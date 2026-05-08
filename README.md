@@ -25,7 +25,8 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 
 ## Screenshots
 
-![HELIOS at solar noon](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview.jpg)
+![HELIOS PREVIEW 01](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_01.png)
+![HELIOS PREVIEW 02](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_02.png_)
 
 *HELIOS displaying current solar exposure, cloud coverage and live PV production for the user's home.*
 
