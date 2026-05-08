@@ -1,0 +1,23 @@
+{
+  "name": "helios",
+  "version": "1.0.0",
+  "description": "HELIOS - real-time solar exposure, cloud cover and PV production card for Home Assistant",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "test:watch": "node --test --watch \"tests/*.test.mjs\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lit": "^3.3.2",
+    "maplibre-gl": "^5.2.0"
+  },
+  "devDependencies": {
+    "terser": "^5.30.0",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0"
+  }
+}

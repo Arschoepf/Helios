@@ -1,0 +1,20 @@
+# Dependency directories
+# Do not push the thousands of npm packages
+node_modules/
+
+# macOS metadata files
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment and IDE settings
+.env
+.vscode/
+.idea/
+.claude/
+
+# TypeScript build info
+*.tsbuildinfo

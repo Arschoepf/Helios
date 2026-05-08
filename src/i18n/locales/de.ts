@@ -1,0 +1,56 @@
+import type { Translations } from '../index';
+
+export const de: Translations = {
+    cardName:        'HELIOS',
+    cardDescription: 'Echtzeit-Visualisierung von Solarenergie und Wolkenbedeckung',
+
+    live: 'Live',
+
+    placeholder:
+    {
+        subtitle: 'Sonneneinstrahlung & Wolkenbedeckung',
+        action:   'MapTiler-API-Schlüssel eintragen, um zu aktivieren'
+    },
+
+    tooltip:
+    {
+        cloudCover:  "Bewölkung: {0}%",
+        cloudLow:    "Niedrig: {0}%",
+        cloudMid:    "Mittel: {0}%",
+        cloudHigh:   "Hoch: {0}%",
+        resetLive:   'Zurück zur Echtzeit'
+    },
+
+    editor:
+    {
+        required:           'API-Schlüssel',
+        apiKey:             'MapTiler-API-Schlüssel',
+        apiKeyHelp:         'Erforderlich für 3D-Karte, Hangschattierung und Gebäude. Der kostenlose Tarif reicht völlig aus.',
+        getKeyAt:           'Hol dir deinen kostenlosen Schlüssel bei',
+        terrainRelief:      'Gelände',
+        terrainReliefHint:  'Hangschattierung als Overlay unter der Karte. In hügeligem Gelände hilfreich, um die Hangausrichtung gegenüber der Sonne zu lesen.',
+        hillshadeColor:     'Schattierungsfarbe *',
+        hillshadeStrength:  'Schattierungsstärke * (0 → 1)',
+        mapSection:         'Karte',
+        showLabels:         'Beschriftungen anzeigen *',
+        showLabelsHint:     'Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.',
+        labelsOn:           'Sichtbar',
+        labelsOff:          'Ausgeblendet',
+        timeline:           'Zeitachse',
+        timelineHint:       'Format der Datumsanzeige auf der Zeitachse und im Scrub-Chip.',
+        dateFormat:         'Datumsformat * (Standard: mm-dd)',
+        dateFormatHelp:     'Platzhalter: yyyy, yy, mm, dd. Beispiele:',
+        timeFormat:         'Zeitformat *',
+        timeFormat12:       '12 h',
+        timeFormat24:       '24 h',
+        colors:             'Farben',
+        colorsHint:         'Eine Farbe pro Messgröße, überall einheitlich verwendet. Die Sonnenfarbe füllt den Bogen, die Sonnenscheibe und den oberen Bereich der Zeitachse. Die Wolkenfarbe füllt die Bodenscheibe und den unteren Bereich der Zeitachse.',
+        sunColor:           'Sonnenfarbe *',
+        cloudColor:         'Wolkenfarbe *',
+        pvSection:          'Solarproduktion',
+        pvHint:             'Optional. Wenn gesetzt, erscheint auf dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Die Linie zwischen Haus und Chip animiert mit einer Geschwindigkeit proportional zur Produktion. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).',
+        pvEntity:           'Produktions-Entität',
+        pvEntityHelp:       'Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).',
+        pvColor:            'Produktionsfarbe *'
+    }
+};
