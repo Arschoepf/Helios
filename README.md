@@ -26,7 +26,8 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 ## Screenshots
 
 ![HELIOS PREVIEW 01](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_01.png)
-![HELIOS PREVIEW 02](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_02.png_)
+![HELIOS PREVIEW 02](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_02.png)
+![HELIOS PREVIEW 02](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_03.png)
 
 *HELIOS displaying current solar exposure, cloud coverage and live PV production for the user's home.*
 
@@ -145,7 +146,7 @@ I build bridges between data and reality. To me, development is more than a prof
 
 ## Support my work
 
-If you find this project useful and want to support its development, feel free to buy me a coffee (or a beer)!
+If you find this project useful and want to support its development, feel free to buy me a coffee (or another battery ;-))!
 
 <a href="https://www.buymeacoffee.com/reikanysora"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee or a beer ?&emoji=&slug=reikanysora&button_colour=874efe&font_colour=ffffff&font_family=Lato&outline_colour=ffffff&coffee_colour=FFDD00" /></a>
 
