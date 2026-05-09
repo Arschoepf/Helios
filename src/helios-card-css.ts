@@ -679,13 +679,14 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Battery leader line — dashes flow from home down to the chip
-        (charging) or from the chip up to home (discharging) at a
-        speed proportional to live |power|. The renderer flips the
-        animateMotion path to drive direction; the CSS dash-offset
-        animation always streams in the same screen direction, so
-        the dashes' visible motion is governed by the polygon arrow
-        which rides the path with rotate="auto". */
+    /*  Battery connectors — two static lines, no animation.
+        - .battery-l-line is the solid L from PV's bottom edge down
+          to the centre-left of the first battery chip.
+        - .battery-pair-line is the dotted segment between the two
+          battery chips when both are configured.
+        Both share the user-configured battery colour and the same
+        hairline width as the cloud / PV leaders for visual
+        coherence with the rest of the chip-leader vocabulary. */
     .battery-leader-svg
     {
         position: absolute;
@@ -696,25 +697,23 @@ export const heliosCardStyles = css`
         z-index: 5;
     }
 
-    .battery-leader-line
+    .battery-l-line
     {
         stroke: var(--battery-leader-color, #D32F2F);
         stroke-width: 1.5;
         stroke-opacity: 0.85;
         stroke-linecap: round;
-        stroke-dasharray: 6 5;
-        animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
+        stroke-linejoin: round;
+        fill: none;
     }
 
-    @keyframes battery-leader-flow
+    .battery-pair-line
     {
-        from { stroke-dashoffset: 0;  }
-        to   { stroke-dashoffset: -11; }
-    }
-
-    .battery-leader-arrow
-    {
-        opacity: 0.9;
+        stroke: var(--battery-leader-color, #D32F2F);
+        stroke-width: 1.5;
+        stroke-opacity: 0.85;
+        stroke-linecap: round;
+        stroke-dasharray: 2 3;
     }
 
     /*  Cloud-cover leader line — black hairline from chip to disc. */

@@ -1744,11 +1744,16 @@ export class HeliosEngine
     //               the home so the production chip is the prominent
     //               readout, with the cloud chip retreating onto its
     //               own feature on the side.
-    //  batteryLabel — where the optional battery chip should be drawn.
-    //               Mirrors the PV chip the same distance below the
-    //               home, creating an "in / out" symmetry across the
-    //               home (PV = incoming production, battery = stored
-    //               / drawn-from reserve).
+    //  battery1Label — where the optional first battery chip is drawn
+    //               (SoC if both entities are configured, otherwise
+    //               whichever single entity is set). Sits to the
+    //               down-right of the PV chip so the battery overlay
+    //               reads as "attached to" the PV chip rather than
+    //               competing for the home's vertical axis.
+    //  battery2Label — where the optional second battery chip is drawn
+    //               (Power, only when both battery entities are
+    //               configured). Sits horizontally next to
+    //               battery1Label, separated by BATTERY_PAIR_GAP_PX.
     //  ringEdge   — projection of the screen-leftmost point of the
     //               100 % reference ring. The cloud leader line ends
     //               here. We sample N points around the ground ring
@@ -1766,11 +1771,12 @@ export class HeliosEngine
     //Returns null when the map isn't ready yet — the card treats
     //null as "don't render the overlay this frame".
     public projectHomeLabelLayout(): {
-        cloudLabel:   { x: number; y: number };
-        pvLabel:      { x: number; y: number };
-        batteryLabel: { x: number; y: number };
-        ringEdge:     { x: number; y: number };
-        home:         { x: number; y: number };
+        cloudLabel:    { x: number; y: number };
+        pvLabel:       { x: number; y: number };
+        battery1Label: { x: number; y: number };
+        battery2Label: { x: number; y: number };
+        ringEdge:      { x: number; y: number };
+        home:          { x: number; y: number };
     } | null
     {
         if (!this.map)
@@ -1818,12 +1824,29 @@ export class HeliosEngine
         //short leader line from chip to ringEdge.
         const CLOUD_CHIP_NUDGE_PX = 30;
 
+        //Battery row offsets, all relative to the PV chip centre.
+        //Anchors the row down-and-right of the PV chip so it reads
+        //as visually attached to PV (the L-shaped connector starts
+        //on PV's bottom edge — see the card render block) rather
+        //than competing for the home's vertical axis. The pair gap
+        //is the centre-to-centre distance between battery1 and
+        //battery2 — visible white space between them depends on
+        //chip widths and is enforced via the dotted line stroke.
+        const BATTERY_OFFSET_FROM_PV_X_PX = 70;
+        const BATTERY_OFFSET_FROM_PV_Y_PX = 50;
+        const BATTERY_PAIR_GAP_PX         = 80;
+
+        const battery1X = home.x + BATTERY_OFFSET_FROM_PV_X_PX;
+        const battery1Y = home.y - CLOUD_LABEL_OFFSET_PX + BATTERY_OFFSET_FROM_PV_Y_PX;
+        const battery2X = battery1X + BATTERY_PAIR_GAP_PX;
+
         return {
-            cloudLabel:   { x: ringEdgeX - CLOUD_CHIP_NUDGE_PX, y: ringEdgeY },
-            pvLabel:      { x: home.x,    y: home.y - CLOUD_LABEL_OFFSET_PX },
-            batteryLabel: { x: home.x,    y: home.y + CLOUD_LABEL_OFFSET_PX },
-            ringEdge:     { x: ringEdgeX, y: ringEdgeY },
-            home:         { x: home.x,    y: home.y }
+            cloudLabel:    { x: ringEdgeX - CLOUD_CHIP_NUDGE_PX, y: ringEdgeY },
+            pvLabel:       { x: home.x,    y: home.y - CLOUD_LABEL_OFFSET_PX },
+            battery1Label: { x: battery1X, y: battery1Y },
+            battery2Label: { x: battery2X, y: battery1Y },
+            ringEdge:      { x: ringEdgeX, y: ringEdgeY },
+            home:          { x: home.x,    y: home.y }
         };
     }
 

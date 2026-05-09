@@ -5,10 +5,11 @@ Refines the catalogue placeholder, hardens the rotation interaction
 so the home stays dead-centre, lightens the on-card chips so the
 underlying scene reads through, exposes a `map-style` option to
 switch the basemap between streets and topographic, adds an
-optional home-battery overlay (SoC + signed power, live and
-scrubbable) below the home mirroring the PV chip above, and
-relocates the cloud-cover chip to the left of the disc so the
-home's vertical axis stays free for the PV / battery pair.
+optional home-battery overlay (live + scrubbable SoC and signed
+Power, split across one or two chips hooked off the PV chip via
+an L-shaped connector), and relocates the cloud-cover chip to
+the bottom-left of the disc so the home's vertical axis stays
+clear of readouts.
 
 ## v1.1.0-beta.1
 
@@ -166,6 +167,47 @@ a small layout tidy-up.
 100 % ring rather than its topmost point in geographic terms).
 This is an internal contract between the engine and the card
 and shouldn't affect anyone but custom forks.
+
+## v1.1.0-beta.6
+
+* **Battery overlay redesigned: two side-by-side chips, hooked
+  off the PV chip** — beta.4 / beta.5 rendered a single
+  combined chip (`85 % • +1.2 kW`) below the home with an
+  animated leader to the home. The new layout splits the
+  battery into one or two independent chips, each with its
+  own icon, drawn down-right of the PV chip:
+  * **Battery 1** — `mdi:battery` icon + SoC percentage when
+    `battery-soc-entity` is configured. If the user only set
+    `battery-power-entity`, this slot is repurposed for the
+    Power chip (with `mdi:lightning-bolt`).
+  * **Battery 2** — only rendered when both entities are
+    configured. Shows the signed Power reading with
+    `mdi:lightning-bolt`.
+  * **L-shaped connector** from PV's bottom edge (≈ ¾ from the
+    left) down to the centre-left of Battery 1. Solid hairline
+    in the configured battery colour, no animation.
+  * **Inter-battery connector** between the centre-right of
+    Battery 1 and the centre-left of Battery 2 — dotted
+    (`stroke-dasharray: 2 3`), same battery colour, no
+    animation. Only rendered when both battery entities are
+    configured.
+  * **The home's vertical axis is free below the home now** —
+    the chip used to live there in beta.4 / 5 but the new
+    layout pulls all PV / battery readouts to the upper-right
+    quadrant, leaving the home + cloud disc as the visual
+    centre.
+
+  The previous flow-direction animation (charging vs
+  discharging) was dropped because it was hard to interpret
+  visually. The information is still present in the signed
+  power value (e.g. `+1.2 kW` vs `−800 W`).
+
+Internal: `projectHomeLabelLayout` now returns `battery1Label`
+and `battery2Label` instead of a single `batteryLabel`. The
+`.battery-leader-line` / `.battery-leader-arrow` CSS classes
+are gone, replaced by `.battery-l-line` (solid polyline) and
+`.battery-pair-line` (dotted line). No public config keys
+changed; existing dashboards keep working with no edits.
 
 ---
 

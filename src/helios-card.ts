@@ -127,11 +127,12 @@ export class HeliosCard extends LitElement
     //onMapTransform). null = layout not yet available (map still
     //loading) — the overlay is hidden in that case.
     @state() private _labelLayout:    {
-        cloudLabel:   { x: number; y: number };
-        pvLabel:      { x: number; y: number };
-        batteryLabel: { x: number; y: number };
-        ringEdge:     { x: number; y: number };
-        home:         { x: number; y: number };
+        cloudLabel:    { x: number; y: number };
+        pvLabel:       { x: number; y: number };
+        battery1Label: { x: number; y: number };
+        battery2Label: { x: number; y: number };
+        ringEdge:      { x: number; y: number };
+        home:          { x: number; y: number };
     } | null = null;
     //Photovoltaic production state — populated when the user has set
     //a `pv-power-entity` config key. _pvCurrent holds the live value
@@ -1999,13 +2000,22 @@ export class HeliosCard extends LitElement
             : 0;
         const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5000);
 
-        //Battery overlay — chip below the home mirroring the PV chip
-        //above. Same scrub semantics as PV: in live mode the chip
-        //shows the entity's current state; in past-scrub mode it
+        //Battery overlay — split into one or two chips drawn down-
+        //right of the PV chip, joined by an L-shaped connector that
+        //starts at three-quarters from the left of PV's bottom edge
+        //and lands on the centre-left of the first battery chip.
+        //
+        //Scrub semantics mirror PV: in live mode each chip shows the
+        //configured entity's current state; in past-scrub mode it
         //shows the historical reading at the selected instant
         //(resolved from the WS history fetch); in future-scrub mode
-        //the chip is hidden because no battery data exists past
-        //"now".
+        //the whole battery overlay is hidden because no battery
+        //data exists past "now".
+        //
+        //Layout adapts gracefully when the user only configured one
+        //of the two entities — the unique chip occupies the
+        //battery1 slot and the inter-battery connector and the
+        //battery2 chip are simply not rendered.
         const batterySocEntity   = String(this.config?.['battery-soc-entity']   ?? '').trim();
         const batteryPowerEntity = String(this.config?.['battery-power-entity'] ?? '').trim();
         const batteryColor       = cfgHex(this.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
@@ -2021,53 +2031,47 @@ export class HeliosCard extends LitElement
         const activeBatteryPower: number | null = batteryScrubbing
             ? this._batterySampleAtTime(this._batteryPowerHistory, this._selectedTime!)
             : this._batteryPower;
-        //The unit doesn't change between live and history samples
-        //(same entity, same configuration), so we read it from the
-        //live state cache regardless of mode.
+        //The power unit doesn't change between live and history
+        //samples (same entity, same configuration), so we read it
+        //from the live state cache regardless of mode.
         const activeBatteryUnit = this._batteryPowerUnit;
 
-        const hasBatteryEntity  = batterySocEntity !== '' || batteryPowerEntity !== '';
-        const hasBatteryReading = activeBatterySoc !== null || activeBatteryPower !== null;
-        const showBatteryLabel  = hasApiKey
-            && layout !== null
-            && hasBatteryEntity
-            && hasBatteryReading
-            && !batteryScrubFuture;
+        //Per-chip render flags. Each chip needs its entity to be
+        //configured AND its active reading to be a finite number;
+        //future scrub hides everything regardless.
+        const showSocChip   = !batteryScrubFuture
+            && batterySocEntity   !== '' && activeBatterySoc   !== null;
+        const showPowerChip = !batteryScrubFuture
+            && batteryPowerEntity !== '' && activeBatteryPower !== null;
+        const showAnyBatteryChip = (hasApiKey && layout !== null)
+            && (showSocChip || showPowerChip);
 
-        //Chip body — bullet-separated SoC % + signed power, falling
-        //back gracefully when only one of the two entities is set or
-        //when one returns a non-numeric state at the active instant.
-        let batteryDisplayValue = '';
-        if (showBatteryLabel)
-        {
-            const parts: string[] = [];
-            if (activeBatterySoc !== null)
-            {
-                parts.push(`${Math.round(activeBatterySoc)} %`);
-            }
-            if (activeBatteryPower !== null)
-            {
-                parts.push(this._formatBatteryPower(activeBatteryPower, activeBatteryUnit));
-            }
-            batteryDisplayValue = parts.join(' • ');
-        }
+        //Both configured → SoC on the left (battery1), Power on the
+        //right (battery2). Only one configured → the unique chip
+        //occupies battery1; battery2 stays empty. The chip "kind"
+        //tracks which entity's content + icon to render in each
+        //slot, since "battery1" can be either SoC or Power depending
+        //on the config.
+        const battery1Kind: 'soc' | 'power' | null =
+            showSocChip   ? 'soc'   :
+            showPowerChip ? 'power' : null;
+        const battery2Kind: 'power' | null =
+            (showSocChip && showPowerChip) ? 'power' : null;
 
-        //Leader animation — same speed mapping as PV (saturate at
-        //~5 kW), but the direction follows the sign of the power:
-        //charging streams from home down to the chip; discharging
-        //streams up from the chip to the home; zero or unconfigured
-        //power stays static. Sign is taken from the active value
-        //(scrubbed or live) so the user sees the direction the
-        //battery was actually flowing at that instant.
-        const batteryPower = activeBatteryPower ?? 0;
-        const batteryWattsForFlow = (() => {
-            if (activeBatteryPower === null) { return 0; }
-            const lu = (activeBatteryUnit || '').trim().toLowerCase();
-            return lu === 'kw' ? Math.abs(activeBatteryPower) * 1000 : Math.abs(activeBatteryPower);
-        })();
-        const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
-        const batteryCharging     = batteryPower > 0;
-        const batteryDischarging  = batteryPower < 0;
+        const battery1Text = battery1Kind === 'soc'
+            ? `${Math.round(activeBatterySoc!)} %`
+            : battery1Kind === 'power'
+                ? this._formatBatteryPower(activeBatteryPower!, activeBatteryUnit)
+                : '';
+        const battery1Icon = battery1Kind === 'soc'
+            ? 'mdi:battery'
+            : 'mdi:lightning-bolt';
+
+        const battery2Text = battery2Kind === 'power'
+            ? this._formatBatteryPower(activeBatteryPower!, activeBatteryUnit)
+            : '';
+        //battery2 is always Power when shown, so the icon is fixed.
+        const battery2Icon = 'mdi:lightning-bolt';
 
         //Solar-arc overlay — sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
@@ -2404,40 +2408,64 @@ ${showSun ? html`
                     </div>
                 ` : nothing}
 
-                ${showBatteryLabel ? html`
+                ${showAnyBatteryChip ? html`
                     <svg class="battery-leader-svg">
-                        <line
-                            class="battery-leader-line"
-                            style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
-                            x1="${layout!.home.x}"
-                            y1="${layout!.home.y}"
-                            x2="${layout!.batteryLabel.x}"
-                            y2="${layout!.batteryLabel.y - 10}"
-                        ></line>
-                        ${(batteryCharging || batteryDischarging) ? svg`
-                            <polygon
-                                class="battery-leader-arrow"
-                                points="-6,-4 0,0 -6,4"
-                                fill="${batteryColor}"
-                            >
-                                <animateMotion
-                                    dur="${batteryFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="${batteryCharging
-                                        ? `M ${layout!.home.x},${layout!.home.y} L ${layout!.batteryLabel.x},${layout!.batteryLabel.y - 10}`
-                                        : `M ${layout!.batteryLabel.x},${layout!.batteryLabel.y - 10} L ${layout!.home.x},${layout!.home.y}`}"
-                                ></animateMotion>
-                            </polygon>
+                        <!--
+                            L-shaped connector from PV chip to the
+                            first battery chip. Vertical leg starts at
+                            three-quarters from the left of PV's
+                            bottom edge (approximated as PV centre + 20 px
+                            since the chip width is content-driven and
+                            not known here); horizontal leg lands on
+                            the centre-left of battery1, with the
+                            endpoint nudged 10 px into the chip so the
+                            chip background hides the inside portion
+                            (same trick used for the cloud / PV leaders).
+                        -->
+                        <polyline
+                            class="battery-l-line"
+                            style="--battery-leader-color:${batteryColor}"
+                            points="${layout!.pvLabel.x + 20},${layout!.pvLabel.y + 12} ${layout!.pvLabel.x + 20},${layout!.battery1Label.y} ${layout!.battery1Label.x - 10},${layout!.battery1Label.y}"
+                            fill="none"
+                        ></polyline>
+                        ${battery2Kind !== null ? svg`
+                            <!--
+                                Inter-battery dotted line: from the
+                                centre-right of battery1 to the
+                                centre-left of battery2. Both endpoints
+                                are nudged 10 px inside their chip so
+                                the chip backgrounds hide the inside
+                                portions and the visible dashes only
+                                appear in the gap between the two.
+                            -->
+                            <line
+                                class="battery-pair-line"
+                                style="--battery-leader-color:${batteryColor}"
+                                x1="${layout!.battery1Label.x + 10}"
+                                y1="${layout!.battery1Label.y}"
+                                x2="${layout!.battery2Label.x - 10}"
+                                y2="${layout!.battery2Label.y}"
+                            ></line>
                         ` : nothing}
                     </svg>
-                    <div
-                        class="battery-pct-label"
-                        style="left:${layout!.batteryLabel.x}px; top:${layout!.batteryLabel.y}px; --battery-leader-color:${batteryColor}"
-                    >
-                        <ha-icon icon="mdi:home-battery"></ha-icon>
-                        <span>${batteryDisplayValue}</span>
-                    </div>
+                    ${battery1Kind !== null ? html`
+                        <div
+                            class="battery-pct-label"
+                            style="left:${layout!.battery1Label.x}px; top:${layout!.battery1Label.y}px; --battery-leader-color:${batteryColor}"
+                        >
+                            <ha-icon icon="${battery1Icon}"></ha-icon>
+                            <span>${battery1Text}</span>
+                        </div>
+                    ` : nothing}
+                    ${battery2Kind !== null ? html`
+                        <div
+                            class="battery-pct-label"
+                            style="left:${layout!.battery2Label.x}px; top:${layout!.battery2Label.y}px; --battery-leader-color:${batteryColor}"
+                        >
+                            <ha-icon icon="${battery2Icon}"></ha-icon>
+                            <span>${battery2Text}</span>
+                        </div>
+                    ` : nothing}
                 ` : nothing}
 
             </ha-card>
