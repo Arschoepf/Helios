@@ -130,7 +130,7 @@ export class HeliosCard extends LitElement
         cloudLabel:   { x: number; y: number };
         pvLabel:      { x: number; y: number };
         batteryLabel: { x: number; y: number };
-        ringTop:      { x: number; y: number };
+        ringEdge:     { x: number; y: number };
         home:         { x: number; y: number };
     } | null = null;
     //Photovoltaic production state — populated when the user has set
@@ -152,14 +152,29 @@ export class HeliosCard extends LitElement
     //only refreshes when the timeline range changes.
     private _pvSampleBuffer: Array<{ t: number; v: number }> = [];
     //Home-battery state — populated when the user has set at least
-    //one of `battery-soc-entity` / `battery-power-entity`. Both
-    //readings are pulled from hass.states on every property update;
-    //unlike PV there's no history fetch (we only display the live
-    //chip, no scrub-back). Units are kept alongside the values so
-    //the chip can format kW vs W without re-reading the state.
+    //one of `battery-soc-entity` / `battery-power-entity`. The two
+    //readings (live and historical) are kept on separate fields so
+    //the chip can render either depending on the timeline mode (live
+    //or scrub). Units are kept alongside the values so the chip can
+    //format kW vs W without re-reading the state.
     @state() private _batterySoc:        number | null = null;
     @state() private _batteryPower:      number | null = null;
     @state() private _batteryPowerUnit:  string        = '';
+    //Historical series for the active timeline range. Same shape as
+    //_pvHistory, fetched via a single `history/history_during_period`
+    //WS call that batches both battery entities (when both are set).
+    //Cleared when the configured entity changes or when the time
+    //range changes; null = not yet fetched / no entity configured.
+    @state() private _batterySocHistory: {
+        times:  Date[];
+        values: number[];
+    } | null = null;
+    @state() private _batteryPowerHistory: {
+        times:  Date[];
+        values: number[];
+    } | null = null;
+    private _batteryFetchKey  = '';
+    private _batteryFetching  = false;
     //Screen-space layout of the solar arc, sun, and incidence ray.
     //Recomputed via engine.projectSunScene() on every map transform
     //(camera animation) and every clock tick (the sun position
@@ -480,11 +495,14 @@ export class HeliosCard extends LitElement
         this._fetchPvHistory(entity, this._timeRange.start, this._timeRange.end);
     }
 
-    //Battery overlay — much simpler than PV: no history fetch, no
-    //rolling buffer, no scrub-back. Just a live read of the SoC and
-    //power entities on every Lit cycle. The chip is hidden (and the
-    //state cleared) when neither entity is configured, or when the
-    //configured entity is unavailable / non-numeric.
+    //Battery overlay — pulls live state from hass.states on every Lit
+    //cycle (no rolling buffer like PV — battery entities are typically
+    //power sensors that already expose an instantaneous reading) and,
+    //when at least one entity is configured AND the timeline range is
+    //set, fetches a historical series so the chip can show what the
+    //battery was doing at any past instant the user scrubs to. The
+    //fetch is gated on a `(socEntity, powerEntity, range)` tuple so
+    //we don't reissue the WS call on every render cycle.
     private _refreshBattery(): void
     {
         if (!this.hass)
@@ -538,6 +556,185 @@ export class HeliosCard extends LitElement
         {
             this._batteryPowerUnit = nextUnit;
         }
+
+        //Drop history series and reset the fetch key when the user
+        //clears all battery entity fields, so a stale graph doesn't
+        //linger after the config goes blank.
+        if (!socEntity && !powerEntity)
+        {
+            if (this._batterySocHistory !== null)   { this._batterySocHistory   = null; }
+            if (this._batteryPowerHistory !== null) { this._batteryPowerHistory = null; }
+            this._batteryFetchKey = '';
+            return;
+        }
+
+        //History fetch — only when the (entities, range) tuple changed.
+        //Without this guard we'd reissue the WS command on every Lit
+        //cycle (e.g. every clock tick).
+        if (!this._timeRange || this._batteryFetching)
+        {
+            return;
+        }
+        const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
+        const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}`;
+        if (fetchKey === this._batteryFetchKey)
+        {
+            return;
+        }
+        this._batteryFetchKey = fetchKey;
+        this._fetchBatteryHistory(socEntity, powerEntity, this._timeRange.start, this._timeRange.end);
+    }
+
+    //Single-call history fetch for the battery overlay. Both entities
+    //(when configured) are bundled into one `entity_ids` array so we
+    //pay one WS roundtrip instead of two. Either side of the result
+    //may end up empty (entity not yet existing, no state changes in
+    //range, etc.) and that's fine — the chip will show only the side
+    //that did return data.
+    private async _fetchBatteryHistory(
+        socEntity: string, powerEntity: string, start: Date, end: Date
+    ): Promise<void>
+    {
+        if (!this.hass?.callWS)
+        {
+            return;
+        }
+        this._batteryFetching = true;
+        try
+        {
+            //History only exists up to "now" — the future half of the
+            //timeline has no battery data. Clamp the fetch end so we
+            //don't waste a roundtrip on empty future buckets.
+            const now = new Date();
+            const fetchEnd = end > now ? now : end;
+            if (start >= fetchEnd)
+            {
+                if (socEntity)   { this._batterySocHistory   = { times: [], values: [] }; }
+                if (powerEntity) { this._batteryPowerHistory = { times: [], values: [] }; }
+                return;
+            }
+
+            const ids: string[] = [];
+            if (socEntity)   { ids.push(socEntity);   }
+            if (powerEntity) { ids.push(powerEntity); }
+
+            const result: any = await this.hass.callWS({
+                type:             'history/history_during_period',
+                start_time:       start.toISOString(),
+                end_time:         fetchEnd.toISOString(),
+                entity_ids:       ids,
+                minimal_response: true,
+                no_attributes:    true
+            });
+
+            const parseSeries = (arr: any[]): { times: Date[]; values: number[] } =>
+            {
+                const times:  Date[]   = [];
+                const values: number[] = [];
+                for (const item of arr ?? [])
+                {
+                    const stateStr =
+                        typeof item?.s     === 'string' ? item.s :
+                        typeof item?.state === 'string' ? item.state :
+                        null;
+                    if (stateStr === null
+                        || stateStr === 'unavailable'
+                        || stateStr === 'unknown'
+                        || stateStr === '')
+                    {
+                        continue;
+                    }
+                    const v = parseFloat(stateStr);
+                    if (!isFinite(v))
+                    {
+                        continue;
+                    }
+                    let ts: Date | null = null;
+                    if (typeof item?.lu === 'number')
+                    {
+                        ts = new Date(item.lu * 1000);
+                    }
+                    else if (typeof item?.last_updated === 'string')
+                    {
+                        ts = new Date(item.last_updated);
+                    }
+                    else if (typeof item?.last_changed === 'string')
+                    {
+                        ts = new Date(item.last_changed);
+                    }
+                    if (!ts || isNaN(ts.getTime()))
+                    {
+                        continue;
+                    }
+                    times.push(ts);
+                    values.push(v);
+                }
+                return { times, values };
+            };
+
+            if (socEntity)
+            {
+                const series = parseSeries(result?.[socEntity] ?? []);
+                //Clamp SoC samples to [0, 100] in the history too — same
+                //out-of-range tolerance as the live read.
+                series.values = series.values.map(v => Math.max(0, Math.min(100, v)));
+                this._batterySocHistory = series;
+            }
+            else
+            {
+                this._batterySocHistory = null;
+            }
+            if (powerEntity)
+            {
+                this._batteryPowerHistory = parseSeries(result?.[powerEntity] ?? []);
+            }
+            else
+            {
+                this._batteryPowerHistory = null;
+            }
+        }
+        catch (e)
+        {
+            console.warn('[HELIOS] battery history fetch failed:', e);
+            this._batterySocHistory   = { times: [], values: [] };
+            this._batteryPowerHistory = { times: [], values: [] };
+        }
+        finally
+        {
+            this._batteryFetching = false;
+        }
+    }
+
+    //Locate the history sample at or before `time` and return its
+    //value, or null if the time falls outside the fetched window. A
+    //60 s grace at the tail keeps "scrub to live" resolving cleanly
+    //(same convention as the PV chip).
+    private _batterySampleAtTime(
+        hist: { times: Date[]; values: number[] } | null, time: Date
+    ): number | null
+    {
+        if (!hist || hist.times.length === 0)
+        {
+            return null;
+        }
+        const tMs = time.getTime();
+        const firstMs = hist.times[0].getTime();
+        const lastMs  = hist.times[hist.times.length - 1].getTime();
+        if (tMs < firstMs || tMs > lastMs + 60_000)
+        {
+            return null;
+        }
+        let idx = hist.times.length - 1;
+        for (let i = 0; i < hist.times.length; i++)
+        {
+            if (hist.times[i].getTime() > tMs)
+            {
+                idx = i - 1;
+                break;
+            }
+        }
+        if (idx < 0) { idx = 0; }
+        return hist.values[idx];
     }
 
     //Format a signed battery power value for the chip. Mirrors
@@ -1803,36 +2000,54 @@ export class HeliosCard extends LitElement
         const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5000);
 
         //Battery overlay — chip below the home mirroring the PV chip
-        //above. Hidden in scrub mode because we don't fetch history;
-        //showing the live SoC while the user explores a past instant
-        //would be misleading (the value isn't a snapshot of *that*
-        //instant, it's "now").
+        //above. Same scrub semantics as PV: in live mode the chip
+        //shows the entity's current state; in past-scrub mode it
+        //shows the historical reading at the selected instant
+        //(resolved from the WS history fetch); in future-scrub mode
+        //the chip is hidden because no battery data exists past
+        //"now".
         const batterySocEntity   = String(this.config?.['battery-soc-entity']   ?? '').trim();
         const batteryPowerEntity = String(this.config?.['battery-power-entity'] ?? '').trim();
         const batteryColor       = cfgHex(this.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
         const batteryScrubbing   = !this._isLiveMode && this._selectedTime !== null;
-        const hasBatteryEntity   = batterySocEntity !== '' || batteryPowerEntity !== '';
-        const hasBatteryReading  = this._batterySoc !== null || this._batteryPower !== null;
-        const showBatteryLabel   = hasApiKey
+        const batteryScrubFuture = batteryScrubbing
+            && this._selectedTime!.getTime() > Date.now() + 60_000;
+
+        //Active SoC / power values for this render — historical
+        //samples in scrub mode, live state otherwise.
+        const activeBatterySoc: number | null = batteryScrubbing
+            ? this._batterySampleAtTime(this._batterySocHistory, this._selectedTime!)
+            : this._batterySoc;
+        const activeBatteryPower: number | null = batteryScrubbing
+            ? this._batterySampleAtTime(this._batteryPowerHistory, this._selectedTime!)
+            : this._batteryPower;
+        //The unit doesn't change between live and history samples
+        //(same entity, same configuration), so we read it from the
+        //live state cache regardless of mode.
+        const activeBatteryUnit = this._batteryPowerUnit;
+
+        const hasBatteryEntity  = batterySocEntity !== '' || batteryPowerEntity !== '';
+        const hasBatteryReading = activeBatterySoc !== null || activeBatteryPower !== null;
+        const showBatteryLabel  = hasApiKey
             && layout !== null
             && hasBatteryEntity
             && hasBatteryReading
-            && !batteryScrubbing;
+            && !batteryScrubFuture;
 
         //Chip body — bullet-separated SoC % + signed power, falling
         //back gracefully when only one of the two entities is set or
-        //when one returns a non-numeric state.
+        //when one returns a non-numeric state at the active instant.
         let batteryDisplayValue = '';
         if (showBatteryLabel)
         {
             const parts: string[] = [];
-            if (this._batterySoc !== null)
+            if (activeBatterySoc !== null)
             {
-                parts.push(`${Math.round(this._batterySoc)} %`);
+                parts.push(`${Math.round(activeBatterySoc)} %`);
             }
-            if (this._batteryPower !== null)
+            if (activeBatteryPower !== null)
             {
-                parts.push(this._formatBatteryPower(this._batteryPower, this._batteryPowerUnit));
+                parts.push(this._formatBatteryPower(activeBatteryPower, activeBatteryUnit));
             }
             batteryDisplayValue = parts.join(' • ');
         }
@@ -1841,12 +2056,14 @@ export class HeliosCard extends LitElement
         //~5 kW), but the direction follows the sign of the power:
         //charging streams from home down to the chip; discharging
         //streams up from the chip to the home; zero or unconfigured
-        //power stays static.
-        const batteryPower = this._batteryPower ?? 0;
+        //power stays static. Sign is taken from the active value
+        //(scrubbed or live) so the user sees the direction the
+        //battery was actually flowing at that instant.
+        const batteryPower = activeBatteryPower ?? 0;
         const batteryWattsForFlow = (() => {
-            if (this._batteryPower === null) { return 0; }
-            const lu = (this._batteryPowerUnit || '').trim().toLowerCase();
-            return lu === 'kw' ? Math.abs(this._batteryPower) * 1000 : Math.abs(this._batteryPower);
+            if (activeBatteryPower === null) { return 0; }
+            const lu = (activeBatteryUnit || '').trim().toLowerCase();
+            return lu === 'kw' ? Math.abs(activeBatteryPower) * 1000 : Math.abs(activeBatteryPower);
         })();
         const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
         const batteryCharging     = batteryPower > 0;
@@ -2126,10 +2343,10 @@ ${showSun ? html`
 
                     <svg class="cloud-leader-svg">
                         <line
-                            x1="${layout!.cloudLabel.x}"
-                            y1="${layout!.cloudLabel.y + 10}"
-                            x2="${layout!.ringTop.x}"
-                            y2="${layout!.ringTop.y}"
+                            x1="${layout!.cloudLabel.x + 10}"
+                            y1="${layout!.cloudLabel.y}"
+                            x2="${layout!.ringEdge.x}"
+                            y2="${layout!.ringEdge.y}"
                         ></line>
                     </svg>
                     <div

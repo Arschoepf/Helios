@@ -24808,7 +24808,7 @@ function parseHex(v2, fallback) {
 const DEFAULT_SUN_COLOR_HEX = "#EF9F27";
 const DEFAULT_CLOUD_COLOR_HEX = "#5A8DC4";
 const DEFAULT_PV_COLOR_HEX = "#27B36B";
-const DEFAULT_BATTERY_COLOR_HEX = "#9D6BCC";
+const DEFAULT_BATTERY_COLOR_HEX = "#D32F2F";
 const DEFAULT_CLOUD_RGB = [90, 141, 196];
 function geoDistM(lat1, lon1, lat2, lon2) {
   const R2 = 6371e3;
@@ -25759,26 +25759,35 @@ class HeliosEngine {
   //the leader lines that tie them to the home / on-ground ring.
   //
   //  cloudLabel — where the cloud-cover chip should be drawn (in
-  //               CSS pixels, relative to the map canvas). Sits a
-  //               fixed CLOUD_CHIP_LIFT_PX above the projected
-  //               cloud-disc reference point — i.e. the chip
-  //               hovers right above the cartographic feature it
-  //               annotates instead of being parked above the
-  //               home itself.
+  //               CSS pixels, relative to the map canvas). Sits to
+  //               the screen-LEFT of the cloud disc, just outside
+  //               the 100 % reference ring. Pinning it on the side
+  //               (rather than above) keeps the home's vertical
+  //               axis clear for the PV chip (above) and the
+  //               battery chip (below).
   //  pvLabel    — where the optional PV production chip should be
   //               drawn. Sits a fixed CLOUD_LABEL_OFFSET_PX above
-  //               the home — the same place the cloud chip used
-  //               to live before v1.4 — so the production chip is
-  //               the prominent readout while the cloud chip
-  //               retreats onto its own feature.
-  //  ringTop    — projection of the topmost point of the 100 %
-  //               reference ring (i.e. the point CLOUD_DISC_RADIUS_M
-  //               due north of the home). The cloud leader line
-  //               ends here. Anchoring on the fixed ring rather
-  //               than the variable disc edge keeps the line
-  //               stable while the percentage scrubs.
+  //               the home so the production chip is the prominent
+  //               readout, with the cloud chip retreating onto its
+  //               own feature on the side.
+  //  batteryLabel — where the optional battery chip should be drawn.
+  //               Mirrors the PV chip the same distance below the
+  //               home, creating an "in / out" symmetry across the
+  //               home (PV = incoming production, battery = stored
+  //               / drawn-from reserve).
+  //  ringEdge   — projection of the screen-leftmost point of the
+  //               100 % reference ring. The cloud leader line ends
+  //               here. We sample N points around the ground ring
+  //               and pick the one with the smallest screen X so
+  //               the chip stays anchored to the left of the disc
+  //               regardless of the user's current bearing — the
+  //               disc projects to an ellipse whose major axis
+  //               flips orientation with rotation, and a fixed
+  //               geographic anchor (e.g. due-west) would land on
+  //               the wrong screen side under the default NH
+  //               bearing of 180°.
   //  home       — the projected home point, used as the anchor for
-  //               the PV chip's leader line.
+  //               the PV and battery chip leader lines.
   //
   //Returns null when the map isn't ready yet — the card treats
   //null as "don't render the overlay this frame".
@@ -25788,19 +25797,31 @@ class HeliosEngine {
     }
     const m2 = this.map;
     const home = m2.project([this.homeLon, this.homeLat]);
-    const dLat = CLOUD_DISC_RADIUS_M / 111320;
-    const ringTop = m2.project([this.homeLon, this.homeLat + dLat]);
-    const CLOUD_CHIP_LIFT_PX = 30;
+    const RING_SAMPLES = 12;
+    const lat0 = this.homeLat;
+    const cosLat = Math.cos(lat0 * Math.PI / 180);
+    let ringEdgeX = home.x;
+    let ringEdgeY = home.y;
+    let minX = Infinity;
+    for (let i2 = 0; i2 < RING_SAMPLES; i2++) {
+      const angle = i2 / RING_SAMPLES * 2 * Math.PI;
+      const dN = CLOUD_DISC_RADIUS_M * Math.cos(angle);
+      const dE = CLOUD_DISC_RADIUS_M * Math.sin(angle);
+      const dLat = dN / 111320;
+      const dLng = dE / (111320 * cosLat);
+      const p2 = m2.project([this.homeLon + dLng, this.homeLat + dLat]);
+      if (p2.x < minX) {
+        minX = p2.x;
+        ringEdgeX = p2.x;
+        ringEdgeY = p2.y;
+      }
+    }
+    const CLOUD_CHIP_NUDGE_PX = 30;
     return {
-      cloudLabel: { x: ringTop.x, y: ringTop.y - CLOUD_CHIP_LIFT_PX },
-      //PV chip sits CLOUD_LABEL_OFFSET_PX above the home; the
-      //battery chip mirrors it the same distance below the home,
-      //creating an "in / out" symmetry across the home (PV =
-      //incoming production, battery = stored / drawn-from
-      //reserve).
+      cloudLabel: { x: ringEdgeX - CLOUD_CHIP_NUDGE_PX, y: ringEdgeY },
       pvLabel: { x: home.x, y: home.y - CLOUD_LABEL_OFFSET_PX },
       batteryLabel: { x: home.x, y: home.y + CLOUD_LABEL_OFFSET_PX },
-      ringTop: { x: ringTop.x, y: ringTop.y },
+      ringEdge: { x: ringEdgeX, y: ringEdgeY },
       home: { x: home.x, y: home.y }
     };
   }
@@ -27172,8 +27193,8 @@ const heliosCardStyles = i$3`
         align-items: center;
         gap: 3px;
         background: rgba(255, 255, 255, 0.8);
-        color:      var(--battery-leader-color, #9D6BCC);
-        border:     1px solid var(--battery-leader-color, #9D6BCC);
+        color:      var(--battery-leader-color, #D32F2F);
+        border:     1px solid var(--battery-leader-color, #D32F2F);
         border-radius: 3px;
         padding: 2px 6px 2px 4px;
         font-size:    12px;
@@ -27211,7 +27232,7 @@ const heliosCardStyles = i$3`
 
     .battery-leader-line
     {
-        stroke: var(--battery-leader-color, #9D6BCC);
+        stroke: var(--battery-leader-color, #D32F2F);
         stroke-width: 1.5;
         stroke-opacity: 0.85;
         stroke-linecap: round;
@@ -28221,6 +28242,10 @@ let HeliosCard = class extends i {
     this._batterySoc = null;
     this._batteryPower = null;
     this._batteryPowerUnit = "";
+    this._batterySocHistory = null;
+    this._batteryPowerHistory = null;
+    this._batteryFetchKey = "";
+    this._batteryFetching = false;
     this._sunScene = null;
     this._chartSeries = null;
     this._fetching = false;
@@ -28395,11 +28420,14 @@ let HeliosCard = class extends i {
     this._pvFetchKey = fetchKey;
     this._fetchPvHistory(entity, this._timeRange.start, this._timeRange.end);
   }
-  //Battery overlay — much simpler than PV: no history fetch, no
-  //rolling buffer, no scrub-back. Just a live read of the SoC and
-  //power entities on every Lit cycle. The chip is hidden (and the
-  //state cleared) when neither entity is configured, or when the
-  //configured entity is unavailable / non-numeric.
+  //Battery overlay — pulls live state from hass.states on every Lit
+  //cycle (no rolling buffer like PV — battery entities are typically
+  //power sensors that already expose an instantaneous reading) and,
+  //when at least one entity is configured AND the timeline range is
+  //set, fetches a historical series so the chip can show what the
+  //battery was doing at any past instant the user scrubs to. The
+  //fetch is gated on a `(socEntity, powerEntity, range)` tuple so
+  //we don't reissue the WS call on every render cycle.
   _refreshBattery() {
     if (!this.hass) {
       return;
@@ -28433,6 +28461,138 @@ let HeliosCard = class extends i {
     if (nextUnit !== this._batteryPowerUnit) {
       this._batteryPowerUnit = nextUnit;
     }
+    if (!socEntity && !powerEntity) {
+      if (this._batterySocHistory !== null) {
+        this._batterySocHistory = null;
+      }
+      if (this._batteryPowerHistory !== null) {
+        this._batteryPowerHistory = null;
+      }
+      this._batteryFetchKey = "";
+      return;
+    }
+    if (!this._timeRange || this._batteryFetching) {
+      return;
+    }
+    const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
+    const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}`;
+    if (fetchKey === this._batteryFetchKey) {
+      return;
+    }
+    this._batteryFetchKey = fetchKey;
+    this._fetchBatteryHistory(socEntity, powerEntity, this._timeRange.start, this._timeRange.end);
+  }
+  //Single-call history fetch for the battery overlay. Both entities
+  //(when configured) are bundled into one `entity_ids` array so we
+  //pay one WS roundtrip instead of two. Either side of the result
+  //may end up empty (entity not yet existing, no state changes in
+  //range, etc.) and that's fine — the chip will show only the side
+  //that did return data.
+  async _fetchBatteryHistory(socEntity, powerEntity, start, end) {
+    if (!this.hass?.callWS) {
+      return;
+    }
+    this._batteryFetching = true;
+    try {
+      const now = /* @__PURE__ */ new Date();
+      const fetchEnd = end > now ? now : end;
+      if (start >= fetchEnd) {
+        if (socEntity) {
+          this._batterySocHistory = { times: [], values: [] };
+        }
+        if (powerEntity) {
+          this._batteryPowerHistory = { times: [], values: [] };
+        }
+        return;
+      }
+      const ids = [];
+      if (socEntity) {
+        ids.push(socEntity);
+      }
+      if (powerEntity) {
+        ids.push(powerEntity);
+      }
+      const result = await this.hass.callWS({
+        type: "history/history_during_period",
+        start_time: start.toISOString(),
+        end_time: fetchEnd.toISOString(),
+        entity_ids: ids,
+        minimal_response: true,
+        no_attributes: true
+      });
+      const parseSeries = (arr) => {
+        const times = [];
+        const values = [];
+        for (const item of arr ?? []) {
+          const stateStr = typeof item?.s === "string" ? item.s : typeof item?.state === "string" ? item.state : null;
+          if (stateStr === null || stateStr === "unavailable" || stateStr === "unknown" || stateStr === "") {
+            continue;
+          }
+          const v2 = parseFloat(stateStr);
+          if (!isFinite(v2)) {
+            continue;
+          }
+          let ts = null;
+          if (typeof item?.lu === "number") {
+            ts = new Date(item.lu * 1e3);
+          } else if (typeof item?.last_updated === "string") {
+            ts = new Date(item.last_updated);
+          } else if (typeof item?.last_changed === "string") {
+            ts = new Date(item.last_changed);
+          }
+          if (!ts || isNaN(ts.getTime())) {
+            continue;
+          }
+          times.push(ts);
+          values.push(v2);
+        }
+        return { times, values };
+      };
+      if (socEntity) {
+        const series = parseSeries(result?.[socEntity] ?? []);
+        series.values = series.values.map((v2) => Math.max(0, Math.min(100, v2)));
+        this._batterySocHistory = series;
+      } else {
+        this._batterySocHistory = null;
+      }
+      if (powerEntity) {
+        this._batteryPowerHistory = parseSeries(result?.[powerEntity] ?? []);
+      } else {
+        this._batteryPowerHistory = null;
+      }
+    } catch (e2) {
+      console.warn("[HELIOS] battery history fetch failed:", e2);
+      this._batterySocHistory = { times: [], values: [] };
+      this._batteryPowerHistory = { times: [], values: [] };
+    } finally {
+      this._batteryFetching = false;
+    }
+  }
+  //Locate the history sample at or before `time` and return its
+  //value, or null if the time falls outside the fetched window. A
+  //60 s grace at the tail keeps "scrub to live" resolving cleanly
+  //(same convention as the PV chip).
+  _batterySampleAtTime(hist, time) {
+    if (!hist || hist.times.length === 0) {
+      return null;
+    }
+    const tMs = time.getTime();
+    const firstMs = hist.times[0].getTime();
+    const lastMs = hist.times[hist.times.length - 1].getTime();
+    if (tMs < firstMs || tMs > lastMs + 6e4) {
+      return null;
+    }
+    let idx = hist.times.length - 1;
+    for (let i2 = 0; i2 < hist.times.length; i2++) {
+      if (hist.times[i2].getTime() > tMs) {
+        idx = i2 - 1;
+        break;
+      }
+    }
+    if (idx < 0) {
+      idx = 0;
+    }
+    return hist.values[idx];
   }
   //Format a signed battery power value for the chip. Mirrors
   //_formatPvValue's W ↔ kW switching but always prefixes a sign so
@@ -29227,27 +29387,31 @@ let HeliosCard = class extends i {
     const batteryPowerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
     const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
     const batteryScrubbing = !this._isLiveMode && this._selectedTime !== null;
+    const batteryScrubFuture = batteryScrubbing && this._selectedTime.getTime() > Date.now() + 6e4;
+    const activeBatterySoc = batteryScrubbing ? this._batterySampleAtTime(this._batterySocHistory, this._selectedTime) : this._batterySoc;
+    const activeBatteryPower = batteryScrubbing ? this._batterySampleAtTime(this._batteryPowerHistory, this._selectedTime) : this._batteryPower;
+    const activeBatteryUnit = this._batteryPowerUnit;
     const hasBatteryEntity = batterySocEntity !== "" || batteryPowerEntity !== "";
-    const hasBatteryReading = this._batterySoc !== null || this._batteryPower !== null;
-    const showBatteryLabel = hasApiKey && layout !== null && hasBatteryEntity && hasBatteryReading && !batteryScrubbing;
+    const hasBatteryReading = activeBatterySoc !== null || activeBatteryPower !== null;
+    const showBatteryLabel = hasApiKey && layout !== null && hasBatteryEntity && hasBatteryReading && !batteryScrubFuture;
     let batteryDisplayValue = "";
     if (showBatteryLabel) {
       const parts = [];
-      if (this._batterySoc !== null) {
-        parts.push(`${Math.round(this._batterySoc)} %`);
+      if (activeBatterySoc !== null) {
+        parts.push(`${Math.round(activeBatterySoc)} %`);
       }
-      if (this._batteryPower !== null) {
-        parts.push(this._formatBatteryPower(this._batteryPower, this._batteryPowerUnit));
+      if (activeBatteryPower !== null) {
+        parts.push(this._formatBatteryPower(activeBatteryPower, activeBatteryUnit));
       }
       batteryDisplayValue = parts.join(" • ");
     }
-    const batteryPower = this._batteryPower ?? 0;
+    const batteryPower = activeBatteryPower ?? 0;
     const batteryWattsForFlow = (() => {
-      if (this._batteryPower === null) {
+      if (activeBatteryPower === null) {
         return 0;
       }
-      const lu = (this._batteryPowerUnit || "").trim().toLowerCase();
-      return lu === "kw" ? Math.abs(this._batteryPower) * 1e3 : Math.abs(this._batteryPower);
+      const lu = (activeBatteryUnit || "").trim().toLowerCase();
+      return lu === "kw" ? Math.abs(activeBatteryPower) * 1e3 : Math.abs(activeBatteryPower);
     })();
     const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
     const batteryCharging = batteryPower > 0;
@@ -29475,10 +29639,10 @@ ${showSun ? b`
 
                     <svg class="cloud-leader-svg">
                         <line
-                            x1="${layout.cloudLabel.x}"
-                            y1="${layout.cloudLabel.y + 10}"
-                            x2="${layout.ringTop.x}"
-                            y2="${layout.ringTop.y}"
+                            x1="${layout.cloudLabel.x + 10}"
+                            y1="${layout.cloudLabel.y}"
+                            x2="${layout.ringEdge.x}"
+                            y2="${layout.ringEdge.y}"
                         ></line>
                     </svg>
                     <div
@@ -29795,6 +29959,12 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_batteryPowerUnit", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_batterySocHistory", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_batteryPowerHistory", 2);
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_sunScene", 2);

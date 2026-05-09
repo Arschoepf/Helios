@@ -4,9 +4,11 @@ Polish release — no breaking changes, no config migration required.
 Refines the catalogue placeholder, hardens the rotation interaction
 so the home stays dead-centre, lightens the on-card chips so the
 underlying scene reads through, exposes a `map-style` option to
-switch the basemap between streets and topographic, and adds an
-optional home-battery overlay (live SoC + signed power) below the
-home, mirroring the PV chip above.
+switch the basemap between streets and topographic, adds an
+optional home-battery overlay (SoC + signed power, live and
+scrubbable) below the home mirroring the PV chip above, and
+relocates the cloud-cover chip to the left of the disc so the
+home's vertical axis stays free for the PV / battery pair.
 
 ## v1.1.0-beta.1
 
@@ -123,6 +125,47 @@ i18n: `Translations.editor` gained seven new keys
 `batterySocEntityHelp`, `batteryPowerEntity`,
 `batteryPowerEntityHelp`, `batteryColor`). Custom locales need
 to provide them or typecheck will fail.
+
+## v1.1.0-beta.5
+
+Refinements on the home-battery overlay shipped in beta.4 plus
+a small layout tidy-up.
+
+* **Battery chip now follows the timeline scrub** — beta.4
+  always showed the live SoC / power, even when the user
+  scrubbed into the past, which was misleading (the chip read
+  "now" against a past instant). The card now fetches a single
+  `history/history_during_period` WS call covering both battery
+  entities (when both are configured) over the active timeline
+  range, and the chip resolves SoC and signed power at the
+  scrubbed instant via a linear lookup (same pattern as the PV
+  chip). The chip stays hidden in future scrub mode, where no
+  battery data exists. The fetch is gated on a
+  `(socEntity, powerEntity, range)` tuple so we don't reissue
+  on every Lit cycle.
+* **Cloud-cover chip relocated to the left of the disc** — the
+  chip used to sit directly above the cloud disc, on the same
+  vertical axis as the PV chip (also above the home) and the
+  beta.4 battery chip (below the home), making the home column
+  visually crowded. The chip now anchors to the screen-left
+  edge of the disc, with its leader pointing horizontally to
+  the disc edge instead of vertically. The implementation
+  samples 12 points around the ground ring and picks the one
+  with the smallest screen X, so the chip stays anchored to
+  the screen-left even after rotation (a fixed geographic
+  anchor would have landed on the wrong screen side under the
+  default NH bearing of 180°).
+* **Default battery colour changed from purple to red** —
+  `DEFAULT_BATTERY_COLOR_HEX` flips from `#9D6BCC` to `#D32F2F`,
+  better matching the "energy on draw" semantics of a battery
+  reading and clearer next to the green PV chip and the orange
+  sun. Users who set `battery-color` explicitly are unaffected.
+
+`projectHomeLabelLayout` returns `ringEdge` instead of `ringTop`
+(same shape, new semantics: the screen-leftmost point of the
+100 % ring rather than its topmost point in geographic terms).
+This is an internal contract between the engine and the card
+and shouldn't affect anyone but custom forks.
 
 ---
 

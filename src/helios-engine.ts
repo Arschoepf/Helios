@@ -215,10 +215,11 @@ export const DEFAULT_CLOUD_COLOR_HEX: string = '#5A8DC4';
 //and reads as "solar production" without competing with the orange sun
 //or the blue cloud colours.
 export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
-//Vivid purple — distinct from sun (orange), cloud (blue) and PV
-//(green), conventionally associated with energy storage in
-//dashboards. Reads cleanly on the 80 % white chip background.
-export const DEFAULT_BATTERY_COLOR_HEX: string = '#9D6BCC';
+//Saturated red — distinct from sun (orange), cloud (blue), PV
+//(green), and easy to associate visually with battery
+//discharge / "energy on draw" semantics. Reads cleanly on the
+//80 % white chip background.
+export const DEFAULT_BATTERY_COLOR_HEX: string = '#D32F2F';
 
 const DEFAULT_CLOUD_RGB: RGB = [0x5A, 0x8D, 0xC4];
 
@@ -1732,26 +1733,35 @@ export class HeliosEngine
     //the leader lines that tie them to the home / on-ground ring.
     //
     //  cloudLabel — where the cloud-cover chip should be drawn (in
-    //               CSS pixels, relative to the map canvas). Sits a
-    //               fixed CLOUD_CHIP_LIFT_PX above the projected
-    //               cloud-disc reference point — i.e. the chip
-    //               hovers right above the cartographic feature it
-    //               annotates instead of being parked above the
-    //               home itself.
+    //               CSS pixels, relative to the map canvas). Sits to
+    //               the screen-LEFT of the cloud disc, just outside
+    //               the 100 % reference ring. Pinning it on the side
+    //               (rather than above) keeps the home's vertical
+    //               axis clear for the PV chip (above) and the
+    //               battery chip (below).
     //  pvLabel    — where the optional PV production chip should be
     //               drawn. Sits a fixed CLOUD_LABEL_OFFSET_PX above
-    //               the home — the same place the cloud chip used
-    //               to live before v1.4 — so the production chip is
-    //               the prominent readout while the cloud chip
-    //               retreats onto its own feature.
-    //  ringTop    — projection of the topmost point of the 100 %
-    //               reference ring (i.e. the point CLOUD_DISC_RADIUS_M
-    //               due north of the home). The cloud leader line
-    //               ends here. Anchoring on the fixed ring rather
-    //               than the variable disc edge keeps the line
-    //               stable while the percentage scrubs.
+    //               the home so the production chip is the prominent
+    //               readout, with the cloud chip retreating onto its
+    //               own feature on the side.
+    //  batteryLabel — where the optional battery chip should be drawn.
+    //               Mirrors the PV chip the same distance below the
+    //               home, creating an "in / out" symmetry across the
+    //               home (PV = incoming production, battery = stored
+    //               / drawn-from reserve).
+    //  ringEdge   — projection of the screen-leftmost point of the
+    //               100 % reference ring. The cloud leader line ends
+    //               here. We sample N points around the ground ring
+    //               and pick the one with the smallest screen X so
+    //               the chip stays anchored to the left of the disc
+    //               regardless of the user's current bearing — the
+    //               disc projects to an ellipse whose major axis
+    //               flips orientation with rotation, and a fixed
+    //               geographic anchor (e.g. due-west) would land on
+    //               the wrong screen side under the default NH
+    //               bearing of 180°.
     //  home       — the projected home point, used as the anchor for
-    //               the PV chip's leader line.
+    //               the PV and battery chip leader lines.
     //
     //Returns null when the map isn't ready yet — the card treats
     //null as "don't render the overlay this frame".
@@ -1759,7 +1769,7 @@ export class HeliosEngine
         cloudLabel:   { x: number; y: number };
         pvLabel:      { x: number; y: number };
         batteryLabel: { x: number; y: number };
-        ringTop:      { x: number; y: number };
+        ringEdge:     { x: number; y: number };
         home:         { x: number; y: number };
     } | null
     {
@@ -1774,27 +1784,45 @@ export class HeliosEngine
         const m = this.map as any;
         const home = m.project([this.homeLon, this.homeLat]);
 
-        //One degree of latitude is ~111 320 m anywhere; we just need
-        //the latitude offset that corresponds to CLOUD_DISC_RADIUS_M
-        //due north — same unit conversion as buildCirclePolygon.
-        const dLat = CLOUD_DISC_RADIUS_M / 111_320;
-        const ringTop = m.project([this.homeLon, this.homeLat + dLat]);
+        //Sample 12 equally-spaced points around the 100 % reference
+        //ring (in metres, geographic coords) and project each one to
+        //the screen. The one with the smallest screen X is the
+        //leftmost-on-screen edge of the disc — that's where we anchor
+        //the cloud chip's leader. 12 samples × 30° apart gives us a
+        //leftmost-point estimate within ~4° of true at zoom 18, which
+        //is well below pixel resolution at our disc size.
+        const RING_SAMPLES = 12;
+        const lat0 = this.homeLat;
+        const cosLat = Math.cos(lat0 * Math.PI / 180);
+        let ringEdgeX = home.x;
+        let ringEdgeY = home.y;
+        let minX = Infinity;
+        for (let i = 0; i < RING_SAMPLES; i++)
+        {
+            const angle = (i / RING_SAMPLES) * 2 * Math.PI;
+            const dN = CLOUD_DISC_RADIUS_M * Math.cos(angle);
+            const dE = CLOUD_DISC_RADIUS_M * Math.sin(angle);
+            const dLat = dN / 111_320;
+            const dLng = dE / (111_320 * cosLat);
+            const p = m.project([this.homeLon + dLng, this.homeLat + dLat]);
+            if (p.x < minX)
+            {
+                minX = p.x;
+                ringEdgeX = p.x;
+                ringEdgeY = p.y;
+            }
+        }
 
-        //Small vertical lift so the cloud chip doesn't directly
+        //Small horizontal nudge so the cloud chip doesn't directly
         //overlap the disc edge it points at — leaves room for a
-        //short leader line down to ringTop.
-        const CLOUD_CHIP_LIFT_PX = 30;
+        //short leader line from chip to ringEdge.
+        const CLOUD_CHIP_NUDGE_PX = 30;
 
         return {
-            cloudLabel:   { x: ringTop.x, y: ringTop.y - CLOUD_CHIP_LIFT_PX },
-            //PV chip sits CLOUD_LABEL_OFFSET_PX above the home; the
-            //battery chip mirrors it the same distance below the home,
-            //creating an "in / out" symmetry across the home (PV =
-            //incoming production, battery = stored / drawn-from
-            //reserve).
-            pvLabel:      { x: home.x,    y: home.y    - CLOUD_LABEL_OFFSET_PX },
-            batteryLabel: { x: home.x,    y: home.y    + CLOUD_LABEL_OFFSET_PX },
-            ringTop:      { x: ringTop.x, y: ringTop.y },
+            cloudLabel:   { x: ringEdgeX - CLOUD_CHIP_NUDGE_PX, y: ringEdgeY },
+            pvLabel:      { x: home.x,    y: home.y - CLOUD_LABEL_OFFSET_PX },
+            batteryLabel: { x: home.x,    y: home.y + CLOUD_LABEL_OFFSET_PX },
+            ringEdge:     { x: ringEdgeX, y: ringEdgeY },
             home:         { x: home.x,    y: home.y }
         };
     }

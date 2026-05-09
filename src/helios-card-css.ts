@@ -659,8 +659,8 @@ export const heliosCardStyles = css`
         align-items: center;
         gap: 3px;
         background: rgba(255, 255, 255, 0.8);
-        color:      var(--battery-leader-color, #9D6BCC);
-        border:     1px solid var(--battery-leader-color, #9D6BCC);
+        color:      var(--battery-leader-color, #D32F2F);
+        border:     1px solid var(--battery-leader-color, #D32F2F);
         border-radius: 3px;
         padding: 2px 6px 2px 4px;
         font-size:    12px;
@@ -698,7 +698,7 @@ export const heliosCardStyles = css`
 
     .battery-leader-line
     {
-        stroke: var(--battery-leader-color, #9D6BCC);
+        stroke: var(--battery-leader-color, #D32F2F);
         stroke-width: 1.5;
         stroke-opacity: 0.85;
         stroke-linecap: round;
