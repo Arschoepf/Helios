@@ -61,11 +61,11 @@ export const de: Translations = {
         pvEntityHelp:       'Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).',
         pvColor:            'Produktionsfarbe *',
         batterySection:     'Hausbatterie',
-        batteryHint:        'Optional. Wenn mindestens eine Entität gesetzt ist, erscheint ein Chip unter dem Haus mit dem aktuellen Ladezustand und der vorzeichenbehafteten momentanen Leistung. Die Leiterlinie animiert beim Laden nach unten und beim Entladen nach oben, mit einer Geschwindigkeit proportional zur aktuellen Leistung. Es wird kein Verlauf abgerufen — der Chip zeigt nur den Live-Wert.',
+        batteryHint:        'Optional. Die Ladezustand-Entität füllt das 3D-Hausgebäude von unten nach oben — leere Batterie zeigt das Haus als durchscheinende graue Silhouette, volle Batterie färbt es vollständig in der konfigurierten Farbe. Mit der Maus über das Haus fahren zeigt den genauen Prozentsatz. Die Leistungs-Entität fügt oben rechts vom Haus einen kleinen Chip mit dem vorzeichenbehafteten Live-Wert hinzu; die punktierte Leiterlinie fließt beim Laden vom Haus zum Chip und beim Entladen vom Chip zum Haus, mit einer Geschwindigkeit proportional zur Leistung.',
         batterySocEntity:   'Ladezustand-Entität',
-        batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery").',
+        batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Steuert die Füllhöhe des Hauses: 0 % = Haus bei voller Deckkraft unsichtbar (nur die 25 %-Silhouette bleibt sichtbar), 100 % = Haus vollständig in der konfigurierten Farbe gefüllt.',
         batteryPowerEntity: 'Leistungs-Entität',
-        batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden.',
+        batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und kehrt die Flussrichtung der Leiterlinie um.',
         batteryColor:       'Batteriefarbe *'
     }
 };

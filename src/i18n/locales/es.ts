@@ -61,11 +61,11 @@ export const es: Translations = {
         pvEntityHelp:       'Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).',
         pvColor:            'Color de producción *',
         batterySection:     'Batería doméstica',
-        batteryHint:        'Opcional. Cuando se configura al menos una entidad, aparece un chip bajo la casa con el estado de carga en vivo y la potencia instantánea con signo. La línea se anima hacia abajo durante la carga y hacia arriba durante la descarga, a una velocidad proporcional a la potencia. No se recupera ningún historial — el chip refleja solo la lectura en vivo.',
+        batteryHint:        'Opcional. La entidad de estado de carga rellena el edificio 3D de la casa de abajo hacia arriba — batería vacía, la casa se muestra como una silueta gris translúcida ; batería llena, queda totalmente pintada con el color configurado. Pasa el cursor sobre la casa para leer el porcentaje exacto. La entidad de potencia añade un chip pequeño arriba a la derecha de la casa con la lectura instantánea con signo ; su línea punteada fluye de la casa al chip durante la carga y del chip a la casa durante la descarga, a una velocidad proporcional a la potencia.',
         batterySocEntity:   'Entidad de estado de carga',
-        batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery").',
+        batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Controla la altura de relleno de la casa : 0 % = casa invisible a plena opacidad (solo se ve el contorno al 25 %), 100 % = casa completamente rellena con el color configurado.',
         batteryPowerEntity: 'Entidad de potencia',
-        batteryPowerEntityHelp: 'Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando.',
+        batteryPowerEntityHelp: 'Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando e invierte el sentido del flujo en la línea punteada.',
         batteryColor:       'Color batería *'
     }
 };

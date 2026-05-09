@@ -679,12 +679,15 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Battery connector — a single dotted L from PV's bottom edge
-        down to the centre-left of the combined battery chip. No
-        animation. Uses the user-configured battery colour and the
-        same hairline width / dotted dash pattern as the cloud / PV
-        leaders for visual coherence with the rest of the chip-
-        leader vocabulary. */
+    /*  Battery leader — animated dotted line between the home and
+        the optional Power chip. Mirrors the PV leader's visual
+        language so the energy-flow vocabulary is consistent across
+        sun → home (incidence ray), home → PV chip (production) and
+        home ↔ battery chip (charge / discharge). The flow direction
+        depends on the sign of the power and is encoded by the
+        battery-leader-discharging class modifier (animation-
+        direction reverse) plus an inline path-direction swap on
+        the SVG animateMotion arrow that rides the line. */
     .battery-leader-svg
     {
         position: absolute;
@@ -695,15 +698,30 @@ export const heliosCardStyles = css`
         z-index: 5;
     }
 
-    .battery-l-line
+    .battery-leader-line
     {
         stroke: var(--battery-leader-color, #D32F2F);
         stroke-width: 1.5;
         stroke-opacity: 0.85;
         stroke-linecap: round;
-        stroke-linejoin: round;
-        stroke-dasharray: 2 3;
-        fill: none;
+        stroke-dasharray: 6 5;
+        animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
+    }
+
+    .battery-leader-discharging
+    {
+        animation-direction: reverse;
+    }
+
+    @keyframes battery-leader-flow
+    {
+        from { stroke-dashoffset: 0;  }
+        to   { stroke-dashoffset: -11; }
+    }
+
+    .battery-leader-arrow
+    {
+        opacity: 0.9;
     }
 
     /*  Cloud-cover leader line — black hairline from chip to disc. */
@@ -832,6 +850,50 @@ export const heliosCardStyles = css`
         15%  { opacity: 0.45; }
         85%  { opacity: 0.45; }
         100% { transform: translateX(280px) scaleX(1.1); opacity: 0;    }
+    }
+
+
+    /*  Home-fill SoC tooltip — floats next to the cursor when the
+        user hovers the home building 3D fill. Same dark-on-light
+        pill chrome as the cloud tooltip so the on-map tooltips
+        speak with one voice. Hidden when no SoC entity is
+        configured (the home-fill is then static, no extra reading
+        to surface). */
+    .home-tooltip
+    {
+        position: absolute;
+        transform: translate(12px, -50%);
+        pointer-events: none;
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: rgba(0, 0, 0, 0.78);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 6px;
+        padding: 4px 8px;
+        color: white;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+        white-space: nowrap;
+    }
+
+    .home-tooltip-flip
+    {
+        transform: translate(calc(-100% - 12px), -50%);
+    }
+
+    .home-tooltip ha-icon
+    {
+        --mdc-icon-size: 14px;
+        color: white;
+        display: inline-flex;
+        align-items: center;
     }
 
 

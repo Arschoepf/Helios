@@ -442,9 +442,20 @@ export class HeliosEngine
     //Hover events on the cloud-cover disc — drive the floating
     //low/mid/high breakdown tooltip in the card.
     public onCloudHover?:    (e: { x: number; y: number; hover: boolean }) => void;
+    //Hover events on the home building 3D fill — drive the SoC
+    //tooltip floating near the cursor.
+    public onHomeBuildingHover?: (e: { x: number; y: number; hover: boolean }) => void;
     //Map transform changed — the card recomputes screen-space
     //projections (sun arc, chip positions, leaders) from this hook.
     public onMapTransform?:  () => void;
+
+    //Live State-of-Charge as a [0, 1] factor used to scale the
+    //home-fill extrusion height: 0 = empty (home not painted),
+    //1 = full (fill matches the building's render_height). Stored
+    //here so the value persists across basemap reloads (setStyle
+    //triggers an _addBuildings re-init that re-applies the saved
+    //factor without the card having to push it again).
+    private _batterySocFactor: number = 0;
 
     constructor(
         container:    HTMLElement,
@@ -1193,15 +1204,22 @@ export class HeliosEngine
     //Renders 3D building extrusions as the visual context for the
     //home location.
     //
-    //In v1.2 the rendering rules changed:
-    //  - All buildings are rendered semi-transparent (opacity 0.25)
-    //    so they form a recognisable urban context without competing
-    //    with the home itself for visual attention.
-    //  - The 'building-color' / 'building-alpha' config keys were
-    //    removed; styling is now uniform.
-    //  - A future phase will identify the home building specifically
-    //    and render it opaque on top of this layer to make it the
-    //    focal point. For now everything is dimmed equally.
+    //In v1.1.0-beta.9 the home-as-battery-readout layout went live:
+    //  - Every building (home included) renders at 0.25 opacity in
+    //    the neutral grey backdrop layer (`helios-buildings`).
+    //  - A second layer (`helios-home-fill`) re-renders ONLY the
+    //    home building at 1.0 opacity in the configured battery
+    //    colour, with extrusion height scaled by the live SoC
+    //    (0 % → invisible, 100 % → full building height). The fill
+    //    grows from the ground up so a half-charged battery shows
+    //    the lower half of the home painted.
+    //  - The home is identified spatially: a 15 m circle around
+    //    the configured home coordinates is used as a `within`
+    //    filter on the `building` source-layer. This works for
+    //    individual residential homes; very dense neighbourhoods
+    //    (terraced houses, apartment blocks) may light up adjacent
+    //    buildings — accepted trade-off for the simplicity of not
+    //    needing per-feature ids from the vector tiles.
     //Toggle MapTiler Streets' label layers (road names, house numbers,
     //POIs, place names) on or off based on the `show-labels` config.
     //Symbol-type layers are the canonical container for text + icon
@@ -1279,28 +1297,144 @@ export class HeliosEngine
             minzoom:        15,
             paint:
             {
-                //Neutral light grey — neighbours act as a quiet
-                //urban backdrop, not as visual noise.
+                //Neutral light grey — neighbours form a quiet
+                //urban backdrop. The home itself is overpainted
+                //at full opacity by `helios-home-fill` below, so
+                //even at 0.25 it stays the focal point.
                 'fill-extrusion-color':   'rgba(210,210,215,1)',
                 'fill-extrusion-height':  ['get', 'render_height'],
                 'fill-extrusion-base':    ['get', 'render_min_height'],
-                //Opacity ramps in between zoom 15 and 16; top
-                //opacity sits at 0.9 so the buildings stand out
-                //clearly. The previous 0.25 wash made the home
-                //hard to spot, but isolating the home alone via
-                //feature-state isn't workable on fill-extrusion
-                //in MapLibre 5 (the data-driven branch silently
-                //evaluates to 0 when mixed with a zoom interpolate).
-                //Bumping every building up keeps the focal point
-                //visible at the cost of a slightly busier urban
-                //backdrop.
                 'fill-extrusion-opacity': [
                     'interpolate', ['linear'], ['zoom'],
                     15, 0,
-                    16, 0.9
+                    16, 0.25
                 ]
             }
         });
+
+        //Home-fill layer — same vector source / source-layer as
+        //the backdrop, but spatially filtered to features that
+        //fall inside a small circle around the home, then re-
+        //rendered opaque in the configured battery colour at a
+        //height scaled by the live SoC factor. Added AFTER the
+        //backdrop so it paints on top.
+        const batteryColor = String(this.cfg['battery-color']
+            ?? DEFAULT_BATTERY_COLOR_HEX);
+        this.map.addLayer(
+        {
+            id:             'helios-home-fill',
+            source:         'helios-planet',
+            'source-layer': 'building',
+            type:           'fill-extrusion',
+            minzoom:        15,
+            filter:         ['within', this._homeFilterPolygon()],
+            paint:
+            {
+                'fill-extrusion-color':   batteryColor,
+                'fill-extrusion-base':    ['get', 'render_min_height'],
+                //Initial height = render_height × current SoC factor.
+                //Will be re-pushed by setBatterySoc() whenever the
+                //live SoC value updates.
+                'fill-extrusion-height': [
+                    '*', ['get', 'render_height'], this._batterySocFactor
+                ],
+                'fill-extrusion-opacity': [
+                    'interpolate', ['linear'], ['zoom'],
+                    15, 0,
+                    16, 1.0
+                ]
+            }
+        });
+
+        //Cursor + hover events on the home-fill layer drive the
+        //SoC tooltip in the card. The `mousemove` handler is
+        //throttled to one event per animation frame upstream by
+        //MapLibre, so emitting on every fire is cheap.
+        this.map.on('mouseenter', 'helios-home-fill', () =>
+        {
+            if (this.map) { this.map.getCanvas().style.cursor = 'pointer'; }
+        });
+        this.map.on('mousemove', 'helios-home-fill', e =>
+        {
+            this.onHomeBuildingHover?.({ x: e.point.x, y: e.point.y, hover: true });
+        });
+        this.map.on('mouseleave', 'helios-home-fill', () =>
+        {
+            if (this.map) { this.map.getCanvas().style.cursor = ''; }
+            this.onHomeBuildingHover?.({ x: 0, y: 0, hover: false });
+        });
+    }
+
+    //Square polygon (≈ 15 m × 15 m) centred on the home, used as
+    //the `within` filter geometry for the home-fill layer. We use
+    //a square (rather than a polygon-circle approximation) because
+    //it's geometrically simpler and the practical impact on which
+    //buildings get caught is identical at this scale: a 15 m
+    //inscribed circle vs a 15 m half-side square only differ at the
+    //corners, well outside the spatial fuzziness of vector-tile
+    //building footprints.
+    private _homeFilterPolygon(): GeoJSON.Polygon
+    {
+        const HALF_M  = 15;
+        const cosLat  = Math.cos(this.homeLat * Math.PI / 180);
+        const dLat    = HALF_M / 111_320;
+        const dLng    = HALF_M / (111_320 * cosLat);
+        const w = this.homeLon - dLng;
+        const e = this.homeLon + dLng;
+        const s = this.homeLat - dLat;
+        const n = this.homeLat + dLat;
+        return {
+            type: 'Polygon',
+            coordinates: [[
+                [w, s], [e, s], [e, n], [w, n], [w, s]
+            ]]
+        };
+    }
+
+    //Public — push a new live SoC reading. Accepts a percentage in
+    //[0, 100] or null/undefined to clear the fill (battery info
+    //unavailable: home reverts to the neutral 0.25 backdrop).
+    public setBatterySoc(socPercent: number | null | undefined): void
+    {
+        let factor = 0;
+        if (typeof socPercent === 'number' && Number.isFinite(socPercent))
+        {
+            factor = Math.max(0, Math.min(1, socPercent / 100));
+        }
+        if (factor === this._batterySocFactor)
+        {
+            return;
+        }
+        this._batterySocFactor = factor;
+        if (!this.map || !this.map.getLayer('helios-home-fill'))
+        {
+            return;
+        }
+        try
+        {
+            this.map.setPaintProperty(
+                'helios-home-fill',
+                'fill-extrusion-height',
+                ['*', ['get', 'render_height'], factor]
+            );
+        }
+        catch (_) {}
+    }
+
+    //Public — push a new battery colour to the home-fill layer.
+    //Called by the card whenever the user changes the colour in
+    //the visual editor.
+    public setBatteryFillColor(hex: string): void
+    {
+        if (!this.map || !this.map.getLayer('helios-home-fill'))
+        {
+            return;
+        }
+        try
+        {
+            this.map.setPaintProperty('helios-home-fill', 'fill-extrusion-color', hex);
+        }
+        catch (_) {}
     }
 
     //Linear interpolation between two RGB hex strings.
@@ -1761,13 +1895,15 @@ export class HeliosEngine
     //               the home so the production chip is the prominent
     //               readout, with the cloud chip retreating onto its
     //               own feature on the side.
-    //  batteryLabel — where the optional combined battery chip is
-    //               drawn (icon + SoC + signed instantaneous power
-    //               on a single line). Sits to the down-right of
-    //               the PV chip so the battery overlay reads as
-    //               "attached to" the PV chip via the dotted L
-    //               connector, rather than competing for the home's
-    //               vertical axis.
+    //  batteryLabel — where the optional battery-power chip is
+    //               drawn (signed instantaneous W/kW). Sits closer
+    //               to the home than the PV chip and to the top-
+    //               right of it, so the battery overlay reads as
+    //               anchored ON the home (matching the home-fill
+    //               extrusion that visualises the SoC) rather
+    //               than off to the side. The leader from this
+    //               chip animates from home → chip when charging
+    //               and chip → home when discharging.
     //  ringEdge   — projection of a fixed geographic point on the
     //               100 % reference ring (the disc's geographic east
     //               edge in the northern hemisphere, west edge in
@@ -1835,19 +1971,19 @@ export class HeliosEngine
         const cloudLabelX = ringEdgeX + (radDX / radLen) * CLOUD_CHIP_NUDGE_PX;
         const cloudLabelY = ringEdgeY + (radDY / radLen) * CLOUD_CHIP_NUDGE_PX;
 
-        //Battery chip offset, relative to the PV chip centre.
-        //Anchors the chip down-and-right of the PV chip so the
-        //battery overlay reads as visually attached to PV (the
-        //L-shaped dotted connector starts on PV's bottom edge — see
-        //the card render block) rather than competing for the
-        //home's vertical axis. The X offset is sized to give the
-        //horizontal leg of the L enough length to read as a clear
-        //"connection" rather than a tight elbow against the chip.
-        const BATTERY_OFFSET_FROM_PV_X_PX = 65;
-        const BATTERY_OFFSET_FROM_PV_Y_PX = 32;
+        //Battery chip offset, relative to the home. Closer than
+        //the PV chip and shifted to the top-right so the chip
+        //reads as a satellite of the home (the home fills with
+        //battery colour and the chip annotates the live power
+        //draw on top of that fill) rather than as a sibling of
+        //the PV readout. Vertical offset stays well clear of the
+        //home roof line so the chip floats above the fill rather
+        //than overlapping it.
+        const BATTERY_OFFSET_FROM_HOME_X_PX = 50;
+        const BATTERY_OFFSET_FROM_HOME_Y_PX = -55;
 
-        const batteryX = home.x + BATTERY_OFFSET_FROM_PV_X_PX;
-        const batteryY = home.y - CLOUD_LABEL_OFFSET_PX + BATTERY_OFFSET_FROM_PV_Y_PX;
+        const batteryX = home.x + BATTERY_OFFSET_FROM_HOME_X_PX;
+        const batteryY = home.y + BATTERY_OFFSET_FROM_HOME_Y_PX;
 
         return {
             cloudLabel:    { x: cloudLabelX, y: cloudLabelY },

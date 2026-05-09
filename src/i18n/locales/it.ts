@@ -61,11 +61,11 @@ export const it: Translations = {
         pvEntityHelp:       'Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).',
         pvColor:            'Colore di produzione *',
         batterySection:     'Batteria domestica',
-        batteryHint:        'Opzionale. Quando è impostata almeno un\'entità, appare una pastiglia sotto la casa con lo stato di carica in tempo reale e la potenza istantanea con segno. La linea si anima verso il basso durante la carica e verso l\'alto durante la scarica, a una velocità proporzionale alla potenza. Nessuno storico viene recuperato — la pastiglia riflette solo la lettura in tempo reale.',
+        batteryHint:        'Opzionale. L\'entità dello stato di carica riempie l\'edificio 3D della casa dal basso verso l\'alto — batteria vuota, la casa appare come una sagoma grigia traslucida; batteria piena, viene dipinta completamente nel colore configurato. Passa il cursore sulla casa per leggere la percentuale esatta. L\'entità di potenza aggiunge una piccola pastiglia in alto a destra della casa con la lettura istantanea con segno; la sua linea punteggiata scorre dalla casa alla pastiglia durante la carica e dalla pastiglia alla casa durante la scarica, a una velocità proporzionale alla potenza.',
         batterySocEntity:   'Entità stato di carica',
-        batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery").',
+        batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Pilota l\'altezza di riempimento della casa: 0 % = casa invisibile a piena opacità (resta visibile solo la sagoma al 25 %), 100 % = casa completamente riempita nel colore configurato.',
         batteryPowerEntity: 'Entità di potenza',
-        batteryPowerEntityHelp: 'Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l\'entità stessa; positivo = in carica.',
+        batteryPowerEntityHelp: 'Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l\'entità stessa; positivo = in carica e inverte il verso del flusso sulla linea punteggiata.',
         batteryColor:       'Colore batteria *'
     }
 };

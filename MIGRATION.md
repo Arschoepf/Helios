@@ -5,13 +5,17 @@ Refines the catalogue placeholder, hardens the rotation interaction
 so the home stays dead-centre, lightens the on-card chips so the
 underlying scene reads through, exposes a `map-style` option to
 switch the basemap between streets, topographic and hybrid
-(satellite + roads), adds an optional home-battery overlay (live +
-scrubbable SoC and signed Power on a single chip hooked off the PV
-chip via a dotted L-shaped connector), relocates the cloud-cover
-chip to the side of the disc so the home's vertical axis stays
-clear of readouts, and ships an opt-in dark theme for the card
-chrome so the card sits cleanly inside dark Home Assistant
-dashboards.
+(satellite + roads), turns the home itself into the live battery
+gauge — neighbouring buildings are now rendered at 25 % opacity
+while the home is re-painted opaque in the configured battery
+colour, with extrusion height scaled by the SoC so the home
+literally fills up as the battery charges; the signed instantaneous
+power is read via a small chip at the top-right of the home with a
+dotted leader whose flow direction encodes charging vs discharging,
+relocates the cloud-cover chip to the side of the disc so the
+home's vertical axis stays clear of readouts, and ships an opt-in
+dark theme for the card chrome so the card sits cleanly inside
+dark Home Assistant dashboards.
 
 ## v1.1.0-beta.1
 
@@ -270,6 +274,52 @@ Internal: `projectHomeLabelLayout` now returns a single
 `.battery-pair-line` CSS class is removed. No public config keys
 were removed; `card-theme` and the `'hybrid'` value of `map-style`
 are additive.
+
+## v1.1.0-beta.9
+
+* **The home itself is now the battery gauge** — a substantial
+  rework of the home-battery overlay introduced in beta.4.
+  * **Neighbour buildings drop to 25 % opacity** (`helios-buildings`
+    layer) so the home reads as the unambiguous focal point
+    against a soft urban backdrop.
+  * **A new `helios-home-fill` extrusion layer** re-paints just
+    the home opaque in the configured battery colour, with a
+    height scaled by the live SoC: empty battery → invisible
+    fill (only the 25 % outline shows), 50 % → lower half of the
+    home painted, 100 % → home fully painted. The fill is
+    spatially anchored via a `within` filter on a 15 m square
+    around the home coordinates — works for individual residential
+    homes; very dense neighbourhoods may light up adjacent
+    buildings as a known trade-off (see code comment).
+  * **Hover the home for the exact percentage.** The fill's height
+    encodes a coarse "how full" reading at a glance; mousing over
+    the home opens a small SoC tooltip (`mdi:battery 73 %`) for
+    the precise number, mirroring the cloud-disc tooltip pattern.
+  * **The combined SoC + Power chip from beta.7 / 8 is gone.**
+    SoC-only configurations now show no chip at all — the home
+    fill carries the value. Power-only configurations show a
+    chip at the top-right of the home with the signed
+    instantaneous reading.
+  * **Animated leader on the Power chip** — the chip is connected
+    to the home by a dotted line whose dashes flow from home to
+    chip while charging (positive power) and from chip to home
+    while discharging (negative). The arrow follows the same
+    direction. Speed scales with `|P|` saturating at ~5 kW, the
+    same envelope as the PV leader.
+* **Editor copy refreshed** for all seven locales to describe the
+  new battery semantics (home-fill height ↔ SoC, hover tooltip,
+  Power chip + animated leader, charging direction).
+
+Internal: `helios-engine` gained `setBatterySoc(percent)` /
+`setBatteryFillColor(hex)` public methods plus the
+`onHomeBuildingHover` callback. `projectHomeLabelLayout`'s
+`batteryLabel` was repositioned closer to the home and to the
+top-right of it. The `.battery-l-line` CSS class was replaced
+by `.battery-leader-line` (animated dotted, with a `-discharging`
+modifier for the reversed flow direction).
+
+No public config keys changed; existing dashboards keep working
+with no edits.
 
 ---
 

@@ -18,6 +18,7 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 * **Incidence ray** — dashed line from sun to home, animated to flow at a speed proportional to live irradiance. The stronger the sun, the faster it pulses.
 * **Cloud cover disc** — translucent disc on the ground, scaled by live cloud-cover %, outlined in the configured cloud colour. A fixed black ring marks the 100 % reference. Hover for the low/mid/high breakdown.
 * **PV production chip** *(optional)* — pin on the home, shows the **instantaneous** production in W/kW. Cumulative-energy sensors (kWh) are differentiated automatically over a rolling 60 s window. The line between the home and the chip flows at a speed proportional to live production.
+* **Home battery as a 3D gauge** *(optional)* — when a State-of-Charge entity is configured, the home itself fills up with the configured battery colour at a height proportional to the live SoC (empty → translucent grey home, full → home entirely painted). Hover the home for the exact percentage. When a power entity is configured too, a small chip floats top-right of the home with the signed instantaneous reading and an animated dotted leader whose flow direction encodes charging vs discharging.
 * **Timeline** — 5 days wide (2 past + today + 2 forecast). Dual-area chart with irradiance on top and cloud cover below. A second graph appears above when a PV entity is configured. Click or drag anywhere on the timeline to scrub; the whole map snaps to the selected instant.
 * **Multilingual** — English, French, German, Spanish, Italian, Dutch, Portuguese. Adapts to your Home Assistant language.
 
@@ -85,9 +86,9 @@ Every option below is editable visually:
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
 | `pv-power-entity` | entity_id | — | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |
 | `pv-color` | hex | `#27B36B` | PV chip border + text + leader + dedicated graph. |
-| `battery-soc-entity` | entity_id | — | Optional. Battery State-of-Charge sensor (`%` — usually `device_class: battery`). |
-| `battery-power-entity` | entity_id | — | Optional. Battery power sensor (W/kW). Signed: positive is interpreted as charging. |
-| `battery-color` | hex | `#D32F2F` | Combined battery chip's border + text + the dotted L connector that hooks it off the PV chip. |
+| `battery-soc-entity` | entity_id | — | Optional. Battery State-of-Charge sensor (`%` — usually `device_class: battery`). Drives the home-fill 3D extrusion: 0 % paints nothing, 100 % paints the full home in the configured battery colour. The exact percentage is shown in a tooltip when hovering the home. |
+| `battery-power-entity` | entity_id | — | Optional. Battery power sensor (W/kW). When set, a chip floats at the top-right of the home with the signed reading and an animated dotted leader points at the home — flow goes home → chip while charging (positive) and chip → home while discharging (negative). |
+| `battery-color` | hex | `#D32F2F` | Battery colour reused for the home-fill extrusion, the Power chip border + text and its animated leader. |
 | `date-format` | string | `mm-dd` | Tokens: `yyyy`, `yy`, `mm`, `dd`. |
 | `time-format` | `'12h' \| '24h'` | `'24h'` | Clock display in the top-right chip. |
 

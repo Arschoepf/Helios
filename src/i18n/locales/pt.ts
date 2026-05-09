@@ -61,11 +61,11 @@ export const pt: Translations = {
         pvEntityHelp:       'Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).',
         pvColor:            'Cor de produção *',
         batterySection:     'Bateria doméstica',
-        batteryHint:        'Opcional. Quando pelo menos uma entidade está definida, aparece um chip por baixo da casa com o estado de carga em tempo real e a potência instantânea com sinal. A linha anima para baixo durante o carregamento e para cima durante a descarga, a uma velocidade proporcional à potência. Não é recuperado nenhum histórico — o chip reflete apenas a leitura em tempo real.',
+        batteryHint:        'Opcional. A entidade de estado de carga preenche o edifício 3D da casa de baixo para cima — bateria vazia, a casa aparece como uma silhueta cinza translúcida; bateria cheia, fica totalmente pintada na cor configurada. Passa o cursor sobre a casa para ler a percentagem exata. A entidade de potência adiciona um pequeno chip no canto superior direito da casa com a leitura instantânea com sinal; a sua linha pontilhada flui da casa para o chip durante o carregamento e do chip para a casa durante a descarga, a uma velocidade proporcional à potência.',
         batterySocEntity:   'Entidade do estado de carga',
-        batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (% — normalmente com device_class "battery").',
+        batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (% — normalmente com device_class "battery"). Comanda a altura de preenchimento da casa: 0 % = casa invisível com opacidade total (só a silhueta a 25 % continua visível), 100 % = casa totalmente preenchida na cor configurada.',
         batteryPowerEntity: 'Entidade de potência',
-        batteryPowerEntityHelp: 'Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar.',
+        batteryPowerEntityHelp: 'Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e inverte o sentido do fluxo na linha pontilhada.',
         batteryColor:       'Cor da bateria *'
     }
 };

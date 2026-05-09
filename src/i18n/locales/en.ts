@@ -71,11 +71,11 @@ export const en: Translations = {
         pvEntityHelp:       'Pick a solar power or energy sensor (W, kW, Wh, kWh).',
         pvColor:            'Production color *',
         batterySection:     'Home battery',
-        batteryHint:        'Optional. When at least one entity is set, a chip appears below the home with the live State of Charge and the signed instantaneous power. The leader line animates downward while charging and upward while discharging, at a speed proportional to the live power. No history is fetched — the chip reflects the live reading only.',
+        batteryHint:        'Optional. The State of Charge entity fills the 3D home building from the ground up — empty battery shows the home as a translucent grey outline, full battery paints it entirely in the configured colour. Hover the home for the exact percentage. The Power entity adds a small chip top-right of the home with the signed instantaneous reading; its dotted leader streams from home to chip while charging and from chip to home while discharging, at a speed proportional to the live power.',
         batterySocEntity:   'State of charge entity',
-        batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery").',
+        batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery"). Drives the home-fill height: 0 % = home invisible at full opacity (only the 25 % outline shows), 100 % = home fully filled in the configured colour.',
         batteryPowerEntity: 'Power entity',
-        batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging.',
+        batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and reverses the leader-line flow direction.',
         batteryColor:       'Battery color *'
     }
 };

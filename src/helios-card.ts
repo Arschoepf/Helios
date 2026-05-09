@@ -121,6 +121,13 @@ export class HeliosCard extends LitElement
     //the default right offset, so it can't overflow past the
     //card edge.
     @state() private _cloudHoverFlip  = false;
+    //Hover state for the home building 3D fill — drives the
+    //SoC tooltip floating near the cursor. Same flip-on-right
+    //logic as the cloud tooltip so it stays inside the card.
+    @state() private _homeHoverX      = 0;
+    @state() private _homeHoverY      = 0;
+    @state() private _homeHover       = false;
+    @state() private _homeHoverFlip   = false;
     //Screen-space layout of the always-visible cloud-cover percentage
     //label and its leader line, recomputed via engine.projectHome-
     //LabelLayout() whenever the map transform changes (engine fires
@@ -938,6 +945,15 @@ export class HeliosCard extends LitElement
                 const mc = this.renderRoot.querySelector('#map-container');
                 const w  = (mc as HTMLElement | null)?.clientWidth ?? 0;
                 this._cloudHoverFlip = w > 0 && e.x > w / 2;
+            };
+            this._engine.onHomeBuildingHover = e =>
+            {
+                this._homeHover  = e.hover;
+                this._homeHoverX = e.x;
+                this._homeHoverY = e.y;
+                const mc = this.renderRoot.querySelector('#map-container');
+                const w  = (mc as HTMLElement | null)?.clientWidth ?? 0;
+                this._homeHoverFlip = w > 0 && e.x > w / 2;
             };
             this._engine.onMapTransform = () =>
             {
@@ -2005,24 +2021,25 @@ export class HeliosCard extends LitElement
             : 0;
         const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5000);
 
-        //Battery overlay — a single combined chip drawn down-right
-        //of the PV chip, joined by a dotted L-shaped connector that
-        //starts on PV's bottom edge and lands on the chip's centre-
-        //left. The chip displays the battery icon followed by the
-        //SoC percentage (entity 1) and the signed instantaneous
-        //power (entity 2), space-separated.
+        //Battery overlay — the SoC drives the home-fill 3D extrusion
+        //(painted in the configured battery colour, height scaled by
+        //the live percentage), and an optional Power chip floats at
+        //the top-right of the home with an animated dotted leader
+        //pointing at the home itself: charging streams from home to
+        //chip, discharging streams from chip to home.
         //
-        //Scrub semantics mirror PV: in live mode the chip shows the
-        //configured entities' current state; in past-scrub mode it
-        //shows the historical readings at the selected instant
-        //(resolved from the WS history fetch); in future-scrub mode
-        //the chip is hidden because no battery data exists past
-        //"now".
+        //Scrub semantics mirror PV: in live mode both the home-fill
+        //and the Power chip show the configured entities' current
+        //state; in past-scrub mode they show the historical reading
+        //at the selected instant (resolved from the WS history
+        //fetch); in future-scrub mode the home-fill collapses to 0
+        //and the chip is hidden because no battery data exists
+        //past "now".
         //
         //Layout adapts gracefully when the user only configured one
-        //of the two entities — the corresponding part is omitted
-        //from the chip text and the icon stays the battery one (so
-        //a Power-only setup still reads as a battery readout).
+        //of the two entities — SoC-only fills the home but renders
+        //no chip (the exact % is read on hover via the home
+        //tooltip); Power-only renders the chip with no home-fill.
         const batterySocEntity   = String(this.config?.['battery-soc-entity']   ?? '').trim();
         const batteryPowerEntity = String(this.config?.['battery-power-entity'] ?? '').trim();
         const batteryColor       = cfgHex(this.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
@@ -2043,21 +2060,49 @@ export class HeliosCard extends LitElement
         //from the live state cache regardless of mode.
         const activeBatteryUnit = this._batteryPowerUnit;
 
-        //Per-part render flags. Each part needs its entity to be
-        //configured AND its active reading to be a finite number;
-        //future scrub hides everything regardless.
-        const showSocPart   = !batteryScrubFuture
-            && batterySocEntity   !== '' && activeBatterySoc   !== null;
-        const showPowerPart = !batteryScrubFuture
-            && batteryPowerEntity !== '' && activeBatteryPower !== null;
-        const showBatteryChip = (hasApiKey && layout !== null)
-            && (showSocPart || showPowerPart);
+        //Push the active SoC into the engine so the home-fill
+        //extrusion height tracks the value being displayed (live
+        //or scrubbed). The setter early-exits if the factor hasn't
+        //changed, so calling on every render is safe.
+        const homeFillSoc = batteryScrubFuture
+            ? null
+            : (batterySocEntity !== '' ? activeBatterySoc : null);
+        this._engine?.setBatterySoc(homeFillSoc);
+        this._engine?.setBatteryFillColor(batteryColor);
 
-        const batterySocText = showSocPart
-            ? `${Math.round(activeBatterySoc!)} %`
-            : '';
-        const batteryPowerText = showPowerPart
+        //Power chip render gate. SoC-only configs show the fill +
+        //hover tooltip but no chip; future scrub hides everything.
+        const showPowerChip = (hasApiKey && layout !== null)
+            && !batteryScrubFuture
+            && batteryPowerEntity !== ''
+            && activeBatteryPower !== null;
+
+        const batteryPowerText = showPowerChip
             ? this._formatBatteryPower(activeBatteryPower!, activeBatteryUnit)
+            : '';
+
+        //Charging / discharging direction drives the leader-line
+        //flow direction and the SVG arrow path direction. Sign
+        //is taken straight from the entity (positive = charging
+        //by convention, see helios-engine config docs).
+        const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
+        //Flow speed scales with absolute power, saturating at the
+        //same ~5 kW threshold as the PV leader so the two streams
+        //read on a comparable scale.
+        const batteryWattsForFlow = showPowerChip
+            ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
+            : 0;
+        const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
+
+        //Tooltip line shown when the cursor hovers the home fill.
+        //Hidden when no SoC is configured (nothing meaningful to
+        //display) or when scrubbing into the future.
+        const showHomeTooltip = this._homeHover
+            && batterySocEntity !== ''
+            && !batteryScrubFuture
+            && activeBatterySoc !== null;
+        const homeSocLine = showHomeTooltip
+            ? `${Math.round(activeBatterySoc!)} %`
             : '';
 
         //Solar-arc overlay — sun trajectory across the sky, sun's
@@ -2398,36 +2443,60 @@ ${showSun ? html`
                     </div>
                 ` : nothing}
 
-                ${showBatteryChip ? html`
+                ${showPowerChip ? html`
                     <svg class="battery-leader-svg">
                         <!--
-                            Dotted L-shaped connector from PV chip to
-                            the combined battery chip. Vertical leg
-                            starts on PV's bottom edge, midway between
-                            the leader-line entry point (PV centre)
-                            and the chip's right border (approximated
-                            at +10 px since the chip width is content-
-                            driven and not known here); horizontal leg
-                            lands on the chip's centre-left, with the
-                            endpoint nudged 10 px into the chip so the
-                            chip background hides the inside portion
-                            (same trick used for the cloud / PV
-                            leaders).
+                            Animated dotted leader from the home to
+                            the Power chip. The path direction (and
+                            therefore the arrow's travel direction)
+                            flips with the sign of the power: charging
+                            (P > 0) streams from home → chip; dis-
+                            charging streams from chip → home, so the
+                            user reads the energy flow direction at a
+                            glance without having to parse the sign on
+                            the chip text.
                         -->
-                        <polyline
-                            class="battery-l-line"
-                            style="--battery-leader-color:${batteryColor}"
-                            points="${layout!.pvLabel.x + 10},${layout!.pvLabel.y + 12} ${layout!.pvLabel.x + 10},${layout!.batteryLabel.y} ${layout!.batteryLabel.x - 10},${layout!.batteryLabel.y}"
-                            fill="none"
-                        ></polyline>
+                        <line
+                            class="battery-leader-line ${batteryCharging ? '' : 'battery-leader-discharging'}"
+                            style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
+                            x1="${layout!.home.x}"
+                            y1="${layout!.home.y}"
+                            x2="${layout!.batteryLabel.x}"
+                            y2="${layout!.batteryLabel.y + 10}"
+                        ></line>
+                        ${svg`
+                            <polygon
+                                class="battery-leader-arrow"
+                                points="-6,-4 0,0 -6,4"
+                                fill="${batteryColor}"
+                            >
+                                <animateMotion
+                                    dur="${batteryFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="${batteryCharging
+                                        ? `M ${layout!.home.x},${layout!.home.y} L ${layout!.batteryLabel.x},${layout!.batteryLabel.y + 10}`
+                                        : `M ${layout!.batteryLabel.x},${layout!.batteryLabel.y + 10} L ${layout!.home.x},${layout!.home.y}`}"
+                                ></animateMotion>
+                            </polygon>
+                        `}
                     </svg>
                     <div
                         class="battery-pct-label"
                         style="left:${layout!.batteryLabel.x}px; top:${layout!.batteryLabel.y}px; --battery-leader-color:${batteryColor}"
                     >
+                        <ha-icon icon="mdi:lightning-bolt"></ha-icon>
+                        <span>${batteryPowerText}</span>
+                    </div>
+                ` : nothing}
+
+                ${showHomeTooltip ? html`
+                    <div
+                        class="home-tooltip ${this._homeHoverFlip ? 'home-tooltip-flip' : ''}"
+                        style="left:${this._homeHoverX}px; top:${this._homeHoverY}px"
+                    >
                         <ha-icon icon="mdi:battery"></ha-icon>
-                        ${showSocPart   ? html`<span>${batterySocText}</span>`   : nothing}
-                        ${showPowerPart ? html`<span>${batteryPowerText}</span>` : nothing}
+                        <span>${homeSocLine}</span>
                     </div>
                 ` : nothing}
 

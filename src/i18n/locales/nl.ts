@@ -61,11 +61,11 @@ export const nl: Translations = {
         pvEntityHelp:       'Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).',
         pvColor:            'Productiekleur *',
         batterySection:     'Thuisbatterij',
-        batteryHint:        'Optioneel. Wanneer ten minste één entiteit is ingesteld, verschijnt er een chip onder het huis met de live laadtoestand en het ondertekende momentane vermogen. De leider-lijn animeert naar beneden tijdens het laden en naar boven tijdens het ontladen, met een snelheid evenredig aan het vermogen. Er wordt geen historie opgehaald — de chip toont alleen de live waarde.',
+        batteryHint:        'Optioneel. De laadtoestand-entiteit vult het 3D-huisgebouw van onder naar boven — lege batterij toont het huis als een doorschijnende grijze omtrek, volle batterij schildert het volledig in de geconfigureerde kleur. Beweeg over het huis om het exacte percentage te lezen. De vermogen-entiteit voegt rechtsboven van het huis een kleine chip toe met de momentane waarde met teken; de stippellijn stroomt tijdens het laden van het huis naar de chip en tijdens het ontladen van de chip naar het huis, met een snelheid evenredig aan het vermogen.',
         batterySocEntity:   'Laadtoestand-entiteit',
-        batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery").',
+        batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Stuurt de vulhoogte van het huis aan: 0 % = huis bij volledige dekking onzichtbaar (alleen de 25 %-omtrek blijft zichtbaar), 100 % = huis volledig gevuld in de geconfigureerde kleur.',
         batteryPowerEntity: 'Vermogen-entiteit',
-        batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen.',
+        batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en draait de stroomrichting van de stippellijn om.',
         batteryColor:       'Batterijkleur *'
     }
 };

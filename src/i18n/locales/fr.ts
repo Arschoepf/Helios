@@ -69,11 +69,11 @@ export const fr: Translations = {
         pvEntityHelp:       'Sélectionne un capteur de puissance ou d\'énergie photovoltaïque (W, kW, Wh, kWh).',
         pvColor:            'Couleur de production *',
         batterySection:     'Batterie domestique',
-        batteryHint:        'Optionnel. Quand au moins une entité est renseignée, une pastille apparaît sous la maison avec l\'état de charge en direct et la puissance instantanée signée. La ligne s\'anime vers le bas en charge et vers le haut en décharge, à une vitesse proportionnelle à la puissance. Aucun historique n\'est récupéré — la pastille reflète uniquement la valeur en direct.',
+        batteryHint:        'Optionnel. L\'entité d\'état de charge remplit le bâtiment 3D de la maison de bas en haut — batterie vide, la maison apparaît comme un volume gris translucide ; batterie pleine, elle est entièrement peinte dans la couleur configurée. Survole la maison pour lire le pourcentage exact. L\'entité de puissance ajoute une petite pastille en haut à droite de la maison avec la valeur instantanée signée ; sa ligne pointillée anime de la maison vers la pastille en charge et de la pastille vers la maison en décharge, à une vitesse proportionnelle à la puissance.',
         batterySocEntity:   'Entité d\'état de charge',
-        batterySocEntityHelp: 'Choisis un capteur d\'état de charge de batterie (% — typiquement avec device_class "battery").',
+        batterySocEntityHelp: 'Choisis un capteur d\'état de charge de batterie (% — typiquement avec device_class "battery"). Pilote la hauteur de remplissage de la maison : 0 % = maison invisible en pleine opacité (seul le contour à 25 % reste visible), 100 % = maison entièrement remplie dans la couleur configurée.',
         batteryPowerEntity: 'Entité de puissance',
-        batteryPowerEntityHelp: 'Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l\'entité elle-même ; positif = en charge.',
+        batteryPowerEntityHelp: 'Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l\'entité elle-même ; positif = en charge et inverse le sens du flux sur la ligne pointillée.',
         batteryColor:       'Couleur batterie *'
     }
 };
