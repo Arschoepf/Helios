@@ -463,6 +463,22 @@ export class HeliosCardEditor extends LitElement
 
                 <div class="section-title">${t.editor.mapSection}</div>
                 <div class="field">
+                    <span class="label">${t.editor.mapStyle}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'streets' ? 'active' : ''}"
+                            @click="${() => this._update('map-style', 'streets')}"
+                        >${t.editor.mapStyleStreet}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'topo' ? 'active' : ''}"
+                            @click="${() => this._update('map-style', 'topo')}"
+                        >${t.editor.mapStyleTopo}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.mapStyleHint}</div>
+                <div class="field">
                     <span class="label">${t.editor.showLabels}</span>
                     <div class="segmented-toggle">
                         <button

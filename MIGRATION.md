@@ -2,8 +2,9 @@
 
 Polish release — no breaking changes, no config migration required.
 Refines the catalogue placeholder, hardens the rotation interaction
-so the home stays dead-centre, and lightens the visual weight of the
-on-card chips so the underlying scene reads through.
+so the home stays dead-centre, lightens the on-card chips so the
+underlying scene reads through, and exposes a `map-style` option to
+switch the basemap between a streets and a topographic style.
 
 ## v1.1.0-beta.1
 
@@ -47,6 +48,36 @@ on-card chips so the underlying scene reads through.
 i18n: `placeholder.action` was removed from `Translations` and
 all locale files. Custom locales pointing at the old shape will
 fail typecheck and need that key deleted.
+
+## v1.1.0-beta.3
+
+* **Map style is now configurable** — a new `map-style` config
+  key picks the MapTiler basemap. Two values are accepted:
+  * `streets` *(default — same as previous releases)* — sober
+    vector basemap suited to dense urban areas.
+  * `topo` — topographic basemap with contour lines and softer
+    earth tones, better in hilly / outdoor settings.
+
+  Label visibility (`show-labels`) and the helios-buildings
+  extrusion are independent of this choice — both layers are
+  wired to custom sources, so 3D buildings render and labels
+  toggle identically on both styles. The hillshade overlay
+  (`topography-color` / `topography-alpha`) still renders on
+  top of either basemap; on `topo` the basemap already carries
+  some baked-in shading, so users may want to lower
+  `topography-alpha` (default 0.65) if the cumulative effect
+  feels too heavy.
+
+  Switching styles at runtime (via the visual editor or by
+  editing the YAML) reloads the basemap in place: terrain,
+  hillshade, cloud disc, buildings and label visibility are
+  re-applied automatically. The visual editor exposes a
+  segmented toggle in the **Map** section.
+
+i18n: `Translations.editor` gained four new keys (`mapStyle`,
+`mapStyleHint`, `mapStyleStreet`, `mapStyleTopo`) used by the
+new toggle. Custom locales need to provide them or typecheck
+will fail.
 
 ---
 

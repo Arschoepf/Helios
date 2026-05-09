@@ -76,8 +76,9 @@ Every option below is editable visually:
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `maptiler-api-key` | string | — | Required. |
+| `map-style` | `'streets' \| 'topo'` | `'streets'` | Basemap style. `streets` is a sober vector basemap suited to dense urban areas; `topo` is a topographic basemap with contour lines, better in hilly / outdoor settings. Labels and 3D buildings work identically on both. |
 | `topography-color` | hex | `#5064a0` | Hillshade tint. |
-| `topography-alpha` | 0–1 | `0.65` | Hillshade strength. |
+| `topography-alpha` | 0–1 | `0.65` | Hillshade strength. On `topo`, the basemap already carries some baked-in shading — lower this if the cumulative effect feels too heavy. |
 | `show-labels` | boolean | `true` | Show MapTiler street names, building numbers, POIs and place names on the basemap. |
 | `sun-color` | hex | `#EF9F27` | Sun disc + arc + timeline irradiance area. |
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |

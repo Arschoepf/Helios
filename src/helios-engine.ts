@@ -44,6 +44,13 @@ export interface HeliosConfig
     //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
     //rendering of the date/time chip at the top-right of the card.
     'time-format'?:           unknown;
+    //v1.1 — picks the MapTiler base style. 'streets' (default) renders
+    //a sober vector basemap suited to dense urban areas; 'topo' renders
+    //a topographic basemap with contour lines and softer earth tones,
+    //better in hilly / outdoor settings. The label visibility toggle
+    //and the helios-buildings extrusion are independent of this choice
+    //(both layers are wired to custom sources).
+    'map-style'?:             unknown;
 }
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
@@ -531,14 +538,27 @@ export class HeliosEngine
         this._refreshWeather();
     }
 
-    //Always returns the street style. The hybrid (satellite imagery)
-    //mode was removed in the 1.2 redesign because it visually fights
-    //the new 3D solar elements (arc, sun sphere, incidence ray):
-    //the satellite tiles introduce too much chromatic noise for the
-    //solar overlay to read clearly. Streets vector tiles give a
-    //sober, structured background that lets the 3D content breathe.
+    //Resolves the active MapTiler style id from `map-style` config.
+    //Two values are accepted:
+    //  'streets' (default) → 'streets-v4' — sober urban basemap.
+    //  'topo'              → 'topo-v4'    — topographic basemap with
+    //                                       contour lines and softer
+    //                                       earth tones, better in
+    //                                       hilly / outdoor settings.
+    //
+    //Anything else falls back to 'streets'. The hybrid (satellite
+    //imagery) mode was removed in the 1.2 redesign because the
+    //satellite tiles introduce too much chromatic noise for the 3D
+    //solar overlay to read clearly; we keep the `isHybrid` flag in
+    //the return shape so the (now unused) sat-hires raster setup
+    //path stays a no-op without further refactor.
     private _resolveMapStyle(): { id: string; isHybrid: boolean }
     {
+        const raw = String(this.cfg['map-style'] ?? 'streets').toLowerCase();
+        if (raw === 'topo')
+        {
+            return { id: 'topo-v4', isHybrid: false };
+        }
         return { id: 'streets-v4', isHybrid: false };
     }
 
@@ -2160,10 +2180,35 @@ export class HeliosEngine
 
     public updateConfig(cfg: HeliosConfig): void
     {
+        const prevStyleId = this._resolveMapStyle().id;
         this.cfg = { ...cfg };
 
         if (!this.map)
         {
+            return;
+        }
+
+        //Map-style change → reload the basemap. setStyle() replaces
+        //the entire style.json (sources, layers, sprites, glyphs);
+        //our custom sources (helios-terrain, helios-cloud, helios-
+        //planet) are wiped along with it and have to be re-added.
+        //_onStyleLoad already does that on the resulting `style.load`
+        //event — the same path used at initial load — so the only
+        //extra work here is dropping `_mapReady` while the new style
+        //is in flight, to prevent any code path that checks it from
+        //operating on a half-loaded style.
+        const nextStyleInfo = this._resolveMapStyle();
+        if (nextStyleInfo.id !== prevStyleId)
+        {
+            this._mapReady = false;
+            this.map.setStyle(
+                `https://api.maptiler.com/maps/${nextStyleInfo.id}/style.json?key=${this.apiKey}`
+            );
+            //_onStyleLoad will re-init terrain/hillshade/cloud disc/
+            //buildings/labels and re-render the current selection,
+            //so we return early — touching paint properties or
+            //running _renderForCurrentSelection right now would race
+            //against the in-flight style load.
             return;
         }
 

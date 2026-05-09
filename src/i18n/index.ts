@@ -46,6 +46,10 @@ export interface Translations
         hillshadeColor:           string;
         hillshadeStrength:        string;
         mapSection:               string;
+        mapStyle:                 string;
+        mapStyleHint:             string;
+        mapStyleStreet:           string;
+        mapStyleTopo:             string;
         showLabels:               string;
         showLabelsHint:           string;
         labelsOn:                 string;

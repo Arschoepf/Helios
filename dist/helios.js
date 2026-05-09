@@ -24945,13 +24945,25 @@ class HeliosEngine {
       this._weatherTimer = void 0;
     }
   }
-  //Always returns the street style. The hybrid (satellite imagery)
-  //mode was removed in the 1.2 redesign because it visually fights
-  //the new 3D solar elements (arc, sun sphere, incidence ray):
-  //the satellite tiles introduce too much chromatic noise for the
-  //solar overlay to read clearly. Streets vector tiles give a
-  //sober, structured background that lets the 3D content breathe.
+  //Resolves the active MapTiler style id from `map-style` config.
+  //Two values are accepted:
+  //  'streets' (default) → 'streets-v4' — sober urban basemap.
+  //  'topo'              → 'topo-v4'    — topographic basemap with
+  //                                       contour lines and softer
+  //                                       earth tones, better in
+  //                                       hilly / outdoor settings.
+  //
+  //Anything else falls back to 'streets'. The hybrid (satellite
+  //imagery) mode was removed in the 1.2 redesign because the
+  //satellite tiles introduce too much chromatic noise for the 3D
+  //solar overlay to read clearly; we keep the `isHybrid` flag in
+  //the return shape so the (now unused) sat-hires raster setup
+  //path stays a no-op without further refactor.
   _resolveMapStyle() {
+    const raw = String(this.cfg["map-style"] ?? "streets").toLowerCase();
+    if (raw === "topo") {
+      return { id: "topo-v4", isHybrid: false };
+    }
     return { id: "streets-v4", isHybrid: false };
   }
   _findHourIndex(t2) {
@@ -26046,8 +26058,17 @@ class HeliosEngine {
     };
   }
   updateConfig(cfg) {
+    const prevStyleId = this._resolveMapStyle().id;
     this.cfg = { ...cfg };
     if (!this.map) {
+      return;
+    }
+    const nextStyleInfo = this._resolveMapStyle();
+    if (nextStyleInfo.id !== prevStyleId) {
+      this._mapReady = false;
+      this.map.setStyle(
+        `https://api.maptiler.com/maps/${nextStyleInfo.id}/style.json?key=${this.apiKey}`
+      );
       return;
     }
     if (this.map.getLayer("helios-hillshade")) {
@@ -26097,6 +26118,10 @@ const en = {
     hillshadeColor: "Hillshade color *",
     hillshadeStrength: "Hillshade strength * (0 → 1)",
     mapSection: "Map",
+    mapStyle: "Map style *",
+    mapStyleHint: "Choose between the streets basemap (sober, urban) and the topographic basemap (contour lines, earth tones, better in hilly terrain). Labels and 3D buildings work identically on both.",
+    mapStyleStreet: "Streets",
+    mapStyleTopo: "Topo",
     showLabels: "Show labels *",
     showLabelsHint: "Toggles street names, building numbers, points of interest and place names on the basemap.",
     labelsOn: "Shown",
@@ -26143,6 +26168,10 @@ const fr = {
     hillshadeColor: "Couleur de l'ombrage *",
     hillshadeStrength: "Intensité de l'ombrage * (0 → 1)",
     mapSection: "Carte",
+    mapStyle: "Style de la carte *",
+    mapStyleHint: "Choisis entre le fond de carte des rues (sobre, urbain) et le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée). Les libellés et les bâtiments 3D fonctionnent à l'identique sur les deux.",
+    mapStyleStreet: "Rues",
+    mapStyleTopo: "Topo",
     showLabels: "Afficher les libellés *",
     showLabelsHint: "Affiche ou masque les noms de rues, numéros de bâtiments, points d'intérêt et noms de quartiers du fond de carte.",
     labelsOn: "Affichés",
@@ -26189,6 +26218,10 @@ const de = {
     hillshadeColor: "Schattierungsfarbe *",
     hillshadeStrength: "Schattierungsstärke * (0 → 1)",
     mapSection: "Karte",
+    mapStyle: "Kartenstil *",
+    mapStyleHint: "Wähle zwischen der Straßenkarte (nüchtern, urban) und der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände). Beschriftungen und 3D-Gebäude funktionieren auf beiden gleich.",
+    mapStyleStreet: "Straßen",
+    mapStyleTopo: "Topo",
     showLabels: "Beschriftungen anzeigen *",
     showLabelsHint: "Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.",
     labelsOn: "Sichtbar",
@@ -26235,6 +26268,10 @@ const es = {
     hillshadeColor: "Color del sombreado *",
     hillshadeStrength: "Intensidad del sombreado * (0 → 1)",
     mapSection: "Mapa",
+    mapStyle: "Estilo del mapa *",
+    mapStyleHint: "Elige entre el mapa de calles (sobrio, urbano) y el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso). Las etiquetas y los edificios 3D funcionan igual en ambos.",
+    mapStyleStreet: "Calles",
+    mapStyleTopo: "Topo",
     showLabels: "Mostrar etiquetas *",
     showLabelsHint: "Muestra u oculta los nombres de calles, números de edificios, puntos de interés y nombres de zonas en el mapa de fondo.",
     labelsOn: "Visibles",
@@ -26281,6 +26318,10 @@ const it = {
     hillshadeColor: "Colore dell'ombreggiatura *",
     hillshadeStrength: "Intensità dell'ombreggiatura * (0 → 1)",
     mapSection: "Mappa",
+    mapStyle: "Stile della mappa *",
+    mapStyleHint: "Scegli tra la mappa stradale (sobria, urbana) e la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare). Le etichette e gli edifici 3D funzionano allo stesso modo su entrambe.",
+    mapStyleStreet: "Strade",
+    mapStyleTopo: "Topo",
     showLabels: "Mostra etichette *",
     showLabelsHint: "Mostra o nasconde i nomi delle vie, i numeri civici, i punti di interesse e i nomi dei quartieri sulla mappa di base.",
     labelsOn: "Visibili",
@@ -26327,6 +26368,10 @@ const nl = {
     hillshadeColor: "Schaduwkleur *",
     hillshadeStrength: "Schaduwsterkte * (0 → 1)",
     mapSection: "Kaart",
+    mapStyle: "Kaartstijl *",
+    mapStyleHint: "Kies tussen de stratenkaart (sober, stedelijk) en de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein). Labels en 3D-gebouwen werken op beide hetzelfde.",
+    mapStyleStreet: "Straten",
+    mapStyleTopo: "Topo",
     showLabels: "Labels weergeven *",
     showLabelsHint: "Toont of verbergt straatnamen, huisnummers, points of interest en buurtnamen op de basiskaart.",
     labelsOn: "Zichtbaar",
@@ -26373,6 +26418,10 @@ const pt = {
     hillshadeColor: "Cor do sombreado *",
     hillshadeStrength: "Intensidade do sombreado * (0 → 1)",
     mapSection: "Mapa",
+    mapStyle: "Estilo do mapa *",
+    mapStyleHint: "Escolhe entre o mapa de ruas (sóbrio, urbano) e o mapa topográfico (curvas de nível, tons terrosos, ideal em terreno montanhoso). As etiquetas e os edifícios 3D funcionam de forma idêntica em ambos.",
+    mapStyleStreet: "Ruas",
+    mapStyleTopo: "Topo",
     showLabels: "Mostrar etiquetas *",
     showLabelsHint: "Mostra ou oculta os nomes das ruas, números de edifícios, pontos de interesse e nomes de bairros no mapa de fundo.",
     labelsOn: "Visíveis",
@@ -27676,6 +27725,22 @@ let HeliosCardEditor = class extends i {
                 <div class="hint">${t2.editor.terrainReliefHint}</div>
 
                 <div class="section-title">${t2.editor.mapSection}</div>
+                <div class="field">
+                    <span class="label">${t2.editor.mapStyle}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["map-style"] ?? "streets") === "streets" ? "active" : ""}"
+                            @click="${() => this._update("map-style", "streets")}"
+                        >${t2.editor.mapStyleStreet}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["map-style"] ?? "streets") === "topo" ? "active" : ""}"
+                            @click="${() => this._update("map-style", "topo")}"
+                        >${t2.editor.mapStyleTopo}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.mapStyleHint}</div>
                 <div class="field">
                     <span class="label">${t2.editor.showLabels}</span>
                     <div class="segmented-toggle">
@@ -29339,7 +29404,12 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   //and Lit re-renders the chart. pv-power-entity is included
   //too so changing it triggers a fresh history fetch.
   "pv-color",
-  "pv-power-entity"
+  "pv-power-entity",
+  //map-style triggers a MapLibre setStyle() inside updateConfig,
+  //so the engine reloads the basemap (terrain, hillshade, cloud
+  //disc, buildings and label visibility are all re-applied via
+  //the resulting `style.load`).
+  "map-style"
 ];
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([

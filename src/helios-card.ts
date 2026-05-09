@@ -197,7 +197,12 @@ export class HeliosCard extends LitElement
         //and Lit re-renders the chart. pv-power-entity is included
         //too so changing it triggers a fresh history fetch.
         'pv-color',
-        'pv-power-entity'
+        'pv-power-entity',
+        //map-style triggers a MapLibre setStyle() inside updateConfig,
+        //so the engine reloads the basemap (terrain, hillshade, cloud
+        //disc, buildings and label visibility are all re-applied via
+        //the resulting `style.load`).
+        'map-style'
     ] as const;
 
     //Cheap stable signature of the visual config — used to skip
