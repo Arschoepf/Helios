@@ -8,8 +8,7 @@ export const es: Translations = {
 
     placeholder:
     {
-        subtitle: 'Exposición solar y cobertura de nubes',
-        action:   'Configura tu clave API de MapTiler para activar'
+        subtitle: 'Exposición solar y cobertura de nubes'
     },
 
     tooltip:

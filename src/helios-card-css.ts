@@ -50,8 +50,8 @@ export const heliosCardStyles = css`
         card's vocabulary (sun arc, sun + halo, low-poly buildings
         with a brighter central home, ground cloud disc, leader
         chips) over a light day-mode sky gradient. The brand chrome
-        (title / sub / action) sits at the bottom on a translucent
-        plate so the catalogue thumbnail stays legible. */
+        (title + subtitle) sits at the bottom — the MapTiler key
+        prompt lives in the README, not on the catalogue thumbnail. */
 
     .placeholder
     {
@@ -113,38 +113,32 @@ export const heliosCardStyles = css`
     .ph-content
     {
         position: absolute;
-        bottom: 8%;
+        bottom: 6%;
         left: 50%;
         transform: translateX(-50%);
         text-align: center;
         z-index: 10;
-        padding: 14px 24px 12px;
+        padding: 6px 18px;
         box-sizing: border-box;
-        background: rgba(255,255,255,0.55);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border-radius: 8px;
-        border: 1px solid rgba(255,255,255,0.8);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
     }
 
     .ph-title
     {
-        font-size: 1.7rem;
+        font-size: 1.5rem;
         font-weight: 200;
-        letter-spacing: 9px;
+        letter-spacing: 8px;
         text-transform: uppercase;
         color: #2a2e34;
         text-shadow: 0 1px 1px rgba(255,255,255,0.6);
         line-height: 1;
         white-space: nowrap;
-        padding-left: 9px;
+        padding-left: 8px;
     }
 
     .ph-divider
     {
-        margin: 10px auto;
-        width: 50px;
+        margin: 8px auto;
+        width: 44px;
         height: 1px;
         background: linear-gradient(90deg,
             transparent             0%,
@@ -154,27 +148,12 @@ export const heliosCardStyles = css`
 
     .ph-sub
     {
-        font-size: 0.7rem;
+        font-size: 0.66rem;
         font-weight: 400;
-        letter-spacing: 3px;
+        letter-spacing: 2.5px;
         text-transform: uppercase;
         color: rgba(40,40,40,0.6);
-        margin-bottom: 14px;
         line-height: 1;
-    }
-
-    .ph-action
-    {
-        display: inline-block;
-        font-size: 0.72rem;
-        font-weight: 500;
-        letter-spacing: 1.2px;
-        color: rgba(35,35,35,0.92);
-        background: rgba(255,255,255,0.7);
-        border: 1px solid rgba(120,120,120,0.45);
-        border-radius: 4px;
-        padding: 8px 18px;
-        text-transform: uppercase;
     }
 
 

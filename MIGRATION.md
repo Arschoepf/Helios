@@ -1,3 +1,32 @@
+# HELIOS — v1.1.0
+
+Catalogue placeholder polish — no breaking changes, no config
+migration required. Pure cosmetic refresh of the screen shown
+before a MapTiler key is entered.
+
+* **Iso vignette redesigned** *(beta.1)* — the previous "sunset
+  sky with breathing sun" placeholder was replaced by a stylised
+  iso scene that mirrors the real card's vocabulary: ground cloud
+  disc, two low-poly neighbouring buildings, a brighter central
+  home, the orange solar arc with a pulsing sun + halo, and two
+  leader chips (W/m² near the sun, kW near the home). Brand chrome
+  (title / subtitle) repainted on a light day-mode sky gradient.
+* **Framing + text trimmed** *(beta.2)* — the SVG now uses
+  `preserveAspectRatio="xMidYMid meet"` instead of `slice`, so
+  the full scene (including the solar arc) stays visible on
+  portrait card aspects rather than being cropped at the sides.
+  The translucent "Set your MapTiler API key to activate" CTA
+  panel was removed — the key requirement is documented in the
+  README and shouldn't dominate the catalogue thumbnail. Title
+  and subtitle now float on the gradient sky with no background
+  plate; sizes and letter-spacing reduced for a lighter footprint.
+
+i18n: `placeholder.action` was removed from `Translations` and
+all locale files. Custom locales pointing at the old shape will
+fail typecheck and need that key deleted.
+
+---
+
 # HELIOS — v1.0.0
 
 This is the **first public release** of HELIOS. The card has been

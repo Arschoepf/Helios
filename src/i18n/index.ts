@@ -24,7 +24,6 @@ export interface Translations
     placeholder:
     {
         subtitle: string;
-        action:   string;
     };
 
     tooltip:

@@ -8,8 +8,7 @@ export const de: Translations = {
 
     placeholder:
     {
-        subtitle: 'Sonneneinstrahlung & Wolkenbedeckung',
-        action:   'MapTiler-API-Schlüssel eintragen, um zu aktivieren'
+        subtitle: 'Sonneneinstrahlung & Wolkenbedeckung'
     },
 
     tooltip:

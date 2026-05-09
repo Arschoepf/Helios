@@ -2052,16 +2052,18 @@ ${showSun ? html`
         //that mirrors the real card's vocabulary — solar arc, sun
         //disc with halo, low-poly iso buildings around a brighter
         //central home, ground cloud disc, and two leader chips
-        //(W/m² near the sun, kW near the home). The scene sits
-        //behind the title / subtitle / configure CTA so the brand
-        //chrome remains legible on the catalogue thumbnail.
+        //(W/m² near the sun, kW near the home). The scene fits
+        //(meet) inside the card so the arc stays fully visible at
+        //any aspect ratio; title + subtitle sit at the bottom on
+        //the gradient sky. The MapTiler key prompt is documented
+        //in the README — it does not belong on the thumbnail.
         return html`
             <div class="placeholder">
 
                 <svg
                     class="ph-scene"
                     viewBox="0 0 400 320"
-                    preserveAspectRatio="xMidYMid slice"
+                    preserveAspectRatio="xMidYMid meet"
                     xmlns="http://www.w3.org/2000/svg"
                 >
                     <defs>
@@ -2161,7 +2163,6 @@ ${showSun ? html`
                     <div class="ph-title">HELIOS</div>
                     <div class="ph-divider"></div>
                     <div class="ph-sub">${t.placeholder.subtitle}</div>
-                    <div class="ph-action">${t.placeholder.action}</div>
                 </div>
 
             </div>

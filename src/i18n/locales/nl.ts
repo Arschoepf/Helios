@@ -8,8 +8,7 @@ export const nl: Translations = {
 
     placeholder:
     {
-        subtitle: 'Zonexpositie & bewolking',
-        action:   'Voer je MapTiler API-sleutel in om te activeren'
+        subtitle: 'Zonexpositie & bewolking'
     },
 
     tooltip:

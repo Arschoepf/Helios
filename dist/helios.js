@@ -26066,8 +26066,7 @@ const en = {
   cardDescription: "Real-time solar energy and cloud coverage visualization",
   live: "Live",
   placeholder: {
-    subtitle: "Solar exposure & cloud coverage",
-    action: "Set your MapTiler API key to activate"
+    subtitle: "Solar exposure & cloud coverage"
   },
   tooltip: {
     cloudCover: "Cloud cover: {0}%",
@@ -26113,8 +26112,7 @@ const fr = {
   cardDescription: "Visualisation en temps réel de l'énergie solaire et de la couverture nuageuse",
   live: "Direct",
   placeholder: {
-    subtitle: "Exposition solaire & couverture nuageuse",
-    action: "Renseigne ta clé API MapTiler pour activer"
+    subtitle: "Exposition solaire & couverture nuageuse"
   },
   tooltip: {
     cloudCover: "Couverture nuageuse : {0}%",
@@ -26160,8 +26158,7 @@ const de = {
   cardDescription: "Echtzeit-Visualisierung von Solarenergie und Wolkenbedeckung",
   live: "Live",
   placeholder: {
-    subtitle: "Sonneneinstrahlung & Wolkenbedeckung",
-    action: "MapTiler-API-Schlüssel eintragen, um zu aktivieren"
+    subtitle: "Sonneneinstrahlung & Wolkenbedeckung"
   },
   tooltip: {
     cloudCover: "Bewölkung: {0}%",
@@ -26207,8 +26204,7 @@ const es = {
   cardDescription: "Visualización en tiempo real de la energía solar y la cobertura de nubes",
   live: "En vivo",
   placeholder: {
-    subtitle: "Exposición solar y cobertura de nubes",
-    action: "Configura tu clave API de MapTiler para activar"
+    subtitle: "Exposición solar y cobertura de nubes"
   },
   tooltip: {
     cloudCover: "Cobertura de nubes: {0}%",
@@ -26254,8 +26250,7 @@ const it = {
   cardDescription: "Visualizzazione in tempo reale dell'energia solare e della copertura nuvolosa",
   live: "Live",
   placeholder: {
-    subtitle: "Esposizione solare e copertura nuvolosa",
-    action: "Imposta la tua chiave API MapTiler per attivare"
+    subtitle: "Esposizione solare e copertura nuvolosa"
   },
   tooltip: {
     cloudCover: "Copertura nuvolosa: {0}%",
@@ -26301,8 +26296,7 @@ const nl = {
   cardDescription: "Realtime visualisatie van zonne-energie en bewolking",
   live: "Live",
   placeholder: {
-    subtitle: "Zonexpositie & bewolking",
-    action: "Voer je MapTiler API-sleutel in om te activeren"
+    subtitle: "Zonexpositie & bewolking"
   },
   tooltip: {
     cloudCover: "Bewolking: {0}%",
@@ -26348,8 +26342,7 @@ const pt = {
   cardDescription: "Visualização em tempo real da energia solar e da cobertura de nuvens",
   live: "Direto",
   placeholder: {
-    subtitle: "Exposição solar e cobertura de nuvens",
-    action: "Configura a tua chave API MapTiler para ativar"
+    subtitle: "Exposição solar e cobertura de nuvens"
   },
   tooltip: {
     cloudCover: "Cobertura de nuvens: {0}%",
@@ -26453,8 +26446,8 @@ const heliosCardStyles = i$3`
         card's vocabulary (sun arc, sun + halo, low-poly buildings
         with a brighter central home, ground cloud disc, leader
         chips) over a light day-mode sky gradient. The brand chrome
-        (title / sub / action) sits at the bottom on a translucent
-        plate so the catalogue thumbnail stays legible. */
+        (title + subtitle) sits at the bottom — the MapTiler key
+        prompt lives in the README, not on the catalogue thumbnail. */
 
     .placeholder
     {
@@ -26516,38 +26509,32 @@ const heliosCardStyles = i$3`
     .ph-content
     {
         position: absolute;
-        bottom: 8%;
+        bottom: 6%;
         left: 50%;
         transform: translateX(-50%);
         text-align: center;
         z-index: 10;
-        padding: 14px 24px 12px;
+        padding: 6px 18px;
         box-sizing: border-box;
-        background: rgba(255,255,255,0.55);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border-radius: 8px;
-        border: 1px solid rgba(255,255,255,0.8);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
     }
 
     .ph-title
     {
-        font-size: 1.7rem;
+        font-size: 1.5rem;
         font-weight: 200;
-        letter-spacing: 9px;
+        letter-spacing: 8px;
         text-transform: uppercase;
         color: #2a2e34;
         text-shadow: 0 1px 1px rgba(255,255,255,0.6);
         line-height: 1;
         white-space: nowrap;
-        padding-left: 9px;
+        padding-left: 8px;
     }
 
     .ph-divider
     {
-        margin: 10px auto;
-        width: 50px;
+        margin: 8px auto;
+        width: 44px;
         height: 1px;
         background: linear-gradient(90deg,
             transparent             0%,
@@ -26557,27 +26544,12 @@ const heliosCardStyles = i$3`
 
     .ph-sub
     {
-        font-size: 0.7rem;
+        font-size: 0.66rem;
         font-weight: 400;
-        letter-spacing: 3px;
+        letter-spacing: 2.5px;
         text-transform: uppercase;
         color: rgba(40,40,40,0.6);
-        margin-bottom: 14px;
         line-height: 1;
-    }
-
-    .ph-action
-    {
-        display: inline-block;
-        font-size: 0.72rem;
-        font-weight: 500;
-        letter-spacing: 1.2px;
-        color: rgba(35,35,35,0.92);
-        background: rgba(255,255,255,0.7);
-        border: 1px solid rgba(120,120,120,0.45);
-        border-radius: 4px;
-        padding: 8px 18px;
-        text-transform: uppercase;
     }
 
 
@@ -29229,7 +29201,7 @@ ${showSun ? b`
                 <svg
                     class="ph-scene"
                     viewBox="0 0 400 320"
-                    preserveAspectRatio="xMidYMid slice"
+                    preserveAspectRatio="xMidYMid meet"
                     xmlns="http://www.w3.org/2000/svg"
                 >
                     <defs>
@@ -29329,7 +29301,6 @@ ${showSun ? b`
                     <div class="ph-title">HELIOS</div>
                     <div class="ph-divider"></div>
                     <div class="ph-sub">${t2.placeholder.subtitle}</div>
-                    <div class="ph-action">${t2.placeholder.action}</div>
                 </div>
 
             </div>

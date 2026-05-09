@@ -18,8 +18,7 @@ export const en: Translations = {
 
     placeholder:
     {
-        subtitle: 'Solar exposure & cloud coverage',
-        action:   'Set your MapTiler API key to activate'
+        subtitle: 'Solar exposure & cloud coverage'
     },
 
     tooltip:
