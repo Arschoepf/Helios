@@ -3,8 +3,10 @@
 Polish release — no breaking changes, no config migration required.
 Refines the catalogue placeholder, hardens the rotation interaction
 so the home stays dead-centre, lightens the on-card chips so the
-underlying scene reads through, and exposes a `map-style` option to
-switch the basemap between a streets and a topographic style.
+underlying scene reads through, exposes a `map-style` option to
+switch the basemap between streets and topographic, and adds an
+optional home-battery overlay (live SoC + signed power) below the
+home, mirroring the PV chip above.
 
 ## v1.1.0-beta.1
 
@@ -78,6 +80,49 @@ i18n: `Translations.editor` gained four new keys (`mapStyle`,
 `mapStyleHint`, `mapStyleStreet`, `mapStyleTopo`) used by the
 new toggle. Custom locales need to provide them or typecheck
 will fail.
+
+## v1.1.0-beta.4
+
+* **Home-battery overlay** — three new optional config keys
+  expose a live battery chip below the home, mirroring the PV
+  chip above. None are required; the chip appears as soon as
+  at least one entity is set, and gracefully renders only the
+  configured value when one of the two is missing:
+  * `battery-soc-entity` — Home Assistant entity id of a
+    numeric State-of-Charge sensor (% — typically with
+    `device_class: "battery"`). Out-of-range values are
+    clamped to `[0, 100]`.
+  * `battery-power-entity` — Home Assistant entity id of a
+    numeric power sensor (W or kW). Sign convention follows
+    the entity itself; positive is interpreted as charging.
+    Cumulative-energy sensors (Wh / kWh) are intentionally not
+    accepted — the chip needs an instantaneous reading and we
+    deliberately do not differentiate on the fly for battery,
+    keeping this overlay simple.
+  * `battery-color` — single colour reused on the chip border,
+    text, icon and animated leader. Defaults to a vivid purple
+    (`#9D6BCC`), distinct from sun (orange), cloud (blue) and
+    PV (green).
+
+  The chip displays the SoC and the signed instantaneous power
+  bullet-separated (e.g. `85 % • +1.2 kW`). The leader line's
+  flow direction follows the sign of the power: charging streams
+  from the home down to the chip, discharging streams up from
+  the chip to the home; zero or unconfigured power leaves the
+  line static. Speed is mapped on the same scale as the PV
+  leader (saturate at ~5 kW).
+
+  Battery readings are pulled directly from `hass.states` on
+  every Lit cycle — no history fetch. This keeps the overlay
+  light, but means the chip is hidden while the timeline is
+  being scrubbed (showing the live SoC against a past instant
+  would be misleading).
+
+i18n: `Translations.editor` gained seven new keys
+(`batterySection`, `batteryHint`, `batterySocEntity`,
+`batterySocEntityHelp`, `batteryPowerEntity`,
+`batteryPowerEntityHelp`, `batteryColor`). Custom locales need
+to provide them or typecheck will fail.
 
 ---
 

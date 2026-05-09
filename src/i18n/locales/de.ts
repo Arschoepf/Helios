@@ -54,6 +54,13 @@ export const de: Translations = {
         pvHint:             'Optional. Wenn gesetzt, erscheint auf dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Die Linie zwischen Haus und Chip animiert mit einer Geschwindigkeit proportional zur Produktion. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).',
         pvEntity:           'Produktions-Entität',
         pvEntityHelp:       'Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).',
-        pvColor:            'Produktionsfarbe *'
+        pvColor:            'Produktionsfarbe *',
+        batterySection:     'Hausbatterie',
+        batteryHint:        'Optional. Wenn mindestens eine Entität gesetzt ist, erscheint ein Chip unter dem Haus mit dem aktuellen Ladezustand und der vorzeichenbehafteten momentanen Leistung. Die Leiterlinie animiert beim Laden nach unten und beim Entladen nach oben, mit einer Geschwindigkeit proportional zur aktuellen Leistung. Es wird kein Verlauf abgerufen — der Chip zeigt nur den Live-Wert.',
+        batterySocEntity:   'Ladezustand-Entität',
+        batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery").',
+        batteryPowerEntity: 'Leistungs-Entität',
+        batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden.',
+        batteryColor:       'Batteriefarbe *'
     }
 };

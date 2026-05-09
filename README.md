@@ -84,6 +84,9 @@ Every option below is editable visually:
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
 | `pv-power-entity` | entity_id | — | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |
 | `pv-color` | hex | `#27B36B` | PV chip border + text + leader + dedicated graph. |
+| `battery-soc-entity` | entity_id | — | Optional. Battery State-of-Charge sensor (`%` — usually `device_class: battery`). |
+| `battery-power-entity` | entity_id | — | Optional. Battery power sensor (W/kW). Signed: positive is interpreted as charging. |
+| `battery-color` | hex | `#9D6BCC` | Battery chip border + text + leader + flow arrow. |
 | `date-format` | string | `mm-dd` | Tokens: `yyyy`, `yy`, `mm`, `dd`. |
 | `time-format` | `'12h' \| '24h'` | `'24h'` | Clock display in the top-right chip. |
 

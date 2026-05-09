@@ -5,7 +5,8 @@ import
     type HeliosConfig,
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
-    DEFAULT_PV_COLOR_HEX
+    DEFAULT_PV_COLOR_HEX,
+    DEFAULT_BATTERY_COLOR_HEX
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -418,6 +419,31 @@ export class HeliosCardEditor extends LitElement
             || u === 'Wh' || u === 'kWh' || u === 'MWh';
     };
 
+    //Filter for the battery SoC picker — sensors with device_class
+    //'battery' (the canonical case used by every BMS integration)
+    //or any sensor with a percent unit. Energy/power sensors are
+    //intentionally excluded; SoC is a percentage by design.
+    private _batterySocEntityFilter = (entity: any): boolean =>
+    {
+        if (!entity || !entity.attributes) return false;
+        if (entity.attributes.device_class === 'battery') return true;
+        const u = String(entity.attributes.unit_of_measurement ?? '').trim();
+        return u === '%';
+    };
+
+    //Filter for the battery power picker — power-only (no energy).
+    //The chip needs an instantaneous reading; cumulative kWh totals
+    //wouldn't make sense here without on-the-fly differentiation,
+    //which we deliberately don't do for battery (PV does, battery
+    //doesn't, to keep this overlay simple per the design brief).
+    private _batteryPowerEntityFilter = (entity: any): boolean =>
+    {
+        if (!entity || !entity.attributes) return false;
+        if (entity.attributes.device_class === 'power') return true;
+        const u = String(entity.attributes.unit_of_measurement ?? '').trim();
+        return u === 'W' || u === 'kW' || u === 'MW';
+    };
+
     protected render(): TemplateResult
     {
         const c = this._cfg;
@@ -545,6 +571,59 @@ export class HeliosCardEditor extends LitElement
                     ></helios-color-picker>
                 </label>
                 <div class="hint">${t.editor.pvHint}</div>
+
+                <div class="section-title">${t.editor.batterySection}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.batterySocEntity}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass="${this.hass}"
+                            .value="${String(c['battery-soc-entity'] ?? '')}"
+                            .includeDomains="${['sensor', 'input_number']}"
+                            .entityFilter="${this._batterySocEntityFilter}"
+                            @value-changed="${(e: CustomEvent) => this._update('battery-soc-entity', e.detail.value ?? '')}"
+                        ></ha-entity-picker>
+                    ` : html`
+                        <input
+                            type="text"
+                            .value="${String(c['battery-soc-entity'] ?? '')}"
+                            placeholder="sensor.battery_soc"
+                            @change="${(e: Event) => this._str('battery-soc-entity', e)}"
+                        />
+                    `}
+                </div>
+                <div class="field-help">${t.editor.batterySocEntityHelp}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.batteryPowerEntity}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass="${this.hass}"
+                            .value="${String(c['battery-power-entity'] ?? '')}"
+                            .includeDomains="${['sensor', 'input_number']}"
+                            .entityFilter="${this._batteryPowerEntityFilter}"
+                            @value-changed="${(e: CustomEvent) => this._update('battery-power-entity', e.detail.value ?? '')}"
+                        ></ha-entity-picker>
+                    ` : html`
+                        <input
+                            type="text"
+                            .value="${String(c['battery-power-entity'] ?? '')}"
+                            placeholder="sensor.battery_power"
+                            @change="${(e: Event) => this._str('battery-power-entity', e)}"
+                        />
+                    `}
+                </div>
+                <div class="field-help">${t.editor.batteryPowerEntityHelp}</div>
+                <label class="field">
+                    <span class="label">${t.editor.batteryColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c['battery-color'], DEFAULT_BATTERY_COLOR_HEX)}"
+                        .ariaLabel="${t.editor.batteryColor}"
+                        @value-changed="${(e: CustomEvent) => this._color('battery-color', e)}"
+                    ></helios-color-picker>
+                </label>
+                <div class="hint">${t.editor.batteryHint}</div>
 
                 <div class="section-title">${t.editor.timeline}</div>
                 <label class="field">

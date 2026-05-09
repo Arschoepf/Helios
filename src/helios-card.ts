@@ -6,7 +6,8 @@ import
     type HeliosConfig,
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
-    DEFAULT_PV_COLOR_HEX
+    DEFAULT_PV_COLOR_HEX,
+    DEFAULT_BATTERY_COLOR_HEX
 } from './helios-engine';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './helios-card-css';
@@ -126,10 +127,11 @@ export class HeliosCard extends LitElement
     //onMapTransform). null = layout not yet available (map still
     //loading) — the overlay is hidden in that case.
     @state() private _labelLayout:    {
-        cloudLabel: { x: number; y: number };
-        pvLabel:    { x: number; y: number };
-        ringTop:    { x: number; y: number };
-        home:       { x: number; y: number };
+        cloudLabel:   { x: number; y: number };
+        pvLabel:      { x: number; y: number };
+        batteryLabel: { x: number; y: number };
+        ringTop:      { x: number; y: number };
+        home:         { x: number; y: number };
     } | null = null;
     //Photovoltaic production state — populated when the user has set
     //a `pv-power-entity` config key. _pvCurrent holds the live value
@@ -149,6 +151,15 @@ export class HeliosCard extends LitElement
     //energy sensors, much fresher than the historical fetch which
     //only refreshes when the timeline range changes.
     private _pvSampleBuffer: Array<{ t: number; v: number }> = [];
+    //Home-battery state — populated when the user has set at least
+    //one of `battery-soc-entity` / `battery-power-entity`. Both
+    //readings are pulled from hass.states on every property update;
+    //unlike PV there's no history fetch (we only display the live
+    //chip, no scrub-back). Units are kept alongside the values so
+    //the chip can format kW vs W without re-reading the state.
+    @state() private _batterySoc:        number | null = null;
+    @state() private _batteryPower:      number | null = null;
+    @state() private _batteryPowerUnit:  string        = '';
     //Screen-space layout of the solar arc, sun, and incidence ray.
     //Recomputed via engine.projectSunScene() on every map transform
     //(camera animation) and every clock tick (the sun position
@@ -202,7 +213,15 @@ export class HeliosCard extends LitElement
         //so the engine reloads the basemap (terrain, hillshade, cloud
         //disc, buildings and label visibility are all re-applied via
         //the resulting `style.load`).
-        'map-style'
+        'map-style',
+        //Battery overlay — soc and power entities feed the live chip
+        //below the home; battery-color tints the chip border, text
+        //and animated leader. Including them in the visual sig means
+        //changing the entity in the editor triggers a re-render that
+        //picks up the new readings on the next hass property update.
+        'battery-soc-entity',
+        'battery-power-entity',
+        'battery-color'
     ] as const;
 
     //Cheap stable signature of the visual config — used to skip
@@ -349,6 +368,11 @@ export class HeliosCard extends LitElement
         //refresh is cheap when nothing relevant changed (string-equal
         //fetch key short-circuits the WebSocket roundtrip).
         this._refreshPv();
+
+        //Battery overlay refresh — pure live-state read, runs every
+        //cycle. Cheap (no WS round-trip, no fetch) so we don't bother
+        //gating on an entity-id signature like _refreshPv does.
+        this._refreshBattery();
     }
 
 
@@ -454,6 +478,92 @@ export class HeliosCard extends LitElement
         }
         this._pvFetchKey = fetchKey;
         this._fetchPvHistory(entity, this._timeRange.start, this._timeRange.end);
+    }
+
+    //Battery overlay — much simpler than PV: no history fetch, no
+    //rolling buffer, no scrub-back. Just a live read of the SoC and
+    //power entities on every Lit cycle. The chip is hidden (and the
+    //state cleared) when neither entity is configured, or when the
+    //configured entity is unavailable / non-numeric.
+    private _refreshBattery(): void
+    {
+        if (!this.hass)
+        {
+            return;
+        }
+        const socEntity   = String(this.config?.['battery-soc-entity']   ?? '').trim();
+        const powerEntity = String(this.config?.['battery-power-entity'] ?? '').trim();
+
+        //SoC — clamp to [0, 100] because some BMS entities momentarily
+        //report 100.5 % during the absorption phase or briefly drop
+        //negative around the calibration cycle, neither of which is
+        //meaningful to the user.
+        let nextSoc: number | null = null;
+        if (socEntity)
+        {
+            const so = this.hass.states?.[socEntity];
+            const v  = so ? parseFloat(so.state) : NaN;
+            if (isFinite(v))
+            {
+                nextSoc = Math.max(0, Math.min(100, v));
+            }
+        }
+        if (nextSoc !== this._batterySoc)
+        {
+            this._batterySoc = nextSoc;
+        }
+
+        //Power — keep the sign (positive = charging, negative =
+        //discharging) verbatim from the entity. Unit is captured so
+        //the chip renderer can format kW vs W; we don't normalise
+        //here because the entity's own unit IS the source of truth
+        //(some BMS expose W, others kW).
+        let nextPower: number | null = null;
+        let nextUnit:  string        = '';
+        if (powerEntity)
+        {
+            const so = this.hass.states?.[powerEntity];
+            const v  = so ? parseFloat(so.state) : NaN;
+            if (isFinite(v))
+            {
+                nextPower = v;
+                nextUnit  = so.attributes?.unit_of_measurement ?? '';
+            }
+        }
+        if (nextPower !== this._batteryPower)
+        {
+            this._batteryPower = nextPower;
+        }
+        if (nextUnit !== this._batteryPowerUnit)
+        {
+            this._batteryPowerUnit = nextUnit;
+        }
+    }
+
+    //Format a signed battery power value for the chip. Mirrors
+    //_formatPvValue's W ↔ kW switching but always prefixes a sign so
+    //the user can tell charging from discharging at a glance.
+    private _formatBatteryPower(value: number, unit: string): string
+    {
+        const lu = (unit || '').trim().toLowerCase();
+        const sign = value > 0 ? '+' : (value < 0 ? '−' : '');
+        const abs  = Math.abs(value);
+
+        if (lu === 'w' && abs >= 1000)
+        {
+            return `${sign}${(abs / 1000).toFixed(2)} kW`;
+        }
+        if (lu === 'w')
+        {
+            return `${sign}${Math.round(abs)} W`;
+        }
+        if (lu === 'kw')
+        {
+            return `${sign}${abs.toFixed(2)} kW`;
+        }
+        //Unknown unit — pass through verbatim so the user still
+        //sees the configured entity's value with its own unit.
+        return `${sign}${abs}${unit ? ' ' + unit : ''}`;
     }
 
     private async _fetchPvHistory(entityId: string, start: Date, end: Date): Promise<void>
@@ -1692,6 +1802,56 @@ export class HeliosCard extends LitElement
             : 0;
         const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5000);
 
+        //Battery overlay — chip below the home mirroring the PV chip
+        //above. Hidden in scrub mode because we don't fetch history;
+        //showing the live SoC while the user explores a past instant
+        //would be misleading (the value isn't a snapshot of *that*
+        //instant, it's "now").
+        const batterySocEntity   = String(this.config?.['battery-soc-entity']   ?? '').trim();
+        const batteryPowerEntity = String(this.config?.['battery-power-entity'] ?? '').trim();
+        const batteryColor       = cfgHex(this.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
+        const batteryScrubbing   = !this._isLiveMode && this._selectedTime !== null;
+        const hasBatteryEntity   = batterySocEntity !== '' || batteryPowerEntity !== '';
+        const hasBatteryReading  = this._batterySoc !== null || this._batteryPower !== null;
+        const showBatteryLabel   = hasApiKey
+            && layout !== null
+            && hasBatteryEntity
+            && hasBatteryReading
+            && !batteryScrubbing;
+
+        //Chip body — bullet-separated SoC % + signed power, falling
+        //back gracefully when only one of the two entities is set or
+        //when one returns a non-numeric state.
+        let batteryDisplayValue = '';
+        if (showBatteryLabel)
+        {
+            const parts: string[] = [];
+            if (this._batterySoc !== null)
+            {
+                parts.push(`${Math.round(this._batterySoc)} %`);
+            }
+            if (this._batteryPower !== null)
+            {
+                parts.push(this._formatBatteryPower(this._batteryPower, this._batteryPowerUnit));
+            }
+            batteryDisplayValue = parts.join(' • ');
+        }
+
+        //Leader animation — same speed mapping as PV (saturate at
+        //~5 kW), but the direction follows the sign of the power:
+        //charging streams from home down to the chip; discharging
+        //streams up from the chip to the home; zero or unconfigured
+        //power stays static.
+        const batteryPower = this._batteryPower ?? 0;
+        const batteryWattsForFlow = (() => {
+            if (this._batteryPower === null) { return 0; }
+            const lu = (this._batteryPowerUnit || '').trim().toLowerCase();
+            return lu === 'kw' ? Math.abs(this._batteryPower) * 1000 : Math.abs(this._batteryPower);
+        })();
+        const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
+        const batteryCharging     = batteryPower > 0;
+        const batteryDischarging  = batteryPower < 0;
+
         //Solar-arc overlay — sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
         //pre-projected to screen space by the engine via
@@ -2024,6 +2184,42 @@ ${showSun ? html`
                     >
                         <ha-icon icon="mdi:solar-power-variant"></ha-icon>
                         <span>${pvDisplayValue}</span>
+                    </div>
+                ` : nothing}
+
+                ${showBatteryLabel ? html`
+                    <svg class="battery-leader-svg">
+                        <line
+                            class="battery-leader-line"
+                            style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
+                            x1="${layout!.home.x}"
+                            y1="${layout!.home.y}"
+                            x2="${layout!.batteryLabel.x}"
+                            y2="${layout!.batteryLabel.y - 10}"
+                        ></line>
+                        ${(batteryCharging || batteryDischarging) ? svg`
+                            <polygon
+                                class="battery-leader-arrow"
+                                points="-6,-4 0,0 -6,4"
+                                fill="${batteryColor}"
+                            >
+                                <animateMotion
+                                    dur="${batteryFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="${batteryCharging
+                                        ? `M ${layout!.home.x},${layout!.home.y} L ${layout!.batteryLabel.x},${layout!.batteryLabel.y - 10}`
+                                        : `M ${layout!.batteryLabel.x},${layout!.batteryLabel.y - 10} L ${layout!.home.x},${layout!.home.y}`}"
+                                ></animateMotion>
+                            </polygon>
+                        ` : nothing}
+                    </svg>
+                    <div
+                        class="battery-pct-label"
+                        style="left:${layout!.batteryLabel.x}px; top:${layout!.batteryLabel.y}px; --battery-leader-color:${batteryColor}"
+                    >
+                        <ha-icon icon="mdi:home-battery"></ha-icon>
+                        <span>${batteryDisplayValue}</span>
                     </div>
                 ` : nothing}
 

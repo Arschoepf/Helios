@@ -54,6 +54,13 @@ export const es: Translations = {
         pvHint:             'Opcional. Si se define, aparece una pastilla en la casa (producción instantánea, calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. La línea entre la casa y la pastilla se anima a una velocidad proporcional a la producción. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).',
         pvEntity:           'Entidad de producción',
         pvEntityHelp:       'Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).',
-        pvColor:            'Color de producción *'
+        pvColor:            'Color de producción *',
+        batterySection:     'Batería doméstica',
+        batteryHint:        'Opcional. Cuando se configura al menos una entidad, aparece un chip bajo la casa con el estado de carga en vivo y la potencia instantánea con signo. La línea se anima hacia abajo durante la carga y hacia arriba durante la descarga, a una velocidad proporcional a la potencia. No se recupera ningún historial — el chip refleja solo la lectura en vivo.',
+        batterySocEntity:   'Entidad de estado de carga',
+        batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery").',
+        batteryPowerEntity: 'Entidad de potencia',
+        batteryPowerEntityHelp: 'Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando.',
+        batteryColor:       'Color batería *'
     }
 };

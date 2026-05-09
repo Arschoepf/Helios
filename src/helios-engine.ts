@@ -39,6 +39,26 @@ export interface HeliosConfig
     //                    to read cleanly on the white chart card.
     'pv-power-entity'?:       unknown;
     'pv-color'?:              unknown;
+    //v1.1 — optional home-battery overlay. A single chip below the
+    //home shows the battery State-of-Charge (%) and the live signed
+    //power draw (positive while charging, negative while discharging),
+    //mirroring the PV chip above the home. Either entity is optional;
+    //the chip renders as long as at least one is set, with a leader
+    //line whose flow direction follows the sign of the power.
+    //  battery-soc-entity   : Home Assistant entity id of a numeric
+    //                         sensor in % (typical: device_class
+    //                         "battery", or unit "%"). Out-of-range
+    //                         values are clamped to [0, 100].
+    //  battery-power-entity : Home Assistant entity id of a numeric
+    //                         power sensor in W or kW. Sign convention
+    //                         follows the entity itself; positive is
+    //                         interpreted as charging.
+    //  battery-color        : single colour used everywhere battery
+    //                         appears (chip text, border, leader,
+    //                         flow arrow). Defaults to a vivid purple.
+    'battery-soc-entity'?:    unknown;
+    'battery-power-entity'?:  unknown;
+    'battery-color'?:         unknown;
     'date-format'?:           unknown;
     //v1.0 — '12h' | '24h'. Default: '24h'. Picks between locale-
     //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
@@ -195,6 +215,10 @@ export const DEFAULT_CLOUD_COLOR_HEX: string = '#5A8DC4';
 //and reads as "solar production" without competing with the orange sun
 //or the blue cloud colours.
 export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
+//Vivid purple — distinct from sun (orange), cloud (blue) and PV
+//(green), conventionally associated with energy storage in
+//dashboards. Reads cleanly on the 80 % white chip background.
+export const DEFAULT_BATTERY_COLOR_HEX: string = '#9D6BCC';
 
 const DEFAULT_CLOUD_RGB: RGB = [0x5A, 0x8D, 0xC4];
 
@@ -1732,10 +1756,11 @@ export class HeliosEngine
     //Returns null when the map isn't ready yet — the card treats
     //null as "don't render the overlay this frame".
     public projectHomeLabelLayout(): {
-        cloudLabel: { x: number; y: number };
-        pvLabel:    { x: number; y: number };
-        ringTop:    { x: number; y: number };
-        home:       { x: number; y: number };
+        cloudLabel:   { x: number; y: number };
+        pvLabel:      { x: number; y: number };
+        batteryLabel: { x: number; y: number };
+        ringTop:      { x: number; y: number };
+        home:         { x: number; y: number };
     } | null
     {
         if (!this.map)
@@ -1761,10 +1786,16 @@ export class HeliosEngine
         const CLOUD_CHIP_LIFT_PX = 30;
 
         return {
-            cloudLabel: { x: ringTop.x, y: ringTop.y - CLOUD_CHIP_LIFT_PX },
-            pvLabel:    { x: home.x,    y: home.y    - CLOUD_LABEL_OFFSET_PX },
-            ringTop:    { x: ringTop.x, y: ringTop.y },
-            home:       { x: home.x,    y: home.y }
+            cloudLabel:   { x: ringTop.x, y: ringTop.y - CLOUD_CHIP_LIFT_PX },
+            //PV chip sits CLOUD_LABEL_OFFSET_PX above the home; the
+            //battery chip mirrors it the same distance below the home,
+            //creating an "in / out" symmetry across the home (PV =
+            //incoming production, battery = stored / drawn-from
+            //reserve).
+            pvLabel:      { x: home.x,    y: home.y    - CLOUD_LABEL_OFFSET_PX },
+            batteryLabel: { x: home.x,    y: home.y    + CLOUD_LABEL_OFFSET_PX },
+            ringTop:      { x: ringTop.x, y: ringTop.y },
+            home:         { x: home.x,    y: home.y }
         };
     }
 

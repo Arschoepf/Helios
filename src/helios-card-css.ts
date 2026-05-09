@@ -644,6 +644,79 @@ export const heliosCardStyles = css`
         opacity: 0.9;
     }
 
+    /*  Battery chip — mirrors the PV chip but sits below the home
+        with a leader line going down. Same 80 % white background as
+        the other on-map chips so the basemap reads through; tinted
+        in the user-configured battery colour (border + text + icon).
+        --battery-leader-color is set inline by the renderer. */
+    .battery-pct-label
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 6;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        background: rgba(255, 255, 255, 0.8);
+        color:      var(--battery-leader-color, #9D6BCC);
+        border:     1px solid var(--battery-leader-color, #9D6BCC);
+        border-radius: 3px;
+        padding: 2px 6px 2px 4px;
+        font-size:    12px;
+        font-weight:  600;
+        line-height:  1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+    }
+
+    .battery-pct-label ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  Battery leader line — dashes flow from home down to the chip
+        (charging) or from the chip up to home (discharging) at a
+        speed proportional to live |power|. The renderer flips the
+        animateMotion path to drive direction; the CSS dash-offset
+        animation always streams in the same screen direction, so
+        the dashes' visible motion is governed by the polygon arrow
+        which rides the path with rotate="auto". */
+    .battery-leader-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    .battery-leader-line
+    {
+        stroke: var(--battery-leader-color, #9D6BCC);
+        stroke-width: 1.5;
+        stroke-opacity: 0.85;
+        stroke-linecap: round;
+        stroke-dasharray: 6 5;
+        animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
+    }
+
+    @keyframes battery-leader-flow
+    {
+        from { stroke-dashoffset: 0;  }
+        to   { stroke-dashoffset: -11; }
+    }
+
+    .battery-leader-arrow
+    {
+        opacity: 0.9;
+    }
+
     /*  Cloud-cover leader line — black hairline from chip to disc. */
     .cloud-leader-svg
     {

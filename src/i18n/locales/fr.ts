@@ -62,6 +62,13 @@ export const fr: Translations = {
         pvHint:             'Optionnel. Si renseigné, une pastille apparaît sur la maison (production instantanée, calculée sur la dernière minute) et un graphique dédié s\'ajoute au-dessus de la chronologie pour suivre la production. La ligne entre la maison et la pastille s\'anime à une vitesse proportionnelle à la production. Capteur de puissance (W/kW) ou d\'énergie cumulée (Wh/kWh) acceptés indifféremment.',
         pvEntity:           'Entité de production',
         pvEntityHelp:       'Sélectionne un capteur de puissance ou d\'énergie photovoltaïque (W, kW, Wh, kWh).',
-        pvColor:            'Couleur de production *'
+        pvColor:            'Couleur de production *',
+        batterySection:     'Batterie domestique',
+        batteryHint:        'Optionnel. Quand au moins une entité est renseignée, une pastille apparaît sous la maison avec l\'état de charge en direct et la puissance instantanée signée. La ligne s\'anime vers le bas en charge et vers le haut en décharge, à une vitesse proportionnelle à la puissance. Aucun historique n\'est récupéré — la pastille reflète uniquement la valeur en direct.',
+        batterySocEntity:   'Entité d\'état de charge',
+        batterySocEntityHelp: 'Choisis un capteur d\'état de charge de batterie (% — typiquement avec device_class "battery").',
+        batteryPowerEntity: 'Entité de puissance',
+        batteryPowerEntityHelp: 'Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l\'entité elle-même ; positif = en charge.',
+        batteryColor:       'Couleur batterie *'
     }
 };

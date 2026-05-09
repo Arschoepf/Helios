@@ -76,6 +76,13 @@ export interface Translations
         pvEntity:                 string;
         pvEntityHelp:             string;
         pvColor:                  string;
+        batterySection:           string;
+        batteryHint:              string;
+        batterySocEntity:         string;
+        batterySocEntityHelp:     string;
+        batteryPowerEntity:       string;
+        batteryPowerEntityHelp:   string;
+        batteryColor:             string;
     };
 }
 

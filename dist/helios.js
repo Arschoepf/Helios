@@ -24808,6 +24808,7 @@ function parseHex(v2, fallback) {
 const DEFAULT_SUN_COLOR_HEX = "#EF9F27";
 const DEFAULT_CLOUD_COLOR_HEX = "#5A8DC4";
 const DEFAULT_PV_COLOR_HEX = "#27B36B";
+const DEFAULT_BATTERY_COLOR_HEX = "#9D6BCC";
 const DEFAULT_CLOUD_RGB = [90, 141, 196];
 function geoDistM(lat1, lon1, lat2, lon2) {
   const R2 = 6371e3;
@@ -25792,7 +25793,13 @@ class HeliosEngine {
     const CLOUD_CHIP_LIFT_PX = 30;
     return {
       cloudLabel: { x: ringTop.x, y: ringTop.y - CLOUD_CHIP_LIFT_PX },
+      //PV chip sits CLOUD_LABEL_OFFSET_PX above the home; the
+      //battery chip mirrors it the same distance below the home,
+      //creating an "in / out" symmetry across the home (PV =
+      //incoming production, battery = stored / drawn-from
+      //reserve).
       pvLabel: { x: home.x, y: home.y - CLOUD_LABEL_OFFSET_PX },
+      batteryLabel: { x: home.x, y: home.y + CLOUD_LABEL_OFFSET_PX },
       ringTop: { x: ringTop.x, y: ringTop.y },
       home: { x: home.x, y: home.y }
     };
@@ -26141,7 +26148,14 @@ const en = {
     pvHint: "Optional. When set, a chip appears on the home (instant production, computed over the last minute) and a dedicated graph is added above the timeline. The line between the home and the chip animates at a speed proportional to the live production. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).",
     pvEntity: "Production entity",
     pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
-    pvColor: "Production color *"
+    pvColor: "Production color *",
+    batterySection: "Home battery",
+    batteryHint: "Optional. When at least one entity is set, a chip appears below the home with the live State of Charge and the signed instantaneous power. The leader line animates downward while charging and upward while discharging, at a speed proportional to the live power. No history is fetched — the chip reflects the live reading only.",
+    batterySocEntity: "State of charge entity",
+    batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery").',
+    batteryPowerEntity: "Power entity",
+    batteryPowerEntityHelp: "Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging.",
+    batteryColor: "Battery color *"
   }
 };
 const fr = {
@@ -26191,7 +26205,14 @@ const fr = {
     pvHint: "Optionnel. Si renseigné, une pastille apparaît sur la maison (production instantanée, calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. La ligne entre la maison et la pastille s'anime à une vitesse proportionnelle à la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
     pvEntity: "Entité de production",
     pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
-    pvColor: "Couleur de production *"
+    pvColor: "Couleur de production *",
+    batterySection: "Batterie domestique",
+    batteryHint: "Optionnel. Quand au moins une entité est renseignée, une pastille apparaît sous la maison avec l'état de charge en direct et la puissance instantanée signée. La ligne s'anime vers le bas en charge et vers le haut en décharge, à une vitesse proportionnelle à la puissance. Aucun historique n'est récupéré — la pastille reflète uniquement la valeur en direct.",
+    batterySocEntity: "Entité d'état de charge",
+    batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (% — typiquement avec device_class "battery").`,
+    batteryPowerEntity: "Entité de puissance",
+    batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge.",
+    batteryColor: "Couleur batterie *"
   }
 };
 const de = {
@@ -26241,7 +26262,14 @@ const de = {
     pvHint: "Optional. Wenn gesetzt, erscheint auf dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Die Linie zwischen Haus und Chip animiert mit einer Geschwindigkeit proportional zur Produktion. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
     pvEntity: "Produktions-Entität",
     pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
-    pvColor: "Produktionsfarbe *"
+    pvColor: "Produktionsfarbe *",
+    batterySection: "Hausbatterie",
+    batteryHint: "Optional. Wenn mindestens eine Entität gesetzt ist, erscheint ein Chip unter dem Haus mit dem aktuellen Ladezustand und der vorzeichenbehafteten momentanen Leistung. Die Leiterlinie animiert beim Laden nach unten und beim Entladen nach oben, mit einer Geschwindigkeit proportional zur aktuellen Leistung. Es wird kein Verlauf abgerufen — der Chip zeigt nur den Live-Wert.",
+    batterySocEntity: "Ladezustand-Entität",
+    batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery").',
+    batteryPowerEntity: "Leistungs-Entität",
+    batteryPowerEntityHelp: "Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden.",
+    batteryColor: "Batteriefarbe *"
   }
 };
 const es = {
@@ -26291,7 +26319,14 @@ const es = {
     pvHint: "Opcional. Si se define, aparece una pastilla en la casa (producción instantánea, calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. La línea entre la casa y la pastilla se anima a una velocidad proporcional a la producción. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
     pvEntity: "Entidad de producción",
     pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
-    pvColor: "Color de producción *"
+    pvColor: "Color de producción *",
+    batterySection: "Batería doméstica",
+    batteryHint: "Opcional. Cuando se configura al menos una entidad, aparece un chip bajo la casa con el estado de carga en vivo y la potencia instantánea con signo. La línea se anima hacia abajo durante la carga y hacia arriba durante la descarga, a una velocidad proporcional a la potencia. No se recupera ningún historial — el chip refleja solo la lectura en vivo.",
+    batterySocEntity: "Entidad de estado de carga",
+    batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery").',
+    batteryPowerEntity: "Entidad de potencia",
+    batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando.",
+    batteryColor: "Color batería *"
   }
 };
 const it = {
@@ -26341,7 +26376,14 @@ const it = {
     pvHint: "Opzionale. Se impostato, una pastiglia appare sulla casa (produzione istantanea, calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. La linea tra la casa e la pastiglia si anima a una velocità proporzionale alla produzione. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
     pvEntity: "Entità di produzione",
     pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
-    pvColor: "Colore di produzione *"
+    pvColor: "Colore di produzione *",
+    batterySection: "Batteria domestica",
+    batteryHint: "Opzionale. Quando è impostata almeno un'entità, appare una pastiglia sotto la casa con lo stato di carica in tempo reale e la potenza istantanea con segno. La linea si anima verso il basso durante la carica e verso l'alto durante la scarica, a una velocità proporzionale alla potenza. Nessuno storico viene recuperato — la pastiglia riflette solo la lettura in tempo reale.",
+    batterySocEntity: "Entità stato di carica",
+    batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery").',
+    batteryPowerEntity: "Entità di potenza",
+    batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa; positivo = in carica.",
+    batteryColor: "Colore batteria *"
   }
 };
 const nl = {
@@ -26391,7 +26433,14 @@ const nl = {
     pvHint: "Optioneel. Als ingesteld verschijnt op het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. De lijn tussen het huis en de chip animeert met een snelheid evenredig aan de productie. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
     pvEntity: "Productie-entiteit",
     pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
-    pvColor: "Productiekleur *"
+    pvColor: "Productiekleur *",
+    batterySection: "Thuisbatterij",
+    batteryHint: "Optioneel. Wanneer ten minste één entiteit is ingesteld, verschijnt er een chip onder het huis met de live laadtoestand en het ondertekende momentane vermogen. De leider-lijn animeert naar beneden tijdens het laden en naar boven tijdens het ontladen, met een snelheid evenredig aan het vermogen. Er wordt geen historie opgehaald — de chip toont alleen de live waarde.",
+    batterySocEntity: "Laadtoestand-entiteit",
+    batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery").',
+    batteryPowerEntity: "Vermogen-entiteit",
+    batteryPowerEntityHelp: "Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen.",
+    batteryColor: "Batterijkleur *"
   }
 };
 const pt = {
@@ -26441,7 +26490,14 @@ const pt = {
     pvHint: "Opcional. Quando definido, surge uma pastilha sobre a casa (produção instantânea, calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. A linha entre a casa e a pastilha anima a uma velocidade proporcional à produção. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
     pvEntity: "Entidade de produção",
     pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
-    pvColor: "Cor de produção *"
+    pvColor: "Cor de produção *",
+    batterySection: "Bateria doméstica",
+    batteryHint: "Opcional. Quando pelo menos uma entidade está definida, aparece um chip por baixo da casa com o estado de carga em tempo real e a potência instantânea com sinal. A linha anima para baixo durante o carregamento e para cima durante a descarga, a uma velocidade proporcional à potência. Não é recuperado nenhum histórico — o chip reflete apenas a leitura em tempo real.",
+    batterySocEntity: "Entidade do estado de carga",
+    batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (% — normalmente com device_class "battery").',
+    batteryPowerEntity: "Entidade de potência",
+    batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar.",
+    batteryColor: "Cor da bateria *"
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -27101,6 +27157,79 @@ const heliosCardStyles = i$3`
         opacity: 0.9;
     }
 
+    /*  Battery chip — mirrors the PV chip but sits below the home
+        with a leader line going down. Same 80 % white background as
+        the other on-map chips so the basemap reads through; tinted
+        in the user-configured battery colour (border + text + icon).
+        --battery-leader-color is set inline by the renderer. */
+    .battery-pct-label
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 6;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        background: rgba(255, 255, 255, 0.8);
+        color:      var(--battery-leader-color, #9D6BCC);
+        border:     1px solid var(--battery-leader-color, #9D6BCC);
+        border-radius: 3px;
+        padding: 2px 6px 2px 4px;
+        font-size:    12px;
+        font-weight:  600;
+        line-height:  1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+    }
+
+    .battery-pct-label ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  Battery leader line — dashes flow from home down to the chip
+        (charging) or from the chip up to home (discharging) at a
+        speed proportional to live |power|. The renderer flips the
+        animateMotion path to drive direction; the CSS dash-offset
+        animation always streams in the same screen direction, so
+        the dashes' visible motion is governed by the polygon arrow
+        which rides the path with rotate="auto". */
+    .battery-leader-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    .battery-leader-line
+    {
+        stroke: var(--battery-leader-color, #9D6BCC);
+        stroke-width: 1.5;
+        stroke-opacity: 0.85;
+        stroke-linecap: round;
+        stroke-dasharray: 6 5;
+        animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
+    }
+
+    @keyframes battery-leader-flow
+    {
+        from { stroke-dashoffset: 0;  }
+        to   { stroke-dashoffset: -11; }
+    }
+
+    .battery-leader-arrow
+    {
+        opacity: 0.9;
+    }
+
     /*  Cloud-cover leader line — black hairline from chip to disc. */
     .cloud-leader-svg
     {
@@ -27615,6 +27744,18 @@ let HeliosCardEditor = class extends i {
       const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
       return u2 === "W" || u2 === "kW" || u2 === "MW" || u2 === "Wh" || u2 === "kWh" || u2 === "MWh";
     };
+    this._batterySocEntityFilter = (entity) => {
+      if (!entity || !entity.attributes) return false;
+      if (entity.attributes.device_class === "battery") return true;
+      const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
+      return u2 === "%";
+    };
+    this._batteryPowerEntityFilter = (entity) => {
+      if (!entity || !entity.attributes) return false;
+      if (entity.attributes.device_class === "power") return true;
+      const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
+      return u2 === "W" || u2 === "kW" || u2 === "MW";
+    };
   }
   setConfig(config) {
     this._cfg = { ...config };
@@ -27808,6 +27949,59 @@ let HeliosCardEditor = class extends i {
                     ></helios-color-picker>
                 </label>
                 <div class="hint">${t2.editor.pvHint}</div>
+
+                <div class="section-title">${t2.editor.batterySection}</div>
+                <div class="field field-block">
+                    <span class="label">${t2.editor.batterySocEntity}</span>
+                    ${this._pickerReady ? b`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass="${this.hass}"
+                            .value="${String(c2["battery-soc-entity"] ?? "")}"
+                            .includeDomains="${["sensor", "input_number"]}"
+                            .entityFilter="${this._batterySocEntityFilter}"
+                            @value-changed="${(e2) => this._update("battery-soc-entity", e2.detail.value ?? "")}"
+                        ></ha-entity-picker>
+                    ` : b`
+                        <input
+                            type="text"
+                            .value="${String(c2["battery-soc-entity"] ?? "")}"
+                            placeholder="sensor.battery_soc"
+                            @change="${(e2) => this._str("battery-soc-entity", e2)}"
+                        />
+                    `}
+                </div>
+                <div class="field-help">${t2.editor.batterySocEntityHelp}</div>
+                <div class="field field-block">
+                    <span class="label">${t2.editor.batteryPowerEntity}</span>
+                    ${this._pickerReady ? b`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass="${this.hass}"
+                            .value="${String(c2["battery-power-entity"] ?? "")}"
+                            .includeDomains="${["sensor", "input_number"]}"
+                            .entityFilter="${this._batteryPowerEntityFilter}"
+                            @value-changed="${(e2) => this._update("battery-power-entity", e2.detail.value ?? "")}"
+                        ></ha-entity-picker>
+                    ` : b`
+                        <input
+                            type="text"
+                            .value="${String(c2["battery-power-entity"] ?? "")}"
+                            placeholder="sensor.battery_power"
+                            @change="${(e2) => this._str("battery-power-entity", e2)}"
+                        />
+                    `}
+                </div>
+                <div class="field-help">${t2.editor.batteryPowerEntityHelp}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.batteryColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["battery-color"], DEFAULT_BATTERY_COLOR_HEX)}"
+                        .ariaLabel="${t2.editor.batteryColor}"
+                        @value-changed="${(e2) => this._color("battery-color", e2)}"
+                    ></helios-color-picker>
+                </label>
+                <div class="hint">${t2.editor.batteryHint}</div>
 
                 <div class="section-title">${t2.editor.timeline}</div>
                 <label class="field">
@@ -28024,6 +28218,9 @@ let HeliosCard = class extends i {
     this._pvFetchKey = "";
     this._pvFetching = false;
     this._pvSampleBuffer = [];
+    this._batterySoc = null;
+    this._batteryPower = null;
+    this._batteryPowerUnit = "";
     this._sunScene = null;
     this._chartSeries = null;
     this._fetching = false;
@@ -28130,6 +28327,7 @@ let HeliosCard = class extends i {
       this._engine.updateConfig(this.config);
     }
     this._refreshPv();
+    this._refreshBattery();
   }
   //Photovoltaic production
   //
@@ -28196,6 +28394,63 @@ let HeliosCard = class extends i {
     }
     this._pvFetchKey = fetchKey;
     this._fetchPvHistory(entity, this._timeRange.start, this._timeRange.end);
+  }
+  //Battery overlay — much simpler than PV: no history fetch, no
+  //rolling buffer, no scrub-back. Just a live read of the SoC and
+  //power entities on every Lit cycle. The chip is hidden (and the
+  //state cleared) when neither entity is configured, or when the
+  //configured entity is unavailable / non-numeric.
+  _refreshBattery() {
+    if (!this.hass) {
+      return;
+    }
+    const socEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
+    const powerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
+    let nextSoc = null;
+    if (socEntity) {
+      const so = this.hass.states?.[socEntity];
+      const v2 = so ? parseFloat(so.state) : NaN;
+      if (isFinite(v2)) {
+        nextSoc = Math.max(0, Math.min(100, v2));
+      }
+    }
+    if (nextSoc !== this._batterySoc) {
+      this._batterySoc = nextSoc;
+    }
+    let nextPower = null;
+    let nextUnit = "";
+    if (powerEntity) {
+      const so = this.hass.states?.[powerEntity];
+      const v2 = so ? parseFloat(so.state) : NaN;
+      if (isFinite(v2)) {
+        nextPower = v2;
+        nextUnit = so.attributes?.unit_of_measurement ?? "";
+      }
+    }
+    if (nextPower !== this._batteryPower) {
+      this._batteryPower = nextPower;
+    }
+    if (nextUnit !== this._batteryPowerUnit) {
+      this._batteryPowerUnit = nextUnit;
+    }
+  }
+  //Format a signed battery power value for the chip. Mirrors
+  //_formatPvValue's W ↔ kW switching but always prefixes a sign so
+  //the user can tell charging from discharging at a glance.
+  _formatBatteryPower(value, unit) {
+    const lu = (unit || "").trim().toLowerCase();
+    const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+    const abs = Math.abs(value);
+    if (lu === "w" && abs >= 1e3) {
+      return `${sign}${(abs / 1e3).toFixed(2)} kW`;
+    }
+    if (lu === "w") {
+      return `${sign}${Math.round(abs)} W`;
+    }
+    if (lu === "kw") {
+      return `${sign}${abs.toFixed(2)} kW`;
+    }
+    return `${sign}${abs}${unit ? " " + unit : ""}`;
   }
   async _fetchPvHistory(entityId, start, end) {
     if (!this.hass?.callWS) {
@@ -28968,6 +29223,35 @@ let HeliosCard = class extends i {
     const pvDisplayValue = showPvLabel ? this._formatPvValue(pvRate.value, pvRate.unit) : "";
     const pvWattsForFlow = pvRate !== null ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit) : 0;
     const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5e3);
+    const batterySocEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
+    const batteryPowerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
+    const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
+    const batteryScrubbing = !this._isLiveMode && this._selectedTime !== null;
+    const hasBatteryEntity = batterySocEntity !== "" || batteryPowerEntity !== "";
+    const hasBatteryReading = this._batterySoc !== null || this._batteryPower !== null;
+    const showBatteryLabel = hasApiKey && layout !== null && hasBatteryEntity && hasBatteryReading && !batteryScrubbing;
+    let batteryDisplayValue = "";
+    if (showBatteryLabel) {
+      const parts = [];
+      if (this._batterySoc !== null) {
+        parts.push(`${Math.round(this._batterySoc)} %`);
+      }
+      if (this._batteryPower !== null) {
+        parts.push(this._formatBatteryPower(this._batteryPower, this._batteryPowerUnit));
+      }
+      batteryDisplayValue = parts.join(" • ");
+    }
+    const batteryPower = this._batteryPower ?? 0;
+    const batteryWattsForFlow = (() => {
+      if (this._batteryPower === null) {
+        return 0;
+      }
+      const lu = (this._batteryPowerUnit || "").trim().toLowerCase();
+      return lu === "kw" ? Math.abs(this._batteryPower) * 1e3 : Math.abs(this._batteryPower);
+    })();
+    const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
+    const batteryCharging = batteryPower > 0;
+    const batteryDischarging = batteryPower < 0;
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -29252,6 +29536,40 @@ ${showSun ? b`
                     </div>
                 ` : A}
 
+                ${showBatteryLabel ? b`
+                    <svg class="battery-leader-svg">
+                        <line
+                            class="battery-leader-line"
+                            style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
+                            x1="${layout.home.x}"
+                            y1="${layout.home.y}"
+                            x2="${layout.batteryLabel.x}"
+                            y2="${layout.batteryLabel.y - 10}"
+                        ></line>
+                        ${batteryCharging || batteryDischarging ? w`
+                            <polygon
+                                class="battery-leader-arrow"
+                                points="-6,-4 0,0 -6,4"
+                                fill="${batteryColor}"
+                            >
+                                <animateMotion
+                                    dur="${batteryFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="${batteryCharging ? `M ${layout.home.x},${layout.home.y} L ${layout.batteryLabel.x},${layout.batteryLabel.y - 10}` : `M ${layout.batteryLabel.x},${layout.batteryLabel.y - 10} L ${layout.home.x},${layout.home.y}`}"
+                                ></animateMotion>
+                            </polygon>
+                        ` : A}
+                    </svg>
+                    <div
+                        class="battery-pct-label"
+                        style="left:${layout.batteryLabel.x}px; top:${layout.batteryLabel.y}px; --battery-leader-color:${batteryColor}"
+                    >
+                        <ha-icon icon="mdi:home-battery"></ha-icon>
+                        <span>${batteryDisplayValue}</span>
+                    </div>
+                ` : A}
+
             </ha-card>
         `;
   }
@@ -29409,7 +29727,15 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   //so the engine reloads the basemap (terrain, hillshade, cloud
   //disc, buildings and label visibility are all re-applied via
   //the resulting `style.load`).
-  "map-style"
+  "map-style",
+  //Battery overlay — soc and power entities feed the live chip
+  //below the home; battery-color tints the chip border, text
+  //and animated leader. Including them in the visual sig means
+  //changing the entity in the editor triggers a re-render that
+  //picks up the new readings on the next hass property update.
+  "battery-soc-entity",
+  "battery-power-entity",
+  "battery-color"
 ];
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([
@@ -29460,6 +29786,15 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_pvHistory", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_batterySoc", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_batteryPower", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_batteryPowerUnit", 2);
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_sunScene", 2);

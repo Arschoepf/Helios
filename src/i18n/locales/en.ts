@@ -64,6 +64,13 @@ export const en: Translations = {
         pvHint:             'Optional. When set, a chip appears on the home (instant production, computed over the last minute) and a dedicated graph is added above the timeline. The line between the home and the chip animates at a speed proportional to the live production. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).',
         pvEntity:           'Production entity',
         pvEntityHelp:       'Pick a solar power or energy sensor (W, kW, Wh, kWh).',
-        pvColor:            'Production color *'
+        pvColor:            'Production color *',
+        batterySection:     'Home battery',
+        batteryHint:        'Optional. When at least one entity is set, a chip appears below the home with the live State of Charge and the signed instantaneous power. The leader line animates downward while charging and upward while discharging, at a speed proportional to the live power. No history is fetched — the chip reflects the live reading only.',
+        batterySocEntity:   'State of charge entity',
+        batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery").',
+        batteryPowerEntity: 'Power entity',
+        batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging.',
+        batteryColor:       'Battery color *'
     }
 };
