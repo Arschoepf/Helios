@@ -1,9 +1,24 @@
-import { css } from 'lit';
+import { css, unsafeCSS } from 'lit';
+//MapLibre's stylesheet ships under dist/maplibre-gl.css. Vite's
+//`?inline` query suffix returns the file content as a raw string
+//instead of injecting a global <style> tag — we need the rules
+//*inside* our shadow root, not in document <head>. Without these
+//rules .maplibregl-canvas falls back to the default `position:
+//static`, which makes the canvas participate in the layout flow:
+//in HA panel-mode (where the parent container has no fixed
+//height), the explicit pixel size MapLibre writes onto the canvas
+//pushes the container, our ResizeObserver fires, MapLibre re-reads
+//a bigger container, and we're in an unbounded growth loop. With
+//the rule applied the canvas is taken out of flow and the loop
+//breaks.
+import maplibreCss from 'maplibre-gl/dist/maplibre-gl.css?inline';
 
 //Visual styles for the main HeliosCard. Kept in a dedicated file so
 //the card module reads as logic only; rules are grouped by feature
 //(layout → placeholder → timeline → overlays → solar arc → tooltips).
 export const heliosCardStyles = css`
+    ${unsafeCSS(maplibreCss)}
+
     :host
     {
         display: block;

@@ -456,6 +456,11 @@ export class HeliosEngine
     //triggers an _addBuildings re-init that re-applies the saved
     //factor without the card having to push it again).
     private _batterySocFactor: number = 0;
+    //True once the home-fill source has been seeded with the actual
+    //home building footprint queried from the rendered vector tiles.
+    //Reset on every basemap reload so the next idle re-runs the
+    //resolution against the freshly loaded layer.
+    private _homeFootprintResolved: boolean = false;
 
     constructor(
         container:    HTMLElement,
@@ -1312,31 +1317,57 @@ export class HeliosEngine
             }
         });
 
-        //Home-fill layer — same vector source / source-layer as
-        //the backdrop, but spatially filtered to features that
-        //fall inside a small circle around the home, then re-
-        //rendered opaque in the configured battery colour at a
-        //height scaled by the live SoC factor. Added AFTER the
-        //backdrop so it paints on top.
+        //Home-fill layer — driven by a CUSTOM GeoJSON source
+        //(`helios-home-src`) rather than the vector-tile building
+        //source. We tried `['within', polygon]` to filter the
+        //vector source down to the home building, but MapLibre 5's
+        //`within` expression only evaluates Point and LineString
+        //features (see Within.evaluate in maplibre-gl-dev.js) —
+        //building polygons silently never match.
+        //
+        //Instead the source is seeded with a fallback 12 m × 12 m
+        //square at the home coordinates, then upgraded to the real
+        //building footprint as soon as the buildings layer has
+        //rendered enough tiles to query (see _tryResolveHomeFootprint
+        //below). The fallback guarantees something always paints
+        //while the upgrade matches the exact building shape when
+        //it's available in OSM.
         const batteryColor = String(this.cfg['battery-color']
             ?? DEFAULT_BATTERY_COLOR_HEX);
+        if (!this.map.getSource('helios-home-src'))
+        {
+            this.map.addSource('helios-home-src',
+            {
+                type: 'geojson',
+                data: this._homeFallbackFeatureCollection()
+            });
+        }
+        else
+        {
+            //Style reload (e.g. user switched map-style) — re-seed
+            //with the fallback while the new tiles load, then the
+            //resolver will overwrite with the real footprint on the
+            //next idle.
+            const src = this.map.getSource('helios-home-src') as any;
+            src?.setData?.(this._homeFallbackFeatureCollection());
+        }
+        this._homeFootprintResolved = false;
+
         this.map.addLayer(
         {
-            id:             'helios-home-fill',
-            source:         'helios-planet',
-            'source-layer': 'building',
-            type:           'fill-extrusion',
-            minzoom:        15,
-            filter:         ['within', this._homeFilterPolygon()],
+            id:      'helios-home-fill',
+            source:  'helios-home-src',
+            type:    'fill-extrusion',
+            minzoom: 15,
             paint:
             {
                 'fill-extrusion-color':   batteryColor,
-                'fill-extrusion-base':    ['get', 'render_min_height'],
+                'fill-extrusion-base':    ['coalesce', ['get', 'render_min_height'], 0],
                 //Initial height = render_height × current SoC factor.
                 //Will be re-pushed by setBatterySoc() whenever the
                 //live SoC value updates.
                 'fill-extrusion-height': [
-                    '*', ['get', 'render_height'], this._batterySocFactor
+                    '*', ['coalesce', ['get', 'render_height'], 8], this._batterySocFactor
                 ],
                 'fill-extrusion-opacity': [
                     'interpolate', ['linear'], ['zoom'],
@@ -1363,19 +1394,26 @@ export class HeliosEngine
             if (this.map) { this.map.getCanvas().style.cursor = ''; }
             this.onHomeBuildingHover?.({ x: 0, y: 0, hover: false });
         });
+
+        //Try to upgrade the fallback square to the real home
+        //footprint as soon as the building tiles have rendered. We
+        //hook 'idle' (fired when no more tiles are loading and no
+        //animations are running) and re-run on every fire until we
+        //get a match — once resolved, the resolver short-circuits
+        //so the cost stays at one queryRenderedFeatures call per
+        //idle until success, then zero.
+        this.map.on('idle', () => this._tryResolveHomeFootprint());
     }
 
-    //Square polygon (≈ 15 m × 15 m) centred on the home, used as
-    //the `within` filter geometry for the home-fill layer. We use
-    //a square (rather than a polygon-circle approximation) because
-    //it's geometrically simpler and the practical impact on which
-    //buildings get caught is identical at this scale: a 15 m
-    //inscribed circle vs a 15 m half-side square only differ at the
-    //corners, well outside the spatial fuzziness of vector-tile
-    //building footprints.
-    private _homeFilterPolygon(): GeoJSON.Polygon
+    //Build the fallback FeatureCollection used to seed
+    //`helios-home-src` before the real footprint is known: a
+    //12 m × 12 m square centred on the home, with a default
+    //`render_height` of 8 m (~2 floors) so the fill scales
+    //plausibly even before we can read the real building height
+    //from the vector tiles.
+    private _homeFallbackFeatureCollection(): GeoJSON.FeatureCollection
     {
-        const HALF_M  = 15;
+        const HALF_M  = 6;
         const cosLat  = Math.cos(this.homeLat * Math.PI / 180);
         const dLat    = HALF_M / 111_320;
         const dLng    = HALF_M / (111_320 * cosLat);
@@ -1384,11 +1422,140 @@ export class HeliosEngine
         const s = this.homeLat - dLat;
         const n = this.homeLat + dLat;
         return {
-            type: 'Polygon',
-            coordinates: [[
-                [w, s], [e, s], [e, n], [w, n], [w, s]
-            ]]
+            type: 'FeatureCollection',
+            features:
+            [
+                {
+                    type:       'Feature',
+                    properties: { render_height: 8, render_min_height: 0 },
+                    geometry:
+                    {
+                        type:        'Polygon',
+                        coordinates: [[
+                            [w, s], [e, s], [e, n], [w, n], [w, s]
+                        ]]
+                    }
+                }
+            ]
         };
+    }
+
+    //Resolve the actual home footprint from the rendered building
+    //tiles and overwrite the fallback square in `helios-home-src`.
+    //
+    //Strategy: project the home (lon, lat) to a screen point, query
+    //the buildings layer over a small box around it
+    //(queryRenderedFeatures on a single point can miss the building
+    //when the home coordinates land inside the courtyard rather than
+    //on the polygon itself), pick the candidate whose centroid is
+    //closest to the home, and push its geometry + render_height /
+    //render_min_height into the GeoJSON source.
+    //
+    //Idempotent: returns immediately once a real footprint has been
+    //resolved, so the per-idle cost drops to a single boolean check
+    //after the first success. Reset on every basemap reload.
+    private _tryResolveHomeFootprint(): void
+    {
+        if (!this.map || this._homeFootprintResolved)
+        {
+            return;
+        }
+        if (!this.map.getLayer('helios-buildings'))
+        {
+            return;
+        }
+
+        const m = this.map as any;
+        const home = m.project([this.homeLon, this.homeLat]);
+        const SEARCH_RADIUS_PX = 24;
+        const box: [[number, number], [number, number]] =
+        [
+            [home.x - SEARCH_RADIUS_PX, home.y - SEARCH_RADIUS_PX],
+            [home.x + SEARCH_RADIUS_PX, home.y + SEARCH_RADIUS_PX]
+        ];
+        const feats = m.queryRenderedFeatures(box, { layers: ['helios-buildings'] }) ?? [];
+        if (feats.length === 0)
+        {
+            return;
+        }
+
+        //Pick the building whose vertex centroid is closest to the
+        //home point in geographic coordinates. This is more reliable
+        //than "first feature returned" — vector tiles split big
+        //buildings across multiple features, and the home might be
+        //adjacent to the courtyard of a neighbouring complex.
+        let best:        any = null;
+        let bestDist:    number = Infinity;
+        for (const f of feats)
+        {
+            const c = this._featureCentroid(f);
+            if (c === null) { continue; }
+            const dx = c[0] - this.homeLon;
+            const dy = c[1] - this.homeLat;
+            const d  = dx * dx + dy * dy;
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best     = f;
+            }
+        }
+        if (!best || !best.geometry)
+        {
+            return;
+        }
+
+        const props = best.properties ?? {};
+        const renderHeight = typeof props.render_height === 'number'
+            ? props.render_height : 8;
+        const renderBase   = typeof props.render_min_height === 'number'
+            ? props.render_min_height : 0;
+
+        const upgraded: GeoJSON.FeatureCollection =
+        {
+            type: 'FeatureCollection',
+            features:
+            [
+                {
+                    type:       'Feature',
+                    properties: { render_height: renderHeight, render_min_height: renderBase },
+                    geometry:   best.geometry as GeoJSON.Geometry
+                }
+            ]
+        };
+
+        const src = this.map.getSource('helios-home-src') as any;
+        src?.setData?.(upgraded);
+        this._homeFootprintResolved = true;
+    }
+
+    //Cheap centroid (vertex average) of a Polygon / MultiPolygon
+    //feature in [lon, lat]. Used to rank buildings by closeness to
+    //the home when multiple match the search box. Vertex average
+    //isn't the geometric centroid for non-convex polygons, but at
+    //the metre scale of a residential building footprint it's
+    //within a couple of metres of the true centroid — well below
+    //the discriminative resolution we need here.
+    private _featureCentroid(f: any): [number, number] | null
+    {
+        const g = f?.geometry;
+        if (!g) { return null; }
+        let rings: number[][][] | null = null;
+        if (g.type === 'Polygon')
+        {
+            rings = g.coordinates;
+        }
+        else if (g.type === 'MultiPolygon')
+        {
+            rings = (g.coordinates as number[][][][])[0] ?? null;
+        }
+        if (!rings || rings.length === 0) { return null; }
+        const ring = rings[0];
+        let cx = 0, cy = 0, n = 0;
+        for (const p of ring)
+        {
+            cx += p[0]; cy += p[1]; n++;
+        }
+        return n > 0 ? [cx / n, cy / n] : null;
     }
 
     //Public — push a new live SoC reading. Accepts a percentage in
@@ -1415,7 +1582,7 @@ export class HeliosEngine
             this.map.setPaintProperty(
                 'helios-home-fill',
                 'fill-extrusion-height',
-                ['*', ['get', 'render_height'], factor]
+                ['*', ['coalesce', ['get', 'render_height'], 8], factor]
             );
         }
         catch (_) {}

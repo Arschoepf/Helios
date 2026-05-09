@@ -321,6 +321,40 @@ modifier for the reversed flow direction).
 No public config keys changed; existing dashboards keep working
 with no edits.
 
+## v1.1.0-beta.10
+
+Two bug fixes for beta.9.
+
+* **Home-fill now actually paints the home.** beta.9 used a
+  `['within', polygon]` filter on the building source-layer to
+  isolate the home, but MapLibre 5's `within` expression only
+  evaluates Point and LineString features (see `Within.evaluate`
+  in `maplibre-gl-dev.js`); building polygons silently never
+  match, so the layer existed but always rendered zero features.
+  The home-fill is now driven by a custom GeoJSON source seeded
+  with a 12 m × 12 m fallback square at the home coordinates,
+  upgraded to the actual building footprint via
+  `queryRenderedFeatures` on the first `idle` event after the
+  tiles have rendered. The fallback guarantees something always
+  paints; the upgrade matches the exact building shape when it's
+  available in OSM. Closest-centroid disambiguation across the
+  query box result picks the right polygon when several buildings
+  overlap the search area.
+* **Card no longer grows infinitely in panel-mode views.**
+  MapLibre's stylesheet (`maplibre-gl/dist/maplibre-gl.css`) was
+  never bundled, so the `.maplibregl-canvas { position: absolute }`
+  rule never reached the shadow root. The canvas defaulted to
+  `position: static` and participated in the layout flow: in HA
+  panel views (where the parent container has no fixed height),
+  the explicit pixel size MapLibre writes onto the canvas pushed
+  the container, our ResizeObserver fired, MapLibre re-read a
+  bigger container, and the layout cycle never converged. The
+  stylesheet is now imported via Vite's `?inline` query suffix
+  and inlined into the lit `css\`...\`` literal (using
+  `unsafeCSS`), so the rules land *inside* the shadow root and
+  the canvas stays out-of-flow regardless of how the parent
+  sizes us.
+
 ---
 
 # HELIOS — v1.0.0
