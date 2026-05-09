@@ -25778,19 +25778,26 @@ class HeliosEngine {
   //               competing for the home's vertical axis.
   //  battery2Label — where the optional second battery chip is drawn
   //               (Power, only when both battery entities are
-  //               configured). Sits horizontally next to
-  //               battery1Label, separated by BATTERY_PAIR_GAP_PX.
-  //  ringEdge   — projection of the screen-leftmost point of the
-  //               100 % reference ring. The cloud leader line ends
-  //               here. We sample N points around the ground ring
-  //               and pick the one with the smallest screen X so
-  //               the chip stays anchored to the left of the disc
-  //               regardless of the user's current bearing — the
-  //               disc projects to an ellipse whose major axis
-  //               flips orientation with rotation, and a fixed
-  //               geographic anchor (e.g. due-west) would land on
-  //               the wrong screen side under the default NH
-  //               bearing of 180°.
+  //               configured). Sits directly below battery1Label,
+  //               separated by BATTERY_PAIR_GAP_PX. Stacking the
+  //               pair vertically (rather than side by side) keeps
+  //               the battery group narrow on screen so it doesn't
+  //               crowd the home or run into neighbouring labels.
+  //  ringEdge   — projection of a fixed geographic point on the
+  //               100 % reference ring (the disc's geographic east
+  //               edge in the northern hemisphere, west edge in
+  //               the south — picked so the chip lands on screen-
+  //               LEFT under each hemisphere's default bearing of
+  //               180° NH / 0° SH). The cloud leader line ends
+  //               here. Pinning to a fixed geographic point — and
+  //               not "screen-leftmost-of-N-samples" as a previous
+  //               revision did — means the chip tracks the same
+  //               world location continuously when the camera
+  //               rotates, instead of teleporting in 30° increments
+  //               between discrete samples. This matches the
+  //               steady, pivot-anchored behaviour of the PV /
+  //               battery chips and keeps the overlay legible
+  //               throughout rotation animations.
   //  home       — the projected home point, used as the anchor for
   //               the PV and battery chip leader lines.
   //
@@ -25802,37 +25809,30 @@ class HeliosEngine {
     }
     const m2 = this.map;
     const home = m2.project([this.homeLon, this.homeLat]);
-    const RING_SAMPLES = 12;
     const lat0 = this.homeLat;
     const cosLat = Math.cos(lat0 * Math.PI / 180);
-    let ringEdgeX = home.x;
-    let ringEdgeY = home.y;
-    let minX = Infinity;
-    for (let i2 = 0; i2 < RING_SAMPLES; i2++) {
-      const angle = i2 / RING_SAMPLES * 2 * Math.PI;
-      const dN = CLOUD_DISC_RADIUS_M * Math.cos(angle);
-      const dE = CLOUD_DISC_RADIUS_M * Math.sin(angle);
-      const dLat = dN / 111320;
-      const dLng = dE / (111320 * cosLat);
-      const p2 = m2.project([this.homeLon + dLng, this.homeLat + dLat]);
-      if (p2.x < minX) {
-        minX = p2.x;
-        ringEdgeX = p2.x;
-        ringEdgeY = p2.y;
-      }
-    }
+    const anchorDE = lat0 >= 0 ? CLOUD_DISC_RADIUS_M : -CLOUD_DISC_RADIUS_M;
+    const anchorDLng = anchorDE / (111320 * cosLat);
+    const anchor = m2.project([this.homeLon + anchorDLng, this.homeLat]);
+    const ringEdgeX = anchor.x;
+    const ringEdgeY = anchor.y;
     const CLOUD_CHIP_NUDGE_PX = 30;
-    const BATTERY_OFFSET_FROM_PV_X_PX = 70;
-    const BATTERY_OFFSET_FROM_PV_Y_PX = 50;
-    const BATTERY_PAIR_GAP_PX = 80;
+    const radDX = ringEdgeX - home.x;
+    const radDY = ringEdgeY - home.y;
+    const radLen = Math.sqrt(radDX * radDX + radDY * radDY) || 1;
+    const cloudLabelX = ringEdgeX + radDX / radLen * CLOUD_CHIP_NUDGE_PX;
+    const cloudLabelY = ringEdgeY + radDY / radLen * CLOUD_CHIP_NUDGE_PX;
+    const BATTERY_OFFSET_FROM_PV_X_PX = 40;
+    const BATTERY_OFFSET_FROM_PV_Y_PX = 30;
+    const BATTERY_PAIR_GAP_PX = 22;
     const battery1X = home.x + BATTERY_OFFSET_FROM_PV_X_PX;
     const battery1Y = home.y - CLOUD_LABEL_OFFSET_PX + BATTERY_OFFSET_FROM_PV_Y_PX;
-    const battery2X = battery1X + BATTERY_PAIR_GAP_PX;
+    const battery2Y = battery1Y + BATTERY_PAIR_GAP_PX;
     return {
-      cloudLabel: { x: ringEdgeX - CLOUD_CHIP_NUDGE_PX, y: ringEdgeY },
+      cloudLabel: { x: cloudLabelX, y: cloudLabelY },
       pvLabel: { x: home.x, y: home.y - CLOUD_LABEL_OFFSET_PX },
       battery1Label: { x: battery1X, y: battery1Y },
-      battery2Label: { x: battery2X, y: battery1Y },
+      battery2Label: { x: battery1X, y: battery2Y },
       ringEdge: { x: ringEdgeX, y: ringEdgeY },
       home: { x: home.x, y: home.y }
     };
@@ -27226,13 +27226,15 @@ const heliosCardStyles = i$3`
     }
 
     /*  Battery connectors — two static lines, no animation.
-        - .battery-l-line is the solid L from PV's bottom edge down
+        - .battery-l-line is the dotted L from PV's bottom edge down
           to the centre-left of the first battery chip.
-        - .battery-pair-line is the dotted segment between the two
-          battery chips when both are configured.
-        Both share the user-configured battery colour and the same
-        hairline width as the cloud / PV leaders for visual
-        coherence with the rest of the chip-leader vocabulary. */
+        - .battery-pair-line is the dotted vertical segment between
+          battery1 (top) and battery2 (below) when both are
+          configured.
+        Both share the user-configured battery colour, the same
+        dotted stroke pattern, and the same hairline width as the
+        cloud / PV leaders for visual coherence with the rest of
+        the chip-leader vocabulary. */
     .battery-leader-svg
     {
         position: absolute;
@@ -27250,6 +27252,7 @@ const heliosCardStyles = i$3`
         stroke-opacity: 0.85;
         stroke-linecap: round;
         stroke-linejoin: round;
+        stroke-dasharray: 2 3;
         fill: none;
     }
 
@@ -29698,29 +29701,31 @@ ${showSun ? b`
                 ${showAnyBatteryChip ? b`
                     <svg class="battery-leader-svg">
                         <!--
-                            L-shaped connector from PV chip to the
-                            first battery chip. Vertical leg starts at
-                            three-quarters from the left of PV's
-                            bottom edge (approximated as PV centre + 20 px
-                            since the chip width is content-driven and
-                            not known here); horizontal leg lands on
-                            the centre-left of battery1, with the
-                            endpoint nudged 10 px into the chip so the
-                            chip background hides the inside portion
-                            (same trick used for the cloud / PV leaders).
+                            Dotted L-shaped connector from PV chip to
+                            the first battery chip. Vertical leg
+                            starts on PV's bottom edge, midway between
+                            the leader-line entry point (PV centre)
+                            and the chip's right border (approximated
+                            at +10 px since the chip width is content-
+                            driven and not known here); horizontal leg
+                            lands on the centre-left of battery1, with
+                            the endpoint nudged 10 px into the chip so
+                            the chip background hides the inside
+                            portion (same trick used for the cloud /
+                            PV leaders).
                         -->
                         <polyline
                             class="battery-l-line"
                             style="--battery-leader-color:${batteryColor}"
-                            points="${layout.pvLabel.x + 20},${layout.pvLabel.y + 12} ${layout.pvLabel.x + 20},${layout.battery1Label.y} ${layout.battery1Label.x - 10},${layout.battery1Label.y}"
+                            points="${layout.pvLabel.x + 10},${layout.pvLabel.y + 12} ${layout.pvLabel.x + 10},${layout.battery1Label.y} ${layout.battery1Label.x - 10},${layout.battery1Label.y}"
                             fill="none"
                         ></polyline>
                         ${battery2Kind !== null ? w`
                             <!--
                                 Inter-battery dotted line: from the
-                                centre-right of battery1 to the
-                                centre-left of battery2. Both endpoints
-                                are nudged 10 px inside their chip so
+                                bottom-centre of battery1 down to the
+                                top-centre of battery2. Both endpoints
+                                are nudged 6 px inside their chip so
                                 the chip backgrounds hide the inside
                                 portions and the visible dashes only
                                 appear in the gap between the two.
@@ -29728,10 +29733,10 @@ ${showSun ? b`
                             <line
                                 class="battery-pair-line"
                                 style="--battery-leader-color:${batteryColor}"
-                                x1="${layout.battery1Label.x + 10}"
-                                y1="${layout.battery1Label.y}"
-                                x2="${layout.battery2Label.x - 10}"
-                                y2="${layout.battery2Label.y}"
+                                x1="${layout.battery1Label.x}"
+                                y1="${layout.battery1Label.y + 6}"
+                                x2="${layout.battery2Label.x}"
+                                y2="${layout.battery2Label.y - 6}"
                             ></line>
                         ` : A}
                     </svg>

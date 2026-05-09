@@ -2411,29 +2411,31 @@ ${showSun ? html`
                 ${showAnyBatteryChip ? html`
                     <svg class="battery-leader-svg">
                         <!--
-                            L-shaped connector from PV chip to the
-                            first battery chip. Vertical leg starts at
-                            three-quarters from the left of PV's
-                            bottom edge (approximated as PV centre + 20 px
-                            since the chip width is content-driven and
-                            not known here); horizontal leg lands on
-                            the centre-left of battery1, with the
-                            endpoint nudged 10 px into the chip so the
-                            chip background hides the inside portion
-                            (same trick used for the cloud / PV leaders).
+                            Dotted L-shaped connector from PV chip to
+                            the first battery chip. Vertical leg
+                            starts on PV's bottom edge, midway between
+                            the leader-line entry point (PV centre)
+                            and the chip's right border (approximated
+                            at +10 px since the chip width is content-
+                            driven and not known here); horizontal leg
+                            lands on the centre-left of battery1, with
+                            the endpoint nudged 10 px into the chip so
+                            the chip background hides the inside
+                            portion (same trick used for the cloud /
+                            PV leaders).
                         -->
                         <polyline
                             class="battery-l-line"
                             style="--battery-leader-color:${batteryColor}"
-                            points="${layout!.pvLabel.x + 20},${layout!.pvLabel.y + 12} ${layout!.pvLabel.x + 20},${layout!.battery1Label.y} ${layout!.battery1Label.x - 10},${layout!.battery1Label.y}"
+                            points="${layout!.pvLabel.x + 10},${layout!.pvLabel.y + 12} ${layout!.pvLabel.x + 10},${layout!.battery1Label.y} ${layout!.battery1Label.x - 10},${layout!.battery1Label.y}"
                             fill="none"
                         ></polyline>
                         ${battery2Kind !== null ? svg`
                             <!--
                                 Inter-battery dotted line: from the
-                                centre-right of battery1 to the
-                                centre-left of battery2. Both endpoints
-                                are nudged 10 px inside their chip so
+                                bottom-centre of battery1 down to the
+                                top-centre of battery2. Both endpoints
+                                are nudged 6 px inside their chip so
                                 the chip backgrounds hide the inside
                                 portions and the visible dashes only
                                 appear in the gap between the two.
@@ -2441,10 +2443,10 @@ ${showSun ? html`
                             <line
                                 class="battery-pair-line"
                                 style="--battery-leader-color:${batteryColor}"
-                                x1="${layout!.battery1Label.x + 10}"
-                                y1="${layout!.battery1Label.y}"
-                                x2="${layout!.battery2Label.x - 10}"
-                                y2="${layout!.battery2Label.y}"
+                                x1="${layout!.battery1Label.x}"
+                                y1="${layout!.battery1Label.y + 6}"
+                                x2="${layout!.battery2Label.x}"
+                                y2="${layout!.battery2Label.y - 6}"
                             ></line>
                         ` : nothing}
                     </svg>

@@ -1752,19 +1752,26 @@ export class HeliosEngine
     //               competing for the home's vertical axis.
     //  battery2Label — where the optional second battery chip is drawn
     //               (Power, only when both battery entities are
-    //               configured). Sits horizontally next to
-    //               battery1Label, separated by BATTERY_PAIR_GAP_PX.
-    //  ringEdge   — projection of the screen-leftmost point of the
-    //               100 % reference ring. The cloud leader line ends
-    //               here. We sample N points around the ground ring
-    //               and pick the one with the smallest screen X so
-    //               the chip stays anchored to the left of the disc
-    //               regardless of the user's current bearing — the
-    //               disc projects to an ellipse whose major axis
-    //               flips orientation with rotation, and a fixed
-    //               geographic anchor (e.g. due-west) would land on
-    //               the wrong screen side under the default NH
-    //               bearing of 180°.
+    //               configured). Sits directly below battery1Label,
+    //               separated by BATTERY_PAIR_GAP_PX. Stacking the
+    //               pair vertically (rather than side by side) keeps
+    //               the battery group narrow on screen so it doesn't
+    //               crowd the home or run into neighbouring labels.
+    //  ringEdge   — projection of a fixed geographic point on the
+    //               100 % reference ring (the disc's geographic east
+    //               edge in the northern hemisphere, west edge in
+    //               the south — picked so the chip lands on screen-
+    //               LEFT under each hemisphere's default bearing of
+    //               180° NH / 0° SH). The cloud leader line ends
+    //               here. Pinning to a fixed geographic point — and
+    //               not "screen-leftmost-of-N-samples" as a previous
+    //               revision did — means the chip tracks the same
+    //               world location continuously when the camera
+    //               rotates, instead of teleporting in 30° increments
+    //               between discrete samples. This matches the
+    //               steady, pivot-anchored behaviour of the PV /
+    //               battery chips and keeps the overlay legible
+    //               throughout rotation animations.
     //  home       — the projected home point, used as the anchor for
     //               the PV and battery chip leader lines.
     //
@@ -1790,61 +1797,56 @@ export class HeliosEngine
         const m = this.map as any;
         const home = m.project([this.homeLon, this.homeLat]);
 
-        //Sample 12 equally-spaced points around the 100 % reference
-        //ring (in metres, geographic coords) and project each one to
-        //the screen. The one with the smallest screen X is the
-        //leftmost-on-screen edge of the disc — that's where we anchor
-        //the cloud chip's leader. 12 samples × 30° apart gives us a
-        //leftmost-point estimate within ~4° of true at zoom 18, which
-        //is well below pixel resolution at our disc size.
-        const RING_SAMPLES = 12;
-        const lat0 = this.homeLat;
+        //Hemisphere-aware fixed geographic anchor on the disc edge:
+        //  NH (default bearing 180° → south-up) → east of home
+        //  SH (default bearing   0° → north-up) → west of home
+        //Both pick the side that projects to the LEFT of screen at
+        //the hemisphere's default bearing, so the chip starts at the
+        //expected spot. Once anchored to a single lon/lat the chip
+        //orbits the home smoothly under rotation rather than jumping
+        //between sampled "leftmost" estimates.
+        const lat0   = this.homeLat;
         const cosLat = Math.cos(lat0 * Math.PI / 180);
-        let ringEdgeX = home.x;
-        let ringEdgeY = home.y;
-        let minX = Infinity;
-        for (let i = 0; i < RING_SAMPLES; i++)
-        {
-            const angle = (i / RING_SAMPLES) * 2 * Math.PI;
-            const dN = CLOUD_DISC_RADIUS_M * Math.cos(angle);
-            const dE = CLOUD_DISC_RADIUS_M * Math.sin(angle);
-            const dLat = dN / 111_320;
-            const dLng = dE / (111_320 * cosLat);
-            const p = m.project([this.homeLon + dLng, this.homeLat + dLat]);
-            if (p.x < minX)
-            {
-                minX = p.x;
-                ringEdgeX = p.x;
-                ringEdgeY = p.y;
-            }
-        }
+        const anchorDE = lat0 >= 0 ? CLOUD_DISC_RADIUS_M : -CLOUD_DISC_RADIUS_M;
+        const anchorDLng = anchorDE / (111_320 * cosLat);
+        const anchor = m.project([this.homeLon + anchorDLng, this.homeLat]);
+        const ringEdgeX = anchor.x;
+        const ringEdgeY = anchor.y;
 
-        //Small horizontal nudge so the cloud chip doesn't directly
-        //overlap the disc edge it points at — leaves room for a
-        //short leader line from chip to ringEdge.
+        //Push the chip outwards along the home→anchor direction so
+        //it always sits OUTSIDE the projected disc, leaving a short
+        //leader-line gap. Using the radial vector (rather than a
+        //fixed -X offset) keeps the chip outside even when rotation
+        //moves the projected anchor to a non-leftward screen side.
         const CLOUD_CHIP_NUDGE_PX = 30;
+        const radDX = ringEdgeX - home.x;
+        const radDY = ringEdgeY - home.y;
+        const radLen = Math.sqrt(radDX * radDX + radDY * radDY) || 1;
+        const cloudLabelX = ringEdgeX + (radDX / radLen) * CLOUD_CHIP_NUDGE_PX;
+        const cloudLabelY = ringEdgeY + (radDY / radLen) * CLOUD_CHIP_NUDGE_PX;
 
-        //Battery row offsets, all relative to the PV chip centre.
-        //Anchors the row down-and-right of the PV chip so it reads
-        //as visually attached to PV (the L-shaped connector starts
-        //on PV's bottom edge — see the card render block) rather
-        //than competing for the home's vertical axis. The pair gap
-        //is the centre-to-centre distance between battery1 and
-        //battery2 — visible white space between them depends on
-        //chip widths and is enforced via the dotted line stroke.
-        const BATTERY_OFFSET_FROM_PV_X_PX = 70;
-        const BATTERY_OFFSET_FROM_PV_Y_PX = 50;
-        const BATTERY_PAIR_GAP_PX         = 80;
+        //Battery column offsets, all relative to the PV chip centre.
+        //Anchors the column down-and-right of the PV chip so it
+        //reads as visually attached to PV (the L-shaped connector
+        //starts on PV's bottom edge — see the card render block)
+        //rather than competing for the home's vertical axis. The
+        //pair gap is the centre-to-centre vertical distance between
+        //battery1 (top) and battery2 (below) — visible white space
+        //around the line depends on chip heights and is enforced
+        //via the dotted line stroke.
+        const BATTERY_OFFSET_FROM_PV_X_PX = 40;
+        const BATTERY_OFFSET_FROM_PV_Y_PX = 30;
+        const BATTERY_PAIR_GAP_PX         = 22;
 
         const battery1X = home.x + BATTERY_OFFSET_FROM_PV_X_PX;
         const battery1Y = home.y - CLOUD_LABEL_OFFSET_PX + BATTERY_OFFSET_FROM_PV_Y_PX;
-        const battery2X = battery1X + BATTERY_PAIR_GAP_PX;
+        const battery2Y = battery1Y + BATTERY_PAIR_GAP_PX;
 
         return {
-            cloudLabel:    { x: ringEdgeX - CLOUD_CHIP_NUDGE_PX, y: ringEdgeY },
+            cloudLabel:    { x: cloudLabelX, y: cloudLabelY },
             pvLabel:       { x: home.x,    y: home.y - CLOUD_LABEL_OFFSET_PX },
             battery1Label: { x: battery1X, y: battery1Y },
-            battery2Label: { x: battery2X, y: battery1Y },
+            battery2Label: { x: battery1X, y: battery2Y },
             ringEdge:      { x: ringEdgeX, y: ringEdgeY },
             home:          { x: home.x,    y: home.y }
         };

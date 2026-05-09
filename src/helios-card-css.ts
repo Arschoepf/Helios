@@ -680,13 +680,15 @@ export const heliosCardStyles = css`
     }
 
     /*  Battery connectors — two static lines, no animation.
-        - .battery-l-line is the solid L from PV's bottom edge down
+        - .battery-l-line is the dotted L from PV's bottom edge down
           to the centre-left of the first battery chip.
-        - .battery-pair-line is the dotted segment between the two
-          battery chips when both are configured.
-        Both share the user-configured battery colour and the same
-        hairline width as the cloud / PV leaders for visual
-        coherence with the rest of the chip-leader vocabulary. */
+        - .battery-pair-line is the dotted vertical segment between
+          battery1 (top) and battery2 (below) when both are
+          configured.
+        Both share the user-configured battery colour, the same
+        dotted stroke pattern, and the same hairline width as the
+        cloud / PV leaders for visual coherence with the rest of
+        the chip-leader vocabulary. */
     .battery-leader-svg
     {
         position: absolute;
@@ -704,6 +706,7 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.85;
         stroke-linecap: round;
         stroke-linejoin: round;
+        stroke-dasharray: 2 3;
         fill: none;
     }
 
