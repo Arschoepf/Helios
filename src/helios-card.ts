@@ -2048,60 +2048,114 @@ ${showSun ? html`
     {
         const t = pickTranslations(this.hass?.language);
 
+        //Mini-Helios placeholder: a stylised, animated SVG vignette
+        //that mirrors the real card's vocabulary — solar arc, sun
+        //disc with halo, low-poly iso buildings around a brighter
+        //central home, ground cloud disc, and two leader chips
+        //(W/m² near the sun, kW near the home). The scene sits
+        //behind the title / subtitle / configure CTA so the brand
+        //chrome remains legible on the catalogue thumbnail.
         return html`
             <div class="placeholder">
 
-                <div class="ph-sky"></div>
-                <div class="ph-haze ph-haze-1"></div>
-                <div class="ph-haze ph-haze-2"></div>
-
                 <svg
-                    class="ph-clouds"
-                    viewBox="0 0 800 500"
+                    class="ph-scene"
+                    viewBox="0 0 400 320"
                     preserveAspectRatio="xMidYMid slice"
                     xmlns="http://www.w3.org/2000/svg"
                 >
                     <defs>
-                        <filter id="ph-noise" x="-20%" y="-20%" width="140%" height="140%">
-                            <feTurbulence
-                                type="fractalNoise"
-                                baseFrequency="0.012 0.025"
-                                numOctaves="3"
-                                seed="7"
-                                result="noise"
-                            />
-                            <feDisplacementMap
-                                in="SourceGraphic"
-                                in2="noise"
-                                scale="55"
-                                xChannelSelector="R"
-                                yChannelSelector="G"
-                            />
-                            <feGaussianBlur stdDeviation="3" />
-                        </filter>
-                        <linearGradient id="ph-cloud-grad" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%"   stop-color="rgba(255,255,255,0.0)" />
-                            <stop offset="40%"  stop-color="rgba(255,255,255,0.55)" />
-                            <stop offset="100%" stop-color="rgba(180,200,225,0.65)" />
-                        </linearGradient>
+                        <radialGradient id="ph-cloud-disc-grad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%"   stop-color="rgba(90,141,196,0.55)" />
+                            <stop offset="80%"  stop-color="rgba(90,141,196,0.20)" />
+                            <stop offset="100%" stop-color="rgba(90,141,196,0)"    />
+                        </radialGradient>
+                        <radialGradient id="ph-sun-glow-grad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%"   stop-color="rgba(239,159,39,0.85)" />
+                            <stop offset="50%"  stop-color="rgba(239,159,39,0.30)" />
+                            <stop offset="100%" stop-color="rgba(239,159,39,0)"    />
+                        </radialGradient>
                     </defs>
-                    <g filter="url(#ph-noise)" fill="url(#ph-cloud-grad)">
-                        <ellipse class="ph-band ph-band-1" cx="200" cy="160" rx="220" ry="20" />
-                        <ellipse class="ph-band ph-band-2" cx="500" cy="320" rx="280" ry="26" />
-                        <ellipse class="ph-band ph-band-3" cx="650" cy="220" rx="180" ry="16" />
+
+                    <!-- Cloud disc on the ground; rendered first so
+                         buildings emerge through it as islands. -->
+                    <ellipse cx="215" cy="215" rx="110" ry="30"
+                        fill="url(#ph-cloud-disc-grad)" />
+                    <ellipse cx="215" cy="215" rx="110" ry="30"
+                        fill="none"
+                        stroke="rgba(90,141,196,0.50)"
+                        stroke-width="0.6" />
+
+                    <!-- Far-back-left neighbour. -->
+                    <g>
+                        <polygon points="110,168 132,180 110,192 88,180"  fill="#dadade" />
+                        <polygon points="132,180 110,192 110,212 132,200" fill="#cbcbcf" />
+                        <polygon points="88,180 110,192 110,212 88,200"   fill="#bcbcc1" />
+                    </g>
+
+                    <!-- Far-back-right neighbour, slightly taller. -->
+                    <g>
+                        <polygon points="300,162 324,176 300,190 276,176" fill="#dadade" />
+                        <polygon points="324,176 300,190 300,212 324,198" fill="#cbcbcf" />
+                        <polygon points="276,176 300,190 300,212 276,198" fill="#bcbcc1" />
+                    </g>
+
+                    <!-- Home: bigger and brighter than its neighbours,
+                         centred on the cloud disc. -->
+                    <g>
+                        <polygon points="215,178 253,198 215,218 177,198" fill="#ebebef" />
+                        <polygon points="253,198 215,218 215,260 253,240" fill="#dededf" />
+                        <polygon points="177,198 215,218 215,260 177,240" fill="#ccccd0" />
+                    </g>
+
+                    <!-- Solar arc — drawn over the buildings so it
+                         visually inhabits the sky. -->
+                    <path
+                        d="M 50 230 Q 215 60 360 230"
+                        fill="none"
+                        stroke="#EF9F27"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-opacity="0.85" />
+
+                    <!-- Sun disc + halo, riding on the arc. The glow
+                         circle pulses; the inner disc stays still so
+                         the brand colour reads clearly. -->
+                    <g transform="translate(305, 110)">
+                        <circle class="ph-sun-glow" r="22" fill="url(#ph-sun-glow-grad)" />
+                        <circle r="9" fill="#EF9F27" />
+                        <circle r="8.5" fill="none"
+                            stroke="#a36617" stroke-width="0.7" stroke-opacity="0.55" />
+                    </g>
+
+                    <!-- W/m² chip + leader from the sun. -->
+                    <line class="ph-leader ph-leader-irrad"
+                        x1="288" y1="118" x2="226" y2="93"
+                        stroke="#666" stroke-width="0.7"
+                        stroke-dasharray="3 3" stroke-linecap="round"
+                        stroke-opacity="0.75" />
+                    <g transform="translate(146, 82)">
+                        <rect width="80" height="22" rx="11"
+                            fill="white" stroke="rgba(0,0,0,0.18)" stroke-width="0.6" />
+                        <text x="40" y="15.5" text-anchor="middle"
+                            font-size="11" fill="#3a3a3a"
+                            font-family="Roboto, system-ui, sans-serif">541 W/m²</text>
+                    </g>
+
+                    <!-- kW chip + leader from the home (PV brand
+                         colour, matches DEFAULT_PV_COLOR_HEX). -->
+                    <line class="ph-leader ph-leader-pv"
+                        x1="195" y1="200" x2="155" y2="155"
+                        stroke="#27B36B" stroke-width="1"
+                        stroke-dasharray="4 3" stroke-linecap="round" />
+                    <g transform="translate(75, 144)">
+                        <rect width="80" height="22" rx="11"
+                            fill="white" stroke="#27B36B" stroke-width="0.8" />
+                        <text x="40" y="15.5" text-anchor="middle"
+                            font-size="11" fill="#27B36B" font-weight="600"
+                            font-family="Roboto, system-ui, sans-serif">0.36 kW</text>
                     </g>
                 </svg>
-
-                <!-- Half-sun rising at the top of the card. The wrapper is centred
-                     horizontally and translated upward so only the bottom half
-                     of the disc + halo are visible above the title. -->
-                <div class="ph-sun-rise">
-                    <div class="ph-sun-bloom"></div>
-                    <div class="ph-sun-corona"></div>
-                    <div class="ph-sun-body"></div>
-                </div>
-
-                <div class="ph-vignette"></div>
 
                 <div class="ph-content">
                     <div class="ph-title">HELIOS</div>

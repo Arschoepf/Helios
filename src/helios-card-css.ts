@@ -46,8 +46,12 @@ export const heliosCardStyles = css`
 
 
     /*  Placeholder shown until the user enters a MapTiler key.
-        Layered sky + drifting hazes + scrolling cloud bands +
-        breathing sun, all CSS-driven. */
+        Mini-Helios vignette: a stylised iso scene matching the real
+        card's vocabulary (sun arc, sun + halo, low-poly buildings
+        with a brighter central home, ground cloud disc, leader
+        chips) over a light day-mode sky gradient. The brand chrome
+        (title / sub / action) sits at the bottom on a translucent
+        plate so the catalogue thumbnail stays legible. */
 
     .placeholder
     {
@@ -56,218 +60,106 @@ export const heliosCardStyles = css`
         overflow: hidden;
         z-index: 20;
         isolation: isolate;
-    }
-
-    .ph-sky
-    {
-        position: absolute;
-        inset: 0;
         background:
-            radial-gradient(1200px 700px at 65% 38%,
-                rgba(255,210,150,0.18) 0%,
+            radial-gradient(1000px 600px at 65% 28%,
+                rgba(255,210,150,0.30) 0%,
                 rgba(255,210,150,0)    55%),
             linear-gradient(180deg,
-                #0a1430 0%,
-                #102047 25%,
-                #1f3a6e 60%,
-                #355a8a 100%);
+                #dbe3ec 0%,
+                #e6e0d4 55%,
+                #d3ccbf 100%);
     }
 
-    .ph-haze
-    {
-        position: absolute;
-        top: -10%;
-        left: -10%;
-        width: 120%;
-        height: 60%;
-        pointer-events: none;
-        mix-blend-mode: screen;
-        opacity: 0.4;
-    }
-
-    .ph-haze-1
-    {
-        background: radial-gradient(ellipse 60% 40% at 30% 50%,
-            rgba(120,180,255,0.30) 0%,
-            rgba(120,180,255,0)    70%);
-        animation: ph-haze-drift 60s ease-in-out infinite alternate;
-    }
-
-    .ph-haze-2
-    {
-        top: 30%;
-        background: radial-gradient(ellipse 70% 50% at 70% 50%,
-            rgba(255,180,140,0.20) 0%,
-            rgba(255,180,140,0)    70%);
-        animation: ph-haze-drift 80s ease-in-out infinite alternate-reverse;
-        opacity: 0.3;
-    }
-
-    @keyframes ph-haze-drift
-    {
-        from { transform: translateX(-3%) translateY(0); }
-        to   { transform: translateX(3%)  translateY(-2%); }
-    }
-
-    .ph-clouds
+    .ph-scene
     {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
         pointer-events: none;
+        z-index: 1;
     }
 
-    .ph-band
+    /*  Sun halo pulses gently — same visual language as the live
+        card's breathing sun. Only the glow circle scales; the
+        inner orange disc stays fixed so the brand colour reads
+        cleanly at the centre. */
+    .ph-sun-glow
     {
         transform-origin: center;
+        transform-box: fill-box;
+        animation: ph-sun-pulse 4s ease-in-out infinite;
     }
 
-    .ph-band-1 { opacity: 0.55; animation: ph-band-drift-1 70s linear infinite; }
-    .ph-band-2 { opacity: 0.45; animation: ph-band-drift-2 95s linear infinite; }
-    .ph-band-3 { opacity: 0.35; animation: ph-band-drift-3 80s linear infinite; }
-
-    @keyframes ph-band-drift-1 { from { transform: translateX(-15%); } to { transform: translateX(115%); } }
-    @keyframes ph-band-drift-2 { from { transform: translateX(-25%); } to { transform: translateX(115%); } }
-    @keyframes ph-band-drift-3 { from { transform: translateX(-15%); } to { transform: translateX(115%); } }
-
-    .ph-vignette
+    @keyframes ph-sun-pulse
     {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        background: radial-gradient(ellipse 90% 70% at 50% 75%,
-            transparent          30%,
-            rgba(0,0,0,0.35)    100%);
-        z-index: 8;
+        0%, 100% { transform: scale(1);    opacity: 1;   }
+        50%      { transform: scale(1.15); opacity: 0.9; }
     }
 
-    .ph-sun-rise
+    /*  Leader-line dashes flow toward their attached element,
+        echoing the live card's pv-leader-flow / solar-ray-flow.
+        Slow speeds — the placeholder shouldn't compete for
+        attention with the configure CTA. */
+    .ph-leader-irrad { animation: ph-leader-flow 14s linear infinite; }
+    .ph-leader-pv    { animation: ph-leader-flow 12s linear infinite; }
+
+    @keyframes ph-leader-flow
     {
-        position: absolute;
-        top: 0;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width:  220px;
-        height: 220px;
-        pointer-events: none;
-        z-index: 9;
+        from { stroke-dashoffset: 0;   }
+        to   { stroke-dashoffset: -28; }
     }
 
     .ph-content
     {
         position: absolute;
-        top: 56%;
+        bottom: 8%;
         left: 50%;
-        transform: translate(-50%, -50%);
+        transform: translateX(-50%);
         text-align: center;
-        color: white;
         z-index: 10;
-        padding: 0 24px;
-        width: 100%;
+        padding: 14px 24px 12px;
         box-sizing: border-box;
+        background: rgba(255,255,255,0.55);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.8);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
     }
 
     .ph-title
     {
-        font-size: 2.6rem;
-        font-weight: 100;
-        letter-spacing: 12px;
+        font-size: 1.7rem;
+        font-weight: 200;
+        letter-spacing: 9px;
         text-transform: uppercase;
-        color: #ffffff;
-        text-shadow:
-            0 1px 30px rgba(255,200,120,0.4),
-            0 0 60px   rgba(120,160,220,0.3);
+        color: #2a2e34;
+        text-shadow: 0 1px 1px rgba(255,255,255,0.6);
         line-height: 1;
         white-space: nowrap;
-        padding-left: 12px;
-    }
-
-    .ph-sun-body
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 50%;
-        height: 50%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: radial-gradient(circle at 40% 38%,
-            #fffaf0   0%,
-            #ffe0a8  35%,
-            #ffb060  75%,
-            #ff8a3c 100%);
-        box-shadow: 0 0 30px rgba(255,180,80,0.6);
-        animation: ph-sun-breathe 6s ease-in-out infinite;
-    }
-
-    .ph-sun-corona
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width:  85%;
-        height: 85%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: radial-gradient(circle,
-            rgba(255,200,120,0.50)  0%,
-            rgba(255,180,90,0.22)  35%,
-            rgba(255,160,70,0)     65%);
-        filter: blur(4px);
-        pointer-events: none;
-        animation: ph-sun-breathe 6s ease-in-out infinite;
-    }
-
-    .ph-sun-bloom
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width:  100%;
-        height: 100%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: radial-gradient(circle,
-            rgba(255,200,140,0.30)  0%,
-            rgba(255,180,90,0.12)  25%,
-            rgba(255,160,70,0)     55%);
-        filter: blur(12px);
-        pointer-events: none;
-        animation: ph-sun-bloom-pulse 10s ease-in-out infinite;
-    }
-
-    @keyframes ph-sun-breathe
-    {
-        0%, 100% { transform: translate(-50%, -50%) scale(1);    }
-        50%      { transform: translate(-50%, -50%) scale(1.04); }
-    }
-
-    @keyframes ph-sun-bloom-pulse
-    {
-        0%, 100% { opacity: 0.85; }
-        50%      { opacity: 1.0;  }
+        padding-left: 9px;
     }
 
     .ph-divider
     {
-        margin: 18px auto;
-        width: 60px;
+        margin: 10px auto;
+        width: 50px;
         height: 1px;
         background: linear-gradient(90deg,
             transparent             0%,
-            rgba(255,200,140,0.6)  50%,
+            rgba(60,60,60,0.45)    50%,
             transparent           100%);
     }
 
     .ph-sub
     {
-        font-size: 0.78rem;
+        font-size: 0.7rem;
         font-weight: 400;
-        letter-spacing: 3.5px;
+        letter-spacing: 3px;
         text-transform: uppercase;
-        color: rgba(255,255,255,0.65);
-        margin-bottom: 28px;
+        color: rgba(40,40,40,0.6);
+        margin-bottom: 14px;
         line-height: 1;
     }
 
@@ -277,13 +169,11 @@ export const heliosCardStyles = css`
         font-size: 0.72rem;
         font-weight: 500;
         letter-spacing: 1.2px;
-        color: rgba(255,255,255,0.85);
-        background: rgba(0,0,0,0.30);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        border: 1px solid rgba(255,200,140,0.30);
+        color: rgba(35,35,35,0.92);
+        background: rgba(255,255,255,0.7);
+        border: 1px solid rgba(120,120,120,0.45);
         border-radius: 4px;
-        padding: 9px 18px;
+        padding: 8px 18px;
         text-transform: uppercase;
     }
 
