@@ -501,9 +501,30 @@ export class HeliosCardEditor extends LitElement
                             class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'topo' ? 'active' : ''}"
                             @click="${() => this._update('map-style', 'topo')}"
                         >${t.editor.mapStyleTopo}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'hybrid' ? 'active' : ''}"
+                            @click="${() => this._update('map-style', 'hybrid')}"
+                        >${t.editor.mapStyleHybrid}</button>
                     </div>
                 </div>
                 <div class="hint">${t.editor.mapStyleHint}</div>
+                <div class="field">
+                    <span class="label">${t.editor.cardTheme}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['card-theme'] ?? 'light')) === 'light' ? 'active' : ''}"
+                            @click="${() => this._update('card-theme', 'light')}"
+                        >${t.editor.cardThemeLight}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['card-theme'] ?? 'light')) === 'dark' ? 'active' : ''}"
+                            @click="${() => this._update('card-theme', 'dark')}"
+                        >${t.editor.cardThemeDark}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.cardThemeHint}</div>
                 <div class="field">
                     <span class="label">${t.editor.showLabels}</span>
                     <div class="segmented-toggle">

@@ -24947,23 +24947,31 @@ class HeliosEngine {
     }
   }
   //Resolves the active MapTiler style id from `map-style` config.
-  //Two values are accepted:
+  //Three values are accepted:
   //  'streets' (default) → 'streets-v4' — sober urban basemap.
   //  'topo'              → 'topo-v4'    — topographic basemap with
   //                                       contour lines and softer
   //                                       earth tones, better in
   //                                       hilly / outdoor settings.
+  //  'hybrid'            → 'hybrid-v4'  — satellite imagery with
+  //                                       roads + label overlays,
+  //                                       useful when the user
+  //                                       wants real-world context
+  //                                       (vegetation, rooftops,
+  //                                       parking lots) under the
+  //                                       solar overlay.
   //
-  //Anything else falls back to 'streets'. The hybrid (satellite
-  //imagery) mode was removed in the 1.2 redesign because the
-  //satellite tiles introduce too much chromatic noise for the 3D
-  //solar overlay to read clearly; we keep the `isHybrid` flag in
-  //the return shape so the (now unused) sat-hires raster setup
-  //path stays a no-op without further refactor.
+  //Anything else falls back to 'streets'. `isHybrid` toggles the
+  //sat-hires raster source (added below) so the high-resolution
+  //satellite tiles fade in beyond zoom 15 — without it the base
+  //hybrid style is too soft at the home's locked zoom 18.
   _resolveMapStyle() {
     const raw = String(this.cfg["map-style"] ?? "streets").toLowerCase();
     if (raw === "topo") {
       return { id: "topo-v4", isHybrid: false };
+    }
+    if (raw === "hybrid") {
+      return { id: "hybrid-v4", isHybrid: true };
     }
     return { id: "streets-v4", isHybrid: false };
   }
@@ -25770,19 +25778,13 @@ class HeliosEngine {
   //               the home so the production chip is the prominent
   //               readout, with the cloud chip retreating onto its
   //               own feature on the side.
-  //  battery1Label — where the optional first battery chip is drawn
-  //               (SoC if both entities are configured, otherwise
-  //               whichever single entity is set). Sits to the
-  //               down-right of the PV chip so the battery overlay
-  //               reads as "attached to" the PV chip rather than
-  //               competing for the home's vertical axis.
-  //  battery2Label — where the optional second battery chip is drawn
-  //               (Power, only when both battery entities are
-  //               configured). Sits directly below battery1Label,
-  //               separated by BATTERY_PAIR_GAP_PX. Stacking the
-  //               pair vertically (rather than side by side) keeps
-  //               the battery group narrow on screen so it doesn't
-  //               crowd the home or run into neighbouring labels.
+  //  batteryLabel — where the optional combined battery chip is
+  //               drawn (icon + SoC + signed instantaneous power
+  //               on a single line). Sits to the down-right of
+  //               the PV chip so the battery overlay reads as
+  //               "attached to" the PV chip via the dotted L
+  //               connector, rather than competing for the home's
+  //               vertical axis.
   //  ringEdge   — projection of a fixed geographic point on the
   //               100 % reference ring (the disc's geographic east
   //               edge in the northern hemisphere, west edge in
@@ -25822,17 +25824,14 @@ class HeliosEngine {
     const radLen = Math.sqrt(radDX * radDX + radDY * radDY) || 1;
     const cloudLabelX = ringEdgeX + radDX / radLen * CLOUD_CHIP_NUDGE_PX;
     const cloudLabelY = ringEdgeY + radDY / radLen * CLOUD_CHIP_NUDGE_PX;
-    const BATTERY_OFFSET_FROM_PV_X_PX = 40;
-    const BATTERY_OFFSET_FROM_PV_Y_PX = 30;
-    const BATTERY_PAIR_GAP_PX = 22;
-    const battery1X = home.x + BATTERY_OFFSET_FROM_PV_X_PX;
-    const battery1Y = home.y - CLOUD_LABEL_OFFSET_PX + BATTERY_OFFSET_FROM_PV_Y_PX;
-    const battery2Y = battery1Y + BATTERY_PAIR_GAP_PX;
+    const BATTERY_OFFSET_FROM_PV_X_PX = 65;
+    const BATTERY_OFFSET_FROM_PV_Y_PX = 32;
+    const batteryX = home.x + BATTERY_OFFSET_FROM_PV_X_PX;
+    const batteryY = home.y - CLOUD_LABEL_OFFSET_PX + BATTERY_OFFSET_FROM_PV_Y_PX;
     return {
       cloudLabel: { x: cloudLabelX, y: cloudLabelY },
       pvLabel: { x: home.x, y: home.y - CLOUD_LABEL_OFFSET_PX },
-      battery1Label: { x: battery1X, y: battery1Y },
-      battery2Label: { x: battery1X, y: battery2Y },
+      batteryLabel: { x: batteryX, y: batteryY },
       ringEdge: { x: ringEdgeX, y: ringEdgeY },
       home: { x: home.x, y: home.y }
     };
@@ -26159,9 +26158,14 @@ const en = {
     hillshadeStrength: "Hillshade strength * (0 → 1)",
     mapSection: "Map",
     mapStyle: "Map style *",
-    mapStyleHint: "Choose between the streets basemap (sober, urban) and the topographic basemap (contour lines, earth tones, better in hilly terrain). Labels and 3D buildings work identically on both.",
+    mapStyleHint: "Choose between the streets basemap (sober, urban), the topographic basemap (contour lines, earth tones, better in hilly terrain) or the hybrid basemap (high-resolution satellite imagery with road and label overlays). Labels and 3D buildings work identically on all three.",
     mapStyleStreet: "Streets",
     mapStyleTopo: "Topo",
+    mapStyleHybrid: "Hybrid",
+    cardTheme: "Card theme *",
+    cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards. The 3D map basemap is unaffected.",
+    cardThemeLight: "Light",
+    cardThemeDark: "Dark",
     showLabels: "Show labels *",
     showLabelsHint: "Toggles street names, building numbers, points of interest and place names on the basemap.",
     labelsOn: "Shown",
@@ -26216,9 +26220,14 @@ const fr = {
     hillshadeStrength: "Intensité de l'ombrage * (0 → 1)",
     mapSection: "Carte",
     mapStyle: "Style de la carte *",
-    mapStyleHint: "Choisis entre le fond de carte des rues (sobre, urbain) et le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée). Les libellés et les bâtiments 3D fonctionnent à l'identique sur les deux.",
+    mapStyleHint: "Choisis entre le fond de carte des rues (sobre, urbain), le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée) ou le fond hybride (imagerie satellite haute résolution avec les routes et libellés en surimpression). Les libellés et les bâtiments 3D fonctionnent à l'identique sur les trois.",
     mapStyleStreet: "Rues",
     mapStyleTopo: "Topo",
+    mapStyleHybrid: "Hybride",
+    cardTheme: "Thème de la carte *",
+    cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre. La carte 3D elle-même n'est pas affectée.",
+    cardThemeLight: "Clair",
+    cardThemeDark: "Sombre",
     showLabels: "Afficher les libellés *",
     showLabelsHint: "Affiche ou masque les noms de rues, numéros de bâtiments, points d'intérêt et noms de quartiers du fond de carte.",
     labelsOn: "Affichés",
@@ -26273,9 +26282,14 @@ const de = {
     hillshadeStrength: "Schattierungsstärke * (0 → 1)",
     mapSection: "Karte",
     mapStyle: "Kartenstil *",
-    mapStyleHint: "Wähle zwischen der Straßenkarte (nüchtern, urban) und der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände). Beschriftungen und 3D-Gebäude funktionieren auf beiden gleich.",
+    mapStyleHint: "Wähle zwischen der Straßenkarte (nüchtern, urban), der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände) oder der Hybrid-Karte (hochauflösende Satellitenbilder mit Straßen- und Beschriftungs-Overlay). Beschriftungen und 3D-Gebäude funktionieren auf allen drei gleich.",
     mapStyleStreet: "Straßen",
     mapStyleTopo: "Topo",
+    mapStyleHybrid: "Hybrid",
+    cardTheme: "Karten-Thema *",
+    cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt. Die 3D-Grundkarte selbst bleibt unverändert.",
+    cardThemeLight: "Hell",
+    cardThemeDark: "Dunkel",
     showLabels: "Beschriftungen anzeigen *",
     showLabelsHint: "Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.",
     labelsOn: "Sichtbar",
@@ -26330,9 +26344,14 @@ const es = {
     hillshadeStrength: "Intensidad del sombreado * (0 → 1)",
     mapSection: "Mapa",
     mapStyle: "Estilo del mapa *",
-    mapStyleHint: "Elige entre el mapa de calles (sobrio, urbano) y el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso). Las etiquetas y los edificios 3D funcionan igual en ambos.",
+    mapStyleHint: "Elige entre el mapa de calles (sobrio, urbano), el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso) o el mapa híbrido (imágenes de satélite de alta resolución con superposición de calles y etiquetas). Las etiquetas y los edificios 3D funcionan igual en los tres.",
     mapStyleStreet: "Calles",
     mapStyleTopo: "Topo",
+    mapStyleHybrid: "Híbrido",
+    cardTheme: "Tema de la tarjeta *",
+    cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros. El mapa 3D no se ve afectado.",
+    cardThemeLight: "Claro",
+    cardThemeDark: "Oscuro",
     showLabels: "Mostrar etiquetas *",
     showLabelsHint: "Muestra u oculta los nombres de calles, números de edificios, puntos de interés y nombres de zonas en el mapa de fondo.",
     labelsOn: "Visibles",
@@ -26387,9 +26406,14 @@ const it = {
     hillshadeStrength: "Intensità dell'ombreggiatura * (0 → 1)",
     mapSection: "Mappa",
     mapStyle: "Stile della mappa *",
-    mapStyleHint: "Scegli tra la mappa stradale (sobria, urbana) e la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare). Le etichette e gli edifici 3D funzionano allo stesso modo su entrambe.",
+    mapStyleHint: "Scegli tra la mappa stradale (sobria, urbana), la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare) o la mappa ibrida (immagini satellitari ad alta risoluzione con sovrapposizione di strade ed etichette). Le etichette e gli edifici 3D funzionano allo stesso modo su tutte e tre.",
     mapStyleStreet: "Strade",
     mapStyleTopo: "Topo",
+    mapStyleHybrid: "Ibrida",
+    cardTheme: "Tema della scheda *",
+    cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri. La mappa 3D non è interessata.",
+    cardThemeLight: "Chiaro",
+    cardThemeDark: "Scuro",
     showLabels: "Mostra etichette *",
     showLabelsHint: "Mostra o nasconde i nomi delle vie, i numeri civici, i punti di interesse e i nomi dei quartieri sulla mappa di base.",
     labelsOn: "Visibili",
@@ -26444,9 +26468,14 @@ const nl = {
     hillshadeStrength: "Schaduwsterkte * (0 → 1)",
     mapSection: "Kaart",
     mapStyle: "Kaartstijl *",
-    mapStyleHint: "Kies tussen de stratenkaart (sober, stedelijk) en de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein). Labels en 3D-gebouwen werken op beide hetzelfde.",
+    mapStyleHint: "Kies tussen de stratenkaart (sober, stedelijk), de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein) of de hybride kaart (hoogwaardige satellietbeelden met overlays voor wegen en labels). Labels en 3D-gebouwen werken op alle drie hetzelfde.",
     mapStyleStreet: "Straten",
     mapStyleTopo: "Topo",
+    mapStyleHybrid: "Hybride",
+    cardTheme: "Kaartthema *",
+    cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards. De 3D-basemap wordt niet beïnvloed.",
+    cardThemeLight: "Licht",
+    cardThemeDark: "Donker",
     showLabels: "Labels weergeven *",
     showLabelsHint: "Toont of verbergt straatnamen, huisnummers, points of interest en buurtnamen op de basiskaart.",
     labelsOn: "Zichtbaar",
@@ -26501,9 +26530,14 @@ const pt = {
     hillshadeStrength: "Intensidade do sombreado * (0 → 1)",
     mapSection: "Mapa",
     mapStyle: "Estilo do mapa *",
-    mapStyleHint: "Escolhe entre o mapa de ruas (sóbrio, urbano) e o mapa topográfico (curvas de nível, tons terrosos, ideal em terreno montanhoso). As etiquetas e os edifícios 3D funcionam de forma idêntica em ambos.",
+    mapStyleHint: "Escolhe entre o mapa de ruas (sóbrio, urbano), o mapa topográfico (curvas de nível, tons terrosos, ideal em terreno montanhoso) ou o mapa híbrido (imagens de satélite de alta resolução com sobreposição de estradas e etiquetas). As etiquetas e os edifícios 3D funcionam de forma idêntica nos três.",
     mapStyleStreet: "Ruas",
     mapStyleTopo: "Topo",
+    mapStyleHybrid: "Híbrido",
+    cardTheme: "Tema do cartão *",
+    cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros. O mapa 3D não é afetado.",
+    cardThemeLight: "Claro",
+    cardThemeDark: "Escuro",
     showLabels: "Mostrar etiquetas *",
     showLabelsHint: "Mostra ou oculta os nomes das ruas, números de edifícios, pontos de interesse e nomes de bairros no mapa de fundo.",
     labelsOn: "Visíveis",
@@ -27225,16 +27259,12 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Battery connectors — two static lines, no animation.
-        - .battery-l-line is the dotted L from PV's bottom edge down
-          to the centre-left of the first battery chip.
-        - .battery-pair-line is the dotted vertical segment between
-          battery1 (top) and battery2 (below) when both are
-          configured.
-        Both share the user-configured battery colour, the same
-        dotted stroke pattern, and the same hairline width as the
-        cloud / PV leaders for visual coherence with the rest of
-        the chip-leader vocabulary. */
+    /*  Battery connector — a single dotted L from PV's bottom edge
+        down to the centre-left of the combined battery chip. No
+        animation. Uses the user-configured battery colour and the
+        same hairline width / dotted dash pattern as the cloud / PV
+        leaders for visual coherence with the rest of the chip-
+        leader vocabulary. */
     .battery-leader-svg
     {
         position: absolute;
@@ -27254,15 +27284,6 @@ const heliosCardStyles = i$3`
         stroke-linejoin: round;
         stroke-dasharray: 2 3;
         fill: none;
-    }
-
-    .battery-pair-line
-    {
-        stroke: var(--battery-leader-color, #D32F2F);
-        stroke-width: 1.5;
-        stroke-opacity: 0.85;
-        stroke-linecap: round;
-        stroke-dasharray: 2 3;
     }
 
     /*  Cloud-cover leader line — black hairline from chip to disc. */
@@ -27467,6 +27488,127 @@ const heliosCardStyles = i$3`
         color: #000000;
         display: inline-flex;
         align-items: center;
+    }
+
+
+    /*  ============================================================
+        Dark theme — opt-in via the \`card-theme: dark\` config.
+
+        The whole card is already painted on top of a 3D map, so
+        "dark mode" here is really about the chrome (chips, charts,
+        cursors, day labels, leader lines, tooltips) — the basemap
+        keeps its own colours. Strategy:
+
+          - chip surfaces flip from a translucent white plate to a
+            translucent near-black plate, so the chip itself reads
+            as a darkened pane of glass over the map instead of a
+            bright sticker.
+          - chip text / borders / icons go from black to a soft
+            light-grey (#e6e6e6 text, #cccccc borders) — pure white
+            would clip detail against bright basemap patches.
+          - chart hairlines (midline, day separators, hour ticks,
+            live cursor) flip from black-on-white to white-on-near-
+            black with the same opacity envelopes as the light skin
+            so the visual weight stays balanced.
+          - chart fills (PV / cloud / irradiance) are user-coloured
+            and unchanged — they read fine on both surfaces.
+          - the scrub blue (#1f6feb) and the live tooltip dark
+            plate already read on dark backgrounds, so they're left
+            alone.
+          - the placeholder vignette is left in light mode regardless
+            of theme: it's a marketing thumbnail rendered when no
+            API key is set, with a sunset gradient that doesn't have
+            a meaningful dark equivalent.
+        ============================================================ */
+
+    /*  Cards (chart panels) and hairlines on the chart. */
+    ha-card.theme-dark .tb-chart-card
+    {
+        background: rgba(20, 22, 28, 0.82);
+        border-color: #4a4d55;
+    }
+
+    ha-card.theme-dark .hc-day-sep
+    {
+        stroke: rgba(255, 255, 255, 0.30);
+    }
+
+    ha-card.theme-dark .hc-chart-mid
+    {
+        stroke: #cccccc;
+    }
+
+    ha-card.theme-dark .hc-hour-tick
+    {
+        stroke: rgba(255, 255, 255, 0.35);
+    }
+
+    ha-card.theme-dark .tb-cursor-now
+    {
+        background: rgba(255, 255, 255, 0.55);
+    }
+
+    ha-card.theme-dark .tb-cursor-now::after
+    {
+        border-top-color: #ffffff;
+    }
+
+    /*  Chips that don't carry a user-configured colour: clock, day
+        labels, live button, cloud %, solar W/m². These all share
+        the "white plate, black ink" base recipe in light mode, so
+        they get the same dark override. */
+    ha-card.theme-dark .clock,
+    ha-card.theme-dark .tl-live-btn,
+    ha-card.theme-dark .tb-day-label,
+    ha-card.theme-dark .cloud-pct-label,
+    ha-card.theme-dark .solar-pct-label
+    {
+        background: rgba(20, 22, 28, 0.82);
+        color:       #e6e6e6;
+        border-color: #cccccc;
+    }
+
+    ha-card.theme-dark .tb-day-label
+    {
+        background: #1a1c22;
+    }
+
+    ha-card.theme-dark .tl-live-btn ha-icon,
+    ha-card.theme-dark .cloud-pct-label ha-icon,
+    ha-card.theme-dark .solar-pct-label ha-icon
+    {
+        color: #e6e6e6;
+    }
+
+    ha-card.theme-dark .tl-live-btn:hover  { background: rgba(36, 38, 44, 0.85); }
+    ha-card.theme-dark .tl-live-btn:active { background: rgba(48, 50, 56, 0.85); }
+
+    /*  PV and battery chips — they keep the user-configured tint
+        on the border / text / icon (so a green PV chip reads as
+        green on either skin), but the surface flips to the dark
+        plate so the tint stays readable. */
+    ha-card.theme-dark .pv-pct-label,
+    ha-card.theme-dark .battery-pct-label
+    {
+        background: rgba(20, 22, 28, 0.82);
+    }
+
+    /*  Cloud-cover leader (chip → disc) flips polarity so it's
+        visible against a dark plate and a darkened map. */
+    ha-card.theme-dark .cloud-leader-svg line
+    {
+        stroke: #e6e6e6;
+        stroke-opacity: 0.55;
+    }
+
+    /*  Solar arc outline — the light skin paints a black halo
+        behind the configured sun colour for legibility on bright
+        basemaps; in dark mode that halo would disappear into the
+        map, so we paint a faint white halo instead. The arc and
+        sun disc themselves keep their configured colour. */
+    ha-card.theme-dark .solar-svg .solar-arc-outline
+    {
+        stroke: rgba(255, 255, 255, 0.45);
     }
 `;
 var __defProp$1 = Object.defineProperty;
@@ -27914,9 +28056,30 @@ let HeliosCardEditor = class extends i {
                             class="seg-option ${String(c2["map-style"] ?? "streets") === "topo" ? "active" : ""}"
                             @click="${() => this._update("map-style", "topo")}"
                         >${t2.editor.mapStyleTopo}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["map-style"] ?? "streets") === "hybrid" ? "active" : ""}"
+                            @click="${() => this._update("map-style", "hybrid")}"
+                        >${t2.editor.mapStyleHybrid}</button>
                     </div>
                 </div>
                 <div class="hint">${t2.editor.mapStyleHint}</div>
+                <div class="field">
+                    <span class="label">${t2.editor.cardTheme}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["card-theme"] ?? "light") === "light" ? "active" : ""}"
+                            @click="${() => this._update("card-theme", "light")}"
+                        >${t2.editor.cardThemeLight}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["card-theme"] ?? "light") === "dark" ? "active" : ""}"
+                            @click="${() => this._update("card-theme", "dark")}"
+                        >${t2.editor.cardThemeDark}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.cardThemeHint}</div>
                 <div class="field">
                     <span class="label">${t2.editor.showLabels}</span>
                     <div class="segmented-toggle">
@@ -29405,15 +29568,11 @@ let HeliosCard = class extends i {
     const activeBatterySoc = batteryScrubbing ? this._batterySampleAtTime(this._batterySocHistory, this._selectedTime) : this._batterySoc;
     const activeBatteryPower = batteryScrubbing ? this._batterySampleAtTime(this._batteryPowerHistory, this._selectedTime) : this._batteryPower;
     const activeBatteryUnit = this._batteryPowerUnit;
-    const showSocChip = !batteryScrubFuture && batterySocEntity !== "" && activeBatterySoc !== null;
-    const showPowerChip = !batteryScrubFuture && batteryPowerEntity !== "" && activeBatteryPower !== null;
-    const showAnyBatteryChip = hasApiKey && layout !== null && (showSocChip || showPowerChip);
-    const battery1Kind = showSocChip ? "soc" : showPowerChip ? "power" : null;
-    const battery2Kind = showSocChip && showPowerChip ? "power" : null;
-    const battery1Text = battery1Kind === "soc" ? `${Math.round(activeBatterySoc)} %` : battery1Kind === "power" ? this._formatBatteryPower(activeBatteryPower, activeBatteryUnit) : "";
-    const battery1Icon = battery1Kind === "soc" ? "mdi:battery" : "mdi:lightning-bolt";
-    const battery2Text = battery2Kind === "power" ? this._formatBatteryPower(activeBatteryPower, activeBatteryUnit) : "";
-    const battery2Icon = "mdi:lightning-bolt";
+    const showSocPart = !batteryScrubFuture && batterySocEntity !== "" && activeBatterySoc !== null;
+    const showPowerPart = !batteryScrubFuture && batteryPowerEntity !== "" && activeBatteryPower !== null;
+    const showBatteryChip = hasApiKey && layout !== null && (showSocPart || showPowerPart);
+    const batterySocText = showSocPart ? `${Math.round(activeBatterySoc)} %` : "";
+    const batteryPowerText = showPowerPart ? this._formatBatteryPower(activeBatteryPower, activeBatteryUnit) : "";
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -29426,8 +29585,10 @@ let HeliosCard = class extends i {
     const sunFillRatio = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1e3)));
     const showSunLabel = showSun && sunScene.sun.altitude > 0;
     const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1e3, 0.8);
+    const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
+    const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
     return b`
-            <ha-card class="${!hasApiKey ? "placeholder-mode" : ""}">
+            <ha-card class="${cardThemeClass} ${!hasApiKey ? "placeholder-mode" : ""}">
 
                 ${!hasApiKey ? this._renderPlaceholder() : A}
 
@@ -29698,66 +29859,37 @@ ${showSun ? b`
                     </div>
                 ` : A}
 
-                ${showAnyBatteryChip ? b`
+                ${showBatteryChip ? b`
                     <svg class="battery-leader-svg">
                         <!--
                             Dotted L-shaped connector from PV chip to
-                            the first battery chip. Vertical leg
+                            the combined battery chip. Vertical leg
                             starts on PV's bottom edge, midway between
                             the leader-line entry point (PV centre)
                             and the chip's right border (approximated
                             at +10 px since the chip width is content-
                             driven and not known here); horizontal leg
-                            lands on the centre-left of battery1, with
-                            the endpoint nudged 10 px into the chip so
-                            the chip background hides the inside
-                            portion (same trick used for the cloud /
-                            PV leaders).
+                            lands on the chip's centre-left, with the
+                            endpoint nudged 10 px into the chip so the
+                            chip background hides the inside portion
+                            (same trick used for the cloud / PV
+                            leaders).
                         -->
                         <polyline
                             class="battery-l-line"
                             style="--battery-leader-color:${batteryColor}"
-                            points="${layout.pvLabel.x + 10},${layout.pvLabel.y + 12} ${layout.pvLabel.x + 10},${layout.battery1Label.y} ${layout.battery1Label.x - 10},${layout.battery1Label.y}"
+                            points="${layout.pvLabel.x + 10},${layout.pvLabel.y + 12} ${layout.pvLabel.x + 10},${layout.batteryLabel.y} ${layout.batteryLabel.x - 10},${layout.batteryLabel.y}"
                             fill="none"
                         ></polyline>
-                        ${battery2Kind !== null ? w`
-                            <!--
-                                Inter-battery dotted line: from the
-                                bottom-centre of battery1 down to the
-                                top-centre of battery2. Both endpoints
-                                are nudged 6 px inside their chip so
-                                the chip backgrounds hide the inside
-                                portions and the visible dashes only
-                                appear in the gap between the two.
-                            -->
-                            <line
-                                class="battery-pair-line"
-                                style="--battery-leader-color:${batteryColor}"
-                                x1="${layout.battery1Label.x}"
-                                y1="${layout.battery1Label.y + 6}"
-                                x2="${layout.battery2Label.x}"
-                                y2="${layout.battery2Label.y - 6}"
-                            ></line>
-                        ` : A}
                     </svg>
-                    ${battery1Kind !== null ? b`
-                        <div
-                            class="battery-pct-label"
-                            style="left:${layout.battery1Label.x}px; top:${layout.battery1Label.y}px; --battery-leader-color:${batteryColor}"
-                        >
-                            <ha-icon icon="${battery1Icon}"></ha-icon>
-                            <span>${battery1Text}</span>
-                        </div>
-                    ` : A}
-                    ${battery2Kind !== null ? b`
-                        <div
-                            class="battery-pct-label"
-                            style="left:${layout.battery2Label.x}px; top:${layout.battery2Label.y}px; --battery-leader-color:${batteryColor}"
-                        >
-                            <ha-icon icon="${battery2Icon}"></ha-icon>
-                            <span>${battery2Text}</span>
-                        </div>
-                    ` : A}
+                    <div
+                        class="battery-pct-label"
+                        style="left:${layout.batteryLabel.x}px; top:${layout.batteryLabel.y}px; --battery-leader-color:${batteryColor}"
+                    >
+                        <ha-icon icon="mdi:battery"></ha-icon>
+                        ${showSocPart ? b`<span>${batterySocText}</span>` : A}
+                        ${showPowerPart ? b`<span>${batteryPowerText}</span>` : A}
+                    </div>
                 ` : A}
 
             </ha-card>
@@ -29925,7 +30057,13 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   //picks up the new readings on the next hass property update.
   "battery-soc-entity",
   "battery-power-entity",
-  "battery-color"
+  "battery-color",
+  //card-theme is purely a card-level visual (it switches the
+  //ha-card's class to flip CSS variables / chip colours
+  //between the light and dark skins), but it must be in the
+  //sig so Lit re-renders the card when the user toggles it
+  //in the editor.
+  "card-theme"
 ];
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([

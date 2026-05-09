@@ -67,10 +67,18 @@ export interface HeliosConfig
     //v1.1 — picks the MapTiler base style. 'streets' (default) renders
     //a sober vector basemap suited to dense urban areas; 'topo' renders
     //a topographic basemap with contour lines and softer earth tones,
-    //better in hilly / outdoor settings. The label visibility toggle
+    //better in hilly / outdoor settings; 'hybrid' renders satellite
+    //imagery with road and label overlays. The label visibility toggle
     //and the helios-buildings extrusion are independent of this choice
-    //(both layers are wired to custom sources).
+    //(all three are wired to custom sources).
     'map-style'?:             unknown;
+    //v1.1.0-beta.8 — picks the card chrome theme. 'light' (default)
+    //paints chips, charts, buttons, tooltips and the scrub overlay
+    //on a white surface; 'dark' switches to a near-black surface
+    //with light-grey text so the card sits cleanly inside dark HA
+    //dashboards. The 3D map basemap and the configured colour
+    //palette (sun, cloud, PV, battery) are unaffected.
+    'card-theme'?:            unknown;
 }
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
@@ -564,25 +572,34 @@ export class HeliosEngine
     }
 
     //Resolves the active MapTiler style id from `map-style` config.
-    //Two values are accepted:
+    //Three values are accepted:
     //  'streets' (default) → 'streets-v4' — sober urban basemap.
     //  'topo'              → 'topo-v4'    — topographic basemap with
     //                                       contour lines and softer
     //                                       earth tones, better in
     //                                       hilly / outdoor settings.
+    //  'hybrid'            → 'hybrid-v4'  — satellite imagery with
+    //                                       roads + label overlays,
+    //                                       useful when the user
+    //                                       wants real-world context
+    //                                       (vegetation, rooftops,
+    //                                       parking lots) under the
+    //                                       solar overlay.
     //
-    //Anything else falls back to 'streets'. The hybrid (satellite
-    //imagery) mode was removed in the 1.2 redesign because the
-    //satellite tiles introduce too much chromatic noise for the 3D
-    //solar overlay to read clearly; we keep the `isHybrid` flag in
-    //the return shape so the (now unused) sat-hires raster setup
-    //path stays a no-op without further refactor.
+    //Anything else falls back to 'streets'. `isHybrid` toggles the
+    //sat-hires raster source (added below) so the high-resolution
+    //satellite tiles fade in beyond zoom 15 — without it the base
+    //hybrid style is too soft at the home's locked zoom 18.
     private _resolveMapStyle(): { id: string; isHybrid: boolean }
     {
         const raw = String(this.cfg['map-style'] ?? 'streets').toLowerCase();
         if (raw === 'topo')
         {
             return { id: 'topo-v4', isHybrid: false };
+        }
+        if (raw === 'hybrid')
+        {
+            return { id: 'hybrid-v4', isHybrid: true };
         }
         return { id: 'streets-v4', isHybrid: false };
     }
@@ -1744,19 +1761,13 @@ export class HeliosEngine
     //               the home so the production chip is the prominent
     //               readout, with the cloud chip retreating onto its
     //               own feature on the side.
-    //  battery1Label — where the optional first battery chip is drawn
-    //               (SoC if both entities are configured, otherwise
-    //               whichever single entity is set). Sits to the
-    //               down-right of the PV chip so the battery overlay
-    //               reads as "attached to" the PV chip rather than
-    //               competing for the home's vertical axis.
-    //  battery2Label — where the optional second battery chip is drawn
-    //               (Power, only when both battery entities are
-    //               configured). Sits directly below battery1Label,
-    //               separated by BATTERY_PAIR_GAP_PX. Stacking the
-    //               pair vertically (rather than side by side) keeps
-    //               the battery group narrow on screen so it doesn't
-    //               crowd the home or run into neighbouring labels.
+    //  batteryLabel — where the optional combined battery chip is
+    //               drawn (icon + SoC + signed instantaneous power
+    //               on a single line). Sits to the down-right of
+    //               the PV chip so the battery overlay reads as
+    //               "attached to" the PV chip via the dotted L
+    //               connector, rather than competing for the home's
+    //               vertical axis.
     //  ringEdge   — projection of a fixed geographic point on the
     //               100 % reference ring (the disc's geographic east
     //               edge in the northern hemisphere, west edge in
@@ -1780,8 +1791,7 @@ export class HeliosEngine
     public projectHomeLabelLayout(): {
         cloudLabel:    { x: number; y: number };
         pvLabel:       { x: number; y: number };
-        battery1Label: { x: number; y: number };
-        battery2Label: { x: number; y: number };
+        batteryLabel:  { x: number; y: number };
         ringEdge:      { x: number; y: number };
         home:          { x: number; y: number };
     } | null
@@ -1825,28 +1835,24 @@ export class HeliosEngine
         const cloudLabelX = ringEdgeX + (radDX / radLen) * CLOUD_CHIP_NUDGE_PX;
         const cloudLabelY = ringEdgeY + (radDY / radLen) * CLOUD_CHIP_NUDGE_PX;
 
-        //Battery column offsets, all relative to the PV chip centre.
-        //Anchors the column down-and-right of the PV chip so it
-        //reads as visually attached to PV (the L-shaped connector
-        //starts on PV's bottom edge — see the card render block)
-        //rather than competing for the home's vertical axis. The
-        //pair gap is the centre-to-centre vertical distance between
-        //battery1 (top) and battery2 (below) — visible white space
-        //around the line depends on chip heights and is enforced
-        //via the dotted line stroke.
-        const BATTERY_OFFSET_FROM_PV_X_PX = 40;
-        const BATTERY_OFFSET_FROM_PV_Y_PX = 30;
-        const BATTERY_PAIR_GAP_PX         = 22;
+        //Battery chip offset, relative to the PV chip centre.
+        //Anchors the chip down-and-right of the PV chip so the
+        //battery overlay reads as visually attached to PV (the
+        //L-shaped dotted connector starts on PV's bottom edge — see
+        //the card render block) rather than competing for the
+        //home's vertical axis. The X offset is sized to give the
+        //horizontal leg of the L enough length to read as a clear
+        //"connection" rather than a tight elbow against the chip.
+        const BATTERY_OFFSET_FROM_PV_X_PX = 65;
+        const BATTERY_OFFSET_FROM_PV_Y_PX = 32;
 
-        const battery1X = home.x + BATTERY_OFFSET_FROM_PV_X_PX;
-        const battery1Y = home.y - CLOUD_LABEL_OFFSET_PX + BATTERY_OFFSET_FROM_PV_Y_PX;
-        const battery2Y = battery1Y + BATTERY_PAIR_GAP_PX;
+        const batteryX = home.x + BATTERY_OFFSET_FROM_PV_X_PX;
+        const batteryY = home.y - CLOUD_LABEL_OFFSET_PX + BATTERY_OFFSET_FROM_PV_Y_PX;
 
         return {
             cloudLabel:    { x: cloudLabelX, y: cloudLabelY },
             pvLabel:       { x: home.x,    y: home.y - CLOUD_LABEL_OFFSET_PX },
-            battery1Label: { x: battery1X, y: battery1Y },
-            battery2Label: { x: battery1X, y: battery2Y },
+            batteryLabel:  { x: batteryX,  y: batteryY },
             ringEdge:      { x: ringEdgeX, y: ringEdgeY },
             home:          { x: home.x,    y: home.y }
         };

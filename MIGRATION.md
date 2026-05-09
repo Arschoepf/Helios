@@ -4,12 +4,14 @@ Polish release — no breaking changes, no config migration required.
 Refines the catalogue placeholder, hardens the rotation interaction
 so the home stays dead-centre, lightens the on-card chips so the
 underlying scene reads through, exposes a `map-style` option to
-switch the basemap between streets and topographic, adds an
-optional home-battery overlay (live + scrubbable SoC and signed
-Power, split across one or two chips hooked off the PV chip via
-an L-shaped connector), and relocates the cloud-cover chip to
-the bottom-left of the disc so the home's vertical axis stays
-clear of readouts.
+switch the basemap between streets, topographic and hybrid
+(satellite + roads), adds an optional home-battery overlay (live +
+scrubbable SoC and signed Power on a single chip hooked off the PV
+chip via a dotted L-shaped connector), relocates the cloud-cover
+chip to the side of the disc so the home's vertical axis stays
+clear of readouts, and ships an opt-in dark theme for the card
+chrome so the card sits cleanly inside dark Home Assistant
+dashboards.
 
 ## v1.1.0-beta.1
 
@@ -208,6 +210,66 @@ and `battery2Label` instead of a single `batteryLabel`. The
 are gone, replaced by `.battery-l-line` (solid polyline) and
 `.battery-pair-line` (dotted line). No public config keys
 changed; existing dashboards keep working with no edits.
+
+## v1.1.0-beta.7
+
+* **Compact dotted L overlay + stable cloud chip on rotation** —
+  small visual polish on the chip overlay introduced in beta.6.
+  * The L connector from PV down to the battery row was scaled
+    down (vertical and horizontal legs roughly halved) and the
+    vertical leg now starts midway between PV's leader-line
+    entry point and its right border, so the L reads as anchored
+    to the chip rather than orbiting it.
+  * The whole L is now dotted (same `stroke-dasharray: 2 3` as
+    the inter-battery segment); the inter-battery line was
+    flipped from horizontal to vertical so the SoC and Power
+    chips stack instead of competing for horizontal real estate.
+  * The cloud-cover chip used to follow the screen-leftmost edge
+    of the disc using a 12-sample search, which made it teleport
+    in 30° increments under camera rotation. It now anchors to a
+    fixed geographic point on the disc edge (east in NH / west
+    in SH — both project to screen-left at each hemisphere's
+    default bearing) and slides smoothly with rotation, with the
+    chip pushed radially outward from the home so it stays
+    outside the disc at any bearing.
+
+## v1.1.0-beta.8
+
+* **Battery chip recombined into a single readout** — the two
+  side-by-side chips from beta.6 / 7 (`mdi:battery 26 %` next to
+  `mdi:lightning-bolt +3.00 kW`) are merged into a single combined
+  chip showing `mdi:battery 26 % +3.00 kW`. Stacking the two
+  values inside one chip removes the visual mismatch caused by
+  their different content widths and frees up enough horizontal
+  room to lengthen the L's horizontal leg, which now reads as a
+  proper "pull" off the PV chip instead of a tight elbow.
+* **Hybrid basemap** — `map-style` now accepts a third value,
+  `hybrid`, which renders the MapTiler `hybrid-v4` map (high-
+  resolution satellite imagery with road and label overlays) and
+  enables the existing sat-hires raster layer for sharper imagery
+  past zoom 15. Useful when the user wants real-world context
+  (vegetation, rooftops, parking lots) under the solar overlay.
+  Visual editor exposes a third button in the Map-style toggle.
+* **Card theme (light / dark)** — new `card-theme` config
+  (`'light' | 'dark'`, default `'light'`) flips the card chrome
+  (chips, chart card, day labels, cursors, leader lines, live
+  button, tooltips) between a light skin (white plates / black
+  ink, unchanged) and a dark skin (near-black plates / soft
+  white ink) so the card sits cleanly inside dark Home Assistant
+  dashboards. The 3D basemap, the configured colour palette
+  (sun, cloud, PV, battery) and the placeholder vignette are all
+  unaffected — the theme is purely a CSS overlay applied via a
+  `theme-light` / `theme-dark` class on the `<ha-card>` root.
+
+i18n: `Translations.editor` gained five new keys (`mapStyleHybrid`,
+`cardTheme`, `cardThemeHint`, `cardThemeLight`, `cardThemeDark`).
+Custom locales need to provide them or typecheck will fail.
+
+Internal: `projectHomeLabelLayout` now returns a single
+`batteryLabel` instead of `battery1Label` / `battery2Label`. The
+`.battery-pair-line` CSS class is removed. No public config keys
+were removed; `card-theme` and the `'hybrid'` value of `map-style`
+are additive.
 
 ---
 

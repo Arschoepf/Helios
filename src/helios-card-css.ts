@@ -679,16 +679,12 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Battery connectors — two static lines, no animation.
-        - .battery-l-line is the dotted L from PV's bottom edge down
-          to the centre-left of the first battery chip.
-        - .battery-pair-line is the dotted vertical segment between
-          battery1 (top) and battery2 (below) when both are
-          configured.
-        Both share the user-configured battery colour, the same
-        dotted stroke pattern, and the same hairline width as the
-        cloud / PV leaders for visual coherence with the rest of
-        the chip-leader vocabulary. */
+    /*  Battery connector — a single dotted L from PV's bottom edge
+        down to the centre-left of the combined battery chip. No
+        animation. Uses the user-configured battery colour and the
+        same hairline width / dotted dash pattern as the cloud / PV
+        leaders for visual coherence with the rest of the chip-
+        leader vocabulary. */
     .battery-leader-svg
     {
         position: absolute;
@@ -708,15 +704,6 @@ export const heliosCardStyles = css`
         stroke-linejoin: round;
         stroke-dasharray: 2 3;
         fill: none;
-    }
-
-    .battery-pair-line
-    {
-        stroke: var(--battery-leader-color, #D32F2F);
-        stroke-width: 1.5;
-        stroke-opacity: 0.85;
-        stroke-linecap: round;
-        stroke-dasharray: 2 3;
     }
 
     /*  Cloud-cover leader line — black hairline from chip to disc. */
@@ -921,5 +908,126 @@ export const heliosCardStyles = css`
         color: #000000;
         display: inline-flex;
         align-items: center;
+    }
+
+
+    /*  ============================================================
+        Dark theme — opt-in via the \`card-theme: dark\` config.
+
+        The whole card is already painted on top of a 3D map, so
+        "dark mode" here is really about the chrome (chips, charts,
+        cursors, day labels, leader lines, tooltips) — the basemap
+        keeps its own colours. Strategy:
+
+          - chip surfaces flip from a translucent white plate to a
+            translucent near-black plate, so the chip itself reads
+            as a darkened pane of glass over the map instead of a
+            bright sticker.
+          - chip text / borders / icons go from black to a soft
+            light-grey (#e6e6e6 text, #cccccc borders) — pure white
+            would clip detail against bright basemap patches.
+          - chart hairlines (midline, day separators, hour ticks,
+            live cursor) flip from black-on-white to white-on-near-
+            black with the same opacity envelopes as the light skin
+            so the visual weight stays balanced.
+          - chart fills (PV / cloud / irradiance) are user-coloured
+            and unchanged — they read fine on both surfaces.
+          - the scrub blue (#1f6feb) and the live tooltip dark
+            plate already read on dark backgrounds, so they're left
+            alone.
+          - the placeholder vignette is left in light mode regardless
+            of theme: it's a marketing thumbnail rendered when no
+            API key is set, with a sunset gradient that doesn't have
+            a meaningful dark equivalent.
+        ============================================================ */
+
+    /*  Cards (chart panels) and hairlines on the chart. */
+    ha-card.theme-dark .tb-chart-card
+    {
+        background: rgba(20, 22, 28, 0.82);
+        border-color: #4a4d55;
+    }
+
+    ha-card.theme-dark .hc-day-sep
+    {
+        stroke: rgba(255, 255, 255, 0.30);
+    }
+
+    ha-card.theme-dark .hc-chart-mid
+    {
+        stroke: #cccccc;
+    }
+
+    ha-card.theme-dark .hc-hour-tick
+    {
+        stroke: rgba(255, 255, 255, 0.35);
+    }
+
+    ha-card.theme-dark .tb-cursor-now
+    {
+        background: rgba(255, 255, 255, 0.55);
+    }
+
+    ha-card.theme-dark .tb-cursor-now::after
+    {
+        border-top-color: #ffffff;
+    }
+
+    /*  Chips that don't carry a user-configured colour: clock, day
+        labels, live button, cloud %, solar W/m². These all share
+        the "white plate, black ink" base recipe in light mode, so
+        they get the same dark override. */
+    ha-card.theme-dark .clock,
+    ha-card.theme-dark .tl-live-btn,
+    ha-card.theme-dark .tb-day-label,
+    ha-card.theme-dark .cloud-pct-label,
+    ha-card.theme-dark .solar-pct-label
+    {
+        background: rgba(20, 22, 28, 0.82);
+        color:       #e6e6e6;
+        border-color: #cccccc;
+    }
+
+    ha-card.theme-dark .tb-day-label
+    {
+        background: #1a1c22;
+    }
+
+    ha-card.theme-dark .tl-live-btn ha-icon,
+    ha-card.theme-dark .cloud-pct-label ha-icon,
+    ha-card.theme-dark .solar-pct-label ha-icon
+    {
+        color: #e6e6e6;
+    }
+
+    ha-card.theme-dark .tl-live-btn:hover  { background: rgba(36, 38, 44, 0.85); }
+    ha-card.theme-dark .tl-live-btn:active { background: rgba(48, 50, 56, 0.85); }
+
+    /*  PV and battery chips — they keep the user-configured tint
+        on the border / text / icon (so a green PV chip reads as
+        green on either skin), but the surface flips to the dark
+        plate so the tint stays readable. */
+    ha-card.theme-dark .pv-pct-label,
+    ha-card.theme-dark .battery-pct-label
+    {
+        background: rgba(20, 22, 28, 0.82);
+    }
+
+    /*  Cloud-cover leader (chip → disc) flips polarity so it's
+        visible against a dark plate and a darkened map. */
+    ha-card.theme-dark .cloud-leader-svg line
+    {
+        stroke: #e6e6e6;
+        stroke-opacity: 0.55;
+    }
+
+    /*  Solar arc outline — the light skin paints a black halo
+        behind the configured sun colour for legibility on bright
+        basemaps; in dark mode that halo would disappear into the
+        map, so we paint a faint white halo instead. The arc and
+        sun disc themselves keep their configured colour. */
+    ha-card.theme-dark .solar-svg .solar-arc-outline
+    {
+        stroke: rgba(255, 255, 255, 0.45);
     }
 `;
