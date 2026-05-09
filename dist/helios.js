@@ -24912,6 +24912,18 @@ class HeliosEngine {
       }, 80);
     });
     this._resizeObserver.observe(container);
+    this.map.touchZoomRotate.enable({ around: "center" });
+    const pinHomeAtCenter = (e2) => {
+      if (!this.map || !e2?.originalEvent) {
+        return;
+      }
+      const c2 = this.map.getCenter();
+      if (c2.lng !== this.homeLon || c2.lat !== this.homeLat) {
+        this.map.setCenter([this.homeLon, this.homeLat]);
+      }
+    };
+    this.map.on("rotate", pinHomeAtCenter);
+    this.map.on("move", pinHomeAtCenter);
     this.map.on("style.load", () => this._onStyleLoad());
     this.map.on("load", () => {
       this.map?.resize();
@@ -26593,7 +26605,7 @@ const heliosCardStyles = i$3`
     .tb-chart-card
     {
         position: relative;
-        background: #ffffff;
+        background: rgba(255, 255, 255, 0.8);
         border: 1px solid #000000;
         border-radius: 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -26839,7 +26851,7 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: #ffffff;
+        background: rgba(255, 255, 255, 0.8);
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
@@ -26866,7 +26878,7 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        background: #ffffff;
+        background: rgba(255, 255, 255, 0.8);
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
@@ -26893,8 +26905,8 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    .tl-live-btn:hover  { background: #f3f3f3; }
-    .tl-live-btn:active { background: #e8e8e8; }
+    .tl-live-btn:hover  { background: rgba(243, 243, 243, 0.8); }
+    .tl-live-btn:active { background: rgba(232, 232, 232, 0.8); }
 
     /*  Live-button tooltip — rendered as a real DOM element (not a
         pseudo-element) so its text gets sub-pixel anti-aliasing,
@@ -26947,7 +26959,7 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         gap: 3px;
-        background: #ffffff;
+        background: rgba(255, 255, 255, 0.8);
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
@@ -26980,7 +26992,7 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         gap: 3px;
-        background: #ffffff;
+        background: rgba(255, 255, 255, 0.8);
         color:      var(--pv-leader-color, #27B36B);
         border:     1px solid var(--pv-leader-color, #27B36B);
         border-radius: 3px;
@@ -27223,7 +27235,7 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         gap: 3px;
-        background: #ffffff;
+        background: rgba(255, 255, 255, 0.8);
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;

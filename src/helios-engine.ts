@@ -476,14 +476,36 @@ export class HeliosEngine
 
         this._resizeObserver.observe(container);
 
-        //v1.1 had a snap-back mechanism here that re-centred the map
-        //on `zoomend`/`rotateend`/`pitchend` to compensate for
-        //sub-metre drift accumulated during zoom/rotate/pitch
-        //interactions. With v1.2's locked camera (no user
-        //pan/zoom/rotate/pitch) those events only ever fire as the
-        //tail end of programmatic easeTo animations — where snapping
-        //the centre would actively undo the animation we just asked
-        //for. The handler was removed.
+        //Lock the pinch-rotate pivot to the canvas centre. By default,
+        //TwoFingersTouchZoomRotateHandler rotates around the centroid
+        //of the two fingers — visually, the home orbits around the
+        //pinch point during the gesture, very obvious on small cards.
+        //`around: 'center'` forces the pivot to be the screen centre,
+        //which is exactly where the home projects, so the home stays
+        //pinned no matter where the fingers land.
+        this.map.touchZoomRotate.enable({ around: 'center' });
+
+        //Hard pin the map centre on every user-driven transform: the
+        //home must never leave the dead-centre of the card during a
+        //rotate, and any sub-pixel drift accumulated by the bearing
+        //handler at zoom 18 / pitch 55° gets corrected immediately.
+        //We gate on `originalEvent` so future programmatic eases
+        //(e.g. recenter()) can still animate freely without being
+        //fought frame-by-frame by this snap.
+        const pinHomeAtCenter = (e: any) =>
+        {
+            if (!this.map || !e?.originalEvent)
+            {
+                return;
+            }
+            const c = this.map.getCenter();
+            if (c.lng !== this.homeLon || c.lat !== this.homeLat)
+            {
+                this.map.setCenter([this.homeLon, this.homeLat]);
+            }
+        };
+        this.map.on('rotate', pinHomeAtCenter);
+        this.map.on('move',   pinHomeAtCenter);
 
         this.map.on('style.load', () => this._onStyleLoad());
         this.map.on('load',       () => { this.map?.resize(); });
