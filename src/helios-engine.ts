@@ -79,6 +79,12 @@ export interface HeliosConfig
     //dashboards. The 3D map basemap and the configured colour
     //palette (sun, cloud, PV, battery) are unaffected.
     'card-theme'?:            unknown;
+    //v1.2 — opts the idle-camera orbit in or out. Default: true
+    //(orbit enabled). When set to false, the camera stays at the
+    //user's bearing forever; pinch-rotate still works normally.
+    //Useful on low-power devices or for users who find the
+    //constant motion distracting.
+    'auto-rotate-enabled'?:   unknown;
 }
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
@@ -2407,7 +2413,11 @@ export class HeliosEngine
             this._autoRotateLastFrame = t;
 
             const sinceUser = Date.now() - this._autoRotateLastUserAction;
-            if (sinceUser >= HeliosEngine.AUTO_ROTATE_INACTIVITY_MS)
+            //`!== false` means an undefined config (the common case)
+            //is treated as opted-in. The user has to explicitly set
+            //`auto-rotate-enabled: false` to disable the orbit.
+            const autoRotateEnabled = this.cfg['auto-rotate-enabled'] !== false;
+            if (autoRotateEnabled && sinceUser >= HeliosEngine.AUTO_ROTATE_INACTIVITY_MS)
             {
                 //Negative delta: bearing decreases, camera rotates
                 //counter-clockwise around the up axis as seen

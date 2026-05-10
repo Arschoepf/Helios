@@ -2069,10 +2069,10 @@ export class HeliosCard extends LitElement
         const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
 
         //Battery leader L-shape geometry — computed once and reused
-        //for both the polyline `points` attribute and the animated
-        //arrow's `<animateMotion>` path. Only meaningful when a
-        //layout is available; gated by the same flag as the chip
-        //rendering so we don't dereference a null layout below.
+        //for the visible <path> elements (SoC and Power) and for
+        //the animated arrow's <animateMotion> path. Only meaningful
+        //when a layout is available; gated by the same flag as the
+        //chip rendering so we don't dereference a null layout below.
         //
         //  PV_QUARTER_PX (19) → 1/4 of the PV chip's min-width
         //  (76 px), used as the horizontal offset of the L's
@@ -2090,20 +2090,54 @@ export class HeliosCard extends LitElement
         //  edge, so the chip background covers the very tip of
         //  the leader and the visible dash sequence terminates
         //  cleanly at the chip border.
+        //  FILLET_R (6) rounds the corner of the L with a quadratic
+        //  Bézier. The visible line and the arrow's <animateMotion>
+        //  path share the same fillet, so the arrow's tangent
+        //  rotates smoothly through the bend instead of snapping
+        //  90° at the corner. Because <animateMotion> parametrises
+        //  the path at constant linear velocity, the time spent on
+        //  the fillet shrinks proportionally with `flowDuration`,
+        //  which makes the rotation rate at the bend track the
+        //  arrow's overall speed naturally.
         const PV_QUARTER_PX        = 19;
         const PV_HALF_HEIGHT_PX    = 11;
         const BAT_CHIP_NUDGE_PX    = 32;
+        const FILLET_R             = 6;
         const lPvBottomY    = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX        : 0;
         const lShelfY       = layout ? layout.batterySocLabel.y                     : 0;
         const lLeftQuarterX = layout ? layout.pvLabel.x - PV_QUARTER_PX             : 0;
         const lRightQuarterX= layout ? layout.pvLabel.x + PV_QUARTER_PX             : 0;
         const lSocEndX      = layout ? layout.batterySocLabel.x   + BAT_CHIP_NUDGE_PX : 0;
         const lPowerEndX    = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
-        const socLeaderPoints   = `${lLeftQuarterX},${lPvBottomY} ${lLeftQuarterX},${lShelfY} ${lSocEndX},${lShelfY}`;
-        const powerLeaderPoints = `${lRightQuarterX},${lPvBottomY} ${lRightQuarterX},${lShelfY} ${lPowerEndX},${lShelfY}`;
-        const powerArrowPath = batteryCharging
-            ? `M ${lRightQuarterX},${lPvBottomY} L ${lRightQuarterX},${lShelfY} L ${lPowerEndX},${lShelfY}`
-            : `M ${lPowerEndX},${lShelfY} L ${lRightQuarterX},${lShelfY} L ${lRightQuarterX},${lPvBottomY}`;
+        //Forward L: top of vertical leg → fillet → end of horizontal
+        //leg. Used for both visible lines and the charging arrow.
+        const buildLPath = (verticalX: number, topY: number, shelfY: number, endX: number): string =>
+        {
+            const dirH = endX > verticalX ? 1 : -1;
+            //Clamp the radius so the fillet never overshoots a short
+            //leg — the rounded corner has to fit inside both legs.
+            const r    = Math.min(FILLET_R, Math.abs(shelfY - topY) / 2, Math.abs(endX - verticalX) / 2);
+            const preY = shelfY - r;
+            const postX = verticalX + dirH * r;
+            return `M ${verticalX},${topY} L ${verticalX},${preY} Q ${verticalX},${shelfY} ${postX},${shelfY} L ${endX},${shelfY}`;
+        };
+        //Reversed L: end of horizontal leg → fillet → top of vertical
+        //leg. Used for the discharging arrow only (visible line is
+        //direction-agnostic; CSS animation-direction handles the
+        //dash-flow reversal independently).
+        const buildLPathReverse = (verticalX: number, topY: number, shelfY: number, endX: number): string =>
+        {
+            const dirH = endX > verticalX ? 1 : -1;
+            const r    = Math.min(FILLET_R, Math.abs(shelfY - topY) / 2, Math.abs(endX - verticalX) / 2);
+            const preY = shelfY - r;
+            const postX = verticalX + dirH * r;
+            return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${topY}`;
+        };
+        const socLeaderPath   = buildLPath(lLeftQuarterX,  lPvBottomY, lShelfY, lSocEndX);
+        const powerLeaderPath = buildLPath(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX);
+        const powerArrowPath  = batteryCharging
+            ? buildLPath(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX)
+            : buildLPathReverse(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX);
 
         //Solar-arc overlay — sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
@@ -2446,37 +2480,40 @@ ${showSun ? html`
                 ${(showSocChip || showPowerChip) ? html`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV — static, dotted, inverted-L
-                            polyline. Vertical leg drops from PV's
-                            bottom edge at 1/4 of the chip width
-                            (the LEFT quarter), horizontal leg
-                            then runs left to the SoC chip. No
+                            SoC ↔ PV — static, dashed, inverted-L
+                            path with a rounded corner (matching
+                            the PV ↔ Power leader's vocabulary
+                            exactly minus the flow animation).
+                            Vertical leg drops from PV's bottom
+                            edge at 1/4 of the chip width (the
+                            LEFT quarter), horizontal leg then
+                            runs left to the SoC chip. No
                             animation: SoC has no flow direction.
                         -->
                         ${showSocChip ? svg`
-                            <polyline
+                            <path
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryColor}"
-                                points="${socLeaderPoints}"
-                            ></polyline>
+                                d="${socLeaderPath}"
+                            ></path>
                         ` : nothing}
                         <!--
-                            PV ↔ Power — animated, dotted L with
+                            PV ↔ Power — animated, dashed L with
                             an arrow tracking the sign of the live
                             power. Vertical leg at 3/4 of PV's
                             width (the RIGHT quarter), horizontal
                             leg then runs right to the Power chip.
                             Charging (P > 0) → arrow PV → Power.
                             Discharging (P < 0) → arrow Power → PV
-                            (the polyline class modifier flips the
+                            (the path class modifier flips the
                             dash flow too).
                         -->
                         ${showPowerChip ? svg`
-                            <polyline
+                            <path
                                 class="battery-leader-line battery-leader-line-animated ${batteryCharging ? '' : 'battery-leader-discharging'}"
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
-                                points="${powerLeaderPoints}"
-                            ></polyline>
+                                d="${powerLeaderPath}"
+                            ></path>
                             <polygon
                                 class="battery-leader-arrow"
                                 points="-6,-4 0,0 -6,4"

@@ -26157,7 +26157,8 @@ const _HeliosEngine = class _HeliosEngine {
       const dt = Math.max(0, t2 - this._autoRotateLastFrame) / 1e3;
       this._autoRotateLastFrame = t2;
       const sinceUser = Date.now() - this._autoRotateLastUserAction;
-      if (sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
+      const autoRotateEnabled = this.cfg["auto-rotate-enabled"] !== false;
+      if (autoRotateEnabled && sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
         const next = this.map.getBearing() - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
         this.map.setBearing(next);
       }
@@ -26220,6 +26221,10 @@ const en = {
     showLabelsHint: "Toggles street names, building numbers, points of interest and place names on the basemap.",
     labelsOn: "Shown",
     labelsOff: "Hidden",
+    autoRotate: "Camera auto-rotation *",
+    autoRotateHint: "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). Any pinch, drag or wheel pauses it instantly and it resumes once you let go.",
+    autoRotateOn: "On",
+    autoRotateOff: "Off",
     timeline: "Timeline",
     timelineHint: "Format of the date labels shown on the timeline and inside the scrub chip.",
     dateFormat: "Date format * (default: mm-dd)",
@@ -26282,6 +26287,10 @@ const fr = {
     showLabelsHint: "Affiche ou masque les noms de rues, numéros de bâtiments, points d'intérêt et noms de quartiers du fond de carte.",
     labelsOn: "Affichés",
     labelsOff: "Masqués",
+    autoRotate: "Rotation auto de la caméra *",
+    autoRotateHint: "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Tout pincement, glissement ou molette met la rotation en pause immédiatement ; elle reprend dès que tu lâches.",
+    autoRotateOn: "Activée",
+    autoRotateOff: "Désactivée",
     timeline: "Chronologie",
     timelineHint: "Format des libellés de date affichés sur la chronologie et dans la pastille du scrub.",
     dateFormat: "Format de date * (par défaut : mm-dd)",
@@ -26344,6 +26353,10 @@ const de = {
     showLabelsHint: "Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.",
     labelsOn: "Sichtbar",
     labelsOff: "Ausgeblendet",
+    autoRotate: "Automatische Kamerarotation *",
+    autoRotateHint: "Nach ein paar Sekunden Inaktivität kreist die Kamera langsam um das Haus (ca. 1,5°/s, gegenläufig zur scheinbaren Sonnenbahn). Pinch, Drag oder Mausrad pausieren sie sofort; sie setzt fort, sobald du loslässt.",
+    autoRotateOn: "Ein",
+    autoRotateOff: "Aus",
     timeline: "Zeitachse",
     timelineHint: "Format der Datumsanzeige auf der Zeitachse und im Scrub-Chip.",
     dateFormat: "Datumsformat * (Standard: mm-dd)",
@@ -26406,6 +26419,10 @@ const es = {
     showLabelsHint: "Muestra u oculta los nombres de calles, números de edificios, puntos de interés y nombres de zonas en el mapa de fondo.",
     labelsOn: "Visibles",
     labelsOff: "Ocultas",
+    autoRotate: "Rotación automática de la cámara *",
+    autoRotateHint: "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (aprox. 1,5°/s, en sentido opuesto al movimiento aparente del sol). Cualquier pellizco, arrastre o rueda la pausa al instante y se reanuda cuando sueltas.",
+    autoRotateOn: "Activada",
+    autoRotateOff: "Desactivada",
     timeline: "Cronología",
     timelineHint: "Formato de las fechas mostradas en la cronología y en la pastilla del scrub.",
     dateFormat: "Formato de fecha * (por defecto: mm-dd)",
@@ -26468,6 +26485,10 @@ const it = {
     showLabelsHint: "Mostra o nasconde i nomi delle vie, i numeri civici, i punti di interesse e i nomi dei quartieri sulla mappa di base.",
     labelsOn: "Visibili",
     labelsOff: "Nascoste",
+    autoRotate: "Rotazione automatica della camera *",
+    autoRotateHint: "Dopo qualche secondo di inattività, la camera ruota lentamente attorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Pinch, drag o rotellina la mettono in pausa all'istante e riprende non appena rilasci.",
+    autoRotateOn: "Attiva",
+    autoRotateOff: "Disattiva",
     timeline: "Cronologia",
     timelineHint: "Formato delle date mostrate sulla cronologia e nella pastiglia di scrub.",
     dateFormat: "Formato data * (predefinito: mm-dd)",
@@ -26530,6 +26551,10 @@ const nl = {
     showLabelsHint: "Toont of verbergt straatnamen, huisnummers, points of interest en buurtnamen op de basiskaart.",
     labelsOn: "Zichtbaar",
     labelsOff: "Verborgen",
+    autoRotate: "Automatische camerarotatie *",
+    autoRotateHint: "Na een paar seconden inactiviteit draait de camera langzaam rond het huis (ongeveer 1,5°/s, tegen de schijnbare beweging van de zon in). Een knijp-, sleep- of muiswielgebaar pauzeert de rotatie direct; ze hervat zodra je loslaat.",
+    autoRotateOn: "Aan",
+    autoRotateOff: "Uit",
     timeline: "Tijdlijn",
     timelineHint: "Datumformaat dat op de tijdlijn en in de scrub-chip wordt weergegeven.",
     dateFormat: "Datumformaat * (standaard: mm-dd)",
@@ -26592,6 +26617,10 @@ const pt = {
     showLabelsHint: "Mostra ou oculta os nomes das ruas, números de edifícios, pontos de interesse e nomes de bairros no mapa de fundo.",
     labelsOn: "Visíveis",
     labelsOff: "Ocultas",
+    autoRotate: "Rotação automática da câmara *",
+    autoRotateHint: "Após alguns segundos de inatividade, a câmara orbita lentamente em torno da casa (cerca de 1,5°/s, em sentido oposto ao movimento aparente do sol). Qualquer beliscão, arrastar ou roda pausa-a instantaneamente e retoma assim que largas.",
+    autoRotateOn: "Ligada",
+    autoRotateOff: "Desligada",
     timeline: "Linha temporal",
     timelineHint: "Formato das datas mostradas na linha temporal e na pastilha do scrub.",
     dateFormat: "Formato de data * (predefinição: mm-dd)",
@@ -27300,20 +27329,24 @@ const heliosCardStyles = i$3`
     }
 
     /*  Battery leaders.
-        - SoC ↔ PV is a short static dotted hairline (.battery-
-          leader-line on its own) — same vocabulary as the cloud
-          leader. The SoC value has no sign so there's no flow
-          direction to encode.
-        - PV ↔ Power is animated (.battery-leader-line-animated
-          modifier on top of .battery-leader-line) with dashes
-          flowing at a speed proportional to |P| — exactly like
-          the PV leader's visual language — and a small arrow
-          polygon riding the line via SVG <animateMotion>. The
+        Both SoC ↔ PV and PV ↔ Power share the exact same visual
+        vocabulary: dashed L-shaped path with a rounded fillet at
+        the bend (so an arrow riding the path rotates smoothly
+        through the corner instead of snapping).
+        - .battery-leader-line carries the static styling (stroke
+          colour, width, opacity, dash pattern). Used on its own
+          for SoC ↔ PV — the SoC value has no sign so there's no
+          flow direction to animate.
+        - .battery-leader-line-animated layers the flow animation
+          on top: the dashes drift at a speed proportional to |P|
+          (via --battery-flow-duration), exactly like the PV
+          leader's visual language. A small arrow polygon rides
+          the path via SVG <animateMotion>; the
           .battery-leader-discharging class flips the dash flow
           direction (CSS animation-direction: reverse) so the
-          dashes move from chip → PV when the battery is
-          discharging; the arrow path is also flipped inline by
-          the renderer so the two cues stay in sync. */
+          dashes move from chip → PV when discharging, and the
+          arrow path is flipped inline by the renderer so the
+          two cues stay in sync. */
     .battery-leader-svg
     {
         position: absolute;
@@ -27331,13 +27364,12 @@ const heliosCardStyles = i$3`
         stroke-opacity: 0.85;
         stroke-linecap: round;
         stroke-linejoin: round;
-        stroke-dasharray: 2 3;
+        stroke-dasharray: 6 5;
         fill: none;
     }
 
     .battery-leader-line-animated
     {
-        stroke-dasharray: 6 5;
         animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
     }
 
@@ -28167,6 +28199,22 @@ let HeliosCardEditor = class extends i {
                     </div>
                 </div>
                 <div class="hint">${t2.editor.showLabelsHint}</div>
+                <div class="field">
+                    <span class="label">${t2.editor.autoRotate}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${c2["auto-rotate-enabled"] !== false ? "active" : ""}"
+                            @click="${() => this._update("auto-rotate-enabled", true)}"
+                        >${t2.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${c2["auto-rotate-enabled"] === false ? "active" : ""}"
+                            @click="${() => this._update("auto-rotate-enabled", false)}"
+                        >${t2.editor.autoRotateOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.autoRotateHint}</div>
 
                 <div class="section-title">${t2.editor.colors}</div>
                 <label class="field">
@@ -29649,15 +29697,30 @@ let HeliosCard = class extends i {
     const PV_QUARTER_PX = 19;
     const PV_HALF_HEIGHT_PX = 11;
     const BAT_CHIP_NUDGE_PX = 32;
+    const FILLET_R = 6;
     const lPvBottomY = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX : 0;
     const lShelfY = layout ? layout.batterySocLabel.y : 0;
     const lLeftQuarterX = layout ? layout.pvLabel.x - PV_QUARTER_PX : 0;
     const lRightQuarterX = layout ? layout.pvLabel.x + PV_QUARTER_PX : 0;
     const lSocEndX = layout ? layout.batterySocLabel.x + BAT_CHIP_NUDGE_PX : 0;
     const lPowerEndX = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
-    const socLeaderPoints = `${lLeftQuarterX},${lPvBottomY} ${lLeftQuarterX},${lShelfY} ${lSocEndX},${lShelfY}`;
-    const powerLeaderPoints = `${lRightQuarterX},${lPvBottomY} ${lRightQuarterX},${lShelfY} ${lPowerEndX},${lShelfY}`;
-    const powerArrowPath = batteryCharging ? `M ${lRightQuarterX},${lPvBottomY} L ${lRightQuarterX},${lShelfY} L ${lPowerEndX},${lShelfY}` : `M ${lPowerEndX},${lShelfY} L ${lRightQuarterX},${lShelfY} L ${lRightQuarterX},${lPvBottomY}`;
+    const buildLPath = (verticalX, topY, shelfY, endX) => {
+      const dirH = endX > verticalX ? 1 : -1;
+      const r2 = Math.min(FILLET_R, Math.abs(shelfY - topY) / 2, Math.abs(endX - verticalX) / 2);
+      const preY = shelfY - r2;
+      const postX = verticalX + dirH * r2;
+      return `M ${verticalX},${topY} L ${verticalX},${preY} Q ${verticalX},${shelfY} ${postX},${shelfY} L ${endX},${shelfY}`;
+    };
+    const buildLPathReverse = (verticalX, topY, shelfY, endX) => {
+      const dirH = endX > verticalX ? 1 : -1;
+      const r2 = Math.min(FILLET_R, Math.abs(shelfY - topY) / 2, Math.abs(endX - verticalX) / 2);
+      const preY = shelfY - r2;
+      const postX = verticalX + dirH * r2;
+      return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${topY}`;
+    };
+    const socLeaderPath = buildLPath(lLeftQuarterX, lPvBottomY, lShelfY, lSocEndX);
+    const powerLeaderPath = buildLPath(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX);
+    const powerArrowPath = batteryCharging ? buildLPath(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX) : buildLPathReverse(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX);
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -29947,37 +30010,40 @@ ${showSun ? b`
                 ${showSocChip || showPowerChip ? b`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV — static, dotted, inverted-L
-                            polyline. Vertical leg drops from PV's
-                            bottom edge at 1/4 of the chip width
-                            (the LEFT quarter), horizontal leg
-                            then runs left to the SoC chip. No
+                            SoC ↔ PV — static, dashed, inverted-L
+                            path with a rounded corner (matching
+                            the PV ↔ Power leader's vocabulary
+                            exactly minus the flow animation).
+                            Vertical leg drops from PV's bottom
+                            edge at 1/4 of the chip width (the
+                            LEFT quarter), horizontal leg then
+                            runs left to the SoC chip. No
                             animation: SoC has no flow direction.
                         -->
                         ${showSocChip ? w`
-                            <polyline
+                            <path
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryColor}"
-                                points="${socLeaderPoints}"
-                            ></polyline>
+                                d="${socLeaderPath}"
+                            ></path>
                         ` : A}
                         <!--
-                            PV ↔ Power — animated, dotted L with
+                            PV ↔ Power — animated, dashed L with
                             an arrow tracking the sign of the live
                             power. Vertical leg at 3/4 of PV's
                             width (the RIGHT quarter), horizontal
                             leg then runs right to the Power chip.
                             Charging (P > 0) → arrow PV → Power.
                             Discharging (P < 0) → arrow Power → PV
-                            (the polyline class modifier flips the
+                            (the path class modifier flips the
                             dash flow too).
                         -->
                         ${showPowerChip ? w`
-                            <polyline
+                            <path
                                 class="battery-leader-line battery-leader-line-animated ${batteryCharging ? "" : "battery-leader-discharging"}"
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
-                                points="${powerLeaderPoints}"
-                            ></polyline>
+                                d="${powerLeaderPath}"
+                            ></path>
                             <polygon
                                 class="battery-leader-arrow"
                                 points="-6,-4 0,0 -6,4"

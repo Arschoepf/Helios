@@ -541,6 +541,22 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.showLabelsHint}</div>
+                <div class="field">
+                    <span class="label">${t.editor.autoRotate}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['auto-rotate-enabled'] !== false) ? 'active' : ''}"
+                            @click="${() => this._update('auto-rotate-enabled', true)}"
+                        >${t.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['auto-rotate-enabled'] === false) ? 'active' : ''}"
+                            @click="${() => this._update('auto-rotate-enabled', false)}"
+                        >${t.editor.autoRotateOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.autoRotateHint}</div>
 
                 <div class="section-title">${t.editor.colors}</div>
                 <label class="field">

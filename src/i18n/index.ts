@@ -59,6 +59,10 @@ export interface Translations
         showLabelsHint:           string;
         labelsOn:                 string;
         labelsOff:                string;
+        autoRotate:               string;
+        autoRotateHint:           string;
+        autoRotateOn:             string;
+        autoRotateOff:            string;
         timeline:                 string;
         timelineHint:             string;
         dateFormat:               string;

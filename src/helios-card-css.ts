@@ -682,20 +682,24 @@ export const heliosCardStyles = css`
     }
 
     /*  Battery leaders.
-        - SoC ↔ PV is a short static dotted hairline (.battery-
-          leader-line on its own) — same vocabulary as the cloud
-          leader. The SoC value has no sign so there's no flow
-          direction to encode.
-        - PV ↔ Power is animated (.battery-leader-line-animated
-          modifier on top of .battery-leader-line) with dashes
-          flowing at a speed proportional to |P| — exactly like
-          the PV leader's visual language — and a small arrow
-          polygon riding the line via SVG <animateMotion>. The
+        Both SoC ↔ PV and PV ↔ Power share the exact same visual
+        vocabulary: dashed L-shaped path with a rounded fillet at
+        the bend (so an arrow riding the path rotates smoothly
+        through the corner instead of snapping).
+        - .battery-leader-line carries the static styling (stroke
+          colour, width, opacity, dash pattern). Used on its own
+          for SoC ↔ PV — the SoC value has no sign so there's no
+          flow direction to animate.
+        - .battery-leader-line-animated layers the flow animation
+          on top: the dashes drift at a speed proportional to |P|
+          (via --battery-flow-duration), exactly like the PV
+          leader's visual language. A small arrow polygon rides
+          the path via SVG <animateMotion>; the
           .battery-leader-discharging class flips the dash flow
           direction (CSS animation-direction: reverse) so the
-          dashes move from chip → PV when the battery is
-          discharging; the arrow path is also flipped inline by
-          the renderer so the two cues stay in sync. */
+          dashes move from chip → PV when discharging, and the
+          arrow path is flipped inline by the renderer so the
+          two cues stay in sync. */
     .battery-leader-svg
     {
         position: absolute;
@@ -713,13 +717,12 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.85;
         stroke-linecap: round;
         stroke-linejoin: round;
-        stroke-dasharray: 2 3;
+        stroke-dasharray: 6 5;
         fill: none;
     }
 
     .battery-leader-line-animated
     {
-        stroke-dasharray: 6 5;
         animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
     }
 
