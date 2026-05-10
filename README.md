@@ -106,7 +106,7 @@ The PV entity picker filters to sensors that look like a power or energy reading
 * **Effective cloud cover** — the card replaces Open-Meteo's raw `cloud_cover` (satellite-view total) with `low + 0.6·mid + 0.2·high` (capped at 100 %), matching ground perception and shortwave attenuation.
 * **PV instantaneous rate** — for cumulative-energy sensors, the card maintains a 5-minute rolling buffer of state samples and differentiates over a ~60 s window, giving a real "what's being produced right now" reading instead of a misleading lifetime total.
 
-Full algorithm + architecture details: see [MIGRATION.md](./MIGRATION.md).
+Full algorithm + architecture details: see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ---
 
