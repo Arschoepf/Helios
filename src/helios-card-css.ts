@@ -115,7 +115,12 @@ export const heliosCardStyles = css`
     .ph-content
     {
         position: absolute;
-        top: 50%;
+        /*  Title centred horizontally, vertically anchored at 65 %
+            from the BOTTOM of the placeholder (so 35 % from the
+            top). Sits just above the iso buildings and visually
+            below the solar arc apex — feels less "crammed in the
+            middle" than a strict 50 % vertical centre. */
+        top: 35%;
         left: 50%;
         transform: translate(-50%, -50%);
         text-align: center;
@@ -707,6 +712,7 @@ export const heliosCardStyles = css`
         stroke-width: 1.5;
         stroke-opacity: 0.85;
         stroke-linecap: round;
+        stroke-linejoin: round;
         stroke-dasharray: 2 3;
         fill: none;
     }

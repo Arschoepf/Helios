@@ -451,21 +451,10 @@ export class HeliosEngine
     //bearing, ~1.5°/s) when the user has been idle for a few
     //seconds. Any direct interaction resets the inactivity timer,
     //so the rotation pauses immediately on pinch / drag / wheel
-    //and the camera then smoothly recalibrates back to the bearing
-    //it had at card load before the drift resumes.
+    //and resumes from the user's bearing once they let go.
     private _autoRotateRaf?:           number;
     private _autoRotateLastFrame:      number = 0;
     private _autoRotateLastUserAction: number = 0;
-    //Bearing snapshot taken at the first frame of the rotation
-    //loop — the "neutral" pose the camera returns to after every
-    //user gesture. Hemisphere-aware (180° NH / 0° SH) since that's
-    //what _setupCamera applies on load.
-    private _autoRotateInitialBearing: number = 0;
-    //Set when the user has nudged the camera away from the initial
-    //bearing. Cleared once the recalibration tween brings the
-    //camera back to the initial bearing — at which point the
-    //normal forward drift resumes.
-    private _autoRotateUserMoved:      boolean = false;
 
     constructor(
         container:    HTMLElement,
@@ -594,10 +583,6 @@ export class HeliosEngine
         const bumpInactivity = () =>
         {
             this._autoRotateLastUserAction = Date.now();
-            //Mark that the user nudged the camera. The drift loop
-            //will tween back to the initial bearing on the next
-            //grace period before resuming normal forward drift.
-            this._autoRotateUserMoved = true;
         };
         canvas.addEventListener('mousedown',  bumpInactivity);
         canvas.addEventListener('wheel',      bumpInactivity, { passive: true });
@@ -1806,16 +1791,23 @@ export class HeliosEngine
     //               own feature on the side.
     //  batterySocLabel  — where the optional battery State-of-
     //               Charge chip is drawn (icon + percent). Sits to
-    //               the screen-LEFT of the PV chip on the same
-    //               horizontal axis, mirroring the Power chip on
-    //               the right. Connected to the PV chip with a
-    //               static dotted hairline (no animation, no
-    //               arrow) — see the card render block.
+    //               the BOTTOM-LEFT of the PV chip, connected via
+    //               an inverted-L polyline whose vertical leg
+    //               drops from PV's bottom edge (at 1/4 of the
+    //               chip width from the left) and whose horizontal
+    //               leg lands on the SoC chip's right side. Static
+    //               (no animation, no arrow) — SoC has no flow
+    //               direction to encode.
     //  batteryPowerLabel — where the optional battery Power chip
     //               is drawn (icon + signed instantaneous W/kW).
-    //               Sits to the screen-RIGHT of the PV chip,
-    //               mirror image of the SoC chip. Same static
-    //               dotted leader to PV.
+    //               Sits to the BOTTOM-RIGHT of the PV chip,
+    //               connected via a regular L polyline whose
+    //               vertical leg drops from PV's bottom edge (at
+    //               3/4 of the chip width from the left) and
+    //               whose horizontal leg lands on the Power
+    //               chip's left side. Animated dashes + arrow
+    //               whose direction follows the sign of the
+    //               power.
     //  ringEdge   — projection of a fixed geographic point on the
     //               100 % reference ring (the disc's geographic east
     //               edge in the northern hemisphere, west edge in
@@ -1884,22 +1876,25 @@ export class HeliosEngine
         const cloudLabelX = ringEdgeX + (radDX / radLen) * CLOUD_CHIP_NUDGE_PX;
         const cloudLabelY = ringEdgeY + (radDY / radLen) * CLOUD_CHIP_NUDGE_PX;
 
-        //Battery chips flank the PV chip horizontally — SoC on the
-        //LEFT, signed Power on the RIGHT, on the same vertical
-        //axis as PV. The horizontal gap is sized to leave room for
-        //a short dotted hairline (~50 px) that visually ties each
-        //battery chip back to the PV chip without crowding it.
-        const BATTERY_CHIP_GAP_PX = 80;
+        //Battery chips sit BELOW and to either side of the PV
+        //chip — SoC bottom-LEFT, Power bottom-RIGHT — connected to
+        //PV by L-shaped polylines (see the card render block). The
+        //horizontal offset is sized to leave room for both the L
+        //corner and a short visible run of the L's horizontal leg;
+        //the vertical drop pushes the chips below the PV chip's
+        //bottom edge so the L vertical leg has a real height.
+        const BATTERY_CHIP_X_OFFSET_PX = 80;
+        const BATTERY_CHIP_Y_OFFSET_PX = 40;
         const pvX = home.x;
         const pvY = home.y - CLOUD_LABEL_OFFSET_PX;
 
         return {
-            cloudLabel:        { x: cloudLabelX,             y: cloudLabelY },
-            pvLabel:           { x: pvX,                     y: pvY        },
-            batterySocLabel:   { x: pvX - BATTERY_CHIP_GAP_PX, y: pvY      },
-            batteryPowerLabel: { x: pvX + BATTERY_CHIP_GAP_PX, y: pvY      },
-            ringEdge:          { x: ringEdgeX,               y: ringEdgeY },
-            home:              { x: home.x,                  y: home.y    }
+            cloudLabel:        { x: cloudLabelX,                  y: cloudLabelY                       },
+            pvLabel:           { x: pvX,                          y: pvY                               },
+            batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
+            batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
+            ringEdge:          { x: ringEdgeX,                    y: ringEdgeY                        },
+            home:              { x: home.x,                       y: home.y                           }
         };
     }
 
@@ -2377,30 +2372,19 @@ export class HeliosEngine
     //bearing in NH, where the sun goes east → south → west, i.e.
     //clockwise from above) so the camera and the live sun visually
     //counter-orbit each other — a quiet but constant motion that
-    //makes the card feel alive even with no user input.
-    //
-    //Three phases per frame, gated by the time since the last user
-    //gesture:
-    //
-    //  - within `AUTO_ROTATE_INACTIVITY_MS` of a user action → idle
-    //    (no bearing change, the user has full control).
-    //  - past the grace period AND the user moved the camera →
-    //    REALIGN: tween smoothly back to the initial bearing
-    //    captured at card load (~30°/s, fast enough that the
-    //    return is over in a beat or two regardless of how far
-    //    the user spun the camera). Once we're within 0.5° of
-    //    the initial bearing, mark the realignment done.
-    //  - past the grace period AND no user move pending → DRIFT:
-    //    keep slowly decreasing the bearing at the configured
-    //    speed.
+    //makes the card feel alive even with no user input. The
+    //rotation pauses for `AUTO_ROTATE_INACTIVITY_MS` after every
+    //user gesture (mouse down / wheel / touch) so the user has
+    //full control during a manipulation, then resumes from
+    //wherever the user left the camera — no recalibration to a
+    //fixed bearing.
     //
     //We tween in seconds (delta-time integrated against the frame
     //rate) rather than a fixed per-frame increment so the rotation
     //speed is constant across 60 Hz / 120 Hz displays and survives
     //tab-throttling with no visible jumps when the user comes back.
-    private static readonly AUTO_ROTATE_DEG_PER_SEC      = 1.5;
-    private static readonly AUTO_ROTATE_REALIGN_DEG_PER_SEC = 30;
-    private static readonly AUTO_ROTATE_INACTIVITY_MS    = 5_000;
+    private static readonly AUTO_ROTATE_DEG_PER_SEC   = 1.5;
+    private static readonly AUTO_ROTATE_INACTIVITY_MS = 5_000;
 
     private _startAutoRotateLoop(): void
     {
@@ -2410,8 +2394,6 @@ export class HeliosEngine
         }
         this._autoRotateLastFrame      = performance.now();
         this._autoRotateLastUserAction = 0;
-        this._autoRotateUserMoved      = false;
-        this._autoRotateInitialBearing = this.map.getBearing();
 
         const tick = (t: number) =>
         {
@@ -2425,44 +2407,15 @@ export class HeliosEngine
             this._autoRotateLastFrame = t;
 
             const sinceUser = Date.now() - this._autoRotateLastUserAction;
-            if (sinceUser < HeliosEngine.AUTO_ROTATE_INACTIVITY_MS)
+            if (sinceUser >= HeliosEngine.AUTO_ROTATE_INACTIVITY_MS)
             {
-                //Inside the grace window — leave the camera alone.
-                this._autoRotateRaf = requestAnimationFrame(tick);
-                return;
-            }
-
-            const current = this.map.getBearing();
-            if (this._autoRotateUserMoved)
-            {
-                //Smooth recalibration back to the initial bearing.
-                //Pick the shortest signed angular delta (range
-                //[-180, +180]) so we never tween the long way
-                //around when the user spun past 180°.
-                let diff = this._autoRotateInitialBearing - current;
-                diff = ((diff + 540) % 360) - 180;
-                const step = HeliosEngine.AUTO_ROTATE_REALIGN_DEG_PER_SEC * dt;
-                if (Math.abs(diff) <= Math.max(step, 0.5))
-                {
-                    //Snap to the exact initial bearing on the
-                    //final frame and exit the realignment phase.
-                    this.map.setBearing(this._autoRotateInitialBearing);
-                    this._autoRotateUserMoved = false;
-                }
-                else
-                {
-                    this.map.setBearing(current + Math.sign(diff) * step);
-                }
-            }
-            else
-            {
-                //Normal forward drift. Negative delta: bearing
-                //decreases, camera rotates counter-clockwise as
-                //seen from above, map content drifts clockwise
-                //on screen — opposite of the sun's apparent
-                //motion.
-                this.map.setBearing(current
-                    - HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt);
+                //Negative delta: bearing decreases, camera rotates
+                //counter-clockwise around the up axis as seen
+                //from above, map content drifts clockwise on
+                //screen — opposite of the sun's apparent motion.
+                const next = this.map.getBearing()
+                    - HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
+                this.map.setBearing(next);
             }
 
             this._autoRotateRaf = requestAnimationFrame(tick);

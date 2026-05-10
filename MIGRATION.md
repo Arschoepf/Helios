@@ -320,6 +320,46 @@ modifier for the reversed flow direction).
 No public config keys changed; existing dashboards keep working
 with no edits.
 
+## v1.1.0-beta.13
+
+Three small but visible fixes on top of beta.12.
+
+* **Placeholder title raised.** `.ph-content`'s vertical anchor
+  moved from `top: 50 %` to `top: 35 %` (≈ 65 % from the bottom)
+  so HELIOS sits cleanly above the iso buildings rather than
+  overlapping them in the middle of the placeholder.
+* **Battery leaders are now L-shaped.** beta.12's straight
+  horizontal lines never lined up visually because the chips
+  were on the same horizontal axis as the PV chip. The two
+  battery chips now sit BELOW PV (SoC bottom-left, Power
+  bottom-right) and the connectors are SVG `<polyline>`s with
+  one corner each:
+    - SoC ↔ PV: inverted L (vertical leg drops from PV's
+      bottom edge at 1/4 of the chip width = the LEFT
+      quarter, then horizontal leg runs left to the SoC chip).
+    - PV ↔ Power: regular L (vertical leg drops at 3/4 of the
+      chip width = the RIGHT quarter, then horizontal leg
+      runs right to the Power chip).
+  The 1/4 / 3/4 anchor uses the chip's min-width (76 px → 19 px
+  from centre) since chips are min-width-clamped in the common
+  case. The Power L keeps its animated dashes + arrow whose
+  direction tracks the sign of the live power; the SoC L
+  stays static.
+* **Auto-rotation reverted to simple drift.** beta.12's
+  "tween back to the initial bearing after every user gesture"
+  felt jerky in practice. The realign-to-initial logic and the
+  `_autoRotateInitialBearing` / `_autoRotateUserMoved` fields
+  are gone; the loop now does what beta.11 did (steady forward
+  drift, paused for 5 s after every user gesture, resumed
+  from the user's bearing) at the slightly faster speed
+  introduced in beta.12 (1.5 °/s).
+
+Internal: `projectHomeLabelLayout`'s `batterySocLabel` and
+`batteryPowerLabel` y values now sit at `pvY + 40` (was `pvY`).
+The `.battery-leader-line` CSS rule gained a
+`stroke-linejoin: round` so the L corners read as a soft bend
+rather than a sharp angle.
+
 ## v1.1.0-beta.12
 
 Polish pass on top of beta.11: drops the never-quite-right

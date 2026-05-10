@@ -24875,8 +24875,6 @@ const _HeliosEngine = class _HeliosEngine {
     this._rateLimitStreak = 0;
     this._autoRotateLastFrame = 0;
     this._autoRotateLastUserAction = 0;
-    this._autoRotateInitialBearing = 0;
-    this._autoRotateUserMoved = false;
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -24938,7 +24936,6 @@ const _HeliosEngine = class _HeliosEngine {
     const canvas = this.map.getCanvas();
     const bumpInactivity = () => {
       this._autoRotateLastUserAction = Date.now();
-      this._autoRotateUserMoved = true;
     };
     canvas.addEventListener("mousedown", bumpInactivity);
     canvas.addEventListener("wheel", bumpInactivity, { passive: true });
@@ -25791,16 +25788,23 @@ const _HeliosEngine = class _HeliosEngine {
   //               own feature on the side.
   //  batterySocLabel  — where the optional battery State-of-
   //               Charge chip is drawn (icon + percent). Sits to
-  //               the screen-LEFT of the PV chip on the same
-  //               horizontal axis, mirroring the Power chip on
-  //               the right. Connected to the PV chip with a
-  //               static dotted hairline (no animation, no
-  //               arrow) — see the card render block.
+  //               the BOTTOM-LEFT of the PV chip, connected via
+  //               an inverted-L polyline whose vertical leg
+  //               drops from PV's bottom edge (at 1/4 of the
+  //               chip width from the left) and whose horizontal
+  //               leg lands on the SoC chip's right side. Static
+  //               (no animation, no arrow) — SoC has no flow
+  //               direction to encode.
   //  batteryPowerLabel — where the optional battery Power chip
   //               is drawn (icon + signed instantaneous W/kW).
-  //               Sits to the screen-RIGHT of the PV chip,
-  //               mirror image of the SoC chip. Same static
-  //               dotted leader to PV.
+  //               Sits to the BOTTOM-RIGHT of the PV chip,
+  //               connected via a regular L polyline whose
+  //               vertical leg drops from PV's bottom edge (at
+  //               3/4 of the chip width from the left) and
+  //               whose horizontal leg lands on the Power
+  //               chip's left side. Animated dashes + arrow
+  //               whose direction follows the sign of the
+  //               power.
   //  ringEdge   — projection of a fixed geographic point on the
   //               100 % reference ring (the disc's geographic east
   //               edge in the northern hemisphere, west edge in
@@ -25840,14 +25844,15 @@ const _HeliosEngine = class _HeliosEngine {
     const radLen = Math.sqrt(radDX * radDX + radDY * radDY) || 1;
     const cloudLabelX = ringEdgeX + radDX / radLen * CLOUD_CHIP_NUDGE_PX;
     const cloudLabelY = ringEdgeY + radDY / radLen * CLOUD_CHIP_NUDGE_PX;
-    const BATTERY_CHIP_GAP_PX = 80;
+    const BATTERY_CHIP_X_OFFSET_PX = 80;
+    const BATTERY_CHIP_Y_OFFSET_PX = 40;
     const pvX = home.x;
     const pvY = home.y - CLOUD_LABEL_OFFSET_PX;
     return {
       cloudLabel: { x: cloudLabelX, y: cloudLabelY },
       pvLabel: { x: pvX, y: pvY },
-      batterySocLabel: { x: pvX - BATTERY_CHIP_GAP_PX, y: pvY },
-      batteryPowerLabel: { x: pvX + BATTERY_CHIP_GAP_PX, y: pvY },
+      batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
+      batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
       ringEdge: { x: ringEdgeX, y: ringEdgeY },
       home: { x: home.x, y: home.y }
     };
@@ -26144,8 +26149,6 @@ const _HeliosEngine = class _HeliosEngine {
     }
     this._autoRotateLastFrame = performance.now();
     this._autoRotateLastUserAction = 0;
-    this._autoRotateUserMoved = false;
-    this._autoRotateInitialBearing = this.map.getBearing();
     const tick = (t2) => {
       if (!this.map) {
         this._autoRotateRaf = void 0;
@@ -26154,23 +26157,9 @@ const _HeliosEngine = class _HeliosEngine {
       const dt = Math.max(0, t2 - this._autoRotateLastFrame) / 1e3;
       this._autoRotateLastFrame = t2;
       const sinceUser = Date.now() - this._autoRotateLastUserAction;
-      if (sinceUser < _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
-        this._autoRotateRaf = requestAnimationFrame(tick);
-        return;
-      }
-      const current = this.map.getBearing();
-      if (this._autoRotateUserMoved) {
-        let diff = this._autoRotateInitialBearing - current;
-        diff = (diff + 540) % 360 - 180;
-        const step = _HeliosEngine.AUTO_ROTATE_REALIGN_DEG_PER_SEC * dt;
-        if (Math.abs(diff) <= Math.max(step, 0.5)) {
-          this.map.setBearing(this._autoRotateInitialBearing);
-          this._autoRotateUserMoved = false;
-        } else {
-          this.map.setBearing(current + Math.sign(diff) * step);
-        }
-      } else {
-        this.map.setBearing(current - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt);
+      if (sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
+        const next = this.map.getBearing() - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
+        this.map.setBearing(next);
       }
       this._autoRotateRaf = requestAnimationFrame(tick);
     };
@@ -26192,7 +26181,6 @@ const _HeliosEngine = class _HeliosEngine {
   }
 };
 _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC = 1.5;
-_HeliosEngine.AUTO_ROTATE_REALIGN_DEG_PER_SEC = 30;
 _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS = 5e3;
 let HeliosEngine = _HeliosEngine;
 const en = {
@@ -26745,7 +26733,12 @@ const heliosCardStyles = i$3`
     .ph-content
     {
         position: absolute;
-        top: 50%;
+        /*  Title centred horizontally, vertically anchored at 65 %
+            from the BOTTOM of the placeholder (so 35 % from the
+            top). Sits just above the iso buildings and visually
+            below the solar arc apex — feels less "crammed in the
+            middle" than a strict 50 % vertical centre. */
+        top: 35%;
         left: 50%;
         transform: translate(-50%, -50%);
         text-align: center;
@@ -27337,6 +27330,7 @@ const heliosCardStyles = i$3`
         stroke-width: 1.5;
         stroke-opacity: 0.85;
         stroke-linecap: round;
+        stroke-linejoin: round;
         stroke-dasharray: 2 3;
         fill: none;
     }
@@ -29652,6 +29646,18 @@ let HeliosCard = class extends i {
     const batteryCharging = showPowerChip && activeBatteryPower > 0;
     const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
     const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
+    const PV_QUARTER_PX = 19;
+    const PV_HALF_HEIGHT_PX = 11;
+    const BAT_CHIP_NUDGE_PX = 32;
+    const lPvBottomY = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX : 0;
+    const lShelfY = layout ? layout.batterySocLabel.y : 0;
+    const lLeftQuarterX = layout ? layout.pvLabel.x - PV_QUARTER_PX : 0;
+    const lRightQuarterX = layout ? layout.pvLabel.x + PV_QUARTER_PX : 0;
+    const lSocEndX = layout ? layout.batterySocLabel.x + BAT_CHIP_NUDGE_PX : 0;
+    const lPowerEndX = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
+    const socLeaderPoints = `${lLeftQuarterX},${lPvBottomY} ${lLeftQuarterX},${lShelfY} ${lSocEndX},${lShelfY}`;
+    const powerLeaderPoints = `${lRightQuarterX},${lPvBottomY} ${lRightQuarterX},${lShelfY} ${lPowerEndX},${lShelfY}`;
+    const powerArrowPath = batteryCharging ? `M ${lRightQuarterX},${lPvBottomY} L ${lRightQuarterX},${lShelfY} L ${lPowerEndX},${lShelfY}` : `M ${lPowerEndX},${lShelfY} L ${lRightQuarterX},${lShelfY} L ${lRightQuarterX},${lPvBottomY}`;
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -29941,42 +29947,37 @@ ${showSun ? b`
                 ${showSocChip || showPowerChip ? b`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV: static dotted hairline (no
-                            animation, no arrow). Same visual language
-                            as the cloud leader. The sign-less SoC
-                            reading carries no flow direction, so any
-                            animation here would just add noise.
+                            SoC ↔ PV — static, dotted, inverted-L
+                            polyline. Vertical leg drops from PV's
+                            bottom edge at 1/4 of the chip width
+                            (the LEFT quarter), horizontal leg
+                            then runs left to the SoC chip. No
+                            animation: SoC has no flow direction.
                         -->
                         ${showSocChip ? w`
-                            <line
+                            <polyline
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryColor}"
-                                x1="${layout.batterySocLabel.x + 10}"
-                                y1="${layout.batterySocLabel.y}"
-                                x2="${layout.pvLabel.x - 10}"
-                                y2="${layout.pvLabel.y}"
-                            ></line>
+                                points="${socLeaderPoints}"
+                            ></polyline>
                         ` : A}
                         <!--
-                            PV ↔ Power: animated dotted line with an
-                            arrow whose direction tracks the sign of
-                            the live power. Charging (P > 0) → arrow
-                            travels PV → Power chip (energy moves
-                            INTO the battery). Discharging (P < 0) →
-                            arrow travels Power → PV (energy comes
-                            OUT). Same dash + flow vocabulary as the
-                            PV / sun leaders so all energy streams
-                            on the card share one visual language.
+                            PV ↔ Power — animated, dotted L with
+                            an arrow tracking the sign of the live
+                            power. Vertical leg at 3/4 of PV's
+                            width (the RIGHT quarter), horizontal
+                            leg then runs right to the Power chip.
+                            Charging (P > 0) → arrow PV → Power.
+                            Discharging (P < 0) → arrow Power → PV
+                            (the polyline class modifier flips the
+                            dash flow too).
                         -->
                         ${showPowerChip ? w`
-                            <line
+                            <polyline
                                 class="battery-leader-line battery-leader-line-animated ${batteryCharging ? "" : "battery-leader-discharging"}"
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
-                                x1="${layout.pvLabel.x + 10}"
-                                y1="${layout.pvLabel.y}"
-                                x2="${layout.batteryPowerLabel.x - 10}"
-                                y2="${layout.batteryPowerLabel.y}"
-                            ></line>
+                                points="${powerLeaderPoints}"
+                            ></polyline>
                             <polygon
                                 class="battery-leader-arrow"
                                 points="-6,-4 0,0 -6,4"
@@ -29986,7 +29987,7 @@ ${showSun ? b`
                                     dur="${batteryFlowDuration}s"
                                     repeatCount="indefinite"
                                     rotate="auto"
-                                    path="${batteryCharging ? `M ${layout.pvLabel.x + 10},${layout.pvLabel.y} L ${layout.batteryPowerLabel.x - 10},${layout.batteryPowerLabel.y}` : `M ${layout.batteryPowerLabel.x - 10},${layout.batteryPowerLabel.y} L ${layout.pvLabel.x + 10},${layout.pvLabel.y}`}"
+                                    path="${powerArrowPath}"
                                 ></animateMotion>
                             </polygon>
                         ` : A}

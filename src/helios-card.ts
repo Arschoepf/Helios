@@ -2068,6 +2068,43 @@ export class HeliosCard extends LitElement
             : 0;
         const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
 
+        //Battery leader L-shape geometry — computed once and reused
+        //for both the polyline `points` attribute and the animated
+        //arrow's `<animateMotion>` path. Only meaningful when a
+        //layout is available; gated by the same flag as the chip
+        //rendering so we don't dereference a null layout below.
+        //
+        //  PV_QUARTER_PX (19) → 1/4 of the PV chip's min-width
+        //  (76 px), used as the horizontal offset of the L's
+        //  vertical leg from the PV chip centre. The SoC L hangs
+        //  from the LEFT-quarter of PV's bottom edge (= 1/4 from
+        //  the left); the Power L from the RIGHT-quarter (= 3/4
+        //  from the left). Constant rather than measured because
+        //  the chips are min-width-clamped to 76 px in the
+        //  common case — see helios-card-css.ts.
+        //  PV_HALF_HEIGHT_PX (11) places the top of the vertical
+        //  leg flush against PV's bottom edge so the line emerges
+        //  from the chip rather than from inside it.
+        //  CHIP_NUDGE_PX (32) is the horizontal distance from each
+        //  battery chip's centre to the inside of its left/right
+        //  edge, so the chip background covers the very tip of
+        //  the leader and the visible dash sequence terminates
+        //  cleanly at the chip border.
+        const PV_QUARTER_PX        = 19;
+        const PV_HALF_HEIGHT_PX    = 11;
+        const BAT_CHIP_NUDGE_PX    = 32;
+        const lPvBottomY    = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX        : 0;
+        const lShelfY       = layout ? layout.batterySocLabel.y                     : 0;
+        const lLeftQuarterX = layout ? layout.pvLabel.x - PV_QUARTER_PX             : 0;
+        const lRightQuarterX= layout ? layout.pvLabel.x + PV_QUARTER_PX             : 0;
+        const lSocEndX      = layout ? layout.batterySocLabel.x   + BAT_CHIP_NUDGE_PX : 0;
+        const lPowerEndX    = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
+        const socLeaderPoints   = `${lLeftQuarterX},${lPvBottomY} ${lLeftQuarterX},${lShelfY} ${lSocEndX},${lShelfY}`;
+        const powerLeaderPoints = `${lRightQuarterX},${lPvBottomY} ${lRightQuarterX},${lShelfY} ${lPowerEndX},${lShelfY}`;
+        const powerArrowPath = batteryCharging
+            ? `M ${lRightQuarterX},${lPvBottomY} L ${lRightQuarterX},${lShelfY} L ${lPowerEndX},${lShelfY}`
+            : `M ${lPowerEndX},${lShelfY} L ${lRightQuarterX},${lShelfY} L ${lRightQuarterX},${lPvBottomY}`;
+
         //Solar-arc overlay — sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
         //pre-projected to screen space by the engine via
@@ -2409,42 +2446,37 @@ ${showSun ? html`
                 ${(showSocChip || showPowerChip) ? html`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV: static dotted hairline (no
-                            animation, no arrow). Same visual language
-                            as the cloud leader. The sign-less SoC
-                            reading carries no flow direction, so any
-                            animation here would just add noise.
+                            SoC ↔ PV — static, dotted, inverted-L
+                            polyline. Vertical leg drops from PV's
+                            bottom edge at 1/4 of the chip width
+                            (the LEFT quarter), horizontal leg
+                            then runs left to the SoC chip. No
+                            animation: SoC has no flow direction.
                         -->
                         ${showSocChip ? svg`
-                            <line
+                            <polyline
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryColor}"
-                                x1="${layout!.batterySocLabel.x + 10}"
-                                y1="${layout!.batterySocLabel.y}"
-                                x2="${layout!.pvLabel.x - 10}"
-                                y2="${layout!.pvLabel.y}"
-                            ></line>
+                                points="${socLeaderPoints}"
+                            ></polyline>
                         ` : nothing}
                         <!--
-                            PV ↔ Power: animated dotted line with an
-                            arrow whose direction tracks the sign of
-                            the live power. Charging (P > 0) → arrow
-                            travels PV → Power chip (energy moves
-                            INTO the battery). Discharging (P < 0) →
-                            arrow travels Power → PV (energy comes
-                            OUT). Same dash + flow vocabulary as the
-                            PV / sun leaders so all energy streams
-                            on the card share one visual language.
+                            PV ↔ Power — animated, dotted L with
+                            an arrow tracking the sign of the live
+                            power. Vertical leg at 3/4 of PV's
+                            width (the RIGHT quarter), horizontal
+                            leg then runs right to the Power chip.
+                            Charging (P > 0) → arrow PV → Power.
+                            Discharging (P < 0) → arrow Power → PV
+                            (the polyline class modifier flips the
+                            dash flow too).
                         -->
                         ${showPowerChip ? svg`
-                            <line
+                            <polyline
                                 class="battery-leader-line battery-leader-line-animated ${batteryCharging ? '' : 'battery-leader-discharging'}"
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
-                                x1="${layout!.pvLabel.x + 10}"
-                                y1="${layout!.pvLabel.y}"
-                                x2="${layout!.batteryPowerLabel.x - 10}"
-                                y2="${layout!.batteryPowerLabel.y}"
-                            ></line>
+                                points="${powerLeaderPoints}"
+                            ></polyline>
                             <polygon
                                 class="battery-leader-arrow"
                                 points="-6,-4 0,0 -6,4"
@@ -2454,9 +2486,7 @@ ${showSun ? html`
                                     dur="${batteryFlowDuration}s"
                                     repeatCount="indefinite"
                                     rotate="auto"
-                                    path="${batteryCharging
-                                        ? `M ${layout!.pvLabel.x + 10},${layout!.pvLabel.y} L ${layout!.batteryPowerLabel.x - 10},${layout!.batteryPowerLabel.y}`
-                                        : `M ${layout!.batteryPowerLabel.x - 10},${layout!.batteryPowerLabel.y} L ${layout!.pvLabel.x + 10},${layout!.pvLabel.y}`}"
+                                    path="${powerArrowPath}"
                                 ></animateMotion>
                             </polygon>
                         ` : nothing}
