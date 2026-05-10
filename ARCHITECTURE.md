@@ -131,6 +131,33 @@ their tags are deleted, so the HACS download list only shows
 the v1.0.0 / v1.1.0 stable releases plus the active v1.2.0-beta
 line.
 
+## v1.2.0-beta.3
+
+* **Dark-mode chip borders softened.** Across light and dark
+  themes the on-map chips ship with a `1 px solid` ring — black
+  on white plates in light mode, `#cccccc` on `#191a1b` plates in
+  dark mode (or the user-configured `pv-color` /
+  `battery-color`). Light mode reads as crisp because both the
+  plate and the basemap below are bright, so the dark border is
+  visually contained. Dark mode used the same recipe but inverted
+  — bright ink on a near-black plate atop a near-black map — and
+  the ring ended up being the brightest thing on the chip,
+  fighting the value it was meant to delimit.
+  * Neutral chips (clock, "back to live", day labels, cloud %,
+    solar W/m²) drop the dark-mode border from `#cccccc` to
+    `rgba(255, 255, 255, 0.20)` — same translucency as the
+    `.tb-chart-card` and segmented-toggle borders elsewhere in
+    dark mode, so all dark-mode delimiters share one optical
+    weight.
+  * PV and battery chips keep their configured tint on the
+    border but drop to 50 % opacity via
+    `color-mix(in srgb, var(--*-leader-color) 50%, transparent)`.
+    Text and icon stay at full saturation so the colour identity
+    is carried by the readable elements rather than the frame.
+  * Border *width* is unchanged at `1 px`, matching light mode
+    exactly — the perceived heaviness was an opacity / contrast
+    artefact, not a geometric one.
+
 ---
 
 # HELIOS — v1.1.0

@@ -1021,7 +1021,15 @@ export const heliosCardStyles = css`
     {
         background: #191a1b;
         color:       #e6e6e6;
-        border-color: #cccccc;
+        /*  Light-mode borders are pure black on a white plate —
+            high contrast but visually contained because the plate
+            and the basemap below it are both bright. In dark mode
+            the same 1 px ring at #cccccc reads as the brightest
+            ink on the card and dominates the chip. Drop the
+            opacity so the border behaves as a delimiter rather
+            than a focal element. Matches the chart-card and
+            segmented-toggle borders elsewhere in dark mode. */
+        border-color: rgba(255, 255, 255, 0.20);
     }
 
     ha-card.theme-dark .tb-day-label
@@ -1042,11 +1050,22 @@ export const heliosCardStyles = css`
     /*  PV and battery chips — they keep the user-configured tint
         on the border / text / icon (so a green PV chip reads as
         green on either skin), but the surface flips to the dark
-        plate so the tint stays readable. */
-    ha-card.theme-dark .pv-pct-label,
+        plate so the tint stays readable. The border drops to 50 %
+        opacity of the configured colour: at full saturation the
+        ring would dominate the chip against a near-black plate
+        and a darkened map, fighting the value just like the
+        neutral-chip border above. The text and icon stay at full
+        saturation so the colour identity is carried by the
+        readable elements, not the frame. */
+    ha-card.theme-dark .pv-pct-label
+    {
+        background: #191a1b;
+        border-color: color-mix(in srgb, var(--pv-leader-color, #27B36B) 50%, transparent);
+    }
     ha-card.theme-dark .battery-pct-label
     {
         background: #191a1b;
+        border-color: color-mix(in srgb, var(--battery-leader-color, #D32F2F) 50%, transparent);
     }
 
     /*  Cloud-cover leader (chip → disc) flips polarity so it's
