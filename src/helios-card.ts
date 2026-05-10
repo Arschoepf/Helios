@@ -2215,17 +2215,9 @@ export class HeliosCard extends LitElement
                                     : (selPct > 92 ? 'translateX(-100%)' : 'translateX(-50%)');
                                 return html`
                                     <div
-                                        class="tb-sel-cluster"
+                                        class="tb-sel-label"
                                         style="left:${selPct}%; transform:${xform}"
-                                    >
-                                        <button
-                                            class="tb-sel-live"
-                                            @click="${this._resetToLive}"
-                                        >
-                                            <ha-icon icon="mdi:restore"></ha-icon>
-                                        </button>
-                                        <div class="tb-sel-label">${this._formatSelTime(this._selectedTime!)}</div>
-                                    </div>
+                                    >${this._formatSelTime(this._selectedTime!)}</div>
                                     <div
                                         class="tb-sel-tether"
                                         style="left:${selPct}%"
@@ -2275,6 +2267,14 @@ export class HeliosCard extends LitElement
                             <span class="clock-date">${displayDateLabel}</span>
                             <span class="clock-time">${displayTimeLabel}</span>
                         </div>
+                        ${!this._isLiveMode ? html`
+                            <button
+                                class="clock-tab"
+                                @click="${this._resetToLive}"
+                            >
+                                <ha-icon icon="mdi:restore"></ha-icon>
+                            </button>
+                        ` : nothing}
                     </div>
                 ` : nothing}
 

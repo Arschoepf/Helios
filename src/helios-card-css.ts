@@ -308,74 +308,32 @@ export const heliosCardStyles = css`
         border-top:    5px solid #1f6feb;
     }
 
-    /*  Scrub-time cluster — sits in the top row above the chart card
-        when the user has scrubbed away from "now". Combines a small
-        icon-only "back to live" button with the scrub-time pill, both
-        tinted in the scrub-cursor blue so the displayed instant is
-        visibly not "now". The cluster anchors at the cursor's X (via
-        an inline left percentage) and edge-clamps via the inline
-        transform so it never bleeds past the card edges. The icon
-        button sits on the LEFT of the time pill and is the only
-        interactive element in the cluster — clicking it returns the
-        card to live mode. The pill itself is pointer-transparent so
-        dragging the timeline through the cluster still scrubs. */
-    .tb-sel-cluster
+    /*  Scrub-time pill — sits in the top row above the chart card
+        when the user has scrubbed away from "now". Tinted in the
+        scrub-cursor blue so the displayed instant is visibly not
+        "now". Anchored at the cursor's X via an inline left
+        percentage, with edge-clamping handled by the inline
+        transform so the pill never bleeds past the card edges.
+        Pointer-transparent so dragging the timeline through it
+        still scrubs — the "back to live" affordance lives in the
+        clock tab above the card, not next to the pill, to keep the
+        timeline's hit area uncontested on mobile. */
+    .tb-sel-label
     {
         position: absolute;
         bottom: 0;
-        display: inline-flex;
-        align-items: stretch;
-        gap: 0;
-        z-index: 3;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-        border-radius: 3px;
-        overflow: hidden;
-    }
-
-    /*  Icon-only "back to live" button — same blue plate as the
-        adjacent time pill, with a subtle hover/active darkening so
-        it reads as actionable without competing with the pill's
-        timestamp readout. No text, no tooltip: the restore icon and
-        the contextual placement (next to the scrubbed-time pill)
-        carry the meaning. */
-    .tb-sel-live
-    {
-        pointer-events: auto;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(31, 111, 235, 0.95);
-        color: white;
-        border: 0;
-        border-right: 1px solid rgba(255, 255, 255, 0.30);
-        padding: 0 5px;
-        cursor: pointer;
-        transition: background 0.12s;
-    }
-
-    .tb-sel-live:hover  { background: rgba(24, 92, 199, 0.95); }
-    .tb-sel-live:active { background: rgba(20, 78, 168, 0.95); }
-
-    .tb-sel-live ha-icon
-    {
-        --mdc-icon-size: 12px;
-        color: white;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    .tb-sel-label
-    {
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 0.3px;
         color: white;
         background: rgba(31, 111, 235, 0.95);
         padding: 3px 8px;
+        border-radius: 3px;
         white-space: nowrap;
         pointer-events: none;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+        font-variant-numeric: tabular-nums;
+        z-index: 3;
     }
 
     /*  Scrub tether — a 6 px vertical hair that drops from the
@@ -484,11 +442,12 @@ export const heliosCardStyles = css`
     /*  Top corner overlays. Date/time chip on the right; "back to
         live" chip on the left when scrubbed. */
 
-    /*  Top-row overlays — the clock now centres horizontally above
-        the card. The previous top-left "back to live" button lives
-        inside the scrub label cluster instead, so when scrubbing
-        the user sees a single clustered control anchored to the
-        cursor instead of two separate corner chips. */
+    /*  Top-row overlay — the clock centres horizontally above the
+        card, with an optional "back to live" tab hanging from its
+        bottom-centre when the user has scrubbed away from now. The
+        wrapper is a vertical flex column so the tab stacks under
+        the clock automatically; both elements share the same X
+        anchor (the column's centre = the card's centre). */
     .overlay-top-center
     {
         position: absolute;
@@ -497,6 +456,7 @@ export const heliosCardStyles = css`
         transform: translateX(-50%);
         z-index: 5;
         display: flex;
+        flex-direction: column;
         align-items: center;
     }
 
@@ -518,10 +478,54 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         white-space: nowrap;
+        position: relative;
+        z-index: 2;
     }
 
     .clock-date { opacity: 0.75; }
     .clock-time { opacity: 1;    }
+
+    /*  "Back to live" tab — hangs from the bottom-centre of the
+        clock as a small folder-style tab when the user has scrubbed
+        away from now. Same blue plate as the on-chart scrub cursor
+        and the scrub-time pill, white restore icon centred. The
+        top corners are squared and the top edge sits 1 px UNDER the
+        clock's bottom border (negative margin) so the two chips
+        visually merge into one stacked control. Mobile-friendly tap
+        target (~26 × 22 px, well above the 24 × 24 px iOS minimum)
+        without competing with the timeline scrub gesture below. */
+    .clock-tab
+    {
+        margin-top: -1px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 26px;
+        height: 18px;
+        padding: 0 6px;
+        background: rgba(31, 111, 235, 0.95);
+        color: white;
+        border: 1px solid rgba(20, 78, 168, 0.95);
+        border-top: 0;
+        border-radius: 0 0 3px 3px;
+        cursor: pointer;
+        pointer-events: auto;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        transition: background 0.12s;
+        position: relative;
+        z-index: 1;
+    }
+
+    .clock-tab:hover  { background: rgba(24, 92, 199, 0.95); }
+    .clock-tab:active { background: rgba(20, 78, 168, 0.95); }
+
+    .clock-tab ha-icon
+    {
+        --mdc-icon-size: 14px;
+        color: white;
+        display: inline-flex;
+        align-items: center;
+    }
 
     /*  Cloud-cover percentage chip — floating above the cloud disc
         on the ground with a leader line down to its feature. */

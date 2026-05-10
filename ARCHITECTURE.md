@@ -131,6 +131,32 @@ their tags are deleted, so the HACS download list only shows
 the v1.0.0 / v1.1.0 stable releases plus the active v1.2.0-beta
 line.
 
+## v1.2.0-beta.5
+
+* **"Back to live" moves to a clock tab.** The icon-only button
+  beta.4 attached to the LEFT of the scrub-time pill turned out
+  to be a footgun on mobile: at ~26 × 18 px and hovering directly
+  above the timeline scrub gesture, taps would frequently land
+  inside the timeline and start a scrub instead of returning to
+  live. The control now hangs as a small folder-style tab from
+  the bottom-centre of the (already-centred) clock chip:
+  * Same scrub-cursor blue (`rgba(31, 111, 235, 0.95)`) as the
+    on-chart cursor and the scrub-time pill, so the visual link
+    "this puts you back on the live cursor" stays explicit.
+  * Top corners squared, bottom corners rounded
+    (`border-radius: 0 0 3px 3px`) and `margin-top: -1px` so the
+    tab visually merges with the clock's bottom edge into one
+    stacked control.
+  * White `mdi:restore` icon at 14 px, centred. Tap target is
+    ~26 × 18 px with the clock chrome above acting as additional
+    visual padding — well clear of the timeline below.
+* **Scrub pill back to a single chip.** With the icon button gone,
+  `.tb-sel-cluster` reverts to the original `.tb-sel-label` pill
+  (just the formatted scrub time on a blue plate), with the same
+  edge-clamping transform and the same cursor-X tether dropping
+  to the chart top edge. Pointer-transparent again so dragging
+  through the pill still scrubs.
+
 ## v1.2.0-beta.4
 
 * **Scrub controls reunified.** The "back to live" button used to
