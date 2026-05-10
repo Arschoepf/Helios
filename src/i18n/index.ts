@@ -50,7 +50,6 @@ export interface Translations
         mapStyleHint:             string;
         mapStyleStreet:           string;
         mapStyleTopo:             string;
-        mapStyleHybrid:           string;
         cardTheme:                string;
         cardThemeHint:            string;
         cardThemeLight:           string;

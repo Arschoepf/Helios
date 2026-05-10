@@ -2074,14 +2074,14 @@ export class HeliosCard extends LitElement
         //when a layout is available; gated by the same flag as the
         //chip rendering so we don't dereference a null layout below.
         //
-        //  PV_QUARTER_PX (19) → 1/4 of the PV chip's min-width
-        //  (76 px), used as the horizontal offset of the L's
-        //  vertical leg from the PV chip centre. The SoC L hangs
-        //  from the LEFT-quarter of PV's bottom edge (= 1/4 from
-        //  the left); the Power L from the RIGHT-quarter (= 3/4
-        //  from the left). Constant rather than measured because
-        //  the chips are min-width-clamped to 76 px in the
-        //  common case — see helios-card-css.ts.
+        //  PV_LEG_OFFSET_PX (12) is the horizontal distance from
+        //  the PV chip's centre to each L-leg's vertical drop.
+        //  The SoC L hangs to the LEFT of centre by this amount,
+        //  the Power L to the RIGHT — bringing both legs slightly
+        //  inboard of the chip's quarter-width so the bends sit
+        //  closer to the chip's middle. Constant rather than
+        //  measured because the chips are min-width-clamped to
+        //  76 px in the common case — see helios-card-css.ts.
         //  PV_HALF_HEIGHT_PX (11) places the top of the vertical
         //  leg flush against PV's bottom edge so the line emerges
         //  from the chip rather than from inside it.
@@ -2099,14 +2099,14 @@ export class HeliosCard extends LitElement
         //  the fillet shrinks proportionally with `flowDuration`,
         //  which makes the rotation rate at the bend track the
         //  arrow's overall speed naturally.
-        const PV_QUARTER_PX        = 19;
+        const PV_LEG_OFFSET_PX     = 12;
         const PV_HALF_HEIGHT_PX    = 11;
         const BAT_CHIP_NUDGE_PX    = 32;
         const FILLET_R             = 6;
         const lPvBottomY    = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX        : 0;
         const lShelfY       = layout ? layout.batterySocLabel.y                     : 0;
-        const lLeftQuarterX = layout ? layout.pvLabel.x - PV_QUARTER_PX             : 0;
-        const lRightQuarterX= layout ? layout.pvLabel.x + PV_QUARTER_PX             : 0;
+        const lSocLegX      = layout ? layout.pvLabel.x - PV_LEG_OFFSET_PX          : 0;
+        const lPowerLegX    = layout ? layout.pvLabel.x + PV_LEG_OFFSET_PX          : 0;
         const lSocEndX      = layout ? layout.batterySocLabel.x   + BAT_CHIP_NUDGE_PX : 0;
         const lPowerEndX    = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
         //Forward L: top of vertical leg → fillet → end of horizontal
@@ -2133,11 +2133,11 @@ export class HeliosCard extends LitElement
             const postX = verticalX + dirH * r;
             return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${topY}`;
         };
-        const socLeaderPath   = buildLPath(lLeftQuarterX,  lPvBottomY, lShelfY, lSocEndX);
-        const powerLeaderPath = buildLPath(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX);
+        const socLeaderPath   = buildLPath(lSocLegX,   lPvBottomY, lShelfY, lSocEndX);
+        const powerLeaderPath = buildLPath(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX);
         const powerArrowPath  = batteryCharging
-            ? buildLPath(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX)
-            : buildLPathReverse(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX);
+            ? buildLPath(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX)
+            : buildLPathReverse(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX);
 
         //Solar-arc overlay — sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
@@ -2485,9 +2485,8 @@ ${showSun ? html`
                             the PV ↔ Power leader's vocabulary
                             exactly minus the flow animation).
                             Vertical leg drops from PV's bottom
-                            edge at 1/4 of the chip width (the
-                            LEFT quarter), horizontal leg then
-                            runs left to the SoC chip. No
+                            edge slightly left of centre, horizontal
+                            leg then runs left to the SoC chip. No
                             animation: SoC has no flow direction.
                         -->
                         ${showSocChip ? svg`
@@ -2500,9 +2499,10 @@ ${showSun ? html`
                         <!--
                             PV ↔ Power — animated, dashed L with
                             an arrow tracking the sign of the live
-                            power. Vertical leg at 3/4 of PV's
-                            width (the RIGHT quarter), horizontal
-                            leg then runs right to the Power chip.
+                            power. Vertical leg drops from PV's
+                            bottom edge slightly right of centre,
+                            horizontal leg then runs right to the
+                            Power chip.
                             Charging (P > 0) → arrow PV → Power.
                             Discharging (P < 0) → arrow Power → PV
                             (the path class modifier flips the
@@ -2514,9 +2514,18 @@ ${showSun ? html`
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
                                 d="${powerLeaderPath}"
                             ></path>
+                            <!--
+                                Polygon is centroid-centred at (0,0):
+                                the centroid of (-2,-4), (4,0), (-2,4)
+                                is (0,0), so animateMotion pivots the
+                                arrow about its visual mass rather than
+                                its tip. Through the L's fillet the
+                                arrow stays balanced on the path
+                                instead of swinging off it.
+                            -->
                             <polygon
                                 class="battery-leader-arrow"
-                                points="-6,-4 0,0 -6,4"
+                                points="-2,-4 4,0 -2,4"
                                 fill="${batteryColor}"
                             >
                                 <animateMotion

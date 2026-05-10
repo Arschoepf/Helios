@@ -24958,33 +24958,21 @@ const _HeliosEngine = class _HeliosEngine {
     }
   }
   //Resolves the active MapTiler style id from `map-style` config.
-  //Three values are accepted:
+  //Two values are accepted:
   //  'streets' (default) → 'streets-v4' — sober urban basemap.
   //  'topo'              → 'topo-v4'    — topographic basemap with
   //                                       contour lines and softer
   //                                       earth tones, better in
   //                                       hilly / outdoor settings.
-  //  'hybrid'            → 'hybrid-v4'  — satellite imagery with
-  //                                       roads + label overlays,
-  //                                       useful when the user
-  //                                       wants real-world context
-  //                                       (vegetation, rooftops,
-  //                                       parking lots) under the
-  //                                       solar overlay.
   //
-  //Anything else falls back to 'streets'. `isHybrid` toggles the
-  //sat-hires raster source (added below) so the high-resolution
-  //satellite tiles fade in beyond zoom 15 — without it the base
-  //hybrid style is too soft at the home's locked zoom 18.
+  //Anything else falls back to 'streets'. When `card-theme: dark`
+  //is set, the `-dark` variant of the chosen style is used so the
+  //basemap matches the dark chrome.
   _resolveMapStyle() {
     const raw = String(this.cfg["map-style"] ?? "streets").toLowerCase();
-    if (raw === "topo") {
-      return { id: "topo-v4", isHybrid: false };
-    }
-    if (raw === "hybrid") {
-      return { id: "hybrid-v4", isHybrid: true };
-    }
-    return { id: "streets-v4", isHybrid: false };
+    const base = raw === "topo" ? "topo-v4" : "streets-v4";
+    const isDark = String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
+    return { id: isDark ? `${base}-dark` : base };
   }
   _findHourIndex(t2) {
     const home = this._homeHourlyData;
@@ -25113,42 +25101,8 @@ const _HeliosEngine = class _HeliosEngine {
       );
     }
     this.map.setTerrain({ source: "helios-terrain", exaggeration: 1.2 });
-    const styleInfo = this._resolveMapStyle();
-    if (styleInfo.isHybrid && !this.map.getSource("sat-hires")) {
-      this.map.addSource(
-        "sat-hires",
-        {
-          type: "raster",
-          url: `https://api.maptiler.com/maps/hybrid-v4/tiles.json?key=${this.apiKey}`,
-          tileSize: 512
-        }
-      );
-      const firstSym = this.map.getStyle().layers?.find((l2) => l2.type === "symbol")?.id;
-      this.map.addLayer(
-        {
-          id: "sat-hires-layer",
-          type: "raster",
-          source: "sat-hires",
-          maxzoom: 22,
-          paint: {
-            "raster-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0, 16, 1],
-            //Calm initial values matching the daytime runtime
-            //modulation in _refreshShadowsAndAtmosphere. Higher
-            //values (sat 0.35 / contrast 0.40) were producing
-            //a "blown out" feel for the first few frames before
-            //the atmosphere pass overrode them, plus they stack
-            //visually with the base raster styling below.
-            "raster-saturation": 0.15,
-            "raster-contrast": 0.15,
-            "raster-brightness-min": 0.03,
-            "raster-resampling": "linear"
-          }
-        },
-        firstSym
-      );
-    }
     this.map.getStyle().layers?.forEach((l2) => {
-      if (l2.type === "raster" && l2.id !== "sat-hires-layer") {
+      if (l2.type === "raster") {
         try {
           this.map.setPaintProperty(l2.id, "raster-saturation", 0.1);
           this.map.setPaintProperty(l2.id, "raster-contrast", 0.05);
@@ -25547,7 +25501,6 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     this._lastAtmosphereAlt = altitude;
-    const warmth = altitude < 0 ? 0 : Math.max(0, Math.cos((altitude - 3) / 18 * Math.PI / 2));
     let shadowCol;
     if (altitude < -6) {
       shadowCol = "#0a0e1a";
@@ -25579,47 +25532,6 @@ const _HeliosEngine = class _HeliosEngine {
         const finalExg = Math.min(1, userExg * dramaScale);
         this.map.setPaintProperty("helios-hillshade", "hillshade-exaggeration", finalExg);
         this.map.setPaintProperty("helios-hillshade", "hillshade-shadow-color", shadowCol);
-      } catch (_2) {
-      }
-    }
-    if (this.map.getLayer("sat-hires-layer")) {
-      try {
-        let bMin, bMax, contrast, sat;
-        if (altitude < -6) {
-          bMin = 0;
-          bMax = 0.3;
-          contrast = -0.45;
-          sat = -0.8;
-        } else if (altitude < 0) {
-          const u2 = (altitude + 6) / 6;
-          bMin = 0;
-          bMax = this._lerp(0.3, 0.75, u2);
-          contrast = this._lerp(-0.45, -0.05, u2);
-          sat = this._lerp(-0.8, -0.2, u2);
-        } else if (altitude < 6) {
-          const u2 = altitude / 6;
-          bMin = 0;
-          bMax = this._lerp(0.75, 0.95, u2);
-          contrast = this._lerp(-0.05, 0.2, u2);
-          sat = this._lerp(-0.2, 0.2, u2);
-        } else if (altitude < 20) {
-          const u2 = (altitude - 6) / 14;
-          bMin = this._lerp(0, 0.04, u2);
-          bMax = 0.95;
-          contrast = this._lerp(0.2, 0.18, u2);
-          sat = this._lerp(0.2, 0.15, u2);
-        } else {
-          const u2 = Math.min(1, (altitude - 20) / 40);
-          bMin = 0.03;
-          bMax = 0.95;
-          contrast = this._lerp(0.18, 0.1, u2);
-          sat = this._lerp(0.15, 0.08, u2);
-        }
-        this.map.setPaintProperty("sat-hires-layer", "raster-brightness-min", bMin);
-        this.map.setPaintProperty("sat-hires-layer", "raster-brightness-max", bMax);
-        this.map.setPaintProperty("sat-hires-layer", "raster-contrast", contrast);
-        this.map.setPaintProperty("sat-hires-layer", "raster-saturation", sat);
-        this.map.setPaintProperty("sat-hires-layer", "raster-hue-rotate", warmth * -8);
       } catch (_2) {
       }
     }
@@ -26209,12 +26121,11 @@ const en = {
     hillshadeStrength: "Hillshade strength * (0 → 1)",
     mapSection: "Map",
     mapStyle: "Map style *",
-    mapStyleHint: "Choose between the streets basemap (sober, urban), the topographic basemap (contour lines, earth tones, better in hilly terrain) or the hybrid basemap (high-resolution satellite imagery with road and label overlays). Labels and 3D buildings work identically on all three.",
+    mapStyleHint: "Choose between the streets basemap (sober, urban) and the topographic basemap (contour lines, earth tones, better in hilly terrain). Labels and 3D buildings work identically on both. The dark variant of the chosen style is used automatically when the card theme is set to dark.",
     mapStyleStreet: "Streets",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Hybrid",
     cardTheme: "Card theme *",
-    cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards. The 3D map basemap is unaffected.",
+    cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) and the 3D map basemap between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards.",
     cardThemeLight: "Light",
     cardThemeDark: "Dark",
     showLabels: "Show labels *",
@@ -26275,12 +26186,11 @@ const fr = {
     hillshadeStrength: "Intensité de l'ombrage * (0 → 1)",
     mapSection: "Carte",
     mapStyle: "Style de la carte *",
-    mapStyleHint: "Choisis entre le fond de carte des rues (sobre, urbain), le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée) ou le fond hybride (imagerie satellite haute résolution avec les routes et libellés en surimpression). Les libellés et les bâtiments 3D fonctionnent à l'identique sur les trois.",
+    mapStyleHint: "Choisis entre le fond de carte des rues (sobre, urbain) et le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée). Les libellés et les bâtiments 3D fonctionnent à l'identique sur les deux. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
     mapStyleStreet: "Rues",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Hybride",
     cardTheme: "Thème de la carte *",
-    cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre. La carte 3D elle-même n'est pas affectée.",
+    cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) ainsi que le fond de carte 3D entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre.",
     cardThemeLight: "Clair",
     cardThemeDark: "Sombre",
     showLabels: "Afficher les libellés *",
@@ -26341,12 +26251,11 @@ const de = {
     hillshadeStrength: "Schattierungsstärke * (0 → 1)",
     mapSection: "Karte",
     mapStyle: "Kartenstil *",
-    mapStyleHint: "Wähle zwischen der Straßenkarte (nüchtern, urban), der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände) oder der Hybrid-Karte (hochauflösende Satellitenbilder mit Straßen- und Beschriftungs-Overlay). Beschriftungen und 3D-Gebäude funktionieren auf allen drei gleich.",
+    mapStyleHint: "Wähle zwischen der Straßenkarte (nüchtern, urban) und der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände). Beschriftungen und 3D-Gebäude funktionieren bei beiden gleich. Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
     mapStyleStreet: "Straßen",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Hybrid",
     cardTheme: "Karten-Thema *",
-    cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt. Die 3D-Grundkarte selbst bleibt unverändert.",
+    cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) sowie die 3D-Grundkarte zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt.",
     cardThemeLight: "Hell",
     cardThemeDark: "Dunkel",
     showLabels: "Beschriftungen anzeigen *",
@@ -26407,12 +26316,11 @@ const es = {
     hillshadeStrength: "Intensidad del sombreado * (0 → 1)",
     mapSection: "Mapa",
     mapStyle: "Estilo del mapa *",
-    mapStyleHint: "Elige entre el mapa de calles (sobrio, urbano), el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso) o el mapa híbrido (imágenes de satélite de alta resolución con superposición de calles y etiquetas). Las etiquetas y los edificios 3D funcionan igual en los tres.",
+    mapStyleHint: "Elige entre el mapa de calles (sobrio, urbano) y el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso). Las etiquetas y los edificios 3D funcionan igual en ambos. La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
     mapStyleStreet: "Calles",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Híbrido",
     cardTheme: "Tema de la tarjeta *",
-    cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros. El mapa 3D no se ve afectado.",
+    cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) y el mapa 3D de fondo entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros.",
     cardThemeLight: "Claro",
     cardThemeDark: "Oscuro",
     showLabels: "Mostrar etiquetas *",
@@ -26473,12 +26381,11 @@ const it = {
     hillshadeStrength: "Intensità dell'ombreggiatura * (0 → 1)",
     mapSection: "Mappa",
     mapStyle: "Stile della mappa *",
-    mapStyleHint: "Scegli tra la mappa stradale (sobria, urbana), la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare) o la mappa ibrida (immagini satellitari ad alta risoluzione con sovrapposizione di strade ed etichette). Le etichette e gli edifici 3D funzionano allo stesso modo su tutte e tre.",
+    mapStyleHint: "Scegli tra la mappa stradale (sobria, urbana) e la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare). Le etichette e gli edifici 3D funzionano allo stesso modo su entrambe. La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
     mapStyleStreet: "Strade",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Ibrida",
     cardTheme: "Tema della scheda *",
-    cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri. La mappa 3D non è interessata.",
+    cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) e la mappa 3D di sfondo tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri.",
     cardThemeLight: "Chiaro",
     cardThemeDark: "Scuro",
     showLabels: "Mostra etichette *",
@@ -26539,12 +26446,11 @@ const nl = {
     hillshadeStrength: "Schaduwsterkte * (0 → 1)",
     mapSection: "Kaart",
     mapStyle: "Kaartstijl *",
-    mapStyleHint: "Kies tussen de stratenkaart (sober, stedelijk), de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein) of de hybride kaart (hoogwaardige satellietbeelden met overlays voor wegen en labels). Labels en 3D-gebouwen werken op alle drie hetzelfde.",
+    mapStyleHint: "Kies tussen de stratenkaart (sober, stedelijk) en de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein). Labels en 3D-gebouwen werken op beide hetzelfde. De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
     mapStyleStreet: "Straten",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Hybride",
     cardTheme: "Kaartthema *",
-    cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards. De 3D-basemap wordt niet beïnvloed.",
+    cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) en de 3D-basemap tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards.",
     cardThemeLight: "Licht",
     cardThemeDark: "Donker",
     showLabels: "Labels weergeven *",
@@ -26605,12 +26511,11 @@ const pt = {
     hillshadeStrength: "Intensidade do sombreado * (0 → 1)",
     mapSection: "Mapa",
     mapStyle: "Estilo do mapa *",
-    mapStyleHint: "Escolhe entre o mapa de ruas (sóbrio, urbano), o mapa topográfico (curvas de nível, tons terrosos, ideal em terreno montanhoso) ou o mapa híbrido (imagens de satélite de alta resolução com sobreposição de estradas e etiquetas). As etiquetas e os edifícios 3D funcionam de forma idêntica nos três.",
+    mapStyleHint: "Escolhe entre o mapa de ruas (sóbrio, urbano) e o mapa topográfico (curvas de nível, tons terrosos, ideal em terreno montanhoso). As etiquetas e os edifícios 3D funcionam de forma idêntica em ambos. A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
     mapStyleStreet: "Ruas",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Híbrido",
     cardTheme: "Tema do cartão *",
-    cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros. O mapa 3D não é afetado.",
+    cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) e o mapa 3D de fundo entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros.",
     cardThemeLight: "Claro",
     cardThemeDark: "Escuro",
     showLabels: "Mostrar etiquetas *",
@@ -27627,7 +27532,7 @@ const heliosCardStyles = i$3`
     /*  Cards (chart panels) and hairlines on the chart. */
     ha-card.theme-dark .tb-chart-card
     {
-        background: #14161c;
+        background: #191a1b;
         border-color: #4a4d55;
     }
 
@@ -27666,14 +27571,14 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label
     {
-        background: #14161c;
+        background: #191a1b;
         color:       #e6e6e6;
         border-color: #cccccc;
     }
 
     ha-card.theme-dark .tb-day-label
     {
-        background: #1a1c22;
+        background: #1f2021;
     }
 
     ha-card.theme-dark .tl-live-btn ha-icon,
@@ -27683,8 +27588,8 @@ const heliosCardStyles = i$3`
         color: #e6e6e6;
     }
 
-    ha-card.theme-dark .tl-live-btn:hover  { background: #24262c; }
-    ha-card.theme-dark .tl-live-btn:active { background: #303238; }
+    ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
+    ha-card.theme-dark .tl-live-btn:active { background: #353637; }
 
     /*  PV and battery chips — they keep the user-configured tint
         on the border / text / icon (so a green PV chip reads as
@@ -27693,7 +27598,7 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .pv-pct-label,
     ha-card.theme-dark .battery-pct-label
     {
-        background: #14161c;
+        background: #191a1b;
     }
 
     /*  Cloud-cover leader (chip → disc) flips polarity so it's
@@ -28159,11 +28064,6 @@ let HeliosCardEditor = class extends i {
                             class="seg-option ${String(c2["map-style"] ?? "streets") === "topo" ? "active" : ""}"
                             @click="${() => this._update("map-style", "topo")}"
                         >${t2.editor.mapStyleTopo}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["map-style"] ?? "streets") === "hybrid" ? "active" : ""}"
-                            @click="${() => this._update("map-style", "hybrid")}"
-                        >${t2.editor.mapStyleHybrid}</button>
                     </div>
                 </div>
                 <div class="hint">${t2.editor.mapStyleHint}</div>
@@ -29694,14 +29594,14 @@ let HeliosCard = class extends i {
     const batteryCharging = showPowerChip && activeBatteryPower > 0;
     const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
     const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
-    const PV_QUARTER_PX = 19;
+    const PV_LEG_OFFSET_PX = 12;
     const PV_HALF_HEIGHT_PX = 11;
     const BAT_CHIP_NUDGE_PX = 32;
     const FILLET_R = 6;
     const lPvBottomY = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX : 0;
     const lShelfY = layout ? layout.batterySocLabel.y : 0;
-    const lLeftQuarterX = layout ? layout.pvLabel.x - PV_QUARTER_PX : 0;
-    const lRightQuarterX = layout ? layout.pvLabel.x + PV_QUARTER_PX : 0;
+    const lSocLegX = layout ? layout.pvLabel.x - PV_LEG_OFFSET_PX : 0;
+    const lPowerLegX = layout ? layout.pvLabel.x + PV_LEG_OFFSET_PX : 0;
     const lSocEndX = layout ? layout.batterySocLabel.x + BAT_CHIP_NUDGE_PX : 0;
     const lPowerEndX = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
     const buildLPath = (verticalX, topY, shelfY, endX) => {
@@ -29718,9 +29618,9 @@ let HeliosCard = class extends i {
       const postX = verticalX + dirH * r2;
       return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${topY}`;
     };
-    const socLeaderPath = buildLPath(lLeftQuarterX, lPvBottomY, lShelfY, lSocEndX);
-    const powerLeaderPath = buildLPath(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX);
-    const powerArrowPath = batteryCharging ? buildLPath(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX) : buildLPathReverse(lRightQuarterX, lPvBottomY, lShelfY, lPowerEndX);
+    const socLeaderPath = buildLPath(lSocLegX, lPvBottomY, lShelfY, lSocEndX);
+    const powerLeaderPath = buildLPath(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX);
+    const powerArrowPath = batteryCharging ? buildLPath(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX) : buildLPathReverse(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX);
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -30015,9 +29915,8 @@ ${showSun ? b`
                             the PV ↔ Power leader's vocabulary
                             exactly minus the flow animation).
                             Vertical leg drops from PV's bottom
-                            edge at 1/4 of the chip width (the
-                            LEFT quarter), horizontal leg then
-                            runs left to the SoC chip. No
+                            edge slightly left of centre, horizontal
+                            leg then runs left to the SoC chip. No
                             animation: SoC has no flow direction.
                         -->
                         ${showSocChip ? w`
@@ -30030,9 +29929,10 @@ ${showSun ? b`
                         <!--
                             PV ↔ Power — animated, dashed L with
                             an arrow tracking the sign of the live
-                            power. Vertical leg at 3/4 of PV's
-                            width (the RIGHT quarter), horizontal
-                            leg then runs right to the Power chip.
+                            power. Vertical leg drops from PV's
+                            bottom edge slightly right of centre,
+                            horizontal leg then runs right to the
+                            Power chip.
                             Charging (P > 0) → arrow PV → Power.
                             Discharging (P < 0) → arrow Power → PV
                             (the path class modifier flips the
@@ -30044,9 +29944,18 @@ ${showSun ? b`
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
                                 d="${powerLeaderPath}"
                             ></path>
+                            <!--
+                                Polygon is centroid-centred at (0,0):
+                                the centroid of (-2,-4), (4,0), (-2,4)
+                                is (0,0), so animateMotion pivots the
+                                arrow about its visual mass rather than
+                                its tip. Through the L's fillet the
+                                arrow stays balanced on the path
+                                instead of swinging off it.
+                            -->
                             <polygon
                                 class="battery-leader-arrow"
-                                points="-6,-4 0,0 -6,4"
+                                points="-2,-4 4,0 -2,4"
                                 fill="${batteryColor}"
                             >
                                 <animateMotion

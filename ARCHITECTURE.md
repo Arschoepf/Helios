@@ -1,3 +1,138 @@
+# HELIOS — v1.2.0
+
+Polish release on top of v1.1.0 — no breaking changes, no config
+migration required (the `'hybrid'` value of `map-style` falls back
+to `'streets'` silently if it lingers in an existing dashboard).
+
+Headline changes since v1.1.0:
+
+* **Auto-rotation toggle.** A new `auto-rotate-enabled` config
+  (boolean, default `true`) lets users opt out of the slow ambient
+  orbit. Pinch-rotate keeps working regardless.
+* **Map basemap follows the card theme.** When `card-theme: dark`
+  is set, the active `map-style` resolves to its `-dark` variant
+  (`streets-v4-dark` / `topo-v4-dark`) so the basemap matches the
+  chrome instead of staying bright under a dark UI.
+* **Hybrid map style retired.** `map-style` now accepts
+  `'streets' | 'topo'` only — the satellite-imagery option (and
+  the entire `sat-hires` raster pipeline that backed it) was
+  pulled because the new MapTiler v4 dark variants made the map
+  theme story cleaner without it. Existing configs with
+  `'hybrid'` fall back to `'streets'`.
+* **Dark surface tone refined.** The dark theme's plate colour
+  moves from the cool `#14161c` to a more neutral `#191a1b`,
+  with the elevated / hover / active shades retuned to match.
+* **Battery L-bends pulled inboard.** The vertical legs of the
+  SoC and Power leaders now drop from `pvX ± 12 px` instead of
+  `pvX ± 19 px` (1/4-width quartiles). The bends sit closer to
+  the PV chip's centre, reading as a tighter, more deliberate
+  pair of leaders.
+* **Battery flow arrow stays centred through the bend.** The
+  animated `<polygon>` that tracks the PV ↔ Power flow is now
+  centroid-anchored at `(0, 0)` instead of tip-anchored, so
+  `<animateMotion rotate="auto">` pivots the arrow about its
+  visual mass rather than its tip — through the L's quadratic
+  fillet the arrow reads as balanced on the path instead of
+  swinging off it. Battery dashes also now match across SoC and
+  Power leaders for a unified flow vocabulary.
+
+i18n: `Translations.editor.mapStyleHybrid` was removed. Custom
+locales that defined it must drop the key or typecheck will fail.
+
+The detailed v1.2.0 beta changelog follows immediately. The full
+v1.1.0 changelog is preserved verbatim further down for
+historical context.
+
+## v1.2.0-beta.1
+
+* **Auto-rotation toggle.** New `auto-rotate-enabled` config
+  (boolean, default `true`). When `false`, the slow ambient orbit
+  introduced in v1.1.0 stays paused indefinitely; pinch-rotate
+  still works normally and re-anchors the centre on the home like
+  before. Surfaced in the visual editor.
+* **Matching battery dashes.** SoC and Power leaders now share a
+  single dash recipe (`6 4` instead of the previous mismatched
+  `5 5` / `6 4`) so the two L-leaders read as one coherent
+  vocabulary instead of two slightly-different families.
+* **Smooth L-bend arrow.** The PV ↔ Power flow arrow now follows
+  a quadratic-Bézier-filleted L instead of two straight legs
+  joined at a 90° corner. The `<animateMotion path="...">` and
+  the visible `<path>` share the same fillet, so the arrow's
+  tangent rotates smoothly through the bend instead of snapping
+  at the corner. The fillet radius (`FILLET_R = 6 px`) is
+  clamped to half the shorter leg so very short legs degrade
+  gracefully.
+
+## v1.2.0-beta.2
+
+* **Map basemap follows the card theme.** `_resolveMapStyle()`
+  now appends the `-dark` suffix to the chosen MapTiler v4 style
+  whenever `card-theme: dark` is set. `streets` resolves to
+  `streets-v4-dark`, `topo` to `topo-v4-dark`, both of which
+  ship in the maptiler-client-js v4 catalogue. The basemap
+  reloads in place via `setStyle()` whenever the theme flips, so
+  scrubbing between light and dark rebuilds terrain, hillshade,
+  cloud disc, buildings and label visibility automatically (the
+  same hot-swap path used for `map-style` itself).
+* **Hybrid map style retired.** `'hybrid'` is no longer accepted
+  by `map-style`; the engine returns `'streets'` as the fallback
+  if it lingers in an existing config. The third button in the
+  visual editor's Map-style toggle is gone, the
+  `mapStyleHybrid` i18n key is removed from `Translations.editor`
+  and from all seven locales, and the `sat-hires` raster source
+  + `sat-hires-layer` + their entire day/night brightness
+  modulation block are removed from `helios-engine.ts` (along
+  with the now-orphan `warmth` cosine-bell that only fed
+  `raster-hue-rotate`). Net delta: about ~95 fewer lines of
+  engine code, one fewer source / layer in the rendered style,
+  one fewer i18n key.
+* **Dark surface tone refined.** The dark theme's plate colour
+  moves from the cool `#14161c` to a more neutral `#191a1b`
+  (RGB 25/26/27 vs the old 20/22/28). The elevated / hover /
+  active shades retune to `#1f2021` / `#292a2b` / `#353637` to
+  preserve the same +6 / +16 / +28 RGB elevation gradient on the
+  new neutral base. The chrome reads slightly warmer / closer
+  to a typical HA dashboard surface than the slightly bluish
+  prior tone.
+* **Battery L-bends pulled inboard.** `PV_QUARTER_PX = 19`
+  (1/4 of PV's 76 px min-width) is replaced by
+  `PV_LEG_OFFSET_PX = 12`. The SoC L's vertical leg now drops
+  from `pvX - 12` and the Power L's from `pvX + 12` (instead of
+  ±19), so both bends sit closer to the chip's centre. The
+  visible legs and the animated arrow's `<animateMotion>` path
+  all read the same constant, so the geometry stays internally
+  consistent.
+* **Battery flow arrow stays centred through the bend.** The
+  animated `<polygon>` previously had its tip at `(0, 0)` and
+  body extending into negative X — `rotate="auto"` therefore
+  pivoted the polygon about its tip, and the body swept a wide
+  arc on the *outside* of the L's fillet, reading visually as
+  the arrow leaning off the line. The polygon is now
+  centroid-anchored at `(0, 0)` (`-2,-4 4,0 -2,4`, centroid
+  `((-2+4-2)/3, (-4+0+4)/3) = (0, 0)`), so the rotation pivot
+  matches the polygon's visual mass and the arrow tracks the
+  path tightly through the bend.
+
+i18n: `Translations.editor.mapStyleHybrid` is removed.
+`mapStyleHint` and `cardThemeHint` are rewritten across all
+seven locales to reflect the two-style catalogue and the new
+"theme drives basemap" coupling. Custom locales that defined
+the deleted key must drop it.
+
+Internal: `_resolveMapStyle()`'s return shape simplifies to
+`{ id: string }` (the old `isHybrid` boolean is gone with the
+sat-hires layer it gated). `updateConfig()`'s style-diff check
+still works as-is — `streets-v4` vs `streets-v4-dark` is a
+different `id`, so flipping `card-theme` triggers the
+`setStyle()` reload exactly like a `map-style` change does.
+HACS-side, the v1.1.0 prerelease entries (`v1.1.0-beta.1`
+through `v1.1.0-beta.13`) are removed from GitHub releases and
+their tags are deleted, so the HACS download list only shows
+the v1.0.0 / v1.1.0 stable releases plus the active v1.2.0-beta
+line.
+
+---
+
 # HELIOS — v1.1.0
 
 Polish release — no breaking changes, no config migration required.

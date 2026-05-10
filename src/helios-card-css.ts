@@ -980,7 +980,7 @@ export const heliosCardStyles = css`
     /*  Cards (chart panels) and hairlines on the chart. */
     ha-card.theme-dark .tb-chart-card
     {
-        background: #14161c;
+        background: #191a1b;
         border-color: #4a4d55;
     }
 
@@ -1019,14 +1019,14 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label
     {
-        background: #14161c;
+        background: #191a1b;
         color:       #e6e6e6;
         border-color: #cccccc;
     }
 
     ha-card.theme-dark .tb-day-label
     {
-        background: #1a1c22;
+        background: #1f2021;
     }
 
     ha-card.theme-dark .tl-live-btn ha-icon,
@@ -1036,8 +1036,8 @@ export const heliosCardStyles = css`
         color: #e6e6e6;
     }
 
-    ha-card.theme-dark .tl-live-btn:hover  { background: #24262c; }
-    ha-card.theme-dark .tl-live-btn:active { background: #303238; }
+    ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
+    ha-card.theme-dark .tl-live-btn:active { background: #353637; }
 
     /*  PV and battery chips — they keep the user-configured tint
         on the border / text / icon (so a green PV chip reads as
@@ -1046,7 +1046,7 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .pv-pct-label,
     ha-card.theme-dark .battery-pct-label
     {
-        background: #14161c;
+        background: #191a1b;
     }
 
     /*  Cloud-cover leader (chip → disc) flips polarity so it's

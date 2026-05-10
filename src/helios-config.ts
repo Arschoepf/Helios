@@ -501,11 +501,6 @@ export class HeliosCardEditor extends LitElement
                             class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'topo' ? 'active' : ''}"
                             @click="${() => this._update('map-style', 'topo')}"
                         >${t.editor.mapStyleTopo}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'hybrid' ? 'active' : ''}"
-                            @click="${() => this._update('map-style', 'hybrid')}"
-                        >${t.editor.mapStyleHybrid}</button>
                     </div>
                 </div>
                 <div class="hint">${t.editor.mapStyleHint}</div>

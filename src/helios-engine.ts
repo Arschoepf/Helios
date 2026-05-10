@@ -67,10 +67,11 @@ export interface HeliosConfig
     //v1.1 — picks the MapTiler base style. 'streets' (default) renders
     //a sober vector basemap suited to dense urban areas; 'topo' renders
     //a topographic basemap with contour lines and softer earth tones,
-    //better in hilly / outdoor settings; 'hybrid' renders satellite
-    //imagery with road and label overlays. The label visibility toggle
+    //better in hilly / outdoor settings. The label visibility toggle
     //and the helios-buildings extrusion are independent of this choice
-    //(all three are wired to custom sources).
+    //(both are wired to custom sources). When `card-theme: dark` is
+    //set, the dark variants of these styles (streets-v4-dark /
+    //topo-v4-dark) are used so the basemap matches the chrome.
     'map-style'?:             unknown;
     //v1.1.0-beta.8 — picks the card chrome theme. 'light' (default)
     //paints chips, charts, buttons, tooltips and the scrub overlay
@@ -609,36 +610,22 @@ export class HeliosEngine
     }
 
     //Resolves the active MapTiler style id from `map-style` config.
-    //Three values are accepted:
+    //Two values are accepted:
     //  'streets' (default) → 'streets-v4' — sober urban basemap.
     //  'topo'              → 'topo-v4'    — topographic basemap with
     //                                       contour lines and softer
     //                                       earth tones, better in
     //                                       hilly / outdoor settings.
-    //  'hybrid'            → 'hybrid-v4'  — satellite imagery with
-    //                                       roads + label overlays,
-    //                                       useful when the user
-    //                                       wants real-world context
-    //                                       (vegetation, rooftops,
-    //                                       parking lots) under the
-    //                                       solar overlay.
     //
-    //Anything else falls back to 'streets'. `isHybrid` toggles the
-    //sat-hires raster source (added below) so the high-resolution
-    //satellite tiles fade in beyond zoom 15 — without it the base
-    //hybrid style is too soft at the home's locked zoom 18.
-    private _resolveMapStyle(): { id: string; isHybrid: boolean }
+    //Anything else falls back to 'streets'. When `card-theme: dark`
+    //is set, the `-dark` variant of the chosen style is used so the
+    //basemap matches the dark chrome.
+    private _resolveMapStyle(): { id: string }
     {
         const raw = String(this.cfg['map-style'] ?? 'streets').toLowerCase();
-        if (raw === 'topo')
-        {
-            return { id: 'topo-v4', isHybrid: false };
-        }
-        if (raw === 'hybrid')
-        {
-            return { id: 'hybrid-v4', isHybrid: true };
-        }
-        return { id: 'streets-v4', isHybrid: false };
+        const base = raw === 'topo' ? 'topo-v4' : 'streets-v4';
+        const isDark = String(this.cfg['card-theme'] ?? 'light').toLowerCase() === 'dark';
+        return { id: isDark ? `${base}-dark` : base };
     }
 
     private _findHourIndex(t: Date): number
@@ -830,64 +817,12 @@ export class HeliosEngine
         }
         this.map.setTerrain({ source: 'helios-terrain', exaggeration: 1.2 });
 
-        const styleInfo = this._resolveMapStyle();
-
-        if (styleInfo.isHybrid && !this.map.getSource('sat-hires'))
-        {
-            //High-resolution satellite raster overlay, faded in at
-            //zoom >= 16 to sharpen the imagery beyond what the vector
-            //style provides on its own. Only added in hybrid mode —
-            //Streets has no satellite imagery and overlaying one would
-            //defeat the choice.
-            //
-            //URL note: this is the rasterized form of the hybrid-v4
-            //*map*, so the path is /maps/hybrid-v4/tiles.json. Using
-            ///tiles/hybrid-v4/... returns a 404 (that path is reserved
-            //for raw tilesets like satellite-v2 or terrain-rgb-v2).
-            this.map.addSource('sat-hires',
-            {
-                type:     'raster',
-                url:      `https://api.maptiler.com/maps/hybrid-v4/tiles.json?key=${this.apiKey}`,
-                tileSize: 512
-            });
-
-            const firstSym = this.map.getStyle().layers?.find(l => l.type === 'symbol')?.id;
-
-            this.map.addLayer(
-                {
-                    id:      'sat-hires-layer',
-                    type:    'raster',
-                    source:  'sat-hires',
-                    maxzoom: 22,
-                    paint:
-                    {
-                        'raster-opacity':        ['interpolate', ['linear'], ['zoom'], 15, 0, 16, 1],
-                        //Calm initial values matching the daytime runtime
-                        //modulation in _refreshShadowsAndAtmosphere. Higher
-                        //values (sat 0.35 / contrast 0.40) were producing
-                        //a "blown out" feel for the first few frames before
-                        //the atmosphere pass overrode them, plus they stack
-                        //visually with the base raster styling below.
-                        'raster-saturation':     0.15,
-                        'raster-contrast':       0.15,
-                        'raster-brightness-min': 0.03,
-                        'raster-resampling':     'linear'
-                    }
-                },
-                firstSym
-            );
-        }
-
         this.map.getStyle().layers?.forEach(l =>
         {
-            if (l.type === 'raster' && l.id !== 'sat-hires-layer')
+            if (l.type === 'raster')
             {
                 try
                 {
-                    //Base raster (below sat-hires, visible at zoom < 16).
-                    //Kept very modest because at zooms 15-16 it blends
-                    //with sat-hires and the contrasts/saturations would
-                    //otherwise add up visually.
                     this.map!.setPaintProperty(l.id, 'raster-saturation', 0.10);
                     this.map!.setPaintProperty(l.id, 'raster-contrast',   0.05);
                 }
@@ -1400,12 +1335,6 @@ export class HeliosEngine
         }
         this._lastAtmosphereAlt = altitude;
 
-        //Sun "warmth" — drives orange tinting that peaks at sunrise/
-        //sunset and fades by mid-day. Cosine bell centred on altitude=3°.
-        const warmth = altitude < 0
-            ? 0
-            : Math.max(0, Math.cos((altitude - 3) / 18 * Math.PI / 2));
-
         //Dynamic shadow colour: black at deep night → indigo at
         //twilight → warm brown at sunrise → cool blue/grey at full day.
         let shadowCol: string;
@@ -1464,78 +1393,6 @@ export class HeliosEngine
                 const finalExg = Math.min(1, userExg * dramaScale);
                 this.map.setPaintProperty('helios-hillshade', 'hillshade-exaggeration', finalExg);
                 this.map.setPaintProperty('helios-hillshade', 'hillshade-shadow-color', shadowCol);
-            }
-            catch (_) {}
-        }
-
-        //Satellite raster — manipulates brightness/contrast/saturation to
-        //communicate the time of day. Night dims and desaturates strongly;
-        //sunrise warms; daytime keeps colours neutral and saturated.
-        //Note: raster paint properties have a hard floor in MapLibre so
-        //they alone cannot make the map look properly "dark" at night;
-        //the helios-night-shade overlay below does the heavy lifting for
-        //night/dawn/dusk.
-        if (this.map.getLayer('sat-hires-layer'))
-        {
-            try
-            {
-                let bMin: number, bMax: number, contrast: number, sat: number;
-
-                if (altitude < -6)
-                {
-                    //Deep night: heavy desaturation, low brightness ceiling
-                    bMin = 0;
-                    bMax = 0.30;
-                    contrast = -0.45;
-                    sat = -0.80;
-                }
-                else if (altitude < 0)
-                {
-                    const u = (altitude + 6) / 6;
-                    bMin = 0;
-                    bMax = this._lerp(0.30, 0.75, u);
-                    contrast = this._lerp(-0.45, -0.05, u);
-                    sat = this._lerp(-0.80, -0.20, u);
-                }
-                else if (altitude < 6)
-                {
-                    //Sunrise/sunset window. We deliberately keep both
-                    //contrast and saturation modest here — combined with
-                    //the warm fog overlay, anything > 0.30 makes the
-                    //satellite look posterised / blown out, especially
-                    //over white/sandy textures.
-                    const u = altitude / 6;
-                    bMin = 0;
-                    bMax = this._lerp(0.75, 0.95, u);
-                    contrast = this._lerp(-0.05, 0.20, u);
-                    sat = this._lerp(-0.20, 0.20, u);
-                }
-                else if (altitude < 20)
-                {
-                    //Low sun. Peak boost — but capped to keep things
-                    //photographic rather than HDR-tone-mapped.
-                    const u = (altitude - 6) / 14;
-                    bMin = this._lerp(0, 0.04, u);
-                    bMax = 0.95;
-                    contrast = this._lerp(0.20, 0.18, u);
-                    sat = this._lerp(0.20, 0.15, u);
-                }
-                else
-                {
-                    //Full daylight. Near-neutral so the imagery reads
-                    //naturally without the over-processed look.
-                    const u = Math.min(1, (altitude - 20) / 40);
-                    bMin = 0.03;
-                    bMax = 0.95;
-                    contrast = this._lerp(0.18, 0.10, u);
-                    sat = this._lerp(0.15, 0.08, u);
-                }
-
-                this.map.setPaintProperty('sat-hires-layer', 'raster-brightness-min', bMin);
-                this.map.setPaintProperty('sat-hires-layer', 'raster-brightness-max', bMax);
-                this.map.setPaintProperty('sat-hires-layer', 'raster-contrast',       contrast);
-                this.map.setPaintProperty('sat-hires-layer', 'raster-saturation',     sat);
-                this.map.setPaintProperty('sat-hires-layer', 'raster-hue-rotate',     warmth * -8);
             }
             catch (_) {}
         }

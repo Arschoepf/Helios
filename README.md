@@ -78,8 +78,8 @@ Every option below is editable visually:
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `maptiler-api-key` | string | — | Required. |
-| `map-style` | `'streets' \| 'topo' \| 'hybrid'` | `'streets'` | Basemap style. `streets` is a sober vector basemap suited to dense urban areas; `topo` is a topographic basemap with contour lines, better in hilly / outdoor settings; `hybrid` is high-resolution satellite imagery with road and label overlays for real-world context (vegetation, rooftops, parking lots) under the solar overlay. Labels and 3D buildings work identically on all three. |
-| `card-theme` | `'light' \| 'dark'` | `'light'` | Card chrome skin — chips, charts, buttons, tooltips and the scrub overlay flip between a light surface (default, on a white plate) and a dark surface (on a near-black plate), so the card sits cleanly inside light or dark Home Assistant dashboards. The 3D map basemap and the configured colour palette (sun, cloud, PV, battery) are unaffected. |
+| `map-style` | `'streets' \| 'topo'` | `'streets'` | Basemap style. `streets` is a sober vector basemap suited to dense urban areas; `topo` is a topographic basemap with contour lines, better in hilly / outdoor settings. Labels and 3D buildings work identically on both. The dark variant of the chosen style is used automatically when `card-theme` is `'dark'`. |
+| `card-theme` | `'light' \| 'dark'` | `'light'` | Card chrome skin — chips, charts, buttons, tooltips, the scrub overlay AND the 3D map basemap (via the MapTiler `*-dark` variants) flip between a light surface (default, on a white plate) and a dark surface (on a near-black `#191a1b` plate), so the card sits cleanly inside light or dark Home Assistant dashboards. The configured colour palette (sun, cloud, PV, battery) is unaffected. |
 | `topography-color` | hex | `#5064a0` | Hillshade tint. |
 | `topography-alpha` | 0–1 | `0.65` | Hillshade strength. On `topo`, the basemap already carries some baked-in shading — lower this if the cumulative effect feels too heavy. |
 | `show-labels` | boolean | `true` | Show MapTiler street names, building numbers, POIs and place names on the basemap. |
