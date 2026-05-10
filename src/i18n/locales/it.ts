@@ -8,8 +8,7 @@ export const it: Translations = {
 
     placeholder:
     {
-        subtitle: 'Esposizione solare e copertura nuvolosa',
-        action:   'Imposta la tua chiave API MapTiler per attivare'
+        subtitle: 'Esposizione solare e copertura nuvolosa'
     },
 
     tooltip:
@@ -32,6 +31,15 @@ export const it: Translations = {
         hillshadeColor:     'Colore dell\'ombreggiatura *',
         hillshadeStrength:  'Intensità dell\'ombreggiatura * (0 → 1)',
         mapSection:         'Mappa',
+        mapStyle:           'Stile della mappa *',
+        mapStyleHint:       'Scegli tra la mappa stradale (sobria, urbana), la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare) o la mappa ibrida (immagini satellitari ad alta risoluzione con sovrapposizione di strade ed etichette). Le etichette e gli edifici 3D funzionano allo stesso modo su tutte e tre.',
+        mapStyleStreet:     'Strade',
+        mapStyleTopo:       'Topo',
+        mapStyleHybrid:     'Ibrida',
+        cardTheme:          'Tema della scheda *',
+        cardThemeHint:      'Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri. La mappa 3D non è interessata.',
+        cardThemeLight:     'Chiaro',
+        cardThemeDark:      'Scuro',
         showLabels:         'Mostra etichette *',
         showLabelsHint:     'Mostra o nasconde i nomi delle vie, i numeri civici, i punti di interesse e i nomi dei quartieri sulla mappa di base.',
         labelsOn:           'Visibili',
@@ -51,6 +59,13 @@ export const it: Translations = {
         pvHint:             'Opzionale. Se impostato, una pastiglia appare sulla casa (produzione istantanea, calcolata sull\'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. La linea tra la casa e la pastiglia si anima a una velocità proporzionale alla produzione. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).',
         pvEntity:           'Entità di produzione',
         pvEntityHelp:       'Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).',
-        pvColor:            'Colore di produzione *'
+        pvColor:            'Colore di produzione *',
+        batterySection:     'Batteria domestica',
+        batteryHint:        'Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV — stato di carica a SINISTRA, potenza con segno a DESTRA — collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali; la pastiglia corrispondente appare appena l\'entità è impostata.',
+        batterySocEntity:   'Entità stato di carica',
+        batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
+        batteryPowerEntity: 'Entità di potenza',
+        batteryPowerEntityHelp: 'Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l\'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).',
+        batteryColor:       'Colore batteria *'
     }
 };

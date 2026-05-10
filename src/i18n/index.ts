@@ -24,7 +24,6 @@ export interface Translations
     placeholder:
     {
         subtitle: string;
-        action:   string;
     };
 
     tooltip:
@@ -47,6 +46,15 @@ export interface Translations
         hillshadeColor:           string;
         hillshadeStrength:        string;
         mapSection:               string;
+        mapStyle:                 string;
+        mapStyleHint:             string;
+        mapStyleStreet:           string;
+        mapStyleTopo:             string;
+        mapStyleHybrid:           string;
+        cardTheme:                string;
+        cardThemeHint:            string;
+        cardThemeLight:           string;
+        cardThemeDark:            string;
         showLabels:               string;
         showLabelsHint:           string;
         labelsOn:                 string;
@@ -73,6 +81,13 @@ export interface Translations
         pvEntity:                 string;
         pvEntityHelp:             string;
         pvColor:                  string;
+        batterySection:           string;
+        batteryHint:              string;
+        batterySocEntity:         string;
+        batterySocEntityHelp:     string;
+        batteryPowerEntity:       string;
+        batteryPowerEntityHelp:   string;
+        batteryColor:             string;
     };
 }
 

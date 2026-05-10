@@ -24808,6 +24808,7 @@ function parseHex(v2, fallback) {
 const DEFAULT_SUN_COLOR_HEX = "#EF9F27";
 const DEFAULT_CLOUD_COLOR_HEX = "#5A8DC4";
 const DEFAULT_PV_COLOR_HEX = "#27B36B";
+const DEFAULT_BATTERY_COLOR_HEX = "#D32F2F";
 const DEFAULT_CLOUD_RGB = [90, 141, 196];
 function geoDistM(lat1, lon1, lat2, lon2) {
   const R2 = 6371e3;
@@ -24863,7 +24864,7 @@ function weatherCodeToIntensity(code, pct) {
   }
   return pct < 80 ? "moderate" : "heavy";
 }
-class HeliosEngine {
+const _HeliosEngine = class _HeliosEngine {
   constructor(container, config, haCoords, haElevation) {
     this._fetchLat = 0;
     this._fetchLon = 0;
@@ -24872,6 +24873,8 @@ class HeliosEngine {
     this._selectedTime = null;
     this._lastAtmosphereAlt = -999;
     this._rateLimitStreak = 0;
+    this._autoRotateLastFrame = 0;
+    this._autoRotateLastUserAction = 0;
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -24912,11 +24915,32 @@ class HeliosEngine {
       }, 80);
     });
     this._resizeObserver.observe(container);
+    this.map.touchZoomRotate.enable({ around: "center" });
+    const pinHomeAtCenter = (e2) => {
+      if (!this.map || !e2?.originalEvent) {
+        return;
+      }
+      const c2 = this.map.getCenter();
+      if (c2.lng !== this.homeLon || c2.lat !== this.homeLat) {
+        this.map.setCenter([this.homeLon, this.homeLat]);
+      }
+    };
+    this.map.on("rotate", pinHomeAtCenter);
+    this.map.on("move", pinHomeAtCenter);
     this.map.on("style.load", () => this._onStyleLoad());
     this.map.on("load", () => {
       this.map?.resize();
+      this._startAutoRotateLoop();
     });
     this.map.on("move", () => this.onMapTransform?.());
+    const canvas = this.map.getCanvas();
+    const bumpInactivity = () => {
+      this._autoRotateLastUserAction = Date.now();
+    };
+    canvas.addEventListener("mousedown", bumpInactivity);
+    canvas.addEventListener("wheel", bumpInactivity, { passive: true });
+    canvas.addEventListener("touchstart", bumpInactivity, { passive: true });
+    canvas.addEventListener("touchmove", bumpInactivity, { passive: true });
     this.map.on("error", (e2) => {
       const msg = e2?.error?.message ?? e2?.error ?? "unknown error";
       console.warn("[HELIOS] MapLibre error:", msg);
@@ -24933,13 +24957,33 @@ class HeliosEngine {
       this._weatherTimer = void 0;
     }
   }
-  //Always returns the street style. The hybrid (satellite imagery)
-  //mode was removed in the 1.2 redesign because it visually fights
-  //the new 3D solar elements (arc, sun sphere, incidence ray):
-  //the satellite tiles introduce too much chromatic noise for the
-  //solar overlay to read clearly. Streets vector tiles give a
-  //sober, structured background that lets the 3D content breathe.
+  //Resolves the active MapTiler style id from `map-style` config.
+  //Three values are accepted:
+  //  'streets' (default) → 'streets-v4' — sober urban basemap.
+  //  'topo'              → 'topo-v4'    — topographic basemap with
+  //                                       contour lines and softer
+  //                                       earth tones, better in
+  //                                       hilly / outdoor settings.
+  //  'hybrid'            → 'hybrid-v4'  — satellite imagery with
+  //                                       roads + label overlays,
+  //                                       useful when the user
+  //                                       wants real-world context
+  //                                       (vegetation, rooftops,
+  //                                       parking lots) under the
+  //                                       solar overlay.
+  //
+  //Anything else falls back to 'streets'. `isHybrid` toggles the
+  //sat-hires raster source (added below) so the high-resolution
+  //satellite tiles fade in beyond zoom 15 — without it the base
+  //hybrid style is too soft at the home's locked zoom 18.
   _resolveMapStyle() {
+    const raw = String(this.cfg["map-style"] ?? "streets").toLowerCase();
+    if (raw === "topo") {
+      return { id: "topo-v4", isHybrid: false };
+    }
+    if (raw === "hybrid") {
+      return { id: "hybrid-v4", isHybrid: true };
+    }
     return { id: "streets-v4", isHybrid: false };
   }
   _findHourIndex(t2) {
@@ -25361,17 +25405,14 @@ class HeliosEngine {
     );
   }
   //Renders 3D building extrusions as the visual context for the
-  //home location.
-  //
-  //In v1.2 the rendering rules changed:
-  //  - All buildings are rendered semi-transparent (opacity 0.25)
-  //    so they form a recognisable urban context without competing
-  //    with the home itself for visual attention.
-  //  - The 'building-color' / 'building-alpha' config keys were
-  //    removed; styling is now uniform.
-  //  - A future phase will identify the home building specifically
-  //    and render it opaque on top of this layer to make it the
-  //    focal point. For now everything is dimmed equally.
+  //home location. All buildings are painted in the configured
+  //`building-color` (defaults to a neutral light grey) at a
+  //single shared opacity — the home is identified by the chips
+  //and leader lines on top, not by a special render of the
+  //building itself. The earlier home-fill experiment (beta.9 /
+  //beta.10) was removed because it was visually noisy and the
+  //spatial identification of the home building from vector tiles
+  //was unreliable in dense neighbourhoods.
   //Toggle MapTiler Streets' label layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
   //Symbol-type layers are the canonical container for text + icon
@@ -25429,21 +25470,21 @@ class HeliosEngine {
         type: "fill-extrusion",
         minzoom: 15,
         paint: {
-          //Neutral light grey — neighbours act as a quiet
-          //urban backdrop, not as visual noise.
+          //Neutral cool grey, hard-coded. We briefly exposed
+          //a `building-color` config but the buildings are
+          //always urban-context backdrop here — making the
+          //colour configurable proved to be a footgun (any
+          //tint with hue ate visual room from the chips and
+          //leaders that carry the actual data) and was
+          //removed in beta.12.
           "fill-extrusion-color": "rgba(210,210,215,1)",
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
           //Opacity ramps in between zoom 15 and 16; top
-          //opacity sits at 0.9 so the buildings stand out
-          //clearly. The previous 0.25 wash made the home
-          //hard to spot, but isolating the home alone via
-          //feature-state isn't workable on fill-extrusion
-          //in MapLibre 5 (the data-driven branch silently
-          //evaluates to 0 when mixed with a zoom interpolate).
-          //Bumping every building up keeps the focal point
-          //visible at the cost of a slightly busier urban
-          //backdrop.
+          //opacity sits at 0.75 — buildings are present
+          //enough to read as solid massing without burying
+          //the basemap or competing with the chips and
+          //leaders that carry the actual data.
           "fill-extrusion-opacity": [
             "interpolate",
             ["linear"],
@@ -25451,7 +25492,7 @@ class HeliosEngine {
             15,
             0,
             16,
-            0.9
+            0.75
           ]
         }
       }
@@ -25734,26 +25775,53 @@ class HeliosEngine {
   //the leader lines that tie them to the home / on-ground ring.
   //
   //  cloudLabel — where the cloud-cover chip should be drawn (in
-  //               CSS pixels, relative to the map canvas). Sits a
-  //               fixed CLOUD_CHIP_LIFT_PX above the projected
-  //               cloud-disc reference point — i.e. the chip
-  //               hovers right above the cartographic feature it
-  //               annotates instead of being parked above the
-  //               home itself.
+  //               CSS pixels, relative to the map canvas). Sits to
+  //               the screen-LEFT of the cloud disc, just outside
+  //               the 100 % reference ring. Pinning it on the side
+  //               (rather than above) keeps the home's vertical
+  //               axis clear for the PV chip (above) and the
+  //               battery chip (below).
   //  pvLabel    — where the optional PV production chip should be
   //               drawn. Sits a fixed CLOUD_LABEL_OFFSET_PX above
-  //               the home — the same place the cloud chip used
-  //               to live before v1.4 — so the production chip is
-  //               the prominent readout while the cloud chip
-  //               retreats onto its own feature.
-  //  ringTop    — projection of the topmost point of the 100 %
-  //               reference ring (i.e. the point CLOUD_DISC_RADIUS_M
-  //               due north of the home). The cloud leader line
-  //               ends here. Anchoring on the fixed ring rather
-  //               than the variable disc edge keeps the line
-  //               stable while the percentage scrubs.
+  //               the home so the production chip is the prominent
+  //               readout, with the cloud chip retreating onto its
+  //               own feature on the side.
+  //  batterySocLabel  — where the optional battery State-of-
+  //               Charge chip is drawn (icon + percent). Sits to
+  //               the BOTTOM-LEFT of the PV chip, connected via
+  //               an inverted-L polyline whose vertical leg
+  //               drops from PV's bottom edge (at 1/4 of the
+  //               chip width from the left) and whose horizontal
+  //               leg lands on the SoC chip's right side. Static
+  //               (no animation, no arrow) — SoC has no flow
+  //               direction to encode.
+  //  batteryPowerLabel — where the optional battery Power chip
+  //               is drawn (icon + signed instantaneous W/kW).
+  //               Sits to the BOTTOM-RIGHT of the PV chip,
+  //               connected via a regular L polyline whose
+  //               vertical leg drops from PV's bottom edge (at
+  //               3/4 of the chip width from the left) and
+  //               whose horizontal leg lands on the Power
+  //               chip's left side. Animated dashes + arrow
+  //               whose direction follows the sign of the
+  //               power.
+  //  ringEdge   — projection of a fixed geographic point on the
+  //               100 % reference ring (the disc's geographic east
+  //               edge in the northern hemisphere, west edge in
+  //               the south — picked so the chip lands on screen-
+  //               LEFT under each hemisphere's default bearing of
+  //               180° NH / 0° SH). The cloud leader line ends
+  //               here. Pinning to a fixed geographic point — and
+  //               not "screen-leftmost-of-N-samples" as a previous
+  //               revision did — means the chip tracks the same
+  //               world location continuously when the camera
+  //               rotates, instead of teleporting in 30° increments
+  //               between discrete samples. This matches the
+  //               steady, pivot-anchored behaviour of the PV /
+  //               battery chips and keeps the overlay legible
+  //               throughout rotation animations.
   //  home       — the projected home point, used as the anchor for
-  //               the PV chip's leader line.
+  //               the PV and battery chip leader lines.
   //
   //Returns null when the map isn't ready yet — the card treats
   //null as "don't render the overlay this frame".
@@ -25763,13 +25831,29 @@ class HeliosEngine {
     }
     const m2 = this.map;
     const home = m2.project([this.homeLon, this.homeLat]);
-    const dLat = CLOUD_DISC_RADIUS_M / 111320;
-    const ringTop = m2.project([this.homeLon, this.homeLat + dLat]);
-    const CLOUD_CHIP_LIFT_PX = 30;
+    const lat0 = this.homeLat;
+    const cosLat = Math.cos(lat0 * Math.PI / 180);
+    const anchorDE = lat0 >= 0 ? CLOUD_DISC_RADIUS_M : -CLOUD_DISC_RADIUS_M;
+    const anchorDLng = anchorDE / (111320 * cosLat);
+    const anchor = m2.project([this.homeLon + anchorDLng, this.homeLat]);
+    const ringEdgeX = anchor.x;
+    const ringEdgeY = anchor.y;
+    const CLOUD_CHIP_NUDGE_PX = 30;
+    const radDX = ringEdgeX - home.x;
+    const radDY = ringEdgeY - home.y;
+    const radLen = Math.sqrt(radDX * radDX + radDY * radDY) || 1;
+    const cloudLabelX = ringEdgeX + radDX / radLen * CLOUD_CHIP_NUDGE_PX;
+    const cloudLabelY = ringEdgeY + radDY / radLen * CLOUD_CHIP_NUDGE_PX;
+    const BATTERY_CHIP_X_OFFSET_PX = 80;
+    const BATTERY_CHIP_Y_OFFSET_PX = 40;
+    const pvX = home.x;
+    const pvY = home.y - CLOUD_LABEL_OFFSET_PX;
     return {
-      cloudLabel: { x: ringTop.x, y: ringTop.y - CLOUD_CHIP_LIFT_PX },
-      pvLabel: { x: home.x, y: home.y - CLOUD_LABEL_OFFSET_PX },
-      ringTop: { x: ringTop.x, y: ringTop.y },
+      cloudLabel: { x: cloudLabelX, y: cloudLabelY },
+      pvLabel: { x: pvX, y: pvY },
+      batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
+      batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
+      ringEdge: { x: ringEdgeX, y: ringEdgeY },
       home: { x: home.x, y: home.y }
     };
   }
@@ -26034,8 +26118,17 @@ class HeliosEngine {
     };
   }
   updateConfig(cfg) {
+    const prevStyleId = this._resolveMapStyle().id;
     this.cfg = { ...cfg };
     if (!this.map) {
+      return;
+    }
+    const nextStyleInfo = this._resolveMapStyle();
+    if (nextStyleInfo.id !== prevStyleId) {
+      this._mapReady = false;
+      this.map.setStyle(
+        `https://api.maptiler.com/maps/${nextStyleInfo.id}/style.json?key=${this.apiKey}`
+      );
       return;
     }
     if (this.map.getLayer("helios-hillshade")) {
@@ -26050,24 +26143,52 @@ class HeliosEngine {
       this._renderForCurrentSelection();
     }
   }
+  _startAutoRotateLoop() {
+    if (this._autoRotateRaf !== void 0 || !this.map) {
+      return;
+    }
+    this._autoRotateLastFrame = performance.now();
+    this._autoRotateLastUserAction = 0;
+    const tick = (t2) => {
+      if (!this.map) {
+        this._autoRotateRaf = void 0;
+        return;
+      }
+      const dt = Math.max(0, t2 - this._autoRotateLastFrame) / 1e3;
+      this._autoRotateLastFrame = t2;
+      const sinceUser = Date.now() - this._autoRotateLastUserAction;
+      if (sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
+        const next = this.map.getBearing() - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
+        this.map.setBearing(next);
+      }
+      this._autoRotateRaf = requestAnimationFrame(tick);
+    };
+    this._autoRotateRaf = requestAnimationFrame(tick);
+  }
   cleanup() {
     this._clearWeatherTimer();
     window.clearInterval(this._skyTimer);
     window.clearTimeout(this._resizeDebounceTimer);
     this._fetchAbortController?.abort();
     this._resizeObserver?.disconnect();
+    if (this._autoRotateRaf !== void 0) {
+      cancelAnimationFrame(this._autoRotateRaf);
+      this._autoRotateRaf = void 0;
+    }
     this.map?.remove();
     this.map = void 0;
     this._mapReady = false;
   }
-}
+};
+_HeliosEngine.AUTO_ROTATE_DEG_PER_SEC = 1.5;
+_HeliosEngine.AUTO_ROTATE_INACTIVITY_MS = 5e3;
+let HeliosEngine = _HeliosEngine;
 const en = {
   cardName: "HELIOS",
   cardDescription: "Real-time solar energy and cloud coverage visualization",
   live: "Live",
   placeholder: {
-    subtitle: "Solar exposure & cloud coverage",
-    action: "Set your MapTiler API key to activate"
+    subtitle: "Solar exposure & cloud coverage"
   },
   tooltip: {
     cloudCover: "Cloud cover: {0}%",
@@ -26086,6 +26207,15 @@ const en = {
     hillshadeColor: "Hillshade color *",
     hillshadeStrength: "Hillshade strength * (0 → 1)",
     mapSection: "Map",
+    mapStyle: "Map style *",
+    mapStyleHint: "Choose between the streets basemap (sober, urban), the topographic basemap (contour lines, earth tones, better in hilly terrain) or the hybrid basemap (high-resolution satellite imagery with road and label overlays). Labels and 3D buildings work identically on all three.",
+    mapStyleStreet: "Streets",
+    mapStyleTopo: "Topo",
+    mapStyleHybrid: "Hybrid",
+    cardTheme: "Card theme *",
+    cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards. The 3D map basemap is unaffected.",
+    cardThemeLight: "Light",
+    cardThemeDark: "Dark",
     showLabels: "Show labels *",
     showLabelsHint: "Toggles street names, building numbers, points of interest and place names on the basemap.",
     labelsOn: "Shown",
@@ -26105,7 +26235,14 @@ const en = {
     pvHint: "Optional. When set, a chip appears on the home (instant production, computed over the last minute) and a dedicated graph is added above the timeline. The line between the home and the chip animates at a speed proportional to the live production. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).",
     pvEntity: "Production entity",
     pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
-    pvColor: "Production color *"
+    pvColor: "Production color *",
+    batterySection: "Home battery",
+    batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip — State of Charge on the LEFT, signed Power on the RIGHT — connected to PV with a static dotted hairline. Either entity is independently optional; the chip on its side appears as soon as the entity is set.",
+    batterySocEntity: "State of charge entity",
+    batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
+    batteryPowerEntity: "Power entity",
+    batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
+    batteryColor: "Battery color *"
   }
 };
 const fr = {
@@ -26113,8 +26250,7 @@ const fr = {
   cardDescription: "Visualisation en temps réel de l'énergie solaire et de la couverture nuageuse",
   live: "Direct",
   placeholder: {
-    subtitle: "Exposition solaire & couverture nuageuse",
-    action: "Renseigne ta clé API MapTiler pour activer"
+    subtitle: "Exposition solaire & couverture nuageuse"
   },
   tooltip: {
     cloudCover: "Couverture nuageuse : {0}%",
@@ -26133,6 +26269,15 @@ const fr = {
     hillshadeColor: "Couleur de l'ombrage *",
     hillshadeStrength: "Intensité de l'ombrage * (0 → 1)",
     mapSection: "Carte",
+    mapStyle: "Style de la carte *",
+    mapStyleHint: "Choisis entre le fond de carte des rues (sobre, urbain), le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée) ou le fond hybride (imagerie satellite haute résolution avec les routes et libellés en surimpression). Les libellés et les bâtiments 3D fonctionnent à l'identique sur les trois.",
+    mapStyleStreet: "Rues",
+    mapStyleTopo: "Topo",
+    mapStyleHybrid: "Hybride",
+    cardTheme: "Thème de la carte *",
+    cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre. La carte 3D elle-même n'est pas affectée.",
+    cardThemeLight: "Clair",
+    cardThemeDark: "Sombre",
     showLabels: "Afficher les libellés *",
     showLabelsHint: "Affiche ou masque les noms de rues, numéros de bâtiments, points d'intérêt et noms de quartiers du fond de carte.",
     labelsOn: "Affichés",
@@ -26152,7 +26297,14 @@ const fr = {
     pvHint: "Optionnel. Si renseigné, une pastille apparaît sur la maison (production instantanée, calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. La ligne entre la maison et la pastille s'anime à une vitesse proportionnelle à la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
     pvEntity: "Entité de production",
     pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
-    pvColor: "Couleur de production *"
+    pvColor: "Couleur de production *",
+    batterySection: "Batterie domestique",
+    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV — état de charge à GAUCHE, puissance signée à DROITE — reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles ; la pastille correspondante s'affiche dès que l'entité est renseignée.",
+    batterySocEntity: "Entité d'état de charge",
+    batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (% — typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
+    batteryPowerEntity: "Entité de puissance",
+    batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
+    batteryColor: "Couleur batterie *"
   }
 };
 const de = {
@@ -26160,8 +26312,7 @@ const de = {
   cardDescription: "Echtzeit-Visualisierung von Solarenergie und Wolkenbedeckung",
   live: "Live",
   placeholder: {
-    subtitle: "Sonneneinstrahlung & Wolkenbedeckung",
-    action: "MapTiler-API-Schlüssel eintragen, um zu aktivieren"
+    subtitle: "Sonneneinstrahlung & Wolkenbedeckung"
   },
   tooltip: {
     cloudCover: "Bewölkung: {0}%",
@@ -26180,6 +26331,15 @@ const de = {
     hillshadeColor: "Schattierungsfarbe *",
     hillshadeStrength: "Schattierungsstärke * (0 → 1)",
     mapSection: "Karte",
+    mapStyle: "Kartenstil *",
+    mapStyleHint: "Wähle zwischen der Straßenkarte (nüchtern, urban), der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände) oder der Hybrid-Karte (hochauflösende Satellitenbilder mit Straßen- und Beschriftungs-Overlay). Beschriftungen und 3D-Gebäude funktionieren auf allen drei gleich.",
+    mapStyleStreet: "Straßen",
+    mapStyleTopo: "Topo",
+    mapStyleHybrid: "Hybrid",
+    cardTheme: "Karten-Thema *",
+    cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt. Die 3D-Grundkarte selbst bleibt unverändert.",
+    cardThemeLight: "Hell",
+    cardThemeDark: "Dunkel",
     showLabels: "Beschriftungen anzeigen *",
     showLabelsHint: "Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.",
     labelsOn: "Sichtbar",
@@ -26199,7 +26359,14 @@ const de = {
     pvHint: "Optional. Wenn gesetzt, erscheint auf dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Die Linie zwischen Haus und Chip animiert mit einer Geschwindigkeit proportional zur Produktion. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
     pvEntity: "Produktions-Entität",
     pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
-    pvColor: "Produktionsfarbe *"
+    pvColor: "Produktionsfarbe *",
+    batterySection: "Hausbatterie",
+    batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips — Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS — über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional; der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
+    batterySocEntity: "Ladezustand-Entität",
+    batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
+    batteryPowerEntity: "Leistungs-Entität",
+    batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
+    batteryColor: "Batteriefarbe *"
   }
 };
 const es = {
@@ -26207,8 +26374,7 @@ const es = {
   cardDescription: "Visualización en tiempo real de la energía solar y la cobertura de nubes",
   live: "En vivo",
   placeholder: {
-    subtitle: "Exposición solar y cobertura de nubes",
-    action: "Configura tu clave API de MapTiler para activar"
+    subtitle: "Exposición solar y cobertura de nubes"
   },
   tooltip: {
     cloudCover: "Cobertura de nubes: {0}%",
@@ -26227,6 +26393,15 @@ const es = {
     hillshadeColor: "Color del sombreado *",
     hillshadeStrength: "Intensidad del sombreado * (0 → 1)",
     mapSection: "Mapa",
+    mapStyle: "Estilo del mapa *",
+    mapStyleHint: "Elige entre el mapa de calles (sobrio, urbano), el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso) o el mapa híbrido (imágenes de satélite de alta resolución con superposición de calles y etiquetas). Las etiquetas y los edificios 3D funcionan igual en los tres.",
+    mapStyleStreet: "Calles",
+    mapStyleTopo: "Topo",
+    mapStyleHybrid: "Híbrido",
+    cardTheme: "Tema de la tarjeta *",
+    cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros. El mapa 3D no se ve afectado.",
+    cardThemeLight: "Claro",
+    cardThemeDark: "Oscuro",
     showLabels: "Mostrar etiquetas *",
     showLabelsHint: "Muestra u oculta los nombres de calles, números de edificios, puntos de interés y nombres de zonas en el mapa de fondo.",
     labelsOn: "Visibles",
@@ -26246,7 +26421,14 @@ const es = {
     pvHint: "Opcional. Si se define, aparece una pastilla en la casa (producción instantánea, calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. La línea entre la casa y la pastilla se anima a una velocidad proporcional a la producción. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
     pvEntity: "Entidad de producción",
     pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
-    pvColor: "Color de producción *"
+    pvColor: "Color de producción *",
+    batterySection: "Batería doméstica",
+    batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV — estado de carga a la IZQUIERDA, potencia con signo a la DERECHA — conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales; el chip correspondiente aparece en cuanto la entidad está definida.",
+    batterySocEntity: "Entidad de estado de carga",
+    batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
+    batteryPowerEntity: "Entidad de potencia",
+    batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
+    batteryColor: "Color batería *"
   }
 };
 const it = {
@@ -26254,8 +26436,7 @@ const it = {
   cardDescription: "Visualizzazione in tempo reale dell'energia solare e della copertura nuvolosa",
   live: "Live",
   placeholder: {
-    subtitle: "Esposizione solare e copertura nuvolosa",
-    action: "Imposta la tua chiave API MapTiler per attivare"
+    subtitle: "Esposizione solare e copertura nuvolosa"
   },
   tooltip: {
     cloudCover: "Copertura nuvolosa: {0}%",
@@ -26274,6 +26455,15 @@ const it = {
     hillshadeColor: "Colore dell'ombreggiatura *",
     hillshadeStrength: "Intensità dell'ombreggiatura * (0 → 1)",
     mapSection: "Mappa",
+    mapStyle: "Stile della mappa *",
+    mapStyleHint: "Scegli tra la mappa stradale (sobria, urbana), la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare) o la mappa ibrida (immagini satellitari ad alta risoluzione con sovrapposizione di strade ed etichette). Le etichette e gli edifici 3D funzionano allo stesso modo su tutte e tre.",
+    mapStyleStreet: "Strade",
+    mapStyleTopo: "Topo",
+    mapStyleHybrid: "Ibrida",
+    cardTheme: "Tema della scheda *",
+    cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri. La mappa 3D non è interessata.",
+    cardThemeLight: "Chiaro",
+    cardThemeDark: "Scuro",
     showLabels: "Mostra etichette *",
     showLabelsHint: "Mostra o nasconde i nomi delle vie, i numeri civici, i punti di interesse e i nomi dei quartieri sulla mappa di base.",
     labelsOn: "Visibili",
@@ -26293,7 +26483,14 @@ const it = {
     pvHint: "Opzionale. Se impostato, una pastiglia appare sulla casa (produzione istantanea, calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. La linea tra la casa e la pastiglia si anima a una velocità proporzionale alla produzione. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
     pvEntity: "Entità di produzione",
     pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
-    pvColor: "Colore di produzione *"
+    pvColor: "Colore di produzione *",
+    batterySection: "Batteria domestica",
+    batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV — stato di carica a SINISTRA, potenza con segno a DESTRA — collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali; la pastiglia corrispondente appare appena l'entità è impostata.",
+    batterySocEntity: "Entità stato di carica",
+    batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
+    batteryPowerEntity: "Entità di potenza",
+    batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
+    batteryColor: "Colore batteria *"
   }
 };
 const nl = {
@@ -26301,8 +26498,7 @@ const nl = {
   cardDescription: "Realtime visualisatie van zonne-energie en bewolking",
   live: "Live",
   placeholder: {
-    subtitle: "Zonexpositie & bewolking",
-    action: "Voer je MapTiler API-sleutel in om te activeren"
+    subtitle: "Zonexpositie & bewolking"
   },
   tooltip: {
     cloudCover: "Bewolking: {0}%",
@@ -26321,6 +26517,15 @@ const nl = {
     hillshadeColor: "Schaduwkleur *",
     hillshadeStrength: "Schaduwsterkte * (0 → 1)",
     mapSection: "Kaart",
+    mapStyle: "Kaartstijl *",
+    mapStyleHint: "Kies tussen de stratenkaart (sober, stedelijk), de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein) of de hybride kaart (hoogwaardige satellietbeelden met overlays voor wegen en labels). Labels en 3D-gebouwen werken op alle drie hetzelfde.",
+    mapStyleStreet: "Straten",
+    mapStyleTopo: "Topo",
+    mapStyleHybrid: "Hybride",
+    cardTheme: "Kaartthema *",
+    cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards. De 3D-basemap wordt niet beïnvloed.",
+    cardThemeLight: "Licht",
+    cardThemeDark: "Donker",
     showLabels: "Labels weergeven *",
     showLabelsHint: "Toont of verbergt straatnamen, huisnummers, points of interest en buurtnamen op de basiskaart.",
     labelsOn: "Zichtbaar",
@@ -26340,7 +26545,14 @@ const nl = {
     pvHint: "Optioneel. Als ingesteld verschijnt op het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. De lijn tussen het huis en de chip animeert met een snelheid evenredig aan de productie. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
     pvEntity: "Productie-entiteit",
     pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
-    pvColor: "Productiekleur *"
+    pvColor: "Productiekleur *",
+    batterySection: "Thuisbatterij",
+    batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip — laadtoestand LINKS, ondertekend vermogen RECHTS — verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel; de bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
+    batterySocEntity: "Laadtoestand-entiteit",
+    batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
+    batteryPowerEntity: "Vermogen-entiteit",
+    batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
+    batteryColor: "Batterijkleur *"
   }
 };
 const pt = {
@@ -26348,8 +26560,7 @@ const pt = {
   cardDescription: "Visualização em tempo real da energia solar e da cobertura de nuvens",
   live: "Direto",
   placeholder: {
-    subtitle: "Exposição solar e cobertura de nuvens",
-    action: "Configura a tua chave API MapTiler para ativar"
+    subtitle: "Exposição solar e cobertura de nuvens"
   },
   tooltip: {
     cloudCover: "Cobertura de nuvens: {0}%",
@@ -26368,6 +26579,15 @@ const pt = {
     hillshadeColor: "Cor do sombreado *",
     hillshadeStrength: "Intensidade do sombreado * (0 → 1)",
     mapSection: "Mapa",
+    mapStyle: "Estilo do mapa *",
+    mapStyleHint: "Escolhe entre o mapa de ruas (sóbrio, urbano), o mapa topográfico (curvas de nível, tons terrosos, ideal em terreno montanhoso) ou o mapa híbrido (imagens de satélite de alta resolução com sobreposição de estradas e etiquetas). As etiquetas e os edifícios 3D funcionam de forma idêntica nos três.",
+    mapStyleStreet: "Ruas",
+    mapStyleTopo: "Topo",
+    mapStyleHybrid: "Híbrido",
+    cardTheme: "Tema do cartão *",
+    cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros. O mapa 3D não é afetado.",
+    cardThemeLight: "Claro",
+    cardThemeDark: "Escuro",
     showLabels: "Mostrar etiquetas *",
     showLabelsHint: "Mostra ou oculta os nomes das ruas, números de edifícios, pontos de interesse e nomes de bairros no mapa de fundo.",
     labelsOn: "Visíveis",
@@ -26387,7 +26607,14 @@ const pt = {
     pvHint: "Opcional. Quando definido, surge uma pastilha sobre a casa (produção instantânea, calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. A linha entre a casa e a pastilha anima a uma velocidade proporcional à produção. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
     pvEntity: "Entidade de produção",
     pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
-    pvColor: "Cor de produção *"
+    pvColor: "Cor de produção *",
+    batterySection: "Bateria doméstica",
+    batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV — estado de carga à ESQUERDA, potência com sinal à DIREITA — ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais; o chip correspondente aparece assim que a entidade é definida.",
+    batterySocEntity: "Entidade do estado de carga",
+    batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (% — normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
+    batteryPowerEntity: "Entidade de potência",
+    batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
+    batteryColor: "Cor da bateria *"
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -26406,7 +26633,10 @@ function pickTranslations(haLanguage) {
   }
   return FALLBACK;
 }
+const maplibreCss = `.maplibregl-map{font:12px/20px Helvetica Neue,Arial,Helvetica,sans-serif;overflow:hidden;position:relative;-webkit-tap-highlight-color:rgb(0 0 0/0)}.maplibregl-canvas{left:0;position:absolute;top:0}.maplibregl-map:fullscreen{height:100%;width:100%}.maplibregl-ctrl-group button.maplibregl-ctrl-compass{touch-action:none}.maplibregl-canvas-container.maplibregl-interactive,.maplibregl-ctrl-group button.maplibregl-ctrl-compass{cursor:grab;-webkit-user-select:none;-moz-user-select:none;user-select:none}.maplibregl-canvas-container.maplibregl-interactive.maplibregl-track-pointer{cursor:pointer}.maplibregl-canvas-container.maplibregl-interactive:active,.maplibregl-ctrl-group button.maplibregl-ctrl-compass:active{cursor:grabbing}.maplibregl-canvas-container.maplibregl-touch-zoom-rotate,.maplibregl-canvas-container.maplibregl-touch-zoom-rotate .maplibregl-canvas{touch-action:pan-x pan-y}.maplibregl-canvas-container.maplibregl-touch-drag-pan,.maplibregl-canvas-container.maplibregl-touch-drag-pan .maplibregl-canvas{touch-action:pinch-zoom}.maplibregl-canvas-container.maplibregl-touch-zoom-rotate.maplibregl-touch-drag-pan,.maplibregl-canvas-container.maplibregl-touch-zoom-rotate.maplibregl-touch-drag-pan .maplibregl-canvas{touch-action:none}.maplibregl-canvas-container.maplibregl-touch-drag-pan.maplibregl-cooperative-gestures,.maplibregl-canvas-container.maplibregl-touch-drag-pan.maplibregl-cooperative-gestures .maplibregl-canvas{touch-action:pan-x pan-y}.maplibregl-ctrl-bottom-left,.maplibregl-ctrl-bottom-right,.maplibregl-ctrl-top-left,.maplibregl-ctrl-top-right{pointer-events:none;position:absolute;z-index:2}.maplibregl-ctrl-top-left{left:0;top:0}.maplibregl-ctrl-top-right{right:0;top:0}.maplibregl-ctrl-bottom-left{bottom:0;left:0}.maplibregl-ctrl-bottom-right{bottom:0;right:0}.maplibregl-ctrl{clear:both;pointer-events:auto;transform:translate(0)}.maplibregl-ctrl-top-left .maplibregl-ctrl{float:left;margin:10px 0 0 10px}.maplibregl-ctrl-top-right .maplibregl-ctrl{float:right;margin:10px 10px 0 0}.maplibregl-ctrl-bottom-left .maplibregl-ctrl{float:left;margin:0 0 10px 10px}.maplibregl-ctrl-bottom-right .maplibregl-ctrl{float:right;margin:0 10px 10px 0}.maplibregl-ctrl-group{background:#fff;border-radius:4px}.maplibregl-ctrl-group:not(:empty){box-shadow:0 0 0 2px #0000001a}@media (forced-colors:active){.maplibregl-ctrl-group:not(:empty){box-shadow:0 0 0 2px ButtonText}}.maplibregl-ctrl-group button{background-color:transparent;border:0;box-sizing:border-box;cursor:pointer;display:block;height:29px;outline:none;padding:0;width:29px}.maplibregl-ctrl-group button+button{border-top:1px solid #ddd}.maplibregl-ctrl button .maplibregl-ctrl-icon{background-position:50%;background-repeat:no-repeat;display:block;height:100%;width:100%}@media (forced-colors:active){.maplibregl-ctrl-icon{background-color:transparent}.maplibregl-ctrl-group button+button{border-top:1px solid ButtonText}}.maplibregl-ctrl button::-moz-focus-inner{border:0;padding:0}.maplibregl-ctrl-attrib-button:focus,.maplibregl-ctrl-group button:focus{box-shadow:0 0 2px 2px #0096ff}.maplibregl-ctrl button:disabled{cursor:not-allowed}.maplibregl-ctrl button:disabled .maplibregl-ctrl-icon{opacity:.25}@media (hover:hover){.maplibregl-ctrl button:not(:disabled):hover{background-color:#0000000d}}.maplibregl-ctrl button:not(:disabled):active{background-color:#0000000d}.maplibregl-ctrl-group button:focus:focus-visible{box-shadow:0 0 2px 2px #0096ff}.maplibregl-ctrl-group button:focus:not(:focus-visible){box-shadow:none}.maplibregl-ctrl-group button:focus:first-child{border-radius:4px 4px 0 0}.maplibregl-ctrl-group button:focus:last-child{border-radius:0 0 4px 4px}.maplibregl-ctrl-group button:focus:only-child{border-radius:inherit}.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E")}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E")}}.maplibregl-ctrl button.maplibregl-ctrl-fullscreen .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M24 16v5.5c0 1.75-.75 2.5-2.5 2.5H16v-1l3-1.5-4-5.5 1-1 5.5 4 1.5-3zM6 16l1.5 3 5.5-4 1 1-4 5.5 3 1.5v1H7.5C5.75 24 5 23.25 5 21.5V16zm7-11v1l-3 1.5 4 5.5-1 1-5.5-4L6 13H5V7.5C5 5.75 5.75 5 7.5 5zm11 2.5c0-1.75-.75-2.5-2.5-2.5H16v1l3 1.5-4 5.5 1 1 5.5-4 1.5 3h1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-shrink .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M18.5 16c-1.75 0-2.5.75-2.5 2.5V24h1l1.5-3 5.5 4 1-1-4-5.5 3-1.5v-1zM13 18.5c0-1.75-.75-2.5-2.5-2.5H5v1l3 1.5L4 24l1 1 5.5-4 1.5 3h1zm3-8c0 1.75.75 2.5 2.5 2.5H24v-1l-3-1.5L25 5l-1-1-5.5 4L17 5h-1zM10.5 13c1.75 0 2.5-.75 2.5-2.5V5h-1l-1.5 3L5 4 4 5l4 5.5L5 12v1z'/%3E%3C/svg%3E")}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-fullscreen .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M24 16v5.5c0 1.75-.75 2.5-2.5 2.5H16v-1l3-1.5-4-5.5 1-1 5.5 4 1.5-3zM6 16l1.5 3 5.5-4 1 1-4 5.5 3 1.5v1H7.5C5.75 24 5 23.25 5 21.5V16zm7-11v1l-3 1.5 4 5.5-1 1-5.5-4L6 13H5V7.5C5 5.75 5.75 5 7.5 5zm11 2.5c0-1.75-.75-2.5-2.5-2.5H16v1l3 1.5-4 5.5 1 1 5.5-4 1.5 3h1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-shrink .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M18.5 16c-1.75 0-2.5.75-2.5 2.5V24h1l1.5-3 5.5 4 1-1-4-5.5 3-1.5v-1zM13 18.5c0-1.75-.75-2.5-2.5-2.5H5v1l3 1.5L4 24l1 1 5.5-4 1.5 3h1zm3-8c0 1.75.75 2.5 2.5 2.5H24v-1l-3-1.5L25 5l-1-1-5.5 4L17 5h-1zM10.5 13c1.75 0 2.5-.75 2.5-2.5V5h-1l-1.5 3L5 4 4 5l4 5.5L5 12v1z'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-fullscreen .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M24 16v5.5c0 1.75-.75 2.5-2.5 2.5H16v-1l3-1.5-4-5.5 1-1 5.5 4 1.5-3zM6 16l1.5 3 5.5-4 1 1-4 5.5 3 1.5v1H7.5C5.75 24 5 23.25 5 21.5V16zm7-11v1l-3 1.5 4 5.5-1 1-5.5-4L6 13H5V7.5C5 5.75 5.75 5 7.5 5zm11 2.5c0-1.75-.75-2.5-2.5-2.5H16v1l3 1.5-4 5.5 1 1 5.5-4 1.5 3h1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-shrink .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M18.5 16c-1.75 0-2.5.75-2.5 2.5V24h1l1.5-3 5.5 4 1-1-4-5.5 3-1.5v-1zM13 18.5c0-1.75-.75-2.5-2.5-2.5H5v1l3 1.5L4 24l1 1 5.5-4 1.5 3h1zm3-8c0 1.75.75 2.5 2.5 2.5H24v-1l-3-1.5L25 5l-1-1-5.5 4L17 5h-1zM10.5 13c1.75 0 2.5-.75 2.5-2.5V5h-1l-1.5 3L5 4 4 5l4 5.5L5 12v1z'/%3E%3C/svg%3E")}}.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23ccc' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E")}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23ccc' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23ccc' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E")}}.maplibregl-ctrl button.maplibregl-ctrl-globe .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='none' stroke='%23333' viewBox='0 0 22 22'%3E%3Ccircle cx='11' cy='11' r='8.5'/%3E%3Cpath d='M17.5 11c0 4.819-3.02 8.5-6.5 8.5S4.5 15.819 4.5 11 7.52 2.5 11 2.5s6.5 3.681 6.5 8.5Z'/%3E%3Cpath d='M13.5 11c0 2.447-.331 4.64-.853 6.206-.262.785-.562 1.384-.872 1.777-.314.399-.58.517-.775.517s-.461-.118-.775-.517c-.31-.393-.61-.992-.872-1.777C8.831 15.64 8.5 13.446 8.5 11s.331-4.64.853-6.206c.262-.785.562-1.384.872-1.777.314-.399.58-.517.775-.517s.461.118.775.517c.31.393.61.992.872 1.777.522 1.565.853 3.76.853 6.206Z'/%3E%3Cpath d='M11 7.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138q.07-.058.224-.138c.299-.151.763-.302 1.379-.434C7.378 5.666 9.091 5.5 11 5.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138q-.07.058-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428ZM4.486 6.436ZM11 16.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138 1.3 1.3 0 0 1 .224-.138c.299-.151.763-.302 1.379-.434C7.378 14.666 9.091 14.5 11 14.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138a1.3 1.3 0 0 1-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428Zm-6.514-1.064ZM11 12.5c-2.46 0-4.672-.222-6.255-.574-.796-.177-1.406-.38-1.805-.59a1.5 1.5 0 0 1-.39-.272.3.3 0 0 1-.047-.064.3.3 0 0 1 .048-.064c.066-.073.189-.167.389-.272.399-.21 1.009-.413 1.805-.59C6.328 9.722 8.54 9.5 11 9.5s4.672.222 6.256.574c.795.177 1.405.38 1.804.59.2.105.323.2.39.272a.3.3 0 0 1 .047.064.3.3 0 0 1-.048.064 1.4 1.4 0 0 1-.389.272c-.399.21-1.009.413-1.804.59-1.584.352-3.796.574-6.256.574Zm-8.501-1.51v.002zm0 .018v.002zm17.002.002v-.002zm0-.018v-.002z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-globe-enabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='none' stroke='%2333b5e5' viewBox='0 0 22 22'%3E%3Ccircle cx='11' cy='11' r='8.5'/%3E%3Cpath d='M17.5 11c0 4.819-3.02 8.5-6.5 8.5S4.5 15.819 4.5 11 7.52 2.5 11 2.5s6.5 3.681 6.5 8.5Z'/%3E%3Cpath d='M13.5 11c0 2.447-.331 4.64-.853 6.206-.262.785-.562 1.384-.872 1.777-.314.399-.58.517-.775.517s-.461-.118-.775-.517c-.31-.393-.61-.992-.872-1.777C8.831 15.64 8.5 13.446 8.5 11s.331-4.64.853-6.206c.262-.785.562-1.384.872-1.777.314-.399.58-.517.775-.517s.461.118.775.517c.31.393.61.992.872 1.777.522 1.565.853 3.76.853 6.206Z'/%3E%3Cpath d='M11 7.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138q.07-.058.224-.138c.299-.151.763-.302 1.379-.434C7.378 5.666 9.091 5.5 11 5.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138q-.07.058-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428ZM4.486 6.436ZM11 16.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138 1.3 1.3 0 0 1 .224-.138c.299-.151.763-.302 1.379-.434C7.378 14.666 9.091 14.5 11 14.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138a1.3 1.3 0 0 1-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428Zm-6.514-1.064ZM11 12.5c-2.46 0-4.672-.222-6.255-.574-.796-.177-1.406-.38-1.805-.59a1.5 1.5 0 0 1-.39-.272.3.3 0 0 1-.047-.064.3.3 0 0 1 .048-.064c.066-.073.189-.167.389-.272.399-.21 1.009-.413 1.805-.59C6.328 9.722 8.54 9.5 11 9.5s4.672.222 6.256.574c.795.177 1.405.38 1.804.59.2.105.323.2.39.272a.3.3 0 0 1 .047.064.3.3 0 0 1-.048.064 1.4 1.4 0 0 1-.389.272c-.399.21-1.009.413-1.804.59-1.584.352-3.796.574-6.256.574Zm-8.501-1.51v.002zm0 .018v.002zm17.002.002v-.002zm0-.018v-.002z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-terrain .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='%23333' viewBox='0 0 22 22'%3E%3Cpath d='m1.754 13.406 4.453-4.851 3.09 3.09 3.281 3.277.969-.969-3.309-3.312 3.844-4.121 6.148 6.886h1.082v-.855l-7.207-8.07-4.84 5.187L6.169 6.57l-5.48 5.965v.871ZM.688 16.844h20.625v1.375H.688Zm0 0'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-terrain-enabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='%2333b5e5' viewBox='0 0 22 22'%3E%3Cpath d='m1.754 13.406 4.453-4.851 3.09 3.09 3.281 3.277.969-.969-3.309-3.312 3.844-4.121 6.148 6.886h1.082v-.855l-7.207-8.07-4.84 5.187L6.169 6.57l-5.48 5.965v.871ZM.688 16.844h20.625v1.375H.688Zm0 0'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate:disabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23aaa' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Cpath fill='red' d='m14 5 1 1-9 9-1-1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e58978' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e54e33' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-waiting .maplibregl-ctrl-icon{animation:maplibregl-spin 2s linear infinite}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate:disabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23999' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Cpath fill='red' d='m14 5 1 1-9 9-1-1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e58978' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e54e33' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate:disabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23666' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Cpath fill='red' d='m14 5 1 1-9 9-1-1z'/%3E%3C/svg%3E")}}@keyframes maplibregl-spin{0%{transform:rotate(0)}to{transform:rotate(1turn)}}a.maplibregl-ctrl-logo{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='23' fill='none'%3E%3Cpath fill='%23000' fill-opacity='.4' fill-rule='evenodd' d='M17.408 16.796h-1.827l2.501-12.095h.198l3.324 6.533.988 2.19.988-2.19 3.258-6.533h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.929 5.644h-.098l-2.914-5.644-.757-1.71-.345 1.71zm1.958-3.42-.726 3.663a1.255 1.255 0 0 1-1.232 1.011h-1.827a1.255 1.255 0 0 1-1.229-1.509l2.501-12.095a1.255 1.255 0 0 1 1.23-1.001h.197a1.25 1.25 0 0 1 1.12.685l3.19 6.273 3.125-6.263a1.25 1.25 0 0 1 1.123-.695h.181a1.255 1.255 0 0 1 1.227.991l1.443 6.71a5 5 0 0 1 .314-.787l.009-.016a4.6 4.6 0 0 1 1.777-1.887c.782-.46 1.668-.667 2.611-.667a4.6 4.6 0 0 1 1.7.32l.306.134c.21-.16.474-.256.759-.256h1.694a1.255 1.255 0 0 1 1.212.925 1.255 1.255 0 0 1 1.212-.925h1.711c.284 0 .545.094.755.252.613-.3 1.312-.45 2.075-.45 1.356 0 2.557.445 3.482 1.4q.47.48.763 1.064V4.701a1.255 1.255 0 0 1 1.255-1.255h1.86A1.255 1.255 0 0 1 54.44 4.7v9.194h2.217c.19 0 .37.043.532.118v-4.77c0-.356.147-.678.385-.906a2.42 2.42 0 0 1-.682-1.71c0-.665.267-1.253.735-1.7a2.45 2.45 0 0 1 1.722-.674 2.43 2.43 0 0 1 1.705.675q.318.302.504.683V4.7a1.255 1.255 0 0 1 1.255-1.255h1.744A1.255 1.255 0 0 1 65.812 4.7v3.335a4.8 4.8 0 0 1 1.526-.246c.938 0 1.817.214 2.59.69a4.47 4.47 0 0 1 1.67 1.743v-.98a1.255 1.255 0 0 1 1.256-1.256h1.777c.233 0 .451.064.639.174a3.4 3.4 0 0 1 1.567-.372c.346 0 .861.02 1.285.232a1.25 1.25 0 0 1 .689 1.004 4.7 4.7 0 0 1 .853-.588c.795-.44 1.675-.647 2.61-.647 1.385 0 2.65.39 3.525 1.396.836.938 1.168 2.173 1.168 3.528q-.001.515-.056 1.051a1.255 1.255 0 0 1-.947 1.09l.408.952a1.255 1.255 0 0 1-.477 1.552c-.418.268-.92.463-1.458.612-.613.171-1.304.244-2.049.244-1.06 0-2.043-.207-2.886-.698l-.015-.008c-.798-.48-1.419-1.135-1.818-1.963l-.004-.008a5.8 5.8 0 0 1-.548-2.512q0-.429.053-.843a1.3 1.3 0 0 1-.333-.086l-.166-.004c-.223 0-.426.062-.643.228-.03.024-.142.139-.142.59v3.883a1.255 1.255 0 0 1-1.256 1.256h-1.777a1.255 1.255 0 0 1-1.256-1.256V15.69l-.032.057a4.8 4.8 0 0 1-1.86 1.833 5.04 5.04 0 0 1-2.484.634 4.5 4.5 0 0 1-1.935-.424 1.25 1.25 0 0 1-.764.258h-1.71a1.255 1.255 0 0 1-1.256-1.255V7.687a2.4 2.4 0 0 1-.428.625c.253.23.412.561.412.93v7.553a1.255 1.255 0 0 1-1.256 1.255h-1.843a1.25 1.25 0 0 1-.894-.373c-.228.23-.544.373-.894.373H51.32a1.255 1.255 0 0 1-1.256-1.255v-1.251l-.061.117a4.7 4.7 0 0 1-1.782 1.884 4.77 4.77 0 0 1-2.485.67 5.6 5.6 0 0 1-1.485-.188l.009 2.764a1.255 1.255 0 0 1-1.255 1.259h-1.729a1.255 1.255 0 0 1-1.255-1.255v-3.537a1.255 1.255 0 0 1-1.167.793h-1.679a1.25 1.25 0 0 1-.77-.263 4.5 4.5 0 0 1-1.945.429c-.885 0-1.724-.21-2.495-.632l-.017-.01a5 5 0 0 1-1.081-.836 1.255 1.255 0 0 1-1.254 1.312h-1.81a1.255 1.255 0 0 1-1.228-.99l-.782-3.625-2.044 3.939a1.25 1.25 0 0 1-1.115.676h-.098a1.25 1.25 0 0 1-1.116-.68l-2.061-3.994zM35.92 16.63l.207-.114.223-.15q.493-.356.735-.785l.061-.118.033 1.332h1.678V9.242h-1.694l-.033 1.267q-.133-.329-.526-.658l-.032-.028a3.2 3.2 0 0 0-.668-.428l-.27-.12a3.3 3.3 0 0 0-1.235-.23q-1.136-.001-1.974.493a3.36 3.36 0 0 0-1.3 1.382q-.445.89-.444 2.074 0 1.2.51 2.107a3.8 3.8 0 0 0 1.382 1.381 3.9 3.9 0 0 0 1.893.477q.795 0 1.455-.33zm-2.789-5.38q-.576.675-.575 1.762 0 1.102.559 1.794.576.675 1.645.675a2.25 2.25 0 0 0 .934-.19 2.2 2.2 0 0 0 .468-.29l.178-.161a2.2 2.2 0 0 0 .397-.561q.244-.5.244-1.15v-.115q0-.708-.296-1.267l-.043-.077a2.2 2.2 0 0 0-.633-.709l-.13-.086-.047-.028a2.1 2.1 0 0 0-1.073-.285q-1.052 0-1.629.692zm2.316 2.706c.163-.17.28-.407.28-.83v-.114c0-.292-.06-.508-.15-.68a.96.96 0 0 0-.353-.389.85.85 0 0 0-.464-.127c-.4 0-.56.114-.664.239l-.01.012c-.148.174-.275.45-.275.945 0 .506.122.801.27.99.097.11.266.224.68.224.303 0 .504-.09.687-.269zm7.545 1.705a2.6 2.6 0 0 0 .331.423q.319.33.755.548l.173.074q.65.255 1.49.255 1.02 0 1.844-.493a3.45 3.45 0 0 0 1.316-1.4q.493-.904.493-2.089 0-1.909-.988-2.913-.988-1.02-2.584-1.02-.898 0-1.575.347a3 3 0 0 0-.415.262l-.199.166a3.4 3.4 0 0 0-.64.82V9.242h-1.712v11.553h1.729l-.017-5.134zm.53-1.138q.206.29.48.5l.155.11.053.034q.51.296 1.119.297 1.07 0 1.645-.675.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.435 0-.835.16a2 2 0 0 0-.284.136 2 2 0 0 0-.363.254 2.2 2.2 0 0 0-.46.569l-.082.162a2.6 2.6 0 0 0-.213 1.072v.115q0 .707.296 1.267l.135.211zm.964-.818a1.1 1.1 0 0 0 .367.385.94.94 0 0 0 .476.118c.423 0 .59-.117.687-.23.159-.194.28-.478.28-.95 0-.53-.133-.8-.266-.952l-.021-.025c-.078-.094-.231-.221-.68-.221a1 1 0 0 0-.503.135l-.012.007a.86.86 0 0 0-.335.343c-.073.133-.132.324-.132.614v.115a1.4 1.4 0 0 0 .14.66zm15.7-6.222q.347-.346.346-.856a1.05 1.05 0 0 0-.345-.79 1.18 1.18 0 0 0-.84-.329q-.51 0-.855.33a1.05 1.05 0 0 0-.346.79q0 .51.346.855.345.346.856.346.51 0 .839-.346zm4.337 9.314.033-1.332q.191.403.59.747l.098.081a4 4 0 0 0 .316.224l.223.122a3.2 3.2 0 0 0 1.44.322 3.8 3.8 0 0 0 1.875-.477 3.5 3.5 0 0 0 1.382-1.366q.527-.89.526-2.09 0-1.184-.444-2.073a3.24 3.24 0 0 0-1.283-1.399q-.823-.51-1.942-.51a3.5 3.5 0 0 0-1.527.344l-.086.043-.165.09a3 3 0 0 0-.33.214q-.432.315-.656.707a2 2 0 0 0-.099.198l.082-1.283V4.701h-1.744v12.095zm.473-2.509a2.5 2.5 0 0 0 .566.7q.117.098.245.18l.144.08a2.1 2.1 0 0 0 .975.232q1.07 0 1.645-.675.576-.69.576-1.778 0-1.102-.576-1.777-.56-.691-1.645-.692a2.2 2.2 0 0 0-1.015.235q-.22.113-.415.282l-.15.142a2.1 2.1 0 0 0-.42.594q-.223.479-.223 1.1v.115q0 .705.293 1.26zm2.616-.293c.157-.191.28-.479.28-.967 0-.51-.13-.79-.276-.961l-.021-.026c-.082-.1-.232-.225-.67-.225a.87.87 0 0 0-.681.279l-.012.011c-.154.155-.274.38-.274.807v.115c0 .285.057.499.144.669a1.1 1.1 0 0 0 .367.405c.137.082.28.123.455.123.423 0 .59-.118.686-.23zm8.266-3.013q.345-.13.724-.14l.069-.002q.493 0 .642.099l.247-1.794q-.196-.099-.717-.099a2.3 2.3 0 0 0-.545.063 2 2 0 0 0-.411.148 2.2 2.2 0 0 0-.4.249 2.5 2.5 0 0 0-.485.499 2.7 2.7 0 0 0-.32.581l-.05.137v-1.48h-1.778v7.553h1.777v-3.884q0-.546.159-.943a1.5 1.5 0 0 1 .466-.636 2.5 2.5 0 0 1 .399-.253 2 2 0 0 1 .224-.099zm9.784 2.656.05-.922q0-1.743-.856-2.698-.838-.97-2.584-.97-1.119-.001-2.007.493a3.46 3.46 0 0 0-1.4 1.382q-.493.906-.493 2.106 0 1.07.428 1.975.428.89 1.332 1.432.906.526 2.255.526.973 0 1.668-.185l.044-.012.135-.04q.613-.184.984-.421l-.542-1.267q-.3.162-.642.274l-.297.087q-.51.131-1.3.131-.954 0-1.497-.444a1.6 1.6 0 0 1-.192-.193q-.366-.44-.512-1.234l-.004-.021zm-5.427-1.256-.003.022h3.752v-.138q-.011-.727-.288-1.118a1 1 0 0 0-.156-.176q-.46-.428-1.316-.428-.986 0-1.494.604-.379.45-.494 1.234zm-27.053 2.77V4.7h-1.86v12.095h5.333V15.15zm7.103-5.908v7.553h-1.843V9.242h1.843z'/%3E%3Cpath fill='%23fff' d='m19.63 11.151-.757-1.71-.345 1.71-1.12 5.644h-1.827L18.083 4.7h.197l3.325 6.533.988 2.19.988-2.19L26.839 4.7h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.93 5.644h-.098l-2.913-5.644zm14.836 5.81q-1.02 0-1.893-.478a3.8 3.8 0 0 1-1.381-1.382q-.51-.906-.51-2.106 0-1.185.444-2.074a3.36 3.36 0 0 1 1.3-1.382q.839-.494 1.974-.494a3.3 3.3 0 0 1 1.234.231 3.3 3.3 0 0 1 .97.575q.396.33.527.659l.033-1.267h1.694v7.553H37.18l-.033-1.332q-.279.593-1.02 1.053a3.17 3.17 0 0 1-1.662.444zm.296-1.482q.938 0 1.58-.642.642-.66.642-1.711v-.115q0-.708-.296-1.267a2.2 2.2 0 0 0-.807-.872 2.1 2.1 0 0 0-1.119-.313q-1.053 0-1.629.692-.575.675-.575 1.76 0 1.103.559 1.795.577.675 1.645.675zm6.521-6.237h1.711v1.4q.906-1.597 2.83-1.597 1.596 0 2.584 1.02.988 1.005.988 2.914 0 1.185-.493 2.09a3.46 3.46 0 0 1-1.316 1.399 3.5 3.5 0 0 1-1.844.493q-.954 0-1.662-.329a2.67 2.67 0 0 1-1.086-.97l.017 5.134h-1.728zm4.048 6.22q1.07 0 1.645-.674.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.592 0-1.12.296-.51.28-.822.823-.296.527-.296 1.234v.115q0 .708.296 1.267.313.543.823.855.51.296 1.119.297z'/%3E%3Cpath fill='%23e1e3e9' d='M51.325 4.7h1.86v10.45h3.473v1.646h-5.333zm7.12 4.542h1.843v7.553h-1.843zm.905-1.415a1.16 1.16 0 0 1-.856-.346 1.17 1.17 0 0 1-.346-.856 1.05 1.05 0 0 1 .346-.79q.346-.329.856-.329.494 0 .839.33a1.05 1.05 0 0 1 .345.79 1.16 1.16 0 0 1-.345.855q-.33.346-.84.346zm7.875 9.133a3.17 3.17 0 0 1-1.662-.444q-.723-.46-1.004-1.053l-.033 1.332h-1.71V4.701h1.743v4.657l-.082 1.283q.279-.658 1.086-1.119a3.5 3.5 0 0 1 1.778-.477q1.119 0 1.942.51a3.24 3.24 0 0 1 1.283 1.4q.445.888.444 2.072 0 1.201-.526 2.09a3.5 3.5 0 0 1-1.382 1.366 3.8 3.8 0 0 1-1.876.477zm-.296-1.481q1.069 0 1.645-.675.577-.69.577-1.778 0-1.102-.577-1.776-.56-.691-1.645-.692a2.12 2.12 0 0 0-1.58.659q-.642.641-.642 1.694v.115q0 .71.296 1.267a2.4 2.4 0 0 0 .807.872 2.1 2.1 0 0 0 1.119.313zm5.927-6.237h1.777v1.481q.263-.757.856-1.217a2.14 2.14 0 0 1 1.349-.46q.527 0 .724.098l-.247 1.794q-.149-.099-.642-.099-.774 0-1.416.494-.626.493-.626 1.58v3.883h-1.777V9.242zm9.534 7.718q-1.35 0-2.255-.526-.904-.543-1.332-1.432a4.6 4.6 0 0 1-.428-1.975q0-1.2.493-2.106a3.46 3.46 0 0 1 1.4-1.382q.889-.495 2.007-.494 1.744 0 2.584.97.855.956.856 2.7 0 .444-.05.92h-5.43q.18 1.005.708 1.45.542.443 1.497.443.79 0 1.3-.131a4 4 0 0 0 .938-.362l.542 1.267q-.411.263-1.119.46-.708.198-1.711.197zm1.596-4.558q.016-1.02-.444-1.432-.46-.428-1.316-.428-1.728 0-1.991 1.86z'/%3E%3Cpath d='M5.074 15.948a.484.657 0 0 0-.486.659v1.84a.484.657 0 0 0 .486.659h4.101a.484.657 0 0 0 .486-.659v-1.84a.484.657 0 0 0-.486-.659zm3.56 1.16H5.617v.838h3.017z' style='fill:%23fff;fill-rule:evenodd;stroke-width:1.03600001'/%3E%3Cg style='stroke-width:1.12603545'%3E%3Cpath d='M-9.408-1.416c-3.833-.025-7.056 2.912-7.08 6.615-.02 3.08 1.653 4.832 3.107 6.268.903.892 1.721 1.74 2.32 2.902l-.525-.004c-.543-.003-.992.304-1.24.639a1.87 1.87 0 0 0-.362 1.121l-.011 1.877c-.003.402.104.787.347 1.125.244.338.688.653 1.23.656l4.142.028c.542.003.99-.306 1.238-.641a1.87 1.87 0 0 0 .363-1.121l.012-1.875a1.87 1.87 0 0 0-.348-1.127c-.243-.338-.688-.653-1.23-.656l-.518-.004c.597-1.145 1.425-1.983 2.348-2.87 1.473-1.414 3.18-3.149 3.2-6.226-.016-3.59-2.923-6.684-6.993-6.707m-.006 1.1v.002c3.274.02 5.92 2.532 5.9 5.6-.017 2.706-1.39 4.026-2.863 5.44-1.034.994-2.118 2.033-2.814 3.633-.018.041-.052.055-.075.065q-.013.004-.02.01a.34.34 0 0 1-.226.084.34.34 0 0 1-.224-.086l-.092-.077c-.699-1.615-1.768-2.669-2.781-3.67-1.454-1.435-2.797-2.762-2.78-5.478.02-3.067 2.7-5.545 5.975-5.523m-.02 2.826c-1.62-.01-2.944 1.315-2.955 2.96-.01 1.646 1.295 2.988 2.916 2.999h.002c1.621.01 2.943-1.316 2.953-2.961.011-1.646-1.294-2.988-2.916-2.998m-.005 1.1c1.017.006 1.829.83 1.822 1.89s-.83 1.874-1.848 1.867c-1.018-.006-1.829-.83-1.822-1.89s.83-1.874 1.848-1.868m-2.155 11.857 4.14.025c.271.002.49.305.487.676l-.013 1.875c-.003.37-.224.67-.495.668l-4.14-.025c-.27-.002-.487-.306-.485-.676l.012-1.875c.003-.37.224-.67.494-.668' style='color:%23000;font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:%23000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:evenodd;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:%23000;solid-opacity:1;vector-effect:none;fill:%23000;fill-opacity:.4;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-9.415-.316C-12.69-.338-15.37 2.14-15.39 5.207c-.017 2.716 1.326 4.041 2.78 5.477 1.013 1 2.081 2.055 2.78 3.67l.092.076a.34.34 0 0 0 .225.086.34.34 0 0 0 .227-.083l.019-.01c.022-.009.057-.024.074-.064.697-1.6 1.78-2.64 2.814-3.634 1.473-1.414 2.847-2.733 2.864-5.44.02-3.067-2.627-5.58-5.901-5.601m-.057 8.784c1.621.011 2.944-1.315 2.955-2.96.01-1.646-1.295-2.988-2.916-2.999-1.622-.01-2.945 1.315-2.955 2.96s1.295 2.989 2.916 3' style='clip-rule:evenodd;fill:%23e1e3e9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-11.594 15.465c-.27-.002-.492.297-.494.668l-.012 1.876c-.003.371.214.673.485.675l4.14.027c.271.002.492-.298.495-.668l.012-1.877c.003-.37-.215-.672-.485-.674z' style='clip-rule:evenodd;fill:%23fff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3C/g%3E%3C/svg%3E");background-repeat:no-repeat;cursor:pointer;display:block;height:23px;margin:0 0 -4px -4px;overflow:hidden;width:88px}a.maplibregl-ctrl-logo.maplibregl-compact{width:14px}@media (forced-colors:active){a.maplibregl-ctrl-logo{background-color:transparent;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='23' fill='none'%3E%3Cpath fill='%23000' fill-opacity='.4' fill-rule='evenodd' d='M17.408 16.796h-1.827l2.501-12.095h.198l3.324 6.533.988 2.19.988-2.19 3.258-6.533h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.929 5.644h-.098l-2.914-5.644-.757-1.71-.345 1.71zm1.958-3.42-.726 3.663a1.255 1.255 0 0 1-1.232 1.011h-1.827a1.255 1.255 0 0 1-1.229-1.509l2.501-12.095a1.255 1.255 0 0 1 1.23-1.001h.197a1.25 1.25 0 0 1 1.12.685l3.19 6.273 3.125-6.263a1.25 1.25 0 0 1 1.123-.695h.181a1.255 1.255 0 0 1 1.227.991l1.443 6.71a5 5 0 0 1 .314-.787l.009-.016a4.6 4.6 0 0 1 1.777-1.887c.782-.46 1.668-.667 2.611-.667a4.6 4.6 0 0 1 1.7.32l.306.134c.21-.16.474-.256.759-.256h1.694a1.255 1.255 0 0 1 1.212.925 1.255 1.255 0 0 1 1.212-.925h1.711c.284 0 .545.094.755.252.613-.3 1.312-.45 2.075-.45 1.356 0 2.557.445 3.482 1.4q.47.48.763 1.064V4.701a1.255 1.255 0 0 1 1.255-1.255h1.86A1.255 1.255 0 0 1 54.44 4.7v9.194h2.217c.19 0 .37.043.532.118v-4.77c0-.356.147-.678.385-.906a2.42 2.42 0 0 1-.682-1.71c0-.665.267-1.253.735-1.7a2.45 2.45 0 0 1 1.722-.674 2.43 2.43 0 0 1 1.705.675q.318.302.504.683V4.7a1.255 1.255 0 0 1 1.255-1.255h1.744A1.255 1.255 0 0 1 65.812 4.7v3.335a4.8 4.8 0 0 1 1.526-.246c.938 0 1.817.214 2.59.69a4.47 4.47 0 0 1 1.67 1.743v-.98a1.255 1.255 0 0 1 1.256-1.256h1.777c.233 0 .451.064.639.174a3.4 3.4 0 0 1 1.567-.372c.346 0 .861.02 1.285.232a1.25 1.25 0 0 1 .689 1.004 4.7 4.7 0 0 1 .853-.588c.795-.44 1.675-.647 2.61-.647 1.385 0 2.65.39 3.525 1.396.836.938 1.168 2.173 1.168 3.528q-.001.515-.056 1.051a1.255 1.255 0 0 1-.947 1.09l.408.952a1.255 1.255 0 0 1-.477 1.552c-.418.268-.92.463-1.458.612-.613.171-1.304.244-2.049.244-1.06 0-2.043-.207-2.886-.698l-.015-.008c-.798-.48-1.419-1.135-1.818-1.963l-.004-.008a5.8 5.8 0 0 1-.548-2.512q0-.429.053-.843a1.3 1.3 0 0 1-.333-.086l-.166-.004c-.223 0-.426.062-.643.228-.03.024-.142.139-.142.59v3.883a1.255 1.255 0 0 1-1.256 1.256h-1.777a1.255 1.255 0 0 1-1.256-1.256V15.69l-.032.057a4.8 4.8 0 0 1-1.86 1.833 5.04 5.04 0 0 1-2.484.634 4.5 4.5 0 0 1-1.935-.424 1.25 1.25 0 0 1-.764.258h-1.71a1.255 1.255 0 0 1-1.256-1.255V7.687a2.4 2.4 0 0 1-.428.625c.253.23.412.561.412.93v7.553a1.255 1.255 0 0 1-1.256 1.255h-1.843a1.25 1.25 0 0 1-.894-.373c-.228.23-.544.373-.894.373H51.32a1.255 1.255 0 0 1-1.256-1.255v-1.251l-.061.117a4.7 4.7 0 0 1-1.782 1.884 4.77 4.77 0 0 1-2.485.67 5.6 5.6 0 0 1-1.485-.188l.009 2.764a1.255 1.255 0 0 1-1.255 1.259h-1.729a1.255 1.255 0 0 1-1.255-1.255v-3.537a1.255 1.255 0 0 1-1.167.793h-1.679a1.25 1.25 0 0 1-.77-.263 4.5 4.5 0 0 1-1.945.429c-.885 0-1.724-.21-2.495-.632l-.017-.01a5 5 0 0 1-1.081-.836 1.255 1.255 0 0 1-1.254 1.312h-1.81a1.255 1.255 0 0 1-1.228-.99l-.782-3.625-2.044 3.939a1.25 1.25 0 0 1-1.115.676h-.098a1.25 1.25 0 0 1-1.116-.68l-2.061-3.994zM35.92 16.63l.207-.114.223-.15q.493-.356.735-.785l.061-.118.033 1.332h1.678V9.242h-1.694l-.033 1.267q-.133-.329-.526-.658l-.032-.028a3.2 3.2 0 0 0-.668-.428l-.27-.12a3.3 3.3 0 0 0-1.235-.23q-1.136-.001-1.974.493a3.36 3.36 0 0 0-1.3 1.382q-.445.89-.444 2.074 0 1.2.51 2.107a3.8 3.8 0 0 0 1.382 1.381 3.9 3.9 0 0 0 1.893.477q.795 0 1.455-.33zm-2.789-5.38q-.576.675-.575 1.762 0 1.102.559 1.794.576.675 1.645.675a2.25 2.25 0 0 0 .934-.19 2.2 2.2 0 0 0 .468-.29l.178-.161a2.2 2.2 0 0 0 .397-.561q.244-.5.244-1.15v-.115q0-.708-.296-1.267l-.043-.077a2.2 2.2 0 0 0-.633-.709l-.13-.086-.047-.028a2.1 2.1 0 0 0-1.073-.285q-1.052 0-1.629.692zm2.316 2.706c.163-.17.28-.407.28-.83v-.114c0-.292-.06-.508-.15-.68a.96.96 0 0 0-.353-.389.85.85 0 0 0-.464-.127c-.4 0-.56.114-.664.239l-.01.012c-.148.174-.275.45-.275.945 0 .506.122.801.27.99.097.11.266.224.68.224.303 0 .504-.09.687-.269zm7.545 1.705a2.6 2.6 0 0 0 .331.423q.319.33.755.548l.173.074q.65.255 1.49.255 1.02 0 1.844-.493a3.45 3.45 0 0 0 1.316-1.4q.493-.904.493-2.089 0-1.909-.988-2.913-.988-1.02-2.584-1.02-.898 0-1.575.347a3 3 0 0 0-.415.262l-.199.166a3.4 3.4 0 0 0-.64.82V9.242h-1.712v11.553h1.729l-.017-5.134zm.53-1.138q.206.29.48.5l.155.11.053.034q.51.296 1.119.297 1.07 0 1.645-.675.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.435 0-.835.16a2 2 0 0 0-.284.136 2 2 0 0 0-.363.254 2.2 2.2 0 0 0-.46.569l-.082.162a2.6 2.6 0 0 0-.213 1.072v.115q0 .707.296 1.267l.135.211zm.964-.818a1.1 1.1 0 0 0 .367.385.94.94 0 0 0 .476.118c.423 0 .59-.117.687-.23.159-.194.28-.478.28-.95 0-.53-.133-.8-.266-.952l-.021-.025c-.078-.094-.231-.221-.68-.221a1 1 0 0 0-.503.135l-.012.007a.86.86 0 0 0-.335.343c-.073.133-.132.324-.132.614v.115a1.4 1.4 0 0 0 .14.66zm15.7-6.222q.347-.346.346-.856a1.05 1.05 0 0 0-.345-.79 1.18 1.18 0 0 0-.84-.329q-.51 0-.855.33a1.05 1.05 0 0 0-.346.79q0 .51.346.855.345.346.856.346.51 0 .839-.346zm4.337 9.314.033-1.332q.191.403.59.747l.098.081a4 4 0 0 0 .316.224l.223.122a3.2 3.2 0 0 0 1.44.322 3.8 3.8 0 0 0 1.875-.477 3.5 3.5 0 0 0 1.382-1.366q.527-.89.526-2.09 0-1.184-.444-2.073a3.24 3.24 0 0 0-1.283-1.399q-.823-.51-1.942-.51a3.5 3.5 0 0 0-1.527.344l-.086.043-.165.09a3 3 0 0 0-.33.214q-.432.315-.656.707a2 2 0 0 0-.099.198l.082-1.283V4.701h-1.744v12.095zm.473-2.509a2.5 2.5 0 0 0 .566.7q.117.098.245.18l.144.08a2.1 2.1 0 0 0 .975.232q1.07 0 1.645-.675.576-.69.576-1.778 0-1.102-.576-1.777-.56-.691-1.645-.692a2.2 2.2 0 0 0-1.015.235q-.22.113-.415.282l-.15.142a2.1 2.1 0 0 0-.42.594q-.223.479-.223 1.1v.115q0 .705.293 1.26zm2.616-.293c.157-.191.28-.479.28-.967 0-.51-.13-.79-.276-.961l-.021-.026c-.082-.1-.232-.225-.67-.225a.87.87 0 0 0-.681.279l-.012.011c-.154.155-.274.38-.274.807v.115c0 .285.057.499.144.669a1.1 1.1 0 0 0 .367.405c.137.082.28.123.455.123.423 0 .59-.118.686-.23zm8.266-3.013q.345-.13.724-.14l.069-.002q.493 0 .642.099l.247-1.794q-.196-.099-.717-.099a2.3 2.3 0 0 0-.545.063 2 2 0 0 0-.411.148 2.2 2.2 0 0 0-.4.249 2.5 2.5 0 0 0-.485.499 2.7 2.7 0 0 0-.32.581l-.05.137v-1.48h-1.778v7.553h1.777v-3.884q0-.546.159-.943a1.5 1.5 0 0 1 .466-.636 2.5 2.5 0 0 1 .399-.253 2 2 0 0 1 .224-.099zm9.784 2.656.05-.922q0-1.743-.856-2.698-.838-.97-2.584-.97-1.119-.001-2.007.493a3.46 3.46 0 0 0-1.4 1.382q-.493.906-.493 2.106 0 1.07.428 1.975.428.89 1.332 1.432.906.526 2.255.526.973 0 1.668-.185l.044-.012.135-.04q.613-.184.984-.421l-.542-1.267q-.3.162-.642.274l-.297.087q-.51.131-1.3.131-.954 0-1.497-.444a1.6 1.6 0 0 1-.192-.193q-.366-.44-.512-1.234l-.004-.021zm-5.427-1.256-.003.022h3.752v-.138q-.011-.727-.288-1.118a1 1 0 0 0-.156-.176q-.46-.428-1.316-.428-.986 0-1.494.604-.379.45-.494 1.234zm-27.053 2.77V4.7h-1.86v12.095h5.333V15.15zm7.103-5.908v7.553h-1.843V9.242h1.843z'/%3E%3Cpath fill='%23fff' d='m19.63 11.151-.757-1.71-.345 1.71-1.12 5.644h-1.827L18.083 4.7h.197l3.325 6.533.988 2.19.988-2.19L26.839 4.7h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.93 5.644h-.098l-2.913-5.644zm14.836 5.81q-1.02 0-1.893-.478a3.8 3.8 0 0 1-1.381-1.382q-.51-.906-.51-2.106 0-1.185.444-2.074a3.36 3.36 0 0 1 1.3-1.382q.839-.494 1.974-.494a3.3 3.3 0 0 1 1.234.231 3.3 3.3 0 0 1 .97.575q.396.33.527.659l.033-1.267h1.694v7.553H37.18l-.033-1.332q-.279.593-1.02 1.053a3.17 3.17 0 0 1-1.662.444zm.296-1.482q.938 0 1.58-.642.642-.66.642-1.711v-.115q0-.708-.296-1.267a2.2 2.2 0 0 0-.807-.872 2.1 2.1 0 0 0-1.119-.313q-1.053 0-1.629.692-.575.675-.575 1.76 0 1.103.559 1.795.577.675 1.645.675zm6.521-6.237h1.711v1.4q.906-1.597 2.83-1.597 1.596 0 2.584 1.02.988 1.005.988 2.914 0 1.185-.493 2.09a3.46 3.46 0 0 1-1.316 1.399 3.5 3.5 0 0 1-1.844.493q-.954 0-1.662-.329a2.67 2.67 0 0 1-1.086-.97l.017 5.134h-1.728zm4.048 6.22q1.07 0 1.645-.674.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.592 0-1.12.296-.51.28-.822.823-.296.527-.296 1.234v.115q0 .708.296 1.267.313.543.823.855.51.296 1.119.297z'/%3E%3Cpath fill='%23e1e3e9' d='M51.325 4.7h1.86v10.45h3.473v1.646h-5.333zm7.12 4.542h1.843v7.553h-1.843zm.905-1.415a1.16 1.16 0 0 1-.856-.346 1.17 1.17 0 0 1-.346-.856 1.05 1.05 0 0 1 .346-.79q.346-.329.856-.329.494 0 .839.33a1.05 1.05 0 0 1 .345.79 1.16 1.16 0 0 1-.345.855q-.33.346-.84.346zm7.875 9.133a3.17 3.17 0 0 1-1.662-.444q-.723-.46-1.004-1.053l-.033 1.332h-1.71V4.701h1.743v4.657l-.082 1.283q.279-.658 1.086-1.119a3.5 3.5 0 0 1 1.778-.477q1.119 0 1.942.51a3.24 3.24 0 0 1 1.283 1.4q.445.888.444 2.072 0 1.201-.526 2.09a3.5 3.5 0 0 1-1.382 1.366 3.8 3.8 0 0 1-1.876.477zm-.296-1.481q1.069 0 1.645-.675.577-.69.577-1.778 0-1.102-.577-1.776-.56-.691-1.645-.692a2.12 2.12 0 0 0-1.58.659q-.642.641-.642 1.694v.115q0 .71.296 1.267a2.4 2.4 0 0 0 .807.872 2.1 2.1 0 0 0 1.119.313zm5.927-6.237h1.777v1.481q.263-.757.856-1.217a2.14 2.14 0 0 1 1.349-.46q.527 0 .724.098l-.247 1.794q-.149-.099-.642-.099-.774 0-1.416.494-.626.493-.626 1.58v3.883h-1.777V9.242zm9.534 7.718q-1.35 0-2.255-.526-.904-.543-1.332-1.432a4.6 4.6 0 0 1-.428-1.975q0-1.2.493-2.106a3.46 3.46 0 0 1 1.4-1.382q.889-.495 2.007-.494 1.744 0 2.584.97.855.956.856 2.7 0 .444-.05.92h-5.43q.18 1.005.708 1.45.542.443 1.497.443.79 0 1.3-.131a4 4 0 0 0 .938-.362l.542 1.267q-.411.263-1.119.46-.708.198-1.711.197zm1.596-4.558q.016-1.02-.444-1.432-.46-.428-1.316-.428-1.728 0-1.991 1.86z'/%3E%3Cpath d='M5.074 15.948a.484.657 0 0 0-.486.659v1.84a.484.657 0 0 0 .486.659h4.101a.484.657 0 0 0 .486-.659v-1.84a.484.657 0 0 0-.486-.659zm3.56 1.16H5.617v.838h3.017z' style='fill:%23fff;fill-rule:evenodd;stroke-width:1.03600001'/%3E%3Cg style='stroke-width:1.12603545'%3E%3Cpath d='M-9.408-1.416c-3.833-.025-7.056 2.912-7.08 6.615-.02 3.08 1.653 4.832 3.107 6.268.903.892 1.721 1.74 2.32 2.902l-.525-.004c-.543-.003-.992.304-1.24.639a1.87 1.87 0 0 0-.362 1.121l-.011 1.877c-.003.402.104.787.347 1.125.244.338.688.653 1.23.656l4.142.028c.542.003.99-.306 1.238-.641a1.87 1.87 0 0 0 .363-1.121l.012-1.875a1.87 1.87 0 0 0-.348-1.127c-.243-.338-.688-.653-1.23-.656l-.518-.004c.597-1.145 1.425-1.983 2.348-2.87 1.473-1.414 3.18-3.149 3.2-6.226-.016-3.59-2.923-6.684-6.993-6.707m-.006 1.1v.002c3.274.02 5.92 2.532 5.9 5.6-.017 2.706-1.39 4.026-2.863 5.44-1.034.994-2.118 2.033-2.814 3.633-.018.041-.052.055-.075.065q-.013.004-.02.01a.34.34 0 0 1-.226.084.34.34 0 0 1-.224-.086l-.092-.077c-.699-1.615-1.768-2.669-2.781-3.67-1.454-1.435-2.797-2.762-2.78-5.478.02-3.067 2.7-5.545 5.975-5.523m-.02 2.826c-1.62-.01-2.944 1.315-2.955 2.96-.01 1.646 1.295 2.988 2.916 2.999h.002c1.621.01 2.943-1.316 2.953-2.961.011-1.646-1.294-2.988-2.916-2.998m-.005 1.1c1.017.006 1.829.83 1.822 1.89s-.83 1.874-1.848 1.867c-1.018-.006-1.829-.83-1.822-1.89s.83-1.874 1.848-1.868m-2.155 11.857 4.14.025c.271.002.49.305.487.676l-.013 1.875c-.003.37-.224.67-.495.668l-4.14-.025c-.27-.002-.487-.306-.485-.676l.012-1.875c.003-.37.224-.67.494-.668' style='color:%23000;font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:%23000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:evenodd;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:%23000;solid-opacity:1;vector-effect:none;fill:%23000;fill-opacity:.4;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-9.415-.316C-12.69-.338-15.37 2.14-15.39 5.207c-.017 2.716 1.326 4.041 2.78 5.477 1.013 1 2.081 2.055 2.78 3.67l.092.076a.34.34 0 0 0 .225.086.34.34 0 0 0 .227-.083l.019-.01c.022-.009.057-.024.074-.064.697-1.6 1.78-2.64 2.814-3.634 1.473-1.414 2.847-2.733 2.864-5.44.02-3.067-2.627-5.58-5.901-5.601m-.057 8.784c1.621.011 2.944-1.315 2.955-2.96.01-1.646-1.295-2.988-2.916-2.999-1.622-.01-2.945 1.315-2.955 2.96s1.295 2.989 2.916 3' style='clip-rule:evenodd;fill:%23e1e3e9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-11.594 15.465c-.27-.002-.492.297-.494.668l-.012 1.876c-.003.371.214.673.485.675l4.14.027c.271.002.492-.298.495-.668l.012-1.877c.003-.37-.215-.672-.485-.674z' style='clip-rule:evenodd;fill:%23fff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3C/g%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){a.maplibregl-ctrl-logo{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='23' fill='none'%3E%3Cpath fill='%23000' fill-opacity='.4' fill-rule='evenodd' d='M17.408 16.796h-1.827l2.501-12.095h.198l3.324 6.533.988 2.19.988-2.19 3.258-6.533h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.929 5.644h-.098l-2.914-5.644-.757-1.71-.345 1.71zm1.958-3.42-.726 3.663a1.255 1.255 0 0 1-1.232 1.011h-1.827a1.255 1.255 0 0 1-1.229-1.509l2.501-12.095a1.255 1.255 0 0 1 1.23-1.001h.197a1.25 1.25 0 0 1 1.12.685l3.19 6.273 3.125-6.263a1.25 1.25 0 0 1 1.123-.695h.181a1.255 1.255 0 0 1 1.227.991l1.443 6.71a5 5 0 0 1 .314-.787l.009-.016a4.6 4.6 0 0 1 1.777-1.887c.782-.46 1.668-.667 2.611-.667a4.6 4.6 0 0 1 1.7.32l.306.134c.21-.16.474-.256.759-.256h1.694a1.255 1.255 0 0 1 1.212.925 1.255 1.255 0 0 1 1.212-.925h1.711c.284 0 .545.094.755.252.613-.3 1.312-.45 2.075-.45 1.356 0 2.557.445 3.482 1.4q.47.48.763 1.064V4.701a1.255 1.255 0 0 1 1.255-1.255h1.86A1.255 1.255 0 0 1 54.44 4.7v9.194h2.217c.19 0 .37.043.532.118v-4.77c0-.356.147-.678.385-.906a2.42 2.42 0 0 1-.682-1.71c0-.665.267-1.253.735-1.7a2.45 2.45 0 0 1 1.722-.674 2.43 2.43 0 0 1 1.705.675q.318.302.504.683V4.7a1.255 1.255 0 0 1 1.255-1.255h1.744A1.255 1.255 0 0 1 65.812 4.7v3.335a4.8 4.8 0 0 1 1.526-.246c.938 0 1.817.214 2.59.69a4.47 4.47 0 0 1 1.67 1.743v-.98a1.255 1.255 0 0 1 1.256-1.256h1.777c.233 0 .451.064.639.174a3.4 3.4 0 0 1 1.567-.372c.346 0 .861.02 1.285.232a1.25 1.25 0 0 1 .689 1.004 4.7 4.7 0 0 1 .853-.588c.795-.44 1.675-.647 2.61-.647 1.385 0 2.65.39 3.525 1.396.836.938 1.168 2.173 1.168 3.528q-.001.515-.056 1.051a1.255 1.255 0 0 1-.947 1.09l.408.952a1.255 1.255 0 0 1-.477 1.552c-.418.268-.92.463-1.458.612-.613.171-1.304.244-2.049.244-1.06 0-2.043-.207-2.886-.698l-.015-.008c-.798-.48-1.419-1.135-1.818-1.963l-.004-.008a5.8 5.8 0 0 1-.548-2.512q0-.429.053-.843a1.3 1.3 0 0 1-.333-.086l-.166-.004c-.223 0-.426.062-.643.228-.03.024-.142.139-.142.59v3.883a1.255 1.255 0 0 1-1.256 1.256h-1.777a1.255 1.255 0 0 1-1.256-1.256V15.69l-.032.057a4.8 4.8 0 0 1-1.86 1.833 5.04 5.04 0 0 1-2.484.634 4.5 4.5 0 0 1-1.935-.424 1.25 1.25 0 0 1-.764.258h-1.71a1.255 1.255 0 0 1-1.256-1.255V7.687a2.4 2.4 0 0 1-.428.625c.253.23.412.561.412.93v7.553a1.255 1.255 0 0 1-1.256 1.255h-1.843a1.25 1.25 0 0 1-.894-.373c-.228.23-.544.373-.894.373H51.32a1.255 1.255 0 0 1-1.256-1.255v-1.251l-.061.117a4.7 4.7 0 0 1-1.782 1.884 4.77 4.77 0 0 1-2.485.67 5.6 5.6 0 0 1-1.485-.188l.009 2.764a1.255 1.255 0 0 1-1.255 1.259h-1.729a1.255 1.255 0 0 1-1.255-1.255v-3.537a1.255 1.255 0 0 1-1.167.793h-1.679a1.25 1.25 0 0 1-.77-.263 4.5 4.5 0 0 1-1.945.429c-.885 0-1.724-.21-2.495-.632l-.017-.01a5 5 0 0 1-1.081-.836 1.255 1.255 0 0 1-1.254 1.312h-1.81a1.255 1.255 0 0 1-1.228-.99l-.782-3.625-2.044 3.939a1.25 1.25 0 0 1-1.115.676h-.098a1.25 1.25 0 0 1-1.116-.68l-2.061-3.994zM35.92 16.63l.207-.114.223-.15q.493-.356.735-.785l.061-.118.033 1.332h1.678V9.242h-1.694l-.033 1.267q-.133-.329-.526-.658l-.032-.028a3.2 3.2 0 0 0-.668-.428l-.27-.12a3.3 3.3 0 0 0-1.235-.23q-1.136-.001-1.974.493a3.36 3.36 0 0 0-1.3 1.382q-.445.89-.444 2.074 0 1.2.51 2.107a3.8 3.8 0 0 0 1.382 1.381 3.9 3.9 0 0 0 1.893.477q.795 0 1.455-.33zm-2.789-5.38q-.576.675-.575 1.762 0 1.102.559 1.794.576.675 1.645.675a2.25 2.25 0 0 0 .934-.19 2.2 2.2 0 0 0 .468-.29l.178-.161a2.2 2.2 0 0 0 .397-.561q.244-.5.244-1.15v-.115q0-.708-.296-1.267l-.043-.077a2.2 2.2 0 0 0-.633-.709l-.13-.086-.047-.028a2.1 2.1 0 0 0-1.073-.285q-1.052 0-1.629.692zm2.316 2.706c.163-.17.28-.407.28-.83v-.114c0-.292-.06-.508-.15-.68a.96.96 0 0 0-.353-.389.85.85 0 0 0-.464-.127c-.4 0-.56.114-.664.239l-.01.012c-.148.174-.275.45-.275.945 0 .506.122.801.27.99.097.11.266.224.68.224.303 0 .504-.09.687-.269zm7.545 1.705a2.6 2.6 0 0 0 .331.423q.319.33.755.548l.173.074q.65.255 1.49.255 1.02 0 1.844-.493a3.45 3.45 0 0 0 1.316-1.4q.493-.904.493-2.089 0-1.909-.988-2.913-.988-1.02-2.584-1.02-.898 0-1.575.347a3 3 0 0 0-.415.262l-.199.166a3.4 3.4 0 0 0-.64.82V9.242h-1.712v11.553h1.729l-.017-5.134zm.53-1.138q.206.29.48.5l.155.11.053.034q.51.296 1.119.297 1.07 0 1.645-.675.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.435 0-.835.16a2 2 0 0 0-.284.136 2 2 0 0 0-.363.254 2.2 2.2 0 0 0-.46.569l-.082.162a2.6 2.6 0 0 0-.213 1.072v.115q0 .707.296 1.267l.135.211zm.964-.818a1.1 1.1 0 0 0 .367.385.94.94 0 0 0 .476.118c.423 0 .59-.117.687-.23.159-.194.28-.478.28-.95 0-.53-.133-.8-.266-.952l-.021-.025c-.078-.094-.231-.221-.68-.221a1 1 0 0 0-.503.135l-.012.007a.86.86 0 0 0-.335.343c-.073.133-.132.324-.132.614v.115a1.4 1.4 0 0 0 .14.66zm15.7-6.222q.347-.346.346-.856a1.05 1.05 0 0 0-.345-.79 1.18 1.18 0 0 0-.84-.329q-.51 0-.855.33a1.05 1.05 0 0 0-.346.79q0 .51.346.855.345.346.856.346.51 0 .839-.346zm4.337 9.314.033-1.332q.191.403.59.747l.098.081a4 4 0 0 0 .316.224l.223.122a3.2 3.2 0 0 0 1.44.322 3.8 3.8 0 0 0 1.875-.477 3.5 3.5 0 0 0 1.382-1.366q.527-.89.526-2.09 0-1.184-.444-2.073a3.24 3.24 0 0 0-1.283-1.399q-.823-.51-1.942-.51a3.5 3.5 0 0 0-1.527.344l-.086.043-.165.09a3 3 0 0 0-.33.214q-.432.315-.656.707a2 2 0 0 0-.099.198l.082-1.283V4.701h-1.744v12.095zm.473-2.509a2.5 2.5 0 0 0 .566.7q.117.098.245.18l.144.08a2.1 2.1 0 0 0 .975.232q1.07 0 1.645-.675.576-.69.576-1.778 0-1.102-.576-1.777-.56-.691-1.645-.692a2.2 2.2 0 0 0-1.015.235q-.22.113-.415.282l-.15.142a2.1 2.1 0 0 0-.42.594q-.223.479-.223 1.1v.115q0 .705.293 1.26zm2.616-.293c.157-.191.28-.479.28-.967 0-.51-.13-.79-.276-.961l-.021-.026c-.082-.1-.232-.225-.67-.225a.87.87 0 0 0-.681.279l-.012.011c-.154.155-.274.38-.274.807v.115c0 .285.057.499.144.669a1.1 1.1 0 0 0 .367.405c.137.082.28.123.455.123.423 0 .59-.118.686-.23zm8.266-3.013q.345-.13.724-.14l.069-.002q.493 0 .642.099l.247-1.794q-.196-.099-.717-.099a2.3 2.3 0 0 0-.545.063 2 2 0 0 0-.411.148 2.2 2.2 0 0 0-.4.249 2.5 2.5 0 0 0-.485.499 2.7 2.7 0 0 0-.32.581l-.05.137v-1.48h-1.778v7.553h1.777v-3.884q0-.546.159-.943a1.5 1.5 0 0 1 .466-.636 2.5 2.5 0 0 1 .399-.253 2 2 0 0 1 .224-.099zm9.784 2.656.05-.922q0-1.743-.856-2.698-.838-.97-2.584-.97-1.119-.001-2.007.493a3.46 3.46 0 0 0-1.4 1.382q-.493.906-.493 2.106 0 1.07.428 1.975.428.89 1.332 1.432.906.526 2.255.526.973 0 1.668-.185l.044-.012.135-.04q.613-.184.984-.421l-.542-1.267q-.3.162-.642.274l-.297.087q-.51.131-1.3.131-.954 0-1.497-.444a1.6 1.6 0 0 1-.192-.193q-.366-.44-.512-1.234l-.004-.021zm-5.427-1.256-.003.022h3.752v-.138q-.011-.727-.288-1.118a1 1 0 0 0-.156-.176q-.46-.428-1.316-.428-.986 0-1.494.604-.379.45-.494 1.234zm-27.053 2.77V4.7h-1.86v12.095h5.333V15.15zm7.103-5.908v7.553h-1.843V9.242h1.843z'/%3E%3Cpath fill='%23fff' d='m19.63 11.151-.757-1.71-.345 1.71-1.12 5.644h-1.827L18.083 4.7h.197l3.325 6.533.988 2.19.988-2.19L26.839 4.7h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.93 5.644h-.098l-2.913-5.644zm14.836 5.81q-1.02 0-1.893-.478a3.8 3.8 0 0 1-1.381-1.382q-.51-.906-.51-2.106 0-1.185.444-2.074a3.36 3.36 0 0 1 1.3-1.382q.839-.494 1.974-.494a3.3 3.3 0 0 1 1.234.231 3.3 3.3 0 0 1 .97.575q.396.33.527.659l.033-1.267h1.694v7.553H37.18l-.033-1.332q-.279.593-1.02 1.053a3.17 3.17 0 0 1-1.662.444zm.296-1.482q.938 0 1.58-.642.642-.66.642-1.711v-.115q0-.708-.296-1.267a2.2 2.2 0 0 0-.807-.872 2.1 2.1 0 0 0-1.119-.313q-1.053 0-1.629.692-.575.675-.575 1.76 0 1.103.559 1.795.577.675 1.645.675zm6.521-6.237h1.711v1.4q.906-1.597 2.83-1.597 1.596 0 2.584 1.02.988 1.005.988 2.914 0 1.185-.493 2.09a3.46 3.46 0 0 1-1.316 1.399 3.5 3.5 0 0 1-1.844.493q-.954 0-1.662-.329a2.67 2.67 0 0 1-1.086-.97l.017 5.134h-1.728zm4.048 6.22q1.07 0 1.645-.674.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.592 0-1.12.296-.51.28-.822.823-.296.527-.296 1.234v.115q0 .708.296 1.267.313.543.823.855.51.296 1.119.297z'/%3E%3Cpath fill='%23e1e3e9' d='M51.325 4.7h1.86v10.45h3.473v1.646h-5.333zm7.12 4.542h1.843v7.553h-1.843zm.905-1.415a1.16 1.16 0 0 1-.856-.346 1.17 1.17 0 0 1-.346-.856 1.05 1.05 0 0 1 .346-.79q.346-.329.856-.329.494 0 .839.33a1.05 1.05 0 0 1 .345.79 1.16 1.16 0 0 1-.345.855q-.33.346-.84.346zm7.875 9.133a3.17 3.17 0 0 1-1.662-.444q-.723-.46-1.004-1.053l-.033 1.332h-1.71V4.701h1.743v4.657l-.082 1.283q.279-.658 1.086-1.119a3.5 3.5 0 0 1 1.778-.477q1.119 0 1.942.51a3.24 3.24 0 0 1 1.283 1.4q.445.888.444 2.072 0 1.201-.526 2.09a3.5 3.5 0 0 1-1.382 1.366 3.8 3.8 0 0 1-1.876.477zm-.296-1.481q1.069 0 1.645-.675.577-.69.577-1.778 0-1.102-.577-1.776-.56-.691-1.645-.692a2.12 2.12 0 0 0-1.58.659q-.642.641-.642 1.694v.115q0 .71.296 1.267a2.4 2.4 0 0 0 .807.872 2.1 2.1 0 0 0 1.119.313zm5.927-6.237h1.777v1.481q.263-.757.856-1.217a2.14 2.14 0 0 1 1.349-.46q.527 0 .724.098l-.247 1.794q-.149-.099-.642-.099-.774 0-1.416.494-.626.493-.626 1.58v3.883h-1.777V9.242zm9.534 7.718q-1.35 0-2.255-.526-.904-.543-1.332-1.432a4.6 4.6 0 0 1-.428-1.975q0-1.2.493-2.106a3.46 3.46 0 0 1 1.4-1.382q.889-.495 2.007-.494 1.744 0 2.584.97.855.956.856 2.7 0 .444-.05.92h-5.43q.18 1.005.708 1.45.542.443 1.497.443.79 0 1.3-.131a4 4 0 0 0 .938-.362l.542 1.267q-.411.263-1.119.46-.708.198-1.711.197zm1.596-4.558q.016-1.02-.444-1.432-.46-.428-1.316-.428-1.728 0-1.991 1.86z'/%3E%3Cpath d='M5.074 15.948a.484.657 0 0 0-.486.659v1.84a.484.657 0 0 0 .486.659h4.101a.484.657 0 0 0 .486-.659v-1.84a.484.657 0 0 0-.486-.659zm3.56 1.16H5.617v.838h3.017z' style='fill:%23fff;fill-rule:evenodd;stroke-width:1.03600001'/%3E%3Cg style='stroke-width:1.12603545'%3E%3Cpath d='M-9.408-1.416c-3.833-.025-7.056 2.912-7.08 6.615-.02 3.08 1.653 4.832 3.107 6.268.903.892 1.721 1.74 2.32 2.902l-.525-.004c-.543-.003-.992.304-1.24.639a1.87 1.87 0 0 0-.362 1.121l-.011 1.877c-.003.402.104.787.347 1.125.244.338.688.653 1.23.656l4.142.028c.542.003.99-.306 1.238-.641a1.87 1.87 0 0 0 .363-1.121l.012-1.875a1.87 1.87 0 0 0-.348-1.127c-.243-.338-.688-.653-1.23-.656l-.518-.004c.597-1.145 1.425-1.983 2.348-2.87 1.473-1.414 3.18-3.149 3.2-6.226-.016-3.59-2.923-6.684-6.993-6.707m-.006 1.1v.002c3.274.02 5.92 2.532 5.9 5.6-.017 2.706-1.39 4.026-2.863 5.44-1.034.994-2.118 2.033-2.814 3.633-.018.041-.052.055-.075.065q-.013.004-.02.01a.34.34 0 0 1-.226.084.34.34 0 0 1-.224-.086l-.092-.077c-.699-1.615-1.768-2.669-2.781-3.67-1.454-1.435-2.797-2.762-2.78-5.478.02-3.067 2.7-5.545 5.975-5.523m-.02 2.826c-1.62-.01-2.944 1.315-2.955 2.96-.01 1.646 1.295 2.988 2.916 2.999h.002c1.621.01 2.943-1.316 2.953-2.961.011-1.646-1.294-2.988-2.916-2.998m-.005 1.1c1.017.006 1.829.83 1.822 1.89s-.83 1.874-1.848 1.867c-1.018-.006-1.829-.83-1.822-1.89s.83-1.874 1.848-1.868m-2.155 11.857 4.14.025c.271.002.49.305.487.676l-.013 1.875c-.003.37-.224.67-.495.668l-4.14-.025c-.27-.002-.487-.306-.485-.676l.012-1.875c.003-.37.224-.67.494-.668' style='color:%23000;font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:%23000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:evenodd;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:%23000;solid-opacity:1;vector-effect:none;fill:%23000;fill-opacity:.4;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-9.415-.316C-12.69-.338-15.37 2.14-15.39 5.207c-.017 2.716 1.326 4.041 2.78 5.477 1.013 1 2.081 2.055 2.78 3.67l.092.076a.34.34 0 0 0 .225.086.34.34 0 0 0 .227-.083l.019-.01c.022-.009.057-.024.074-.064.697-1.6 1.78-2.64 2.814-3.634 1.473-1.414 2.847-2.733 2.864-5.44.02-3.067-2.627-5.58-5.901-5.601m-.057 8.784c1.621.011 2.944-1.315 2.955-2.96.01-1.646-1.295-2.988-2.916-2.999-1.622-.01-2.945 1.315-2.955 2.96s1.295 2.989 2.916 3' style='clip-rule:evenodd;fill:%23e1e3e9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-11.594 15.465c-.27-.002-.492.297-.494.668l-.012 1.876c-.003.371.214.673.485.675l4.14.027c.271.002.492-.298.495-.668l.012-1.877c.003-.37-.215-.672-.485-.674z' style='clip-rule:evenodd;fill:%23fff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3C/g%3E%3C/svg%3E")}}.maplibregl-ctrl.maplibregl-ctrl-attrib{background-color:#ffffff80;margin:0;padding:0 5px}@media screen{.maplibregl-ctrl-attrib.maplibregl-compact{background-color:#fff;border-radius:12px;box-sizing:content-box;color:#000;margin:10px;min-height:20px;padding:2px 24px 2px 0;position:relative}.maplibregl-ctrl-attrib.maplibregl-compact-show{padding:2px 28px 2px 8px;visibility:visible}.maplibregl-ctrl-bottom-left>.maplibregl-ctrl-attrib.maplibregl-compact-show,.maplibregl-ctrl-top-left>.maplibregl-ctrl-attrib.maplibregl-compact-show{border-radius:12px;padding:2px 8px 2px 28px}.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-inner{display:none}.maplibregl-ctrl-attrib-button{background-color:#ffffff80;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E");border:0;border-radius:12px;box-sizing:border-box;cursor:pointer;display:none;height:24px;outline:none;position:absolute;right:0;top:0;width:24px}.maplibregl-ctrl-attrib summary.maplibregl-ctrl-attrib-button{-webkit-appearance:none;-moz-appearance:none;appearance:none;list-style:none}.maplibregl-ctrl-attrib summary.maplibregl-ctrl-attrib-button::-webkit-details-marker{display:none}.maplibregl-ctrl-bottom-left .maplibregl-ctrl-attrib-button,.maplibregl-ctrl-top-left .maplibregl-ctrl-attrib-button{left:0}.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button,.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner{display:block}.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button{background-color:#0000000d}.maplibregl-ctrl-bottom-right>.maplibregl-ctrl-attrib.maplibregl-compact:after{bottom:0;right:0}.maplibregl-ctrl-top-right>.maplibregl-ctrl-attrib.maplibregl-compact:after{right:0;top:0}.maplibregl-ctrl-top-left>.maplibregl-ctrl-attrib.maplibregl-compact:after{left:0;top:0}.maplibregl-ctrl-bottom-left>.maplibregl-ctrl-attrib.maplibregl-compact:after{bottom:0;left:0}}@media screen and (forced-colors:active){.maplibregl-ctrl-attrib.maplibregl-compact:after{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='%23fff' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E")}}@media screen and (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl-attrib.maplibregl-compact:after{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E")}}.maplibregl-ctrl-attrib a{color:#000000bf;text-decoration:none}.maplibregl-ctrl-attrib a:hover{color:inherit;text-decoration:underline}.maplibregl-attrib-empty{display:none}.maplibregl-ctrl-scale{background-color:#ffffffbf;border:2px solid #333;border-top:#333;box-sizing:border-box;color:#333;font-size:10px;padding:0 5px;white-space:nowrap}.maplibregl-popup{display:flex;left:0;pointer-events:none;position:absolute;top:0;will-change:transform}.maplibregl-popup-anchor-top,.maplibregl-popup-anchor-top-left,.maplibregl-popup-anchor-top-right{flex-direction:column}.maplibregl-popup-anchor-bottom,.maplibregl-popup-anchor-bottom-left,.maplibregl-popup-anchor-bottom-right{flex-direction:column-reverse}.maplibregl-popup-anchor-left{flex-direction:row}.maplibregl-popup-anchor-right{flex-direction:row-reverse}.maplibregl-popup-tip{border:10px solid transparent;height:0;width:0;z-index:1}.maplibregl-popup-anchor-top .maplibregl-popup-tip{align-self:center;border-bottom-color:#fff;border-top:none}.maplibregl-popup-anchor-top-left .maplibregl-popup-tip{align-self:flex-start;border-bottom-color:#fff;border-left:none;border-top:none}.maplibregl-popup-anchor-top-right .maplibregl-popup-tip{align-self:flex-end;border-bottom-color:#fff;border-right:none;border-top:none}.maplibregl-popup-anchor-bottom .maplibregl-popup-tip{align-self:center;border-bottom:none;border-top-color:#fff}.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip{align-self:flex-start;border-bottom:none;border-left:none;border-top-color:#fff}.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip{align-self:flex-end;border-bottom:none;border-right:none;border-top-color:#fff}.maplibregl-popup-anchor-left .maplibregl-popup-tip{align-self:center;border-left:none;border-right-color:#fff}.maplibregl-popup-anchor-right .maplibregl-popup-tip{align-self:center;border-left-color:#fff;border-right:none}[dir=rtl] .maplibregl-popup-anchor-left{flex-direction:row-reverse}[dir=rtl] .maplibregl-popup-anchor-right{flex-direction:row}[dir=rtl] .maplibregl-popup-anchor-top-left .maplibregl-popup-tip{align-self:flex-end}[dir=rtl] .maplibregl-popup-anchor-top-right .maplibregl-popup-tip{align-self:flex-start}[dir=rtl] .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip{align-self:flex-end}[dir=rtl] .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip{align-self:flex-start}.maplibregl-popup-close-button{background-color:transparent;border:0;border-radius:0 3px 0 0;cursor:pointer;position:absolute;right:0;top:0}.maplibregl-popup-close-button:hover{background-color:#0000000d}.maplibregl-popup-content{background:#fff;border-radius:3px;box-shadow:0 1px 2px #0000001a;padding:15px 10px;pointer-events:auto;position:relative}.maplibregl-popup-anchor-top-left .maplibregl-popup-content{border-top-left-radius:0}.maplibregl-popup-anchor-top-right .maplibregl-popup-content{border-top-right-radius:0}.maplibregl-popup-anchor-bottom-left .maplibregl-popup-content{border-bottom-left-radius:0}.maplibregl-popup-anchor-bottom-right .maplibregl-popup-content{border-bottom-right-radius:0}.maplibregl-popup-track-pointer{display:none}.maplibregl-popup-track-pointer *{pointer-events:none;-webkit-user-select:none;-moz-user-select:none;user-select:none}.maplibregl-map:hover .maplibregl-popup-track-pointer{display:flex}.maplibregl-map:active .maplibregl-popup-track-pointer{display:none}.maplibregl-marker{left:0;position:absolute;top:0;transition:opacity .2s;will-change:transform}.maplibregl-user-location-dot,.maplibregl-user-location-dot:before{background-color:#1da1f2;border-radius:50%;height:15px;width:15px}.maplibregl-user-location-dot:before{animation:maplibregl-user-location-dot-pulse 2s infinite;content:"";position:absolute}.maplibregl-user-location-dot:after{border:2px solid #fff;border-radius:50%;box-shadow:0 0 3px #00000059;box-sizing:border-box;content:"";height:19px;left:-2px;position:absolute;top:-2px;width:19px}@media (prefers-reduced-motion:reduce){.maplibregl-user-location-dot:before{animation:none}}@keyframes maplibregl-user-location-dot-pulse{0%{opacity:1;transform:scale(1)}70%{opacity:0;transform:scale(3)}to{opacity:0;transform:scale(1)}}.maplibregl-user-location-dot-stale{background-color:#aaa}.maplibregl-user-location-dot-stale:after{display:none}.maplibregl-user-location-accuracy-circle{background-color:#1da1f233;border-radius:100%;height:1px;width:1px}.maplibregl-crosshair,.maplibregl-crosshair .maplibregl-interactive,.maplibregl-crosshair .maplibregl-interactive:active{cursor:crosshair}.maplibregl-boxzoom{background:#fff;border:2px dotted #202020;height:0;left:0;opacity:.5;position:absolute;top:0;width:0}.maplibregl-cooperative-gesture-screen{align-items:center;background:#0006;color:#fff;display:flex;font-size:1.4em;inset:0;justify-content:center;line-height:1.2;opacity:0;padding:1rem;pointer-events:none;position:absolute;transition:opacity 1s ease 1s;z-index:99999}.maplibregl-cooperative-gesture-screen.maplibregl-show{opacity:1;transition:opacity .05s}.maplibregl-cooperative-gesture-screen .maplibregl-mobile-message{display:none}@media (hover:none),(pointer:coarse){.maplibregl-cooperative-gesture-screen .maplibregl-desktop-message{display:none}.maplibregl-cooperative-gesture-screen .maplibregl-mobile-message{display:block}}.maplibregl-pseudo-fullscreen{height:100%!important;left:0!important;position:fixed!important;top:0!important;width:100%!important;z-index:99999}`;
 const heliosCardStyles = i$3`
+    ${r$4(maplibreCss)}
+
     :host
     {
         display: block;
@@ -26449,8 +26679,12 @@ const heliosCardStyles = i$3`
 
 
     /*  Placeholder shown until the user enters a MapTiler key.
-        Layered sky + drifting hazes + scrolling cloud bands +
-        breathing sun, all CSS-driven. */
+        Mini-Helios vignette: a stylised iso scene matching the real
+        card's vocabulary (sun arc, sun + halo, low-poly buildings
+        with a brighter central home, ground cloud disc, leader
+        chips) over a light day-mode sky gradient. The brand chrome
+        (title + subtitle) sits at the bottom — the MapTiler key
+        prompt lives in the README, not on the catalogue thumbnail. */
 
     .placeholder
     {
@@ -26459,235 +26693,75 @@ const heliosCardStyles = i$3`
         overflow: hidden;
         z-index: 20;
         isolation: isolate;
-    }
-
-    .ph-sky
-    {
-        position: absolute;
-        inset: 0;
         background:
-            radial-gradient(1200px 700px at 65% 38%,
-                rgba(255,210,150,0.18) 0%,
+            radial-gradient(1000px 600px at 65% 28%,
+                rgba(255,210,150,0.30) 0%,
                 rgba(255,210,150,0)    55%),
             linear-gradient(180deg,
-                #0a1430 0%,
-                #102047 25%,
-                #1f3a6e 60%,
-                #355a8a 100%);
+                #dbe3ec 0%,
+                #e6e0d4 55%,
+                #d3ccbf 100%);
     }
 
-    .ph-haze
-    {
-        position: absolute;
-        top: -10%;
-        left: -10%;
-        width: 120%;
-        height: 60%;
-        pointer-events: none;
-        mix-blend-mode: screen;
-        opacity: 0.4;
-    }
-
-    .ph-haze-1
-    {
-        background: radial-gradient(ellipse 60% 40% at 30% 50%,
-            rgba(120,180,255,0.30) 0%,
-            rgba(120,180,255,0)    70%);
-        animation: ph-haze-drift 60s ease-in-out infinite alternate;
-    }
-
-    .ph-haze-2
-    {
-        top: 30%;
-        background: radial-gradient(ellipse 70% 50% at 70% 50%,
-            rgba(255,180,140,0.20) 0%,
-            rgba(255,180,140,0)    70%);
-        animation: ph-haze-drift 80s ease-in-out infinite alternate-reverse;
-        opacity: 0.3;
-    }
-
-    @keyframes ph-haze-drift
-    {
-        from { transform: translateX(-3%) translateY(0); }
-        to   { transform: translateX(3%)  translateY(-2%); }
-    }
-
-    .ph-clouds
+    .ph-scene
     {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
         pointer-events: none;
+        z-index: 1;
     }
 
-    .ph-band
+    /*  Sun halo pulses gently — same visual language as the live
+        card's breathing sun. Only the glow circle scales; the
+        inner orange disc stays fixed so the brand colour reads
+        cleanly at the centre. */
+    .ph-sun-glow
     {
         transform-origin: center;
+        transform-box: fill-box;
+        animation: ph-sun-pulse 4s ease-in-out infinite;
     }
 
-    .ph-band-1 { opacity: 0.55; animation: ph-band-drift-1 70s linear infinite; }
-    .ph-band-2 { opacity: 0.45; animation: ph-band-drift-2 95s linear infinite; }
-    .ph-band-3 { opacity: 0.35; animation: ph-band-drift-3 80s linear infinite; }
-
-    @keyframes ph-band-drift-1 { from { transform: translateX(-15%); } to { transform: translateX(115%); } }
-    @keyframes ph-band-drift-2 { from { transform: translateX(-25%); } to { transform: translateX(115%); } }
-    @keyframes ph-band-drift-3 { from { transform: translateX(-15%); } to { transform: translateX(115%); } }
-
-    .ph-vignette
+    @keyframes ph-sun-pulse
     {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        background: radial-gradient(ellipse 90% 70% at 50% 75%,
-            transparent          30%,
-            rgba(0,0,0,0.35)    100%);
-        z-index: 8;
-    }
-
-    .ph-sun-rise
-    {
-        position: absolute;
-        top: 0;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width:  220px;
-        height: 220px;
-        pointer-events: none;
-        z-index: 9;
+        0%, 100% { transform: scale(1);    opacity: 1;   }
+        50%      { transform: scale(1.15); opacity: 0.9; }
     }
 
     .ph-content
     {
         position: absolute;
-        top: 56%;
+        /*  Title centred horizontally, vertically anchored at 65 %
+            from the BOTTOM of the placeholder (so 35 % from the
+            top). Sits just above the iso buildings and visually
+            below the solar arc apex — feels less "crammed in the
+            middle" than a strict 50 % vertical centre. */
+        top: 35%;
         left: 50%;
         transform: translate(-50%, -50%);
         text-align: center;
-        color: white;
         z-index: 10;
-        padding: 0 24px;
-        width: 100%;
+        padding: 6px 18px;
         box-sizing: border-box;
     }
 
     .ph-title
     {
-        font-size: 2.6rem;
-        font-weight: 100;
-        letter-spacing: 12px;
+        font-size: 1.85rem;
+        font-weight: 200;
+        letter-spacing: 10px;
         text-transform: uppercase;
-        color: #ffffff;
-        text-shadow:
-            0 1px 30px rgba(255,200,120,0.4),
-            0 0 60px   rgba(120,160,220,0.3);
+        color: #2a2e34;
+        text-shadow: 0 1px 1px rgba(255,255,255,0.6);
         line-height: 1;
         white-space: nowrap;
-        padding-left: 12px;
-    }
-
-    .ph-sun-body
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 50%;
-        height: 50%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: radial-gradient(circle at 40% 38%,
-            #fffaf0   0%,
-            #ffe0a8  35%,
-            #ffb060  75%,
-            #ff8a3c 100%);
-        box-shadow: 0 0 30px rgba(255,180,80,0.6);
-        animation: ph-sun-breathe 6s ease-in-out infinite;
-    }
-
-    .ph-sun-corona
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width:  85%;
-        height: 85%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: radial-gradient(circle,
-            rgba(255,200,120,0.50)  0%,
-            rgba(255,180,90,0.22)  35%,
-            rgba(255,160,70,0)     65%);
-        filter: blur(4px);
-        pointer-events: none;
-        animation: ph-sun-breathe 6s ease-in-out infinite;
-    }
-
-    .ph-sun-bloom
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width:  100%;
-        height: 100%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: radial-gradient(circle,
-            rgba(255,200,140,0.30)  0%,
-            rgba(255,180,90,0.12)  25%,
-            rgba(255,160,70,0)     55%);
-        filter: blur(12px);
-        pointer-events: none;
-        animation: ph-sun-bloom-pulse 10s ease-in-out infinite;
-    }
-
-    @keyframes ph-sun-breathe
-    {
-        0%, 100% { transform: translate(-50%, -50%) scale(1);    }
-        50%      { transform: translate(-50%, -50%) scale(1.04); }
-    }
-
-    @keyframes ph-sun-bloom-pulse
-    {
-        0%, 100% { opacity: 0.85; }
-        50%      { opacity: 1.0;  }
-    }
-
-    .ph-divider
-    {
-        margin: 18px auto;
-        width: 60px;
-        height: 1px;
-        background: linear-gradient(90deg,
-            transparent             0%,
-            rgba(255,200,140,0.6)  50%,
-            transparent           100%);
-    }
-
-    .ph-sub
-    {
-        font-size: 0.78rem;
-        font-weight: 400;
-        letter-spacing: 3.5px;
-        text-transform: uppercase;
-        color: rgba(255,255,255,0.65);
-        margin-bottom: 28px;
-        line-height: 1;
-    }
-
-    .ph-action
-    {
-        display: inline-block;
-        font-size: 0.72rem;
-        font-weight: 500;
-        letter-spacing: 1.2px;
-        color: rgba(255,255,255,0.85);
-        background: rgba(0,0,0,0.30);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        border: 1px solid rgba(255,200,140,0.30);
-        border-radius: 4px;
-        padding: 9px 18px;
-        text-transform: uppercase;
+        /*  Optical centre — letter-spacing piles up on the right of
+            the last glyph so the visual centre of the wordmark
+            sits a few pixels left of the geometric centre. The
+            padding-left compensates so HELIOS reads centred. */
+        padding-left: 10px;
     }
 
 
@@ -27108,7 +27182,12 @@ const heliosCardStyles = i$3`
     /*  Photovoltaic production chip — same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
         text + icon) for instant identification.
-        --pv-leader-color is set inline by the renderer. */
+        --pv-leader-color is set inline by the renderer. The
+        min-width / centred text are shared with the SoC and Power
+        battery chips so the visible gap on each side of the PV
+        chip is identical regardless of how wide each value reads
+        ("26 %" vs "+12.34 kW" otherwise produce visibly unequal
+        leader gaps). */
     .pv-pct-label
     {
         position: absolute;
@@ -27117,7 +27196,10 @@ const heliosCardStyles = i$3`
         z-index: 6;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 3px;
+        min-width: 76px;
+        box-sizing: border-box;
         background: #ffffff;
         color:      var(--pv-leader-color, #27B36B);
         border:     1px solid var(--pv-leader-color, #27B36B);
@@ -27174,6 +27256,103 @@ const heliosCardStyles = i$3`
         on animateMotion keeps the tip pointing in the direction of
         travel (home → chip). */
     .pv-leader-arrow
+    {
+        opacity: 0.9;
+    }
+
+    /*  Battery chips (SoC on the left of PV, Power on the right) —
+        same frame as the PV chip, tinted in the user-configured
+        battery colour. Shares min-width and centred text with the
+        PV chip so the visible dotted-leader gap on each side of PV
+        is identical regardless of the value's content width.
+        --battery-leader-color is set inline by the renderer. */
+    .battery-pct-label
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 6;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        min-width: 76px;
+        box-sizing: border-box;
+        background: #ffffff;
+        color:      var(--battery-leader-color, #D32F2F);
+        border:     1px solid var(--battery-leader-color, #D32F2F);
+        border-radius: 3px;
+        padding: 2px 6px 2px 4px;
+        font-size:    12px;
+        font-weight:  600;
+        line-height:  1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+    }
+
+    .battery-pct-label ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  Battery leaders.
+        - SoC ↔ PV is a short static dotted hairline (.battery-
+          leader-line on its own) — same vocabulary as the cloud
+          leader. The SoC value has no sign so there's no flow
+          direction to encode.
+        - PV ↔ Power is animated (.battery-leader-line-animated
+          modifier on top of .battery-leader-line) with dashes
+          flowing at a speed proportional to |P| — exactly like
+          the PV leader's visual language — and a small arrow
+          polygon riding the line via SVG <animateMotion>. The
+          .battery-leader-discharging class flips the dash flow
+          direction (CSS animation-direction: reverse) so the
+          dashes move from chip → PV when the battery is
+          discharging; the arrow path is also flipped inline by
+          the renderer so the two cues stay in sync. */
+    .battery-leader-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    .battery-leader-line
+    {
+        stroke: var(--battery-leader-color, #D32F2F);
+        stroke-width: 1.5;
+        stroke-opacity: 0.85;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 2 3;
+        fill: none;
+    }
+
+    .battery-leader-line-animated
+    {
+        stroke-dasharray: 6 5;
+        animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
+    }
+
+    .battery-leader-discharging
+    {
+        animation-direction: reverse;
+    }
+
+    @keyframes battery-leader-flow
+    {
+        from { stroke-dashoffset: 0;   }
+        to   { stroke-dashoffset: -11; }
+    }
+
+    .battery-leader-arrow
     {
         opacity: 0.9;
     }
@@ -27380,6 +27559,127 @@ const heliosCardStyles = i$3`
         color: #000000;
         display: inline-flex;
         align-items: center;
+    }
+
+
+    /*  ============================================================
+        Dark theme — opt-in via the \`card-theme: dark\` config.
+
+        The whole card is already painted on top of a 3D map, so
+        "dark mode" here is really about the chrome (chips, charts,
+        cursors, day labels, leader lines, tooltips) — the basemap
+        keeps its own colours. Strategy:
+
+          - chip surfaces flip from a solid white plate to a solid
+            near-black plate, so the chip itself reads as a clean
+            darkened tile over the map instead of a
+            bright sticker.
+          - chip text / borders / icons go from black to a soft
+            light-grey (#e6e6e6 text, #cccccc borders) — pure white
+            would clip detail against bright basemap patches.
+          - chart hairlines (midline, day separators, hour ticks,
+            live cursor) flip from black-on-white to white-on-near-
+            black with the same opacity envelopes as the light skin
+            so the visual weight stays balanced.
+          - chart fills (PV / cloud / irradiance) are user-coloured
+            and unchanged — they read fine on both surfaces.
+          - the scrub blue (#1f6feb) and the live tooltip dark
+            plate already read on dark backgrounds, so they're left
+            alone.
+          - the placeholder vignette is left in light mode regardless
+            of theme: it's a marketing thumbnail rendered when no
+            API key is set, with a sunset gradient that doesn't have
+            a meaningful dark equivalent.
+        ============================================================ */
+
+    /*  Cards (chart panels) and hairlines on the chart. */
+    ha-card.theme-dark .tb-chart-card
+    {
+        background: #14161c;
+        border-color: #4a4d55;
+    }
+
+    ha-card.theme-dark .hc-day-sep
+    {
+        stroke: rgba(255, 255, 255, 0.30);
+    }
+
+    ha-card.theme-dark .hc-chart-mid
+    {
+        stroke: #cccccc;
+    }
+
+    ha-card.theme-dark .hc-hour-tick
+    {
+        stroke: rgba(255, 255, 255, 0.35);
+    }
+
+    ha-card.theme-dark .tb-cursor-now
+    {
+        background: rgba(255, 255, 255, 0.55);
+    }
+
+    ha-card.theme-dark .tb-cursor-now::after
+    {
+        border-top-color: #ffffff;
+    }
+
+    /*  Chips that don't carry a user-configured colour: clock, day
+        labels, live button, cloud %, solar W/m². These all share
+        the "white plate, black ink" base recipe in light mode, so
+        they get the same dark override. */
+    ha-card.theme-dark .clock,
+    ha-card.theme-dark .tl-live-btn,
+    ha-card.theme-dark .tb-day-label,
+    ha-card.theme-dark .cloud-pct-label,
+    ha-card.theme-dark .solar-pct-label
+    {
+        background: #14161c;
+        color:       #e6e6e6;
+        border-color: #cccccc;
+    }
+
+    ha-card.theme-dark .tb-day-label
+    {
+        background: #1a1c22;
+    }
+
+    ha-card.theme-dark .tl-live-btn ha-icon,
+    ha-card.theme-dark .cloud-pct-label ha-icon,
+    ha-card.theme-dark .solar-pct-label ha-icon
+    {
+        color: #e6e6e6;
+    }
+
+    ha-card.theme-dark .tl-live-btn:hover  { background: #24262c; }
+    ha-card.theme-dark .tl-live-btn:active { background: #303238; }
+
+    /*  PV and battery chips — they keep the user-configured tint
+        on the border / text / icon (so a green PV chip reads as
+        green on either skin), but the surface flips to the dark
+        plate so the tint stays readable. */
+    ha-card.theme-dark .pv-pct-label,
+    ha-card.theme-dark .battery-pct-label
+    {
+        background: #14161c;
+    }
+
+    /*  Cloud-cover leader (chip → disc) flips polarity so it's
+        visible against a dark plate and a darkened map. */
+    ha-card.theme-dark .cloud-leader-svg line
+    {
+        stroke: #e6e6e6;
+        stroke-opacity: 0.55;
+    }
+
+    /*  Solar arc outline — the light skin paints a black halo
+        behind the configured sun colour for legibility on bright
+        basemaps; in dark mode that halo would disappear into the
+        map, so we paint a faint white halo instead. The arc and
+        sun disc themselves keep their configured colour. */
+    ha-card.theme-dark .solar-svg .solar-arc-outline
+    {
+        stroke: rgba(255, 255, 255, 0.45);
     }
 `;
 var __defProp$1 = Object.defineProperty;
@@ -27692,6 +27992,18 @@ let HeliosCardEditor = class extends i {
       const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
       return u2 === "W" || u2 === "kW" || u2 === "MW" || u2 === "Wh" || u2 === "kWh" || u2 === "MWh";
     };
+    this._batterySocEntityFilter = (entity) => {
+      if (!entity || !entity.attributes) return false;
+      if (entity.attributes.device_class === "battery") return true;
+      const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
+      return u2 === "%";
+    };
+    this._batteryPowerEntityFilter = (entity) => {
+      if (!entity || !entity.attributes) return false;
+      if (entity.attributes.device_class === "power") return true;
+      const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
+      return u2 === "W" || u2 === "kW" || u2 === "MW";
+    };
   }
   setConfig(config) {
     this._cfg = { ...config };
@@ -27803,6 +28115,43 @@ let HeliosCardEditor = class extends i {
 
                 <div class="section-title">${t2.editor.mapSection}</div>
                 <div class="field">
+                    <span class="label">${t2.editor.mapStyle}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["map-style"] ?? "streets") === "streets" ? "active" : ""}"
+                            @click="${() => this._update("map-style", "streets")}"
+                        >${t2.editor.mapStyleStreet}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["map-style"] ?? "streets") === "topo" ? "active" : ""}"
+                            @click="${() => this._update("map-style", "topo")}"
+                        >${t2.editor.mapStyleTopo}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["map-style"] ?? "streets") === "hybrid" ? "active" : ""}"
+                            @click="${() => this._update("map-style", "hybrid")}"
+                        >${t2.editor.mapStyleHybrid}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.mapStyleHint}</div>
+                <div class="field">
+                    <span class="label">${t2.editor.cardTheme}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["card-theme"] ?? "light") === "light" ? "active" : ""}"
+                            @click="${() => this._update("card-theme", "light")}"
+                        >${t2.editor.cardThemeLight}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["card-theme"] ?? "light") === "dark" ? "active" : ""}"
+                            @click="${() => this._update("card-theme", "dark")}"
+                        >${t2.editor.cardThemeDark}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.cardThemeHint}</div>
+                <div class="field">
                     <span class="label">${t2.editor.showLabels}</span>
                     <div class="segmented-toggle">
                         <button
@@ -27869,6 +28218,59 @@ let HeliosCardEditor = class extends i {
                     ></helios-color-picker>
                 </label>
                 <div class="hint">${t2.editor.pvHint}</div>
+
+                <div class="section-title">${t2.editor.batterySection}</div>
+                <div class="field field-block">
+                    <span class="label">${t2.editor.batterySocEntity}</span>
+                    ${this._pickerReady ? b`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass="${this.hass}"
+                            .value="${String(c2["battery-soc-entity"] ?? "")}"
+                            .includeDomains="${["sensor", "input_number"]}"
+                            .entityFilter="${this._batterySocEntityFilter}"
+                            @value-changed="${(e2) => this._update("battery-soc-entity", e2.detail.value ?? "")}"
+                        ></ha-entity-picker>
+                    ` : b`
+                        <input
+                            type="text"
+                            .value="${String(c2["battery-soc-entity"] ?? "")}"
+                            placeholder="sensor.battery_soc"
+                            @change="${(e2) => this._str("battery-soc-entity", e2)}"
+                        />
+                    `}
+                </div>
+                <div class="field-help">${t2.editor.batterySocEntityHelp}</div>
+                <div class="field field-block">
+                    <span class="label">${t2.editor.batteryPowerEntity}</span>
+                    ${this._pickerReady ? b`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass="${this.hass}"
+                            .value="${String(c2["battery-power-entity"] ?? "")}"
+                            .includeDomains="${["sensor", "input_number"]}"
+                            .entityFilter="${this._batteryPowerEntityFilter}"
+                            @value-changed="${(e2) => this._update("battery-power-entity", e2.detail.value ?? "")}"
+                        ></ha-entity-picker>
+                    ` : b`
+                        <input
+                            type="text"
+                            .value="${String(c2["battery-power-entity"] ?? "")}"
+                            placeholder="sensor.battery_power"
+                            @change="${(e2) => this._str("battery-power-entity", e2)}"
+                        />
+                    `}
+                </div>
+                <div class="field-help">${t2.editor.batteryPowerEntityHelp}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.batteryColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["battery-color"], DEFAULT_BATTERY_COLOR_HEX)}"
+                        .ariaLabel="${t2.editor.batteryColor}"
+                        @value-changed="${(e2) => this._color("battery-color", e2)}"
+                    ></helios-color-picker>
+                </label>
+                <div class="hint">${t2.editor.batteryHint}</div>
 
                 <div class="section-title">${t2.editor.timeline}</div>
                 <label class="field">
@@ -28085,6 +28487,13 @@ let HeliosCard = class extends i {
     this._pvFetchKey = "";
     this._pvFetching = false;
     this._pvSampleBuffer = [];
+    this._batterySoc = null;
+    this._batteryPower = null;
+    this._batteryPowerUnit = "";
+    this._batterySocHistory = null;
+    this._batteryPowerHistory = null;
+    this._batteryFetchKey = "";
+    this._batteryFetching = false;
     this._sunScene = null;
     this._chartSeries = null;
     this._fetching = false;
@@ -28191,6 +28600,7 @@ let HeliosCard = class extends i {
       this._engine.updateConfig(this.config);
     }
     this._refreshPv();
+    this._refreshBattery();
   }
   //Photovoltaic production
   //
@@ -28257,6 +28667,198 @@ let HeliosCard = class extends i {
     }
     this._pvFetchKey = fetchKey;
     this._fetchPvHistory(entity, this._timeRange.start, this._timeRange.end);
+  }
+  //Battery overlay — pulls live state from hass.states on every Lit
+  //cycle (no rolling buffer like PV — battery entities are typically
+  //power sensors that already expose an instantaneous reading) and,
+  //when at least one entity is configured AND the timeline range is
+  //set, fetches a historical series so the chip can show what the
+  //battery was doing at any past instant the user scrubs to. The
+  //fetch is gated on a `(socEntity, powerEntity, range)` tuple so
+  //we don't reissue the WS call on every render cycle.
+  _refreshBattery() {
+    if (!this.hass) {
+      return;
+    }
+    const socEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
+    const powerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
+    let nextSoc = null;
+    if (socEntity) {
+      const so = this.hass.states?.[socEntity];
+      const v2 = so ? parseFloat(so.state) : NaN;
+      if (isFinite(v2)) {
+        nextSoc = Math.max(0, Math.min(100, v2));
+      }
+    }
+    if (nextSoc !== this._batterySoc) {
+      this._batterySoc = nextSoc;
+    }
+    let nextPower = null;
+    let nextUnit = "";
+    if (powerEntity) {
+      const so = this.hass.states?.[powerEntity];
+      const v2 = so ? parseFloat(so.state) : NaN;
+      if (isFinite(v2)) {
+        nextPower = v2;
+        nextUnit = so.attributes?.unit_of_measurement ?? "";
+      }
+    }
+    if (nextPower !== this._batteryPower) {
+      this._batteryPower = nextPower;
+    }
+    if (nextUnit !== this._batteryPowerUnit) {
+      this._batteryPowerUnit = nextUnit;
+    }
+    if (!socEntity && !powerEntity) {
+      if (this._batterySocHistory !== null) {
+        this._batterySocHistory = null;
+      }
+      if (this._batteryPowerHistory !== null) {
+        this._batteryPowerHistory = null;
+      }
+      this._batteryFetchKey = "";
+      return;
+    }
+    if (!this._timeRange || this._batteryFetching) {
+      return;
+    }
+    const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
+    const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}`;
+    if (fetchKey === this._batteryFetchKey) {
+      return;
+    }
+    this._batteryFetchKey = fetchKey;
+    this._fetchBatteryHistory(socEntity, powerEntity, this._timeRange.start, this._timeRange.end);
+  }
+  //Single-call history fetch for the battery overlay. Both entities
+  //(when configured) are bundled into one `entity_ids` array so we
+  //pay one WS roundtrip instead of two. Either side of the result
+  //may end up empty (entity not yet existing, no state changes in
+  //range, etc.) and that's fine — the chip will show only the side
+  //that did return data.
+  async _fetchBatteryHistory(socEntity, powerEntity, start, end) {
+    if (!this.hass?.callWS) {
+      return;
+    }
+    this._batteryFetching = true;
+    try {
+      const now = /* @__PURE__ */ new Date();
+      const fetchEnd = end > now ? now : end;
+      if (start >= fetchEnd) {
+        if (socEntity) {
+          this._batterySocHistory = { times: [], values: [] };
+        }
+        if (powerEntity) {
+          this._batteryPowerHistory = { times: [], values: [] };
+        }
+        return;
+      }
+      const ids = [];
+      if (socEntity) {
+        ids.push(socEntity);
+      }
+      if (powerEntity) {
+        ids.push(powerEntity);
+      }
+      const result = await this.hass.callWS({
+        type: "history/history_during_period",
+        start_time: start.toISOString(),
+        end_time: fetchEnd.toISOString(),
+        entity_ids: ids,
+        minimal_response: true,
+        no_attributes: true
+      });
+      const parseSeries = (arr) => {
+        const times = [];
+        const values = [];
+        for (const item of arr ?? []) {
+          const stateStr = typeof item?.s === "string" ? item.s : typeof item?.state === "string" ? item.state : null;
+          if (stateStr === null || stateStr === "unavailable" || stateStr === "unknown" || stateStr === "") {
+            continue;
+          }
+          const v2 = parseFloat(stateStr);
+          if (!isFinite(v2)) {
+            continue;
+          }
+          let ts = null;
+          if (typeof item?.lu === "number") {
+            ts = new Date(item.lu * 1e3);
+          } else if (typeof item?.last_updated === "string") {
+            ts = new Date(item.last_updated);
+          } else if (typeof item?.last_changed === "string") {
+            ts = new Date(item.last_changed);
+          }
+          if (!ts || isNaN(ts.getTime())) {
+            continue;
+          }
+          times.push(ts);
+          values.push(v2);
+        }
+        return { times, values };
+      };
+      if (socEntity) {
+        const series = parseSeries(result?.[socEntity] ?? []);
+        series.values = series.values.map((v2) => Math.max(0, Math.min(100, v2)));
+        this._batterySocHistory = series;
+      } else {
+        this._batterySocHistory = null;
+      }
+      if (powerEntity) {
+        this._batteryPowerHistory = parseSeries(result?.[powerEntity] ?? []);
+      } else {
+        this._batteryPowerHistory = null;
+      }
+    } catch (e2) {
+      console.warn("[HELIOS] battery history fetch failed:", e2);
+      this._batterySocHistory = { times: [], values: [] };
+      this._batteryPowerHistory = { times: [], values: [] };
+    } finally {
+      this._batteryFetching = false;
+    }
+  }
+  //Locate the history sample at or before `time` and return its
+  //value, or null if the time falls outside the fetched window. A
+  //60 s grace at the tail keeps "scrub to live" resolving cleanly
+  //(same convention as the PV chip).
+  _batterySampleAtTime(hist, time) {
+    if (!hist || hist.times.length === 0) {
+      return null;
+    }
+    const tMs = time.getTime();
+    const firstMs = hist.times[0].getTime();
+    const lastMs = hist.times[hist.times.length - 1].getTime();
+    if (tMs < firstMs || tMs > lastMs + 6e4) {
+      return null;
+    }
+    let idx = hist.times.length - 1;
+    for (let i2 = 0; i2 < hist.times.length; i2++) {
+      if (hist.times[i2].getTime() > tMs) {
+        idx = i2 - 1;
+        break;
+      }
+    }
+    if (idx < 0) {
+      idx = 0;
+    }
+    return hist.values[idx];
+  }
+  //Format a signed battery power value for the chip. Mirrors
+  //_formatPvValue's W ↔ kW switching but always prefixes a sign so
+  //the user can tell charging from discharging at a glance.
+  _formatBatteryPower(value, unit) {
+    const lu = (unit || "").trim().toLowerCase();
+    const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+    const abs = Math.abs(value);
+    if (lu === "w" && abs >= 1e3) {
+      return `${sign}${(abs / 1e3).toFixed(2)} kW`;
+    }
+    if (lu === "w") {
+      return `${sign}${Math.round(abs)} W`;
+    }
+    if (lu === "kw") {
+      return `${sign}${abs.toFixed(2)} kW`;
+    }
+    return `${sign}${abs}${unit ? " " + unit : ""}`;
   }
   async _fetchPvHistory(entityId, start, end) {
     if (!this.hass?.callWS) {
@@ -29029,6 +29631,33 @@ let HeliosCard = class extends i {
     const pvDisplayValue = showPvLabel ? this._formatPvValue(pvRate.value, pvRate.unit) : "";
     const pvWattsForFlow = pvRate !== null ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit) : 0;
     const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5e3);
+    const batterySocEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
+    const batteryPowerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
+    const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
+    const batteryScrubbing = !this._isLiveMode && this._selectedTime !== null;
+    const batteryScrubFuture = batteryScrubbing && this._selectedTime.getTime() > Date.now() + 6e4;
+    const activeBatterySoc = batteryScrubbing ? this._batterySampleAtTime(this._batterySocHistory, this._selectedTime) : this._batterySoc;
+    const activeBatteryPower = batteryScrubbing ? this._batterySampleAtTime(this._batteryPowerHistory, this._selectedTime) : this._batteryPower;
+    const activeBatteryUnit = this._batteryPowerUnit;
+    const showSocChip = hasApiKey && layout !== null && !batteryScrubFuture && batterySocEntity !== "" && activeBatterySoc !== null;
+    const showPowerChip = hasApiKey && layout !== null && !batteryScrubFuture && batteryPowerEntity !== "" && activeBatteryPower !== null;
+    const batterySocText = showSocChip ? `${Math.round(activeBatterySoc)} %` : "";
+    const batteryPowerText = showPowerChip ? this._formatBatteryPower(activeBatteryPower, activeBatteryUnit) : "";
+    const batteryCharging = showPowerChip && activeBatteryPower > 0;
+    const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
+    const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
+    const PV_QUARTER_PX = 19;
+    const PV_HALF_HEIGHT_PX = 11;
+    const BAT_CHIP_NUDGE_PX = 32;
+    const lPvBottomY = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX : 0;
+    const lShelfY = layout ? layout.batterySocLabel.y : 0;
+    const lLeftQuarterX = layout ? layout.pvLabel.x - PV_QUARTER_PX : 0;
+    const lRightQuarterX = layout ? layout.pvLabel.x + PV_QUARTER_PX : 0;
+    const lSocEndX = layout ? layout.batterySocLabel.x + BAT_CHIP_NUDGE_PX : 0;
+    const lPowerEndX = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
+    const socLeaderPoints = `${lLeftQuarterX},${lPvBottomY} ${lLeftQuarterX},${lShelfY} ${lSocEndX},${lShelfY}`;
+    const powerLeaderPoints = `${lRightQuarterX},${lPvBottomY} ${lRightQuarterX},${lShelfY} ${lPowerEndX},${lShelfY}`;
+    const powerArrowPath = batteryCharging ? `M ${lRightQuarterX},${lPvBottomY} L ${lRightQuarterX},${lShelfY} L ${lPowerEndX},${lShelfY}` : `M ${lPowerEndX},${lShelfY} L ${lRightQuarterX},${lShelfY} L ${lRightQuarterX},${lPvBottomY}`;
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -29041,8 +29670,10 @@ let HeliosCard = class extends i {
     const sunFillRatio = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1e3)));
     const showSunLabel = showSun && sunScene.sun.altitude > 0;
     const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1e3, 0.8);
+    const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
+    const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
     return b`
-            <ha-card class="${!hasApiKey ? "placeholder-mode" : ""}">
+            <ha-card class="${cardThemeClass} ${!hasApiKey ? "placeholder-mode" : ""}">
 
                 ${!hasApiKey ? this._renderPlaceholder() : A}
 
@@ -29252,10 +29883,10 @@ ${showSun ? b`
 
                     <svg class="cloud-leader-svg">
                         <line
-                            x1="${layout.cloudLabel.x}"
-                            y1="${layout.cloudLabel.y + 10}"
-                            x2="${layout.ringTop.x}"
-                            y2="${layout.ringTop.y}"
+                            x1="${layout.cloudLabel.x + 10}"
+                            y1="${layout.cloudLabel.y}"
+                            x2="${layout.ringEdge.x}"
+                            y2="${layout.ringEdge.y}"
                         ></line>
                     </svg>
                     <div
@@ -29313,6 +29944,74 @@ ${showSun ? b`
                     </div>
                 ` : A}
 
+                ${showSocChip || showPowerChip ? b`
+                    <svg class="battery-leader-svg">
+                        <!--
+                            SoC ↔ PV — static, dotted, inverted-L
+                            polyline. Vertical leg drops from PV's
+                            bottom edge at 1/4 of the chip width
+                            (the LEFT quarter), horizontal leg
+                            then runs left to the SoC chip. No
+                            animation: SoC has no flow direction.
+                        -->
+                        ${showSocChip ? w`
+                            <polyline
+                                class="battery-leader-line"
+                                style="--battery-leader-color:${batteryColor}"
+                                points="${socLeaderPoints}"
+                            ></polyline>
+                        ` : A}
+                        <!--
+                            PV ↔ Power — animated, dotted L with
+                            an arrow tracking the sign of the live
+                            power. Vertical leg at 3/4 of PV's
+                            width (the RIGHT quarter), horizontal
+                            leg then runs right to the Power chip.
+                            Charging (P > 0) → arrow PV → Power.
+                            Discharging (P < 0) → arrow Power → PV
+                            (the polyline class modifier flips the
+                            dash flow too).
+                        -->
+                        ${showPowerChip ? w`
+                            <polyline
+                                class="battery-leader-line battery-leader-line-animated ${batteryCharging ? "" : "battery-leader-discharging"}"
+                                style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
+                                points="${powerLeaderPoints}"
+                            ></polyline>
+                            <polygon
+                                class="battery-leader-arrow"
+                                points="-6,-4 0,0 -6,4"
+                                fill="${batteryColor}"
+                            >
+                                <animateMotion
+                                    dur="${batteryFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="${powerArrowPath}"
+                                ></animateMotion>
+                            </polygon>
+                        ` : A}
+                    </svg>
+                    ${showSocChip ? b`
+                        <div
+                            class="battery-pct-label"
+                            style="left:${layout.batterySocLabel.x}px; top:${layout.batterySocLabel.y}px; --battery-leader-color:${batteryColor}"
+                        >
+                            <ha-icon icon="mdi:battery"></ha-icon>
+                            <span>${batterySocText}</span>
+                        </div>
+                    ` : A}
+                    ${showPowerChip ? b`
+                        <div
+                            class="battery-pct-label"
+                            style="left:${layout.batteryPowerLabel.x}px; top:${layout.batteryPowerLabel.y}px; --battery-leader-color:${batteryColor}"
+                        >
+                            <ha-icon icon="mdi:lightning-bolt"></ha-icon>
+                            <span>${batteryPowerText}</span>
+                        </div>
+                    ` : A}
+                ` : A}
+
             </ha-card>
         `;
   }
@@ -29332,67 +30031,84 @@ ${showSun ? b`
   }
   //Placeholder (no API key configured)
   _renderPlaceholder() {
-    const t2 = pickTranslations(this.hass?.language);
     return b`
             <div class="placeholder">
 
-                <div class="ph-sky"></div>
-                <div class="ph-haze ph-haze-1"></div>
-                <div class="ph-haze ph-haze-2"></div>
-
                 <svg
-                    class="ph-clouds"
-                    viewBox="0 0 800 500"
-                    preserveAspectRatio="xMidYMid slice"
+                    class="ph-scene"
+                    viewBox="0 0 400 320"
+                    preserveAspectRatio="xMidYMid meet"
                     xmlns="http://www.w3.org/2000/svg"
                 >
                     <defs>
-                        <filter id="ph-noise" x="-20%" y="-20%" width="140%" height="140%">
-                            <feTurbulence
-                                type="fractalNoise"
-                                baseFrequency="0.012 0.025"
-                                numOctaves="3"
-                                seed="7"
-                                result="noise"
-                            />
-                            <feDisplacementMap
-                                in="SourceGraphic"
-                                in2="noise"
-                                scale="55"
-                                xChannelSelector="R"
-                                yChannelSelector="G"
-                            />
-                            <feGaussianBlur stdDeviation="3" />
-                        </filter>
-                        <linearGradient id="ph-cloud-grad" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%"   stop-color="rgba(255,255,255,0.0)" />
-                            <stop offset="40%"  stop-color="rgba(255,255,255,0.55)" />
-                            <stop offset="100%" stop-color="rgba(180,200,225,0.65)" />
-                        </linearGradient>
+                        <radialGradient id="ph-cloud-disc-grad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%"   stop-color="rgba(90,141,196,0.55)" />
+                            <stop offset="80%"  stop-color="rgba(90,141,196,0.20)" />
+                            <stop offset="100%" stop-color="rgba(90,141,196,0)"    />
+                        </radialGradient>
+                        <radialGradient id="ph-sun-glow-grad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%"   stop-color="rgba(239,159,39,0.85)" />
+                            <stop offset="50%"  stop-color="rgba(239,159,39,0.30)" />
+                            <stop offset="100%" stop-color="rgba(239,159,39,0)"    />
+                        </radialGradient>
                     </defs>
-                    <g filter="url(#ph-noise)" fill="url(#ph-cloud-grad)">
-                        <ellipse class="ph-band ph-band-1" cx="200" cy="160" rx="220" ry="20" />
-                        <ellipse class="ph-band ph-band-2" cx="500" cy="320" rx="280" ry="26" />
-                        <ellipse class="ph-band ph-band-3" cx="650" cy="220" rx="180" ry="16" />
+
+                    <!-- Cloud disc on the ground; rendered first so
+                         buildings emerge through it as islands. -->
+                    <ellipse cx="215" cy="215" rx="110" ry="30"
+                        fill="url(#ph-cloud-disc-grad)" />
+                    <ellipse cx="215" cy="215" rx="110" ry="30"
+                        fill="none"
+                        stroke="rgba(90,141,196,0.50)"
+                        stroke-width="0.6" />
+
+                    <!-- Far-back-left neighbour. -->
+                    <g>
+                        <polygon points="110,168 132,180 110,192 88,180"  fill="#dadade" />
+                        <polygon points="132,180 110,192 110,212 132,200" fill="#cbcbcf" />
+                        <polygon points="88,180 110,192 110,212 88,200"   fill="#bcbcc1" />
+                    </g>
+
+                    <!-- Far-back-right neighbour, slightly taller. -->
+                    <g>
+                        <polygon points="300,162 324,176 300,190 276,176" fill="#dadade" />
+                        <polygon points="324,176 300,190 300,212 324,198" fill="#cbcbcf" />
+                        <polygon points="276,176 300,190 300,212 276,198" fill="#bcbcc1" />
+                    </g>
+
+                    <!-- Home: bigger and brighter than its neighbours,
+                         centred on the cloud disc. -->
+                    <g>
+                        <polygon points="215,178 253,198 215,218 177,198" fill="#ebebef" />
+                        <polygon points="253,198 215,218 215,260 253,240" fill="#dededf" />
+                        <polygon points="177,198 215,218 215,260 177,240" fill="#ccccd0" />
+                    </g>
+
+                    <!-- Solar arc — drawn over the buildings so it
+                         visually inhabits the sky. -->
+                    <path
+                        d="M 50 230 Q 215 60 360 230"
+                        fill="none"
+                        stroke="#EF9F27"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-opacity="0.85" />
+
+                    <!-- Sun disc + halo, riding on the arc at t=0.75
+                         (3/4 of the way from the left) so it sits ON
+                         the path. The glow circle pulses; the inner
+                         disc stays still so the brand colour reads
+                         clearly. -->
+                    <g transform="translate(286, 166)">
+                        <circle class="ph-sun-glow" r="22" fill="url(#ph-sun-glow-grad)" />
+                        <circle r="9" fill="#EF9F27" />
+                        <circle r="8.5" fill="none"
+                            stroke="#a36617" stroke-width="0.7" stroke-opacity="0.55" />
                     </g>
                 </svg>
 
-                <!-- Half-sun rising at the top of the card. The wrapper is centred
-                     horizontally and translated upward so only the bottom half
-                     of the disc + halo are visible above the title. -->
-                <div class="ph-sun-rise">
-                    <div class="ph-sun-bloom"></div>
-                    <div class="ph-sun-corona"></div>
-                    <div class="ph-sun-body"></div>
-                </div>
-
-                <div class="ph-vignette"></div>
-
                 <div class="ph-content">
                     <div class="ph-title">HELIOS</div>
-                    <div class="ph-divider"></div>
-                    <div class="ph-sub">${t2.placeholder.subtitle}</div>
-                    <div class="ph-action">${t2.placeholder.action}</div>
                 </div>
 
             </div>
@@ -29419,7 +30135,26 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   //and Lit re-renders the chart. pv-power-entity is included
   //too so changing it triggers a fresh history fetch.
   "pv-color",
-  "pv-power-entity"
+  "pv-power-entity",
+  //map-style triggers a MapLibre setStyle() inside updateConfig,
+  //so the engine reloads the basemap (terrain, hillshade, cloud
+  //disc, buildings and label visibility are all re-applied via
+  //the resulting `style.load`).
+  "map-style",
+  //Battery overlay — soc and power entities feed the live chip
+  //below the home; battery-color tints the chip border, text
+  //and animated leader. Including them in the visual sig means
+  //changing the entity in the editor triggers a re-render that
+  //picks up the new readings on the next hass property update.
+  "battery-soc-entity",
+  "battery-power-entity",
+  "battery-color",
+  //card-theme is purely a card-level visual (it switches the
+  //ha-card's class to flip CSS variables / chip colours
+  //between the light and dark skins), but it must be in the
+  //sig so Lit re-renders the card when the user toggles it
+  //in the editor.
+  "card-theme"
 ];
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([
@@ -29470,6 +30205,21 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_pvHistory", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_batterySoc", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_batteryPower", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_batteryPowerUnit", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_batterySocHistory", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_batteryPowerHistory", 2);
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_sunScene", 2);

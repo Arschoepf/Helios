@@ -8,8 +8,7 @@ export const de: Translations = {
 
     placeholder:
     {
-        subtitle: 'Sonneneinstrahlung & Wolkenbedeckung',
-        action:   'MapTiler-API-Schlüssel eintragen, um zu aktivieren'
+        subtitle: 'Sonneneinstrahlung & Wolkenbedeckung'
     },
 
     tooltip:
@@ -32,6 +31,15 @@ export const de: Translations = {
         hillshadeColor:     'Schattierungsfarbe *',
         hillshadeStrength:  'Schattierungsstärke * (0 → 1)',
         mapSection:         'Karte',
+        mapStyle:           'Kartenstil *',
+        mapStyleHint:       'Wähle zwischen der Straßenkarte (nüchtern, urban), der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände) oder der Hybrid-Karte (hochauflösende Satellitenbilder mit Straßen- und Beschriftungs-Overlay). Beschriftungen und 3D-Gebäude funktionieren auf allen drei gleich.',
+        mapStyleStreet:     'Straßen',
+        mapStyleTopo:       'Topo',
+        mapStyleHybrid:     'Hybrid',
+        cardTheme:          'Karten-Thema *',
+        cardThemeHint:      'Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt. Die 3D-Grundkarte selbst bleibt unverändert.',
+        cardThemeLight:     'Hell',
+        cardThemeDark:      'Dunkel',
         showLabels:         'Beschriftungen anzeigen *',
         showLabelsHint:     'Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.',
         labelsOn:           'Sichtbar',
@@ -51,6 +59,13 @@ export const de: Translations = {
         pvHint:             'Optional. Wenn gesetzt, erscheint auf dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Die Linie zwischen Haus und Chip animiert mit einer Geschwindigkeit proportional zur Produktion. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).',
         pvEntity:           'Produktions-Entität',
         pvEntityHelp:       'Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).',
-        pvColor:            'Produktionsfarbe *'
+        pvColor:            'Produktionsfarbe *',
+        batterySection:     'Hausbatterie',
+        batteryHint:        'Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips — Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS — über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional; der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.',
+        batterySocEntity:   'Ladezustand-Entität',
+        batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
+        batteryPowerEntity: 'Leistungs-Entität',
+        batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
+        batteryColor:       'Batteriefarbe *'
     }
 };

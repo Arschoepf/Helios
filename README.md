@@ -18,6 +18,8 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 * **Incidence ray** — dashed line from sun to home, animated to flow at a speed proportional to live irradiance. The stronger the sun, the faster it pulses.
 * **Cloud cover disc** — translucent disc on the ground, scaled by live cloud-cover %, outlined in the configured cloud colour. A fixed black ring marks the 100 % reference. Hover for the low/mid/high breakdown.
 * **PV production chip** *(optional)* — pin on the home, shows the **instantaneous** production in W/kW. Cumulative-energy sensors (kWh) are differentiated automatically over a rolling 60 s window. The line between the home and the chip flows at a speed proportional to live production.
+* **Home battery overlay** *(optional)* — two independent chips flank the PV chip on the same horizontal axis: State of Charge on the left, signed instantaneous power on the right. Each chip is connected to PV by a short static dotted hairline. Either entity is independently optional; the corresponding chip only renders when its entity is set.
+* **Auto-rotation** — when the user is idle, the camera slowly orbits the home in the opposite direction to the sun's apparent motion (~1°/s). Any pinch / drag pauses it instantly and it resumes after a few seconds of stillness.
 * **Timeline** — 5 days wide (2 past + today + 2 forecast). Dual-area chart with irradiance on top and cloud cover below. A second graph appears above when a PV entity is configured. Click or drag anywhere on the timeline to scrub; the whole map snaps to the selected instant.
 * **Multilingual** — English, French, German, Spanish, Italian, Dutch, Portuguese. Adapts to your Home Assistant language.
 
@@ -76,13 +78,18 @@ Every option below is editable visually:
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `maptiler-api-key` | string | — | Required. |
+| `map-style` | `'streets' \| 'topo' \| 'hybrid'` | `'streets'` | Basemap style. `streets` is a sober vector basemap suited to dense urban areas; `topo` is a topographic basemap with contour lines, better in hilly / outdoor settings; `hybrid` is high-resolution satellite imagery with road and label overlays for real-world context (vegetation, rooftops, parking lots) under the solar overlay. Labels and 3D buildings work identically on all three. |
+| `card-theme` | `'light' \| 'dark'` | `'light'` | Card chrome skin — chips, charts, buttons, tooltips and the scrub overlay flip between a light surface (default, on a white plate) and a dark surface (on a near-black plate), so the card sits cleanly inside light or dark Home Assistant dashboards. The 3D map basemap and the configured colour palette (sun, cloud, PV, battery) are unaffected. |
 | `topography-color` | hex | `#5064a0` | Hillshade tint. |
-| `topography-alpha` | 0–1 | `0.65` | Hillshade strength. |
+| `topography-alpha` | 0–1 | `0.65` | Hillshade strength. On `topo`, the basemap already carries some baked-in shading — lower this if the cumulative effect feels too heavy. |
 | `show-labels` | boolean | `true` | Show MapTiler street names, building numbers, POIs and place names on the basemap. |
 | `sun-color` | hex | `#EF9F27` | Sun disc + arc + timeline irradiance area. |
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
 | `pv-power-entity` | entity_id | — | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |
 | `pv-color` | hex | `#27B36B` | PV chip border + text + leader + dedicated graph. |
+| `battery-soc-entity` | entity_id | — | Optional. Battery State-of-Charge sensor (`%` — usually `device_class: battery`). Renders as a chip on the LEFT of the PV chip showing the live percentage. |
+| `battery-power-entity` | entity_id | — | Optional. Battery power sensor (W/kW). Signed: positive is interpreted as charging. Renders as a chip on the RIGHT of the PV chip showing the signed reading verbatim. |
+| `battery-color` | hex | `#D32F2F` | Battery colour reused on both battery chips' borders + text + the static dotted leaders that connect each to the PV chip. |
 | `date-format` | string | `mm-dd` | Tokens: `yyyy`, `yy`, `mm`, `dd`. |
 | `time-format` | `'12h' \| '24h'` | `'24h'` | Clock display in the top-right chip. |
 

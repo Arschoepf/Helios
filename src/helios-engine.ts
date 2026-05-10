@@ -39,11 +39,46 @@ export interface HeliosConfig
     //                    to read cleanly on the white chart card.
     'pv-power-entity'?:       unknown;
     'pv-color'?:              unknown;
+    //v1.1 — optional home-battery overlay. A single chip below the
+    //home shows the battery State-of-Charge (%) and the live signed
+    //power draw (positive while charging, negative while discharging),
+    //mirroring the PV chip above the home. Either entity is optional;
+    //the chip renders as long as at least one is set, with a leader
+    //line whose flow direction follows the sign of the power.
+    //  battery-soc-entity   : Home Assistant entity id of a numeric
+    //                         sensor in % (typical: device_class
+    //                         "battery", or unit "%"). Out-of-range
+    //                         values are clamped to [0, 100].
+    //  battery-power-entity : Home Assistant entity id of a numeric
+    //                         power sensor in W or kW. Sign convention
+    //                         follows the entity itself; positive is
+    //                         interpreted as charging.
+    //  battery-color        : single colour used everywhere battery
+    //                         appears (chip text, border, leader,
+    //                         flow arrow). Defaults to a vivid purple.
+    'battery-soc-entity'?:    unknown;
+    'battery-power-entity'?:  unknown;
+    'battery-color'?:         unknown;
     'date-format'?:           unknown;
     //v1.0 — '12h' | '24h'. Default: '24h'. Picks between locale-
     //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
     //rendering of the date/time chip at the top-right of the card.
     'time-format'?:           unknown;
+    //v1.1 — picks the MapTiler base style. 'streets' (default) renders
+    //a sober vector basemap suited to dense urban areas; 'topo' renders
+    //a topographic basemap with contour lines and softer earth tones,
+    //better in hilly / outdoor settings; 'hybrid' renders satellite
+    //imagery with road and label overlays. The label visibility toggle
+    //and the helios-buildings extrusion are independent of this choice
+    //(all three are wired to custom sources).
+    'map-style'?:             unknown;
+    //v1.1.0-beta.8 — picks the card chrome theme. 'light' (default)
+    //paints chips, charts, buttons, tooltips and the scrub overlay
+    //on a white surface; 'dark' switches to a near-black surface
+    //with light-grey text so the card sits cleanly inside dark HA
+    //dashboards. The 3D map basemap and the configured colour
+    //palette (sun, cloud, PV, battery) are unaffected.
+    'card-theme'?:            unknown;
 }
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
@@ -188,6 +223,11 @@ export const DEFAULT_CLOUD_COLOR_HEX: string = '#5A8DC4';
 //and reads as "solar production" without competing with the orange sun
 //or the blue cloud colours.
 export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
+//Saturated red — distinct from sun (orange), cloud (blue), PV
+//(green), and easy to associate visually with battery
+//discharge / "energy on draw" semantics. Reads cleanly on the
+//80 % white chip background.
+export const DEFAULT_BATTERY_COLOR_HEX: string = '#D32F2F';
 
 const DEFAULT_CLOUD_RGB: RGB = [0x5A, 0x8D, 0xC4];
 
@@ -406,6 +446,16 @@ export class HeliosEngine
     //projections (sun arc, chip positions, leaders) from this hook.
     public onMapTransform?:  () => void;
 
+    //Auto-rotation state. The map slowly orbits the home in the
+    //opposite direction to the sun's apparent motion (decreasing
+    //bearing, ~1.5°/s) when the user has been idle for a few
+    //seconds. Any direct interaction resets the inactivity timer,
+    //so the rotation pauses immediately on pinch / drag / wheel
+    //and resumes from the user's bearing once they let go.
+    private _autoRotateRaf?:           number;
+    private _autoRotateLastFrame:      number = 0;
+    private _autoRotateLastUserAction: number = 0;
+
     constructor(
         container:    HTMLElement,
         config:       HeliosConfig,
@@ -476,17 +526,43 @@ export class HeliosEngine
 
         this._resizeObserver.observe(container);
 
-        //v1.1 had a snap-back mechanism here that re-centred the map
-        //on `zoomend`/`rotateend`/`pitchend` to compensate for
-        //sub-metre drift accumulated during zoom/rotate/pitch
-        //interactions. With v1.2's locked camera (no user
-        //pan/zoom/rotate/pitch) those events only ever fire as the
-        //tail end of programmatic easeTo animations — where snapping
-        //the centre would actively undo the animation we just asked
-        //for. The handler was removed.
+        //Lock the pinch-rotate pivot to the canvas centre. By default,
+        //TwoFingersTouchZoomRotateHandler rotates around the centroid
+        //of the two fingers — visually, the home orbits around the
+        //pinch point during the gesture, very obvious on small cards.
+        //`around: 'center'` forces the pivot to be the screen centre,
+        //which is exactly where the home projects, so the home stays
+        //pinned no matter where the fingers land.
+        this.map.touchZoomRotate.enable({ around: 'center' });
+
+        //Hard pin the map centre on every user-driven transform: the
+        //home must never leave the dead-centre of the card during a
+        //rotate, and any sub-pixel drift accumulated by the bearing
+        //handler at zoom 18 / pitch 55° gets corrected immediately.
+        //We gate on `originalEvent` so future programmatic eases
+        //(e.g. recenter()) can still animate freely without being
+        //fought frame-by-frame by this snap.
+        const pinHomeAtCenter = (e: any) =>
+        {
+            if (!this.map || !e?.originalEvent)
+            {
+                return;
+            }
+            const c = this.map.getCenter();
+            if (c.lng !== this.homeLon || c.lat !== this.homeLat)
+            {
+                this.map.setCenter([this.homeLon, this.homeLat]);
+            }
+        };
+        this.map.on('rotate', pinHomeAtCenter);
+        this.map.on('move',   pinHomeAtCenter);
 
         this.map.on('style.load', () => this._onStyleLoad());
-        this.map.on('load',       () => { this.map?.resize(); });
+        this.map.on('load',       () =>
+        {
+            this.map?.resize();
+            this._startAutoRotateLoop();
+        });
 
         //Map transform broadcaster — relays move events to the card so
         //it can keep HTML overlays (the percentage label and its
@@ -495,6 +571,23 @@ export class HeliosEngine
         //overlays track the camera frame-by-frame during programmatic
         //animations rather than snapping at the end.
         this.map.on('move', () => this.onMapTransform?.());
+
+        //Auto-rotation pause — any DOM-level interaction on the canvas
+        //(mouse, touch, wheel) bumps the inactivity timer so the
+        //rotation loop yields immediately and only resumes after a
+        //few seconds of stillness. We hook DOM events rather than
+        //MapLibre 'rotate' / 'pitch' / 'drag' because the loop ITSELF
+        //emits those (via setBearing), which would otherwise be
+        //indistinguishable from a real user action.
+        const canvas = this.map.getCanvas();
+        const bumpInactivity = () =>
+        {
+            this._autoRotateLastUserAction = Date.now();
+        };
+        canvas.addEventListener('mousedown',  bumpInactivity);
+        canvas.addEventListener('wheel',      bumpInactivity, { passive: true });
+        canvas.addEventListener('touchstart', bumpInactivity, { passive: true });
+        canvas.addEventListener('touchmove',  bumpInactivity, { passive: true });
 
         //Surface MapLibre internal errors (auth, tile fetch, WebGL) to
         //the browser console rather than letting them silently cascade.
@@ -509,14 +602,36 @@ export class HeliosEngine
         this._refreshWeather();
     }
 
-    //Always returns the street style. The hybrid (satellite imagery)
-    //mode was removed in the 1.2 redesign because it visually fights
-    //the new 3D solar elements (arc, sun sphere, incidence ray):
-    //the satellite tiles introduce too much chromatic noise for the
-    //solar overlay to read clearly. Streets vector tiles give a
-    //sober, structured background that lets the 3D content breathe.
+    //Resolves the active MapTiler style id from `map-style` config.
+    //Three values are accepted:
+    //  'streets' (default) → 'streets-v4' — sober urban basemap.
+    //  'topo'              → 'topo-v4'    — topographic basemap with
+    //                                       contour lines and softer
+    //                                       earth tones, better in
+    //                                       hilly / outdoor settings.
+    //  'hybrid'            → 'hybrid-v4'  — satellite imagery with
+    //                                       roads + label overlays,
+    //                                       useful when the user
+    //                                       wants real-world context
+    //                                       (vegetation, rooftops,
+    //                                       parking lots) under the
+    //                                       solar overlay.
+    //
+    //Anything else falls back to 'streets'. `isHybrid` toggles the
+    //sat-hires raster source (added below) so the high-resolution
+    //satellite tiles fade in beyond zoom 15 — without it the base
+    //hybrid style is too soft at the home's locked zoom 18.
     private _resolveMapStyle(): { id: string; isHybrid: boolean }
     {
+        const raw = String(this.cfg['map-style'] ?? 'streets').toLowerCase();
+        if (raw === 'topo')
+        {
+            return { id: 'topo-v4', isHybrid: false };
+        }
+        if (raw === 'hybrid')
+        {
+            return { id: 'hybrid-v4', isHybrid: true };
+        }
         return { id: 'streets-v4', isHybrid: false };
     }
 
@@ -1107,17 +1222,14 @@ export class HeliosEngine
     }
 
     //Renders 3D building extrusions as the visual context for the
-    //home location.
-    //
-    //In v1.2 the rendering rules changed:
-    //  - All buildings are rendered semi-transparent (opacity 0.25)
-    //    so they form a recognisable urban context without competing
-    //    with the home itself for visual attention.
-    //  - The 'building-color' / 'building-alpha' config keys were
-    //    removed; styling is now uniform.
-    //  - A future phase will identify the home building specifically
-    //    and render it opaque on top of this layer to make it the
-    //    focal point. For now everything is dimmed equally.
+    //home location. All buildings are painted in the configured
+    //`building-color` (defaults to a neutral light grey) at a
+    //single shared opacity — the home is identified by the chips
+    //and leader lines on top, not by a special render of the
+    //building itself. The earlier home-fill experiment (beta.9 /
+    //beta.10) was removed because it was visually noisy and the
+    //spatial identification of the home building from vector tiles
+    //was unreliable in dense neighbourhoods.
     //Toggle MapTiler Streets' label layers (road names, house numbers,
     //POIs, place names) on or off based on the `show-labels` config.
     //Symbol-type layers are the canonical container for text + icon
@@ -1195,25 +1307,25 @@ export class HeliosEngine
             minzoom:        15,
             paint:
             {
-                //Neutral light grey — neighbours act as a quiet
-                //urban backdrop, not as visual noise.
+                //Neutral cool grey, hard-coded. We briefly exposed
+                //a `building-color` config but the buildings are
+                //always urban-context backdrop here — making the
+                //colour configurable proved to be a footgun (any
+                //tint with hue ate visual room from the chips and
+                //leaders that carry the actual data) and was
+                //removed in beta.12.
                 'fill-extrusion-color':   'rgba(210,210,215,1)',
                 'fill-extrusion-height':  ['get', 'render_height'],
                 'fill-extrusion-base':    ['get', 'render_min_height'],
                 //Opacity ramps in between zoom 15 and 16; top
-                //opacity sits at 0.9 so the buildings stand out
-                //clearly. The previous 0.25 wash made the home
-                //hard to spot, but isolating the home alone via
-                //feature-state isn't workable on fill-extrusion
-                //in MapLibre 5 (the data-driven branch silently
-                //evaluates to 0 when mixed with a zoom interpolate).
-                //Bumping every building up keeps the focal point
-                //visible at the cost of a slightly busier urban
-                //backdrop.
+                //opacity sits at 0.75 — buildings are present
+                //enough to read as solid massing without burying
+                //the basemap or competing with the chips and
+                //leaders that carry the actual data.
                 'fill-extrusion-opacity': [
                     'interpolate', ['linear'], ['zoom'],
                     15, 0,
-                    16, 0.9
+                    16, 0.75
                 ]
             }
         });
@@ -1666,34 +1778,63 @@ export class HeliosEngine
     //the leader lines that tie them to the home / on-ground ring.
     //
     //  cloudLabel — where the cloud-cover chip should be drawn (in
-    //               CSS pixels, relative to the map canvas). Sits a
-    //               fixed CLOUD_CHIP_LIFT_PX above the projected
-    //               cloud-disc reference point — i.e. the chip
-    //               hovers right above the cartographic feature it
-    //               annotates instead of being parked above the
-    //               home itself.
+    //               CSS pixels, relative to the map canvas). Sits to
+    //               the screen-LEFT of the cloud disc, just outside
+    //               the 100 % reference ring. Pinning it on the side
+    //               (rather than above) keeps the home's vertical
+    //               axis clear for the PV chip (above) and the
+    //               battery chip (below).
     //  pvLabel    — where the optional PV production chip should be
     //               drawn. Sits a fixed CLOUD_LABEL_OFFSET_PX above
-    //               the home — the same place the cloud chip used
-    //               to live before v1.4 — so the production chip is
-    //               the prominent readout while the cloud chip
-    //               retreats onto its own feature.
-    //  ringTop    — projection of the topmost point of the 100 %
-    //               reference ring (i.e. the point CLOUD_DISC_RADIUS_M
-    //               due north of the home). The cloud leader line
-    //               ends here. Anchoring on the fixed ring rather
-    //               than the variable disc edge keeps the line
-    //               stable while the percentage scrubs.
+    //               the home so the production chip is the prominent
+    //               readout, with the cloud chip retreating onto its
+    //               own feature on the side.
+    //  batterySocLabel  — where the optional battery State-of-
+    //               Charge chip is drawn (icon + percent). Sits to
+    //               the BOTTOM-LEFT of the PV chip, connected via
+    //               an inverted-L polyline whose vertical leg
+    //               drops from PV's bottom edge (at 1/4 of the
+    //               chip width from the left) and whose horizontal
+    //               leg lands on the SoC chip's right side. Static
+    //               (no animation, no arrow) — SoC has no flow
+    //               direction to encode.
+    //  batteryPowerLabel — where the optional battery Power chip
+    //               is drawn (icon + signed instantaneous W/kW).
+    //               Sits to the BOTTOM-RIGHT of the PV chip,
+    //               connected via a regular L polyline whose
+    //               vertical leg drops from PV's bottom edge (at
+    //               3/4 of the chip width from the left) and
+    //               whose horizontal leg lands on the Power
+    //               chip's left side. Animated dashes + arrow
+    //               whose direction follows the sign of the
+    //               power.
+    //  ringEdge   — projection of a fixed geographic point on the
+    //               100 % reference ring (the disc's geographic east
+    //               edge in the northern hemisphere, west edge in
+    //               the south — picked so the chip lands on screen-
+    //               LEFT under each hemisphere's default bearing of
+    //               180° NH / 0° SH). The cloud leader line ends
+    //               here. Pinning to a fixed geographic point — and
+    //               not "screen-leftmost-of-N-samples" as a previous
+    //               revision did — means the chip tracks the same
+    //               world location continuously when the camera
+    //               rotates, instead of teleporting in 30° increments
+    //               between discrete samples. This matches the
+    //               steady, pivot-anchored behaviour of the PV /
+    //               battery chips and keeps the overlay legible
+    //               throughout rotation animations.
     //  home       — the projected home point, used as the anchor for
-    //               the PV chip's leader line.
+    //               the PV and battery chip leader lines.
     //
     //Returns null when the map isn't ready yet — the card treats
     //null as "don't render the overlay this frame".
     public projectHomeLabelLayout(): {
-        cloudLabel: { x: number; y: number };
-        pvLabel:    { x: number; y: number };
-        ringTop:    { x: number; y: number };
-        home:       { x: number; y: number };
+        cloudLabel:        { x: number; y: number };
+        pvLabel:           { x: number; y: number };
+        batterySocLabel:   { x: number; y: number };
+        batteryPowerLabel: { x: number; y: number };
+        ringEdge:          { x: number; y: number };
+        home:              { x: number; y: number };
     } | null
     {
         if (!this.map)
@@ -1707,22 +1848,53 @@ export class HeliosEngine
         const m = this.map as any;
         const home = m.project([this.homeLon, this.homeLat]);
 
-        //One degree of latitude is ~111 320 m anywhere; we just need
-        //the latitude offset that corresponds to CLOUD_DISC_RADIUS_M
-        //due north — same unit conversion as buildCirclePolygon.
-        const dLat = CLOUD_DISC_RADIUS_M / 111_320;
-        const ringTop = m.project([this.homeLon, this.homeLat + dLat]);
+        //Hemisphere-aware fixed geographic anchor on the disc edge:
+        //  NH (default bearing 180° → south-up) → east of home
+        //  SH (default bearing   0° → north-up) → west of home
+        //Both pick the side that projects to the LEFT of screen at
+        //the hemisphere's default bearing, so the chip starts at the
+        //expected spot. Once anchored to a single lon/lat the chip
+        //orbits the home smoothly under rotation rather than jumping
+        //between sampled "leftmost" estimates.
+        const lat0   = this.homeLat;
+        const cosLat = Math.cos(lat0 * Math.PI / 180);
+        const anchorDE = lat0 >= 0 ? CLOUD_DISC_RADIUS_M : -CLOUD_DISC_RADIUS_M;
+        const anchorDLng = anchorDE / (111_320 * cosLat);
+        const anchor = m.project([this.homeLon + anchorDLng, this.homeLat]);
+        const ringEdgeX = anchor.x;
+        const ringEdgeY = anchor.y;
 
-        //Small vertical lift so the cloud chip doesn't directly
-        //overlap the disc edge it points at — leaves room for a
-        //short leader line down to ringTop.
-        const CLOUD_CHIP_LIFT_PX = 30;
+        //Push the chip outwards along the home→anchor direction so
+        //it always sits OUTSIDE the projected disc, leaving a short
+        //leader-line gap. Using the radial vector (rather than a
+        //fixed -X offset) keeps the chip outside even when rotation
+        //moves the projected anchor to a non-leftward screen side.
+        const CLOUD_CHIP_NUDGE_PX = 30;
+        const radDX = ringEdgeX - home.x;
+        const radDY = ringEdgeY - home.y;
+        const radLen = Math.sqrt(radDX * radDX + radDY * radDY) || 1;
+        const cloudLabelX = ringEdgeX + (radDX / radLen) * CLOUD_CHIP_NUDGE_PX;
+        const cloudLabelY = ringEdgeY + (radDY / radLen) * CLOUD_CHIP_NUDGE_PX;
+
+        //Battery chips sit BELOW and to either side of the PV
+        //chip — SoC bottom-LEFT, Power bottom-RIGHT — connected to
+        //PV by L-shaped polylines (see the card render block). The
+        //horizontal offset is sized to leave room for both the L
+        //corner and a short visible run of the L's horizontal leg;
+        //the vertical drop pushes the chips below the PV chip's
+        //bottom edge so the L vertical leg has a real height.
+        const BATTERY_CHIP_X_OFFSET_PX = 80;
+        const BATTERY_CHIP_Y_OFFSET_PX = 40;
+        const pvX = home.x;
+        const pvY = home.y - CLOUD_LABEL_OFFSET_PX;
 
         return {
-            cloudLabel: { x: ringTop.x, y: ringTop.y - CLOUD_CHIP_LIFT_PX },
-            pvLabel:    { x: home.x,    y: home.y    - CLOUD_LABEL_OFFSET_PX },
-            ringTop:    { x: ringTop.x, y: ringTop.y },
-            home:       { x: home.x,    y: home.y }
+            cloudLabel:        { x: cloudLabelX,                  y: cloudLabelY                       },
+            pvLabel:           { x: pvX,                          y: pvY                               },
+            batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
+            batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
+            ringEdge:          { x: ringEdgeX,                    y: ringEdgeY                        },
+            home:              { x: home.x,                       y: home.y                           }
         };
     }
 
@@ -2138,10 +2310,35 @@ export class HeliosEngine
 
     public updateConfig(cfg: HeliosConfig): void
     {
+        const prevStyleId = this._resolveMapStyle().id;
         this.cfg = { ...cfg };
 
         if (!this.map)
         {
+            return;
+        }
+
+        //Map-style change → reload the basemap. setStyle() replaces
+        //the entire style.json (sources, layers, sprites, glyphs);
+        //our custom sources (helios-terrain, helios-cloud, helios-
+        //planet) are wiped along with it and have to be re-added.
+        //_onStyleLoad already does that on the resulting `style.load`
+        //event — the same path used at initial load — so the only
+        //extra work here is dropping `_mapReady` while the new style
+        //is in flight, to prevent any code path that checks it from
+        //operating on a half-loaded style.
+        const nextStyleInfo = this._resolveMapStyle();
+        if (nextStyleInfo.id !== prevStyleId)
+        {
+            this._mapReady = false;
+            this.map.setStyle(
+                `https://api.maptiler.com/maps/${nextStyleInfo.id}/style.json?key=${this.apiKey}`
+            );
+            //_onStyleLoad will re-init terrain/hillshade/cloud disc/
+            //buildings/labels and re-render the current selection,
+            //so we return early — touching paint properties or
+            //running _renderForCurrentSelection right now would race
+            //against the in-flight style load.
             return;
         }
 
@@ -2170,6 +2367,62 @@ export class HeliosEngine
         }
     }
 
+    //Smooth, time-based auto-rotation around the home. Runs in the
+    //OPPOSITE direction to the sun's apparent motion (decreasing
+    //bearing in NH, where the sun goes east → south → west, i.e.
+    //clockwise from above) so the camera and the live sun visually
+    //counter-orbit each other — a quiet but constant motion that
+    //makes the card feel alive even with no user input. The
+    //rotation pauses for `AUTO_ROTATE_INACTIVITY_MS` after every
+    //user gesture (mouse down / wheel / touch) so the user has
+    //full control during a manipulation, then resumes from
+    //wherever the user left the camera — no recalibration to a
+    //fixed bearing.
+    //
+    //We tween in seconds (delta-time integrated against the frame
+    //rate) rather than a fixed per-frame increment so the rotation
+    //speed is constant across 60 Hz / 120 Hz displays and survives
+    //tab-throttling with no visible jumps when the user comes back.
+    private static readonly AUTO_ROTATE_DEG_PER_SEC   = 1.5;
+    private static readonly AUTO_ROTATE_INACTIVITY_MS = 5_000;
+
+    private _startAutoRotateLoop(): void
+    {
+        if (this._autoRotateRaf !== undefined || !this.map)
+        {
+            return;
+        }
+        this._autoRotateLastFrame      = performance.now();
+        this._autoRotateLastUserAction = 0;
+
+        const tick = (t: number) =>
+        {
+            if (!this.map)
+            {
+                this._autoRotateRaf = undefined;
+                return;
+            }
+
+            const dt = Math.max(0, t - this._autoRotateLastFrame) / 1000;
+            this._autoRotateLastFrame = t;
+
+            const sinceUser = Date.now() - this._autoRotateLastUserAction;
+            if (sinceUser >= HeliosEngine.AUTO_ROTATE_INACTIVITY_MS)
+            {
+                //Negative delta: bearing decreases, camera rotates
+                //counter-clockwise around the up axis as seen
+                //from above, map content drifts clockwise on
+                //screen — opposite of the sun's apparent motion.
+                const next = this.map.getBearing()
+                    - HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
+                this.map.setBearing(next);
+            }
+
+            this._autoRotateRaf = requestAnimationFrame(tick);
+        };
+        this._autoRotateRaf = requestAnimationFrame(tick);
+    }
+
     public cleanup(): void
     {
         this._clearWeatherTimer();
@@ -2177,6 +2430,11 @@ export class HeliosEngine
         window.clearTimeout(this._resizeDebounceTimer);
         this._fetchAbortController?.abort();
         this._resizeObserver?.disconnect();
+        if (this._autoRotateRaf !== undefined)
+        {
+            cancelAnimationFrame(this._autoRotateRaf);
+            this._autoRotateRaf = undefined;
+        }
         this.map?.remove();
         this.map       = undefined;
         this._mapReady = false;

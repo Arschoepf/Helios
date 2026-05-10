@@ -16,8 +16,7 @@ export const fr: Translations = {
 
     placeholder:
     {
-        subtitle: 'Exposition solaire & couverture nuageuse',
-        action:   'Renseigne ta clé API MapTiler pour activer'
+        subtitle: 'Exposition solaire & couverture nuageuse'
     },
 
     tooltip:
@@ -40,6 +39,15 @@ export const fr: Translations = {
         hillshadeColor:     'Couleur de l\'ombrage *',
         hillshadeStrength:  'Intensité de l\'ombrage * (0 → 1)',
         mapSection:         'Carte',
+        mapStyle:           'Style de la carte *',
+        mapStyleHint:       'Choisis entre le fond de carte des rues (sobre, urbain), le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée) ou le fond hybride (imagerie satellite haute résolution avec les routes et libellés en surimpression). Les libellés et les bâtiments 3D fonctionnent à l\'identique sur les trois.',
+        mapStyleStreet:     'Rues',
+        mapStyleTopo:       'Topo',
+        mapStyleHybrid:     'Hybride',
+        cardTheme:          'Thème de la carte *',
+        cardThemeHint:      'Bascule l\'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s\'intègre proprement dans un tableau de bord Home Assistant clair ou sombre. La carte 3D elle-même n\'est pas affectée.',
+        cardThemeLight:     'Clair',
+        cardThemeDark:      'Sombre',
         showLabels:         'Afficher les libellés *',
         showLabelsHint:     'Affiche ou masque les noms de rues, numéros de bâtiments, points d\'intérêt et noms de quartiers du fond de carte.',
         labelsOn:           'Affichés',
@@ -59,6 +67,13 @@ export const fr: Translations = {
         pvHint:             'Optionnel. Si renseigné, une pastille apparaît sur la maison (production instantanée, calculée sur la dernière minute) et un graphique dédié s\'ajoute au-dessus de la chronologie pour suivre la production. La ligne entre la maison et la pastille s\'anime à une vitesse proportionnelle à la production. Capteur de puissance (W/kW) ou d\'énergie cumulée (Wh/kWh) acceptés indifféremment.',
         pvEntity:           'Entité de production',
         pvEntityHelp:       'Sélectionne un capteur de puissance ou d\'énergie photovoltaïque (W, kW, Wh, kWh).',
-        pvColor:            'Couleur de production *'
+        pvColor:            'Couleur de production *',
+        batterySection:     'Batterie domestique',
+        batteryHint:        'Optionnel. Chaque entité apparaît sous forme de pastille de part et d\'autre de la pastille PV — état de charge à GAUCHE, puissance signée à DROITE — reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles ; la pastille correspondante s\'affiche dès que l\'entité est renseignée.',
+        batterySocEntity:   'Entité d\'état de charge',
+        batterySocEntityHelp: 'Choisis un capteur d\'état de charge de batterie (% — typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.',
+        batteryPowerEntity: 'Entité de puissance',
+        batteryPowerEntityHelp: 'Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l\'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).',
+        batteryColor:       'Couleur batterie *'
     }
 };

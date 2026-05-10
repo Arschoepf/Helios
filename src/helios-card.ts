@@ -6,7 +6,8 @@ import
     type HeliosConfig,
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
-    DEFAULT_PV_COLOR_HEX
+    DEFAULT_PV_COLOR_HEX,
+    DEFAULT_BATTERY_COLOR_HEX
 } from './helios-engine';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './helios-card-css';
@@ -126,10 +127,12 @@ export class HeliosCard extends LitElement
     //onMapTransform). null = layout not yet available (map still
     //loading) — the overlay is hidden in that case.
     @state() private _labelLayout:    {
-        cloudLabel: { x: number; y: number };
-        pvLabel:    { x: number; y: number };
-        ringTop:    { x: number; y: number };
-        home:       { x: number; y: number };
+        cloudLabel:        { x: number; y: number };
+        pvLabel:           { x: number; y: number };
+        batterySocLabel:   { x: number; y: number };
+        batteryPowerLabel: { x: number; y: number };
+        ringEdge:          { x: number; y: number };
+        home:              { x: number; y: number };
     } | null = null;
     //Photovoltaic production state — populated when the user has set
     //a `pv-power-entity` config key. _pvCurrent holds the live value
@@ -149,6 +152,30 @@ export class HeliosCard extends LitElement
     //energy sensors, much fresher than the historical fetch which
     //only refreshes when the timeline range changes.
     private _pvSampleBuffer: Array<{ t: number; v: number }> = [];
+    //Home-battery state — populated when the user has set at least
+    //one of `battery-soc-entity` / `battery-power-entity`. The two
+    //readings (live and historical) are kept on separate fields so
+    //the chip can render either depending on the timeline mode (live
+    //or scrub). Units are kept alongside the values so the chip can
+    //format kW vs W without re-reading the state.
+    @state() private _batterySoc:        number | null = null;
+    @state() private _batteryPower:      number | null = null;
+    @state() private _batteryPowerUnit:  string        = '';
+    //Historical series for the active timeline range. Same shape as
+    //_pvHistory, fetched via a single `history/history_during_period`
+    //WS call that batches both battery entities (when both are set).
+    //Cleared when the configured entity changes or when the time
+    //range changes; null = not yet fetched / no entity configured.
+    @state() private _batterySocHistory: {
+        times:  Date[];
+        values: number[];
+    } | null = null;
+    @state() private _batteryPowerHistory: {
+        times:  Date[];
+        values: number[];
+    } | null = null;
+    private _batteryFetchKey  = '';
+    private _batteryFetching  = false;
     //Screen-space layout of the solar arc, sun, and incidence ray.
     //Recomputed via engine.projectSunScene() on every map transform
     //(camera animation) and every clock tick (the sun position
@@ -197,7 +224,26 @@ export class HeliosCard extends LitElement
         //and Lit re-renders the chart. pv-power-entity is included
         //too so changing it triggers a fresh history fetch.
         'pv-color',
-        'pv-power-entity'
+        'pv-power-entity',
+        //map-style triggers a MapLibre setStyle() inside updateConfig,
+        //so the engine reloads the basemap (terrain, hillshade, cloud
+        //disc, buildings and label visibility are all re-applied via
+        //the resulting `style.load`).
+        'map-style',
+        //Battery overlay — soc and power entities feed the live chip
+        //below the home; battery-color tints the chip border, text
+        //and animated leader. Including them in the visual sig means
+        //changing the entity in the editor triggers a re-render that
+        //picks up the new readings on the next hass property update.
+        'battery-soc-entity',
+        'battery-power-entity',
+        'battery-color',
+        //card-theme is purely a card-level visual (it switches the
+        //ha-card's class to flip CSS variables / chip colours
+        //between the light and dark skins), but it must be in the
+        //sig so Lit re-renders the card when the user toggles it
+        //in the editor.
+        'card-theme'
     ] as const;
 
     //Cheap stable signature of the visual config — used to skip
@@ -344,6 +390,11 @@ export class HeliosCard extends LitElement
         //refresh is cheap when nothing relevant changed (string-equal
         //fetch key short-circuits the WebSocket roundtrip).
         this._refreshPv();
+
+        //Battery overlay refresh — pure live-state read, runs every
+        //cycle. Cheap (no WS round-trip, no fetch) so we don't bother
+        //gating on an entity-id signature like _refreshPv does.
+        this._refreshBattery();
     }
 
 
@@ -449,6 +500,274 @@ export class HeliosCard extends LitElement
         }
         this._pvFetchKey = fetchKey;
         this._fetchPvHistory(entity, this._timeRange.start, this._timeRange.end);
+    }
+
+    //Battery overlay — pulls live state from hass.states on every Lit
+    //cycle (no rolling buffer like PV — battery entities are typically
+    //power sensors that already expose an instantaneous reading) and,
+    //when at least one entity is configured AND the timeline range is
+    //set, fetches a historical series so the chip can show what the
+    //battery was doing at any past instant the user scrubs to. The
+    //fetch is gated on a `(socEntity, powerEntity, range)` tuple so
+    //we don't reissue the WS call on every render cycle.
+    private _refreshBattery(): void
+    {
+        if (!this.hass)
+        {
+            return;
+        }
+        const socEntity   = String(this.config?.['battery-soc-entity']   ?? '').trim();
+        const powerEntity = String(this.config?.['battery-power-entity'] ?? '').trim();
+
+        //SoC — clamp to [0, 100] because some BMS entities momentarily
+        //report 100.5 % during the absorption phase or briefly drop
+        //negative around the calibration cycle, neither of which is
+        //meaningful to the user.
+        let nextSoc: number | null = null;
+        if (socEntity)
+        {
+            const so = this.hass.states?.[socEntity];
+            const v  = so ? parseFloat(so.state) : NaN;
+            if (isFinite(v))
+            {
+                nextSoc = Math.max(0, Math.min(100, v));
+            }
+        }
+        if (nextSoc !== this._batterySoc)
+        {
+            this._batterySoc = nextSoc;
+        }
+
+        //Power — keep the sign (positive = charging, negative =
+        //discharging) verbatim from the entity. Unit is captured so
+        //the chip renderer can format kW vs W; we don't normalise
+        //here because the entity's own unit IS the source of truth
+        //(some BMS expose W, others kW).
+        let nextPower: number | null = null;
+        let nextUnit:  string        = '';
+        if (powerEntity)
+        {
+            const so = this.hass.states?.[powerEntity];
+            const v  = so ? parseFloat(so.state) : NaN;
+            if (isFinite(v))
+            {
+                nextPower = v;
+                nextUnit  = so.attributes?.unit_of_measurement ?? '';
+            }
+        }
+        if (nextPower !== this._batteryPower)
+        {
+            this._batteryPower = nextPower;
+        }
+        if (nextUnit !== this._batteryPowerUnit)
+        {
+            this._batteryPowerUnit = nextUnit;
+        }
+
+        //Drop history series and reset the fetch key when the user
+        //clears all battery entity fields, so a stale graph doesn't
+        //linger after the config goes blank.
+        if (!socEntity && !powerEntity)
+        {
+            if (this._batterySocHistory !== null)   { this._batterySocHistory   = null; }
+            if (this._batteryPowerHistory !== null) { this._batteryPowerHistory = null; }
+            this._batteryFetchKey = '';
+            return;
+        }
+
+        //History fetch — only when the (entities, range) tuple changed.
+        //Without this guard we'd reissue the WS command on every Lit
+        //cycle (e.g. every clock tick).
+        if (!this._timeRange || this._batteryFetching)
+        {
+            return;
+        }
+        const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
+        const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}`;
+        if (fetchKey === this._batteryFetchKey)
+        {
+            return;
+        }
+        this._batteryFetchKey = fetchKey;
+        this._fetchBatteryHistory(socEntity, powerEntity, this._timeRange.start, this._timeRange.end);
+    }
+
+    //Single-call history fetch for the battery overlay. Both entities
+    //(when configured) are bundled into one `entity_ids` array so we
+    //pay one WS roundtrip instead of two. Either side of the result
+    //may end up empty (entity not yet existing, no state changes in
+    //range, etc.) and that's fine — the chip will show only the side
+    //that did return data.
+    private async _fetchBatteryHistory(
+        socEntity: string, powerEntity: string, start: Date, end: Date
+    ): Promise<void>
+    {
+        if (!this.hass?.callWS)
+        {
+            return;
+        }
+        this._batteryFetching = true;
+        try
+        {
+            //History only exists up to "now" — the future half of the
+            //timeline has no battery data. Clamp the fetch end so we
+            //don't waste a roundtrip on empty future buckets.
+            const now = new Date();
+            const fetchEnd = end > now ? now : end;
+            if (start >= fetchEnd)
+            {
+                if (socEntity)   { this._batterySocHistory   = { times: [], values: [] }; }
+                if (powerEntity) { this._batteryPowerHistory = { times: [], values: [] }; }
+                return;
+            }
+
+            const ids: string[] = [];
+            if (socEntity)   { ids.push(socEntity);   }
+            if (powerEntity) { ids.push(powerEntity); }
+
+            const result: any = await this.hass.callWS({
+                type:             'history/history_during_period',
+                start_time:       start.toISOString(),
+                end_time:         fetchEnd.toISOString(),
+                entity_ids:       ids,
+                minimal_response: true,
+                no_attributes:    true
+            });
+
+            const parseSeries = (arr: any[]): { times: Date[]; values: number[] } =>
+            {
+                const times:  Date[]   = [];
+                const values: number[] = [];
+                for (const item of arr ?? [])
+                {
+                    const stateStr =
+                        typeof item?.s     === 'string' ? item.s :
+                        typeof item?.state === 'string' ? item.state :
+                        null;
+                    if (stateStr === null
+                        || stateStr === 'unavailable'
+                        || stateStr === 'unknown'
+                        || stateStr === '')
+                    {
+                        continue;
+                    }
+                    const v = parseFloat(stateStr);
+                    if (!isFinite(v))
+                    {
+                        continue;
+                    }
+                    let ts: Date | null = null;
+                    if (typeof item?.lu === 'number')
+                    {
+                        ts = new Date(item.lu * 1000);
+                    }
+                    else if (typeof item?.last_updated === 'string')
+                    {
+                        ts = new Date(item.last_updated);
+                    }
+                    else if (typeof item?.last_changed === 'string')
+                    {
+                        ts = new Date(item.last_changed);
+                    }
+                    if (!ts || isNaN(ts.getTime()))
+                    {
+                        continue;
+                    }
+                    times.push(ts);
+                    values.push(v);
+                }
+                return { times, values };
+            };
+
+            if (socEntity)
+            {
+                const series = parseSeries(result?.[socEntity] ?? []);
+                //Clamp SoC samples to [0, 100] in the history too — same
+                //out-of-range tolerance as the live read.
+                series.values = series.values.map(v => Math.max(0, Math.min(100, v)));
+                this._batterySocHistory = series;
+            }
+            else
+            {
+                this._batterySocHistory = null;
+            }
+            if (powerEntity)
+            {
+                this._batteryPowerHistory = parseSeries(result?.[powerEntity] ?? []);
+            }
+            else
+            {
+                this._batteryPowerHistory = null;
+            }
+        }
+        catch (e)
+        {
+            console.warn('[HELIOS] battery history fetch failed:', e);
+            this._batterySocHistory   = { times: [], values: [] };
+            this._batteryPowerHistory = { times: [], values: [] };
+        }
+        finally
+        {
+            this._batteryFetching = false;
+        }
+    }
+
+    //Locate the history sample at or before `time` and return its
+    //value, or null if the time falls outside the fetched window. A
+    //60 s grace at the tail keeps "scrub to live" resolving cleanly
+    //(same convention as the PV chip).
+    private _batterySampleAtTime(
+        hist: { times: Date[]; values: number[] } | null, time: Date
+    ): number | null
+    {
+        if (!hist || hist.times.length === 0)
+        {
+            return null;
+        }
+        const tMs = time.getTime();
+        const firstMs = hist.times[0].getTime();
+        const lastMs  = hist.times[hist.times.length - 1].getTime();
+        if (tMs < firstMs || tMs > lastMs + 60_000)
+        {
+            return null;
+        }
+        let idx = hist.times.length - 1;
+        for (let i = 0; i < hist.times.length; i++)
+        {
+            if (hist.times[i].getTime() > tMs)
+            {
+                idx = i - 1;
+                break;
+            }
+        }
+        if (idx < 0) { idx = 0; }
+        return hist.values[idx];
+    }
+
+    //Format a signed battery power value for the chip. Mirrors
+    //_formatPvValue's W ↔ kW switching but always prefixes a sign so
+    //the user can tell charging from discharging at a glance.
+    private _formatBatteryPower(value: number, unit: string): string
+    {
+        const lu = (unit || '').trim().toLowerCase();
+        const sign = value > 0 ? '+' : (value < 0 ? '−' : '');
+        const abs  = Math.abs(value);
+
+        if (lu === 'w' && abs >= 1000)
+        {
+            return `${sign}${(abs / 1000).toFixed(2)} kW`;
+        }
+        if (lu === 'w')
+        {
+            return `${sign}${Math.round(abs)} W`;
+        }
+        if (lu === 'kw')
+        {
+            return `${sign}${abs.toFixed(2)} kW`;
+        }
+        //Unknown unit — pass through verbatim so the user still
+        //sees the configured entity's value with its own unit.
+        return `${sign}${abs}${unit ? ' ' + unit : ''}`;
     }
 
     private async _fetchPvHistory(entityId: string, start: Date, end: Date): Promise<void>
@@ -1687,6 +2006,105 @@ export class HeliosCard extends LitElement
             : 0;
         const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5000);
 
+        //Battery overlay — two independent chips flanking the PV
+        //chip in screen-space: SoC % on the LEFT, signed Power on
+        //the RIGHT, mirroring each other around the PV chip's
+        //vertical axis. Each chip is wired back to the PV chip via
+        //a static dotted hairline (no animation, no arrow) — the
+        //sign of the power value is the only encoding for charging
+        //vs discharging.
+        //
+        //Scrub semantics mirror PV: live mode reads from
+        //hass.states; past-scrub mode reads from the historical
+        //series fetched via WS; future-scrub hides both chips
+        //because no battery data exists past "now".
+        const batterySocEntity   = String(this.config?.['battery-soc-entity']   ?? '').trim();
+        const batteryPowerEntity = String(this.config?.['battery-power-entity'] ?? '').trim();
+        const batteryColor       = cfgHex(this.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
+        const batteryScrubbing   = !this._isLiveMode && this._selectedTime !== null;
+        const batteryScrubFuture = batteryScrubbing
+            && this._selectedTime!.getTime() > Date.now() + 60_000;
+
+        //Active SoC / power values for this render — historical
+        //samples in scrub mode, live state otherwise.
+        const activeBatterySoc: number | null = batteryScrubbing
+            ? this._batterySampleAtTime(this._batterySocHistory, this._selectedTime!)
+            : this._batterySoc;
+        const activeBatteryPower: number | null = batteryScrubbing
+            ? this._batterySampleAtTime(this._batteryPowerHistory, this._selectedTime!)
+            : this._batteryPower;
+        //The power unit doesn't change between live and history
+        //samples (same entity, same configuration), so we read it
+        //from the live state cache regardless of mode.
+        const activeBatteryUnit = this._batteryPowerUnit;
+
+        const showSocChip = (hasApiKey && layout !== null)
+            && !batteryScrubFuture
+            && batterySocEntity !== ''
+            && activeBatterySoc !== null;
+        const showPowerChip = (hasApiKey && layout !== null)
+            && !batteryScrubFuture
+            && batteryPowerEntity !== ''
+            && activeBatteryPower !== null;
+
+        const batterySocText = showSocChip
+            ? `${Math.round(activeBatterySoc!)} %`
+            : '';
+        const batteryPowerText = showPowerChip
+            ? this._formatBatteryPower(activeBatteryPower!, activeBatteryUnit)
+            : '';
+
+        //Charging / discharging direction drives the SVG arrow
+        //path direction on the PV↔Power leader. Sign comes straight
+        //from the entity (positive = charging by convention).
+        //Charging: arrow flows PV → Power (energy moving INTO the
+        //battery). Discharging: arrow flows Power → PV (energy
+        //moving OUT). The dashes flow at a speed proportional to
+        //|P|, saturating at the same ~5 kW threshold as the PV
+        //leader so all energy-flow streams read on the same scale.
+        const batteryCharging  = showPowerChip && (activeBatteryPower! > 0);
+        const batteryWattsForFlow = showPowerChip
+            ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
+            : 0;
+        const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
+
+        //Battery leader L-shape geometry — computed once and reused
+        //for both the polyline `points` attribute and the animated
+        //arrow's `<animateMotion>` path. Only meaningful when a
+        //layout is available; gated by the same flag as the chip
+        //rendering so we don't dereference a null layout below.
+        //
+        //  PV_QUARTER_PX (19) → 1/4 of the PV chip's min-width
+        //  (76 px), used as the horizontal offset of the L's
+        //  vertical leg from the PV chip centre. The SoC L hangs
+        //  from the LEFT-quarter of PV's bottom edge (= 1/4 from
+        //  the left); the Power L from the RIGHT-quarter (= 3/4
+        //  from the left). Constant rather than measured because
+        //  the chips are min-width-clamped to 76 px in the
+        //  common case — see helios-card-css.ts.
+        //  PV_HALF_HEIGHT_PX (11) places the top of the vertical
+        //  leg flush against PV's bottom edge so the line emerges
+        //  from the chip rather than from inside it.
+        //  CHIP_NUDGE_PX (32) is the horizontal distance from each
+        //  battery chip's centre to the inside of its left/right
+        //  edge, so the chip background covers the very tip of
+        //  the leader and the visible dash sequence terminates
+        //  cleanly at the chip border.
+        const PV_QUARTER_PX        = 19;
+        const PV_HALF_HEIGHT_PX    = 11;
+        const BAT_CHIP_NUDGE_PX    = 32;
+        const lPvBottomY    = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX        : 0;
+        const lShelfY       = layout ? layout.batterySocLabel.y                     : 0;
+        const lLeftQuarterX = layout ? layout.pvLabel.x - PV_QUARTER_PX             : 0;
+        const lRightQuarterX= layout ? layout.pvLabel.x + PV_QUARTER_PX             : 0;
+        const lSocEndX      = layout ? layout.batterySocLabel.x   + BAT_CHIP_NUDGE_PX : 0;
+        const lPowerEndX    = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
+        const socLeaderPoints   = `${lLeftQuarterX},${lPvBottomY} ${lLeftQuarterX},${lShelfY} ${lSocEndX},${lShelfY}`;
+        const powerLeaderPoints = `${lRightQuarterX},${lPvBottomY} ${lRightQuarterX},${lShelfY} ${lPowerEndX},${lShelfY}`;
+        const powerArrowPath = batteryCharging
+            ? `M ${lRightQuarterX},${lPvBottomY} L ${lRightQuarterX},${lShelfY} L ${lPowerEndX},${lShelfY}`
+            : `M ${lPowerEndX},${lShelfY} L ${lRightQuarterX},${lShelfY} L ${lRightQuarterX},${lPvBottomY}`;
+
         //Solar-arc overlay — sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
         //pre-projected to screen space by the engine via
@@ -1730,8 +2148,11 @@ export class HeliosCard extends LitElement
         //feeling frantic at the top of the day.
         const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1000, 0.8);
 
+        const cardTheme = String(this.config?.['card-theme'] ?? 'light').toLowerCase();
+        const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';
+
         return html`
-            <ha-card class="${!hasApiKey ? 'placeholder-mode' : ''}">
+            <ha-card class="${cardThemeClass} ${!hasApiKey ? 'placeholder-mode' : ''}">
 
                 ${!hasApiKey ? this._renderPlaceholder() : nothing}
 
@@ -1961,10 +2382,10 @@ ${showSun ? html`
 
                     <svg class="cloud-leader-svg">
                         <line
-                            x1="${layout!.cloudLabel.x}"
-                            y1="${layout!.cloudLabel.y + 10}"
-                            x2="${layout!.ringTop.x}"
-                            y2="${layout!.ringTop.y}"
+                            x1="${layout!.cloudLabel.x + 10}"
+                            y1="${layout!.cloudLabel.y}"
+                            x2="${layout!.ringEdge.x}"
+                            y2="${layout!.ringEdge.y}"
                         ></line>
                     </svg>
                     <div
@@ -2022,6 +2443,74 @@ ${showSun ? html`
                     </div>
                 ` : nothing}
 
+                ${(showSocChip || showPowerChip) ? html`
+                    <svg class="battery-leader-svg">
+                        <!--
+                            SoC ↔ PV — static, dotted, inverted-L
+                            polyline. Vertical leg drops from PV's
+                            bottom edge at 1/4 of the chip width
+                            (the LEFT quarter), horizontal leg
+                            then runs left to the SoC chip. No
+                            animation: SoC has no flow direction.
+                        -->
+                        ${showSocChip ? svg`
+                            <polyline
+                                class="battery-leader-line"
+                                style="--battery-leader-color:${batteryColor}"
+                                points="${socLeaderPoints}"
+                            ></polyline>
+                        ` : nothing}
+                        <!--
+                            PV ↔ Power — animated, dotted L with
+                            an arrow tracking the sign of the live
+                            power. Vertical leg at 3/4 of PV's
+                            width (the RIGHT quarter), horizontal
+                            leg then runs right to the Power chip.
+                            Charging (P > 0) → arrow PV → Power.
+                            Discharging (P < 0) → arrow Power → PV
+                            (the polyline class modifier flips the
+                            dash flow too).
+                        -->
+                        ${showPowerChip ? svg`
+                            <polyline
+                                class="battery-leader-line battery-leader-line-animated ${batteryCharging ? '' : 'battery-leader-discharging'}"
+                                style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
+                                points="${powerLeaderPoints}"
+                            ></polyline>
+                            <polygon
+                                class="battery-leader-arrow"
+                                points="-6,-4 0,0 -6,4"
+                                fill="${batteryColor}"
+                            >
+                                <animateMotion
+                                    dur="${batteryFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="${powerArrowPath}"
+                                ></animateMotion>
+                            </polygon>
+                        ` : nothing}
+                    </svg>
+                    ${showSocChip ? html`
+                        <div
+                            class="battery-pct-label"
+                            style="left:${layout!.batterySocLabel.x}px; top:${layout!.batterySocLabel.y}px; --battery-leader-color:${batteryColor}"
+                        >
+                            <ha-icon icon="mdi:battery"></ha-icon>
+                            <span>${batterySocText}</span>
+                        </div>
+                    ` : nothing}
+                    ${showPowerChip ? html`
+                        <div
+                            class="battery-pct-label"
+                            style="left:${layout!.batteryPowerLabel.x}px; top:${layout!.batteryPowerLabel.y}px; --battery-leader-color:${batteryColor}"
+                        >
+                            <ha-icon icon="mdi:lightning-bolt"></ha-icon>
+                            <span>${batteryPowerText}</span>
+                        </div>
+                    ` : nothing}
+                ` : nothing}
+
             </ha-card>
         `;
     }
@@ -2046,68 +2535,93 @@ ${showSun ? html`
 
     private _renderPlaceholder(): TemplateResult
     {
-        const t = pickTranslations(this.hass?.language);
-
+        //Minimal catalogue thumbnail: only the stylised iso scene
+        //(low-poly buildings + ground cloud disc) and the solar arc
+        //+ sun overhead — no chips, no leaders, no subtitle. The
+        //"HELIOS" wordmark sits centred on top via .ph-content. The
+        //sun is positioned at t = 0.75 along the arc Bezier
+        //(M 50,230 Q 215,60 360,230 → (286, 166)) so it visually
+        //rides ON the curve rather than floating above it. The
+        //MapTiler key prompt is documented in the README — it does
+        //not belong on the thumbnail.
         return html`
             <div class="placeholder">
 
-                <div class="ph-sky"></div>
-                <div class="ph-haze ph-haze-1"></div>
-                <div class="ph-haze ph-haze-2"></div>
-
                 <svg
-                    class="ph-clouds"
-                    viewBox="0 0 800 500"
-                    preserveAspectRatio="xMidYMid slice"
+                    class="ph-scene"
+                    viewBox="0 0 400 320"
+                    preserveAspectRatio="xMidYMid meet"
                     xmlns="http://www.w3.org/2000/svg"
                 >
                     <defs>
-                        <filter id="ph-noise" x="-20%" y="-20%" width="140%" height="140%">
-                            <feTurbulence
-                                type="fractalNoise"
-                                baseFrequency="0.012 0.025"
-                                numOctaves="3"
-                                seed="7"
-                                result="noise"
-                            />
-                            <feDisplacementMap
-                                in="SourceGraphic"
-                                in2="noise"
-                                scale="55"
-                                xChannelSelector="R"
-                                yChannelSelector="G"
-                            />
-                            <feGaussianBlur stdDeviation="3" />
-                        </filter>
-                        <linearGradient id="ph-cloud-grad" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%"   stop-color="rgba(255,255,255,0.0)" />
-                            <stop offset="40%"  stop-color="rgba(255,255,255,0.55)" />
-                            <stop offset="100%" stop-color="rgba(180,200,225,0.65)" />
-                        </linearGradient>
+                        <radialGradient id="ph-cloud-disc-grad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%"   stop-color="rgba(90,141,196,0.55)" />
+                            <stop offset="80%"  stop-color="rgba(90,141,196,0.20)" />
+                            <stop offset="100%" stop-color="rgba(90,141,196,0)"    />
+                        </radialGradient>
+                        <radialGradient id="ph-sun-glow-grad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%"   stop-color="rgba(239,159,39,0.85)" />
+                            <stop offset="50%"  stop-color="rgba(239,159,39,0.30)" />
+                            <stop offset="100%" stop-color="rgba(239,159,39,0)"    />
+                        </radialGradient>
                     </defs>
-                    <g filter="url(#ph-noise)" fill="url(#ph-cloud-grad)">
-                        <ellipse class="ph-band ph-band-1" cx="200" cy="160" rx="220" ry="20" />
-                        <ellipse class="ph-band ph-band-2" cx="500" cy="320" rx="280" ry="26" />
-                        <ellipse class="ph-band ph-band-3" cx="650" cy="220" rx="180" ry="16" />
+
+                    <!-- Cloud disc on the ground; rendered first so
+                         buildings emerge through it as islands. -->
+                    <ellipse cx="215" cy="215" rx="110" ry="30"
+                        fill="url(#ph-cloud-disc-grad)" />
+                    <ellipse cx="215" cy="215" rx="110" ry="30"
+                        fill="none"
+                        stroke="rgba(90,141,196,0.50)"
+                        stroke-width="0.6" />
+
+                    <!-- Far-back-left neighbour. -->
+                    <g>
+                        <polygon points="110,168 132,180 110,192 88,180"  fill="#dadade" />
+                        <polygon points="132,180 110,192 110,212 132,200" fill="#cbcbcf" />
+                        <polygon points="88,180 110,192 110,212 88,200"   fill="#bcbcc1" />
+                    </g>
+
+                    <!-- Far-back-right neighbour, slightly taller. -->
+                    <g>
+                        <polygon points="300,162 324,176 300,190 276,176" fill="#dadade" />
+                        <polygon points="324,176 300,190 300,212 324,198" fill="#cbcbcf" />
+                        <polygon points="276,176 300,190 300,212 276,198" fill="#bcbcc1" />
+                    </g>
+
+                    <!-- Home: bigger and brighter than its neighbours,
+                         centred on the cloud disc. -->
+                    <g>
+                        <polygon points="215,178 253,198 215,218 177,198" fill="#ebebef" />
+                        <polygon points="253,198 215,218 215,260 253,240" fill="#dededf" />
+                        <polygon points="177,198 215,218 215,260 177,240" fill="#ccccd0" />
+                    </g>
+
+                    <!-- Solar arc — drawn over the buildings so it
+                         visually inhabits the sky. -->
+                    <path
+                        d="M 50 230 Q 215 60 360 230"
+                        fill="none"
+                        stroke="#EF9F27"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-opacity="0.85" />
+
+                    <!-- Sun disc + halo, riding on the arc at t=0.75
+                         (3/4 of the way from the left) so it sits ON
+                         the path. The glow circle pulses; the inner
+                         disc stays still so the brand colour reads
+                         clearly. -->
+                    <g transform="translate(286, 166)">
+                        <circle class="ph-sun-glow" r="22" fill="url(#ph-sun-glow-grad)" />
+                        <circle r="9" fill="#EF9F27" />
+                        <circle r="8.5" fill="none"
+                            stroke="#a36617" stroke-width="0.7" stroke-opacity="0.55" />
                     </g>
                 </svg>
 
-                <!-- Half-sun rising at the top of the card. The wrapper is centred
-                     horizontally and translated upward so only the bottom half
-                     of the disc + halo are visible above the title. -->
-                <div class="ph-sun-rise">
-                    <div class="ph-sun-bloom"></div>
-                    <div class="ph-sun-corona"></div>
-                    <div class="ph-sun-body"></div>
-                </div>
-
-                <div class="ph-vignette"></div>
-
                 <div class="ph-content">
                     <div class="ph-title">HELIOS</div>
-                    <div class="ph-divider"></div>
-                    <div class="ph-sub">${t.placeholder.subtitle}</div>
-                    <div class="ph-action">${t.placeholder.action}</div>
                 </div>
 
             </div>

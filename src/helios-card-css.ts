@@ -1,9 +1,24 @@
-import { css } from 'lit';
+import { css, unsafeCSS } from 'lit';
+//MapLibre's stylesheet ships under dist/maplibre-gl.css. Vite's
+//`?inline` query suffix returns the file content as a raw string
+//instead of injecting a global <style> tag — we need the rules
+//*inside* our shadow root, not in document <head>. Without these
+//rules .maplibregl-canvas falls back to the default `position:
+//static`, which makes the canvas participate in the layout flow:
+//in HA panel-mode (where the parent container has no fixed
+//height), the explicit pixel size MapLibre writes onto the canvas
+//pushes the container, our ResizeObserver fires, MapLibre re-reads
+//a bigger container, and we're in an unbounded growth loop. With
+//the rule applied the canvas is taken out of flow and the loop
+//breaks.
+import maplibreCss from 'maplibre-gl/dist/maplibre-gl.css?inline';
 
 //Visual styles for the main HeliosCard. Kept in a dedicated file so
 //the card module reads as logic only; rules are grouped by feature
 //(layout → placeholder → timeline → overlays → solar arc → tooltips).
 export const heliosCardStyles = css`
+    ${unsafeCSS(maplibreCss)}
+
     :host
     {
         display: block;
@@ -46,8 +61,12 @@ export const heliosCardStyles = css`
 
 
     /*  Placeholder shown until the user enters a MapTiler key.
-        Layered sky + drifting hazes + scrolling cloud bands +
-        breathing sun, all CSS-driven. */
+        Mini-Helios vignette: a stylised iso scene matching the real
+        card's vocabulary (sun arc, sun + halo, low-poly buildings
+        with a brighter central home, ground cloud disc, leader
+        chips) over a light day-mode sky gradient. The brand chrome
+        (title + subtitle) sits at the bottom — the MapTiler key
+        prompt lives in the README, not on the catalogue thumbnail. */
 
     .placeholder
     {
@@ -56,235 +75,75 @@ export const heliosCardStyles = css`
         overflow: hidden;
         z-index: 20;
         isolation: isolate;
-    }
-
-    .ph-sky
-    {
-        position: absolute;
-        inset: 0;
         background:
-            radial-gradient(1200px 700px at 65% 38%,
-                rgba(255,210,150,0.18) 0%,
+            radial-gradient(1000px 600px at 65% 28%,
+                rgba(255,210,150,0.30) 0%,
                 rgba(255,210,150,0)    55%),
             linear-gradient(180deg,
-                #0a1430 0%,
-                #102047 25%,
-                #1f3a6e 60%,
-                #355a8a 100%);
+                #dbe3ec 0%,
+                #e6e0d4 55%,
+                #d3ccbf 100%);
     }
 
-    .ph-haze
-    {
-        position: absolute;
-        top: -10%;
-        left: -10%;
-        width: 120%;
-        height: 60%;
-        pointer-events: none;
-        mix-blend-mode: screen;
-        opacity: 0.4;
-    }
-
-    .ph-haze-1
-    {
-        background: radial-gradient(ellipse 60% 40% at 30% 50%,
-            rgba(120,180,255,0.30) 0%,
-            rgba(120,180,255,0)    70%);
-        animation: ph-haze-drift 60s ease-in-out infinite alternate;
-    }
-
-    .ph-haze-2
-    {
-        top: 30%;
-        background: radial-gradient(ellipse 70% 50% at 70% 50%,
-            rgba(255,180,140,0.20) 0%,
-            rgba(255,180,140,0)    70%);
-        animation: ph-haze-drift 80s ease-in-out infinite alternate-reverse;
-        opacity: 0.3;
-    }
-
-    @keyframes ph-haze-drift
-    {
-        from { transform: translateX(-3%) translateY(0); }
-        to   { transform: translateX(3%)  translateY(-2%); }
-    }
-
-    .ph-clouds
+    .ph-scene
     {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
         pointer-events: none;
+        z-index: 1;
     }
 
-    .ph-band
+    /*  Sun halo pulses gently — same visual language as the live
+        card's breathing sun. Only the glow circle scales; the
+        inner orange disc stays fixed so the brand colour reads
+        cleanly at the centre. */
+    .ph-sun-glow
     {
         transform-origin: center;
+        transform-box: fill-box;
+        animation: ph-sun-pulse 4s ease-in-out infinite;
     }
 
-    .ph-band-1 { opacity: 0.55; animation: ph-band-drift-1 70s linear infinite; }
-    .ph-band-2 { opacity: 0.45; animation: ph-band-drift-2 95s linear infinite; }
-    .ph-band-3 { opacity: 0.35; animation: ph-band-drift-3 80s linear infinite; }
-
-    @keyframes ph-band-drift-1 { from { transform: translateX(-15%); } to { transform: translateX(115%); } }
-    @keyframes ph-band-drift-2 { from { transform: translateX(-25%); } to { transform: translateX(115%); } }
-    @keyframes ph-band-drift-3 { from { transform: translateX(-15%); } to { transform: translateX(115%); } }
-
-    .ph-vignette
+    @keyframes ph-sun-pulse
     {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        background: radial-gradient(ellipse 90% 70% at 50% 75%,
-            transparent          30%,
-            rgba(0,0,0,0.35)    100%);
-        z-index: 8;
-    }
-
-    .ph-sun-rise
-    {
-        position: absolute;
-        top: 0;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width:  220px;
-        height: 220px;
-        pointer-events: none;
-        z-index: 9;
+        0%, 100% { transform: scale(1);    opacity: 1;   }
+        50%      { transform: scale(1.15); opacity: 0.9; }
     }
 
     .ph-content
     {
         position: absolute;
-        top: 56%;
+        /*  Title centred horizontally, vertically anchored at 65 %
+            from the BOTTOM of the placeholder (so 35 % from the
+            top). Sits just above the iso buildings and visually
+            below the solar arc apex — feels less "crammed in the
+            middle" than a strict 50 % vertical centre. */
+        top: 35%;
         left: 50%;
         transform: translate(-50%, -50%);
         text-align: center;
-        color: white;
         z-index: 10;
-        padding: 0 24px;
-        width: 100%;
+        padding: 6px 18px;
         box-sizing: border-box;
     }
 
     .ph-title
     {
-        font-size: 2.6rem;
-        font-weight: 100;
-        letter-spacing: 12px;
+        font-size: 1.85rem;
+        font-weight: 200;
+        letter-spacing: 10px;
         text-transform: uppercase;
-        color: #ffffff;
-        text-shadow:
-            0 1px 30px rgba(255,200,120,0.4),
-            0 0 60px   rgba(120,160,220,0.3);
+        color: #2a2e34;
+        text-shadow: 0 1px 1px rgba(255,255,255,0.6);
         line-height: 1;
         white-space: nowrap;
-        padding-left: 12px;
-    }
-
-    .ph-sun-body
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 50%;
-        height: 50%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: radial-gradient(circle at 40% 38%,
-            #fffaf0   0%,
-            #ffe0a8  35%,
-            #ffb060  75%,
-            #ff8a3c 100%);
-        box-shadow: 0 0 30px rgba(255,180,80,0.6);
-        animation: ph-sun-breathe 6s ease-in-out infinite;
-    }
-
-    .ph-sun-corona
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width:  85%;
-        height: 85%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: radial-gradient(circle,
-            rgba(255,200,120,0.50)  0%,
-            rgba(255,180,90,0.22)  35%,
-            rgba(255,160,70,0)     65%);
-        filter: blur(4px);
-        pointer-events: none;
-        animation: ph-sun-breathe 6s ease-in-out infinite;
-    }
-
-    .ph-sun-bloom
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width:  100%;
-        height: 100%;
-        transform: translate(-50%, -50%);
-        border-radius: 50%;
-        background: radial-gradient(circle,
-            rgba(255,200,140,0.30)  0%,
-            rgba(255,180,90,0.12)  25%,
-            rgba(255,160,70,0)     55%);
-        filter: blur(12px);
-        pointer-events: none;
-        animation: ph-sun-bloom-pulse 10s ease-in-out infinite;
-    }
-
-    @keyframes ph-sun-breathe
-    {
-        0%, 100% { transform: translate(-50%, -50%) scale(1);    }
-        50%      { transform: translate(-50%, -50%) scale(1.04); }
-    }
-
-    @keyframes ph-sun-bloom-pulse
-    {
-        0%, 100% { opacity: 0.85; }
-        50%      { opacity: 1.0;  }
-    }
-
-    .ph-divider
-    {
-        margin: 18px auto;
-        width: 60px;
-        height: 1px;
-        background: linear-gradient(90deg,
-            transparent             0%,
-            rgba(255,200,140,0.6)  50%,
-            transparent           100%);
-    }
-
-    .ph-sub
-    {
-        font-size: 0.78rem;
-        font-weight: 400;
-        letter-spacing: 3.5px;
-        text-transform: uppercase;
-        color: rgba(255,255,255,0.65);
-        margin-bottom: 28px;
-        line-height: 1;
-    }
-
-    .ph-action
-    {
-        display: inline-block;
-        font-size: 0.72rem;
-        font-weight: 500;
-        letter-spacing: 1.2px;
-        color: rgba(255,255,255,0.85);
-        background: rgba(0,0,0,0.30);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        border: 1px solid rgba(255,200,140,0.30);
-        border-radius: 4px;
-        padding: 9px 18px;
-        text-transform: uppercase;
+        /*  Optical centre — letter-spacing piles up on the right of
+            the last glyph so the visual centre of the wordmark
+            sits a few pixels left of the geometric centre. The
+            padding-left compensates so HELIOS reads centred. */
+        padding-left: 10px;
     }
 
 
@@ -705,7 +564,12 @@ export const heliosCardStyles = css`
     /*  Photovoltaic production chip — same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
         text + icon) for instant identification.
-        --pv-leader-color is set inline by the renderer. */
+        --pv-leader-color is set inline by the renderer. The
+        min-width / centred text are shared with the SoC and Power
+        battery chips so the visible gap on each side of the PV
+        chip is identical regardless of how wide each value reads
+        ("26 %" vs "+12.34 kW" otherwise produce visibly unequal
+        leader gaps). */
     .pv-pct-label
     {
         position: absolute;
@@ -714,7 +578,10 @@ export const heliosCardStyles = css`
         z-index: 6;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 3px;
+        min-width: 76px;
+        box-sizing: border-box;
         background: #ffffff;
         color:      var(--pv-leader-color, #27B36B);
         border:     1px solid var(--pv-leader-color, #27B36B);
@@ -771,6 +638,103 @@ export const heliosCardStyles = css`
         on animateMotion keeps the tip pointing in the direction of
         travel (home → chip). */
     .pv-leader-arrow
+    {
+        opacity: 0.9;
+    }
+
+    /*  Battery chips (SoC on the left of PV, Power on the right) —
+        same frame as the PV chip, tinted in the user-configured
+        battery colour. Shares min-width and centred text with the
+        PV chip so the visible dotted-leader gap on each side of PV
+        is identical regardless of the value's content width.
+        --battery-leader-color is set inline by the renderer. */
+    .battery-pct-label
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 6;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        min-width: 76px;
+        box-sizing: border-box;
+        background: #ffffff;
+        color:      var(--battery-leader-color, #D32F2F);
+        border:     1px solid var(--battery-leader-color, #D32F2F);
+        border-radius: 3px;
+        padding: 2px 6px 2px 4px;
+        font-size:    12px;
+        font-weight:  600;
+        line-height:  1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+    }
+
+    .battery-pct-label ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  Battery leaders.
+        - SoC ↔ PV is a short static dotted hairline (.battery-
+          leader-line on its own) — same vocabulary as the cloud
+          leader. The SoC value has no sign so there's no flow
+          direction to encode.
+        - PV ↔ Power is animated (.battery-leader-line-animated
+          modifier on top of .battery-leader-line) with dashes
+          flowing at a speed proportional to |P| — exactly like
+          the PV leader's visual language — and a small arrow
+          polygon riding the line via SVG <animateMotion>. The
+          .battery-leader-discharging class flips the dash flow
+          direction (CSS animation-direction: reverse) so the
+          dashes move from chip → PV when the battery is
+          discharging; the arrow path is also flipped inline by
+          the renderer so the two cues stay in sync. */
+    .battery-leader-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    .battery-leader-line
+    {
+        stroke: var(--battery-leader-color, #D32F2F);
+        stroke-width: 1.5;
+        stroke-opacity: 0.85;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 2 3;
+        fill: none;
+    }
+
+    .battery-leader-line-animated
+    {
+        stroke-dasharray: 6 5;
+        animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
+    }
+
+    .battery-leader-discharging
+    {
+        animation-direction: reverse;
+    }
+
+    @keyframes battery-leader-flow
+    {
+        from { stroke-dashoffset: 0;   }
+        to   { stroke-dashoffset: -11; }
+    }
+
+    .battery-leader-arrow
     {
         opacity: 0.9;
     }
@@ -977,5 +941,126 @@ export const heliosCardStyles = css`
         color: #000000;
         display: inline-flex;
         align-items: center;
+    }
+
+
+    /*  ============================================================
+        Dark theme — opt-in via the \`card-theme: dark\` config.
+
+        The whole card is already painted on top of a 3D map, so
+        "dark mode" here is really about the chrome (chips, charts,
+        cursors, day labels, leader lines, tooltips) — the basemap
+        keeps its own colours. Strategy:
+
+          - chip surfaces flip from a solid white plate to a solid
+            near-black plate, so the chip itself reads as a clean
+            darkened tile over the map instead of a
+            bright sticker.
+          - chip text / borders / icons go from black to a soft
+            light-grey (#e6e6e6 text, #cccccc borders) — pure white
+            would clip detail against bright basemap patches.
+          - chart hairlines (midline, day separators, hour ticks,
+            live cursor) flip from black-on-white to white-on-near-
+            black with the same opacity envelopes as the light skin
+            so the visual weight stays balanced.
+          - chart fills (PV / cloud / irradiance) are user-coloured
+            and unchanged — they read fine on both surfaces.
+          - the scrub blue (#1f6feb) and the live tooltip dark
+            plate already read on dark backgrounds, so they're left
+            alone.
+          - the placeholder vignette is left in light mode regardless
+            of theme: it's a marketing thumbnail rendered when no
+            API key is set, with a sunset gradient that doesn't have
+            a meaningful dark equivalent.
+        ============================================================ */
+
+    /*  Cards (chart panels) and hairlines on the chart. */
+    ha-card.theme-dark .tb-chart-card
+    {
+        background: #14161c;
+        border-color: #4a4d55;
+    }
+
+    ha-card.theme-dark .hc-day-sep
+    {
+        stroke: rgba(255, 255, 255, 0.30);
+    }
+
+    ha-card.theme-dark .hc-chart-mid
+    {
+        stroke: #cccccc;
+    }
+
+    ha-card.theme-dark .hc-hour-tick
+    {
+        stroke: rgba(255, 255, 255, 0.35);
+    }
+
+    ha-card.theme-dark .tb-cursor-now
+    {
+        background: rgba(255, 255, 255, 0.55);
+    }
+
+    ha-card.theme-dark .tb-cursor-now::after
+    {
+        border-top-color: #ffffff;
+    }
+
+    /*  Chips that don't carry a user-configured colour: clock, day
+        labels, live button, cloud %, solar W/m². These all share
+        the "white plate, black ink" base recipe in light mode, so
+        they get the same dark override. */
+    ha-card.theme-dark .clock,
+    ha-card.theme-dark .tl-live-btn,
+    ha-card.theme-dark .tb-day-label,
+    ha-card.theme-dark .cloud-pct-label,
+    ha-card.theme-dark .solar-pct-label
+    {
+        background: #14161c;
+        color:       #e6e6e6;
+        border-color: #cccccc;
+    }
+
+    ha-card.theme-dark .tb-day-label
+    {
+        background: #1a1c22;
+    }
+
+    ha-card.theme-dark .tl-live-btn ha-icon,
+    ha-card.theme-dark .cloud-pct-label ha-icon,
+    ha-card.theme-dark .solar-pct-label ha-icon
+    {
+        color: #e6e6e6;
+    }
+
+    ha-card.theme-dark .tl-live-btn:hover  { background: #24262c; }
+    ha-card.theme-dark .tl-live-btn:active { background: #303238; }
+
+    /*  PV and battery chips — they keep the user-configured tint
+        on the border / text / icon (so a green PV chip reads as
+        green on either skin), but the surface flips to the dark
+        plate so the tint stays readable. */
+    ha-card.theme-dark .pv-pct-label,
+    ha-card.theme-dark .battery-pct-label
+    {
+        background: #14161c;
+    }
+
+    /*  Cloud-cover leader (chip → disc) flips polarity so it's
+        visible against a dark plate and a darkened map. */
+    ha-card.theme-dark .cloud-leader-svg line
+    {
+        stroke: #e6e6e6;
+        stroke-opacity: 0.55;
+    }
+
+    /*  Solar arc outline — the light skin paints a black halo
+        behind the configured sun colour for legibility on bright
+        basemaps; in dark mode that halo would disappear into the
+        map, so we paint a faint white halo instead. The arc and
+        sun disc themselves keep their configured colour. */
+    ha-card.theme-dark .solar-svg .solar-arc-outline
+    {
+        stroke: rgba(255, 255, 255, 0.45);
     }
 `;

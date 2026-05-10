@@ -18,8 +18,7 @@ export const en: Translations = {
 
     placeholder:
     {
-        subtitle: 'Solar exposure & cloud coverage',
-        action:   'Set your MapTiler API key to activate'
+        subtitle: 'Solar exposure & cloud coverage'
     },
 
     tooltip:
@@ -42,6 +41,15 @@ export const en: Translations = {
         hillshadeColor:     'Hillshade color *',
         hillshadeStrength:  'Hillshade strength * (0 → 1)',
         mapSection:         'Map',
+        mapStyle:           'Map style *',
+        mapStyleHint:       'Choose between the streets basemap (sober, urban), the topographic basemap (contour lines, earth tones, better in hilly terrain) or the hybrid basemap (high-resolution satellite imagery with road and label overlays). Labels and 3D buildings work identically on all three.',
+        mapStyleStreet:     'Streets',
+        mapStyleTopo:       'Topo',
+        mapStyleHybrid:     'Hybrid',
+        cardTheme:          'Card theme *',
+        cardThemeHint:      'Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards. The 3D map basemap is unaffected.',
+        cardThemeLight:     'Light',
+        cardThemeDark:      'Dark',
         showLabels:         'Show labels *',
         showLabelsHint:     'Toggles street names, building numbers, points of interest and place names on the basemap.',
         labelsOn:           'Shown',
@@ -61,6 +69,13 @@ export const en: Translations = {
         pvHint:             'Optional. When set, a chip appears on the home (instant production, computed over the last minute) and a dedicated graph is added above the timeline. The line between the home and the chip animates at a speed proportional to the live production. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).',
         pvEntity:           'Production entity',
         pvEntityHelp:       'Pick a solar power or energy sensor (W, kW, Wh, kWh).',
-        pvColor:            'Production color *'
+        pvColor:            'Production color *',
+        batterySection:     'Home battery',
+        batteryHint:        'Optional. Each entity surfaces as its own chip flanking the PV chip — State of Charge on the LEFT, signed Power on the RIGHT — connected to PV with a static dotted hairline. Either entity is independently optional; the chip on its side appears as soon as the entity is set.',
+        batterySocEntity:   'State of charge entity',
+        batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
+        batteryPowerEntity: 'Power entity',
+        batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
+        batteryColor:       'Battery color *'
     }
 };
