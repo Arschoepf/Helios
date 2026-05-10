@@ -1,20 +1,66 @@
 # HELIOS — v1.1.0
 
 Polish release — no breaking changes, no config migration required.
-Refines the catalogue placeholder, hardens the rotation interaction
-so the home stays dead-centre, lightens the on-card chips so the
-underlying scene reads through, exposes a `map-style` option to
-switch the basemap between streets, topographic and hybrid
-(satellite + roads), adds an optional home-battery overlay (two
-chips flanking the PV chip — SoC on the left, signed Power on the
-right — connected by dotted hairlines, with a directional flow
-arrow on the Power leader), relocates the cloud-cover chip to
-the side of the disc so the home's vertical axis stays clear of
-readouts, ships an opt-in dark theme for the card chrome so the
-card sits cleanly inside dark Home Assistant dashboards, and
-adds a slow ambient camera rotation around the home that pauses
-on user interaction and snaps back to the initial bearing once
-they let go.
+
+Headline changes since v1.0.0:
+
+* **Catalogue placeholder redesigned.** Stylised iso scene
+  (low-poly buildings + ground cloud disc + solar arc with the
+  sun rendered ON the curve at 3/4 from the left). HELIOS
+  wordmark centred horizontally and anchored at 65 % from the
+  bottom of the placeholder.
+* **Map style is now configurable** via the new `map-style`
+  config (`'streets' | 'topo' | 'hybrid'`, defaults to
+  `'streets'`). Hybrid renders MapTiler `hybrid-v4` (high-
+  resolution satellite imagery + road / label overlays) with
+  the existing sat-hires raster sharpening past zoom 15.
+* **Card theme** (`card-theme: 'light' | 'dark'`) flips the
+  card chrome (chips, charts, buttons, tooltips, scrub overlay)
+  between a light skin (white plates / black ink, default) and
+  a dark skin (near-black plates / soft white ink) so the card
+  sits cleanly inside light or dark Home Assistant dashboards.
+  The 3D basemap and the configured colour palette are
+  unaffected.
+* **Home-battery overlay.** Three new optional config keys
+  (`battery-soc-entity`, `battery-power-entity`,
+  `battery-color`) surface a State-of-Charge chip on the
+  bottom-LEFT of the PV chip and a signed-Power chip on the
+  bottom-RIGHT, connected to PV via L-shaped dotted polylines
+  (vertical legs at 1/4 and 3/4 of PV's width respectively).
+  The Power leader animates: dashes flow + a small SVG arrow
+  travels from PV to Power while charging (positive value) and
+  from Power back to PV while discharging (negative). Either
+  entity is independently optional.
+* **Cloud-cover chip** relocated to a fixed geographic point on
+  the disc edge (east of the home in NH, west in SH — both
+  project to screen-LEFT at each hemisphere's default bearing).
+  Smooth tracking under rotation rather than the discrete
+  "leftmost-of-N-samples" jumps of earlier revisions.
+* **Camera locked, with ambient drift.** Rotation is the only
+  remaining direct user input. When the user has been idle for
+  more than 5 s, the camera slowly orbits the home in the
+  opposite direction to the sun's apparent motion (1.5 °/s,
+  decreasing bearing); any pinch / drag / wheel pauses the
+  drift instantly and resumes from the user's bearing once
+  they let go.
+* **Battery scrub** — the chips follow the timeline: live mode
+  reads from `hass.states`, past-scrub mode reads from a single
+  `history/history_during_period` WS call covering both battery
+  entities over the active range, future-scrub hides the
+  battery overlay.
+* **Solid chip surfaces** restored across light + dark themes —
+  the brief 80 % translucent skin from the early betas was
+  reverted to fully opaque chrome for crisper readings against
+  the basemap.
+
+i18n: `Translations.editor` gained six new keys
+(`mapStyleHybrid`, `cardTheme`, `cardThemeHint`, `cardThemeLight`,
+`cardThemeDark`, plus an `mapStyleStreet` / `mapStyleTopo`
+already shipped in 1.0.x). Custom locales need to add them or
+typecheck will fail.
+
+The detailed beta changelog is preserved below — scroll past the
+v1.0.0 section to read it in chronological order.
 
 ## v1.1.0-beta.1
 
@@ -319,6 +365,23 @@ modifier for the reversed flow direction).
 
 No public config keys changed; existing dashboards keep working
 with no edits.
+
+## v1.1.0 (final)
+
+Single visual fix on top of beta.13 before cutting the stable
+release.
+
+* **Solid chip surfaces.** Every on-map chip and timeline panel
+  (cloud-cover, PV, battery SoC + Power, solar irradiance,
+  date/time clock, "back to live" button, day labels, chart
+  card) used to render on an 80 % translucent surface (light
+  theme) / 82 % near-black (dark theme). The translucency
+  helped a little against the basemap but consistently fought
+  the values: numbers were softer, the three battery / PV
+  chips read as different shades depending on what tile sat
+  behind them. All surfaces are now fully opaque
+  (`#ffffff` light / `#14161c` dark) with matching opaque
+  hover / active states for the live button.
 
 ## v1.1.0-beta.13
 

@@ -26805,7 +26805,7 @@ const heliosCardStyles = i$3`
     .tb-chart-card
     {
         position: relative;
-        background: rgba(255, 255, 255, 0.8);
+        background: #ffffff;
         border: 1px solid #000000;
         border-radius: 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -27051,7 +27051,7 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: rgba(255, 255, 255, 0.8);
+        background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
@@ -27078,7 +27078,7 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        background: rgba(255, 255, 255, 0.8);
+        background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
@@ -27105,8 +27105,8 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    .tl-live-btn:hover  { background: rgba(243, 243, 243, 0.8); }
-    .tl-live-btn:active { background: rgba(232, 232, 232, 0.8); }
+    .tl-live-btn:hover  { background: #f3f3f3; }
+    .tl-live-btn:active { background: #e8e8e8; }
 
     /*  Live-button tooltip — rendered as a real DOM element (not a
         pseudo-element) so its text gets sub-pixel anti-aliasing,
@@ -27159,7 +27159,7 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         gap: 3px;
-        background: rgba(255, 255, 255, 0.8);
+        background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
@@ -27200,7 +27200,7 @@ const heliosCardStyles = i$3`
         gap: 3px;
         min-width: 76px;
         box-sizing: border-box;
-        background: rgba(255, 255, 255, 0.8);
+        background: #ffffff;
         color:      var(--pv-leader-color, #27B36B);
         border:     1px solid var(--pv-leader-color, #27B36B);
         border-radius: 3px;
@@ -27278,7 +27278,7 @@ const heliosCardStyles = i$3`
         gap: 3px;
         min-width: 76px;
         box-sizing: border-box;
-        background: rgba(255, 255, 255, 0.8);
+        background: #ffffff;
         color:      var(--battery-leader-color, #D32F2F);
         border:     1px solid var(--battery-leader-color, #D32F2F);
         border-radius: 3px;
@@ -27540,7 +27540,7 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         gap: 3px;
-        background: rgba(255, 255, 255, 0.8);
+        background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
@@ -27570,9 +27570,9 @@ const heliosCardStyles = i$3`
         cursors, day labels, leader lines, tooltips) — the basemap
         keeps its own colours. Strategy:
 
-          - chip surfaces flip from a translucent white plate to a
-            translucent near-black plate, so the chip itself reads
-            as a darkened pane of glass over the map instead of a
+          - chip surfaces flip from a solid white plate to a solid
+            near-black plate, so the chip itself reads as a clean
+            darkened tile over the map instead of a
             bright sticker.
           - chip text / borders / icons go from black to a soft
             light-grey (#e6e6e6 text, #cccccc borders) — pure white
@@ -27595,7 +27595,7 @@ const heliosCardStyles = i$3`
     /*  Cards (chart panels) and hairlines on the chart. */
     ha-card.theme-dark .tb-chart-card
     {
-        background: rgba(20, 22, 28, 0.82);
+        background: #14161c;
         border-color: #4a4d55;
     }
 
@@ -27634,7 +27634,7 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label
     {
-        background: rgba(20, 22, 28, 0.82);
+        background: #14161c;
         color:       #e6e6e6;
         border-color: #cccccc;
     }
@@ -27651,8 +27651,8 @@ const heliosCardStyles = i$3`
         color: #e6e6e6;
     }
 
-    ha-card.theme-dark .tl-live-btn:hover  { background: rgba(36, 38, 44, 0.85); }
-    ha-card.theme-dark .tl-live-btn:active { background: rgba(48, 50, 56, 0.85); }
+    ha-card.theme-dark .tl-live-btn:hover  { background: #24262c; }
+    ha-card.theme-dark .tl-live-btn:active { background: #303238; }
 
     /*  PV and battery chips — they keep the user-configured tint
         on the border / text / icon (so a green PV chip reads as
@@ -27661,7 +27661,7 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .pv-pct-label,
     ha-card.theme-dark .battery-pct-label
     {
-        background: rgba(20, 22, 28, 0.82);
+        background: #14161c;
     }
 
     /*  Cloud-cover leader (chip → disc) flips polarity so it's
