@@ -14,8 +14,6 @@ export const en: Translations = {
     cardName:        'HELIOS',
     cardDescription: 'Real-time solar energy and cloud coverage visualization',
 
-    live: 'Live',
-
     placeholder:
     {
         subtitle: 'Solar exposure & cloud coverage'
@@ -26,8 +24,7 @@ export const en: Translations = {
         cloudCover:  "Cloud cover: {0}%",
         cloudLow:    "Low: {0}%",
         cloudMid:    "Mid: {0}%",
-        cloudHigh:   "High: {0}%",
-        resetLive:   'Back to live'
+        cloudHigh:   "High: {0}%"
     },
 
     editor:

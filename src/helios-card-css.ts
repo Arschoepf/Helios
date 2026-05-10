@@ -308,24 +308,94 @@ export const heliosCardStyles = css`
         border-top:    5px solid #1f6feb;
     }
 
-    /*  Scrub-time chip — sits in the top row above the chart card,
+    /*  Scrub-time cluster — sits in the top row above the chart card
+        when the user has scrubbed away from "now". Combines a small
+        icon-only "back to live" button with the scrub-time pill, both
         tinted in the scrub-cursor blue so the displayed instant is
-        visibly not "now". */
-    .tb-sel-label
+        visibly not "now". The cluster anchors at the cursor's X (via
+        an inline left percentage) and edge-clamps via the inline
+        transform so it never bleeds past the card edges. The icon
+        button sits on the LEFT of the time pill and is the only
+        interactive element in the cluster — clicking it returns the
+        card to live mode. The pill itself is pointer-transparent so
+        dragging the timeline through the cluster still scrubs. */
+    .tb-sel-cluster
     {
         position: absolute;
         bottom: 0;
+        display: inline-flex;
+        align-items: stretch;
+        gap: 0;
+        z-index: 3;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    /*  Icon-only "back to live" button — same blue plate as the
+        adjacent time pill, with a subtle hover/active darkening so
+        it reads as actionable without competing with the pill's
+        timestamp readout. No text, no tooltip: the restore icon and
+        the contextual placement (next to the scrubbed-time pill)
+        carry the meaning. */
+    .tb-sel-live
+    {
+        pointer-events: auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(31, 111, 235, 0.95);
+        color: white;
+        border: 0;
+        border-right: 1px solid rgba(255, 255, 255, 0.30);
+        padding: 0 5px;
+        cursor: pointer;
+        transition: background 0.12s;
+    }
+
+    .tb-sel-live:hover  { background: rgba(24, 92, 199, 0.95); }
+    .tb-sel-live:active { background: rgba(20, 78, 168, 0.95); }
+
+    .tb-sel-live ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: white;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .tb-sel-label
+    {
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 0.3px;
         color: white;
         background: rgba(31, 111, 235, 0.95);
         padding: 3px 8px;
-        border-radius: 3px;
         white-space: nowrap;
         pointer-events: none;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-        font-variant-numeric: tabular-nums;
+    }
+
+    /*  Scrub tether — a 6 px vertical hair that drops from the
+        bottom edge of the scrub cluster to the top edge of the
+        chart card, anchored at the cursor's X. Carries the
+        scrub-cursor blue so it reads as continuous with the cursor's
+        downward triangle inside the chart. The tether is rendered
+        as a sibling of the cluster (not a child) and uses the same
+        left-percentage anchor without the cluster's edge-clamping
+        transform, so it always lands directly above the cursor even
+        when the cluster shifts to avoid clipping. */
+    .tb-sel-tether
+    {
+        position: absolute;
+        bottom: -6px;
+        height: 6px;
+        width: 1px;
+        background: rgba(31, 111, 235, 0.95);
+        transform: translateX(-50%);
+        pointer-events: none;
         z-index: 3;
     }
 
@@ -414,18 +484,21 @@ export const heliosCardStyles = css`
     /*  Top corner overlays. Date/time chip on the right; "back to
         live" chip on the left when scrubbed. */
 
-    .overlay-top-right,
-    .overlay-top-left
+    /*  Top-row overlays — the clock now centres horizontally above
+        the card. The previous top-left "back to live" button lives
+        inside the scrub label cluster instead, so when scrubbing
+        the user sees a single clustered control anchored to the
+        cursor instead of two separate corner chips. */
+    .overlay-top-center
     {
         position: absolute;
         top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 5;
         display: flex;
         align-items: center;
     }
-
-    .overlay-top-right { right: 14px; }
-    .overlay-top-left  { left:  14px; }
 
     /*  Date/time chip — same chip language as the on-map readouts. */
     .clock
@@ -449,86 +522,6 @@ export const heliosCardStyles = css`
 
     .clock-date { opacity: 0.75; }
     .clock-time { opacity: 1;    }
-
-    /*  "Back to live" button — same chip as the clock, clickable.
-        position:relative so the tooltip pseudo-element anchors to
-        the button itself. */
-    .tl-live-btn
-    {
-        position: relative;
-        pointer-events: auto;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 2px 6px 2px 4px;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size:    12px;
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        white-space: nowrap;
-        cursor: pointer;
-        /*  Paint-only transition. Animating transform here would
-            keep the button on a GPU compositing layer permanently
-            and soften the tooltip text rendered as a child. */
-        transition: background 0.15s;
-    }
-
-    .tl-live-btn ha-icon
-    {
-        --mdc-icon-size: 12px;
-        color: #000000;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    .tl-live-btn:hover  { background: #f3f3f3; }
-    .tl-live-btn:active { background: #e8e8e8; }
-
-    /*  Live-button tooltip — rendered as a real DOM element (not a
-        pseudo-element) so its text gets sub-pixel anti-aliasing,
-        matching the cloud-disc tooltip rendered the same way. */
-    .tl-live-tooltip
-    {
-        position: absolute;
-        left: calc(100% + 6px);
-        top: 50%;
-        transform: translateY(-50%);
-        background: rgba(0, 0, 0, 0.78);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 6px;
-        padding: 6px 10px;
-        color: white;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size: 11px;
-        font-weight: 400;
-        line-height: 1.4;
-        white-space: nowrap;
-        text-transform: none;
-        letter-spacing: normal;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
-        pointer-events: none;
-        z-index: 100;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.1s ease, visibility 0.1s ease;
-    }
-
-    .tl-live-btn:hover .tl-live-tooltip,
-    .tl-live-btn:focus .tl-live-tooltip
-    {
-        opacity: 1;
-        visibility: visible;
-    }
-
 
     /*  Cloud-cover percentage chip — floating above the cloud disc
         on the ground with a leader line down to its feature. */
@@ -816,58 +809,6 @@ export const heliosCardStyles = css`
     .solar-svg .solar-ray-arrow
     {
         opacity: 0.85;
-    }
-
-
-    /*  Sky activity — soft cloud-tinted wisps drifting horizontally
-        over the on-ground disc. Pure-CSS atmospheric texture; pointer-
-        transparent and behind the chips. The whole layer's opacity
-        is modulated by --sky-intensity (= live cloud cover / 100), so
-        the effect crescendos with the cloudiness without ever
-        distracting from the data layers. */
-    .sky-activity
-    {
-        position: absolute;
-        width: 220px;
-        height: 220px;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-        z-index: 3;
-        opacity: var(--sky-intensity, 0);
-        transition: opacity 1.2s ease;
-        overflow: hidden;
-    }
-
-    .sky-wisp
-    {
-        position: absolute;
-        width: 56px;
-        height: 14px;
-        border-radius: 50%;
-        background: var(--sky-cloud-color, #5A8DC4);
-        opacity: 0;
-        filter: blur(6px);
-        will-change: transform, opacity;
-    }
-
-    /*  Five wisps with staggered phases and slightly different
-        speeds — even at full opacity the eye reads it as gentle
-        weather drift rather than a synchronised animation. The
-        negative animation-delay starts each puff mid-cycle so the
-        layer is populated immediately on render instead of waiting
-        the full duration for the first puff to enter. */
-    .sky-wisp-1 { top: 28%; animation: sky-drift 22s linear infinite     0s; }
-    .sky-wisp-2 { top: 46%; animation: sky-drift 28s linear infinite   -10s; }
-    .sky-wisp-3 { top: 62%; animation: sky-drift 18s linear infinite    -4s; }
-    .sky-wisp-4 { top: 38%; animation: sky-drift 32s linear infinite   -18s; }
-    .sky-wisp-5 { top: 70%; animation: sky-drift 25s linear infinite   -14s; }
-
-    @keyframes sky-drift
-    {
-        0%   { transform: translateX(-60px) scaleX(0.9); opacity: 0;    }
-        15%  { opacity: 0.45; }
-        85%  { opacity: 0.45; }
-        100% { transform: translateX(280px) scaleX(1.1); opacity: 0;    }
     }
 
 

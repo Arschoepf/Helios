@@ -24836,7 +24836,7 @@ function buildCirclePolygon(centerLon, centerLat, radiusMetres, segments = 64) {
 const CLOUD_DISC_RADIUS_M = 30;
 const CLOUD_DISC_OPACITY = 0.25;
 const CLOUD_RING_COLOR = "#000000";
-const CLOUD_RING_WIDTH_PX = 1;
+const CLOUD_RING_WIDTH_PX = 2;
 const CLOUD_RING_OPACITY = 0.4;
 const CLOUD_CIRCLE_SEGMENTS = 128;
 const CLOUD_LABEL_OFFSET_PX = 100;
@@ -26099,7 +26099,6 @@ let HeliosEngine = _HeliosEngine;
 const en = {
   cardName: "HELIOS",
   cardDescription: "Real-time solar energy and cloud coverage visualization",
-  live: "Live",
   placeholder: {
     subtitle: "Solar exposure & cloud coverage"
   },
@@ -26107,8 +26106,7 @@ const en = {
     cloudCover: "Cloud cover: {0}%",
     cloudLow: "Low: {0}%",
     cloudMid: "Mid: {0}%",
-    cloudHigh: "High: {0}%",
-    resetLive: "Back to live"
+    cloudHigh: "High: {0}%"
   },
   editor: {
     required: "API key",
@@ -26164,7 +26162,6 @@ const en = {
 const fr = {
   cardName: "HELIOS",
   cardDescription: "Visualisation en temps réel de l'énergie solaire et de la couverture nuageuse",
-  live: "Direct",
   placeholder: {
     subtitle: "Exposition solaire & couverture nuageuse"
   },
@@ -26172,8 +26169,7 @@ const fr = {
     cloudCover: "Couverture nuageuse : {0}%",
     cloudLow: "Basse : {0}%",
     cloudMid: "Moyenne : {0}%",
-    cloudHigh: "Haute : {0}%",
-    resetLive: "Revenir à l'instant présent"
+    cloudHigh: "Haute : {0}%"
   },
   editor: {
     required: "Clé API",
@@ -26229,7 +26225,6 @@ const fr = {
 const de = {
   cardName: "HELIOS",
   cardDescription: "Echtzeit-Visualisierung von Solarenergie und Wolkenbedeckung",
-  live: "Live",
   placeholder: {
     subtitle: "Sonneneinstrahlung & Wolkenbedeckung"
   },
@@ -26237,8 +26232,7 @@ const de = {
     cloudCover: "Bewölkung: {0}%",
     cloudLow: "Niedrig: {0}%",
     cloudMid: "Mittel: {0}%",
-    cloudHigh: "Hoch: {0}%",
-    resetLive: "Zurück zur Echtzeit"
+    cloudHigh: "Hoch: {0}%"
   },
   editor: {
     required: "API-Schlüssel",
@@ -26294,7 +26288,6 @@ const de = {
 const es = {
   cardName: "HELIOS",
   cardDescription: "Visualización en tiempo real de la energía solar y la cobertura de nubes",
-  live: "En vivo",
   placeholder: {
     subtitle: "Exposición solar y cobertura de nubes"
   },
@@ -26302,8 +26295,7 @@ const es = {
     cloudCover: "Cobertura de nubes: {0}%",
     cloudLow: "Baja: {0}%",
     cloudMid: "Media: {0}%",
-    cloudHigh: "Alta: {0}%",
-    resetLive: "Volver al directo"
+    cloudHigh: "Alta: {0}%"
   },
   editor: {
     required: "Clave API",
@@ -26359,7 +26351,6 @@ const es = {
 const it = {
   cardName: "HELIOS",
   cardDescription: "Visualizzazione in tempo reale dell'energia solare e della copertura nuvolosa",
-  live: "Live",
   placeholder: {
     subtitle: "Esposizione solare e copertura nuvolosa"
   },
@@ -26367,8 +26358,7 @@ const it = {
     cloudCover: "Copertura nuvolosa: {0}%",
     cloudLow: "Bassa: {0}%",
     cloudMid: "Media: {0}%",
-    cloudHigh: "Alta: {0}%",
-    resetLive: "Torna al live"
+    cloudHigh: "Alta: {0}%"
   },
   editor: {
     required: "Chiave API",
@@ -26424,7 +26414,6 @@ const it = {
 const nl = {
   cardName: "HELIOS",
   cardDescription: "Realtime visualisatie van zonne-energie en bewolking",
-  live: "Live",
   placeholder: {
     subtitle: "Zonexpositie & bewolking"
   },
@@ -26432,8 +26421,7 @@ const nl = {
     cloudCover: "Bewolking: {0}%",
     cloudLow: "Laag: {0}%",
     cloudMid: "Middel: {0}%",
-    cloudHigh: "Hoog: {0}%",
-    resetLive: "Terug naar live"
+    cloudHigh: "Hoog: {0}%"
   },
   editor: {
     required: "API-sleutel",
@@ -26489,7 +26477,6 @@ const nl = {
 const pt = {
   cardName: "HELIOS",
   cardDescription: "Visualização em tempo real da energia solar e da cobertura de nuvens",
-  live: "Direto",
   placeholder: {
     subtitle: "Exposição solar e cobertura de nuvens"
   },
@@ -26497,8 +26484,7 @@ const pt = {
     cloudCover: "Cobertura de nuvens: {0}%",
     cloudLow: "Baixa: {0}%",
     cloudMid: "Média: {0}%",
-    cloudHigh: "Alta: {0}%",
-    resetLive: "Voltar ao direto"
+    cloudHigh: "Alta: {0}%"
   },
   editor: {
     required: "Chave API",
@@ -26860,24 +26846,94 @@ const heliosCardStyles = i$3`
         border-top:    5px solid #1f6feb;
     }
 
-    /*  Scrub-time chip — sits in the top row above the chart card,
+    /*  Scrub-time cluster — sits in the top row above the chart card
+        when the user has scrubbed away from "now". Combines a small
+        icon-only "back to live" button with the scrub-time pill, both
         tinted in the scrub-cursor blue so the displayed instant is
-        visibly not "now". */
-    .tb-sel-label
+        visibly not "now". The cluster anchors at the cursor's X (via
+        an inline left percentage) and edge-clamps via the inline
+        transform so it never bleeds past the card edges. The icon
+        button sits on the LEFT of the time pill and is the only
+        interactive element in the cluster — clicking it returns the
+        card to live mode. The pill itself is pointer-transparent so
+        dragging the timeline through the cluster still scrubs. */
+    .tb-sel-cluster
     {
         position: absolute;
         bottom: 0;
+        display: inline-flex;
+        align-items: stretch;
+        gap: 0;
+        z-index: 3;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    /*  Icon-only "back to live" button — same blue plate as the
+        adjacent time pill, with a subtle hover/active darkening so
+        it reads as actionable without competing with the pill's
+        timestamp readout. No text, no tooltip: the restore icon and
+        the contextual placement (next to the scrubbed-time pill)
+        carry the meaning. */
+    .tb-sel-live
+    {
+        pointer-events: auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(31, 111, 235, 0.95);
+        color: white;
+        border: 0;
+        border-right: 1px solid rgba(255, 255, 255, 0.30);
+        padding: 0 5px;
+        cursor: pointer;
+        transition: background 0.12s;
+    }
+
+    .tb-sel-live:hover  { background: rgba(24, 92, 199, 0.95); }
+    .tb-sel-live:active { background: rgba(20, 78, 168, 0.95); }
+
+    .tb-sel-live ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: white;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .tb-sel-label
+    {
         font-size: 10px;
         font-weight: 700;
         letter-spacing: 0.3px;
         color: white;
         background: rgba(31, 111, 235, 0.95);
         padding: 3px 8px;
-        border-radius: 3px;
         white-space: nowrap;
         pointer-events: none;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-        font-variant-numeric: tabular-nums;
+    }
+
+    /*  Scrub tether — a 6 px vertical hair that drops from the
+        bottom edge of the scrub cluster to the top edge of the
+        chart card, anchored at the cursor's X. Carries the
+        scrub-cursor blue so it reads as continuous with the cursor's
+        downward triangle inside the chart. The tether is rendered
+        as a sibling of the cluster (not a child) and uses the same
+        left-percentage anchor without the cluster's edge-clamping
+        transform, so it always lands directly above the cursor even
+        when the cluster shifts to avoid clipping. */
+    .tb-sel-tether
+    {
+        position: absolute;
+        bottom: -6px;
+        height: 6px;
+        width: 1px;
+        background: rgba(31, 111, 235, 0.95);
+        transform: translateX(-50%);
+        pointer-events: none;
         z-index: 3;
     }
 
@@ -26966,18 +27022,21 @@ const heliosCardStyles = i$3`
     /*  Top corner overlays. Date/time chip on the right; "back to
         live" chip on the left when scrubbed. */
 
-    .overlay-top-right,
-    .overlay-top-left
+    /*  Top-row overlays — the clock now centres horizontally above
+        the card. The previous top-left "back to live" button lives
+        inside the scrub label cluster instead, so when scrubbing
+        the user sees a single clustered control anchored to the
+        cursor instead of two separate corner chips. */
+    .overlay-top-center
     {
         position: absolute;
         top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 5;
         display: flex;
         align-items: center;
     }
-
-    .overlay-top-right { right: 14px; }
-    .overlay-top-left  { left:  14px; }
 
     /*  Date/time chip — same chip language as the on-map readouts. */
     .clock
@@ -27001,86 +27060,6 @@ const heliosCardStyles = i$3`
 
     .clock-date { opacity: 0.75; }
     .clock-time { opacity: 1;    }
-
-    /*  "Back to live" button — same chip as the clock, clickable.
-        position:relative so the tooltip pseudo-element anchors to
-        the button itself. */
-    .tl-live-btn
-    {
-        position: relative;
-        pointer-events: auto;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 2px 6px 2px 4px;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size:    12px;
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        white-space: nowrap;
-        cursor: pointer;
-        /*  Paint-only transition. Animating transform here would
-            keep the button on a GPU compositing layer permanently
-            and soften the tooltip text rendered as a child. */
-        transition: background 0.15s;
-    }
-
-    .tl-live-btn ha-icon
-    {
-        --mdc-icon-size: 12px;
-        color: #000000;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    .tl-live-btn:hover  { background: #f3f3f3; }
-    .tl-live-btn:active { background: #e8e8e8; }
-
-    /*  Live-button tooltip — rendered as a real DOM element (not a
-        pseudo-element) so its text gets sub-pixel anti-aliasing,
-        matching the cloud-disc tooltip rendered the same way. */
-    .tl-live-tooltip
-    {
-        position: absolute;
-        left: calc(100% + 6px);
-        top: 50%;
-        transform: translateY(-50%);
-        background: rgba(0, 0, 0, 0.78);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 6px;
-        padding: 6px 10px;
-        color: white;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size: 11px;
-        font-weight: 400;
-        line-height: 1.4;
-        white-space: nowrap;
-        text-transform: none;
-        letter-spacing: normal;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
-        pointer-events: none;
-        z-index: 100;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.1s ease, visibility 0.1s ease;
-    }
-
-    .tl-live-btn:hover .tl-live-tooltip,
-    .tl-live-btn:focus .tl-live-tooltip
-    {
-        opacity: 1;
-        visibility: visible;
-    }
-
 
     /*  Cloud-cover percentage chip — floating above the cloud disc
         on the ground with a leader line down to its feature. */
@@ -27368,58 +27347,6 @@ const heliosCardStyles = i$3`
     .solar-svg .solar-ray-arrow
     {
         opacity: 0.85;
-    }
-
-
-    /*  Sky activity — soft cloud-tinted wisps drifting horizontally
-        over the on-ground disc. Pure-CSS atmospheric texture; pointer-
-        transparent and behind the chips. The whole layer's opacity
-        is modulated by --sky-intensity (= live cloud cover / 100), so
-        the effect crescendos with the cloudiness without ever
-        distracting from the data layers. */
-    .sky-activity
-    {
-        position: absolute;
-        width: 220px;
-        height: 220px;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-        z-index: 3;
-        opacity: var(--sky-intensity, 0);
-        transition: opacity 1.2s ease;
-        overflow: hidden;
-    }
-
-    .sky-wisp
-    {
-        position: absolute;
-        width: 56px;
-        height: 14px;
-        border-radius: 50%;
-        background: var(--sky-cloud-color, #5A8DC4);
-        opacity: 0;
-        filter: blur(6px);
-        will-change: transform, opacity;
-    }
-
-    /*  Five wisps with staggered phases and slightly different
-        speeds — even at full opacity the eye reads it as gentle
-        weather drift rather than a synchronised animation. The
-        negative animation-delay starts each puff mid-cycle so the
-        layer is populated immediately on render instead of waiting
-        the full duration for the first puff to enter. */
-    .sky-wisp-1 { top: 28%; animation: sky-drift 22s linear infinite     0s; }
-    .sky-wisp-2 { top: 46%; animation: sky-drift 28s linear infinite   -10s; }
-    .sky-wisp-3 { top: 62%; animation: sky-drift 18s linear infinite    -4s; }
-    .sky-wisp-4 { top: 38%; animation: sky-drift 32s linear infinite   -18s; }
-    .sky-wisp-5 { top: 70%; animation: sky-drift 25s linear infinite   -14s; }
-
-    @keyframes sky-drift
-    {
-        0%   { transform: translateX(-60px) scaleX(0.9); opacity: 0;    }
-        15%  { opacity: 0.45; }
-        85%  { opacity: 0.45; }
-        100% { transform: translateX(280px) scaleX(1.1); opacity: 0;    }
     }
 
 
@@ -29571,7 +29498,6 @@ let HeliosCard = class extends i {
     const t2 = pickTranslations(this.hass?.language);
     const apiKey = String(this.config?.["maptiler-api-key"] ?? "").trim();
     const hasApiKey = apiKey.length > 0;
-    const resetTooltip = t2.tooltip.resetLive;
     const displayDate = !this._isLiveMode && this._selectedTime ? this._selectedTime : this._now;
     const displayDateLabel = formatDate(displayDate, this.config?.["date-format"]);
     const is12h = String(this.config?.["time-format"] ?? "24h").toLowerCase() === "12h";
@@ -29643,7 +29569,6 @@ let HeliosCard = class extends i {
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
-    const cloudColor = cfgHex(this.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
     const sunRimColor = this._darkenHex(sunColor, 0.2);
     const arcSegments = showSun ? this._buildArcSegments(sunScene.arc, sunColor) : [];
     const showRay = showSun && sunScene.sun.altitude > 0;
@@ -29666,10 +29591,15 @@ let HeliosCard = class extends i {
                         class="time-bar"
                         @pointerdown="${this._onTimelinePointerDown}"
                     >
-                        <!--  Top row: scrub time chip, shown above the
-                              chart card with a small breathing gap so
-                              it reads cleanly without competing with
-                              the chart's data ink.  -->
+                        <!--  Top row: scrub-time cluster (icon-only
+                              "back to live" button + scrub-time pill)
+                              shown above the chart card with a small
+                              breathing gap and a thin tether hair down
+                              to the chart's top edge. The cluster
+                              anchors at the cursor's X with edge-aware
+                              clamping; the tether anchors at the same
+                              X without clamping so it always lands
+                              directly above the cursor.  -->
                         <div class="tb-top-row">
                             ${!this._isLiveMode && this._selectedTime ? (() => {
       const { start, end } = this._timeRange;
@@ -29681,9 +29611,21 @@ let HeliosCard = class extends i {
       const xform = selPct < 8 ? "translateX(0)" : selPct > 92 ? "translateX(-100%)" : "translateX(-50%)";
       return b`
                                     <div
-                                        class="tb-sel-label"
+                                        class="tb-sel-cluster"
                                         style="left:${selPct}%; transform:${xform}"
-                                    >${this._formatSelTime(this._selectedTime)}</div>
+                                    >
+                                        <button
+                                            class="tb-sel-live"
+                                            @click="${this._resetToLive}"
+                                        >
+                                            <ha-icon icon="mdi:restore"></ha-icon>
+                                        </button>
+                                        <div class="tb-sel-label">${this._formatSelTime(this._selectedTime)}</div>
+                                    </div>
+                                    <div
+                                        class="tb-sel-tether"
+                                        style="left:${selPct}%"
+                                    ></div>
                                 `;
     })() : A}
                         </div>
@@ -29724,24 +29666,11 @@ let HeliosCard = class extends i {
                 ` : A}
 
                 ${hasApiKey ? b`
-                    <div class="overlay-top-right">
+                    <div class="overlay-top-center">
                         <div class="clock ${this._isLiveMode ? "" : "clock-scrubbed"}">
                             <span class="clock-date">${displayDateLabel}</span>
                             <span class="clock-time">${displayTimeLabel}</span>
                         </div>
-                    </div>
-                ` : A}
-
-                ${hasApiKey && !this._isLiveMode ? b`
-                    <div class="overlay-top-left">
-                        <button
-                            class="tl-live-btn"
-                            @click="${this._resetToLive}"
-                        >
-                            <ha-icon class="tl-live-icon" icon="mdi:restore"></ha-icon>
-                            <span>${t2.live}</span>
-                            <span class="tl-live-tooltip">${resetTooltip}</span>
-                        </button>
                     </div>
                 ` : A}
 
@@ -29842,27 +29771,6 @@ ${showSun ? b`
                 ` : A}
 
                 ${showLabel ? b`
-                    <!--  Sky activity — soft cloud-tinted wisps drifting
-                          horizontally over the on-ground disc, modulated
-                          by the live cloud-cover percentage. Pure CSS,
-                          pointer-transparent, behind the chips so it
-                          never competes for attention. -->
-                    <div
-                        class="sky-activity"
-                        style="
-                            left:${layout.home.x}px;
-                            top:${layout.home.y}px;
-                            --sky-cloud-color:${cloudColor};
-                            --sky-intensity:${Math.min(1, cloudPctRound / 100)};
-                        "
-                    >
-                        <span class="sky-wisp sky-wisp-1"></span>
-                        <span class="sky-wisp sky-wisp-2"></span>
-                        <span class="sky-wisp sky-wisp-3"></span>
-                        <span class="sky-wisp sky-wisp-4"></span>
-                        <span class="sky-wisp sky-wisp-5"></span>
-                    </div>
-
                     <svg class="cloud-leader-svg">
                         <line
                             x1="${layout.cloudLabel.x + 10}"

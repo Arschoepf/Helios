@@ -19,8 +19,6 @@ export interface Translations
     cardName:        string;
     cardDescription: string;
 
-    live: string;
-
     placeholder:
     {
         subtitle: string;
@@ -32,7 +30,6 @@ export interface Translations
         cloudLow:    string;     //"Low: {0}%"
         cloudMid:    string;     //"Mid: {0}%"
         cloudHigh:   string;     //"High: {0}%"
-        resetLive:   string;
     };
 
     editor:

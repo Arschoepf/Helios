@@ -4,8 +4,6 @@ export const nl: Translations = {
     cardName:        'HELIOS',
     cardDescription: 'Realtime visualisatie van zonne-energie en bewolking',
 
-    live: 'Live',
-
     placeholder:
     {
         subtitle: 'Zonexpositie & bewolking'
@@ -16,8 +14,7 @@ export const nl: Translations = {
         cloudCover:  "Bewolking: {0}%",
         cloudLow:    "Laag: {0}%",
         cloudMid:    "Middel: {0}%",
-        cloudHigh:   "Hoog: {0}%",
-        resetLive:   'Terug naar live'
+        cloudHigh:   "Hoog: {0}%"
     },
 
     editor:

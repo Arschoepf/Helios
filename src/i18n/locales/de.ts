@@ -4,8 +4,6 @@ export const de: Translations = {
     cardName:        'HELIOS',
     cardDescription: 'Echtzeit-Visualisierung von Solarenergie und Wolkenbedeckung',
 
-    live: 'Live',
-
     placeholder:
     {
         subtitle: 'Sonneneinstrahlung & Wolkenbedeckung'
@@ -16,8 +14,7 @@ export const de: Translations = {
         cloudCover:  "Bewölkung: {0}%",
         cloudLow:    "Niedrig: {0}%",
         cloudMid:    "Mittel: {0}%",
-        cloudHigh:   "Hoch: {0}%",
-        resetLive:   'Zurück zur Echtzeit'
+        cloudHigh:   "Hoch: {0}%"
     },
 
     editor:

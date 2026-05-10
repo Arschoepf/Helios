@@ -320,7 +320,7 @@ const CLOUD_DISC_OPACITY        = 0.25;
 //with the percentage label for attention. Pure black so it reads
 //consistently regardless of the chosen cloud-color.
 const CLOUD_RING_COLOR          = '#000000';
-const CLOUD_RING_WIDTH_PX       = 1;
+const CLOUD_RING_WIDTH_PX       = 2;
 const CLOUD_RING_OPACITY        = 0.4;
 //Number of polygon vertices used to approximate the disc and ring.
 //128 is overkill for the visual smoothness alone but the cost is

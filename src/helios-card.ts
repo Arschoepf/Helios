@@ -1906,8 +1906,6 @@ export class HeliosCard extends LitElement
         const apiKey    = String(this.config?.['maptiler-api-key'] ?? '').trim();
         const hasApiKey = apiKey.length > 0;
 
-        const resetTooltip    = t.tooltip.resetLive;
-
 
         //Date+time shown bottom-right: tracks the timeline cursor.
         //  - In live mode it follows wall-clock time (re-rendered every
@@ -2148,11 +2146,11 @@ export class HeliosCard extends LitElement
 
         //v1.3 — fixed colour design system. The configured sun
         //colour paints the arc, the outer rim of the sun disc,
-        //and the inner irradiance fill. The configured cloud
-        //colour paints the on-ground disc and the lower mirror
-        //of the timeline chart.
+        //and the inner irradiance fill. The on-ground cloud disc
+        //is painted in MapLibre paint properties from the engine
+        //(see _updateCloudCoverDisc) so we don't need the cloud
+        //hex in this render block.
         const sunColor      = cfgHex(this.config?.['sun-color'],   DEFAULT_SUN_COLOR_HEX);
-        const cloudColor    = cfgHex(this.config?.['cloud-color'], DEFAULT_CLOUD_COLOR_HEX);
         const sunRimColor   = this._darkenHex(sunColor, 0.20);
         const arcSegments   = showSun ? this._buildArcSegments(sunScene!.arc, sunColor) : [];
 
@@ -2197,10 +2195,15 @@ export class HeliosCard extends LitElement
                         class="time-bar"
                         @pointerdown="${this._onTimelinePointerDown}"
                     >
-                        <!--  Top row: scrub time chip, shown above the
-                              chart card with a small breathing gap so
-                              it reads cleanly without competing with
-                              the chart's data ink.  -->
+                        <!--  Top row: scrub-time cluster (icon-only
+                              "back to live" button + scrub-time pill)
+                              shown above the chart card with a small
+                              breathing gap and a thin tether hair down
+                              to the chart's top edge. The cluster
+                              anchors at the cursor's X with edge-aware
+                              clamping; the tether anchors at the same
+                              X without clamping so it always lands
+                              directly above the cursor.  -->
                         <div class="tb-top-row">
                             ${(!this._isLiveMode && this._selectedTime) ? (() => {
                                 const { start, end } = this._timeRange!;
@@ -2212,9 +2215,21 @@ export class HeliosCard extends LitElement
                                     : (selPct > 92 ? 'translateX(-100%)' : 'translateX(-50%)');
                                 return html`
                                     <div
-                                        class="tb-sel-label"
+                                        class="tb-sel-cluster"
                                         style="left:${selPct}%; transform:${xform}"
-                                    >${this._formatSelTime(this._selectedTime!)}</div>
+                                    >
+                                        <button
+                                            class="tb-sel-live"
+                                            @click="${this._resetToLive}"
+                                        >
+                                            <ha-icon icon="mdi:restore"></ha-icon>
+                                        </button>
+                                        <div class="tb-sel-label">${this._formatSelTime(this._selectedTime!)}</div>
+                                    </div>
+                                    <div
+                                        class="tb-sel-tether"
+                                        style="left:${selPct}%"
+                                    ></div>
                                 `;
                             })() : nothing}
                         </div>
@@ -2255,24 +2270,11 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 ${hasApiKey ? html`
-                    <div class="overlay-top-right">
+                    <div class="overlay-top-center">
                         <div class="clock ${this._isLiveMode ? '' : 'clock-scrubbed'}">
                             <span class="clock-date">${displayDateLabel}</span>
                             <span class="clock-time">${displayTimeLabel}</span>
                         </div>
-                    </div>
-                ` : nothing}
-
-                ${hasApiKey && !this._isLiveMode ? html`
-                    <div class="overlay-top-left">
-                        <button
-                            class="tl-live-btn"
-                            @click="${this._resetToLive}"
-                        >
-                            <ha-icon class="tl-live-icon" icon="mdi:restore"></ha-icon>
-                            <span>${t.live}</span>
-                            <span class="tl-live-tooltip">${resetTooltip}</span>
-                        </button>
                     </div>
                 ` : nothing}
 
@@ -2393,27 +2395,6 @@ ${showSun ? html`
                 ` : nothing}
 
                 ${showLabel ? html`
-                    <!--  Sky activity — soft cloud-tinted wisps drifting
-                          horizontally over the on-ground disc, modulated
-                          by the live cloud-cover percentage. Pure CSS,
-                          pointer-transparent, behind the chips so it
-                          never competes for attention. -->
-                    <div
-                        class="sky-activity"
-                        style="
-                            left:${layout!.home.x}px;
-                            top:${layout!.home.y}px;
-                            --sky-cloud-color:${cloudColor};
-                            --sky-intensity:${Math.min(1, cloudPctRound / 100)};
-                        "
-                    >
-                        <span class="sky-wisp sky-wisp-1"></span>
-                        <span class="sky-wisp sky-wisp-2"></span>
-                        <span class="sky-wisp sky-wisp-3"></span>
-                        <span class="sky-wisp sky-wisp-4"></span>
-                        <span class="sky-wisp sky-wisp-5"></span>
-                    </div>
-
                     <svg class="cloud-leader-svg">
                         <line
                             x1="${layout!.cloudLabel.x + 10}"

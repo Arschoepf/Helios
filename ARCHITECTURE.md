@@ -131,6 +131,53 @@ their tags are deleted, so the HACS download list only shows
 the v1.0.0 / v1.1.0 stable releases plus the active v1.2.0-beta
 line.
 
+## v1.2.0-beta.4
+
+* **Scrub controls reunified.** The "back to live" button used to
+  live in a separate `.overlay-top-left` chip and the scrub time
+  pill in `.tb-top-row`. They were two different chrome elements
+  reacting to the same state (scrubbed vs live) and the user had
+  to swing their gaze between corners. Both now sit in a single
+  `.tb-sel-cluster` anchored at the cursor's X above the chart
+  card: a small icon-only button (`<ha-icon icon="mdi:restore">`)
+  on the left, the scrub-time pill on the right, both on the
+  same blue plate. Click the icon to return to live.
+* **Tooltip + i18n removed.** The icon's contextual placement
+  (it only appears when the user is scrubbed away from now, right
+  next to the displayed past/future time) carries the meaning
+  unambiguously, so the previous "Back to live" tooltip and the
+  `t.live` / `t.tooltip.resetLive` strings were pulled. Removed
+  from `Translations`, all seven locale files, and the
+  `.tl-live-btn` / `.tl-live-icon` / `.tl-live-tooltip` CSS
+  vocabulary that backed them.
+* **Scrub tether.** A 6 px vertical hair drops from the bottom
+  edge of the cluster down to the top edge of the chart card
+  (anchored at the cursor X without the cluster's edge-clamping
+  transform, so it always lands directly above the on-chart
+  cursor — even when the cluster shifts to avoid clipping near
+  the chart's left/right edges). Carries the same scrub-cursor
+  blue, reading as continuous with the cursor's downward
+  triangle inside the chart.
+* **Date / time clock centred.** Moved from `.overlay-top-right`
+  to a new `.overlay-top-center` (`top: 14px; left: 50%;
+  transform: translateX(-50%)`). The chip stays visually anchored
+  to the top edge of the card but now sits as the symmetric pair
+  to the (centred) scrub cluster below the card centre. Frees
+  the top corners for future chrome.
+* **Cloud reference ring thicker.** `CLOUD_RING_WIDTH_PX` goes
+  from `1` to `2` so the 100 % outline reads cleanly even on
+  very saturated basemaps where the original 1 px line was
+  fading into roads / labels at its edge intersections.
+* **Sky-activity wisps retired.** The five `.sky-wisp-*` divs
+  that drifted soft cloud-tinted puffs across the home (modulated
+  by `--sky-intensity = cloudCover / 100`) added ambient texture
+  but felt busy at high cloud cover. Removed entirely along with
+  their `@keyframes sky-drift` animation, the `.sky-activity`
+  container and the `cloudColor` plumbing in `render()` that fed
+  the `--sky-cloud-color` variable. Cloud cover is now
+  communicated solely by the on-ground disc filling toward its
+  100 % reference ring — a single, deliberate visual.
+
 ## v1.2.0-beta.3
 
 * **Dark-mode chip borders softened.** Across light and dark
