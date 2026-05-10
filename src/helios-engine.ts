@@ -79,6 +79,13 @@ export interface HeliosConfig
     //dashboards. The 3D map basemap and the configured colour
     //palette (sun, cloud, PV, battery) are unaffected.
     'card-theme'?:            unknown;
+    //v1.1.0-beta.11 — single colour applied to every 3D building
+    //in the helios-buildings layer (home + neighbours). Defaults
+    //to a neutral cool grey. Exposing it lets users tint the
+    //urban backdrop to match their dashboard palette without
+    //touching the chip / leader colours that carry the actual
+    //data.
+    'building-color'?:        unknown;
 }
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
@@ -228,6 +235,11 @@ export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
 //discharge / "energy on draw" semantics. Reads cleanly on the
 //80 % white chip background.
 export const DEFAULT_BATTERY_COLOR_HEX: string = '#D32F2F';
+//Neutral light grey — buildings are urban context, never the
+//focal point. Slightly cool (more blue than the chip white) so
+//the home reads as "stone / concrete" rather than "snow", and
+//sits a touch behind the warmer sun / PV chips visually.
+export const DEFAULT_BUILDING_COLOR_HEX: string = '#D2D2D7';
 
 const DEFAULT_CLOUD_RGB: RGB = [0x5A, 0x8D, 0xC4];
 
@@ -442,25 +454,19 @@ export class HeliosEngine
     //Hover events on the cloud-cover disc — drive the floating
     //low/mid/high breakdown tooltip in the card.
     public onCloudHover?:    (e: { x: number; y: number; hover: boolean }) => void;
-    //Hover events on the home building 3D fill — drive the SoC
-    //tooltip floating near the cursor.
-    public onHomeBuildingHover?: (e: { x: number; y: number; hover: boolean }) => void;
     //Map transform changed — the card recomputes screen-space
     //projections (sun arc, chip positions, leaders) from this hook.
     public onMapTransform?:  () => void;
 
-    //Live State-of-Charge as a [0, 1] factor used to scale the
-    //home-fill extrusion height: 0 = empty (home not painted),
-    //1 = full (fill matches the building's render_height). Stored
-    //here so the value persists across basemap reloads (setStyle
-    //triggers an _addBuildings re-init that re-applies the saved
-    //factor without the card having to push it again).
-    private _batterySocFactor: number = 0;
-    //True once the home-fill source has been seeded with the actual
-    //home building footprint queried from the rendered vector tiles.
-    //Reset on every basemap reload so the next idle re-runs the
-    //resolution against the freshly loaded layer.
-    private _homeFootprintResolved: boolean = false;
+    //Auto-rotation state. The map slowly orbits the home in the
+    //opposite direction to the sun's apparent motion (decreasing
+    //bearing, ~1°/s) when the user has been idle for a few seconds.
+    //Any direct interaction resets the inactivity timer, so the
+    //rotation pauses immediately on pinch / drag / wheel and
+    //resumes once the user lets go.
+    private _autoRotateRaf?:           number;
+    private _autoRotateLastFrame:      number = 0;
+    private _autoRotateLastUserAction: number = 0;
 
     constructor(
         container:    HTMLElement,
@@ -564,7 +570,11 @@ export class HeliosEngine
         this.map.on('move',   pinHomeAtCenter);
 
         this.map.on('style.load', () => this._onStyleLoad());
-        this.map.on('load',       () => { this.map?.resize(); });
+        this.map.on('load',       () =>
+        {
+            this.map?.resize();
+            this._startAutoRotateLoop();
+        });
 
         //Map transform broadcaster — relays move events to the card so
         //it can keep HTML overlays (the percentage label and its
@@ -573,6 +583,20 @@ export class HeliosEngine
         //overlays track the camera frame-by-frame during programmatic
         //animations rather than snapping at the end.
         this.map.on('move', () => this.onMapTransform?.());
+
+        //Auto-rotation pause — any DOM-level interaction on the canvas
+        //(mouse, touch, wheel) bumps the inactivity timer so the
+        //rotation loop yields immediately and only resumes after a
+        //few seconds of stillness. We hook DOM events rather than
+        //MapLibre 'rotate' / 'pitch' / 'drag' because the loop ITSELF
+        //emits those (via setBearing), which would otherwise be
+        //indistinguishable from a real user action.
+        const canvas = this.map.getCanvas();
+        const bumpInactivity = () => { this._autoRotateLastUserAction = Date.now(); };
+        canvas.addEventListener('mousedown',  bumpInactivity);
+        canvas.addEventListener('wheel',      bumpInactivity, { passive: true });
+        canvas.addEventListener('touchstart', bumpInactivity, { passive: true });
+        canvas.addEventListener('touchmove',  bumpInactivity, { passive: true });
 
         //Surface MapLibre internal errors (auth, tile fetch, WebGL) to
         //the browser console rather than letting them silently cascade.
@@ -1207,24 +1231,14 @@ export class HeliosEngine
     }
 
     //Renders 3D building extrusions as the visual context for the
-    //home location.
-    //
-    //In v1.1.0-beta.9 the home-as-battery-readout layout went live:
-    //  - Every building (home included) renders at 0.25 opacity in
-    //    the neutral grey backdrop layer (`helios-buildings`).
-    //  - A second layer (`helios-home-fill`) re-renders ONLY the
-    //    home building at 1.0 opacity in the configured battery
-    //    colour, with extrusion height scaled by the live SoC
-    //    (0 % → invisible, 100 % → full building height). The fill
-    //    grows from the ground up so a half-charged battery shows
-    //    the lower half of the home painted.
-    //  - The home is identified spatially: a 15 m circle around
-    //    the configured home coordinates is used as a `within`
-    //    filter on the `building` source-layer. This works for
-    //    individual residential homes; very dense neighbourhoods
-    //    (terraced houses, apartment blocks) may light up adjacent
-    //    buildings — accepted trade-off for the simplicity of not
-    //    needing per-feature ids from the vector tiles.
+    //home location. All buildings are painted in the configured
+    //`building-color` (defaults to a neutral light grey) at a
+    //single shared opacity — the home is identified by the chips
+    //and leader lines on top, not by a special render of the
+    //building itself. The earlier home-fill experiment (beta.9 /
+    //beta.10) was removed because it was visually noisy and the
+    //spatial identification of the home building from vector tiles
+    //was unreliable in dense neighbourhoods.
     //Toggle MapTiler Streets' label layers (road names, house numbers,
     //POIs, place names) on or off based on the `show-labels` config.
     //Symbol-type layers are the canonical container for text + icon
@@ -1293,6 +1307,9 @@ export class HeliosEngine
             });
         }
 
+        const buildingColor = String(this.cfg['building-color']
+            ?? DEFAULT_BUILDING_COLOR_HEX);
+
         this.map.addLayer(
         {
             id:             'helios-buildings',
@@ -1302,304 +1319,37 @@ export class HeliosEngine
             minzoom:        15,
             paint:
             {
-                //Neutral light grey — neighbours form a quiet
-                //urban backdrop. The home itself is overpainted
-                //at full opacity by `helios-home-fill` below, so
-                //even at 0.25 it stays the focal point.
-                'fill-extrusion-color':   'rgba(210,210,215,1)',
+                'fill-extrusion-color':   buildingColor,
                 'fill-extrusion-height':  ['get', 'render_height'],
                 'fill-extrusion-base':    ['get', 'render_min_height'],
+                //Opacity ramps in between zoom 15 and 16; top
+                //opacity sits at 0.75 — buildings are present
+                //enough to read as solid massing without burying
+                //the basemap or competing with the chips and
+                //leaders that carry the actual data.
                 'fill-extrusion-opacity': [
                     'interpolate', ['linear'], ['zoom'],
                     15, 0,
-                    16, 0.25
+                    16, 0.75
                 ]
             }
         });
-
-        //Home-fill layer — driven by a CUSTOM GeoJSON source
-        //(`helios-home-src`) rather than the vector-tile building
-        //source. We tried `['within', polygon]` to filter the
-        //vector source down to the home building, but MapLibre 5's
-        //`within` expression only evaluates Point and LineString
-        //features (see Within.evaluate in maplibre-gl-dev.js) —
-        //building polygons silently never match.
-        //
-        //Instead the source is seeded with a fallback 12 m × 12 m
-        //square at the home coordinates, then upgraded to the real
-        //building footprint as soon as the buildings layer has
-        //rendered enough tiles to query (see _tryResolveHomeFootprint
-        //below). The fallback guarantees something always paints
-        //while the upgrade matches the exact building shape when
-        //it's available in OSM.
-        const batteryColor = String(this.cfg['battery-color']
-            ?? DEFAULT_BATTERY_COLOR_HEX);
-        if (!this.map.getSource('helios-home-src'))
-        {
-            this.map.addSource('helios-home-src',
-            {
-                type: 'geojson',
-                data: this._homeFallbackFeatureCollection()
-            });
-        }
-        else
-        {
-            //Style reload (e.g. user switched map-style) — re-seed
-            //with the fallback while the new tiles load, then the
-            //resolver will overwrite with the real footprint on the
-            //next idle.
-            const src = this.map.getSource('helios-home-src') as any;
-            src?.setData?.(this._homeFallbackFeatureCollection());
-        }
-        this._homeFootprintResolved = false;
-
-        this.map.addLayer(
-        {
-            id:      'helios-home-fill',
-            source:  'helios-home-src',
-            type:    'fill-extrusion',
-            minzoom: 15,
-            paint:
-            {
-                'fill-extrusion-color':   batteryColor,
-                'fill-extrusion-base':    ['coalesce', ['get', 'render_min_height'], 0],
-                //Initial height = render_height × current SoC factor.
-                //Will be re-pushed by setBatterySoc() whenever the
-                //live SoC value updates.
-                'fill-extrusion-height': [
-                    '*', ['coalesce', ['get', 'render_height'], 8], this._batterySocFactor
-                ],
-                'fill-extrusion-opacity': [
-                    'interpolate', ['linear'], ['zoom'],
-                    15, 0,
-                    16, 1.0
-                ]
-            }
-        });
-
-        //Cursor + hover events on the home-fill layer drive the
-        //SoC tooltip in the card. The `mousemove` handler is
-        //throttled to one event per animation frame upstream by
-        //MapLibre, so emitting on every fire is cheap.
-        this.map.on('mouseenter', 'helios-home-fill', () =>
-        {
-            if (this.map) { this.map.getCanvas().style.cursor = 'pointer'; }
-        });
-        this.map.on('mousemove', 'helios-home-fill', e =>
-        {
-            this.onHomeBuildingHover?.({ x: e.point.x, y: e.point.y, hover: true });
-        });
-        this.map.on('mouseleave', 'helios-home-fill', () =>
-        {
-            if (this.map) { this.map.getCanvas().style.cursor = ''; }
-            this.onHomeBuildingHover?.({ x: 0, y: 0, hover: false });
-        });
-
-        //Try to upgrade the fallback square to the real home
-        //footprint as soon as the building tiles have rendered. We
-        //hook 'idle' (fired when no more tiles are loading and no
-        //animations are running) and re-run on every fire until we
-        //get a match — once resolved, the resolver short-circuits
-        //so the cost stays at one queryRenderedFeatures call per
-        //idle until success, then zero.
-        this.map.on('idle', () => this._tryResolveHomeFootprint());
     }
 
-    //Build the fallback FeatureCollection used to seed
-    //`helios-home-src` before the real footprint is known: a
-    //12 m × 12 m square centred on the home, with a default
-    //`render_height` of 8 m (~2 floors) so the fill scales
-    //plausibly even before we can read the real building height
-    //from the vector tiles.
-    private _homeFallbackFeatureCollection(): GeoJSON.FeatureCollection
+    //Public — push a new building colour to the running buildings
+    //layer (called by the card when the user edits `building-color`
+    //in the visual editor). Skips silently when the layer hasn't
+    //been added yet — the next basemap reload will pick the new
+    //colour up from `this.cfg`.
+    public setBuildingColor(hex: string): void
     {
-        const HALF_M  = 6;
-        const cosLat  = Math.cos(this.homeLat * Math.PI / 180);
-        const dLat    = HALF_M / 111_320;
-        const dLng    = HALF_M / (111_320 * cosLat);
-        const w = this.homeLon - dLng;
-        const e = this.homeLon + dLng;
-        const s = this.homeLat - dLat;
-        const n = this.homeLat + dLat;
-        return {
-            type: 'FeatureCollection',
-            features:
-            [
-                {
-                    type:       'Feature',
-                    properties: { render_height: 8, render_min_height: 0 },
-                    geometry:
-                    {
-                        type:        'Polygon',
-                        coordinates: [[
-                            [w, s], [e, s], [e, n], [w, n], [w, s]
-                        ]]
-                    }
-                }
-            ]
-        };
-    }
-
-    //Resolve the actual home footprint from the rendered building
-    //tiles and overwrite the fallback square in `helios-home-src`.
-    //
-    //Strategy: project the home (lon, lat) to a screen point, query
-    //the buildings layer over a small box around it
-    //(queryRenderedFeatures on a single point can miss the building
-    //when the home coordinates land inside the courtyard rather than
-    //on the polygon itself), pick the candidate whose centroid is
-    //closest to the home, and push its geometry + render_height /
-    //render_min_height into the GeoJSON source.
-    //
-    //Idempotent: returns immediately once a real footprint has been
-    //resolved, so the per-idle cost drops to a single boolean check
-    //after the first success. Reset on every basemap reload.
-    private _tryResolveHomeFootprint(): void
-    {
-        if (!this.map || this._homeFootprintResolved)
-        {
-            return;
-        }
-        if (!this.map.getLayer('helios-buildings'))
-        {
-            return;
-        }
-
-        const m = this.map as any;
-        const home = m.project([this.homeLon, this.homeLat]);
-        const SEARCH_RADIUS_PX = 24;
-        const box: [[number, number], [number, number]] =
-        [
-            [home.x - SEARCH_RADIUS_PX, home.y - SEARCH_RADIUS_PX],
-            [home.x + SEARCH_RADIUS_PX, home.y + SEARCH_RADIUS_PX]
-        ];
-        const feats = m.queryRenderedFeatures(box, { layers: ['helios-buildings'] }) ?? [];
-        if (feats.length === 0)
-        {
-            return;
-        }
-
-        //Pick the building whose vertex centroid is closest to the
-        //home point in geographic coordinates. This is more reliable
-        //than "first feature returned" — vector tiles split big
-        //buildings across multiple features, and the home might be
-        //adjacent to the courtyard of a neighbouring complex.
-        let best:        any = null;
-        let bestDist:    number = Infinity;
-        for (const f of feats)
-        {
-            const c = this._featureCentroid(f);
-            if (c === null) { continue; }
-            const dx = c[0] - this.homeLon;
-            const dy = c[1] - this.homeLat;
-            const d  = dx * dx + dy * dy;
-            if (d < bestDist)
-            {
-                bestDist = d;
-                best     = f;
-            }
-        }
-        if (!best || !best.geometry)
-        {
-            return;
-        }
-
-        const props = best.properties ?? {};
-        const renderHeight = typeof props.render_height === 'number'
-            ? props.render_height : 8;
-        const renderBase   = typeof props.render_min_height === 'number'
-            ? props.render_min_height : 0;
-
-        const upgraded: GeoJSON.FeatureCollection =
-        {
-            type: 'FeatureCollection',
-            features:
-            [
-                {
-                    type:       'Feature',
-                    properties: { render_height: renderHeight, render_min_height: renderBase },
-                    geometry:   best.geometry as GeoJSON.Geometry
-                }
-            ]
-        };
-
-        const src = this.map.getSource('helios-home-src') as any;
-        src?.setData?.(upgraded);
-        this._homeFootprintResolved = true;
-    }
-
-    //Cheap centroid (vertex average) of a Polygon / MultiPolygon
-    //feature in [lon, lat]. Used to rank buildings by closeness to
-    //the home when multiple match the search box. Vertex average
-    //isn't the geometric centroid for non-convex polygons, but at
-    //the metre scale of a residential building footprint it's
-    //within a couple of metres of the true centroid — well below
-    //the discriminative resolution we need here.
-    private _featureCentroid(f: any): [number, number] | null
-    {
-        const g = f?.geometry;
-        if (!g) { return null; }
-        let rings: number[][][] | null = null;
-        if (g.type === 'Polygon')
-        {
-            rings = g.coordinates;
-        }
-        else if (g.type === 'MultiPolygon')
-        {
-            rings = (g.coordinates as number[][][][])[0] ?? null;
-        }
-        if (!rings || rings.length === 0) { return null; }
-        const ring = rings[0];
-        let cx = 0, cy = 0, n = 0;
-        for (const p of ring)
-        {
-            cx += p[0]; cy += p[1]; n++;
-        }
-        return n > 0 ? [cx / n, cy / n] : null;
-    }
-
-    //Public — push a new live SoC reading. Accepts a percentage in
-    //[0, 100] or null/undefined to clear the fill (battery info
-    //unavailable: home reverts to the neutral 0.25 backdrop).
-    public setBatterySoc(socPercent: number | null | undefined): void
-    {
-        let factor = 0;
-        if (typeof socPercent === 'number' && Number.isFinite(socPercent))
-        {
-            factor = Math.max(0, Math.min(1, socPercent / 100));
-        }
-        if (factor === this._batterySocFactor)
-        {
-            return;
-        }
-        this._batterySocFactor = factor;
-        if (!this.map || !this.map.getLayer('helios-home-fill'))
+        if (!this.map || !this.map.getLayer('helios-buildings'))
         {
             return;
         }
         try
         {
-            this.map.setPaintProperty(
-                'helios-home-fill',
-                'fill-extrusion-height',
-                ['*', ['coalesce', ['get', 'render_height'], 8], factor]
-            );
-        }
-        catch (_) {}
-    }
-
-    //Public — push a new battery colour to the home-fill layer.
-    //Called by the card whenever the user changes the colour in
-    //the visual editor.
-    public setBatteryFillColor(hex: string): void
-    {
-        if (!this.map || !this.map.getLayer('helios-home-fill'))
-        {
-            return;
-        }
-        try
-        {
-            this.map.setPaintProperty('helios-home-fill', 'fill-extrusion-color', hex);
+            this.map.setPaintProperty('helios-buildings', 'fill-extrusion-color', hex);
         }
         catch (_) {}
     }
@@ -2062,15 +1812,18 @@ export class HeliosEngine
     //               the home so the production chip is the prominent
     //               readout, with the cloud chip retreating onto its
     //               own feature on the side.
-    //  batteryLabel — where the optional battery-power chip is
-    //               drawn (signed instantaneous W/kW). Sits closer
-    //               to the home than the PV chip and to the top-
-    //               right of it, so the battery overlay reads as
-    //               anchored ON the home (matching the home-fill
-    //               extrusion that visualises the SoC) rather
-    //               than off to the side. The leader from this
-    //               chip animates from home → chip when charging
-    //               and chip → home when discharging.
+    //  batterySocLabel  — where the optional battery State-of-
+    //               Charge chip is drawn (icon + percent). Sits to
+    //               the screen-LEFT of the PV chip on the same
+    //               horizontal axis, mirroring the Power chip on
+    //               the right. Connected to the PV chip with a
+    //               static dotted hairline (no animation, no
+    //               arrow) — see the card render block.
+    //  batteryPowerLabel — where the optional battery Power chip
+    //               is drawn (icon + signed instantaneous W/kW).
+    //               Sits to the screen-RIGHT of the PV chip,
+    //               mirror image of the SoC chip. Same static
+    //               dotted leader to PV.
     //  ringEdge   — projection of a fixed geographic point on the
     //               100 % reference ring (the disc's geographic east
     //               edge in the northern hemisphere, west edge in
@@ -2092,11 +1845,12 @@ export class HeliosEngine
     //Returns null when the map isn't ready yet — the card treats
     //null as "don't render the overlay this frame".
     public projectHomeLabelLayout(): {
-        cloudLabel:    { x: number; y: number };
-        pvLabel:       { x: number; y: number };
-        batteryLabel:  { x: number; y: number };
-        ringEdge:      { x: number; y: number };
-        home:          { x: number; y: number };
+        cloudLabel:        { x: number; y: number };
+        pvLabel:           { x: number; y: number };
+        batterySocLabel:   { x: number; y: number };
+        batteryPowerLabel: { x: number; y: number };
+        ringEdge:          { x: number; y: number };
+        home:              { x: number; y: number };
     } | null
     {
         if (!this.map)
@@ -2138,26 +1892,22 @@ export class HeliosEngine
         const cloudLabelX = ringEdgeX + (radDX / radLen) * CLOUD_CHIP_NUDGE_PX;
         const cloudLabelY = ringEdgeY + (radDY / radLen) * CLOUD_CHIP_NUDGE_PX;
 
-        //Battery chip offset, relative to the home. Closer than
-        //the PV chip and shifted to the top-right so the chip
-        //reads as a satellite of the home (the home fills with
-        //battery colour and the chip annotates the live power
-        //draw on top of that fill) rather than as a sibling of
-        //the PV readout. Vertical offset stays well clear of the
-        //home roof line so the chip floats above the fill rather
-        //than overlapping it.
-        const BATTERY_OFFSET_FROM_HOME_X_PX = 50;
-        const BATTERY_OFFSET_FROM_HOME_Y_PX = -55;
-
-        const batteryX = home.x + BATTERY_OFFSET_FROM_HOME_X_PX;
-        const batteryY = home.y + BATTERY_OFFSET_FROM_HOME_Y_PX;
+        //Battery chips flank the PV chip horizontally — SoC on the
+        //LEFT, signed Power on the RIGHT, on the same vertical
+        //axis as PV. The horizontal gap is sized to leave room for
+        //a short dotted hairline (~50 px) that visually ties each
+        //battery chip back to the PV chip without crowding it.
+        const BATTERY_CHIP_GAP_PX = 80;
+        const pvX = home.x;
+        const pvY = home.y - CLOUD_LABEL_OFFSET_PX;
 
         return {
-            cloudLabel:    { x: cloudLabelX, y: cloudLabelY },
-            pvLabel:       { x: home.x,    y: home.y - CLOUD_LABEL_OFFSET_PX },
-            batteryLabel:  { x: batteryX,  y: batteryY },
-            ringEdge:      { x: ringEdgeX, y: ringEdgeY },
-            home:          { x: home.x,    y: home.y }
+            cloudLabel:        { x: cloudLabelX,             y: cloudLabelY },
+            pvLabel:           { x: pvX,                     y: pvY        },
+            batterySocLabel:   { x: pvX - BATTERY_CHIP_GAP_PX, y: pvY      },
+            batteryPowerLabel: { x: pvX + BATTERY_CHIP_GAP_PX, y: pvY      },
+            ringEdge:          { x: ringEdgeX,               y: ringEdgeY },
+            home:              { x: home.x,                  y: home.y    }
         };
     }
 
@@ -2624,10 +2374,75 @@ export class HeliosEngine
         //bother diffing the old vs new value.
         this._applyLabelVisibility();
 
+        //Building tint is a one-shot paint-property update on the
+        //existing helios-buildings layer (no geometry rebuild), so
+        //it's cheap to push on every config change without a diff.
+        this.setBuildingColor(String(this.cfg['building-color']
+            ?? DEFAULT_BUILDING_COLOR_HEX));
+
         if (this._homeHourlyData && this._mapReady)
         {
             this._renderForCurrentSelection();
         }
+    }
+
+    //Smooth, time-based auto-rotation around the home. Runs in the
+    //OPPOSITE direction to the sun's apparent motion (decreasing
+    //bearing in NH, where the sun goes east → south → west, i.e.
+    //clockwise from above) so the camera and the live sun visually
+    //counter-orbit each other — a quiet but constant motion that
+    //makes the card feel alive even with no user input.
+    //
+    //Pause logic: any DOM-level interaction on the canvas (mouse
+    //down, wheel, touch) bumps `_autoRotateLastUserAction`; the
+    //loop checks this on every frame and skips the bearing update
+    //while the inactivity window hasn't elapsed (5 s). This gives
+    //the user instant, frictionless control during a gesture and
+    //a brief grace period after they let go before the camera
+    //starts drifting again.
+    //
+    //We tween in seconds (delta-time integrated against the frame
+    //rate) rather than a fixed per-frame increment so the rotation
+    //speed is constant across 60 Hz / 120 Hz displays and survives
+    //tab-throttling with no visible jumps when the user comes back.
+    private static readonly AUTO_ROTATE_DEG_PER_SEC      = 1;
+    private static readonly AUTO_ROTATE_INACTIVITY_MS    = 5_000;
+
+    private _startAutoRotateLoop(): void
+    {
+        if (this._autoRotateRaf !== undefined)
+        {
+            return;
+        }
+        this._autoRotateLastFrame      = performance.now();
+        this._autoRotateLastUserAction = 0;
+
+        const tick = (t: number) =>
+        {
+            if (!this.map)
+            {
+                this._autoRotateRaf = undefined;
+                return;
+            }
+
+            const dt = Math.max(0, t - this._autoRotateLastFrame) / 1000;
+            this._autoRotateLastFrame = t;
+
+            const sinceUser = Date.now() - this._autoRotateLastUserAction;
+            if (sinceUser >= HeliosEngine.AUTO_ROTATE_INACTIVITY_MS)
+            {
+                //Negative delta: bearing decreases, camera rotates
+                //counter-clockwise around the up axis as seen from
+                //above, map content appears to drift clockwise on
+                //screen — opposite of the sun's apparent motion.
+                const next = this.map.getBearing()
+                    - HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
+                this.map.setBearing(next);
+            }
+
+            this._autoRotateRaf = requestAnimationFrame(tick);
+        };
+        this._autoRotateRaf = requestAnimationFrame(tick);
     }
 
     public cleanup(): void
@@ -2637,6 +2452,11 @@ export class HeliosEngine
         window.clearTimeout(this._resizeDebounceTimer);
         this._fetchAbortController?.abort();
         this._resizeObserver?.disconnect();
+        if (this._autoRotateRaf !== undefined)
+        {
+            cancelAnimationFrame(this._autoRotateRaf);
+            this._autoRotateRaf = undefined;
+        }
         this.map?.remove();
         this.map       = undefined;
         this._mapReady = false;

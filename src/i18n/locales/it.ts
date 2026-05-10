@@ -55,17 +55,18 @@ export const it: Translations = {
         colorsHint:         'Un colore per grandezza, riutilizzato ovunque appaia. Il colore del sole dipinge l\'arco, il disco solare e l\'area superiore della cronologia. Il colore delle nuvole dipinge il disco al suolo e l\'area inferiore della cronologia.',
         sunColor:           'Colore del sole *',
         cloudColor:         'Colore delle nuvole *',
+        buildingColor:      'Colore degli edifici *',
         pvSection:          'Produzione solare',
         pvHint:             'Opzionale. Se impostato, una pastiglia appare sulla casa (produzione istantanea, calcolata sull\'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. La linea tra la casa e la pastiglia si anima a una velocità proporzionale alla produzione. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).',
         pvEntity:           'Entità di produzione',
         pvEntityHelp:       'Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).',
         pvColor:            'Colore di produzione *',
         batterySection:     'Batteria domestica',
-        batteryHint:        'Opzionale. L\'entità dello stato di carica riempie l\'edificio 3D della casa dal basso verso l\'alto — batteria vuota, la casa appare come una sagoma grigia traslucida; batteria piena, viene dipinta completamente nel colore configurato. Passa il cursore sulla casa per leggere la percentuale esatta. L\'entità di potenza aggiunge una piccola pastiglia in alto a destra della casa con la lettura istantanea con segno; la sua linea punteggiata scorre dalla casa alla pastiglia durante la carica e dalla pastiglia alla casa durante la scarica, a una velocità proporzionale alla potenza.',
+        batteryHint:        'Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV — stato di carica a SINISTRA, potenza con segno a DESTRA — collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali; la pastiglia corrispondente appare appena l\'entità è impostata.',
         batterySocEntity:   'Entità stato di carica',
-        batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Pilota l\'altezza di riempimento della casa: 0 % = casa invisibile a piena opacità (resta visibile solo la sagoma al 25 %), 100 % = casa completamente riempita nel colore configurato.',
+        batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
         batteryPowerEntity: 'Entità di potenza',
-        batteryPowerEntityHelp: 'Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l\'entità stessa; positivo = in carica e inverte il verso del flusso sulla linea punteggiata.',
+        batteryPowerEntityHelp: 'Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l\'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).',
         batteryColor:       'Colore batteria *'
     }
 };

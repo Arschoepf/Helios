@@ -63,17 +63,18 @@ export const fr: Translations = {
         colorsHint:         'Une couleur par grandeur, réutilisée partout où elle apparaît. La couleur du soleil peint l\'arc, le disque solaire et la zone haute de la chronologie. La couleur des nuages peint le disque au sol et la zone basse de la chronologie.',
         sunColor:           'Couleur du soleil *',
         cloudColor:         'Couleur des nuages *',
+        buildingColor:      'Couleur des bâtiments *',
         pvSection:          'Production photovoltaïque',
         pvHint:             'Optionnel. Si renseigné, une pastille apparaît sur la maison (production instantanée, calculée sur la dernière minute) et un graphique dédié s\'ajoute au-dessus de la chronologie pour suivre la production. La ligne entre la maison et la pastille s\'anime à une vitesse proportionnelle à la production. Capteur de puissance (W/kW) ou d\'énergie cumulée (Wh/kWh) acceptés indifféremment.',
         pvEntity:           'Entité de production',
         pvEntityHelp:       'Sélectionne un capteur de puissance ou d\'énergie photovoltaïque (W, kW, Wh, kWh).',
         pvColor:            'Couleur de production *',
         batterySection:     'Batterie domestique',
-        batteryHint:        'Optionnel. L\'entité d\'état de charge remplit le bâtiment 3D de la maison de bas en haut — batterie vide, la maison apparaît comme un volume gris translucide ; batterie pleine, elle est entièrement peinte dans la couleur configurée. Survole la maison pour lire le pourcentage exact. L\'entité de puissance ajoute une petite pastille en haut à droite de la maison avec la valeur instantanée signée ; sa ligne pointillée anime de la maison vers la pastille en charge et de la pastille vers la maison en décharge, à une vitesse proportionnelle à la puissance.',
+        batteryHint:        'Optionnel. Chaque entité apparaît sous forme de pastille de part et d\'autre de la pastille PV — état de charge à GAUCHE, puissance signée à DROITE — reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles ; la pastille correspondante s\'affiche dès que l\'entité est renseignée.',
         batterySocEntity:   'Entité d\'état de charge',
-        batterySocEntityHelp: 'Choisis un capteur d\'état de charge de batterie (% — typiquement avec device_class "battery"). Pilote la hauteur de remplissage de la maison : 0 % = maison invisible en pleine opacité (seul le contour à 25 % reste visible), 100 % = maison entièrement remplie dans la couleur configurée.',
+        batterySocEntityHelp: 'Choisis un capteur d\'état de charge de batterie (% — typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.',
         batteryPowerEntity: 'Entité de puissance',
-        batteryPowerEntityHelp: 'Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l\'entité elle-même ; positif = en charge et inverse le sens du flux sur la ligne pointillée.',
+        batteryPowerEntityHelp: 'Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l\'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).',
         batteryColor:       'Couleur batterie *'
     }
 };

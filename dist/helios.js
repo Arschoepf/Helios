@@ -24809,6 +24809,7 @@ const DEFAULT_SUN_COLOR_HEX = "#EF9F27";
 const DEFAULT_CLOUD_COLOR_HEX = "#5A8DC4";
 const DEFAULT_PV_COLOR_HEX = "#27B36B";
 const DEFAULT_BATTERY_COLOR_HEX = "#D32F2F";
+const DEFAULT_BUILDING_COLOR_HEX = "#D2D2D7";
 const DEFAULT_CLOUD_RGB = [90, 141, 196];
 function geoDistM(lat1, lon1, lat2, lon2) {
   const R2 = 6371e3;
@@ -24864,7 +24865,7 @@ function weatherCodeToIntensity(code, pct) {
   }
   return pct < 80 ? "moderate" : "heavy";
 }
-class HeliosEngine {
+const _HeliosEngine = class _HeliosEngine {
   constructor(container, config, haCoords, haElevation) {
     this._fetchLat = 0;
     this._fetchLon = 0;
@@ -24873,8 +24874,8 @@ class HeliosEngine {
     this._selectedTime = null;
     this._lastAtmosphereAlt = -999;
     this._rateLimitStreak = 0;
-    this._batterySocFactor = 0;
-    this._homeFootprintResolved = false;
+    this._autoRotateLastFrame = 0;
+    this._autoRotateLastUserAction = 0;
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -24930,8 +24931,17 @@ class HeliosEngine {
     this.map.on("style.load", () => this._onStyleLoad());
     this.map.on("load", () => {
       this.map?.resize();
+      this._startAutoRotateLoop();
     });
     this.map.on("move", () => this.onMapTransform?.());
+    const canvas = this.map.getCanvas();
+    const bumpInactivity = () => {
+      this._autoRotateLastUserAction = Date.now();
+    };
+    canvas.addEventListener("mousedown", bumpInactivity);
+    canvas.addEventListener("wheel", bumpInactivity, { passive: true });
+    canvas.addEventListener("touchstart", bumpInactivity, { passive: true });
+    canvas.addEventListener("touchmove", bumpInactivity, { passive: true });
     this.map.on("error", (e2) => {
       const msg = e2?.error?.message ?? e2?.error ?? "unknown error";
       console.warn("[HELIOS] MapLibre error:", msg);
@@ -25396,24 +25406,14 @@ class HeliosEngine {
     );
   }
   //Renders 3D building extrusions as the visual context for the
-  //home location.
-  //
-  //In v1.1.0-beta.9 the home-as-battery-readout layout went live:
-  //  - Every building (home included) renders at 0.25 opacity in
-  //    the neutral grey backdrop layer (`helios-buildings`).
-  //  - A second layer (`helios-home-fill`) re-renders ONLY the
-  //    home building at 1.0 opacity in the configured battery
-  //    colour, with extrusion height scaled by the live SoC
-  //    (0 % → invisible, 100 % → full building height). The fill
-  //    grows from the ground up so a half-charged battery shows
-  //    the lower half of the home painted.
-  //  - The home is identified spatially: a 15 m circle around
-  //    the configured home coordinates is used as a `within`
-  //    filter on the `building` source-layer. This works for
-  //    individual residential homes; very dense neighbourhoods
-  //    (terraced houses, apartment blocks) may light up adjacent
-  //    buildings — accepted trade-off for the simplicity of not
-  //    needing per-feature ids from the vector tiles.
+  //home location. All buildings are painted in the configured
+  //`building-color` (defaults to a neutral light grey) at a
+  //single shared opacity — the home is identified by the chips
+  //and leader lines on top, not by a special render of the
+  //building itself. The earlier home-fill experiment (beta.9 /
+  //beta.10) was removed because it was visually noisy and the
+  //spatial identification of the home building from vector tiles
+  //was unreliable in dense neighbourhoods.
   //Toggle MapTiler Streets' label layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
   //Symbol-type layers are the canonical container for text + icon
@@ -25463,6 +25463,7 @@ class HeliosEngine {
         }
       );
     }
+    const buildingColor = String(this.cfg["building-color"] ?? DEFAULT_BUILDING_COLOR_HEX);
     this.map.addLayer(
       {
         id: "helios-buildings",
@@ -25471,13 +25472,14 @@ class HeliosEngine {
         type: "fill-extrusion",
         minzoom: 15,
         paint: {
-          //Neutral light grey — neighbours form a quiet
-          //urban backdrop. The home itself is overpainted
-          //at full opacity by `helios-home-fill` below, so
-          //even at 0.25 it stays the focal point.
-          "fill-extrusion-color": "rgba(210,210,215,1)",
+          "fill-extrusion-color": buildingColor,
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
+          //Opacity ramps in between zoom 15 and 16; top
+          //opacity sits at 0.75 — buildings are present
+          //enough to read as solid massing without burying
+          //the basemap or competing with the chips and
+          //leaders that carry the actual data.
           "fill-extrusion-opacity": [
             "interpolate",
             ["linear"],
@@ -25485,235 +25487,23 @@ class HeliosEngine {
             15,
             0,
             16,
-            0.25
+            0.75
           ]
         }
       }
     );
-    const batteryColor = String(this.cfg["battery-color"] ?? DEFAULT_BATTERY_COLOR_HEX);
-    if (!this.map.getSource("helios-home-src")) {
-      this.map.addSource(
-        "helios-home-src",
-        {
-          type: "geojson",
-          data: this._homeFallbackFeatureCollection()
-        }
-      );
-    } else {
-      const src = this.map.getSource("helios-home-src");
-      src?.setData?.(this._homeFallbackFeatureCollection());
-    }
-    this._homeFootprintResolved = false;
-    this.map.addLayer(
-      {
-        id: "helios-home-fill",
-        source: "helios-home-src",
-        type: "fill-extrusion",
-        minzoom: 15,
-        paint: {
-          "fill-extrusion-color": batteryColor,
-          "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
-          //Initial height = render_height × current SoC factor.
-          //Will be re-pushed by setBatterySoc() whenever the
-          //live SoC value updates.
-          "fill-extrusion-height": [
-            "*",
-            ["coalesce", ["get", "render_height"], 8],
-            this._batterySocFactor
-          ],
-          "fill-extrusion-opacity": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            15,
-            0,
-            16,
-            1
-          ]
-        }
-      }
-    );
-    this.map.on("mouseenter", "helios-home-fill", () => {
-      if (this.map) {
-        this.map.getCanvas().style.cursor = "pointer";
-      }
-    });
-    this.map.on("mousemove", "helios-home-fill", (e2) => {
-      this.onHomeBuildingHover?.({ x: e2.point.x, y: e2.point.y, hover: true });
-    });
-    this.map.on("mouseleave", "helios-home-fill", () => {
-      if (this.map) {
-        this.map.getCanvas().style.cursor = "";
-      }
-      this.onHomeBuildingHover?.({ x: 0, y: 0, hover: false });
-    });
-    this.map.on("idle", () => this._tryResolveHomeFootprint());
   }
-  //Build the fallback FeatureCollection used to seed
-  //`helios-home-src` before the real footprint is known: a
-  //12 m × 12 m square centred on the home, with a default
-  //`render_height` of 8 m (~2 floors) so the fill scales
-  //plausibly even before we can read the real building height
-  //from the vector tiles.
-  _homeFallbackFeatureCollection() {
-    const HALF_M = 6;
-    const cosLat = Math.cos(this.homeLat * Math.PI / 180);
-    const dLat = HALF_M / 111320;
-    const dLng = HALF_M / (111320 * cosLat);
-    const w2 = this.homeLon - dLng;
-    const e2 = this.homeLon + dLng;
-    const s2 = this.homeLat - dLat;
-    const n3 = this.homeLat + dLat;
-    return {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          properties: { render_height: 8, render_min_height: 0 },
-          geometry: {
-            type: "Polygon",
-            coordinates: [[
-              [w2, s2],
-              [e2, s2],
-              [e2, n3],
-              [w2, n3],
-              [w2, s2]
-            ]]
-          }
-        }
-      ]
-    };
-  }
-  //Resolve the actual home footprint from the rendered building
-  //tiles and overwrite the fallback square in `helios-home-src`.
-  //
-  //Strategy: project the home (lon, lat) to a screen point, query
-  //the buildings layer over a small box around it
-  //(queryRenderedFeatures on a single point can miss the building
-  //when the home coordinates land inside the courtyard rather than
-  //on the polygon itself), pick the candidate whose centroid is
-  //closest to the home, and push its geometry + render_height /
-  //render_min_height into the GeoJSON source.
-  //
-  //Idempotent: returns immediately once a real footprint has been
-  //resolved, so the per-idle cost drops to a single boolean check
-  //after the first success. Reset on every basemap reload.
-  _tryResolveHomeFootprint() {
-    if (!this.map || this._homeFootprintResolved) {
-      return;
-    }
-    if (!this.map.getLayer("helios-buildings")) {
-      return;
-    }
-    const m2 = this.map;
-    const home = m2.project([this.homeLon, this.homeLat]);
-    const SEARCH_RADIUS_PX = 24;
-    const box = [
-      [home.x - SEARCH_RADIUS_PX, home.y - SEARCH_RADIUS_PX],
-      [home.x + SEARCH_RADIUS_PX, home.y + SEARCH_RADIUS_PX]
-    ];
-    const feats = m2.queryRenderedFeatures(box, { layers: ["helios-buildings"] }) ?? [];
-    if (feats.length === 0) {
-      return;
-    }
-    let best = null;
-    let bestDist = Infinity;
-    for (const f2 of feats) {
-      const c2 = this._featureCentroid(f2);
-      if (c2 === null) {
-        continue;
-      }
-      const dx = c2[0] - this.homeLon;
-      const dy = c2[1] - this.homeLat;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < bestDist) {
-        bestDist = d2;
-        best = f2;
-      }
-    }
-    if (!best || !best.geometry) {
-      return;
-    }
-    const props = best.properties ?? {};
-    const renderHeight = typeof props.render_height === "number" ? props.render_height : 8;
-    const renderBase = typeof props.render_min_height === "number" ? props.render_min_height : 0;
-    const upgraded = {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          properties: { render_height: renderHeight, render_min_height: renderBase },
-          geometry: best.geometry
-        }
-      ]
-    };
-    const src = this.map.getSource("helios-home-src");
-    src?.setData?.(upgraded);
-    this._homeFootprintResolved = true;
-  }
-  //Cheap centroid (vertex average) of a Polygon / MultiPolygon
-  //feature in [lon, lat]. Used to rank buildings by closeness to
-  //the home when multiple match the search box. Vertex average
-  //isn't the geometric centroid for non-convex polygons, but at
-  //the metre scale of a residential building footprint it's
-  //within a couple of metres of the true centroid — well below
-  //the discriminative resolution we need here.
-  _featureCentroid(f2) {
-    const g2 = f2?.geometry;
-    if (!g2) {
-      return null;
-    }
-    let rings = null;
-    if (g2.type === "Polygon") {
-      rings = g2.coordinates;
-    } else if (g2.type === "MultiPolygon") {
-      rings = g2.coordinates[0] ?? null;
-    }
-    if (!rings || rings.length === 0) {
-      return null;
-    }
-    const ring = rings[0];
-    let cx = 0, cy = 0, n3 = 0;
-    for (const p2 of ring) {
-      cx += p2[0];
-      cy += p2[1];
-      n3++;
-    }
-    return n3 > 0 ? [cx / n3, cy / n3] : null;
-  }
-  //Public — push a new live SoC reading. Accepts a percentage in
-  //[0, 100] or null/undefined to clear the fill (battery info
-  //unavailable: home reverts to the neutral 0.25 backdrop).
-  setBatterySoc(socPercent) {
-    let factor = 0;
-    if (typeof socPercent === "number" && Number.isFinite(socPercent)) {
-      factor = Math.max(0, Math.min(1, socPercent / 100));
-    }
-    if (factor === this._batterySocFactor) {
-      return;
-    }
-    this._batterySocFactor = factor;
-    if (!this.map || !this.map.getLayer("helios-home-fill")) {
+  //Public — push a new building colour to the running buildings
+  //layer (called by the card when the user edits `building-color`
+  //in the visual editor). Skips silently when the layer hasn't
+  //been added yet — the next basemap reload will pick the new
+  //colour up from `this.cfg`.
+  setBuildingColor(hex) {
+    if (!this.map || !this.map.getLayer("helios-buildings")) {
       return;
     }
     try {
-      this.map.setPaintProperty(
-        "helios-home-fill",
-        "fill-extrusion-height",
-        ["*", ["coalesce", ["get", "render_height"], 8], factor]
-      );
-    } catch (_2) {
-    }
-  }
-  //Public — push a new battery colour to the home-fill layer.
-  //Called by the card whenever the user changes the colour in
-  //the visual editor.
-  setBatteryFillColor(hex) {
-    if (!this.map || !this.map.getLayer("helios-home-fill")) {
-      return;
-    }
-    try {
-      this.map.setPaintProperty("helios-home-fill", "fill-extrusion-color", hex);
+      this.map.setPaintProperty("helios-buildings", "fill-extrusion-color", hex);
     } catch (_2) {
     }
   }
@@ -26005,15 +25795,18 @@ class HeliosEngine {
   //               the home so the production chip is the prominent
   //               readout, with the cloud chip retreating onto its
   //               own feature on the side.
-  //  batteryLabel — where the optional battery-power chip is
-  //               drawn (signed instantaneous W/kW). Sits closer
-  //               to the home than the PV chip and to the top-
-  //               right of it, so the battery overlay reads as
-  //               anchored ON the home (matching the home-fill
-  //               extrusion that visualises the SoC) rather
-  //               than off to the side. The leader from this
-  //               chip animates from home → chip when charging
-  //               and chip → home when discharging.
+  //  batterySocLabel  — where the optional battery State-of-
+  //               Charge chip is drawn (icon + percent). Sits to
+  //               the screen-LEFT of the PV chip on the same
+  //               horizontal axis, mirroring the Power chip on
+  //               the right. Connected to the PV chip with a
+  //               static dotted hairline (no animation, no
+  //               arrow) — see the card render block.
+  //  batteryPowerLabel — where the optional battery Power chip
+  //               is drawn (icon + signed instantaneous W/kW).
+  //               Sits to the screen-RIGHT of the PV chip,
+  //               mirror image of the SoC chip. Same static
+  //               dotted leader to PV.
   //  ringEdge   — projection of a fixed geographic point on the
   //               100 % reference ring (the disc's geographic east
   //               edge in the northern hemisphere, west edge in
@@ -26053,14 +25846,14 @@ class HeliosEngine {
     const radLen = Math.sqrt(radDX * radDX + radDY * radDY) || 1;
     const cloudLabelX = ringEdgeX + radDX / radLen * CLOUD_CHIP_NUDGE_PX;
     const cloudLabelY = ringEdgeY + radDY / radLen * CLOUD_CHIP_NUDGE_PX;
-    const BATTERY_OFFSET_FROM_HOME_X_PX = 50;
-    const BATTERY_OFFSET_FROM_HOME_Y_PX = -55;
-    const batteryX = home.x + BATTERY_OFFSET_FROM_HOME_X_PX;
-    const batteryY = home.y + BATTERY_OFFSET_FROM_HOME_Y_PX;
+    const BATTERY_CHIP_GAP_PX = 80;
+    const pvX = home.x;
+    const pvY = home.y - CLOUD_LABEL_OFFSET_PX;
     return {
       cloudLabel: { x: cloudLabelX, y: cloudLabelY },
-      pvLabel: { x: home.x, y: home.y - CLOUD_LABEL_OFFSET_PX },
-      batteryLabel: { x: batteryX, y: batteryY },
+      pvLabel: { x: pvX, y: pvY },
+      batterySocLabel: { x: pvX - BATTERY_CHIP_GAP_PX, y: pvY },
+      batteryPowerLabel: { x: pvX + BATTERY_CHIP_GAP_PX, y: pvY },
       ringEdge: { x: ringEdgeX, y: ringEdgeY },
       home: { x: home.x, y: home.y }
     };
@@ -26347,9 +26140,32 @@ class HeliosEngine {
       this.map.setPaintProperty("helios-hillshade", "hillshade-exaggeration", a2);
     }
     this._applyLabelVisibility();
+    this.setBuildingColor(String(this.cfg["building-color"] ?? DEFAULT_BUILDING_COLOR_HEX));
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
     }
+  }
+  _startAutoRotateLoop() {
+    if (this._autoRotateRaf !== void 0) {
+      return;
+    }
+    this._autoRotateLastFrame = performance.now();
+    this._autoRotateLastUserAction = 0;
+    const tick = (t2) => {
+      if (!this.map) {
+        this._autoRotateRaf = void 0;
+        return;
+      }
+      const dt = Math.max(0, t2 - this._autoRotateLastFrame) / 1e3;
+      this._autoRotateLastFrame = t2;
+      const sinceUser = Date.now() - this._autoRotateLastUserAction;
+      if (sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
+        const next = this.map.getBearing() - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
+        this.map.setBearing(next);
+      }
+      this._autoRotateRaf = requestAnimationFrame(tick);
+    };
+    this._autoRotateRaf = requestAnimationFrame(tick);
   }
   cleanup() {
     this._clearWeatherTimer();
@@ -26357,11 +26173,18 @@ class HeliosEngine {
     window.clearTimeout(this._resizeDebounceTimer);
     this._fetchAbortController?.abort();
     this._resizeObserver?.disconnect();
+    if (this._autoRotateRaf !== void 0) {
+      cancelAnimationFrame(this._autoRotateRaf);
+      this._autoRotateRaf = void 0;
+    }
     this.map?.remove();
     this.map = void 0;
     this._mapReady = false;
   }
-}
+};
+_HeliosEngine.AUTO_ROTATE_DEG_PER_SEC = 1;
+_HeliosEngine.AUTO_ROTATE_INACTIVITY_MS = 5e3;
+let HeliosEngine = _HeliosEngine;
 const en = {
   cardName: "HELIOS",
   cardDescription: "Real-time solar energy and cloud coverage visualization",
@@ -26410,17 +26233,18 @@ const en = {
     colorsHint: "One colour per metric, reused everywhere it appears. The sun colour paints the arc, the sun disc and the upper area of the timeline. The cloud colour paints the on-ground disc and the lower area of the timeline.",
     sunColor: "Sun color *",
     cloudColor: "Cloud color *",
+    buildingColor: "Building color *",
     pvSection: "Solar production",
     pvHint: "Optional. When set, a chip appears on the home (instant production, computed over the last minute) and a dedicated graph is added above the timeline. The line between the home and the chip animates at a speed proportional to the live production. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).",
     pvEntity: "Production entity",
     pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
     pvColor: "Production color *",
     batterySection: "Home battery",
-    batteryHint: "Optional. The State of Charge entity fills the 3D home building from the ground up — empty battery shows the home as a translucent grey outline, full battery paints it entirely in the configured colour. Hover the home for the exact percentage. The Power entity adds a small chip top-right of the home with the signed instantaneous reading; its dotted leader streams from home to chip while charging and from chip to home while discharging, at a speed proportional to the live power.",
+    batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip — State of Charge on the LEFT, signed Power on the RIGHT — connected to PV with a static dotted hairline. Either entity is independently optional; the chip on its side appears as soon as the entity is set.",
     batterySocEntity: "State of charge entity",
-    batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery"). Drives the home-fill height: 0 % = home invisible at full opacity (only the 25 % outline shows), 100 % = home fully filled in the configured colour.',
+    batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
     batteryPowerEntity: "Power entity",
-    batteryPowerEntityHelp: "Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and reverses the leader-line flow direction.",
+    batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
     batteryColor: "Battery color *"
   }
 };
@@ -26472,17 +26296,18 @@ const fr = {
     colorsHint: "Une couleur par grandeur, réutilisée partout où elle apparaît. La couleur du soleil peint l'arc, le disque solaire et la zone haute de la chronologie. La couleur des nuages peint le disque au sol et la zone basse de la chronologie.",
     sunColor: "Couleur du soleil *",
     cloudColor: "Couleur des nuages *",
+    buildingColor: "Couleur des bâtiments *",
     pvSection: "Production photovoltaïque",
     pvHint: "Optionnel. Si renseigné, une pastille apparaît sur la maison (production instantanée, calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. La ligne entre la maison et la pastille s'anime à une vitesse proportionnelle à la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
     pvEntity: "Entité de production",
     pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
     pvColor: "Couleur de production *",
     batterySection: "Batterie domestique",
-    batteryHint: "Optionnel. L'entité d'état de charge remplit le bâtiment 3D de la maison de bas en haut — batterie vide, la maison apparaît comme un volume gris translucide ; batterie pleine, elle est entièrement peinte dans la couleur configurée. Survole la maison pour lire le pourcentage exact. L'entité de puissance ajoute une petite pastille en haut à droite de la maison avec la valeur instantanée signée ; sa ligne pointillée anime de la maison vers la pastille en charge et de la pastille vers la maison en décharge, à une vitesse proportionnelle à la puissance.",
+    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV — état de charge à GAUCHE, puissance signée à DROITE — reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles ; la pastille correspondante s'affiche dès que l'entité est renseignée.",
     batterySocEntity: "Entité d'état de charge",
-    batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (% — typiquement avec device_class "battery"). Pilote la hauteur de remplissage de la maison : 0 % = maison invisible en pleine opacité (seul le contour à 25 % reste visible), 100 % = maison entièrement remplie dans la couleur configurée.`,
+    batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (% — typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
     batteryPowerEntity: "Entité de puissance",
-    batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et inverse le sens du flux sur la ligne pointillée.",
+    batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
     batteryColor: "Couleur batterie *"
   }
 };
@@ -26534,17 +26359,18 @@ const de = {
     colorsHint: "Eine Farbe pro Messgröße, überall einheitlich verwendet. Die Sonnenfarbe füllt den Bogen, die Sonnenscheibe und den oberen Bereich der Zeitachse. Die Wolkenfarbe füllt die Bodenscheibe und den unteren Bereich der Zeitachse.",
     sunColor: "Sonnenfarbe *",
     cloudColor: "Wolkenfarbe *",
+    buildingColor: "Gebäudefarbe *",
     pvSection: "Solarproduktion",
     pvHint: "Optional. Wenn gesetzt, erscheint auf dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Die Linie zwischen Haus und Chip animiert mit einer Geschwindigkeit proportional zur Produktion. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
     pvEntity: "Produktions-Entität",
     pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
     pvColor: "Produktionsfarbe *",
     batterySection: "Hausbatterie",
-    batteryHint: "Optional. Die Ladezustand-Entität füllt das 3D-Hausgebäude von unten nach oben — leere Batterie zeigt das Haus als durchscheinende graue Silhouette, volle Batterie färbt es vollständig in der konfigurierten Farbe. Mit der Maus über das Haus fahren zeigt den genauen Prozentsatz. Die Leistungs-Entität fügt oben rechts vom Haus einen kleinen Chip mit dem vorzeichenbehafteten Live-Wert hinzu; die punktierte Leiterlinie fließt beim Laden vom Haus zum Chip und beim Entladen vom Chip zum Haus, mit einer Geschwindigkeit proportional zur Leistung.",
+    batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips — Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS — über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional; der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
     batterySocEntity: "Ladezustand-Entität",
-    batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Steuert die Füllhöhe des Hauses: 0 % = Haus bei voller Deckkraft unsichtbar (nur die 25 %-Silhouette bleibt sichtbar), 100 % = Haus vollständig in der konfigurierten Farbe gefüllt.',
+    batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
     batteryPowerEntity: "Leistungs-Entität",
-    batteryPowerEntityHelp: "Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und kehrt die Flussrichtung der Leiterlinie um.",
+    batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
     batteryColor: "Batteriefarbe *"
   }
 };
@@ -26596,17 +26422,18 @@ const es = {
     colorsHint: "Un color por magnitud, reutilizado en todos los lugares donde aparece. El color del sol pinta el arco, el disco solar y la zona alta de la cronología. El color de las nubes pinta el disco del suelo y la zona baja de la cronología.",
     sunColor: "Color del sol *",
     cloudColor: "Color de las nubes *",
+    buildingColor: "Color de los edificios *",
     pvSection: "Producción solar",
     pvHint: "Opcional. Si se define, aparece una pastilla en la casa (producción instantánea, calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. La línea entre la casa y la pastilla se anima a una velocidad proporcional a la producción. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
     pvEntity: "Entidad de producción",
     pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
     pvColor: "Color de producción *",
     batterySection: "Batería doméstica",
-    batteryHint: "Opcional. La entidad de estado de carga rellena el edificio 3D de la casa de abajo hacia arriba — batería vacía, la casa se muestra como una silueta gris translúcida ; batería llena, queda totalmente pintada con el color configurado. Pasa el cursor sobre la casa para leer el porcentaje exacto. La entidad de potencia añade un chip pequeño arriba a la derecha de la casa con la lectura instantánea con signo ; su línea punteada fluye de la casa al chip durante la carga y del chip a la casa durante la descarga, a una velocidad proporcional a la potencia.",
+    batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV — estado de carga a la IZQUIERDA, potencia con signo a la DERECHA — conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales; el chip correspondiente aparece en cuanto la entidad está definida.",
     batterySocEntity: "Entidad de estado de carga",
-    batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Controla la altura de relleno de la casa : 0 % = casa invisible a plena opacidad (solo se ve el contorno al 25 %), 100 % = casa completamente rellena con el color configurado.',
+    batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
     batteryPowerEntity: "Entidad de potencia",
-    batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando e invierte el sentido del flujo en la línea punteada.",
+    batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
     batteryColor: "Color batería *"
   }
 };
@@ -26658,17 +26485,18 @@ const it = {
     colorsHint: "Un colore per grandezza, riutilizzato ovunque appaia. Il colore del sole dipinge l'arco, il disco solare e l'area superiore della cronologia. Il colore delle nuvole dipinge il disco al suolo e l'area inferiore della cronologia.",
     sunColor: "Colore del sole *",
     cloudColor: "Colore delle nuvole *",
+    buildingColor: "Colore degli edifici *",
     pvSection: "Produzione solare",
     pvHint: "Opzionale. Se impostato, una pastiglia appare sulla casa (produzione istantanea, calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. La linea tra la casa e la pastiglia si anima a una velocità proporzionale alla produzione. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
     pvEntity: "Entità di produzione",
     pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
     pvColor: "Colore di produzione *",
     batterySection: "Batteria domestica",
-    batteryHint: "Opzionale. L'entità dello stato di carica riempie l'edificio 3D della casa dal basso verso l'alto — batteria vuota, la casa appare come una sagoma grigia traslucida; batteria piena, viene dipinta completamente nel colore configurato. Passa il cursore sulla casa per leggere la percentuale esatta. L'entità di potenza aggiunge una piccola pastiglia in alto a destra della casa con la lettura istantanea con segno; la sua linea punteggiata scorre dalla casa alla pastiglia durante la carica e dalla pastiglia alla casa durante la scarica, a una velocità proporzionale alla potenza.",
+    batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV — stato di carica a SINISTRA, potenza con segno a DESTRA — collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali; la pastiglia corrispondente appare appena l'entità è impostata.",
     batterySocEntity: "Entità stato di carica",
-    batterySocEntityHelp: `Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Pilota l'altezza di riempimento della casa: 0 % = casa invisibile a piena opacità (resta visibile solo la sagoma al 25 %), 100 % = casa completamente riempita nel colore configurato.`,
+    batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
     batteryPowerEntity: "Entità di potenza",
-    batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa; positivo = in carica e inverte il verso del flusso sulla linea punteggiata.",
+    batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
     batteryColor: "Colore batteria *"
   }
 };
@@ -26720,17 +26548,18 @@ const nl = {
     colorsHint: "Eén kleur per grootheid, overal hergebruikt. De zonkleur kleurt de boog, de zonneschijf en het bovenste deel van de tijdlijn. De wolkenkleur kleurt de schijf op de grond en het onderste deel van de tijdlijn.",
     sunColor: "Zonkleur *",
     cloudColor: "Wolkenkleur *",
+    buildingColor: "Gebouwkleur *",
     pvSection: "Zonneproductie",
     pvHint: "Optioneel. Als ingesteld verschijnt op het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. De lijn tussen het huis en de chip animeert met een snelheid evenredig aan de productie. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
     pvEntity: "Productie-entiteit",
     pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
     pvColor: "Productiekleur *",
     batterySection: "Thuisbatterij",
-    batteryHint: "Optioneel. De laadtoestand-entiteit vult het 3D-huisgebouw van onder naar boven — lege batterij toont het huis als een doorschijnende grijze omtrek, volle batterij schildert het volledig in de geconfigureerde kleur. Beweeg over het huis om het exacte percentage te lezen. De vermogen-entiteit voegt rechtsboven van het huis een kleine chip toe met de momentane waarde met teken; de stippellijn stroomt tijdens het laden van het huis naar de chip en tijdens het ontladen van de chip naar het huis, met een snelheid evenredig aan het vermogen.",
+    batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip — laadtoestand LINKS, ondertekend vermogen RECHTS — verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel; de bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
     batterySocEntity: "Laadtoestand-entiteit",
-    batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Stuurt de vulhoogte van het huis aan: 0 % = huis bij volledige dekking onzichtbaar (alleen de 25 %-omtrek blijft zichtbaar), 100 % = huis volledig gevuld in de geconfigureerde kleur.',
+    batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
     batteryPowerEntity: "Vermogen-entiteit",
-    batteryPowerEntityHelp: "Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en draait de stroomrichting van de stippellijn om.",
+    batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
     batteryColor: "Batterijkleur *"
   }
 };
@@ -26782,17 +26611,18 @@ const pt = {
     colorsHint: "Uma cor por grandeza, reutilizada onde quer que apareça. A cor do sol pinta o arco, o disco solar e a área superior da linha temporal. A cor das nuvens pinta o disco no solo e a área inferior da linha temporal.",
     sunColor: "Cor do sol *",
     cloudColor: "Cor das nuvens *",
+    buildingColor: "Cor dos edifícios *",
     pvSection: "Produção solar",
     pvHint: "Opcional. Quando definido, surge uma pastilha sobre a casa (produção instantânea, calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. A linha entre a casa e a pastilha anima a uma velocidade proporcional à produção. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
     pvEntity: "Entidade de produção",
     pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
     pvColor: "Cor de produção *",
     batterySection: "Bateria doméstica",
-    batteryHint: "Opcional. A entidade de estado de carga preenche o edifício 3D da casa de baixo para cima — bateria vazia, a casa aparece como uma silhueta cinza translúcida; bateria cheia, fica totalmente pintada na cor configurada. Passa o cursor sobre a casa para ler a percentagem exata. A entidade de potência adiciona um pequeno chip no canto superior direito da casa com a leitura instantânea com sinal; a sua linha pontilhada flui da casa para o chip durante o carregamento e do chip para a casa durante a descarga, a uma velocidade proporcional à potência.",
+    batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV — estado de carga à ESQUERDA, potência com sinal à DIREITA — ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais; o chip correspondente aparece assim que a entidade é definida.",
     batterySocEntity: "Entidade do estado de carga",
-    batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (% — normalmente com device_class "battery"). Comanda a altura de preenchimento da casa: 0 % = casa invisível com opacidade total (só a silhueta a 25 % continua visível), 100 % = casa totalmente preenchida na cor configurada.',
+    batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (% — normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
     batteryPowerEntity: "Entidade de potência",
-    batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e inverte o sentido do fluxo na linha pontilhada.",
+    batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
     batteryColor: "Cor da bateria *"
   }
 };
@@ -26925,13 +26755,14 @@ const heliosCardStyles = i$3`
     .ph-content
     {
         position: absolute;
-        bottom: 6%;
+        top: 50%;
         left: 50%;
-        transform: translateX(-50%);
+        transform: translate(-50%, -50%);
         text-align: center;
         z-index: 10;
         padding: 6px 18px;
         box-sizing: border-box;
+        max-width: min(85%, 320px);
     }
 
     .ph-title
@@ -26960,12 +26791,20 @@ const heliosCardStyles = i$3`
 
     .ph-sub
     {
-        font-size: 0.66rem;
+        font-size: 0.55rem;
         font-weight: 400;
-        letter-spacing: 2.5px;
+        letter-spacing: 1.2px;
         text-transform: uppercase;
-        color: rgba(40,40,40,0.6);
-        line-height: 1;
+        color: rgba(40,40,40,0.55);
+        line-height: 1.35;
+        /*  Hard-cap at 2 lines so a verbose translation never pushes
+            the title off-centre. WebKit-safe, ignored on browsers
+            that don't support line-clamp (overflow: hidden then
+            still trims by box height). */
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
 
 
@@ -27491,15 +27330,14 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Battery leader — animated dotted line between the home and
-        the optional Power chip. Mirrors the PV leader's visual
-        language so the energy-flow vocabulary is consistent across
-        sun → home (incidence ray), home → PV chip (production) and
-        home ↔ battery chip (charge / discharge). The flow direction
-        depends on the sign of the power and is encoded by the
-        battery-leader-discharging class modifier (animation-
-        direction reverse) plus an inline path-direction swap on
-        the SVG animateMotion arrow that rides the line. */
+    /*  Battery leaders — short static dotted hairlines between
+        each battery chip (SoC on the left of PV, Power on the
+        right) and the central PV chip. No animation, no arrow:
+        the sign of the power value alone encodes charging vs
+        discharging, so a flow direction visualisation would just
+        duplicate that information visually. Same dotted dash
+        pattern as the cloud leader for a coherent vocabulary
+        across the static chip-leader connectors. */
     .battery-leader-svg
     {
         position: absolute;
@@ -27516,24 +27354,8 @@ const heliosCardStyles = i$3`
         stroke-width: 1.5;
         stroke-opacity: 0.85;
         stroke-linecap: round;
-        stroke-dasharray: 6 5;
-        animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
-    }
-
-    .battery-leader-discharging
-    {
-        animation-direction: reverse;
-    }
-
-    @keyframes battery-leader-flow
-    {
-        from { stroke-dashoffset: 0;  }
-        to   { stroke-dashoffset: -11; }
-    }
-
-    .battery-leader-arrow
-    {
-        opacity: 0.9;
+        stroke-dasharray: 2 3;
+        fill: none;
     }
 
     /*  Cloud-cover leader line — black hairline from chip to disc. */
@@ -27662,50 +27484,6 @@ const heliosCardStyles = i$3`
         15%  { opacity: 0.45; }
         85%  { opacity: 0.45; }
         100% { transform: translateX(280px) scaleX(1.1); opacity: 0;    }
-    }
-
-
-    /*  Home-fill SoC tooltip — floats next to the cursor when the
-        user hovers the home building 3D fill. Same dark-on-light
-        pill chrome as the cloud tooltip so the on-map tooltips
-        speak with one voice. Hidden when no SoC entity is
-        configured (the home-fill is then static, no extra reading
-        to surface). */
-    .home-tooltip
-    {
-        position: absolute;
-        transform: translate(12px, -50%);
-        pointer-events: none;
-        z-index: 50;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        background: rgba(0, 0, 0, 0.78);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 6px;
-        padding: 4px 8px;
-        color: white;
-        font-size: 11px;
-        font-weight: 600;
-        line-height: 1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
-        white-space: nowrap;
-    }
-
-    .home-tooltip-flip
-    {
-        transform: translate(calc(-100% - 12px), -50%);
-    }
-
-    .home-tooltip ha-icon
-    {
-        --mdc-icon-size: 14px;
-        color: white;
-        display: inline-flex;
-        align-items: center;
     }
 
 
@@ -28408,6 +28186,14 @@ let HeliosCardEditor = class extends i {
                         @value-changed="${(e2) => this._color("cloud-color", e2)}"
                     ></helios-color-picker>
                 </label>
+                <label class="field">
+                    <span class="label">${t2.editor.buildingColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["building-color"], DEFAULT_BUILDING_COLOR_HEX)}"
+                        .ariaLabel="${t2.editor.buildingColor}"
+                        @value-changed="${(e2) => this._color("building-color", e2)}"
+                    ></helios-color-picker>
+                </label>
                 <div class="hint">${t2.editor.colorsHint}</div>
 
                 <div class="section-title">${t2.editor.pvSection}</div>
@@ -28703,10 +28489,6 @@ let HeliosCard = class extends i {
     this._cloudHoverY = 0;
     this._cloudHover = false;
     this._cloudHoverFlip = false;
-    this._homeHoverX = 0;
-    this._homeHoverY = 0;
-    this._homeHover = false;
-    this._homeHoverFlip = false;
     this._labelLayout = null;
     this._pvCurrent = null;
     this._pvUnit = "";
@@ -29186,14 +28968,6 @@ let HeliosCard = class extends i {
         const mc = this.renderRoot.querySelector("#map-container");
         const w2 = mc?.clientWidth ?? 0;
         this._cloudHoverFlip = w2 > 0 && e2.x > w2 / 2;
-      };
-      this._engine.onHomeBuildingHover = (e2) => {
-        this._homeHover = e2.hover;
-        this._homeHoverX = e2.x;
-        this._homeHoverY = e2.y;
-        const mc = this.renderRoot.querySelector("#map-container");
-        const w2 = mc?.clientWidth ?? 0;
-        this._homeHoverFlip = w2 > 0 && e2.x > w2 / 2;
       };
       this._engine.onMapTransform = () => {
         this._refreshOverlays();
@@ -29874,16 +29648,10 @@ let HeliosCard = class extends i {
     const activeBatterySoc = batteryScrubbing ? this._batterySampleAtTime(this._batterySocHistory, this._selectedTime) : this._batterySoc;
     const activeBatteryPower = batteryScrubbing ? this._batterySampleAtTime(this._batteryPowerHistory, this._selectedTime) : this._batteryPower;
     const activeBatteryUnit = this._batteryPowerUnit;
-    const homeFillSoc = batteryScrubFuture ? null : batterySocEntity !== "" ? activeBatterySoc : null;
-    this._engine?.setBatterySoc(homeFillSoc);
-    this._engine?.setBatteryFillColor(batteryColor);
+    const showSocChip = hasApiKey && layout !== null && !batteryScrubFuture && batterySocEntity !== "" && activeBatterySoc !== null;
     const showPowerChip = hasApiKey && layout !== null && !batteryScrubFuture && batteryPowerEntity !== "" && activeBatteryPower !== null;
+    const batterySocText = showSocChip ? `${Math.round(activeBatterySoc)} %` : "";
     const batteryPowerText = showPowerChip ? this._formatBatteryPower(activeBatteryPower, activeBatteryUnit) : "";
-    const batteryCharging = showPowerChip && activeBatteryPower > 0;
-    const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
-    const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
-    const showHomeTooltip = this._homeHover && batterySocEntity !== "" && !batteryScrubFuture && activeBatterySoc !== null;
-    const homeSocLine = showHomeTooltip ? `${Math.round(activeBatterySoc)} %` : "";
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -30170,59 +29938,59 @@ ${showSun ? b`
                     </div>
                 ` : A}
 
-                ${showPowerChip ? b`
+                ${showSocChip || showPowerChip ? b`
                     <svg class="battery-leader-svg">
                         <!--
-                            Animated dotted leader from the home to
-                            the Power chip. The path direction (and
-                            therefore the arrow's travel direction)
-                            flips with the sign of the power: charging
-                            (P > 0) streams from home → chip; dis-
-                            charging streams from chip → home, so the
-                            user reads the energy flow direction at a
-                            glance without having to parse the sign on
-                            the chip text.
+                            Static dotted hairlines from each battery
+                            chip to the PV chip — same visual language
+                            as the cloud leader (no animation, no arrow,
+                            no charging-direction encoding). Sign of
+                            the power value carries the charging /
+                            discharging information instead. Both ends
+                            are nudged 10 px inside their respective
+                            chips so the chip backgrounds hide the
+                            inside portions and the visible dashes only
+                            appear in the gap between them.
                         -->
-                        <line
-                            class="battery-leader-line ${batteryCharging ? "" : "battery-leader-discharging"}"
-                            style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
-                            x1="${layout.home.x}"
-                            y1="${layout.home.y}"
-                            x2="${layout.batteryLabel.x}"
-                            y2="${layout.batteryLabel.y + 10}"
-                        ></line>
-                        ${w`
-                            <polygon
-                                class="battery-leader-arrow"
-                                points="-6,-4 0,0 -6,4"
-                                fill="${batteryColor}"
-                            >
-                                <animateMotion
-                                    dur="${batteryFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="${batteryCharging ? `M ${layout.home.x},${layout.home.y} L ${layout.batteryLabel.x},${layout.batteryLabel.y + 10}` : `M ${layout.batteryLabel.x},${layout.batteryLabel.y + 10} L ${layout.home.x},${layout.home.y}`}"
-                                ></animateMotion>
-                            </polygon>
-                        `}
+                        ${showSocChip ? w`
+                            <line
+                                class="battery-leader-line"
+                                style="--battery-leader-color:${batteryColor}"
+                                x1="${layout.batterySocLabel.x + 10}"
+                                y1="${layout.batterySocLabel.y}"
+                                x2="${layout.pvLabel.x - 10}"
+                                y2="${layout.pvLabel.y}"
+                            ></line>
+                        ` : A}
+                        ${showPowerChip ? w`
+                            <line
+                                class="battery-leader-line"
+                                style="--battery-leader-color:${batteryColor}"
+                                x1="${layout.pvLabel.x + 10}"
+                                y1="${layout.pvLabel.y}"
+                                x2="${layout.batteryPowerLabel.x - 10}"
+                                y2="${layout.batteryPowerLabel.y}"
+                            ></line>
+                        ` : A}
                     </svg>
-                    <div
-                        class="battery-pct-label"
-                        style="left:${layout.batteryLabel.x}px; top:${layout.batteryLabel.y}px; --battery-leader-color:${batteryColor}"
-                    >
-                        <ha-icon icon="mdi:lightning-bolt"></ha-icon>
-                        <span>${batteryPowerText}</span>
-                    </div>
-                ` : A}
-
-                ${showHomeTooltip ? b`
-                    <div
-                        class="home-tooltip ${this._homeHoverFlip ? "home-tooltip-flip" : ""}"
-                        style="left:${this._homeHoverX}px; top:${this._homeHoverY}px"
-                    >
-                        <ha-icon icon="mdi:battery"></ha-icon>
-                        <span>${homeSocLine}</span>
-                    </div>
+                    ${showSocChip ? b`
+                        <div
+                            class="battery-pct-label"
+                            style="left:${layout.batterySocLabel.x}px; top:${layout.batterySocLabel.y}px; --battery-leader-color:${batteryColor}"
+                        >
+                            <ha-icon icon="mdi:battery"></ha-icon>
+                            <span>${batterySocText}</span>
+                        </div>
+                    ` : A}
+                    ${showPowerChip ? b`
+                        <div
+                            class="battery-pct-label"
+                            style="left:${layout.batteryPowerLabel.x}px; top:${layout.batteryPowerLabel.y}px; --battery-leader-color:${batteryColor}"
+                        >
+                            <ha-icon icon="mdi:lightning-bolt"></ha-icon>
+                            <span>${batteryPowerText}</span>
+                        </div>
+                    ` : A}
                 ` : A}
 
             </ha-card>
@@ -30310,8 +30078,11 @@ ${showSun ? b`
 
                     <!-- Sun disc + halo, riding on the arc. The glow
                          circle pulses; the inner disc stays still so
-                         the brand colour reads clearly. -->
-                    <g transform="translate(305, 110)">
+                         the brand colour reads clearly. Position is
+                         the arc evaluated at t=0.76, so the sun
+                         visually sits ON the path (the previous
+                         (305, 110) sat well above it). -->
+                    <g transform="translate(297, 168)">
                         <circle class="ph-sun-glow" r="22" fill="url(#ph-sun-glow-grad)" />
                         <circle r="9" fill="#EF9F27" />
                         <circle r="8.5" fill="none"
@@ -30320,7 +30091,7 @@ ${showSun ? b`
 
                     <!-- W/m² chip + leader from the sun. -->
                     <line class="ph-leader ph-leader-irrad"
-                        x1="288" y1="118" x2="226" y2="93"
+                        x1="282" y1="170" x2="226" y2="93"
                         stroke="#666" stroke-width="0.7"
                         stroke-dasharray="3 3" stroke-linecap="round"
                         stroke-opacity="0.75" />
@@ -30396,7 +30167,11 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   //between the light and dark skins), but it must be in the
   //sig so Lit re-renders the card when the user toggles it
   //in the editor.
-  "card-theme"
+  "card-theme",
+  //building-color tints every 3D building extrusion. Listed
+  //here so the engine receives the new value via updateConfig,
+  //which forwards it to setBuildingColor on the running map.
+  "building-color"
 ];
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([
@@ -30435,18 +30210,6 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_cloudHoverFlip", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_homeHoverX", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_homeHoverY", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_homeHover", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_homeHoverFlip", 2);
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_labelLayout", 2);

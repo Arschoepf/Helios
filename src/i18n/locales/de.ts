@@ -55,17 +55,18 @@ export const de: Translations = {
         colorsHint:         'Eine Farbe pro Messgröße, überall einheitlich verwendet. Die Sonnenfarbe füllt den Bogen, die Sonnenscheibe und den oberen Bereich der Zeitachse. Die Wolkenfarbe füllt die Bodenscheibe und den unteren Bereich der Zeitachse.',
         sunColor:           'Sonnenfarbe *',
         cloudColor:         'Wolkenfarbe *',
+        buildingColor:      'Gebäudefarbe *',
         pvSection:          'Solarproduktion',
         pvHint:             'Optional. Wenn gesetzt, erscheint auf dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Die Linie zwischen Haus und Chip animiert mit einer Geschwindigkeit proportional zur Produktion. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).',
         pvEntity:           'Produktions-Entität',
         pvEntityHelp:       'Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).',
         pvColor:            'Produktionsfarbe *',
         batterySection:     'Hausbatterie',
-        batteryHint:        'Optional. Die Ladezustand-Entität füllt das 3D-Hausgebäude von unten nach oben — leere Batterie zeigt das Haus als durchscheinende graue Silhouette, volle Batterie färbt es vollständig in der konfigurierten Farbe. Mit der Maus über das Haus fahren zeigt den genauen Prozentsatz. Die Leistungs-Entität fügt oben rechts vom Haus einen kleinen Chip mit dem vorzeichenbehafteten Live-Wert hinzu; die punktierte Leiterlinie fließt beim Laden vom Haus zum Chip und beim Entladen vom Chip zum Haus, mit einer Geschwindigkeit proportional zur Leistung.',
+        batteryHint:        'Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips — Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS — über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional; der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.',
         batterySocEntity:   'Ladezustand-Entität',
-        batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Steuert die Füllhöhe des Hauses: 0 % = Haus bei voller Deckkraft unsichtbar (nur die 25 %-Silhouette bleibt sichtbar), 100 % = Haus vollständig in der konfigurierten Farbe gefüllt.',
+        batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
         batteryPowerEntity: 'Leistungs-Entität',
-        batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und kehrt die Flussrichtung der Leiterlinie um.',
+        batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
         batteryColor:       'Batteriefarbe *'
     }
 };

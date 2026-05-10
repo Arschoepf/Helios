@@ -6,7 +6,8 @@ import
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
-    DEFAULT_BATTERY_COLOR_HEX
+    DEFAULT_BATTERY_COLOR_HEX,
+    DEFAULT_BUILDING_COLOR_HEX
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -557,6 +558,14 @@ export class HeliosCardEditor extends LitElement
                         .value="${cfgHex(c['cloud-color'], DEFAULT_CLOUD_COLOR_HEX)}"
                         .ariaLabel="${t.editor.cloudColor}"
                         @value-changed="${(e: CustomEvent) => this._color('cloud-color', e)}"
+                    ></helios-color-picker>
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.buildingColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c['building-color'], DEFAULT_BUILDING_COLOR_HEX)}"
+                        .ariaLabel="${t.editor.buildingColor}"
+                        @value-changed="${(e: CustomEvent) => this._color('building-color', e)}"
                     ></helios-color-picker>
                 </label>
                 <div class="hint">${t.editor.colorsHint}</div>

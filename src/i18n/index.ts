@@ -75,6 +75,9 @@ export interface Translations
         colorsHint:               string;
         sunColor:                 string;
         cloudColor:               string;
+        //v1.1.0-beta.11 — single colour applied to every 3D building
+        //in the helios-buildings layer (home + neighbours).
+        buildingColor:            string;
         //v1.4 — optional photovoltaic production overlay.
         pvSection:                string;
         pvHint:                   string;

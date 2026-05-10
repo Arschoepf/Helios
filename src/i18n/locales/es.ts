@@ -55,17 +55,18 @@ export const es: Translations = {
         colorsHint:         'Un color por magnitud, reutilizado en todos los lugares donde aparece. El color del sol pinta el arco, el disco solar y la zona alta de la cronología. El color de las nubes pinta el disco del suelo y la zona baja de la cronología.',
         sunColor:           'Color del sol *',
         cloudColor:         'Color de las nubes *',
+        buildingColor:      'Color de los edificios *',
         pvSection:          'Producción solar',
         pvHint:             'Opcional. Si se define, aparece una pastilla en la casa (producción instantánea, calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. La línea entre la casa y la pastilla se anima a una velocidad proporcional a la producción. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).',
         pvEntity:           'Entidad de producción',
         pvEntityHelp:       'Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).',
         pvColor:            'Color de producción *',
         batterySection:     'Batería doméstica',
-        batteryHint:        'Opcional. La entidad de estado de carga rellena el edificio 3D de la casa de abajo hacia arriba — batería vacía, la casa se muestra como una silueta gris translúcida ; batería llena, queda totalmente pintada con el color configurado. Pasa el cursor sobre la casa para leer el porcentaje exacto. La entidad de potencia añade un chip pequeño arriba a la derecha de la casa con la lectura instantánea con signo ; su línea punteada fluye de la casa al chip durante la carga y del chip a la casa durante la descarga, a una velocidad proporcional a la potencia.',
+        batteryHint:        'Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV — estado de carga a la IZQUIERDA, potencia con signo a la DERECHA — conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales; el chip correspondiente aparece en cuanto la entidad está definida.',
         batterySocEntity:   'Entidad de estado de carga',
-        batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Controla la altura de relleno de la casa : 0 % = casa invisible a plena opacidad (solo se ve el contorno al 25 %), 100 % = casa completamente rellena con el color configurado.',
+        batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
         batteryPowerEntity: 'Entidad de potencia',
-        batteryPowerEntityHelp: 'Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando e invierte el sentido del flujo en la línea punteada.',
+        batteryPowerEntityHelp: 'Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).',
         batteryColor:       'Color batería *'
     }
 };

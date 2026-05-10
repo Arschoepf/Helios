@@ -55,17 +55,18 @@ export const nl: Translations = {
         colorsHint:         'Eén kleur per grootheid, overal hergebruikt. De zonkleur kleurt de boog, de zonneschijf en het bovenste deel van de tijdlijn. De wolkenkleur kleurt de schijf op de grond en het onderste deel van de tijdlijn.',
         sunColor:           'Zonkleur *',
         cloudColor:         'Wolkenkleur *',
+        buildingColor:      'Gebouwkleur *',
         pvSection:          'Zonneproductie',
         pvHint:             'Optioneel. Als ingesteld verschijnt op het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. De lijn tussen het huis en de chip animeert met een snelheid evenredig aan de productie. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).',
         pvEntity:           'Productie-entiteit',
         pvEntityHelp:       'Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).',
         pvColor:            'Productiekleur *',
         batterySection:     'Thuisbatterij',
-        batteryHint:        'Optioneel. De laadtoestand-entiteit vult het 3D-huisgebouw van onder naar boven — lege batterij toont het huis als een doorschijnende grijze omtrek, volle batterij schildert het volledig in de geconfigureerde kleur. Beweeg over het huis om het exacte percentage te lezen. De vermogen-entiteit voegt rechtsboven van het huis een kleine chip toe met de momentane waarde met teken; de stippellijn stroomt tijdens het laden van het huis naar de chip en tijdens het ontladen van de chip naar het huis, met een snelheid evenredig aan het vermogen.',
+        batteryHint:        'Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip — laadtoestand LINKS, ondertekend vermogen RECHTS — verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel; de bijbehorende chip verschijnt zodra de entiteit is ingesteld.',
         batterySocEntity:   'Laadtoestand-entiteit',
-        batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Stuurt de vulhoogte van het huis aan: 0 % = huis bij volledige dekking onzichtbaar (alleen de 25 %-omtrek blijft zichtbaar), 100 % = huis volledig gevuld in de geconfigureerde kleur.',
+        batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
         batteryPowerEntity: 'Vermogen-entiteit',
-        batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en draait de stroomrichting van de stippellijn om.',
+        batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
         batteryColor:       'Batterijkleur *'
     }
 };

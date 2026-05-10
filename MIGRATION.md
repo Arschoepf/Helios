@@ -5,17 +5,15 @@ Refines the catalogue placeholder, hardens the rotation interaction
 so the home stays dead-centre, lightens the on-card chips so the
 underlying scene reads through, exposes a `map-style` option to
 switch the basemap between streets, topographic and hybrid
-(satellite + roads), turns the home itself into the live battery
-gauge — neighbouring buildings are now rendered at 25 % opacity
-while the home is re-painted opaque in the configured battery
-colour, with extrusion height scaled by the SoC so the home
-literally fills up as the battery charges; the signed instantaneous
-power is read via a small chip at the top-right of the home with a
-dotted leader whose flow direction encodes charging vs discharging,
+(satellite + roads), adds an optional home-battery overlay (two
+chips flanking the PV chip — SoC on the left, signed Power on the
+right — connected by short static dotted hairlines), introduces a
+configurable `building-color` for the 3D building extrusions,
 relocates the cloud-cover chip to the side of the disc so the
-home's vertical axis stays clear of readouts, and ships an opt-in
+home's vertical axis stays clear of readouts, ships an opt-in
 dark theme for the card chrome so the card sits cleanly inside
-dark Home Assistant dashboards.
+dark Home Assistant dashboards, and adds a slow ambient camera
+rotation around the home that pauses on user interaction.
 
 ## v1.1.0-beta.1
 
@@ -320,6 +318,66 @@ modifier for the reversed flow direction).
 
 No public config keys changed; existing dashboards keep working
 with no edits.
+
+## v1.1.0-beta.11
+
+Reverts the home-as-battery-readout experiment and reshapes the
+battery overlay around two chips that flank the PV chip in
+screen-space.
+
+* **Home-fill removed.** The 3D home extrusion painted in the
+  battery colour (beta.9 / 10) was hard to read in many real-
+  world setups (large buildings, dense neighbourhoods, OSM
+  footprints that don't match the actual home) and the
+  query-and-overpaint plumbing was disproportionate to the
+  visual payoff. All home-fill code, state, hover handling and
+  the SoC tooltip are gone.
+* **Building opacity restored to 75 %** with a new `building-color`
+  config (default `#D2D2D7` — same neutral grey as before, just
+  exposed). Lets users tint the urban backdrop to match their
+  dashboard palette without touching the chip / leader colours.
+* **Battery chips mirrored around the PV chip.** State of Charge
+  on the LEFT of PV, signed Power on the RIGHT, on the same
+  horizontal axis. Each chip is independently optional; the
+  corresponding chip only renders when its entity is set. Both
+  chips are connected to the PV chip with a short static dotted
+  hairline (no animation, no arrow) — the sign of the power
+  value is the only encoding for charging vs discharging.
+* **Auto-rotation.** A new ambient animation: when the user is
+  idle (5 s of no canvas interaction), the camera slowly orbits
+  the home in the opposite direction to the sun's apparent
+  motion (1 °/s in NH, decreasing bearing). Any pinch / drag /
+  wheel pauses it instantly and it resumes after a few seconds
+  of stillness. Time-based integration (per-frame `dt` against
+  `performance.now`) keeps the speed constant across 60 / 120 Hz
+  displays and survives tab-throttling cleanly.
+* **Placeholder polish.** "HELIOS" is now centred horizontally
+  AND vertically inside the catalogue thumbnail (was anchored
+  at `bottom: 6%`). The subtitle font is smaller (0.55 rem,
+  was 0.66 rem) with tighter letter-spacing (1.2 px, was
+  2.5 px) and a hard 2-line clamp so it never pushes the title
+  off-centre. The sun disc was moved from `(305, 110)` to
+  `(297, 168)` so it sits on the arc curve rather than floating
+  above it; the W/m² leader was nudged to start from the new
+  sun position.
+
+i18n: `Translations.editor` gained one new key (`buildingColor`).
+Custom locales need to provide it or typecheck will fail. The
+`batteryHint`, `batterySocEntityHelp` and `batteryPowerEntityHelp`
+copy was rewritten in all seven locales to describe the new
+flanking-chip behaviour.
+
+Internal: `projectHomeLabelLayout` returns `batterySocLabel`
+and `batteryPowerLabel` instead of a single `batteryLabel`. The
+engine gained `setBuildingColor(hex)` (paint-only, no geometry
+rebuild). The `setBatterySoc` / `setBatteryFillColor` / `onHome-
+BuildingHover` / `helios-home-fill` / `helios-home-src` symbols
+were removed. New private state on the engine drives the auto-
+rotation loop (`_autoRotateRaf`, `_autoRotateLastFrame`,
+`_autoRotateLastUserAction`).
+
+No public config keys were removed; `building-color` is purely
+additive. Existing dashboards keep working with no edits.
 
 ## v1.1.0-beta.10
 
