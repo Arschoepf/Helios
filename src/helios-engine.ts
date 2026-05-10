@@ -79,13 +79,6 @@ export interface HeliosConfig
     //dashboards. The 3D map basemap and the configured colour
     //palette (sun, cloud, PV, battery) are unaffected.
     'card-theme'?:            unknown;
-    //v1.1.0-beta.11 — single colour applied to every 3D building
-    //in the helios-buildings layer (home + neighbours). Defaults
-    //to a neutral cool grey. Exposing it lets users tint the
-    //urban backdrop to match their dashboard palette without
-    //touching the chip / leader colours that carry the actual
-    //data.
-    'building-color'?:        unknown;
 }
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
@@ -235,11 +228,6 @@ export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
 //discharge / "energy on draw" semantics. Reads cleanly on the
 //80 % white chip background.
 export const DEFAULT_BATTERY_COLOR_HEX: string = '#D32F2F';
-//Neutral light grey — buildings are urban context, never the
-//focal point. Slightly cool (more blue than the chip white) so
-//the home reads as "stone / concrete" rather than "snow", and
-//sits a touch behind the warmer sun / PV chips visually.
-export const DEFAULT_BUILDING_COLOR_HEX: string = '#D2D2D7';
 
 const DEFAULT_CLOUD_RGB: RGB = [0x5A, 0x8D, 0xC4];
 
@@ -460,13 +448,24 @@ export class HeliosEngine
 
     //Auto-rotation state. The map slowly orbits the home in the
     //opposite direction to the sun's apparent motion (decreasing
-    //bearing, ~1°/s) when the user has been idle for a few seconds.
-    //Any direct interaction resets the inactivity timer, so the
-    //rotation pauses immediately on pinch / drag / wheel and
-    //resumes once the user lets go.
+    //bearing, ~1.5°/s) when the user has been idle for a few
+    //seconds. Any direct interaction resets the inactivity timer,
+    //so the rotation pauses immediately on pinch / drag / wheel
+    //and the camera then smoothly recalibrates back to the bearing
+    //it had at card load before the drift resumes.
     private _autoRotateRaf?:           number;
     private _autoRotateLastFrame:      number = 0;
     private _autoRotateLastUserAction: number = 0;
+    //Bearing snapshot taken at the first frame of the rotation
+    //loop — the "neutral" pose the camera returns to after every
+    //user gesture. Hemisphere-aware (180° NH / 0° SH) since that's
+    //what _setupCamera applies on load.
+    private _autoRotateInitialBearing: number = 0;
+    //Set when the user has nudged the camera away from the initial
+    //bearing. Cleared once the recalibration tween brings the
+    //camera back to the initial bearing — at which point the
+    //normal forward drift resumes.
+    private _autoRotateUserMoved:      boolean = false;
 
     constructor(
         container:    HTMLElement,
@@ -592,7 +591,14 @@ export class HeliosEngine
         //emits those (via setBearing), which would otherwise be
         //indistinguishable from a real user action.
         const canvas = this.map.getCanvas();
-        const bumpInactivity = () => { this._autoRotateLastUserAction = Date.now(); };
+        const bumpInactivity = () =>
+        {
+            this._autoRotateLastUserAction = Date.now();
+            //Mark that the user nudged the camera. The drift loop
+            //will tween back to the initial bearing on the next
+            //grace period before resuming normal forward drift.
+            this._autoRotateUserMoved = true;
+        };
         canvas.addEventListener('mousedown',  bumpInactivity);
         canvas.addEventListener('wheel',      bumpInactivity, { passive: true });
         canvas.addEventListener('touchstart', bumpInactivity, { passive: true });
@@ -1307,9 +1313,6 @@ export class HeliosEngine
             });
         }
 
-        const buildingColor = String(this.cfg['building-color']
-            ?? DEFAULT_BUILDING_COLOR_HEX);
-
         this.map.addLayer(
         {
             id:             'helios-buildings',
@@ -1319,7 +1322,14 @@ export class HeliosEngine
             minzoom:        15,
             paint:
             {
-                'fill-extrusion-color':   buildingColor,
+                //Neutral cool grey, hard-coded. We briefly exposed
+                //a `building-color` config but the buildings are
+                //always urban-context backdrop here — making the
+                //colour configurable proved to be a footgun (any
+                //tint with hue ate visual room from the chips and
+                //leaders that carry the actual data) and was
+                //removed in beta.12.
+                'fill-extrusion-color':   'rgba(210,210,215,1)',
                 'fill-extrusion-height':  ['get', 'render_height'],
                 'fill-extrusion-base':    ['get', 'render_min_height'],
                 //Opacity ramps in between zoom 15 and 16; top
@@ -1334,24 +1344,6 @@ export class HeliosEngine
                 ]
             }
         });
-    }
-
-    //Public — push a new building colour to the running buildings
-    //layer (called by the card when the user edits `building-color`
-    //in the visual editor). Skips silently when the layer hasn't
-    //been added yet — the next basemap reload will pick the new
-    //colour up from `this.cfg`.
-    public setBuildingColor(hex: string): void
-    {
-        if (!this.map || !this.map.getLayer('helios-buildings'))
-        {
-            return;
-        }
-        try
-        {
-            this.map.setPaintProperty('helios-buildings', 'fill-extrusion-color', hex);
-        }
-        catch (_) {}
     }
 
     //Linear interpolation between two RGB hex strings.
@@ -2374,12 +2366,6 @@ export class HeliosEngine
         //bother diffing the old vs new value.
         this._applyLabelVisibility();
 
-        //Building tint is a one-shot paint-property update on the
-        //existing helios-buildings layer (no geometry rebuild), so
-        //it's cheap to push on every config change without a diff.
-        this.setBuildingColor(String(this.cfg['building-color']
-            ?? DEFAULT_BUILDING_COLOR_HEX));
-
         if (this._homeHourlyData && this._mapReady)
         {
             this._renderForCurrentSelection();
@@ -2393,29 +2379,39 @@ export class HeliosEngine
     //counter-orbit each other — a quiet but constant motion that
     //makes the card feel alive even with no user input.
     //
-    //Pause logic: any DOM-level interaction on the canvas (mouse
-    //down, wheel, touch) bumps `_autoRotateLastUserAction`; the
-    //loop checks this on every frame and skips the bearing update
-    //while the inactivity window hasn't elapsed (5 s). This gives
-    //the user instant, frictionless control during a gesture and
-    //a brief grace period after they let go before the camera
-    //starts drifting again.
+    //Three phases per frame, gated by the time since the last user
+    //gesture:
+    //
+    //  - within `AUTO_ROTATE_INACTIVITY_MS` of a user action → idle
+    //    (no bearing change, the user has full control).
+    //  - past the grace period AND the user moved the camera →
+    //    REALIGN: tween smoothly back to the initial bearing
+    //    captured at card load (~30°/s, fast enough that the
+    //    return is over in a beat or two regardless of how far
+    //    the user spun the camera). Once we're within 0.5° of
+    //    the initial bearing, mark the realignment done.
+    //  - past the grace period AND no user move pending → DRIFT:
+    //    keep slowly decreasing the bearing at the configured
+    //    speed.
     //
     //We tween in seconds (delta-time integrated against the frame
     //rate) rather than a fixed per-frame increment so the rotation
     //speed is constant across 60 Hz / 120 Hz displays and survives
     //tab-throttling with no visible jumps when the user comes back.
-    private static readonly AUTO_ROTATE_DEG_PER_SEC      = 1;
+    private static readonly AUTO_ROTATE_DEG_PER_SEC      = 1.5;
+    private static readonly AUTO_ROTATE_REALIGN_DEG_PER_SEC = 30;
     private static readonly AUTO_ROTATE_INACTIVITY_MS    = 5_000;
 
     private _startAutoRotateLoop(): void
     {
-        if (this._autoRotateRaf !== undefined)
+        if (this._autoRotateRaf !== undefined || !this.map)
         {
             return;
         }
         this._autoRotateLastFrame      = performance.now();
         this._autoRotateLastUserAction = 0;
+        this._autoRotateUserMoved      = false;
+        this._autoRotateInitialBearing = this.map.getBearing();
 
         const tick = (t: number) =>
         {
@@ -2429,15 +2425,44 @@ export class HeliosEngine
             this._autoRotateLastFrame = t;
 
             const sinceUser = Date.now() - this._autoRotateLastUserAction;
-            if (sinceUser >= HeliosEngine.AUTO_ROTATE_INACTIVITY_MS)
+            if (sinceUser < HeliosEngine.AUTO_ROTATE_INACTIVITY_MS)
             {
-                //Negative delta: bearing decreases, camera rotates
-                //counter-clockwise around the up axis as seen from
-                //above, map content appears to drift clockwise on
-                //screen — opposite of the sun's apparent motion.
-                const next = this.map.getBearing()
-                    - HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
-                this.map.setBearing(next);
+                //Inside the grace window — leave the camera alone.
+                this._autoRotateRaf = requestAnimationFrame(tick);
+                return;
+            }
+
+            const current = this.map.getBearing();
+            if (this._autoRotateUserMoved)
+            {
+                //Smooth recalibration back to the initial bearing.
+                //Pick the shortest signed angular delta (range
+                //[-180, +180]) so we never tween the long way
+                //around when the user spun past 180°.
+                let diff = this._autoRotateInitialBearing - current;
+                diff = ((diff + 540) % 360) - 180;
+                const step = HeliosEngine.AUTO_ROTATE_REALIGN_DEG_PER_SEC * dt;
+                if (Math.abs(diff) <= Math.max(step, 0.5))
+                {
+                    //Snap to the exact initial bearing on the
+                    //final frame and exit the realignment phase.
+                    this.map.setBearing(this._autoRotateInitialBearing);
+                    this._autoRotateUserMoved = false;
+                }
+                else
+                {
+                    this.map.setBearing(current + Math.sign(diff) * step);
+                }
+            }
+            else
+            {
+                //Normal forward drift. Negative delta: bearing
+                //decreases, camera rotates counter-clockwise as
+                //seen from above, map content drifts clockwise
+                //on screen — opposite of the sun's apparent
+                //motion.
+                this.map.setBearing(current
+                    - HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt);
             }
 
             this._autoRotateRaf = requestAnimationFrame(tick);

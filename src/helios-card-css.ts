@@ -112,19 +112,6 @@ export const heliosCardStyles = css`
         50%      { transform: scale(1.15); opacity: 0.9; }
     }
 
-    /*  Leader-line dashes flow toward their attached element,
-        echoing the live card's pv-leader-flow / solar-ray-flow.
-        Slow speeds — the placeholder shouldn't compete for
-        attention with the configure CTA. */
-    .ph-leader-irrad { animation: ph-leader-flow 14s linear infinite; }
-    .ph-leader-pv    { animation: ph-leader-flow 12s linear infinite; }
-
-    @keyframes ph-leader-flow
-    {
-        from { stroke-dashoffset: 0;   }
-        to   { stroke-dashoffset: -28; }
-    }
-
     .ph-content
     {
         position: absolute;
@@ -135,49 +122,23 @@ export const heliosCardStyles = css`
         z-index: 10;
         padding: 6px 18px;
         box-sizing: border-box;
-        max-width: min(85%, 320px);
     }
 
     .ph-title
     {
-        font-size: 1.5rem;
+        font-size: 1.85rem;
         font-weight: 200;
-        letter-spacing: 8px;
+        letter-spacing: 10px;
         text-transform: uppercase;
         color: #2a2e34;
         text-shadow: 0 1px 1px rgba(255,255,255,0.6);
         line-height: 1;
         white-space: nowrap;
-        padding-left: 8px;
-    }
-
-    .ph-divider
-    {
-        margin: 8px auto;
-        width: 44px;
-        height: 1px;
-        background: linear-gradient(90deg,
-            transparent             0%,
-            rgba(60,60,60,0.45)    50%,
-            transparent           100%);
-    }
-
-    .ph-sub
-    {
-        font-size: 0.55rem;
-        font-weight: 400;
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
-        color: rgba(40,40,40,0.55);
-        line-height: 1.35;
-        /*  Hard-cap at 2 lines so a verbose translation never pushes
-            the title off-centre. WebKit-safe, ignored on browsers
-            that don't support line-clamp (overflow: hidden then
-            still trims by box height). */
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+        /*  Optical centre — letter-spacing piles up on the right of
+            the last glyph so the visual centre of the wordmark
+            sits a few pixels left of the geometric centre. The
+            padding-left compensates so HELIOS reads centred. */
+        padding-left: 10px;
     }
 
 
@@ -598,7 +559,12 @@ export const heliosCardStyles = css`
     /*  Photovoltaic production chip — same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
         text + icon) for instant identification.
-        --pv-leader-color is set inline by the renderer. */
+        --pv-leader-color is set inline by the renderer. The
+        min-width / centred text are shared with the SoC and Power
+        battery chips so the visible gap on each side of the PV
+        chip is identical regardless of how wide each value reads
+        ("26 %" vs "+12.34 kW" otherwise produce visibly unequal
+        leader gaps). */
     .pv-pct-label
     {
         position: absolute;
@@ -607,7 +573,10 @@ export const heliosCardStyles = css`
         z-index: 6;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 3px;
+        min-width: 76px;
+        box-sizing: border-box;
         background: rgba(255, 255, 255, 0.8);
         color:      var(--pv-leader-color, #27B36B);
         border:     1px solid var(--pv-leader-color, #27B36B);
@@ -668,10 +637,11 @@ export const heliosCardStyles = css`
         opacity: 0.9;
     }
 
-    /*  Battery chip — mirrors the PV chip but sits below the home
-        with a leader line going down. Same 80 % white background as
-        the other on-map chips so the basemap reads through; tinted
-        in the user-configured battery colour (border + text + icon).
+    /*  Battery chips (SoC on the left of PV, Power on the right) —
+        same frame as the PV chip, tinted in the user-configured
+        battery colour. Shares min-width and centred text with the
+        PV chip so the visible dotted-leader gap on each side of PV
+        is identical regardless of the value's content width.
         --battery-leader-color is set inline by the renderer. */
     .battery-pct-label
     {
@@ -681,7 +651,10 @@ export const heliosCardStyles = css`
         z-index: 6;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 3px;
+        min-width: 76px;
+        box-sizing: border-box;
         background: rgba(255, 255, 255, 0.8);
         color:      var(--battery-leader-color, #D32F2F);
         border:     1px solid var(--battery-leader-color, #D32F2F);
@@ -703,14 +676,21 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Battery leaders — short static dotted hairlines between
-        each battery chip (SoC on the left of PV, Power on the
-        right) and the central PV chip. No animation, no arrow:
-        the sign of the power value alone encodes charging vs
-        discharging, so a flow direction visualisation would just
-        duplicate that information visually. Same dotted dash
-        pattern as the cloud leader for a coherent vocabulary
-        across the static chip-leader connectors. */
+    /*  Battery leaders.
+        - SoC ↔ PV is a short static dotted hairline (.battery-
+          leader-line on its own) — same vocabulary as the cloud
+          leader. The SoC value has no sign so there's no flow
+          direction to encode.
+        - PV ↔ Power is animated (.battery-leader-line-animated
+          modifier on top of .battery-leader-line) with dashes
+          flowing at a speed proportional to |P| — exactly like
+          the PV leader's visual language — and a small arrow
+          polygon riding the line via SVG <animateMotion>. The
+          .battery-leader-discharging class flips the dash flow
+          direction (CSS animation-direction: reverse) so the
+          dashes move from chip → PV when the battery is
+          discharging; the arrow path is also flipped inline by
+          the renderer so the two cues stay in sync. */
     .battery-leader-svg
     {
         position: absolute;
@@ -729,6 +709,28 @@ export const heliosCardStyles = css`
         stroke-linecap: round;
         stroke-dasharray: 2 3;
         fill: none;
+    }
+
+    .battery-leader-line-animated
+    {
+        stroke-dasharray: 6 5;
+        animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
+    }
+
+    .battery-leader-discharging
+    {
+        animation-direction: reverse;
+    }
+
+    @keyframes battery-leader-flow
+    {
+        from { stroke-dashoffset: 0;   }
+        to   { stroke-dashoffset: -11; }
+    }
+
+    .battery-leader-arrow
+    {
+        opacity: 0.9;
     }
 
     /*  Cloud-cover leader line — black hairline from chip to disc. */

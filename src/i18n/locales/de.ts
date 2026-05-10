@@ -55,7 +55,6 @@ export const de: Translations = {
         colorsHint:         'Eine Farbe pro Messgröße, überall einheitlich verwendet. Die Sonnenfarbe füllt den Bogen, die Sonnenscheibe und den oberen Bereich der Zeitachse. Die Wolkenfarbe füllt die Bodenscheibe und den unteren Bereich der Zeitachse.',
         sunColor:           'Sonnenfarbe *',
         cloudColor:         'Wolkenfarbe *',
-        buildingColor:      'Gebäudefarbe *',
         pvSection:          'Solarproduktion',
         pvHint:             'Optional. Wenn gesetzt, erscheint auf dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Die Linie zwischen Haus und Chip animiert mit einer Geschwindigkeit proportional zur Produktion. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).',
         pvEntity:           'Produktions-Entität',

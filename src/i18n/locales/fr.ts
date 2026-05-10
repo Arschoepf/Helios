@@ -63,7 +63,6 @@ export const fr: Translations = {
         colorsHint:         'Une couleur par grandeur, réutilisée partout où elle apparaît. La couleur du soleil peint l\'arc, le disque solaire et la zone haute de la chronologie. La couleur des nuages peint le disque au sol et la zone basse de la chronologie.',
         sunColor:           'Couleur du soleil *',
         cloudColor:         'Couleur des nuages *',
-        buildingColor:      'Couleur des bâtiments *',
         pvSection:          'Production photovoltaïque',
         pvHint:             'Optionnel. Si renseigné, une pastille apparaît sur la maison (production instantanée, calculée sur la dernière minute) et un graphique dédié s\'ajoute au-dessus de la chronologie pour suivre la production. La ligne entre la maison et la pastille s\'anime à une vitesse proportionnelle à la production. Capteur de puissance (W/kW) ou d\'énergie cumulée (Wh/kWh) acceptés indifféremment.',
         pvEntity:           'Entité de production',

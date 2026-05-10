@@ -243,11 +243,7 @@ export class HeliosCard extends LitElement
         //between the light and dark skins), but it must be in the
         //sig so Lit re-renders the card when the user toggles it
         //in the editor.
-        'card-theme',
-        //building-color tints every 3D building extrusion. Listed
-        //here so the engine receives the new value via updateConfig,
-        //which forwards it to setBuildingColor on the running map.
-        'building-color'
+        'card-theme'
     ] as const;
 
     //Cheap stable signature of the visual config — used to skip
@@ -2058,6 +2054,20 @@ export class HeliosCard extends LitElement
             ? this._formatBatteryPower(activeBatteryPower!, activeBatteryUnit)
             : '';
 
+        //Charging / discharging direction drives the SVG arrow
+        //path direction on the PV↔Power leader. Sign comes straight
+        //from the entity (positive = charging by convention).
+        //Charging: arrow flows PV → Power (energy moving INTO the
+        //battery). Discharging: arrow flows Power → PV (energy
+        //moving OUT). The dashes flow at a speed proportional to
+        //|P|, saturating at the same ~5 kW threshold as the PV
+        //leader so all energy-flow streams read on the same scale.
+        const batteryCharging  = showPowerChip && (activeBatteryPower! > 0);
+        const batteryWattsForFlow = showPowerChip
+            ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
+            : 0;
+        const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
+
         //Solar-arc overlay — sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
         //pre-projected to screen space by the engine via
@@ -2399,16 +2409,11 @@ ${showSun ? html`
                 ${(showSocChip || showPowerChip) ? html`
                     <svg class="battery-leader-svg">
                         <!--
-                            Static dotted hairlines from each battery
-                            chip to the PV chip — same visual language
-                            as the cloud leader (no animation, no arrow,
-                            no charging-direction encoding). Sign of
-                            the power value carries the charging /
-                            discharging information instead. Both ends
-                            are nudged 10 px inside their respective
-                            chips so the chip backgrounds hide the
-                            inside portions and the visible dashes only
-                            appear in the gap between them.
+                            SoC ↔ PV: static dotted hairline (no
+                            animation, no arrow). Same visual language
+                            as the cloud leader. The sign-less SoC
+                            reading carries no flow direction, so any
+                            animation here would just add noise.
                         -->
                         ${showSocChip ? svg`
                             <line
@@ -2420,15 +2425,40 @@ ${showSun ? html`
                                 y2="${layout!.pvLabel.y}"
                             ></line>
                         ` : nothing}
+                        <!--
+                            PV ↔ Power: animated dotted line with an
+                            arrow whose direction tracks the sign of
+                            the live power. Charging (P > 0) → arrow
+                            travels PV → Power chip (energy moves
+                            INTO the battery). Discharging (P < 0) →
+                            arrow travels Power → PV (energy comes
+                            OUT). Same dash + flow vocabulary as the
+                            PV / sun leaders so all energy streams
+                            on the card share one visual language.
+                        -->
                         ${showPowerChip ? svg`
                             <line
-                                class="battery-leader-line"
-                                style="--battery-leader-color:${batteryColor}"
+                                class="battery-leader-line battery-leader-line-animated ${batteryCharging ? '' : 'battery-leader-discharging'}"
+                                style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
                                 x1="${layout!.pvLabel.x + 10}"
                                 y1="${layout!.pvLabel.y}"
                                 x2="${layout!.batteryPowerLabel.x - 10}"
                                 y2="${layout!.batteryPowerLabel.y}"
                             ></line>
+                            <polygon
+                                class="battery-leader-arrow"
+                                points="-6,-4 0,0 -6,4"
+                                fill="${batteryColor}"
+                            >
+                                <animateMotion
+                                    dur="${batteryFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="${batteryCharging
+                                        ? `M ${layout!.pvLabel.x + 10},${layout!.pvLabel.y} L ${layout!.batteryPowerLabel.x - 10},${layout!.batteryPowerLabel.y}`
+                                        : `M ${layout!.batteryPowerLabel.x - 10},${layout!.batteryPowerLabel.y} L ${layout!.pvLabel.x + 10},${layout!.pvLabel.y}`}"
+                                ></animateMotion>
+                            </polygon>
                         ` : nothing}
                     </svg>
                     ${showSocChip ? html`
@@ -2475,17 +2505,15 @@ ${showSun ? html`
 
     private _renderPlaceholder(): TemplateResult
     {
-        const t = pickTranslations(this.hass?.language);
-
-        //Mini-Helios placeholder: a stylised, animated SVG vignette
-        //that mirrors the real card's vocabulary — solar arc, sun
-        //disc with halo, low-poly iso buildings around a brighter
-        //central home, ground cloud disc, and two leader chips
-        //(W/m² near the sun, kW near the home). The scene fits
-        //(meet) inside the card so the arc stays fully visible at
-        //any aspect ratio; title + subtitle sit at the bottom on
-        //the gradient sky. The MapTiler key prompt is documented
-        //in the README — it does not belong on the thumbnail.
+        //Minimal catalogue thumbnail: only the stylised iso scene
+        //(low-poly buildings + ground cloud disc) and the solar arc
+        //+ sun overhead — no chips, no leaders, no subtitle. The
+        //"HELIOS" wordmark sits centred on top via .ph-content. The
+        //sun is positioned at t = 0.75 along the arc Bezier
+        //(M 50,230 Q 215,60 360,230 → (286, 166)) so it visually
+        //rides ON the curve rather than floating above it. The
+        //MapTiler key prompt is documented in the README — it does
+        //not belong on the thumbnail.
         return html`
             <div class="placeholder">
 
@@ -2549,52 +2577,21 @@ ${showSun ? html`
                         stroke-linecap="round"
                         stroke-opacity="0.85" />
 
-                    <!-- Sun disc + halo, riding on the arc. The glow
-                         circle pulses; the inner disc stays still so
-                         the brand colour reads clearly. Position is
-                         the arc evaluated at t=0.76, so the sun
-                         visually sits ON the path (the previous
-                         (305, 110) sat well above it). -->
-                    <g transform="translate(297, 168)">
+                    <!-- Sun disc + halo, riding on the arc at t=0.75
+                         (3/4 of the way from the left) so it sits ON
+                         the path. The glow circle pulses; the inner
+                         disc stays still so the brand colour reads
+                         clearly. -->
+                    <g transform="translate(286, 166)">
                         <circle class="ph-sun-glow" r="22" fill="url(#ph-sun-glow-grad)" />
                         <circle r="9" fill="#EF9F27" />
                         <circle r="8.5" fill="none"
                             stroke="#a36617" stroke-width="0.7" stroke-opacity="0.55" />
                     </g>
-
-                    <!-- W/m² chip + leader from the sun. -->
-                    <line class="ph-leader ph-leader-irrad"
-                        x1="282" y1="170" x2="226" y2="93"
-                        stroke="#666" stroke-width="0.7"
-                        stroke-dasharray="3 3" stroke-linecap="round"
-                        stroke-opacity="0.75" />
-                    <g transform="translate(146, 82)">
-                        <rect width="80" height="22" rx="11"
-                            fill="white" stroke="rgba(0,0,0,0.18)" stroke-width="0.6" />
-                        <text x="40" y="15.5" text-anchor="middle"
-                            font-size="11" fill="#3a3a3a"
-                            font-family="Roboto, system-ui, sans-serif">541 W/m²</text>
-                    </g>
-
-                    <!-- kW chip + leader from the home (PV brand
-                         colour, matches DEFAULT_PV_COLOR_HEX). -->
-                    <line class="ph-leader ph-leader-pv"
-                        x1="195" y1="200" x2="155" y2="155"
-                        stroke="#27B36B" stroke-width="1"
-                        stroke-dasharray="4 3" stroke-linecap="round" />
-                    <g transform="translate(75, 144)">
-                        <rect width="80" height="22" rx="11"
-                            fill="white" stroke="#27B36B" stroke-width="0.8" />
-                        <text x="40" y="15.5" text-anchor="middle"
-                            font-size="11" fill="#27B36B" font-weight="600"
-                            font-family="Roboto, system-ui, sans-serif">0.36 kW</text>
-                    </g>
                 </svg>
 
                 <div class="ph-content">
                     <div class="ph-title">HELIOS</div>
-                    <div class="ph-divider"></div>
-                    <div class="ph-sub">${t.placeholder.subtitle}</div>
                 </div>
 
             </div>

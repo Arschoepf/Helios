@@ -55,7 +55,6 @@ export const es: Translations = {
         colorsHint:         'Un color por magnitud, reutilizado en todos los lugares donde aparece. El color del sol pinta el arco, el disco solar y la zona alta de la cronología. El color de las nubes pinta el disco del suelo y la zona baja de la cronología.',
         sunColor:           'Color del sol *',
         cloudColor:         'Color de las nubes *',
-        buildingColor:      'Color de los edificios *',
         pvSection:          'Producción solar',
         pvHint:             'Opcional. Si se define, aparece una pastilla en la casa (producción instantánea, calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. La línea entre la casa y la pastilla se anima a una velocidad proporcional a la producción. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).',
         pvEntity:           'Entidad de producción',

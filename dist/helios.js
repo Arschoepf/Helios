@@ -24809,7 +24809,6 @@ const DEFAULT_SUN_COLOR_HEX = "#EF9F27";
 const DEFAULT_CLOUD_COLOR_HEX = "#5A8DC4";
 const DEFAULT_PV_COLOR_HEX = "#27B36B";
 const DEFAULT_BATTERY_COLOR_HEX = "#D32F2F";
-const DEFAULT_BUILDING_COLOR_HEX = "#D2D2D7";
 const DEFAULT_CLOUD_RGB = [90, 141, 196];
 function geoDistM(lat1, lon1, lat2, lon2) {
   const R2 = 6371e3;
@@ -24876,6 +24875,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._rateLimitStreak = 0;
     this._autoRotateLastFrame = 0;
     this._autoRotateLastUserAction = 0;
+    this._autoRotateInitialBearing = 0;
+    this._autoRotateUserMoved = false;
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -24937,6 +24938,7 @@ const _HeliosEngine = class _HeliosEngine {
     const canvas = this.map.getCanvas();
     const bumpInactivity = () => {
       this._autoRotateLastUserAction = Date.now();
+      this._autoRotateUserMoved = true;
     };
     canvas.addEventListener("mousedown", bumpInactivity);
     canvas.addEventListener("wheel", bumpInactivity, { passive: true });
@@ -25463,7 +25465,6 @@ const _HeliosEngine = class _HeliosEngine {
         }
       );
     }
-    const buildingColor = String(this.cfg["building-color"] ?? DEFAULT_BUILDING_COLOR_HEX);
     this.map.addLayer(
       {
         id: "helios-buildings",
@@ -25472,7 +25473,14 @@ const _HeliosEngine = class _HeliosEngine {
         type: "fill-extrusion",
         minzoom: 15,
         paint: {
-          "fill-extrusion-color": buildingColor,
+          //Neutral cool grey, hard-coded. We briefly exposed
+          //a `building-color` config but the buildings are
+          //always urban-context backdrop here — making the
+          //colour configurable proved to be a footgun (any
+          //tint with hue ate visual room from the chips and
+          //leaders that carry the actual data) and was
+          //removed in beta.12.
+          "fill-extrusion-color": "rgba(210,210,215,1)",
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
           //Opacity ramps in between zoom 15 and 16; top
@@ -25492,20 +25500,6 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     );
-  }
-  //Public — push a new building colour to the running buildings
-  //layer (called by the card when the user edits `building-color`
-  //in the visual editor). Skips silently when the layer hasn't
-  //been added yet — the next basemap reload will pick the new
-  //colour up from `this.cfg`.
-  setBuildingColor(hex) {
-    if (!this.map || !this.map.getLayer("helios-buildings")) {
-      return;
-    }
-    try {
-      this.map.setPaintProperty("helios-buildings", "fill-extrusion-color", hex);
-    } catch (_2) {
-    }
   }
   //Linear interpolation between two RGB hex strings.
   _lerpHex(a2, b2, t2) {
@@ -26140,17 +26134,18 @@ const _HeliosEngine = class _HeliosEngine {
       this.map.setPaintProperty("helios-hillshade", "hillshade-exaggeration", a2);
     }
     this._applyLabelVisibility();
-    this.setBuildingColor(String(this.cfg["building-color"] ?? DEFAULT_BUILDING_COLOR_HEX));
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
     }
   }
   _startAutoRotateLoop() {
-    if (this._autoRotateRaf !== void 0) {
+    if (this._autoRotateRaf !== void 0 || !this.map) {
       return;
     }
     this._autoRotateLastFrame = performance.now();
     this._autoRotateLastUserAction = 0;
+    this._autoRotateUserMoved = false;
+    this._autoRotateInitialBearing = this.map.getBearing();
     const tick = (t2) => {
       if (!this.map) {
         this._autoRotateRaf = void 0;
@@ -26159,9 +26154,23 @@ const _HeliosEngine = class _HeliosEngine {
       const dt = Math.max(0, t2 - this._autoRotateLastFrame) / 1e3;
       this._autoRotateLastFrame = t2;
       const sinceUser = Date.now() - this._autoRotateLastUserAction;
-      if (sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
-        const next = this.map.getBearing() - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
-        this.map.setBearing(next);
+      if (sinceUser < _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
+        this._autoRotateRaf = requestAnimationFrame(tick);
+        return;
+      }
+      const current = this.map.getBearing();
+      if (this._autoRotateUserMoved) {
+        let diff = this._autoRotateInitialBearing - current;
+        diff = (diff + 540) % 360 - 180;
+        const step = _HeliosEngine.AUTO_ROTATE_REALIGN_DEG_PER_SEC * dt;
+        if (Math.abs(diff) <= Math.max(step, 0.5)) {
+          this.map.setBearing(this._autoRotateInitialBearing);
+          this._autoRotateUserMoved = false;
+        } else {
+          this.map.setBearing(current + Math.sign(diff) * step);
+        }
+      } else {
+        this.map.setBearing(current - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt);
       }
       this._autoRotateRaf = requestAnimationFrame(tick);
     };
@@ -26182,7 +26191,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._mapReady = false;
   }
 };
-_HeliosEngine.AUTO_ROTATE_DEG_PER_SEC = 1;
+_HeliosEngine.AUTO_ROTATE_DEG_PER_SEC = 1.5;
+_HeliosEngine.AUTO_ROTATE_REALIGN_DEG_PER_SEC = 30;
 _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS = 5e3;
 let HeliosEngine = _HeliosEngine;
 const en = {
@@ -26233,7 +26243,6 @@ const en = {
     colorsHint: "One colour per metric, reused everywhere it appears. The sun colour paints the arc, the sun disc and the upper area of the timeline. The cloud colour paints the on-ground disc and the lower area of the timeline.",
     sunColor: "Sun color *",
     cloudColor: "Cloud color *",
-    buildingColor: "Building color *",
     pvSection: "Solar production",
     pvHint: "Optional. When set, a chip appears on the home (instant production, computed over the last minute) and a dedicated graph is added above the timeline. The line between the home and the chip animates at a speed proportional to the live production. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).",
     pvEntity: "Production entity",
@@ -26296,7 +26305,6 @@ const fr = {
     colorsHint: "Une couleur par grandeur, réutilisée partout où elle apparaît. La couleur du soleil peint l'arc, le disque solaire et la zone haute de la chronologie. La couleur des nuages peint le disque au sol et la zone basse de la chronologie.",
     sunColor: "Couleur du soleil *",
     cloudColor: "Couleur des nuages *",
-    buildingColor: "Couleur des bâtiments *",
     pvSection: "Production photovoltaïque",
     pvHint: "Optionnel. Si renseigné, une pastille apparaît sur la maison (production instantanée, calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. La ligne entre la maison et la pastille s'anime à une vitesse proportionnelle à la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
     pvEntity: "Entité de production",
@@ -26359,7 +26367,6 @@ const de = {
     colorsHint: "Eine Farbe pro Messgröße, überall einheitlich verwendet. Die Sonnenfarbe füllt den Bogen, die Sonnenscheibe und den oberen Bereich der Zeitachse. Die Wolkenfarbe füllt die Bodenscheibe und den unteren Bereich der Zeitachse.",
     sunColor: "Sonnenfarbe *",
     cloudColor: "Wolkenfarbe *",
-    buildingColor: "Gebäudefarbe *",
     pvSection: "Solarproduktion",
     pvHint: "Optional. Wenn gesetzt, erscheint auf dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Die Linie zwischen Haus und Chip animiert mit einer Geschwindigkeit proportional zur Produktion. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
     pvEntity: "Produktions-Entität",
@@ -26422,7 +26429,6 @@ const es = {
     colorsHint: "Un color por magnitud, reutilizado en todos los lugares donde aparece. El color del sol pinta el arco, el disco solar y la zona alta de la cronología. El color de las nubes pinta el disco del suelo y la zona baja de la cronología.",
     sunColor: "Color del sol *",
     cloudColor: "Color de las nubes *",
-    buildingColor: "Color de los edificios *",
     pvSection: "Producción solar",
     pvHint: "Opcional. Si se define, aparece una pastilla en la casa (producción instantánea, calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. La línea entre la casa y la pastilla se anima a una velocidad proporcional a la producción. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
     pvEntity: "Entidad de producción",
@@ -26485,7 +26491,6 @@ const it = {
     colorsHint: "Un colore per grandezza, riutilizzato ovunque appaia. Il colore del sole dipinge l'arco, il disco solare e l'area superiore della cronologia. Il colore delle nuvole dipinge il disco al suolo e l'area inferiore della cronologia.",
     sunColor: "Colore del sole *",
     cloudColor: "Colore delle nuvole *",
-    buildingColor: "Colore degli edifici *",
     pvSection: "Produzione solare",
     pvHint: "Opzionale. Se impostato, una pastiglia appare sulla casa (produzione istantanea, calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. La linea tra la casa e la pastiglia si anima a una velocità proporzionale alla produzione. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
     pvEntity: "Entità di produzione",
@@ -26548,7 +26553,6 @@ const nl = {
     colorsHint: "Eén kleur per grootheid, overal hergebruikt. De zonkleur kleurt de boog, de zonneschijf en het bovenste deel van de tijdlijn. De wolkenkleur kleurt de schijf op de grond en het onderste deel van de tijdlijn.",
     sunColor: "Zonkleur *",
     cloudColor: "Wolkenkleur *",
-    buildingColor: "Gebouwkleur *",
     pvSection: "Zonneproductie",
     pvHint: "Optioneel. Als ingesteld verschijnt op het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. De lijn tussen het huis en de chip animeert met een snelheid evenredig aan de productie. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
     pvEntity: "Productie-entiteit",
@@ -26611,7 +26615,6 @@ const pt = {
     colorsHint: "Uma cor por grandeza, reutilizada onde quer que apareça. A cor do sol pinta o arco, o disco solar e a área superior da linha temporal. A cor das nuvens pinta o disco no solo e a área inferior da linha temporal.",
     sunColor: "Cor do sol *",
     cloudColor: "Cor das nuvens *",
-    buildingColor: "Cor dos edifícios *",
     pvSection: "Produção solar",
     pvHint: "Opcional. Quando definido, surge uma pastilha sobre a casa (produção instantânea, calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. A linha entre a casa e a pastilha anima a uma velocidade proporcional à produção. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
     pvEntity: "Entidade de produção",
@@ -26739,19 +26742,6 @@ const heliosCardStyles = i$3`
         50%      { transform: scale(1.15); opacity: 0.9; }
     }
 
-    /*  Leader-line dashes flow toward their attached element,
-        echoing the live card's pv-leader-flow / solar-ray-flow.
-        Slow speeds — the placeholder shouldn't compete for
-        attention with the configure CTA. */
-    .ph-leader-irrad { animation: ph-leader-flow 14s linear infinite; }
-    .ph-leader-pv    { animation: ph-leader-flow 12s linear infinite; }
-
-    @keyframes ph-leader-flow
-    {
-        from { stroke-dashoffset: 0;   }
-        to   { stroke-dashoffset: -28; }
-    }
-
     .ph-content
     {
         position: absolute;
@@ -26762,49 +26752,23 @@ const heliosCardStyles = i$3`
         z-index: 10;
         padding: 6px 18px;
         box-sizing: border-box;
-        max-width: min(85%, 320px);
     }
 
     .ph-title
     {
-        font-size: 1.5rem;
+        font-size: 1.85rem;
         font-weight: 200;
-        letter-spacing: 8px;
+        letter-spacing: 10px;
         text-transform: uppercase;
         color: #2a2e34;
         text-shadow: 0 1px 1px rgba(255,255,255,0.6);
         line-height: 1;
         white-space: nowrap;
-        padding-left: 8px;
-    }
-
-    .ph-divider
-    {
-        margin: 8px auto;
-        width: 44px;
-        height: 1px;
-        background: linear-gradient(90deg,
-            transparent             0%,
-            rgba(60,60,60,0.45)    50%,
-            transparent           100%);
-    }
-
-    .ph-sub
-    {
-        font-size: 0.55rem;
-        font-weight: 400;
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
-        color: rgba(40,40,40,0.55);
-        line-height: 1.35;
-        /*  Hard-cap at 2 lines so a verbose translation never pushes
-            the title off-centre. WebKit-safe, ignored on browsers
-            that don't support line-clamp (overflow: hidden then
-            still trims by box height). */
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+        /*  Optical centre — letter-spacing piles up on the right of
+            the last glyph so the visual centre of the wordmark
+            sits a few pixels left of the geometric centre. The
+            padding-left compensates so HELIOS reads centred. */
+        padding-left: 10px;
     }
 
 
@@ -27225,7 +27189,12 @@ const heliosCardStyles = i$3`
     /*  Photovoltaic production chip — same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
         text + icon) for instant identification.
-        --pv-leader-color is set inline by the renderer. */
+        --pv-leader-color is set inline by the renderer. The
+        min-width / centred text are shared with the SoC and Power
+        battery chips so the visible gap on each side of the PV
+        chip is identical regardless of how wide each value reads
+        ("26 %" vs "+12.34 kW" otherwise produce visibly unequal
+        leader gaps). */
     .pv-pct-label
     {
         position: absolute;
@@ -27234,7 +27203,10 @@ const heliosCardStyles = i$3`
         z-index: 6;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 3px;
+        min-width: 76px;
+        box-sizing: border-box;
         background: rgba(255, 255, 255, 0.8);
         color:      var(--pv-leader-color, #27B36B);
         border:     1px solid var(--pv-leader-color, #27B36B);
@@ -27295,10 +27267,11 @@ const heliosCardStyles = i$3`
         opacity: 0.9;
     }
 
-    /*  Battery chip — mirrors the PV chip but sits below the home
-        with a leader line going down. Same 80 % white background as
-        the other on-map chips so the basemap reads through; tinted
-        in the user-configured battery colour (border + text + icon).
+    /*  Battery chips (SoC on the left of PV, Power on the right) —
+        same frame as the PV chip, tinted in the user-configured
+        battery colour. Shares min-width and centred text with the
+        PV chip so the visible dotted-leader gap on each side of PV
+        is identical regardless of the value's content width.
         --battery-leader-color is set inline by the renderer. */
     .battery-pct-label
     {
@@ -27308,7 +27281,10 @@ const heliosCardStyles = i$3`
         z-index: 6;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 3px;
+        min-width: 76px;
+        box-sizing: border-box;
         background: rgba(255, 255, 255, 0.8);
         color:      var(--battery-leader-color, #D32F2F);
         border:     1px solid var(--battery-leader-color, #D32F2F);
@@ -27330,14 +27306,21 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Battery leaders — short static dotted hairlines between
-        each battery chip (SoC on the left of PV, Power on the
-        right) and the central PV chip. No animation, no arrow:
-        the sign of the power value alone encodes charging vs
-        discharging, so a flow direction visualisation would just
-        duplicate that information visually. Same dotted dash
-        pattern as the cloud leader for a coherent vocabulary
-        across the static chip-leader connectors. */
+    /*  Battery leaders.
+        - SoC ↔ PV is a short static dotted hairline (.battery-
+          leader-line on its own) — same vocabulary as the cloud
+          leader. The SoC value has no sign so there's no flow
+          direction to encode.
+        - PV ↔ Power is animated (.battery-leader-line-animated
+          modifier on top of .battery-leader-line) with dashes
+          flowing at a speed proportional to |P| — exactly like
+          the PV leader's visual language — and a small arrow
+          polygon riding the line via SVG <animateMotion>. The
+          .battery-leader-discharging class flips the dash flow
+          direction (CSS animation-direction: reverse) so the
+          dashes move from chip → PV when the battery is
+          discharging; the arrow path is also flipped inline by
+          the renderer so the two cues stay in sync. */
     .battery-leader-svg
     {
         position: absolute;
@@ -27356,6 +27339,28 @@ const heliosCardStyles = i$3`
         stroke-linecap: round;
         stroke-dasharray: 2 3;
         fill: none;
+    }
+
+    .battery-leader-line-animated
+    {
+        stroke-dasharray: 6 5;
+        animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
+    }
+
+    .battery-leader-discharging
+    {
+        animation-direction: reverse;
+    }
+
+    @keyframes battery-leader-flow
+    {
+        from { stroke-dashoffset: 0;   }
+        to   { stroke-dashoffset: -11; }
+    }
+
+    .battery-leader-arrow
+    {
+        opacity: 0.9;
     }
 
     /*  Cloud-cover leader line — black hairline from chip to disc. */
@@ -28184,14 +28189,6 @@ let HeliosCardEditor = class extends i {
                         .value="${cfgHex(c2["cloud-color"], DEFAULT_CLOUD_COLOR_HEX)}"
                         .ariaLabel="${t2.editor.cloudColor}"
                         @value-changed="${(e2) => this._color("cloud-color", e2)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t2.editor.buildingColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["building-color"], DEFAULT_BUILDING_COLOR_HEX)}"
-                        .ariaLabel="${t2.editor.buildingColor}"
-                        @value-changed="${(e2) => this._color("building-color", e2)}"
                     ></helios-color-picker>
                 </label>
                 <div class="hint">${t2.editor.colorsHint}</div>
@@ -29652,6 +29649,9 @@ let HeliosCard = class extends i {
     const showPowerChip = hasApiKey && layout !== null && !batteryScrubFuture && batteryPowerEntity !== "" && activeBatteryPower !== null;
     const batterySocText = showSocChip ? `${Math.round(activeBatterySoc)} %` : "";
     const batteryPowerText = showPowerChip ? this._formatBatteryPower(activeBatteryPower, activeBatteryUnit) : "";
+    const batteryCharging = showPowerChip && activeBatteryPower > 0;
+    const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
+    const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -29941,16 +29941,11 @@ ${showSun ? b`
                 ${showSocChip || showPowerChip ? b`
                     <svg class="battery-leader-svg">
                         <!--
-                            Static dotted hairlines from each battery
-                            chip to the PV chip — same visual language
-                            as the cloud leader (no animation, no arrow,
-                            no charging-direction encoding). Sign of
-                            the power value carries the charging /
-                            discharging information instead. Both ends
-                            are nudged 10 px inside their respective
-                            chips so the chip backgrounds hide the
-                            inside portions and the visible dashes only
-                            appear in the gap between them.
+                            SoC ↔ PV: static dotted hairline (no
+                            animation, no arrow). Same visual language
+                            as the cloud leader. The sign-less SoC
+                            reading carries no flow direction, so any
+                            animation here would just add noise.
                         -->
                         ${showSocChip ? w`
                             <line
@@ -29962,15 +29957,38 @@ ${showSun ? b`
                                 y2="${layout.pvLabel.y}"
                             ></line>
                         ` : A}
+                        <!--
+                            PV ↔ Power: animated dotted line with an
+                            arrow whose direction tracks the sign of
+                            the live power. Charging (P > 0) → arrow
+                            travels PV → Power chip (energy moves
+                            INTO the battery). Discharging (P < 0) →
+                            arrow travels Power → PV (energy comes
+                            OUT). Same dash + flow vocabulary as the
+                            PV / sun leaders so all energy streams
+                            on the card share one visual language.
+                        -->
                         ${showPowerChip ? w`
                             <line
-                                class="battery-leader-line"
-                                style="--battery-leader-color:${batteryColor}"
+                                class="battery-leader-line battery-leader-line-animated ${batteryCharging ? "" : "battery-leader-discharging"}"
+                                style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
                                 x1="${layout.pvLabel.x + 10}"
                                 y1="${layout.pvLabel.y}"
                                 x2="${layout.batteryPowerLabel.x - 10}"
                                 y2="${layout.batteryPowerLabel.y}"
                             ></line>
+                            <polygon
+                                class="battery-leader-arrow"
+                                points="-6,-4 0,0 -6,4"
+                                fill="${batteryColor}"
+                            >
+                                <animateMotion
+                                    dur="${batteryFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="${batteryCharging ? `M ${layout.pvLabel.x + 10},${layout.pvLabel.y} L ${layout.batteryPowerLabel.x - 10},${layout.batteryPowerLabel.y}` : `M ${layout.batteryPowerLabel.x - 10},${layout.batteryPowerLabel.y} L ${layout.pvLabel.x + 10},${layout.pvLabel.y}`}"
+                                ></animateMotion>
+                            </polygon>
                         ` : A}
                     </svg>
                     ${showSocChip ? b`
@@ -30012,7 +30030,6 @@ ${showSun ? b`
   }
   //Placeholder (no API key configured)
   _renderPlaceholder() {
-    const t2 = pickTranslations(this.hass?.language);
     return b`
             <div class="placeholder">
 
@@ -30076,52 +30093,21 @@ ${showSun ? b`
                         stroke-linecap="round"
                         stroke-opacity="0.85" />
 
-                    <!-- Sun disc + halo, riding on the arc. The glow
-                         circle pulses; the inner disc stays still so
-                         the brand colour reads clearly. Position is
-                         the arc evaluated at t=0.76, so the sun
-                         visually sits ON the path (the previous
-                         (305, 110) sat well above it). -->
-                    <g transform="translate(297, 168)">
+                    <!-- Sun disc + halo, riding on the arc at t=0.75
+                         (3/4 of the way from the left) so it sits ON
+                         the path. The glow circle pulses; the inner
+                         disc stays still so the brand colour reads
+                         clearly. -->
+                    <g transform="translate(286, 166)">
                         <circle class="ph-sun-glow" r="22" fill="url(#ph-sun-glow-grad)" />
                         <circle r="9" fill="#EF9F27" />
                         <circle r="8.5" fill="none"
                             stroke="#a36617" stroke-width="0.7" stroke-opacity="0.55" />
                     </g>
-
-                    <!-- W/m² chip + leader from the sun. -->
-                    <line class="ph-leader ph-leader-irrad"
-                        x1="282" y1="170" x2="226" y2="93"
-                        stroke="#666" stroke-width="0.7"
-                        stroke-dasharray="3 3" stroke-linecap="round"
-                        stroke-opacity="0.75" />
-                    <g transform="translate(146, 82)">
-                        <rect width="80" height="22" rx="11"
-                            fill="white" stroke="rgba(0,0,0,0.18)" stroke-width="0.6" />
-                        <text x="40" y="15.5" text-anchor="middle"
-                            font-size="11" fill="#3a3a3a"
-                            font-family="Roboto, system-ui, sans-serif">541 W/m²</text>
-                    </g>
-
-                    <!-- kW chip + leader from the home (PV brand
-                         colour, matches DEFAULT_PV_COLOR_HEX). -->
-                    <line class="ph-leader ph-leader-pv"
-                        x1="195" y1="200" x2="155" y2="155"
-                        stroke="#27B36B" stroke-width="1"
-                        stroke-dasharray="4 3" stroke-linecap="round" />
-                    <g transform="translate(75, 144)">
-                        <rect width="80" height="22" rx="11"
-                            fill="white" stroke="#27B36B" stroke-width="0.8" />
-                        <text x="40" y="15.5" text-anchor="middle"
-                            font-size="11" fill="#27B36B" font-weight="600"
-                            font-family="Roboto, system-ui, sans-serif">0.36 kW</text>
-                    </g>
                 </svg>
 
                 <div class="ph-content">
                     <div class="ph-title">HELIOS</div>
-                    <div class="ph-divider"></div>
-                    <div class="ph-sub">${t2.placeholder.subtitle}</div>
                 </div>
 
             </div>
@@ -30167,11 +30153,7 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   //between the light and dark skins), but it must be in the
   //sig so Lit re-renders the card when the user toggles it
   //in the editor.
-  "card-theme",
-  //building-color tints every 3D building extrusion. Listed
-  //here so the engine receives the new value via updateConfig,
-  //which forwards it to setBuildingColor on the running map.
-  "building-color"
+  "card-theme"
 ];
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([

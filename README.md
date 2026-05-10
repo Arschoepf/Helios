@@ -85,7 +85,6 @@ Every option below is editable visually:
 | `show-labels` | boolean | `true` | Show MapTiler street names, building numbers, POIs and place names on the basemap. |
 | `sun-color` | hex | `#EF9F27` | Sun disc + arc + timeline irradiance area. |
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
-| `building-color` | hex | `#D2D2D7` | Single colour applied to every 3D building extrusion (home + neighbours). |
 | `pv-power-entity` | entity_id | — | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |
 | `pv-color` | hex | `#27B36B` | PV chip border + text + leader + dedicated graph. |
 | `battery-soc-entity` | entity_id | — | Optional. Battery State-of-Charge sensor (`%` — usually `device_class: battery`). Renders as a chip on the LEFT of the PV chip showing the live percentage. |

@@ -7,13 +7,14 @@ underlying scene reads through, exposes a `map-style` option to
 switch the basemap between streets, topographic and hybrid
 (satellite + roads), adds an optional home-battery overlay (two
 chips flanking the PV chip — SoC on the left, signed Power on the
-right — connected by short static dotted hairlines), introduces a
-configurable `building-color` for the 3D building extrusions,
-relocates the cloud-cover chip to the side of the disc so the
-home's vertical axis stays clear of readouts, ships an opt-in
-dark theme for the card chrome so the card sits cleanly inside
-dark Home Assistant dashboards, and adds a slow ambient camera
-rotation around the home that pauses on user interaction.
+right — connected by dotted hairlines, with a directional flow
+arrow on the Power leader), relocates the cloud-cover chip to
+the side of the disc so the home's vertical axis stays clear of
+readouts, ships an opt-in dark theme for the card chrome so the
+card sits cleanly inside dark Home Assistant dashboards, and
+adds a slow ambient camera rotation around the home that pauses
+on user interaction and snaps back to the initial bearing once
+they let go.
 
 ## v1.1.0-beta.1
 
@@ -318,6 +319,73 @@ modifier for the reversed flow direction).
 
 No public config keys changed; existing dashboards keep working
 with no edits.
+
+## v1.1.0-beta.12
+
+Polish pass on top of beta.11: drops the never-quite-right
+`building-color` config, simplifies the catalogue placeholder,
+makes the auto-rotation more lively, equalises the visible
+length of the battery leaders, and brings back the directional
+flow arrow on the PV ↔ Power leader.
+
+* **`building-color` removed.** The exposed config never produced
+  a satisfying result (any tinted hue ate visual room from the
+  chips and leaders) and the default neutral grey is what every
+  use case actually wants. The config key is gone, the
+  associated paint-property update path is gone, and the
+  visual editor / i18n keys / docs no longer mention it. The
+  buildings keep painting at `rgba(210,210,215,1)` with the
+  75 % opacity from beta.11.
+* **Placeholder stripped down to the wordmark.** beta.11's
+  attempt to centre HELIOS while keeping the W/m² chip, the kW
+  chip, the leaders, the divider and the subtitle ended up
+  cramped. The thumbnail now keeps just the iso scene
+  (low-poly buildings + ground cloud disc) and the solar arc
+  with the sun on it (re-positioned to t = 0.75 of the Bezier
+  → exact 3/4 from the left). Everything else is gone:
+  no chips, no leaders, no divider, no subtitle. The HELIOS
+  wordmark sits centred horizontally + vertically with a
+  slightly larger font (1.85 rem, was 1.5).
+* **Auto-rotation reworked.** The ambient drift is a touch
+  faster (1 → 1.5 °/s) and now snaps gracefully back to the
+  bearing the camera had at card load whenever the user has
+  moved it: after 5 s of inactivity the rotation loop tweens
+  the camera back to the initial bearing at ~30 °/s before
+  resuming forward drift. So no matter how the user spun the
+  camera around, it always slides back to the configured
+  hemisphere-aware default a few seconds later.
+* **Equal-length battery leaders.** The two dotted lines (SoC
+  ↔ PV on the left, Power ↔ PV on the right) now read at the
+  same visible length in the common case. Both PV and battery
+  chips share a `min-width: 76 px` and `justify-content: center`
+  so for typical values (small SoC %, small power values) the
+  three chips have identical widths, leaving identical gaps
+  for the leaders. Very wide power values may still grow their
+  chip a few pixels, but the asymmetry is now barely
+  perceptible.
+* **Animated arrow back on the PV ↔ Power leader.** beta.11
+  removed it; beta.12 brings it back with the previous
+  charging / discharging direction encoding. Charging
+  (positive power) → arrow flows from PV to the Power chip.
+  Discharging (negative) → arrow flows back from the Power
+  chip to PV. The dashes flow at a speed proportional to
+  `|P|`, saturating at the same ~5 kW envelope as the PV
+  leader. The SoC ↔ PV leader stays static (no animation)
+  since SoC has no flow direction to encode.
+
+i18n: `Translations.editor.buildingColor` removed. Custom
+locales must drop that key.
+
+Internal: `HeliosConfig['building-color']`, the
+`DEFAULT_BUILDING_COLOR_HEX` export and `setBuildingColor`
+method are gone. The buildings layer paints with the hard-
+coded `rgba(210,210,215,1)` colour at minzoom 16 / opacity
+0.75. The auto-rotation loop gained two private fields
+(`_autoRotateInitialBearing`, `_autoRotateUserMoved`) and a
+`AUTO_ROTATE_REALIGN_DEG_PER_SEC` constant. The
+`.battery-leader-line-animated` and `.battery-leader-arrow`
+CSS classes are back; `.battery-leader-discharging` is back as
+the `animation-direction: reverse` modifier.
 
 ## v1.1.0-beta.11
 

@@ -55,7 +55,6 @@ export const nl: Translations = {
         colorsHint:         'Eén kleur per grootheid, overal hergebruikt. De zonkleur kleurt de boog, de zonneschijf en het bovenste deel van de tijdlijn. De wolkenkleur kleurt de schijf op de grond en het onderste deel van de tijdlijn.',
         sunColor:           'Zonkleur *',
         cloudColor:         'Wolkenkleur *',
-        buildingColor:      'Gebouwkleur *',
         pvSection:          'Zonneproductie',
         pvHint:             'Optioneel. Als ingesteld verschijnt op het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. De lijn tussen het huis en de chip animeert met een snelheid evenredig aan de productie. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).',
         pvEntity:           'Productie-entiteit',

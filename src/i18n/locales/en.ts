@@ -65,7 +65,6 @@ export const en: Translations = {
         colorsHint:         'One colour per metric, reused everywhere it appears. The sun colour paints the arc, the sun disc and the upper area of the timeline. The cloud colour paints the on-ground disc and the lower area of the timeline.',
         sunColor:           'Sun color *',
         cloudColor:         'Cloud color *',
-        buildingColor:      'Building color *',
         pvSection:          'Solar production',
         pvHint:             'Optional. When set, a chip appears on the home (instant production, computed over the last minute) and a dedicated graph is added above the timeline. The line between the home and the chip animates at a speed proportional to the live production. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).',
         pvEntity:           'Production entity',
