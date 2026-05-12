@@ -1315,50 +1315,121 @@ export class HeliosEngine
 
         //Suppress every native building layer the active style ships.
         //
-        //We tried `setLayoutProperty(id, 'visibility', 'none')` first
-        //(MapTiler streets-v2 etc.) and it worked. With MapTiler
-        //streets-v4 / topo-v4 the base style relies on MapLibre 5
-        //"style imports" — imported layers are listed by
-        //`getStyle().layers` but `setLayoutProperty` on them is a
-        //silent no-op, leaving the native 3D extrusions visible on
-        //top of our radius-trimmed set and producing the reported
-        //"buildings visible at kilometres" regression.
+        //MapTiler streets-v4 / topo-v4 use MapLibre 5 "style imports":
+        //the basemap is referenced as an external sub-style. Imported
+        //layers are read-only through the flat APIs:
+        //`setLayoutProperty(id, ...)` and `removeLayer(id)` against a
+        //bare id are both silent no-ops, leaving the native 3D
+        //extrusions covering the map and making the radius filter
+        //look broken (beta.6 / beta.7 symptom).
         //
-        //The robust fix is to remove the layers outright; removeLayer
-        //ignores import scoping. We target every layer whose type is
-        //fill-extrusion (3D blocks) OR whose source-layer is one of
-        //the known v3 building source-layers (catches flat 2D
-        //building footprints too) OR whose id mentions building
-        //(belt-and-suspenders for any other style variant). Our own
-        //two helios building layers are spared by id.
+        //The supported APIs for imported content are:
+        //  - setConfigProperty(importId, key, value): MapTiler v4
+        //    styles expose schema flags like `3dBuildings`,
+        //    `buildings3d`, etc. — toggling them off is the
+        //    cleanest path.
+        //  - Scoped layer ids `importId\\layerId`: works for
+        //    removeLayer / setPaintProperty / setLayoutProperty on
+        //    imported layers in v5.
+        //
+        //We try both, plus zeroing paint properties as a final
+        //fallback (paint pipelines and layout pipelines have
+        //independent guards inside MapLibre, so an opacity:0 may
+        //land even when visibility:none didn't). Whatever sticks
+        //wins; we log a report so a regression in MapTiler's style
+        //schema doesn't fail silently again.
+        const styleObj = this.map.getStyle() as {
+            layers?:  Array<{ id: string; type: string; 'source-layer'?: string }>;
+            imports?: Array<{ id: string }>;
+        };
+        const allLayers = styleObj.layers ?? [];
+        const imports   = styleObj.imports ?? [];
+        const importIds = imports.map(i => i.id).filter(Boolean);
+
+        //Identify every native building layer (3D or 2D).
         const buildingLayerIds: string[] = [];
-        this.map.getStyle().layers?.forEach(l =>
+        for (const l of allLayers)
         {
             if (l.id === 'helios-buildings-surroundings'
-             || l.id === 'helios-buildings-home')
-            {
-                return;
-            }
-            const sourceLayer = (l as { 'source-layer'?: string })['source-layer'];
-            const isBuildingSrc = sourceLayer === 'building' || sourceLayer === 'building_3d';
+             || l.id === 'helios-buildings-home') continue;
+            const sl = l['source-layer'];
+            const isBuildingSrc = sl === 'building' || sl === 'building_3d';
             const isExtrusion   = l.type === 'fill-extrusion';
             const idMentions    = typeof l.id === 'string' && l.id.toLowerCase().includes('building');
             if (isBuildingSrc || isExtrusion || idMentions)
             {
                 buildingLayerIds.push(l.id);
             }
+        }
+
+        //Strategy A — toggle the MapTiler v4 schema flags off, on
+        //every import. Each flag is best-effort: the wrong key just
+        //throws and is ignored.
+        const buildingConfigKeys = [
+            '3dBuildings',    'buildings3d',     'show3dBuildings',
+            'show3DBuildings','building3D',      '2dBuildings',
+            'buildings',      'showBuildings',   'show2dBuildings'
+        ];
+        for (const imp of imports)
+        {
+            for (const key of buildingConfigKeys)
+            {
+                try { (this.map as unknown as {
+                    setConfigProperty: (id: string, k: string, v: unknown) => void
+                }).setConfigProperty(imp.id, key, false); }
+                catch (_) {}
+            }
+        }
+
+        //Strategy B — for each building layer, attempt removal AND
+        //paint-zeroing, using both the bare id and every scoped
+        //variant `${importId}\\${layerId}`.
+        const idCandidates = (layerId: string): string[] =>
+        {
+            const list = [layerId];
+            for (const iid of importIds) list.push(`${iid}\\${layerId}`);
+            return list;
+        };
+
+        for (const layerId of buildingLayerIds)
+        {
+            for (const cand of idCandidates(layerId))
+            {
+                try { if (this.map.getLayer(cand)) this.map.removeLayer(cand); }
+                catch (_) {}
+                try { this.map.setLayoutProperty(cand, 'visibility', 'none'); }
+                catch (_) {}
+                try { this.map.setPaintProperty(cand, 'fill-extrusion-opacity', 0); }
+                catch (_) {}
+                try { this.map.setPaintProperty(cand, 'fill-extrusion-height',  0); }
+                catch (_) {}
+                try { this.map.setPaintProperty(cand, 'fill-opacity', 0); }
+                catch (_) {}
+            }
+        }
+
+        //Verify: re-read the merged style and see what's left.
+        const remaining = ((this.map.getStyle() as {
+            layers?: Array<{ id: string; type: string; 'source-layer'?: string }>
+        }).layers ?? [])
+            .filter(l =>
+            {
+                if (l.id === 'helios-buildings-surroundings'
+                 || l.id === 'helios-buildings-home') return false;
+                const sl = l['source-layer'];
+                return l.type === 'fill-extrusion'
+                    || sl === 'building'
+                    || sl === 'building_3d'
+                    || (typeof l.id === 'string' && l.id.toLowerCase().includes('building'));
+            })
+            .map(l => `${l.id}(${l.type})`);
+
+        console.debug('[HELIOS] Building suppression report:',
+        {
+            detected:  buildingLayerIds,
+            imports:   importIds,
+            remaining
         });
-        for (const id of buildingLayerIds)
-        {
-            try { this.map.setLayoutProperty(id, 'visibility', 'none'); }
-            catch (_) {}
-            try { if (this.map.getLayer(id)) this.map.removeLayer(id); }
-            catch (_) {}
-        }
-        if (buildingLayerIds.length > 0)
-        {
-            console.debug('[HELIOS] Suppressed native building layers:', buildingLayerIds);
-        }
 
         const opacity   = this._buildingOpacity();
         const homeData  = this._buildingsData?.home

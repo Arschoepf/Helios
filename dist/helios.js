@@ -26824,32 +26824,82 @@ const _HeliosEngine = class _HeliosEngine {
     if (this.map.getLayer("helios-buildings-home")) {
       this.map.removeLayer("helios-buildings-home");
     }
+    const styleObj = this.map.getStyle();
+    const allLayers = styleObj.layers ?? [];
+    const imports = styleObj.imports ?? [];
+    const importIds = imports.map((i2) => i2.id).filter(Boolean);
     const buildingLayerIds = [];
-    this.map.getStyle().layers?.forEach((l2) => {
-      if (l2.id === "helios-buildings-surroundings" || l2.id === "helios-buildings-home") {
-        return;
-      }
-      const sourceLayer = l2["source-layer"];
-      const isBuildingSrc = sourceLayer === "building" || sourceLayer === "building_3d";
+    for (const l2 of allLayers) {
+      if (l2.id === "helios-buildings-surroundings" || l2.id === "helios-buildings-home") continue;
+      const sl = l2["source-layer"];
+      const isBuildingSrc = sl === "building" || sl === "building_3d";
       const isExtrusion = l2.type === "fill-extrusion";
       const idMentions = typeof l2.id === "string" && l2.id.toLowerCase().includes("building");
       if (isBuildingSrc || isExtrusion || idMentions) {
         buildingLayerIds.push(l2.id);
       }
-    });
-    for (const id of buildingLayerIds) {
-      try {
-        this.map.setLayoutProperty(id, "visibility", "none");
-      } catch (_2) {
-      }
-      try {
-        if (this.map.getLayer(id)) this.map.removeLayer(id);
-      } catch (_2) {
+    }
+    const buildingConfigKeys = [
+      "3dBuildings",
+      "buildings3d",
+      "show3dBuildings",
+      "show3DBuildings",
+      "building3D",
+      "2dBuildings",
+      "buildings",
+      "showBuildings",
+      "show2dBuildings"
+    ];
+    for (const imp of imports) {
+      for (const key of buildingConfigKeys) {
+        try {
+          this.map.setConfigProperty(imp.id, key, false);
+        } catch (_2) {
+        }
       }
     }
-    if (buildingLayerIds.length > 0) {
-      console.debug("[HELIOS] Suppressed native building layers:", buildingLayerIds);
+    const idCandidates = (layerId) => {
+      const list = [layerId];
+      for (const iid of importIds) list.push(`${iid}\\${layerId}`);
+      return list;
+    };
+    for (const layerId of buildingLayerIds) {
+      for (const cand of idCandidates(layerId)) {
+        try {
+          if (this.map.getLayer(cand)) this.map.removeLayer(cand);
+        } catch (_2) {
+        }
+        try {
+          this.map.setLayoutProperty(cand, "visibility", "none");
+        } catch (_2) {
+        }
+        try {
+          this.map.setPaintProperty(cand, "fill-extrusion-opacity", 0);
+        } catch (_2) {
+        }
+        try {
+          this.map.setPaintProperty(cand, "fill-extrusion-height", 0);
+        } catch (_2) {
+        }
+        try {
+          this.map.setPaintProperty(cand, "fill-opacity", 0);
+        } catch (_2) {
+        }
+      }
     }
+    const remaining = (this.map.getStyle().layers ?? []).filter((l2) => {
+      if (l2.id === "helios-buildings-surroundings" || l2.id === "helios-buildings-home") return false;
+      const sl = l2["source-layer"];
+      return l2.type === "fill-extrusion" || sl === "building" || sl === "building_3d" || typeof l2.id === "string" && l2.id.toLowerCase().includes("building");
+    }).map((l2) => `${l2.id}(${l2.type})`);
+    console.debug(
+      "[HELIOS] Building suppression report:",
+      {
+        detected: buildingLayerIds,
+        imports: importIds,
+        remaining
+      }
+    );
     const opacity = this._buildingOpacity();
     const homeData = this._buildingsData?.home ?? { type: "FeatureCollection", features: [] };
     const surrData = this._buildingsData?.surroundings ?? { type: "FeatureCollection", features: [] };
