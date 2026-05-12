@@ -2158,6 +2158,11 @@ export class HeliosCard extends LitElement
         //  fillet shrinks proportionally with `flowDuration`.
         const PV_LEG_OFFSET_PX     = 12;
         const PV_HALF_HEIGHT_PX    = 11;
+        //Half-width of the PV chip — min-width:76 in .pv-pct-label,
+        //so 38 px from centre to either side. Used for the solar-ray
+        //target snap (left/right side of the chip) when the sun sits
+        //roughly horizontal to the chip.
+        const PV_HALF_WIDTH_PX     = 38;
         const BAT_CHIP_NUDGE_PX    = 32;
         const FILLET_R             = 6;
         const lPvBottomY    = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX        : 0;
@@ -2239,13 +2244,51 @@ export class HeliosCard extends LitElement
         //feeling frantic at the top of the day.
         const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1000, 0.8);
 
-        //Solar-ray target — the tip points at the TOP-CENTRE of the
-        //PV chip (where the chip's "tip" visually meets the leader)
-        //so the irradiance ray reads as feeding the PV reading
-        //directly. Falls back to the projected home when the chip
-        //layout isn't available yet (very first frames).
-        const sunRayTargetX = layout ? layout.pvLabel.x                     : (sunScene?.home.x ?? 0);
-        const sunRayTargetY = layout ? layout.pvLabel.y - PV_HALF_HEIGHT_PX : (sunScene?.home.y ?? 0);
+        //Solar-ray target — snaps to one of the 4 sides of the PV
+        //chip based on which side faces the sun. The compass angle
+        //is measured from the PV chip's centre to the sun, with 0°
+        //pointing up; ±45° windows around each cardinal direction
+        //pick the matching chip side:
+        //    [-45°,  45°] → TOP
+        //    [ 45°, 135°] → RIGHT
+        //   |angle|>135°  → BOTTOM
+        //    [-135°,-45°] → LEFT
+        //Without this snap, a sun sitting below the chip pulled the
+        //ray through the chip's top, which looked broken.
+        let sunRayTargetX = sunScene?.home.x ?? 0;
+        let sunRayTargetY = sunScene?.home.y ?? 0;
+        if (layout && sunScene)
+        {
+            const dx       = sunScene.sun.x - layout.pvLabel.x;
+            const dy       = sunScene.sun.y - layout.pvLabel.y;
+            const compass  = Math.atan2(dx, -dy);   // 0 = up, +π/2 = right
+            const Q        = Math.PI / 4;           // 45°
+            const absC     = Math.abs(compass);
+            if (absC <= Q)
+            {
+                //Sun is above → attach to top-centre.
+                sunRayTargetX = layout.pvLabel.x;
+                sunRayTargetY = layout.pvLabel.y - PV_HALF_HEIGHT_PX;
+            }
+            else if (absC >= 3 * Q)
+            {
+                //Sun is below → attach to bottom-centre.
+                sunRayTargetX = layout.pvLabel.x;
+                sunRayTargetY = layout.pvLabel.y + PV_HALF_HEIGHT_PX;
+            }
+            else if (compass > 0)
+            {
+                //Sun is to the right → attach to right-centre.
+                sunRayTargetX = layout.pvLabel.x + PV_HALF_WIDTH_PX;
+                sunRayTargetY = layout.pvLabel.y;
+            }
+            else
+            {
+                //Sun is to the left → attach to left-centre.
+                sunRayTargetX = layout.pvLabel.x - PV_HALF_WIDTH_PX;
+                sunRayTargetY = layout.pvLabel.y;
+            }
+        }
 
         const cardTheme = String(this.config?.['card-theme'] ?? 'light').toLowerCase();
         const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';

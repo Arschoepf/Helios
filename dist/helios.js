@@ -31463,6 +31463,7 @@ let HeliosCard = class extends i {
     const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
     const PV_LEG_OFFSET_PX = 12;
     const PV_HALF_HEIGHT_PX = 11;
+    const PV_HALF_WIDTH_PX = 38;
     const BAT_CHIP_NUDGE_PX = 32;
     const FILLET_R = 6;
     const lPvBottomY = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX : 0;
@@ -31499,8 +31500,28 @@ let HeliosCard = class extends i {
     const sunFillRatio = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1e3)));
     const showSunLabel = showSun && sunScene.sun.altitude > 0;
     const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1e3, 0.8);
-    const sunRayTargetX = layout ? layout.pvLabel.x : sunScene?.home.x ?? 0;
-    const sunRayTargetY = layout ? layout.pvLabel.y - PV_HALF_HEIGHT_PX : sunScene?.home.y ?? 0;
+    let sunRayTargetX = sunScene?.home.x ?? 0;
+    let sunRayTargetY = sunScene?.home.y ?? 0;
+    if (layout && sunScene) {
+      const dx = sunScene.sun.x - layout.pvLabel.x;
+      const dy = sunScene.sun.y - layout.pvLabel.y;
+      const compass = Math.atan2(dx, -dy);
+      const Q = Math.PI / 4;
+      const absC = Math.abs(compass);
+      if (absC <= Q) {
+        sunRayTargetX = layout.pvLabel.x;
+        sunRayTargetY = layout.pvLabel.y - PV_HALF_HEIGHT_PX;
+      } else if (absC >= 3 * Q) {
+        sunRayTargetX = layout.pvLabel.x;
+        sunRayTargetY = layout.pvLabel.y + PV_HALF_HEIGHT_PX;
+      } else if (compass > 0) {
+        sunRayTargetX = layout.pvLabel.x + PV_HALF_WIDTH_PX;
+        sunRayTargetY = layout.pvLabel.y;
+      } else {
+        sunRayTargetX = layout.pvLabel.x - PV_HALF_WIDTH_PX;
+        sunRayTargetY = layout.pvLabel.y;
+      }
+    }
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
     return b`
