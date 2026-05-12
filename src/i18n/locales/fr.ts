@@ -74,6 +74,10 @@ export const fr: Translations = {
         batterySocEntityHelp: 'Choisis un capteur d\'état de charge de batterie (% — typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.',
         batteryPowerEntity: 'Entité de puissance',
         batteryPowerEntityHelp: 'Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l\'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).',
-        batteryColor:       'Couleur batterie *'
+        batteryColor:       'Couleur batterie *',
+        buildingsSection:   'Bâtiments alentour',
+        buildingsHint:      'Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données.',
+        buildingRadius:     'Rayon de visibilité (m) *',
+        buildingOpacity:    'Opacité des bâtiments voisins * (0 → 1)'
     }
 };

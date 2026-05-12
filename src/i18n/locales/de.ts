@@ -66,6 +66,10 @@ export const de: Translations = {
         batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
         batteryPowerEntity: 'Leistungs-Entität',
         batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
-        batteryColor:       'Batteriefarbe *'
+        batteryColor:       'Batteriefarbe *',
+        buildingsSection:   'Umliegende Gebäude',
+        buildingsHint:      'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren.',
+        buildingRadius:     'Sichtradius (m) *',
+        buildingOpacity:    'Deckkraft Nachbargebäude * (0 → 1)'
     }
 };

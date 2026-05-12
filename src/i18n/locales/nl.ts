@@ -66,6 +66,10 @@ export const nl: Translations = {
         batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
         batteryPowerEntity: 'Vermogen-entiteit',
         batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
-        batteryColor:       'Batterijkleur *'
+        batteryColor:       'Batterijkleur *',
+        buildingsSection:   'Omliggende gebouwen',
+        buildingsHint:      'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren.',
+        buildingRadius:     'Zichtstraal (m) *',
+        buildingOpacity:    'Dekking omliggende gebouwen * (0 → 1)'
     }
 };

@@ -66,6 +66,10 @@ export const es: Translations = {
         batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
         batteryPowerEntity: 'Entidad de potencia',
         batteryPowerEntityHelp: 'Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).',
-        batteryColor:       'Color batería *'
+        batteryColor:       'Color batería *',
+        buildingsSection:   'Edificios circundantes',
+        buildingsHint:      'Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos.',
+        buildingRadius:     'Radio de visibilidad (m) *',
+        buildingOpacity:    'Opacidad de los vecinos * (0 → 1)'
     }
 };

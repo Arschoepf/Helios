@@ -12,8 +12,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@mapbox/vector-tile": "^2.0.4",
     "lit": "^3.3.2",
-    "maplibre-gl": "^5.2.0"
+    "maplibre-gl": "^5.2.0",
+    "pbf": "^4.0.1"
   },
   "devDependencies": {
     "terser": "^5.30.0",

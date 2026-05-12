@@ -6,7 +6,9 @@ import
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
-    DEFAULT_BATTERY_COLOR_HEX
+    DEFAULT_BATTERY_COLOR_HEX,
+    DEFAULT_BUILDING_RADIUS_M,
+    DEFAULT_BUILDING_OPACITY
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -552,6 +554,25 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.autoRotateHint}</div>
+
+                <div class="section-title">${t.editor.buildingsSection}</div>
+                <label class="field">
+                    <span class="label">${t.editor.buildingRadius}</span>
+                    <input
+                        type="number" min="20" max="1000" step="10"
+                        .value="${String(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M)}"
+                        @change="${(e: Event) => this._num('building-radius', e)}"
+                    />
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.buildingOpacity}</span>
+                    <input
+                        type="number" min="0" max="1" step="0.05"
+                        .value="${String(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY)}"
+                        @change="${(e: Event) => this._num('building-opacity', e)}"
+                    />
+                </label>
+                <div class="hint">${t.editor.buildingsHint}</div>
 
                 <div class="section-title">${t.editor.colors}</div>
                 <label class="field">

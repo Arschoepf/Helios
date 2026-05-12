@@ -243,7 +243,13 @@ export class HeliosCard extends LitElement
         //between the light and dark skins), but it must be in the
         //sig so Lit re-renders the card when the user toggles it
         //in the editor.
-        'card-theme'
+        'card-theme',
+        //building-radius / building-opacity drive the helios-buildings-*
+        //custom layers (radius triggers a refetch + GeoJSON refresh,
+        //opacity is a cheap paint-property update on the surroundings
+        //layer).
+        'building-radius',
+        'building-opacity'
     ] as const;
 
     //Cheap stable signature of the visual config — used to skip

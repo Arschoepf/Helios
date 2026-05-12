@@ -2,6 +2,7 @@ import maplibregl from 'maplibre-gl';
 import type { Map } from 'maplibre-gl';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './helios-sun';
 import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './helios-weather';
+import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildings';
 
 //Public types
 
@@ -86,7 +87,24 @@ export interface HeliosConfig
     //Useful on low-power devices or for users who find the
     //constant motion distracting.
     'auto-rotate-enabled'?:   unknown;
+    //v1.2.0-beta.6 — radius (in metres) around the home within which
+    //surrounding buildings are rendered. Buildings outside this radius
+    //are not drawn at all, which is a hard perf win in dense urban
+    //areas (rendering thousands of fill-extrusions per frame was the
+    //main pain point reported by beta testers). The user's own home
+    //is always rendered regardless of radius. Default: 100.
+    'building-radius'?:       unknown;
+    //v1.2.0-beta.6 — opacity of the surrounding buildings (0..1). The
+    //home itself stays at full opacity so it reads as the focal point.
+    //Default: 0.25 (a "ghost" surround that conveys urban context
+    //without competing with the data overlays).
+    'building-opacity'?:      unknown;
 }
+
+//Default values for the building radius/opacity config — exposed so
+//the visual editor can render the matching placeholder hints.
+export const DEFAULT_BUILDING_RADIUS_M = 100;
+export const DEFAULT_BUILDING_OPACITY  = 0.25;
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
 
@@ -462,6 +480,15 @@ export class HeliosEngine
     private _autoRotateRaf?:           number;
     private _autoRotateLastFrame:      number = 0;
     private _autoRotateLastUserAction: number = 0;
+
+    //Cached result of the building fetch around the home. The home
+    //doesn't move during a session, so we fetch once and reuse the
+    //GeoJSON across style reloads (theme switches, basemap changes)
+    //instead of hitting the MapTiler API again. Invalidated when the
+    //building-radius config option changes.
+    private _buildingsData:     BuildingsResult | null = null;
+    private _buildingsFetchKey: string = '';
+    private _buildingsAbort?:   AbortController;
 
     constructor(
         container:    HTMLElement,
@@ -976,9 +1003,10 @@ export class HeliosEngine
     //and refreshed by _updateCloudCoverDisc() whenever the cloud-cover
     //value changes (live tick or scrub).
     //
-    //Z-order: this layer pair is added before `helios-buildings`, so
-    //buildings still emerge through the disc as opaque islands. The
-    //home marker (added after buildings) stays on top of everything.
+    //Z-order: this layer pair is added before the helios-buildings-*
+    //layers, so buildings still emerge through the disc as opaque
+    //islands. The home marker (added after buildings) stays on top
+    //of everything.
     private _initCloudCoverDisc(): void
     {
         if (!this.map)
@@ -1202,25 +1230,87 @@ export class HeliosEngine
         }
     }
 
+    //Resolves the configured building radius (metres). Falls back to
+    //DEFAULT_BUILDING_RADIUS_M for missing or invalid input. Clamped
+    //to a sane range so a stray editor value can't accidentally
+    //trigger fetching dozens of tiles.
+    private _buildingRadiusMeters(): number
+    {
+        const v = Number(this.cfg['building-radius']);
+        if (!Number.isFinite(v) || v <= 0)
+        {
+            return DEFAULT_BUILDING_RADIUS_M;
+        }
+        return Math.min(1000, Math.max(20, v));
+    }
+
+    //Resolves the configured surroundings opacity (0..1). Falls back
+    //to DEFAULT_BUILDING_OPACITY for missing or invalid input.
+    private _buildingOpacity(): number
+    {
+        const v = Number(this.cfg['building-opacity']);
+        if (!Number.isFinite(v))
+        {
+            return DEFAULT_BUILDING_OPACITY;
+        }
+        return Math.min(1, Math.max(0, v));
+    }
+
+    //Adds the two custom building layers around the home:
+    //
+    //  - helios-buildings-surroundings : every building within the
+    //    configured radius of the home, painted at the configured
+    //    opacity (default ~25%). Conveys urban context without
+    //    competing visually with the data overlays.
+    //  - helios-buildings-home : the home itself (whichever polygon
+    //    contains the home coordinates), painted at full opacity in
+    //    the same neutral grey. Reads as the focal point.
+    //
+    //Compared to the previous single layer fed from MapTiler's
+    //"helios-planet" source-layer, this design (a) renders only the
+    //handful of buildings the user actually cares about, eliminating
+    //the per-frame cost of thousands of fill-extrusions in dense
+    //urban areas, and (b) cleanly isolates the home so future
+    //iterations can give it special treatment (PV-on-roof rendering,
+    //per-room data overlays, etc.) without per-feature MapLibre
+    //expression gymnastics.
+    //
+    //The building GeoJSON is fetched once per (home, radius) combo
+    //in helios-buildings.ts; subsequent calls to _addBuildings()
+    //(e.g. on theme switch, which rebuilds the whole style) reuse
+    //the cached data without re-hitting the API.
     private _addBuildings(): void
     {
         if (!this.map)
         {
             return;
         }
+
+        //Drop the v1.0 layer if a stale build left it around — it
+        //pulled from MapTiler's vector source and would render
+        //thousands of extrusions next to our trimmed-down ones.
         if (this.map.getLayer('helios-buildings'))
         {
             this.map.removeLayer('helios-buildings');
         }
+        if (this.map.getLayer('helios-buildings-surroundings'))
+        {
+            this.map.removeLayer('helios-buildings-surroundings');
+        }
+        if (this.map.getLayer('helios-buildings-home'))
+        {
+            this.map.removeLayer('helios-buildings-home');
+        }
 
         //Hide any fill-extrusion layer the active style ships natively.
         //The Streets style includes its own 3D buildings; without this
-        //pass our custom helios-buildings layer would Z-fight against
-        //them since both extrude the same source-layer at the same
-        //heights.
+        //pass our two helios building layers would Z-fight against
+        //them since both extrude footprints at the same heights.
         this.map.getStyle().layers?.forEach(l =>
         {
-            if (l.type === 'fill-extrusion' && l.id !== 'helios-buildings')
+            if (l.type === 'fill-extrusion'
+                && l.id !== 'helios-buildings-surroundings'
+                && l.id !== 'helios-buildings-home')
             {
                 try
                 {
@@ -1230,45 +1320,137 @@ export class HeliosEngine
             }
         });
 
-        if (!this.map.getSource('helios-planet'))
+        const opacity   = this._buildingOpacity();
+        const homeData  = this._buildingsData?.home
+                       ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection;
+        const surrData  = this._buildingsData?.surroundings
+                       ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection;
+
+        if (!this.map.getSource('helios-buildings-surroundings-src'))
         {
-            this.map.addSource('helios-planet',
+            this.map.addSource('helios-buildings-surroundings-src',
             {
-                type: 'vector',
-                url:  `https://api.maptiler.com/tiles/v3/tiles.json?key=${this.apiKey}`
+                type: 'geojson',
+                data: surrData
             });
         }
+        else
+        {
+            (this.map.getSource('helios-buildings-surroundings-src') as maplibregl.GeoJSONSource)
+                .setData(surrData);
+        }
 
+        if (!this.map.getSource('helios-buildings-home-src'))
+        {
+            this.map.addSource('helios-buildings-home-src',
+            {
+                type: 'geojson',
+                data: homeData
+            });
+        }
+        else
+        {
+            (this.map.getSource('helios-buildings-home-src') as maplibregl.GeoJSONSource)
+                .setData(homeData);
+        }
+
+        //Surroundings first, then home, so the home draws on top in
+        //the rare case the polygons overlap (the home footprint
+        //should also be absent from the surroundings collection, but
+        //we don't rely on that for layering correctness).
         this.map.addLayer(
         {
-            id:             'helios-buildings',
-            source:         'helios-planet',
-            'source-layer': 'building',
-            type:           'fill-extrusion',
-            minzoom:        15,
+            id:     'helios-buildings-surroundings',
+            source: 'helios-buildings-surroundings-src',
+            type:   'fill-extrusion',
             paint:
             {
-                //Neutral cool grey, hard-coded. We briefly exposed
-                //a `building-color` config but the buildings are
-                //always urban-context backdrop here — making the
-                //colour configurable proved to be a footgun (any
-                //tint with hue ate visual room from the chips and
-                //leaders that carry the actual data) and was
-                //removed in beta.12.
+                //Neutral cool grey — same hard-coded tone as the
+                //old single-layer rendering. We briefly exposed a
+                //`building-color` config; making it adjustable
+                //proved a footgun (any hue ate visual room from
+                //the data overlays) and it was retired in beta.12.
                 'fill-extrusion-color':   'rgba(210,210,215,1)',
                 'fill-extrusion-height':  ['get', 'render_height'],
                 'fill-extrusion-base':    ['get', 'render_min_height'],
-                //Opacity ramps in between zoom 15 and 16; top
-                //opacity sits at 0.75 — buildings are present
-                //enough to read as solid massing without burying
-                //the basemap or competing with the chips and
-                //leaders that carry the actual data.
-                'fill-extrusion-opacity': [
-                    'interpolate', ['linear'], ['zoom'],
-                    15, 0,
-                    16, 0.75
-                ]
+                'fill-extrusion-opacity': opacity
             }
+        });
+
+        this.map.addLayer(
+        {
+            id:     'helios-buildings-home',
+            source: 'helios-buildings-home-src',
+            type:   'fill-extrusion',
+            paint:
+            {
+                'fill-extrusion-color':   'rgba(210,210,215,1)',
+                'fill-extrusion-height':  ['get', 'render_height'],
+                'fill-extrusion-base':    ['get', 'render_min_height'],
+                'fill-extrusion-opacity': 1
+            }
+        });
+
+        //Kick off the fetch in the background. Layers are already
+        //wired and will start drawing as soon as the GeoJSON sources
+        //get populated. If cached data exists for this (home, radius)
+        //combo we skip the network call entirely.
+        this._ensureBuildingsFetched();
+    }
+
+    //Idempotent fetch helper. Reuses _buildingsData across style
+    //reloads; only re-hits the MapTiler API when the home position
+    //or the configured radius actually changed.
+    private _ensureBuildingsFetched(): void
+    {
+        if (!this.map)
+        {
+            return;
+        }
+        const apiKey = this.apiKey;
+        if (!apiKey)
+        {
+            return;
+        }
+        const radius = this._buildingRadiusMeters();
+        const key    = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}`;
+
+        if (this._buildingsData && this._buildingsFetchKey === key)
+        {
+            return;
+        }
+
+        //Abort any in-flight request so a rapid radius change
+        //doesn't leave a slow tile from the previous fetch racing
+        //the new one to populate the sources.
+        this._buildingsAbort?.abort();
+        const ac = new AbortController();
+        this._buildingsAbort   = ac;
+        this._buildingsFetchKey = key;
+
+        fetchBuildingsAroundHome(
+        {
+            homeLon:      this.homeLon,
+            homeLat:      this.homeLat,
+            radiusMeters: radius,
+            apiKey,
+            signal:       ac.signal
+        })
+        .then(result =>
+        {
+            if (ac.signal.aborted || !this.map) return;
+            this._buildingsData = result;
+            const homeSrc = this.map.getSource('helios-buildings-home-src') as
+                            maplibregl.GeoJSONSource | undefined;
+            const surrSrc = this.map.getSource('helios-buildings-surroundings-src') as
+                            maplibregl.GeoJSONSource | undefined;
+            homeSrc?.setData(result.home);
+            surrSrc?.setData(result.surroundings);
+        })
+        .catch(err =>
+        {
+            if ((err as { name?: string })?.name === 'AbortError') return;
+            console.warn('[HELIOS] Buildings fetch failed:', err);
         });
     }
 
@@ -1464,51 +1646,54 @@ export class HeliosEngine
         //unified palette there is no longer a user-configurable colour
         //to honour, so the daylight base is hard-coded to the same
         //rgba(210,210,215,1) used by _addBuildings().
-        if (this.map.getLayer('helios-buildings'))
+        try
         {
-            try
+            const baseHex = '#d2d2d7';
+
+            let buildingHex: string;
+            if (altitude < -6)
             {
-                const baseHex = '#d2d2d7';
-
-                let buildingHex: string;
-                if (altitude < -6)
-                {
-                    //Deep night — buildings as dark indigo silhouettes
-                    buildingHex = this._mixHex(baseHex, '#0a0e1a', 0.85);
-                }
-                else if (altitude < 0)
-                {
-                    //Civil twilight — fade in/out of night
-                    const u = (altitude + 6) / 6;
-                    const dark = this._mixHex(baseHex, '#0a0e1a', 0.85);
-                    const dusk = this._mixHex(baseHex, '#2a2540', 0.55);
-                    buildingHex = this._lerpHex(dark, dusk, u);
-                }
-                else if (altitude < 6)
-                {
-                    //Sunrise/sunset — warm wash
-                    const u = altitude / 6;
-                    const dusk = this._mixHex(baseHex, '#2a2540', 0.55);
-                    const warm = this._mixHex(baseHex, '#5a3220', 0.35);
-                    buildingHex = this._lerpHex(dusk, warm, u);
-                }
-                else if (altitude < 20)
-                {
-                    //Low sun — fade warm tint back to base
-                    const u = (altitude - 6) / 14;
-                    const warm = this._mixHex(baseHex, '#5a3220', 0.35);
-                    buildingHex = this._lerpHex(warm, baseHex, u);
-                }
-                else
-                {
-                    //Full daylight — exact user-defined colour
-                    buildingHex = baseHex;
-                }
-
-                this.map.setPaintProperty('helios-buildings', 'fill-extrusion-color', buildingHex);
+                //Deep night — buildings as dark indigo silhouettes
+                buildingHex = this._mixHex(baseHex, '#0a0e1a', 0.85);
             }
-            catch (_) {}
+            else if (altitude < 0)
+            {
+                //Civil twilight — fade in/out of night
+                const u = (altitude + 6) / 6;
+                const dark = this._mixHex(baseHex, '#0a0e1a', 0.85);
+                const dusk = this._mixHex(baseHex, '#2a2540', 0.55);
+                buildingHex = this._lerpHex(dark, dusk, u);
+            }
+            else if (altitude < 6)
+            {
+                //Sunrise/sunset — warm wash
+                const u = altitude / 6;
+                const dusk = this._mixHex(baseHex, '#2a2540', 0.55);
+                const warm = this._mixHex(baseHex, '#5a3220', 0.35);
+                buildingHex = this._lerpHex(dusk, warm, u);
+            }
+            else if (altitude < 20)
+            {
+                //Low sun — fade warm tint back to base
+                const u = (altitude - 6) / 14;
+                const warm = this._mixHex(baseHex, '#5a3220', 0.35);
+                buildingHex = this._lerpHex(warm, baseHex, u);
+            }
+            else
+            {
+                //Full daylight — exact user-defined colour
+                buildingHex = baseHex;
+            }
+
+            for (const lid of ['helios-buildings-surroundings', 'helios-buildings-home'])
+            {
+                if (this.map.getLayer(lid))
+                {
+                    this.map.setPaintProperty(lid, 'fill-extrusion-color', buildingHex);
+                }
+            }
         }
+        catch (_) {}
     }
 
     //v1.4 — the 'standard' precision tier was retired: a single
@@ -2173,7 +2358,9 @@ export class HeliosEngine
 
     public updateConfig(cfg: HeliosConfig): void
     {
-        const prevStyleId = this._resolveMapStyle().id;
+        const prevStyleId  = this._resolveMapStyle().id;
+        const prevRadius   = this._buildingRadiusMeters();
+        const prevOpacity  = this._buildingOpacity();
         this.cfg = { ...cfg };
 
         if (!this.map)
@@ -2223,6 +2410,28 @@ export class HeliosEngine
         //setLayoutProperty is cheap (no geometry rebuild) so we don't
         //bother diffing the old vs new value.
         this._applyLabelVisibility();
+
+        //React to building-radius / building-opacity changes. A
+        //radius change invalidates the cached GeoJSON so the next
+        //_addBuildings() call refetches; an opacity-only change is
+        //a cheap paint property update — no refetch needed.
+        const nextRadius  = this._buildingRadiusMeters();
+        const nextOpacity = this._buildingOpacity();
+        if (nextRadius !== prevRadius)
+        {
+            this._buildingsData     = null;
+            this._buildingsFetchKey = '';
+            this._addBuildings();
+        }
+        else if (nextOpacity !== prevOpacity
+              && this.map.getLayer('helios-buildings-surroundings'))
+        {
+            this.map.setPaintProperty(
+                'helios-buildings-surroundings',
+                'fill-extrusion-opacity',
+                nextOpacity
+            );
+        }
 
         if (this._homeHourlyData && this._mapReady)
         {
@@ -2296,6 +2505,7 @@ export class HeliosEngine
         window.clearInterval(this._skyTimer);
         window.clearTimeout(this._resizeDebounceTimer);
         this._fetchAbortController?.abort();
+        this._buildingsAbort?.abort();
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
         {

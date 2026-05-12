@@ -88,6 +88,13 @@ export interface Translations
         batteryPowerEntity:       string;
         batteryPowerEntityHelp:   string;
         batteryColor:             string;
+        //v1.2.0-beta.6 — radius (m) around the home within which
+        //surrounding buildings are rendered, and the opacity of
+        //those surroundings (the home itself stays fully opaque).
+        buildingsSection:         string;
+        buildingsHint:            string;
+        buildingRadius:           string;
+        buildingOpacity:          string;
     };
 }
 

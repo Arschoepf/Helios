@@ -24753,6 +24753,1375 @@ async function fetchHomePointData(lat, lon, elevation, precision, signal) {
     return null;
   }
 }
+function Point(x2, y3) {
+  this.x = x2;
+  this.y = y3;
+}
+Point.prototype = {
+  /**
+   * Clone this point, returning a new point that can be modified
+   * without affecting the old one.
+   * @return {Point} the clone
+   */
+  clone() {
+    return new Point(this.x, this.y);
+  },
+  /**
+   * Add this point's x & y coordinates to another point,
+   * yielding a new point.
+   * @param {Point} p the other point
+   * @return {Point} output point
+   */
+  add(p2) {
+    return this.clone()._add(p2);
+  },
+  /**
+   * Subtract this point's x & y coordinates to from point,
+   * yielding a new point.
+   * @param {Point} p the other point
+   * @return {Point} output point
+   */
+  sub(p2) {
+    return this.clone()._sub(p2);
+  },
+  /**
+   * Multiply this point's x & y coordinates by point,
+   * yielding a new point.
+   * @param {Point} p the other point
+   * @return {Point} output point
+   */
+  multByPoint(p2) {
+    return this.clone()._multByPoint(p2);
+  },
+  /**
+   * Divide this point's x & y coordinates by point,
+   * yielding a new point.
+   * @param {Point} p the other point
+   * @return {Point} output point
+   */
+  divByPoint(p2) {
+    return this.clone()._divByPoint(p2);
+  },
+  /**
+   * Multiply this point's x & y coordinates by a factor,
+   * yielding a new point.
+   * @param {number} k factor
+   * @return {Point} output point
+   */
+  mult(k2) {
+    return this.clone()._mult(k2);
+  },
+  /**
+   * Divide this point's x & y coordinates by a factor,
+   * yielding a new point.
+   * @param {number} k factor
+   * @return {Point} output point
+   */
+  div(k2) {
+    return this.clone()._div(k2);
+  },
+  /**
+   * Rotate this point around the 0, 0 origin by an angle a,
+   * given in radians
+   * @param {number} a angle to rotate around, in radians
+   * @return {Point} output point
+   */
+  rotate(a2) {
+    return this.clone()._rotate(a2);
+  },
+  /**
+   * Rotate this point around p point by an angle a,
+   * given in radians
+   * @param {number} a angle to rotate around, in radians
+   * @param {Point} p Point to rotate around
+   * @return {Point} output point
+   */
+  rotateAround(a2, p2) {
+    return this.clone()._rotateAround(a2, p2);
+  },
+  /**
+   * Multiply this point by a 4x1 transformation matrix
+   * @param {[number, number, number, number]} m transformation matrix
+   * @return {Point} output point
+   */
+  matMult(m2) {
+    return this.clone()._matMult(m2);
+  },
+  /**
+   * Calculate this point but as a unit vector from 0, 0, meaning
+   * that the distance from the resulting point to the 0, 0
+   * coordinate will be equal to 1 and the angle from the resulting
+   * point to the 0, 0 coordinate will be the same as before.
+   * @return {Point} unit vector point
+   */
+  unit() {
+    return this.clone()._unit();
+  },
+  /**
+   * Compute a perpendicular point, where the new y coordinate
+   * is the old x coordinate and the new x coordinate is the old y
+   * coordinate multiplied by -1
+   * @return {Point} perpendicular point
+   */
+  perp() {
+    return this.clone()._perp();
+  },
+  /**
+   * Return a version of this point with the x & y coordinates
+   * rounded to integers.
+   * @return {Point} rounded point
+   */
+  round() {
+    return this.clone()._round();
+  },
+  /**
+   * Return the magnitude of this point: this is the Euclidean
+   * distance from the 0, 0 coordinate to this point's x and y
+   * coordinates.
+   * @return {number} magnitude
+   */
+  mag() {
+    return Math.sqrt(this.x * this.x + this.y * this.y);
+  },
+  /**
+   * Judge whether this point is equal to another point, returning
+   * true or false.
+   * @param {Point} other the other point
+   * @return {boolean} whether the points are equal
+   */
+  equals(other) {
+    return this.x === other.x && this.y === other.y;
+  },
+  /**
+   * Calculate the distance from this point to another point
+   * @param {Point} p the other point
+   * @return {number} distance
+   */
+  dist(p2) {
+    return Math.sqrt(this.distSqr(p2));
+  },
+  /**
+   * Calculate the distance from this point to another point,
+   * without the square root step. Useful if you're comparing
+   * relative distances.
+   * @param {Point} p the other point
+   * @return {number} distance
+   */
+  distSqr(p2) {
+    const dx = p2.x - this.x, dy = p2.y - this.y;
+    return dx * dx + dy * dy;
+  },
+  /**
+   * Get the angle from the 0, 0 coordinate to this point, in radians
+   * coordinates.
+   * @return {number} angle
+   */
+  angle() {
+    return Math.atan2(this.y, this.x);
+  },
+  /**
+   * Get the angle from this point to another point, in radians
+   * @param {Point} b the other point
+   * @return {number} angle
+   */
+  angleTo(b2) {
+    return Math.atan2(this.y - b2.y, this.x - b2.x);
+  },
+  /**
+   * Get the angle between this point and another point, in radians
+   * @param {Point} b the other point
+   * @return {number} angle
+   */
+  angleWith(b2) {
+    return this.angleWithSep(b2.x, b2.y);
+  },
+  /**
+   * Find the angle of the two vectors, solving the formula for
+   * the cross product a x b = |a||b|sin(θ) for θ.
+   * @param {number} x the x-coordinate
+   * @param {number} y the y-coordinate
+   * @return {number} the angle in radians
+   */
+  angleWithSep(x2, y3) {
+    return Math.atan2(
+      this.x * y3 - this.y * x2,
+      this.x * x2 + this.y * y3
+    );
+  },
+  /** @param {[number, number, number, number]} m */
+  _matMult(m2) {
+    const x2 = m2[0] * this.x + m2[1] * this.y, y3 = m2[2] * this.x + m2[3] * this.y;
+    this.x = x2;
+    this.y = y3;
+    return this;
+  },
+  /** @param {Point} p */
+  _add(p2) {
+    this.x += p2.x;
+    this.y += p2.y;
+    return this;
+  },
+  /** @param {Point} p */
+  _sub(p2) {
+    this.x -= p2.x;
+    this.y -= p2.y;
+    return this;
+  },
+  /** @param {number} k */
+  _mult(k2) {
+    this.x *= k2;
+    this.y *= k2;
+    return this;
+  },
+  /** @param {number} k */
+  _div(k2) {
+    this.x /= k2;
+    this.y /= k2;
+    return this;
+  },
+  /** @param {Point} p */
+  _multByPoint(p2) {
+    this.x *= p2.x;
+    this.y *= p2.y;
+    return this;
+  },
+  /** @param {Point} p */
+  _divByPoint(p2) {
+    this.x /= p2.x;
+    this.y /= p2.y;
+    return this;
+  },
+  _unit() {
+    this._div(this.mag());
+    return this;
+  },
+  _perp() {
+    const y3 = this.y;
+    this.y = this.x;
+    this.x = -y3;
+    return this;
+  },
+  /** @param {number} angle */
+  _rotate(angle) {
+    const cos = Math.cos(angle), sin = Math.sin(angle), x2 = cos * this.x - sin * this.y, y3 = sin * this.x + cos * this.y;
+    this.x = x2;
+    this.y = y3;
+    return this;
+  },
+  /**
+   * @param {number} angle
+   * @param {Point} p
+   */
+  _rotateAround(angle, p2) {
+    const cos = Math.cos(angle), sin = Math.sin(angle), x2 = p2.x + cos * (this.x - p2.x) - sin * (this.y - p2.y), y3 = p2.y + sin * (this.x - p2.x) + cos * (this.y - p2.y);
+    this.x = x2;
+    this.y = y3;
+    return this;
+  },
+  _round() {
+    this.x = Math.round(this.x);
+    this.y = Math.round(this.y);
+    return this;
+  },
+  constructor: Point
+};
+Point.convert = function(p2) {
+  if (p2 instanceof Point) {
+    return (
+      /** @type {Point} */
+      p2
+    );
+  }
+  if (Array.isArray(p2)) {
+    return new Point(+p2[0], +p2[1]);
+  }
+  if (p2.x !== void 0 && p2.y !== void 0) {
+    return new Point(+p2.x, +p2.y);
+  }
+  throw new Error("Expected [x, y] or {x, y} point format");
+};
+class VectorTileFeature {
+  /**
+   * @param {Pbf} pbf
+   * @param {number} end
+   * @param {number} extent
+   * @param {string[]} keys
+   * @param {(number | string | boolean)[]} values
+   */
+  constructor(pbf, end, extent, keys, values) {
+    this.properties = {};
+    this.extent = extent;
+    this.type = 0;
+    this.id = void 0;
+    this._pbf = pbf;
+    this._geometry = -1;
+    this._keys = keys;
+    this._values = values;
+    pbf.readFields(readFeature, this, end);
+  }
+  loadGeometry() {
+    const pbf = this._pbf;
+    pbf.pos = this._geometry;
+    const end = pbf.readVarint() + pbf.pos;
+    const lines = [];
+    let line;
+    let cmd = 1;
+    let length = 0;
+    let x2 = 0;
+    let y3 = 0;
+    while (pbf.pos < end) {
+      if (length <= 0) {
+        const cmdLen = pbf.readVarint();
+        cmd = cmdLen & 7;
+        length = cmdLen >> 3;
+      }
+      length--;
+      if (cmd === 1 || cmd === 2) {
+        x2 += pbf.readSVarint();
+        y3 += pbf.readSVarint();
+        if (cmd === 1) {
+          if (line) lines.push(line);
+          line = [];
+        }
+        if (line) line.push(new Point(x2, y3));
+      } else if (cmd === 7) {
+        if (line) {
+          line.push(line[0].clone());
+        }
+      } else {
+        throw new Error(`unknown command ${cmd}`);
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  bbox() {
+    const pbf = this._pbf;
+    pbf.pos = this._geometry;
+    const end = pbf.readVarint() + pbf.pos;
+    let cmd = 1, length = 0, x2 = 0, y3 = 0, x1 = Infinity, x22 = -Infinity, y1 = Infinity, y22 = -Infinity;
+    while (pbf.pos < end) {
+      if (length <= 0) {
+        const cmdLen = pbf.readVarint();
+        cmd = cmdLen & 7;
+        length = cmdLen >> 3;
+      }
+      length--;
+      if (cmd === 1 || cmd === 2) {
+        x2 += pbf.readSVarint();
+        y3 += pbf.readSVarint();
+        if (x2 < x1) x1 = x2;
+        if (x2 > x22) x22 = x2;
+        if (y3 < y1) y1 = y3;
+        if (y3 > y22) y22 = y3;
+      } else if (cmd !== 7) {
+        throw new Error(`unknown command ${cmd}`);
+      }
+    }
+    return [x1, y1, x22, y22];
+  }
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @return {Feature}
+   */
+  toGeoJSON(x2, y3, z2) {
+    const size = this.extent * Math.pow(2, z2), x0 = this.extent * x2, y0 = this.extent * y3, vtCoords = this.loadGeometry();
+    function projectPoint(p2) {
+      return [
+        (p2.x + x0) * 360 / size - 180,
+        360 / Math.PI * Math.atan(Math.exp((1 - (p2.y + y0) * 2 / size) * Math.PI)) - 90
+      ];
+    }
+    function projectLine(line) {
+      return line.map(projectPoint);
+    }
+    let geometry;
+    if (this.type === 1) {
+      const points = [];
+      for (const line of vtCoords) {
+        points.push(line[0]);
+      }
+      const coordinates = projectLine(points);
+      geometry = points.length === 1 ? { type: "Point", coordinates: coordinates[0] } : { type: "MultiPoint", coordinates };
+    } else if (this.type === 2) {
+      const coordinates = vtCoords.map(projectLine);
+      geometry = coordinates.length === 1 ? { type: "LineString", coordinates: coordinates[0] } : { type: "MultiLineString", coordinates };
+    } else if (this.type === 3) {
+      const polygons = classifyRings(vtCoords);
+      const coordinates = [];
+      for (const polygon of polygons) {
+        coordinates.push(polygon.map(projectLine));
+      }
+      geometry = coordinates.length === 1 ? { type: "Polygon", coordinates: coordinates[0] } : { type: "MultiPolygon", coordinates };
+    } else {
+      throw new Error("unknown feature type");
+    }
+    const result = {
+      type: "Feature",
+      geometry,
+      properties: this.properties
+    };
+    if (this.id != null) {
+      result.id = this.id;
+    }
+    return result;
+  }
+}
+VectorTileFeature.types = ["Unknown", "Point", "LineString", "Polygon"];
+function readFeature(tag, feature, pbf) {
+  if (tag === 1) feature.id = pbf.readVarint();
+  else if (tag === 2) readTag(pbf, feature);
+  else if (tag === 3) feature.type = /** @type {0 | 1 | 2 | 3} */
+  pbf.readVarint();
+  else if (tag === 4) feature._geometry = pbf.pos;
+}
+function readTag(pbf, feature) {
+  const end = pbf.readVarint() + pbf.pos;
+  while (pbf.pos < end) {
+    const key = feature._keys[pbf.readVarint()];
+    const value = feature._values[pbf.readVarint()];
+    feature.properties[key] = value;
+  }
+}
+function classifyRings(rings) {
+  const len = rings.length;
+  if (len <= 1) return [rings];
+  const polygons = [];
+  let polygon, ccw;
+  for (let i2 = 0; i2 < len; i2++) {
+    const area = signedArea(rings[i2]);
+    if (area === 0) continue;
+    if (ccw === void 0) ccw = area < 0;
+    if (ccw === area < 0) {
+      if (polygon) polygons.push(polygon);
+      polygon = [rings[i2]];
+    } else if (polygon) {
+      polygon.push(rings[i2]);
+    }
+  }
+  if (polygon) polygons.push(polygon);
+  return polygons;
+}
+function signedArea(ring) {
+  let sum = 0;
+  for (let i2 = 0, len = ring.length, j = len - 1, p1, p2; i2 < len; j = i2++) {
+    p1 = ring[i2];
+    p2 = ring[j];
+    sum += (p2.x - p1.x) * (p1.y + p2.y);
+  }
+  return sum;
+}
+class VectorTileLayer {
+  /**
+   * @param {Pbf} pbf
+   * @param {number} [end]
+   */
+  constructor(pbf, end) {
+    this.version = 1;
+    this.name = "";
+    this.extent = 4096;
+    this.length = 0;
+    this._pbf = pbf;
+    this._keys = [];
+    this._values = [];
+    this._features = [];
+    pbf.readFields(readLayer, this, end);
+    this.length = this._features.length;
+  }
+  /** return feature `i` from this layer as a `VectorTileFeature`
+   * @param {number} i
+   */
+  feature(i2) {
+    if (i2 < 0 || i2 >= this._features.length) throw new Error("feature index out of bounds");
+    this._pbf.pos = this._features[i2];
+    const end = this._pbf.readVarint() + this._pbf.pos;
+    return new VectorTileFeature(this._pbf, end, this.extent, this._keys, this._values);
+  }
+}
+function readLayer(tag, layer, pbf) {
+  if (tag === 15) layer.version = pbf.readVarint();
+  else if (tag === 1) layer.name = pbf.readString();
+  else if (tag === 5) layer.extent = pbf.readVarint();
+  else if (tag === 2) layer._features.push(pbf.pos);
+  else if (tag === 3) layer._keys.push(pbf.readString());
+  else if (tag === 4) layer._values.push(readValueMessage(pbf));
+}
+function readValueMessage(pbf) {
+  let value = null;
+  const end = pbf.readVarint() + pbf.pos;
+  while (pbf.pos < end) {
+    const tag = pbf.readVarint() >> 3;
+    value = tag === 1 ? pbf.readString() : tag === 2 ? pbf.readFloat() : tag === 3 ? pbf.readDouble() : tag === 4 ? pbf.readVarint64() : tag === 5 ? pbf.readVarint() : tag === 6 ? pbf.readSVarint() : tag === 7 ? pbf.readBoolean() : null;
+  }
+  if (value == null) {
+    throw new Error("unknown feature value");
+  }
+  return value;
+}
+class VectorTile {
+  /**
+   * @param {Pbf} pbf
+   * @param {number} [end]
+   */
+  constructor(pbf, end) {
+    this.layers = pbf.readFields(readTile, {}, end);
+  }
+}
+function readTile(tag, layers, pbf) {
+  if (tag === 3) {
+    const layer = new VectorTileLayer(pbf, pbf.readVarint() + pbf.pos);
+    if (layer.length) layers[layer.name] = layer;
+  }
+}
+const SHIFT_LEFT_32 = (1 << 16) * (1 << 16);
+const SHIFT_RIGHT_32 = 1 / SHIFT_LEFT_32;
+const TEXT_DECODER_MIN_LENGTH = 12;
+const utf8TextDecoder = typeof TextDecoder === "undefined" ? null : new TextDecoder("utf-8");
+const PBF_VARINT = 0;
+const PBF_FIXED64 = 1;
+const PBF_BYTES = 2;
+const PBF_FIXED32 = 5;
+class Pbf {
+  /**
+   * @param {Uint8Array | ArrayBuffer} [buf]
+   */
+  constructor(buf = new Uint8Array(16)) {
+    this.buf = ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf);
+    this.dataView = new DataView(this.buf.buffer);
+    this.pos = 0;
+    this.type = 0;
+    this.length = this.buf.length;
+  }
+  // === READING =================================================================
+  /**
+   * @template T
+   * @param {(tag: number, result: T, pbf: Pbf) => void} readField
+   * @param {T} result
+   * @param {number} [end]
+   */
+  readFields(readField, result, end = this.length) {
+    while (this.pos < end) {
+      const val = this.readVarint(), tag = val >> 3, startPos = this.pos;
+      this.type = val & 7;
+      readField(tag, result, this);
+      if (this.pos === startPos) this.skip(val);
+    }
+    return result;
+  }
+  /**
+   * @template T
+   * @param {(tag: number, result: T, pbf: Pbf) => void} readField
+   * @param {T} result
+   */
+  readMessage(readField, result) {
+    return this.readFields(readField, result, this.readVarint() + this.pos);
+  }
+  readFixed32() {
+    const val = this.dataView.getUint32(this.pos, true);
+    this.pos += 4;
+    return val;
+  }
+  readSFixed32() {
+    const val = this.dataView.getInt32(this.pos, true);
+    this.pos += 4;
+    return val;
+  }
+  // 64-bit int handling is based on github.com/dpw/node-buffer-more-ints (MIT-licensed)
+  readFixed64() {
+    const val = this.dataView.getUint32(this.pos, true) + this.dataView.getUint32(this.pos + 4, true) * SHIFT_LEFT_32;
+    this.pos += 8;
+    return val;
+  }
+  readSFixed64() {
+    const val = this.dataView.getUint32(this.pos, true) + this.dataView.getInt32(this.pos + 4, true) * SHIFT_LEFT_32;
+    this.pos += 8;
+    return val;
+  }
+  readFloat() {
+    const val = this.dataView.getFloat32(this.pos, true);
+    this.pos += 4;
+    return val;
+  }
+  readDouble() {
+    const val = this.dataView.getFloat64(this.pos, true);
+    this.pos += 8;
+    return val;
+  }
+  /**
+   * @param {boolean} [isSigned]
+   */
+  readVarint(isSigned) {
+    const buf = this.buf;
+    let val, b2;
+    b2 = buf[this.pos++];
+    val = b2 & 127;
+    if (b2 < 128) return val;
+    b2 = buf[this.pos++];
+    val |= (b2 & 127) << 7;
+    if (b2 < 128) return val;
+    b2 = buf[this.pos++];
+    val |= (b2 & 127) << 14;
+    if (b2 < 128) return val;
+    b2 = buf[this.pos++];
+    val |= (b2 & 127) << 21;
+    if (b2 < 128) return val;
+    b2 = buf[this.pos];
+    val |= (b2 & 15) << 28;
+    return readVarintRemainder(val, isSigned, this);
+  }
+  readVarint64() {
+    return this.readVarint(true);
+  }
+  readSVarint() {
+    const num = this.readVarint();
+    return num % 2 === 1 ? (num + 1) / -2 : num / 2;
+  }
+  readBoolean() {
+    return Boolean(this.readVarint());
+  }
+  readString() {
+    const end = this.readVarint() + this.pos;
+    const pos = this.pos;
+    this.pos = end;
+    if (end - pos >= TEXT_DECODER_MIN_LENGTH && utf8TextDecoder) {
+      return utf8TextDecoder.decode(this.buf.subarray(pos, end));
+    }
+    return readUtf8(this.buf, pos, end);
+  }
+  readBytes() {
+    const end = this.readVarint() + this.pos, buffer = this.buf.subarray(this.pos, end);
+    this.pos = end;
+    return buffer;
+  }
+  // verbose for performance reasons; doesn't affect gzipped size
+  /**
+   * @param {number[]} [arr]
+   * @param {boolean} [isSigned]
+   */
+  readPackedVarint(arr = [], isSigned) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readVarint(isSigned));
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedSVarint(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readSVarint());
+    return arr;
+  }
+  /** @param {boolean[]} [arr] */
+  readPackedBoolean(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readBoolean());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedFloat(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readFloat());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedDouble(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readDouble());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedFixed32(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readFixed32());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedSFixed32(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readSFixed32());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedFixed64(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readFixed64());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedSFixed64(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readSFixed64());
+    return arr;
+  }
+  readPackedEnd() {
+    return this.type === PBF_BYTES ? this.readVarint() + this.pos : this.pos + 1;
+  }
+  /** @param {number} val */
+  skip(val) {
+    const type = val & 7;
+    if (type === PBF_VARINT) while (this.buf[this.pos++] > 127) {
+    }
+    else if (type === PBF_BYTES) this.pos = this.readVarint() + this.pos;
+    else if (type === PBF_FIXED32) this.pos += 4;
+    else if (type === PBF_FIXED64) this.pos += 8;
+    else throw new Error(`Unimplemented type: ${type}`);
+  }
+  // === WRITING =================================================================
+  /**
+   * @param {number} tag
+   * @param {number} type
+   */
+  writeTag(tag, type) {
+    this.writeVarint(tag << 3 | type);
+  }
+  /** @param {number} min */
+  realloc(min) {
+    let length = this.length || 16;
+    while (length < this.pos + min) length *= 2;
+    if (length !== this.length) {
+      const buf = new Uint8Array(length);
+      buf.set(this.buf);
+      this.buf = buf;
+      this.dataView = new DataView(buf.buffer);
+      this.length = length;
+    }
+  }
+  finish() {
+    this.length = this.pos;
+    this.pos = 0;
+    return this.buf.subarray(0, this.length);
+  }
+  /** @param {number} val */
+  writeFixed32(val) {
+    this.realloc(4);
+    this.dataView.setInt32(this.pos, val, true);
+    this.pos += 4;
+  }
+  /** @param {number} val */
+  writeSFixed32(val) {
+    this.realloc(4);
+    this.dataView.setInt32(this.pos, val, true);
+    this.pos += 4;
+  }
+  /** @param {number} val */
+  writeFixed64(val) {
+    this.realloc(8);
+    this.dataView.setInt32(this.pos, val & -1, true);
+    this.dataView.setInt32(this.pos + 4, Math.floor(val * SHIFT_RIGHT_32), true);
+    this.pos += 8;
+  }
+  /** @param {number} val */
+  writeSFixed64(val) {
+    this.realloc(8);
+    this.dataView.setInt32(this.pos, val & -1, true);
+    this.dataView.setInt32(this.pos + 4, Math.floor(val * SHIFT_RIGHT_32), true);
+    this.pos += 8;
+  }
+  /** @param {number} val */
+  writeVarint(val) {
+    val = +val || 0;
+    if (val > 268435455 || val < 0) {
+      writeBigVarint(val, this);
+      return;
+    }
+    this.realloc(4);
+    this.buf[this.pos++] = val & 127 | (val > 127 ? 128 : 0);
+    if (val <= 127) return;
+    this.buf[this.pos++] = (val >>>= 7) & 127 | (val > 127 ? 128 : 0);
+    if (val <= 127) return;
+    this.buf[this.pos++] = (val >>>= 7) & 127 | (val > 127 ? 128 : 0);
+    if (val <= 127) return;
+    this.buf[this.pos++] = val >>> 7 & 127;
+  }
+  /** @param {number} val */
+  writeSVarint(val) {
+    this.writeVarint(val < 0 ? -val * 2 - 1 : val * 2);
+  }
+  /** @param {boolean} val */
+  writeBoolean(val) {
+    this.writeVarint(+val);
+  }
+  /** @param {string} str */
+  writeString(str) {
+    str = String(str);
+    this.realloc(str.length * 4);
+    this.pos++;
+    const startPos = this.pos;
+    this.pos = writeUtf8(this.buf, str, this.pos);
+    const len = this.pos - startPos;
+    if (len >= 128) makeRoomForExtraLength(startPos, len, this);
+    this.pos = startPos - 1;
+    this.writeVarint(len);
+    this.pos += len;
+  }
+  /** @param {number} val */
+  writeFloat(val) {
+    this.realloc(4);
+    this.dataView.setFloat32(this.pos, val, true);
+    this.pos += 4;
+  }
+  /** @param {number} val */
+  writeDouble(val) {
+    this.realloc(8);
+    this.dataView.setFloat64(this.pos, val, true);
+    this.pos += 8;
+  }
+  /** @param {Uint8Array} buffer */
+  writeBytes(buffer) {
+    const len = buffer.length;
+    this.writeVarint(len);
+    this.realloc(len);
+    for (let i2 = 0; i2 < len; i2++) this.buf[this.pos++] = buffer[i2];
+  }
+  /**
+   * @template T
+   * @param {(obj: T, pbf: Pbf) => void} fn
+   * @param {T} obj
+   */
+  writeRawMessage(fn, obj) {
+    this.pos++;
+    const startPos = this.pos;
+    fn(obj, this);
+    const len = this.pos - startPos;
+    if (len >= 128) makeRoomForExtraLength(startPos, len, this);
+    this.pos = startPos - 1;
+    this.writeVarint(len);
+    this.pos += len;
+  }
+  /**
+   * @template T
+   * @param {number} tag
+   * @param {(obj: T, pbf: Pbf) => void} fn
+   * @param {T} obj
+   */
+  writeMessage(tag, fn, obj) {
+    this.writeTag(tag, PBF_BYTES);
+    this.writeRawMessage(fn, obj);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedVarint(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedVarint, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedSVarint(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedSVarint, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {boolean[]} arr
+   */
+  writePackedBoolean(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedBoolean, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedFloat(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedFloat, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedDouble(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedDouble, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedFixed32(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedFixed32, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedSFixed32(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedSFixed32, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedFixed64(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedFixed64, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedSFixed64(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedSFixed64, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {Uint8Array} buffer
+   */
+  writeBytesField(tag, buffer) {
+    this.writeTag(tag, PBF_BYTES);
+    this.writeBytes(buffer);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeFixed32Field(tag, val) {
+    this.writeTag(tag, PBF_FIXED32);
+    this.writeFixed32(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeSFixed32Field(tag, val) {
+    this.writeTag(tag, PBF_FIXED32);
+    this.writeSFixed32(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeFixed64Field(tag, val) {
+    this.writeTag(tag, PBF_FIXED64);
+    this.writeFixed64(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeSFixed64Field(tag, val) {
+    this.writeTag(tag, PBF_FIXED64);
+    this.writeSFixed64(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeVarintField(tag, val) {
+    this.writeTag(tag, PBF_VARINT);
+    this.writeVarint(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeSVarintField(tag, val) {
+    this.writeTag(tag, PBF_VARINT);
+    this.writeSVarint(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {string} str
+   */
+  writeStringField(tag, str) {
+    this.writeTag(tag, PBF_BYTES);
+    this.writeString(str);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeFloatField(tag, val) {
+    this.writeTag(tag, PBF_FIXED32);
+    this.writeFloat(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeDoubleField(tag, val) {
+    this.writeTag(tag, PBF_FIXED64);
+    this.writeDouble(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {boolean} val
+   */
+  writeBooleanField(tag, val) {
+    this.writeVarintField(tag, +val);
+  }
+}
+function readVarintRemainder(l2, s2, p2) {
+  const buf = p2.buf;
+  let h2, b2;
+  b2 = buf[p2.pos++];
+  h2 = (b2 & 112) >> 4;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  b2 = buf[p2.pos++];
+  h2 |= (b2 & 127) << 3;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  b2 = buf[p2.pos++];
+  h2 |= (b2 & 127) << 10;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  b2 = buf[p2.pos++];
+  h2 |= (b2 & 127) << 17;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  b2 = buf[p2.pos++];
+  h2 |= (b2 & 127) << 24;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  b2 = buf[p2.pos++];
+  h2 |= (b2 & 1) << 31;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  throw new Error("Expected varint not more than 10 bytes");
+}
+function toNum(low, high, isSigned) {
+  return isSigned ? high * 4294967296 + (low >>> 0) : (high >>> 0) * 4294967296 + (low >>> 0);
+}
+function writeBigVarint(val, pbf) {
+  let low, high;
+  if (val >= 0) {
+    low = val % 4294967296 | 0;
+    high = val / 4294967296 | 0;
+  } else {
+    low = ~(-val % 4294967296);
+    high = ~(-val / 4294967296);
+    if (low ^ 4294967295) {
+      low = low + 1 | 0;
+    } else {
+      low = 0;
+      high = high + 1 | 0;
+    }
+  }
+  if (val >= 18446744073709552e3 || val < -18446744073709552e3) {
+    throw new Error("Given varint doesn't fit into 10 bytes");
+  }
+  pbf.realloc(10);
+  writeBigVarintLow(low, high, pbf);
+  writeBigVarintHigh(high, pbf);
+}
+function writeBigVarintLow(low, high, pbf) {
+  pbf.buf[pbf.pos++] = low & 127 | 128;
+  low >>>= 7;
+  pbf.buf[pbf.pos++] = low & 127 | 128;
+  low >>>= 7;
+  pbf.buf[pbf.pos++] = low & 127 | 128;
+  low >>>= 7;
+  pbf.buf[pbf.pos++] = low & 127 | 128;
+  low >>>= 7;
+  pbf.buf[pbf.pos] = low & 127;
+}
+function writeBigVarintHigh(high, pbf) {
+  const lsb = (high & 7) << 4;
+  pbf.buf[pbf.pos++] |= lsb | ((high >>>= 3) ? 128 : 0);
+  if (!high) return;
+  pbf.buf[pbf.pos++] = high & 127 | ((high >>>= 7) ? 128 : 0);
+  if (!high) return;
+  pbf.buf[pbf.pos++] = high & 127 | ((high >>>= 7) ? 128 : 0);
+  if (!high) return;
+  pbf.buf[pbf.pos++] = high & 127 | ((high >>>= 7) ? 128 : 0);
+  if (!high) return;
+  pbf.buf[pbf.pos++] = high & 127 | ((high >>>= 7) ? 128 : 0);
+  if (!high) return;
+  pbf.buf[pbf.pos++] = high & 127;
+}
+function makeRoomForExtraLength(startPos, len, pbf) {
+  const extraLen = len <= 16383 ? 1 : len <= 2097151 ? 2 : len <= 268435455 ? 3 : Math.floor(Math.log(len) / (Math.LN2 * 7));
+  pbf.realloc(extraLen);
+  for (let i2 = pbf.pos - 1; i2 >= startPos; i2--) pbf.buf[i2 + extraLen] = pbf.buf[i2];
+}
+function writePackedVarint(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeVarint(arr[i2]);
+}
+function writePackedSVarint(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeSVarint(arr[i2]);
+}
+function writePackedFloat(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeFloat(arr[i2]);
+}
+function writePackedDouble(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeDouble(arr[i2]);
+}
+function writePackedBoolean(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeBoolean(arr[i2]);
+}
+function writePackedFixed32(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeFixed32(arr[i2]);
+}
+function writePackedSFixed32(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeSFixed32(arr[i2]);
+}
+function writePackedFixed64(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeFixed64(arr[i2]);
+}
+function writePackedSFixed64(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeSFixed64(arr[i2]);
+}
+function readUtf8(buf, pos, end) {
+  let str = "";
+  let i2 = pos;
+  while (i2 < end) {
+    const b0 = buf[i2];
+    let c2 = null;
+    let bytesPerSequence = b0 > 239 ? 4 : b0 > 223 ? 3 : b0 > 191 ? 2 : 1;
+    if (i2 + bytesPerSequence > end) break;
+    let b1, b2, b3;
+    if (bytesPerSequence === 1) {
+      if (b0 < 128) {
+        c2 = b0;
+      }
+    } else if (bytesPerSequence === 2) {
+      b1 = buf[i2 + 1];
+      if ((b1 & 192) === 128) {
+        c2 = (b0 & 31) << 6 | b1 & 63;
+        if (c2 <= 127) {
+          c2 = null;
+        }
+      }
+    } else if (bytesPerSequence === 3) {
+      b1 = buf[i2 + 1];
+      b2 = buf[i2 + 2];
+      if ((b1 & 192) === 128 && (b2 & 192) === 128) {
+        c2 = (b0 & 15) << 12 | (b1 & 63) << 6 | b2 & 63;
+        if (c2 <= 2047 || c2 >= 55296 && c2 <= 57343) {
+          c2 = null;
+        }
+      }
+    } else if (bytesPerSequence === 4) {
+      b1 = buf[i2 + 1];
+      b2 = buf[i2 + 2];
+      b3 = buf[i2 + 3];
+      if ((b1 & 192) === 128 && (b2 & 192) === 128 && (b3 & 192) === 128) {
+        c2 = (b0 & 15) << 18 | (b1 & 63) << 12 | (b2 & 63) << 6 | b3 & 63;
+        if (c2 <= 65535 || c2 >= 1114112) {
+          c2 = null;
+        }
+      }
+    }
+    if (c2 === null) {
+      c2 = 65533;
+      bytesPerSequence = 1;
+    } else if (c2 > 65535) {
+      c2 -= 65536;
+      str += String.fromCharCode(c2 >>> 10 & 1023 | 55296);
+      c2 = 56320 | c2 & 1023;
+    }
+    str += String.fromCharCode(c2);
+    i2 += bytesPerSequence;
+  }
+  return str;
+}
+function writeUtf8(buf, str, pos) {
+  for (let i2 = 0, c2, lead; i2 < str.length; i2++) {
+    c2 = str.charCodeAt(i2);
+    if (c2 > 55295 && c2 < 57344) {
+      if (lead) {
+        if (c2 < 56320) {
+          buf[pos++] = 239;
+          buf[pos++] = 191;
+          buf[pos++] = 189;
+          lead = c2;
+          continue;
+        } else {
+          c2 = lead - 55296 << 10 | c2 - 56320 | 65536;
+          lead = null;
+        }
+      } else {
+        if (c2 > 56319 || i2 + 1 === str.length) {
+          buf[pos++] = 239;
+          buf[pos++] = 191;
+          buf[pos++] = 189;
+        } else {
+          lead = c2;
+        }
+        continue;
+      }
+    } else if (lead) {
+      buf[pos++] = 239;
+      buf[pos++] = 191;
+      buf[pos++] = 189;
+      lead = null;
+    }
+    if (c2 < 128) {
+      buf[pos++] = c2;
+    } else {
+      if (c2 < 2048) {
+        buf[pos++] = c2 >> 6 | 192;
+      } else {
+        if (c2 < 65536) {
+          buf[pos++] = c2 >> 12 | 224;
+        } else {
+          buf[pos++] = c2 >> 18 | 240;
+          buf[pos++] = c2 >> 12 & 63 | 128;
+        }
+        buf[pos++] = c2 >> 6 & 63 | 128;
+      }
+      buf[pos++] = c2 & 63 | 128;
+    }
+  }
+  return pos;
+}
+const EARTH_RADIUS_M = 63710088e-1;
+const HOME_FALLBACK_M = 30;
+function lonLatToTile(lon, lat, z2) {
+  const n3 = Math.pow(2, z2);
+  const latRad = lat * Math.PI / 180;
+  const x2 = Math.floor((lon + 180) / 360 * n3);
+  const y3 = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n3);
+  return { x: x2, y: y3 };
+}
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a2 = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a2));
+}
+function metersToDegLat(m2) {
+  return m2 / 111320;
+}
+function metersToDegLon(m2, atLat) {
+  return m2 / (111320 * Math.cos(atLat * Math.PI / 180));
+}
+function pointInRing(lon, lat, ring) {
+  let inside = false;
+  for (let i2 = 0, j = ring.length - 1; i2 < ring.length; j = i2++) {
+    const xi = ring[i2][0], yi = ring[i2][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-12) + xi;
+    if (intersect) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+function polygonContains(geom, lon, lat) {
+  if (geom.type === "Polygon") {
+    return geom.coordinates.length > 0 && pointInRing(lon, lat, geom.coordinates[0]);
+  }
+  if (geom.type === "MultiPolygon") {
+    return geom.coordinates.some((poly) => poly.length > 0 && pointInRing(lon, lat, poly[0]));
+  }
+  return false;
+}
+function representativePoint(geom) {
+  let ring = null;
+  if (geom.type === "Polygon" && geom.coordinates.length > 0) {
+    ring = geom.coordinates[0];
+  } else if (geom.type === "MultiPolygon" && geom.coordinates.length > 0 && geom.coordinates[0].length > 0) {
+    ring = geom.coordinates[0][0];
+  }
+  if (!ring || ring.length === 0) {
+    return null;
+  }
+  let sx = 0, sy = 0;
+  for (const p2 of ring) {
+    sx += p2[0];
+    sy += p2[1];
+  }
+  return [sx / ring.length, sy / ring.length];
+}
+async function fetchBuildingsAroundHome(opts) {
+  const z2 = Math.max(0, Math.floor(opts.zoom ?? 14));
+  const r2 = Math.max(1, opts.radiusMeters);
+  const padFactor = 1.15;
+  const dLat = metersToDegLat(r2 * padFactor);
+  const dLon = metersToDegLon(r2 * padFactor, opts.homeLat);
+  const minLat = opts.homeLat - dLat;
+  const maxLat = opts.homeLat + dLat;
+  const minLon = opts.homeLon - dLon;
+  const maxLon = opts.homeLon + dLon;
+  const tlTile = lonLatToTile(minLon, maxLat, z2);
+  const brTile = lonLatToTile(maxLon, minLat, z2);
+  const xMin = Math.min(tlTile.x, brTile.x);
+  const xMax = Math.max(tlTile.x, brTile.x);
+  const yMin = Math.min(tlTile.y, brTile.y);
+  const yMax = Math.max(tlTile.y, brTile.y);
+  const tilesToFetch = [];
+  for (let x2 = xMin; x2 <= xMax; x2++) {
+    for (let y3 = yMin; y3 <= yMax; y3++) {
+      tilesToFetch.push({ x: x2, y: y3 });
+    }
+  }
+  if (tilesToFetch.length > 16) {
+    throw new Error(`[HELIOS] fetchBuildingsAroundHome: ${tilesToFetch.length} tiles requested — radius/zoom misconfigured`);
+  }
+  const features = [];
+  await Promise.all(tilesToFetch.map(async ({ x: x2, y: y3 }) => {
+    const url = `https://api.maptiler.com/tiles/v3/${z2}/${x2}/${y3}.pbf?key=${opts.apiKey}`;
+    let resp;
+    try {
+      resp = await fetch(url, { signal: opts.signal });
+    } catch (e2) {
+      return;
+    }
+    if (!resp.ok) {
+      return;
+    }
+    let buf;
+    try {
+      buf = await resp.arrayBuffer();
+    } catch (_2) {
+      return;
+    }
+    if (buf.byteLength === 0) {
+      return;
+    }
+    let tile;
+    try {
+      tile = new VectorTile(new Pbf(new Uint8Array(buf)));
+    } catch (_2) {
+      return;
+    }
+    const layer = tile.layers["building"];
+    if (!layer) {
+      return;
+    }
+    for (let i2 = 0; i2 < layer.length; i2++) {
+      let geojson;
+      try {
+        geojson = layer.feature(i2).toGeoJSON(x2, y3, z2);
+      } catch (_2) {
+        continue;
+      }
+      if (!geojson.geometry || geojson.geometry.type !== "Polygon" && geojson.geometry.type !== "MultiPolygon") {
+        continue;
+      }
+      features.push(geojson);
+    }
+  }));
+  let homeFeature = null;
+  let homeFallback = null;
+  const surroundings = [];
+  for (const f2 of features) {
+    const contains = polygonContains(f2.geometry, opts.homeLon, opts.homeLat);
+    if (contains && !homeFeature) {
+      homeFeature = f2;
+      continue;
+    }
+    const rep = representativePoint(f2.geometry);
+    if (!rep) {
+      continue;
+    }
+    const d2 = haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0]);
+    if (!homeFeature && d2 <= HOME_FALLBACK_M) {
+      if (!homeFallback || d2 < homeFallback.distance) {
+        homeFallback = { feature: f2, distance: d2 };
+      }
+    }
+    if (d2 <= r2) {
+      surroundings.push(f2);
+    }
+  }
+  if (!homeFeature && homeFallback) {
+    homeFeature = homeFallback.feature;
+    const idx = surroundings.indexOf(homeFallback.feature);
+    if (idx >= 0) surroundings.splice(idx, 1);
+  }
+  return {
+    home: { type: "FeatureCollection", features: homeFeature ? [homeFeature] : [] },
+    surroundings: { type: "FeatureCollection", features: surroundings }
+  };
+}
+const DEFAULT_BUILDING_RADIUS_M = 100;
+const DEFAULT_BUILDING_OPACITY = 0.25;
 const IS_MOBILE = (() => {
   if (typeof navigator === "undefined") {
     return false;
@@ -24875,6 +26244,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._rateLimitStreak = 0;
     this._autoRotateLastFrame = 0;
     this._autoRotateLastUserAction = 0;
+    this._buildingsData = null;
+    this._buildingsFetchKey = "";
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -25226,9 +26597,10 @@ const _HeliosEngine = class _HeliosEngine {
   //and refreshed by _updateCloudCoverDisc() whenever the cloud-cover
   //value changes (live tick or scrub).
   //
-  //Z-order: this layer pair is added before `helios-buildings`, so
-  //buildings still emerge through the disc as opaque islands. The
-  //home marker (added after buildings) stays on top of everything.
+  //Z-order: this layer pair is added before the helios-buildings-*
+  //layers, so buildings still emerge through the disc as opaque
+  //islands. The home marker (added after buildings) stays on top
+  //of everything.
   _initCloudCoverDisc() {
     if (!this.map) {
       return;
@@ -25392,6 +26764,49 @@ const _HeliosEngine = class _HeliosEngine {
       }
     }
   }
+  //Resolves the configured building radius (metres). Falls back to
+  //DEFAULT_BUILDING_RADIUS_M for missing or invalid input. Clamped
+  //to a sane range so a stray editor value can't accidentally
+  //trigger fetching dozens of tiles.
+  _buildingRadiusMeters() {
+    const v2 = Number(this.cfg["building-radius"]);
+    if (!Number.isFinite(v2) || v2 <= 0) {
+      return DEFAULT_BUILDING_RADIUS_M;
+    }
+    return Math.min(1e3, Math.max(20, v2));
+  }
+  //Resolves the configured surroundings opacity (0..1). Falls back
+  //to DEFAULT_BUILDING_OPACITY for missing or invalid input.
+  _buildingOpacity() {
+    const v2 = Number(this.cfg["building-opacity"]);
+    if (!Number.isFinite(v2)) {
+      return DEFAULT_BUILDING_OPACITY;
+    }
+    return Math.min(1, Math.max(0, v2));
+  }
+  //Adds the two custom building layers around the home:
+  //
+  //  - helios-buildings-surroundings : every building within the
+  //    configured radius of the home, painted at the configured
+  //    opacity (default ~25%). Conveys urban context without
+  //    competing visually with the data overlays.
+  //  - helios-buildings-home : the home itself (whichever polygon
+  //    contains the home coordinates), painted at full opacity in
+  //    the same neutral grey. Reads as the focal point.
+  //
+  //Compared to the previous single layer fed from MapTiler's
+  //"helios-planet" source-layer, this design (a) renders only the
+  //handful of buildings the user actually cares about, eliminating
+  //the per-frame cost of thousands of fill-extrusions in dense
+  //urban areas, and (b) cleanly isolates the home so future
+  //iterations can give it special treatment (PV-on-roof rendering,
+  //per-room data overlays, etc.) without per-feature MapLibre
+  //expression gymnastics.
+  //
+  //The building GeoJSON is fetched once per (home, radius) combo
+  //in helios-buildings.ts; subsequent calls to _addBuildings()
+  //(e.g. on theme switch, which rebuilds the whole style) reuse
+  //the cached data without re-hitting the API.
   _addBuildings() {
     if (!this.map) {
       return;
@@ -25399,58 +26814,117 @@ const _HeliosEngine = class _HeliosEngine {
     if (this.map.getLayer("helios-buildings")) {
       this.map.removeLayer("helios-buildings");
     }
+    if (this.map.getLayer("helios-buildings-surroundings")) {
+      this.map.removeLayer("helios-buildings-surroundings");
+    }
+    if (this.map.getLayer("helios-buildings-home")) {
+      this.map.removeLayer("helios-buildings-home");
+    }
     this.map.getStyle().layers?.forEach((l2) => {
-      if (l2.type === "fill-extrusion" && l2.id !== "helios-buildings") {
+      if (l2.type === "fill-extrusion" && l2.id !== "helios-buildings-surroundings" && l2.id !== "helios-buildings-home") {
         try {
           this.map.setLayoutProperty(l2.id, "visibility", "none");
         } catch (_2) {
         }
       }
     });
-    if (!this.map.getSource("helios-planet")) {
+    const opacity = this._buildingOpacity();
+    const homeData = this._buildingsData?.home ?? { type: "FeatureCollection", features: [] };
+    const surrData = this._buildingsData?.surroundings ?? { type: "FeatureCollection", features: [] };
+    if (!this.map.getSource("helios-buildings-surroundings-src")) {
       this.map.addSource(
-        "helios-planet",
+        "helios-buildings-surroundings-src",
         {
-          type: "vector",
-          url: `https://api.maptiler.com/tiles/v3/tiles.json?key=${this.apiKey}`
+          type: "geojson",
+          data: surrData
         }
       );
+    } else {
+      this.map.getSource("helios-buildings-surroundings-src").setData(surrData);
+    }
+    if (!this.map.getSource("helios-buildings-home-src")) {
+      this.map.addSource(
+        "helios-buildings-home-src",
+        {
+          type: "geojson",
+          data: homeData
+        }
+      );
+    } else {
+      this.map.getSource("helios-buildings-home-src").setData(homeData);
     }
     this.map.addLayer(
       {
-        id: "helios-buildings",
-        source: "helios-planet",
-        "source-layer": "building",
+        id: "helios-buildings-surroundings",
+        source: "helios-buildings-surroundings-src",
         type: "fill-extrusion",
-        minzoom: 15,
         paint: {
-          //Neutral cool grey, hard-coded. We briefly exposed
-          //a `building-color` config but the buildings are
-          //always urban-context backdrop here — making the
-          //colour configurable proved to be a footgun (any
-          //tint with hue ate visual room from the chips and
-          //leaders that carry the actual data) and was
-          //removed in beta.12.
+          //Neutral cool grey — same hard-coded tone as the
+          //old single-layer rendering. We briefly exposed a
+          //`building-color` config; making it adjustable
+          //proved a footgun (any hue ate visual room from
+          //the data overlays) and it was retired in beta.12.
           "fill-extrusion-color": "rgba(210,210,215,1)",
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
-          //Opacity ramps in between zoom 15 and 16; top
-          //opacity sits at 0.75 — buildings are present
-          //enough to read as solid massing without burying
-          //the basemap or competing with the chips and
-          //leaders that carry the actual data.
-          "fill-extrusion-opacity": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            15,
-            0,
-            16,
-            0.75
-          ]
+          "fill-extrusion-opacity": opacity
         }
       }
     );
+    this.map.addLayer(
+      {
+        id: "helios-buildings-home",
+        source: "helios-buildings-home-src",
+        type: "fill-extrusion",
+        paint: {
+          "fill-extrusion-color": "rgba(210,210,215,1)",
+          "fill-extrusion-height": ["get", "render_height"],
+          "fill-extrusion-base": ["get", "render_min_height"],
+          "fill-extrusion-opacity": 1
+        }
+      }
+    );
+    this._ensureBuildingsFetched();
+  }
+  //Idempotent fetch helper. Reuses _buildingsData across style
+  //reloads; only re-hits the MapTiler API when the home position
+  //or the configured radius actually changed.
+  _ensureBuildingsFetched() {
+    if (!this.map) {
+      return;
+    }
+    const apiKey = this.apiKey;
+    if (!apiKey) {
+      return;
+    }
+    const radius = this._buildingRadiusMeters();
+    const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}`;
+    if (this._buildingsData && this._buildingsFetchKey === key) {
+      return;
+    }
+    this._buildingsAbort?.abort();
+    const ac = new AbortController();
+    this._buildingsAbort = ac;
+    this._buildingsFetchKey = key;
+    fetchBuildingsAroundHome(
+      {
+        homeLon: this.homeLon,
+        homeLat: this.homeLat,
+        radiusMeters: radius,
+        apiKey,
+        signal: ac.signal
+      }
+    ).then((result) => {
+      if (ac.signal.aborted || !this.map) return;
+      this._buildingsData = result;
+      const homeSrc = this.map.getSource("helios-buildings-home-src");
+      const surrSrc = this.map.getSource("helios-buildings-surroundings-src");
+      homeSrc?.setData(result.home);
+      surrSrc?.setData(result.surroundings);
+    }).catch((err) => {
+      if (err?.name === "AbortError") return;
+      console.warn("[HELIOS] Buildings fetch failed:", err);
+    });
   }
   //Linear interpolation between two RGB hex strings.
   _lerpHex(a2, b2, t2) {
@@ -25567,32 +27041,34 @@ const _HeliosEngine = class _HeliosEngine {
       } catch (_2) {
       }
     }
-    if (this.map.getLayer("helios-buildings")) {
-      try {
-        const baseHex = "#d2d2d7";
-        let buildingHex;
-        if (altitude < -6) {
-          buildingHex = this._mixHex(baseHex, "#0a0e1a", 0.85);
-        } else if (altitude < 0) {
-          const u2 = (altitude + 6) / 6;
-          const dark = this._mixHex(baseHex, "#0a0e1a", 0.85);
-          const dusk = this._mixHex(baseHex, "#2a2540", 0.55);
-          buildingHex = this._lerpHex(dark, dusk, u2);
-        } else if (altitude < 6) {
-          const u2 = altitude / 6;
-          const dusk = this._mixHex(baseHex, "#2a2540", 0.55);
-          const warm = this._mixHex(baseHex, "#5a3220", 0.35);
-          buildingHex = this._lerpHex(dusk, warm, u2);
-        } else if (altitude < 20) {
-          const u2 = (altitude - 6) / 14;
-          const warm = this._mixHex(baseHex, "#5a3220", 0.35);
-          buildingHex = this._lerpHex(warm, baseHex, u2);
-        } else {
-          buildingHex = baseHex;
-        }
-        this.map.setPaintProperty("helios-buildings", "fill-extrusion-color", buildingHex);
-      } catch (_2) {
+    try {
+      const baseHex = "#d2d2d7";
+      let buildingHex;
+      if (altitude < -6) {
+        buildingHex = this._mixHex(baseHex, "#0a0e1a", 0.85);
+      } else if (altitude < 0) {
+        const u2 = (altitude + 6) / 6;
+        const dark = this._mixHex(baseHex, "#0a0e1a", 0.85);
+        const dusk = this._mixHex(baseHex, "#2a2540", 0.55);
+        buildingHex = this._lerpHex(dark, dusk, u2);
+      } else if (altitude < 6) {
+        const u2 = altitude / 6;
+        const dusk = this._mixHex(baseHex, "#2a2540", 0.55);
+        const warm = this._mixHex(baseHex, "#5a3220", 0.35);
+        buildingHex = this._lerpHex(dusk, warm, u2);
+      } else if (altitude < 20) {
+        const u2 = (altitude - 6) / 14;
+        const warm = this._mixHex(baseHex, "#5a3220", 0.35);
+        buildingHex = this._lerpHex(warm, baseHex, u2);
+      } else {
+        buildingHex = baseHex;
       }
+      for (const lid of ["helios-buildings-surroundings", "helios-buildings-home"]) {
+        if (this.map.getLayer(lid)) {
+          this.map.setPaintProperty(lid, "fill-extrusion-color", buildingHex);
+        }
+      }
+    } catch (_2) {
     }
   }
   //v1.4 — the 'standard' precision tier was retired: a single
@@ -26031,6 +27507,8 @@ const _HeliosEngine = class _HeliosEngine {
   }
   updateConfig(cfg) {
     const prevStyleId = this._resolveMapStyle().id;
+    const prevRadius = this._buildingRadiusMeters();
+    const prevOpacity = this._buildingOpacity();
     this.cfg = { ...cfg };
     if (!this.map) {
       return;
@@ -26051,6 +27529,19 @@ const _HeliosEngine = class _HeliosEngine {
       this.map.setPaintProperty("helios-hillshade", "hillshade-exaggeration", a2);
     }
     this._applyLabelVisibility();
+    const nextRadius = this._buildingRadiusMeters();
+    const nextOpacity = this._buildingOpacity();
+    if (nextRadius !== prevRadius) {
+      this._buildingsData = null;
+      this._buildingsFetchKey = "";
+      this._addBuildings();
+    } else if (nextOpacity !== prevOpacity && this.map.getLayer("helios-buildings-surroundings")) {
+      this.map.setPaintProperty(
+        "helios-buildings-surroundings",
+        "fill-extrusion-opacity",
+        nextOpacity
+      );
+    }
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
     }
@@ -26083,6 +27574,7 @@ const _HeliosEngine = class _HeliosEngine {
     window.clearInterval(this._skyTimer);
     window.clearTimeout(this._resizeDebounceTimer);
     this._fetchAbortController?.abort();
+    this._buildingsAbort?.abort();
     this._resizeObserver?.disconnect();
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
@@ -26156,7 +27648,11 @@ const en = {
     batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
     batteryPowerEntity: "Power entity",
     batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
-    batteryColor: "Battery color *"
+    batteryColor: "Battery color *",
+    buildingsSection: "Surrounding buildings",
+    buildingsHint: "To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays.",
+    buildingRadius: "Visibility radius (m) *",
+    buildingOpacity: "Surrounding opacity * (0 → 1)"
   }
 };
 const fr = {
@@ -26219,7 +27715,11 @@ const fr = {
     batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (% — typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
     batteryPowerEntity: "Entité de puissance",
     batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
-    batteryColor: "Couleur batterie *"
+    batteryColor: "Couleur batterie *",
+    buildingsSection: "Bâtiments alentour",
+    buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données.",
+    buildingRadius: "Rayon de visibilité (m) *",
+    buildingOpacity: "Opacité des bâtiments voisins * (0 → 1)"
   }
 };
 const de = {
@@ -26282,7 +27782,11 @@ const de = {
     batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
     batteryPowerEntity: "Leistungs-Entität",
     batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
-    batteryColor: "Batteriefarbe *"
+    batteryColor: "Batteriefarbe *",
+    buildingsSection: "Umliegende Gebäude",
+    buildingsHint: "Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren.",
+    buildingRadius: "Sichtradius (m) *",
+    buildingOpacity: "Deckkraft Nachbargebäude * (0 → 1)"
   }
 };
 const es = {
@@ -26345,7 +27849,11 @@ const es = {
     batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
     batteryPowerEntity: "Entidad de potencia",
     batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
-    batteryColor: "Color batería *"
+    batteryColor: "Color batería *",
+    buildingsSection: "Edificios circundantes",
+    buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos.",
+    buildingRadius: "Radio de visibilidad (m) *",
+    buildingOpacity: "Opacidad de los vecinos * (0 → 1)"
   }
 };
 const it = {
@@ -26408,7 +27916,11 @@ const it = {
     batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
     batteryPowerEntity: "Entità di potenza",
     batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
-    batteryColor: "Colore batteria *"
+    batteryColor: "Colore batteria *",
+    buildingsSection: "Edifici circostanti",
+    buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati.",
+    buildingRadius: "Raggio di visibilità (m) *",
+    buildingOpacity: "Opacità degli edifici vicini * (0 → 1)"
   }
 };
 const nl = {
@@ -26471,7 +27983,11 @@ const nl = {
     batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
     batteryPowerEntity: "Vermogen-entiteit",
     batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
-    batteryColor: "Batterijkleur *"
+    batteryColor: "Batterijkleur *",
+    buildingsSection: "Omliggende gebouwen",
+    buildingsHint: "Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren.",
+    buildingRadius: "Zichtstraal (m) *",
+    buildingOpacity: "Dekking omliggende gebouwen * (0 → 1)"
   }
 };
 const pt = {
@@ -26534,7 +28050,11 @@ const pt = {
     batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (% — normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
     batteryPowerEntity: "Entidade de potência",
     batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
-    batteryColor: "Cor da bateria *"
+    batteryColor: "Cor da bateria *",
+    buildingsSection: "Edifícios circundantes",
+    buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados.",
+    buildingRadius: "Raio de visibilidade (m) *",
+    buildingOpacity: "Opacidade dos vizinhos * (0 → 1)"
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -28065,6 +29585,25 @@ let HeliosCardEditor = class extends i {
                     </div>
                 </div>
                 <div class="hint">${t2.editor.autoRotateHint}</div>
+
+                <div class="section-title">${t2.editor.buildingsSection}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.buildingRadius}</span>
+                    <input
+                        type="number" min="20" max="1000" step="10"
+                        .value="${String(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M)}"
+                        @change="${(e2) => this._num("building-radius", e2)}"
+                    />
+                </label>
+                <label class="field">
+                    <span class="label">${t2.editor.buildingOpacity}</span>
+                    <input
+                        type="number" min="0" max="1" step="0.05"
+                        .value="${String(c2["building-opacity"] ?? DEFAULT_BUILDING_OPACITY)}"
+                        @change="${(e2) => this._num("building-opacity", e2)}"
+                    />
+                </label>
+                <div class="hint">${t2.editor.buildingsHint}</div>
 
                 <div class="section-title">${t2.editor.colors}</div>
                 <label class="field">
@@ -30060,7 +31599,13 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   //between the light and dark skins), but it must be in the
   //sig so Lit re-renders the card when the user toggles it
   //in the editor.
-  "card-theme"
+  "card-theme",
+  //building-radius / building-opacity drive the helios-buildings-*
+  //custom layers (radius triggers a refetch + GeoJSON refresh,
+  //opacity is a cheap paint-property update on the surroundings
+  //layer).
+  "building-radius",
+  "building-opacity"
 ];
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([

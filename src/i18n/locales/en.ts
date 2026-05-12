@@ -76,6 +76,10 @@ export const en: Translations = {
         batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
         batteryPowerEntity: 'Power entity',
         batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
-        batteryColor:       'Battery color *'
+        batteryColor:       'Battery color *',
+        buildingsSection:   'Surrounding buildings',
+        buildingsHint:      'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays.',
+        buildingRadius:     'Visibility radius (m) *',
+        buildingOpacity:    'Surrounding opacity * (0 → 1)'
     }
 };
