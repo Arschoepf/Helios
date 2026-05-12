@@ -265,11 +265,41 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
             {
                 continue;
             }
-            if (!geojson.geometry || (geojson.geometry.type !== 'Polygon' && geojson.geometry.type !== 'MultiPolygon'))
+            if (!geojson.geometry) continue;
+
+            //v1.2.0-beta.10 — split MultiPolygons into individual
+            //Polygon features.
+            //
+            //MapTiler's v3 vector-tile encoder groups multiple
+            //unrelated buildings into a single MultiPolygon feature
+            //(observed: a single feature carrying 24 sub-polygons
+            //in a rural French hamlet). Beta.9 captured one such
+            //MultiPolygon as the "home" because the home point sat
+            //inside one of its sub-polygons — and rendered ALL 24
+            //buildings at full opacity, which read as "buildings
+            //visible at kilometres". Splitting at decode time means
+            //downstream filtering (home detection, radius cutoff)
+            //operates at the granularity of one building per feature.
+            //L-shaped or multi-wing buildings split into parts that
+            //will still render identically when extruded at the same
+            //height, so the visual outcome is unchanged for genuine
+            //multi-part buildings.
+            if (geojson.geometry.type === 'Polygon')
             {
-                continue;
+                features.push(geojson);
             }
-            features.push(geojson);
+            else if (geojson.geometry.type === 'MultiPolygon')
+            {
+                for (const polyCoords of geojson.geometry.coordinates)
+                {
+                    features.push({
+                        type:       'Feature',
+                        geometry:   { type: 'Polygon', coordinates: polyCoords as number[][][] },
+                        properties: { ...(geojson.properties ?? {}) }
+                    });
+                }
+            }
+            //Lines / points are skipped silently — not buildings.
         }
     }));
 

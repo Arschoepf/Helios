@@ -26081,10 +26081,18 @@ async function fetchBuildingsAroundHome(opts) {
       } catch (_2) {
         continue;
       }
-      if (!geojson.geometry || geojson.geometry.type !== "Polygon" && geojson.geometry.type !== "MultiPolygon") {
-        continue;
+      if (!geojson.geometry) continue;
+      if (geojson.geometry.type === "Polygon") {
+        features.push(geojson);
+      } else if (geojson.geometry.type === "MultiPolygon") {
+        for (const polyCoords of geojson.geometry.coordinates) {
+          features.push({
+            type: "Feature",
+            geometry: { type: "Polygon", coordinates: polyCoords },
+            properties: { ...geojson.properties ?? {} }
+          });
+        }
       }
-      features.push(geojson);
     }
   }));
   let homeFeature = null;
