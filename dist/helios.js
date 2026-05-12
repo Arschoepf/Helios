@@ -26369,6 +26369,7 @@ const _HeliosEngine = class _HeliosEngine {
     canvas.addEventListener("webglcontextrestored", this._webglRestoredHandler, false);
     this._mapErrorHandler = (e2) => {
       const msg = e2?.error?.message ?? "unknown error";
+      if (msg.includes("non-existing layer")) return;
       console.warn("[HELIOS] MapLibre error:", msg);
     };
     this.map.on("error", this._mapErrorHandler);
@@ -30382,6 +30383,7 @@ let HeliosCard = class extends i {
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
+    this._isInEditorPreview = false;
     this._trackElement = null;
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
@@ -30438,6 +30440,29 @@ let HeliosCard = class extends i {
     this._tick();
     this._timer = window.setInterval(() => this._tick(), 1e3);
     this._initVisibilityObserver();
+    this._isInEditorPreview = this._detectEditorPreview();
+  }
+  _detectEditorPreview() {
+    const EDITOR_TAGS = /* @__PURE__ */ new Set([
+      "hui-dialog-edit-card",
+      "hui-card-element-editor",
+      "hui-edit-card",
+      "hui-card-editor"
+    ]);
+    let node = this;
+    let hops = 0;
+    while (node && hops++ < 40) {
+      if (node instanceof ShadowRoot) {
+        node = node.host;
+        continue;
+      }
+      if (node instanceof Element) {
+        const tag = node.tagName?.toLowerCase();
+        if (tag && EDITOR_TAGS.has(tag)) return true;
+      }
+      node = node.parentNode;
+    }
+    return false;
   }
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -30826,6 +30851,9 @@ let HeliosCard = class extends i {
     }
   }
   _initEngine() {
+    if (this._isInEditorPreview) {
+      return;
+    }
     this._initInflight = true;
     if (this._initDebounceTimer !== void 0) {
       window.clearTimeout(this._initDebounceTimer);
@@ -31569,6 +31597,7 @@ let HeliosCard = class extends i {
     const batteryPowerText = showPowerChip ? this._formatBatteryPower(activeBatteryPower, activeBatteryUnit) : "";
     const batteryCharging = showPowerChip && activeBatteryPower > 0;
     const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
+    const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
     const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
     const PV_LEG_OFFSET_PX = 7;
     const PV_HALF_HEIGHT_PX = 11;
@@ -31635,12 +31664,13 @@ let HeliosCard = class extends i {
     }
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
+    const showPlaceholder = !hasApiKey || this._isInEditorPreview;
     return b`
-            <ha-card class="${cardThemeClass} ${!hasApiKey ? "placeholder-mode" : ""}">
+            <ha-card class="${cardThemeClass} ${showPlaceholder ? "placeholder-mode" : ""}">
 
-                ${!hasApiKey ? this._renderPlaceholder() : A}
+                ${showPlaceholder ? this._renderPlaceholder() : A}
 
-                <div id="map-container" class="${!hasApiKey ? "hidden" : ""}"></div>
+                <div id="map-container" class="${showPlaceholder ? "hidden" : ""}"></div>
 
                 ${hasApiKey && this._timeRange ? b`
                     <div
@@ -31899,31 +31929,33 @@ ${showSun ? b`
                         -->
                         ${showPowerChip ? w`
                             <path
-                                class="battery-leader-line battery-leader-line-animated ${batteryCharging ? "" : "battery-leader-discharging"}"
+                                class="battery-leader-line ${batteryIdle ? "" : "battery-leader-line-animated"} ${batteryCharging ? "" : "battery-leader-discharging"}"
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
                                 d="${powerLeaderPath}"
                             ></path>
-                            <!--
-                                Polygon is centroid-centred at (0,0):
-                                the centroid of (-2,-4), (4,0), (-2,4)
-                                is (0,0), so animateMotion pivots the
-                                arrow about its visual mass rather than
-                                its tip. Through the L's fillet the
-                                arrow stays balanced on the path
-                                instead of swinging off it.
-                            -->
-                            <polygon
-                                class="battery-leader-arrow"
-                                points="-2,-4 4,0 -2,4"
-                                fill="${batteryColor}"
-                            >
-                                <animateMotion
-                                    dur="${batteryFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="${powerArrowPath}"
-                                ></animateMotion>
-                            </polygon>
+                            ${!batteryIdle ? w`
+                                <!--
+                                    Polygon is centroid-centred at (0,0):
+                                    the centroid of (-2,-4), (4,0), (-2,4)
+                                    is (0,0), so animateMotion pivots the
+                                    arrow about its visual mass rather
+                                    than its tip. Through the L's fillet
+                                    the arrow stays balanced on the path
+                                    instead of swinging off it.
+                                -->
+                                <polygon
+                                    class="battery-leader-arrow"
+                                    points="-2,-4 4,0 -2,4"
+                                    fill="${batteryColor}"
+                                >
+                                    <animateMotion
+                                        dur="${batteryFlowDuration}s"
+                                        repeatCount="indefinite"
+                                        rotate="auto"
+                                        path="${powerArrowPath}"
+                                    ></animateMotion>
+                                </polygon>
+                            ` : A}
                         ` : A}
                     </svg>
                     ${showSocChip ? b`

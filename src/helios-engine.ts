@@ -789,6 +789,12 @@ export class HeliosEngine
         this._mapErrorHandler = (e: { error?: { message?: string } }) =>
         {
             const msg = e?.error?.message ?? 'unknown error';
+            //Suppress noisy errors triggered by our own building-layer
+            //suppression: we attempt setLayoutProperty / setPaintProperty
+            //on layers that may already be removed during the suppression
+            //sweep; MapLibre reports each as "Cannot style non-existing
+            //layer X" but the outcome is the harmless intended one.
+            if (msg.includes('non-existing layer')) return;
             console.warn('[HELIOS] MapLibre error:', msg);
         };
         this.map.on('error', this._mapErrorHandler);

@@ -331,6 +331,51 @@ export class HeliosCard extends LitElement
         this._tick();
         this._timer = window.setInterval(() => this._tick(), 1000);
         this._initVisibilityObserver();
+        //Detect early whether we're rendered inside HA's dashboard
+        //editor preview. The editor instantiates a fresh helios-card
+        //on every config change and each engine takes a WebGL
+        //context — Safari mobile caps at ~8 and starts recycling
+        //past that, which is the root cause of the FPS drift and
+        //iOS black-screen lockup. We skip the engine entirely for
+        //preview cards (the dashboard card on the actual page keeps
+        //its full rendering).
+        this._isInEditorPreview = this._detectEditorPreview();
+    }
+
+    //Cached at connectedCallback time; does not change for the
+    //lifetime of the card instance.
+    private _isInEditorPreview = false;
+
+    private _detectEditorPreview(): boolean
+    {
+        //Tag list collected from inspecting HA's dashboard editor
+        //DOM: the modal dialog wrapping each preview, the element
+        //editor, plus a couple of generic fallbacks. We walk every
+        //ancestor (including across shadow-root boundaries via
+        //node.host) until we hit one matching, or run out of hops.
+        const EDITOR_TAGS = new Set([
+            'hui-dialog-edit-card',
+            'hui-card-element-editor',
+            'hui-edit-card',
+            'hui-card-editor'
+        ]);
+        let node: Node | null = this;
+        let hops = 0;
+        while (node && hops++ < 40)
+        {
+            if (node instanceof ShadowRoot)
+            {
+                node = node.host;
+                continue;
+            }
+            if (node instanceof Element)
+            {
+                const tag = node.tagName?.toLowerCase();
+                if (tag && EDITOR_TAGS.has(tag)) return true;
+            }
+            node = (node as Node).parentNode;
+        }
+        return false;
     }
 
     public disconnectedCallback(): void
@@ -959,6 +1004,16 @@ export class HeliosCard extends LitElement
 
     private _initEngine(): void
     {
+        //Hard skip: a card rendered inside HA's dashboard editor
+        //preview never spawns an engine. Each preview instance would
+        //claim a WebGL context that Safari mobile can't release fast
+        //enough — root cause of the drift and the iOS black screen.
+        //The actual dashboard card on the live page keeps its full
+        //rendering.
+        if (this._isInEditorPreview)
+        {
+            return;
+        }
         this._initInflight = true;
 
         //Cancel any pending debounce — a fresh _initEngine() call
@@ -2189,6 +2244,12 @@ export class HeliosCard extends LitElement
         const batteryWattsForFlow = showPowerChip
             ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
             : 0;
+        //"Idle" — measured power within sensor-noise margin of zero
+        //(±5 W). The leader is still drawn so the user keeps the
+        //spatial relationship, but the dash flow is frozen and the
+        //arrow head is hidden — nothing is moving in either
+        //direction, so any motion would be misleading.
+        const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
         const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
 
         //Battery leader L-shape geometry — computed once and reused
@@ -2363,12 +2424,20 @@ export class HeliosCard extends LitElement
         const cardTheme = String(this.config?.['card-theme'] ?? 'light').toLowerCase();
         const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';
 
+        //showPlaceholder collapses two cases that share the same
+        //render: (a) the user hasn't provided a MapTiler API key
+        //yet, (b) the card is rendered inside HA's dashboard editor
+        //preview, where we deliberately skip the WebGL engine to
+        //avoid context exhaustion. Both fall back to the same
+        //illustrated placeholder.
+        const showPlaceholder = !hasApiKey || this._isInEditorPreview;
+
         return html`
-            <ha-card class="${cardThemeClass} ${!hasApiKey ? 'placeholder-mode' : ''}">
+            <ha-card class="${cardThemeClass} ${showPlaceholder ? 'placeholder-mode' : ''}">
 
-                ${!hasApiKey ? this._renderPlaceholder() : nothing}
+                ${showPlaceholder ? this._renderPlaceholder() : nothing}
 
-                <div id="map-container" class="${!hasApiKey ? 'hidden' : ''}"></div>
+                <div id="map-container" class="${showPlaceholder ? 'hidden' : ''}"></div>
 
                 ${hasApiKey && this._timeRange ? html`
                     <div
@@ -2647,31 +2716,33 @@ ${showSun ? html`
                         -->
                         ${showPowerChip ? svg`
                             <path
-                                class="battery-leader-line battery-leader-line-animated ${batteryCharging ? '' : 'battery-leader-discharging'}"
+                                class="battery-leader-line ${batteryIdle ? '' : 'battery-leader-line-animated'} ${batteryCharging ? '' : 'battery-leader-discharging'}"
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
                                 d="${powerLeaderPath}"
                             ></path>
-                            <!--
-                                Polygon is centroid-centred at (0,0):
-                                the centroid of (-2,-4), (4,0), (-2,4)
-                                is (0,0), so animateMotion pivots the
-                                arrow about its visual mass rather than
-                                its tip. Through the L's fillet the
-                                arrow stays balanced on the path
-                                instead of swinging off it.
-                            -->
-                            <polygon
-                                class="battery-leader-arrow"
-                                points="-2,-4 4,0 -2,4"
-                                fill="${batteryColor}"
-                            >
-                                <animateMotion
-                                    dur="${batteryFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="${powerArrowPath}"
-                                ></animateMotion>
-                            </polygon>
+                            ${!batteryIdle ? svg`
+                                <!--
+                                    Polygon is centroid-centred at (0,0):
+                                    the centroid of (-2,-4), (4,0), (-2,4)
+                                    is (0,0), so animateMotion pivots the
+                                    arrow about its visual mass rather
+                                    than its tip. Through the L's fillet
+                                    the arrow stays balanced on the path
+                                    instead of swinging off it.
+                                -->
+                                <polygon
+                                    class="battery-leader-arrow"
+                                    points="-2,-4 4,0 -2,4"
+                                    fill="${batteryColor}"
+                                >
+                                    <animateMotion
+                                        dur="${batteryFlowDuration}s"
+                                        repeatCount="indefinite"
+                                        rotate="auto"
+                                        path="${powerArrowPath}"
+                                    ></animateMotion>
+                                </polygon>
+                            ` : nothing}
                         ` : nothing}
                     </svg>
                     ${showSocChip ? html`
