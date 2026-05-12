@@ -27276,34 +27276,25 @@ const _HeliosEngine = class _HeliosEngine {
   //  cloudLabel — where the cloud-cover chip should be drawn (in
   //               CSS pixels, relative to the map canvas). Sits to
   //               the screen-LEFT of the cloud disc, just outside
-  //               the 100 % reference ring. Pinning it on the side
-  //               (rather than above) keeps the home's vertical
-  //               axis clear for the PV chip (above) and the
-  //               battery chip (below).
+  //               the 100 % reference ring.
   //  pvLabel    — where the optional PV production chip should be
-  //               drawn. Sits a fixed PV_CHIP_OFFSET_PX above the
-  //               home so the production chip is the prominent
-  //               readout, with the cloud chip retreating onto its
-  //               own feature on the side.
-  //  batterySocLabel  — where the optional battery State-of-
-  //               Charge chip is drawn (icon + percent). Sits to
-  //               the BOTTOM-LEFT of the PV chip, connected via
-  //               an inverted-L polyline whose vertical leg
-  //               drops from PV's bottom edge (at 1/4 of the
-  //               chip width from the left) and whose horizontal
-  //               leg lands on the SoC chip's right side. Static
-  //               (no animation, no arrow) — SoC has no flow
-  //               direction to encode.
-  //  batteryPowerLabel — where the optional battery Power chip
-  //               is drawn (icon + signed instantaneous W/kW).
-  //               Sits to the BOTTOM-RIGHT of the PV chip,
-  //               connected via a regular L polyline whose
-  //               vertical leg drops from PV's bottom edge (at
-  //               3/4 of the chip width from the left) and
-  //               whose horizontal leg lands on the Power
-  //               chip's left side. Animated dashes + arrow
-  //               whose direction follows the sign of the
-  //               power.
+  //               drawn. Sits just below the home so the chip is
+  //               read as the home's "production" badge. The SoC
+  //               and Power chips sit on a shared shelf above it,
+  //               so the cluster has the PV chip at the bottom,
+  //               the home in the middle of the L-leaders, and
+  //               the battery chips at the top.
+  //  batterySocLabel   — battery State-of-Charge chip (icon + %).
+  //               Sits on the shelf, to the LEFT of the home's
+  //               vertical axis, connected to PV by an L polyline
+  //               (PV top-left → up → left → SoC right edge).
+  //               Static (no flow direction to encode).
+  //  batteryPowerLabel — battery Power chip (icon + signed W/kW).
+  //               Sits on the shelf, to the RIGHT of the home's
+  //               vertical axis, connected to PV by an L polyline
+  //               (PV top-right → up → right → Power left edge).
+  //               Animated dashes + arrow tracking the sign of
+  //               the live power.
   //  home       — the projected home point, used both as the visual
   //               centre of the cloud disc (the cloud leader ends
   //               here) and as the anchor for the PV / battery
@@ -27332,13 +27323,14 @@ const _HeliosEngine = class _HeliosEngine {
     const cloudLabelY = ringEdgeY + radDY / radLen * CLOUD_CHIP_NUDGE_PX;
     const BATTERY_CHIP_X_OFFSET_PX = 80;
     const BATTERY_CHIP_Y_OFFSET_PX = 40;
+    const shelfY = home.y - PV_CHIP_OFFSET_PX + BATTERY_CHIP_Y_OFFSET_PX;
     const pvX = home.x;
-    const pvY = home.y - PV_CHIP_OFFSET_PX;
+    const pvY = shelfY + BATTERY_CHIP_Y_OFFSET_PX;
     return {
       cloudLabel: { x: cloudLabelX, y: cloudLabelY },
       pvLabel: { x: pvX, y: pvY },
-      batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
-      batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
+      batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
+      batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       home: { x: home.x, y: home.y }
     };
   }
@@ -27723,6 +27715,11 @@ const _HeliosEngine = class _HeliosEngine {
       canvas.removeEventListener("touchstart", handler);
       canvas.removeEventListener("touchmove", handler);
     }
+    let gl = null;
+    try {
+      gl = canvas?.getContext("webgl2") ?? canvas?.getContext("webgl") ?? null;
+    } catch (_2) {
+    }
     this._bumpInactivityCanvas = void 0;
     this._bumpInactivityHandler = void 0;
     this._buildingsData = null;
@@ -27730,6 +27727,10 @@ const _HeliosEngine = class _HeliosEngine {
     this.map?.remove();
     this.map = void 0;
     this._mapReady = false;
+    try {
+      gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    } catch (_2) {
+    }
     try {
       const w2 = window;
       if (w2.__heliosMap !== void 0) delete w2.__heliosMap;
@@ -28887,45 +28888,6 @@ const heliosCardStyles = i$3`
         color: inherit;
         display: inline-flex;
         align-items: center;
-    }
-
-    /*  PV leader line — dashes flow from the home up to the chip
-        at a speed proportional to live production. */
-    .pv-leader-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 5;
-    }
-
-    .pv-leader-line
-    {
-        stroke: var(--pv-leader-color, #27B36B);
-        stroke-width: 1.5;
-        stroke-opacity: 0.85;
-        stroke-linecap: round;
-        stroke-dasharray: 6 5;
-        animation: pv-leader-flow var(--pv-flow-duration, 30s) linear infinite;
-    }
-
-    /*  Negative offset shifts dashes from line start (home) toward
-        end (chip). Cycle length = sum of dasharray pattern. */
-    @keyframes pv-leader-flow
-    {
-        from { stroke-dashoffset: 0;  }
-        to   { stroke-dashoffset: -11; }
-    }
-
-    /*  PV leader arrow — small triangle riding the leader line via
-        SVG <animateMotion>. Same fill as the line; the rotate="auto"
-        on animateMotion keeps the tip pointing in the direction of
-        travel (home → chip). */
-    .pv-leader-arrow
-    {
-        opacity: 0.9;
     }
 
     /*  Battery chips (SoC on the left of PV, Power on the right) —
@@ -30770,6 +30732,9 @@ let HeliosCard = class extends i {
       }
       const elevation = this.hass.config.elevation;
       this._engine?.cleanup();
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
       this._engine = new HeliosEngine(container, this.config, [lon, lat], elevation);
       this._engine.onFetchStart = () => {
         this._fetching = true;
@@ -31463,8 +31428,6 @@ let HeliosCard = class extends i {
     const pvRate = pvEntityId !== "" && layout !== null ? pvScrubbing ? this._pvRateAtTime(this._selectedTime) : this._pvCurrent !== null ? this._currentPvRate() : null : null;
     const showPvLabel = hasApiKey && layout !== null && pvEntityId !== "" && !pvScrubFuture && pvRate !== null;
     const pvDisplayValue = showPvLabel ? this._formatPvValue(pvRate.value, pvRate.unit) : "";
-    const pvWattsForFlow = pvRate !== null ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit) : 0;
-    const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5e3);
     const batterySocEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
     const batteryPowerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
     const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
@@ -31485,29 +31448,31 @@ let HeliosCard = class extends i {
     const PV_HALF_WIDTH_PX = 38;
     const BAT_CHIP_NUDGE_PX = 32;
     const FILLET_R = 6;
-    const lPvBottomY = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX : 0;
+    const lPvEdgeY = layout ? layout.pvLabel.y - PV_HALF_HEIGHT_PX : 0;
     const lShelfY = layout ? layout.batterySocLabel.y : 0;
     const lSocLegX = layout ? layout.pvLabel.x - PV_LEG_OFFSET_PX : 0;
     const lPowerLegX = layout ? layout.pvLabel.x + PV_LEG_OFFSET_PX : 0;
     const lSocEndX = layout ? layout.batterySocLabel.x + BAT_CHIP_NUDGE_PX : 0;
     const lPowerEndX = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
-    const buildLPath = (verticalX, topY, shelfY, endX) => {
+    const buildLPath = (verticalX, pvEdgeY, shelfY, endX) => {
       const dirH = endX > verticalX ? 1 : -1;
-      const r2 = Math.min(FILLET_R, Math.abs(shelfY - topY) / 2, Math.abs(endX - verticalX) / 2);
-      const preY = shelfY - r2;
+      const dirV = shelfY > pvEdgeY ? 1 : -1;
+      const r2 = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
+      const preY = shelfY - dirV * r2;
       const postX = verticalX + dirH * r2;
-      return `M ${verticalX},${topY} L ${verticalX},${preY} Q ${verticalX},${shelfY} ${postX},${shelfY} L ${endX},${shelfY}`;
+      return `M ${verticalX},${pvEdgeY} L ${verticalX},${preY} Q ${verticalX},${shelfY} ${postX},${shelfY} L ${endX},${shelfY}`;
     };
-    const buildLPathReverse = (verticalX, topY, shelfY, endX) => {
+    const buildLPathReverse = (verticalX, pvEdgeY, shelfY, endX) => {
       const dirH = endX > verticalX ? 1 : -1;
-      const r2 = Math.min(FILLET_R, Math.abs(shelfY - topY) / 2, Math.abs(endX - verticalX) / 2);
-      const preY = shelfY - r2;
+      const dirV = shelfY > pvEdgeY ? 1 : -1;
+      const r2 = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
+      const preY = shelfY - dirV * r2;
       const postX = verticalX + dirH * r2;
-      return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${topY}`;
+      return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${pvEdgeY}`;
     };
-    const socLeaderPath = buildLPath(lSocLegX, lPvBottomY, lShelfY, lSocEndX);
-    const powerLeaderPath = buildLPath(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX);
-    const powerArrowPath = batteryCharging ? buildLPath(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX) : buildLPathReverse(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX);
+    const socLeaderPath = buildLPath(lSocLegX, lPvEdgeY, lShelfY, lSocEndX);
+    const powerLeaderPath = buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
+    const powerArrowPath = batteryCharging ? buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX) : buildLPathReverse(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -31765,30 +31730,6 @@ ${showSun ? b`
                 ` : A}
 
                 ${showPvLabel ? b`
-                    <svg class="pv-leader-svg">
-                        <line
-                            class="pv-leader-line"
-                            style="--pv-leader-color:${pvColor}; --pv-flow-duration:${pvFlowDuration}s"
-                            x1="${layout.home.x}"
-                            y1="${layout.home.y}"
-                            x2="${layout.pvLabel.x}"
-                            y2="${layout.pvLabel.y + 10}"
-                        ></line>
-                        ${w`
-                            <polygon
-                                class="pv-leader-arrow"
-                                points="-6,-4 0,0 -6,4"
-                                fill="${pvColor}"
-                            >
-                                <animateMotion
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${layout.home.x},${layout.home.y} L ${layout.pvLabel.x},${layout.pvLabel.y + 10}"
-                                ></animateMotion>
-                            </polygon>
-                        `}
-                    </svg>
                     <div
                         class="pv-pct-label"
                         style="left:${layout.pvLabel.x}px; top:${layout.pvLabel.y}px; --pv-leader-color:${pvColor}"

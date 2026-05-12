@@ -602,45 +602,6 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  PV leader line — dashes flow from the home up to the chip
-        at a speed proportional to live production. */
-    .pv-leader-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 5;
-    }
-
-    .pv-leader-line
-    {
-        stroke: var(--pv-leader-color, #27B36B);
-        stroke-width: 1.5;
-        stroke-opacity: 0.85;
-        stroke-linecap: round;
-        stroke-dasharray: 6 5;
-        animation: pv-leader-flow var(--pv-flow-duration, 30s) linear infinite;
-    }
-
-    /*  Negative offset shifts dashes from line start (home) toward
-        end (chip). Cycle length = sum of dasharray pattern. */
-    @keyframes pv-leader-flow
-    {
-        from { stroke-dashoffset: 0;  }
-        to   { stroke-dashoffset: -11; }
-    }
-
-    /*  PV leader arrow — small triangle riding the leader line via
-        SVG <animateMotion>. Same fill as the line; the rotate="auto"
-        on animateMotion keeps the tip pointing in the direction of
-        travel (home → chip). */
-    .pv-leader-arrow
-    {
-        opacity: 0.9;
-    }
-
     /*  Battery chips (SoC on the left of PV, Power on the right) —
         same frame as the PV chip, tinted in the user-configured
         battery colour. Shares min-width and centred text with the

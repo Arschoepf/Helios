@@ -959,6 +959,14 @@ export class HeliosCard extends LitElement
             const elevation = this.hass.config.elevation;
 
             this._engine?.cleanup();
+            //Defensive: clear anything MapLibre left in the container
+            //(canvas, telemetry div, marker root). Older revisions of
+            //MapLibre occasionally left a dead canvas behind, which
+            //would stack a second 3D context on top of the new one.
+            while (container.firstChild)
+            {
+                container.removeChild(container.firstChild);
+            }
             this._engine = new HeliosEngine(container, this.config, [lon, lat], elevation);
 
             this._engine.onFetchStart = () =>
@@ -2060,11 +2068,6 @@ export class HeliosCard extends LitElement
         //still), saturated → 3 s/cycle (visible motion without being
         //annoying). For PV we saturate at ~5 kW which is a typical
         //residential peak.
-        const pvWattsForFlow = pvRate !== null
-            ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit)
-            : 0;
-        const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5000);
-
         //Battery overlay — two independent chips flanking the PV
         //chip in screen-space: SoC % on the LEFT, signed Power on
         //the RIGHT, mirroring each other around the PV chip's
@@ -2165,41 +2168,47 @@ export class HeliosCard extends LitElement
         const PV_HALF_WIDTH_PX     = 38;
         const BAT_CHIP_NUDGE_PX    = 32;
         const FILLET_R             = 6;
-        const lPvBottomY    = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX        : 0;
-        const lShelfY       = layout ? layout.batterySocLabel.y                     : 0;
-        const lSocLegX      = layout ? layout.pvLabel.x - PV_LEG_OFFSET_PX          : 0;
-        const lPowerLegX    = layout ? layout.pvLabel.x + PV_LEG_OFFSET_PX          : 0;
+        //PV chip sits BELOW the SoC / Power shelf, so each L-leader
+        //runs from PV's TOP edge upward to the shelf, then
+        //horizontally to the SoC / Power chip.
+        const lPvEdgeY      = layout ? layout.pvLabel.y - PV_HALF_HEIGHT_PX           : 0;
+        const lShelfY       = layout ? layout.batterySocLabel.y                       : 0;
+        const lSocLegX      = layout ? layout.pvLabel.x - PV_LEG_OFFSET_PX            : 0;
+        const lPowerLegX    = layout ? layout.pvLabel.x + PV_LEG_OFFSET_PX            : 0;
         const lSocEndX      = layout ? layout.batterySocLabel.x   + BAT_CHIP_NUDGE_PX : 0;
         const lPowerEndX    = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
-        //Forward L: top of vertical leg → fillet → end of horizontal
-        //leg. Used for both visible lines and the charging arrow.
-        const buildLPath = (verticalX: number, topY: number, shelfY: number, endX: number): string =>
+        //Forward L: PV edge → vertical leg → fillet → horizontal leg
+        //→ end. Direction-agnostic — the vertical leg can travel
+        //either up (PV below the shelf, current layout) or down
+        //(legacy PV-above-shelf layout) because the fillet approach
+        //point follows the sign of (shelfY - pvEdgeY).
+        const buildLPath = (verticalX: number, pvEdgeY: number, shelfY: number, endX: number): string =>
         {
-            const dirH = endX > verticalX ? 1 : -1;
+            const dirH  = endX  > verticalX ? 1 : -1;
+            const dirV  = shelfY > pvEdgeY  ? 1 : -1;
             //Clamp the radius so the fillet never overshoots a short
             //leg — the rounded corner has to fit inside both legs.
-            const r    = Math.min(FILLET_R, Math.abs(shelfY - topY) / 2, Math.abs(endX - verticalX) / 2);
-            const preY = shelfY - r;
+            const r     = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
+            const preY  = shelfY - dirV * r;
             const postX = verticalX + dirH * r;
-            return `M ${verticalX},${topY} L ${verticalX},${preY} Q ${verticalX},${shelfY} ${postX},${shelfY} L ${endX},${shelfY}`;
+            return `M ${verticalX},${pvEdgeY} L ${verticalX},${preY} Q ${verticalX},${shelfY} ${postX},${shelfY} L ${endX},${shelfY}`;
         };
-        //Reversed L: end of horizontal leg → fillet → top of vertical
-        //leg. Used for the discharging arrow only (visible line is
-        //direction-agnostic; CSS animation-direction handles the
-        //dash-flow reversal independently).
-        const buildLPathReverse = (verticalX: number, topY: number, shelfY: number, endX: number): string =>
+        //Reversed L: end of horizontal leg → fillet → vertical leg →
+        //PV edge. Used for the discharging arrow only.
+        const buildLPathReverse = (verticalX: number, pvEdgeY: number, shelfY: number, endX: number): string =>
         {
-            const dirH = endX > verticalX ? 1 : -1;
-            const r    = Math.min(FILLET_R, Math.abs(shelfY - topY) / 2, Math.abs(endX - verticalX) / 2);
-            const preY = shelfY - r;
+            const dirH  = endX  > verticalX ? 1 : -1;
+            const dirV  = shelfY > pvEdgeY  ? 1 : -1;
+            const r     = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
+            const preY  = shelfY - dirV * r;
             const postX = verticalX + dirH * r;
-            return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${topY}`;
+            return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${pvEdgeY}`;
         };
-        const socLeaderPath   = buildLPath(lSocLegX,   lPvBottomY, lShelfY, lSocEndX);
-        const powerLeaderPath = buildLPath(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX);
+        const socLeaderPath   = buildLPath(lSocLegX,   lPvEdgeY, lShelfY, lSocEndX);
+        const powerLeaderPath = buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
         const powerArrowPath  = batteryCharging
-            ? buildLPath(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX)
-            : buildLPathReverse(lPowerLegX, lPvBottomY, lShelfY, lPowerEndX);
+            ? buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX)
+            : buildLPathReverse(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
 
         //Solar-arc overlay — sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
@@ -2535,30 +2544,6 @@ ${showSun ? html`
                 ` : nothing}
 
                 ${showPvLabel ? html`
-                    <svg class="pv-leader-svg">
-                        <line
-                            class="pv-leader-line"
-                            style="--pv-leader-color:${pvColor}; --pv-flow-duration:${pvFlowDuration}s"
-                            x1="${layout!.home.x}"
-                            y1="${layout!.home.y}"
-                            x2="${layout!.pvLabel.x}"
-                            y2="${layout!.pvLabel.y + 10}"
-                        ></line>
-                        ${svg`
-                            <polygon
-                                class="pv-leader-arrow"
-                                points="-6,-4 0,0 -6,4"
-                                fill="${pvColor}"
-                            >
-                                <animateMotion
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${layout!.home.x},${layout!.home.y} L ${layout!.pvLabel.x},${layout!.pvLabel.y + 10}"
-                                ></animateMotion>
-                            </polygon>
-                        `}
-                    </svg>
                     <div
                         class="pv-pct-label"
                         style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}"

@@ -2013,34 +2013,25 @@ export class HeliosEngine
     //  cloudLabel — where the cloud-cover chip should be drawn (in
     //               CSS pixels, relative to the map canvas). Sits to
     //               the screen-LEFT of the cloud disc, just outside
-    //               the 100 % reference ring. Pinning it on the side
-    //               (rather than above) keeps the home's vertical
-    //               axis clear for the PV chip (above) and the
-    //               battery chip (below).
+    //               the 100 % reference ring.
     //  pvLabel    — where the optional PV production chip should be
-    //               drawn. Sits a fixed PV_CHIP_OFFSET_PX above the
-    //               home so the production chip is the prominent
-    //               readout, with the cloud chip retreating onto its
-    //               own feature on the side.
-    //  batterySocLabel  — where the optional battery State-of-
-    //               Charge chip is drawn (icon + percent). Sits to
-    //               the BOTTOM-LEFT of the PV chip, connected via
-    //               an inverted-L polyline whose vertical leg
-    //               drops from PV's bottom edge (at 1/4 of the
-    //               chip width from the left) and whose horizontal
-    //               leg lands on the SoC chip's right side. Static
-    //               (no animation, no arrow) — SoC has no flow
-    //               direction to encode.
-    //  batteryPowerLabel — where the optional battery Power chip
-    //               is drawn (icon + signed instantaneous W/kW).
-    //               Sits to the BOTTOM-RIGHT of the PV chip,
-    //               connected via a regular L polyline whose
-    //               vertical leg drops from PV's bottom edge (at
-    //               3/4 of the chip width from the left) and
-    //               whose horizontal leg lands on the Power
-    //               chip's left side. Animated dashes + arrow
-    //               whose direction follows the sign of the
-    //               power.
+    //               drawn. Sits just below the home so the chip is
+    //               read as the home's "production" badge. The SoC
+    //               and Power chips sit on a shared shelf above it,
+    //               so the cluster has the PV chip at the bottom,
+    //               the home in the middle of the L-leaders, and
+    //               the battery chips at the top.
+    //  batterySocLabel   — battery State-of-Charge chip (icon + %).
+    //               Sits on the shelf, to the LEFT of the home's
+    //               vertical axis, connected to PV by an L polyline
+    //               (PV top-left → up → left → SoC right edge).
+    //               Static (no flow direction to encode).
+    //  batteryPowerLabel — battery Power chip (icon + signed W/kW).
+    //               Sits on the shelf, to the RIGHT of the home's
+    //               vertical axis, connected to PV by an L polyline
+    //               (PV top-right → up → right → Power left edge).
+    //               Animated dashes + arrow tracking the sign of
+    //               the live power.
     //  home       — the projected home point, used both as the visual
     //               centre of the cloud disc (the cloud leader ends
     //               here) and as the anchor for the PV / battery
@@ -2095,24 +2086,28 @@ export class HeliosEngine
         const cloudLabelX = ringEdgeX + (radDX / radLen) * CLOUD_CHIP_NUDGE_PX;
         const cloudLabelY = ringEdgeY + (radDY / radLen) * CLOUD_CHIP_NUDGE_PX;
 
-        //Battery chips sit BELOW and to either side of the PV
-        //chip — SoC bottom-LEFT, Power bottom-RIGHT — connected to
-        //PV by L-shaped polylines (see the card render block). The
-        //horizontal offset is sized to leave room for both the L
-        //corner and a short visible run of the L's horizontal leg;
-        //the vertical drop pushes the chips below the PV chip's
-        //bottom edge so the L vertical leg has a real height.
+        //Chip cluster around the home:
+        //  - SoC and Power chips sit on a shared horizontal "shelf"
+        //    a fixed distance above the home, flanking the home's
+        //    vertical axis (SoC on the left, Power on the right).
+        //  - The PV chip is mirrored across that shelf and lands
+        //    just below the home, leaving the home itself uncluttered
+        //    while still placing the PV reading next to its visual
+        //    referent. Each pair of L-shaped leaders runs from the
+        //    PV chip's TOP edge upward to the shelf, then horizontally
+        //    to the SoC / Power chip.
         const BATTERY_CHIP_X_OFFSET_PX = 80;
         const BATTERY_CHIP_Y_OFFSET_PX = 40;
-        const pvX = home.x;
-        const pvY = home.y - PV_CHIP_OFFSET_PX;
+        const shelfY = home.y - PV_CHIP_OFFSET_PX + BATTERY_CHIP_Y_OFFSET_PX;
+        const pvX    = home.x;
+        const pvY    = shelfY + BATTERY_CHIP_Y_OFFSET_PX;
 
         return {
-            cloudLabel:        { x: cloudLabelX,                    y: cloudLabelY                     },
-            pvLabel:           { x: pvX,                            y: pvY                             },
-            batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX  },
-            batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX  },
-            home:              { x: home.x,                         y: home.y                          }
+            cloudLabel:        { x: cloudLabelX,                    y: cloudLabelY },
+            pvLabel:           { x: pvX,                            y: pvY         },
+            batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
+            batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
+            home:              { x: home.x,                         y: home.y      }
         };
     }
 
@@ -2717,10 +2712,17 @@ export class HeliosEngine
         }
 
         //Detach the inactivity bumper listeners we registered on the
-        //canvas. Without this, the closures keep `this` alive (and
-        //therefore the dead MapLibre map + every cached GeoJSON we
-        //fed it) across re-inits.
-        const canvas = this._bumpInactivityCanvas;
+        //canvas, and grab the WebGL context off the same canvas so
+        //we can force-lose it after MapLibre tears the map down.
+        //
+        //Why both at once: the closures keep `this` alive (which
+        //transitively holds the dead MapLibre map + every cached
+        //GeoJSON we fed it) until they are detached. And browsers
+        //don't always release the WebGL context slot when the canvas
+        //alone is GC'd — manual `loseContext` is the only reliable
+        //path to release the slot, which is the root of the perf
+        //drift after several editor re-inits.
+        const canvas  = this._bumpInactivityCanvas;
         const handler = this._bumpInactivityHandler;
         if (canvas && handler)
         {
@@ -2729,6 +2731,14 @@ export class HeliosEngine
             canvas.removeEventListener('touchstart', handler);
             canvas.removeEventListener('touchmove',  handler);
         }
+        let gl: WebGLRenderingContext | WebGL2RenderingContext | null = null;
+        try
+        {
+            gl = (canvas?.getContext('webgl2') as WebGL2RenderingContext | null)
+              ?? (canvas?.getContext('webgl')  as WebGLRenderingContext  | null)
+              ?? null;
+        }
+        catch (_) {}
         this._bumpInactivityCanvas  = undefined;
         this._bumpInactivityHandler = undefined;
 
@@ -2741,6 +2751,9 @@ export class HeliosEngine
         this.map?.remove();
         this.map       = undefined;
         this._mapReady = false;
+
+        try { gl?.getExtension('WEBGL_lose_context')?.loseContext(); }
+        catch (_) {}
 
         //Don't leave the debug global pointing at the disposed map —
         //it would keep the WebGL context alive in some browsers.
