@@ -30541,6 +30541,8 @@ let HeliosCard = class extends i {
     this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
     this._boundPointerUp = (e2) => this._onTimelinePointerUp(e2);
     this._pvCalibK = null;
+    this._pvCalibHARead = false;
+    this._pvCalibPendingSave = null;
   }
   //Cheap stable signature of the visual config — used to skip
   //updateConfig() when nothing the engine cares about has changed.
@@ -30627,6 +30629,11 @@ let HeliosCard = class extends i {
       this._initDebounceTimer = void 0;
       this._initInflight = false;
     }
+    if (this._pvCalibHAWriteTimer !== void 0) {
+      window.clearTimeout(this._pvCalibHAWriteTimer);
+      this._pvCalibHAWriteTimer = void 0;
+      void this._flushPvCalibToHA();
+    }
     this._engine?.cleanup();
     this._engine = void 0;
   }
@@ -30670,6 +30677,9 @@ let HeliosCard = class extends i {
     const lon = this.hass.config.longitude;
     if (lat === void 0 || lon === void 0 || !apiKey) {
       return;
+    }
+    if (!this._pvCalibHARead) {
+      void this._reconcilePvCalibWithHA();
     }
     const homeKey = `${lat.toFixed(5)},${lon.toFixed(5)}`;
     const identityChanged = apiKey !== this._lastApiKey || homeKey !== this._lastHomeKey;
@@ -31703,6 +31713,9 @@ let HeliosCard = class extends i {
     if (typeof lat !== "number" || typeof lon !== "number") return null;
     return `helios-pv-calib:${lat.toFixed(3)}_${lon.toFixed(3)}`;
   }
+  //Synchronous read from localStorage cache. Used at boot so the
+  //first chart render already has whatever data we have locally;
+  //HA reconciliation lands a few hundred ms later.
   _loadPvCalibSamples() {
     const key = this._pvCalibStorageKey();
     if (!key) return [];
@@ -31717,11 +31730,81 @@ let HeliosCard = class extends i {
       return [];
     }
   }
+  //Save to localStorage immediately + schedule a debounced HA
+  //write. Two destinations because they each cover a different
+  //failure mode: localStorage gives us instant boot, HA gives us
+  //device-portability + backup safety.
   _savePvCalibSamples(samples) {
     const key = this._pvCalibStorageKey();
     if (!key) return;
     try {
       window.localStorage?.setItem(key, JSON.stringify(samples));
+    } catch (_2) {
+    }
+    this._pvCalibPendingSave = samples;
+    if (this._pvCalibHAWriteTimer === void 0) {
+      this._pvCalibHAWriteTimer = window.setTimeout(
+        () => this._flushPvCalibToHA(),
+        HeliosCard.PV_CALIB_HA_WRITE_MS
+      );
+    }
+  }
+  //Push the latest buffer to HA via frontend/set_user_data.
+  //frontend/get_user_data + frontend/set_user_data accept arbitrary
+  //string keys and store on the server under the current HA user's
+  //profile (.storage/frontend.user_data_{user_id}). Per-user means
+  //multi-account HA installs keep their calibrations separate,
+  //which is the right default when different people may have
+  //different PV setups.
+  async _flushPvCalibToHA() {
+    this._pvCalibHAWriteTimer = void 0;
+    const samples = this._pvCalibPendingSave;
+    const key = this._pvCalibStorageKey();
+    this._pvCalibPendingSave = null;
+    if (!samples || !key) return;
+    if (!this.hass?.callWS) return;
+    try {
+      await this.hass.callWS({
+        type: "frontend/set_user_data",
+        key,
+        value: samples
+      });
+    } catch (_2) {
+    }
+  }
+  //Pull the buffer from HA, merge with the local cache (HA wins
+  //on conflict — it's the source of truth), recompute k. Called
+  //once when hass becomes available; subsequent updates flow
+  //through _updatePvCalibration / _savePvCalibSamples.
+  async _reconcilePvCalibWithHA() {
+    if (this._pvCalibHARead) return;
+    if (!this.hass?.callWS) return;
+    const key = this._pvCalibStorageKey();
+    if (!key) return;
+    this._pvCalibHARead = true;
+    try {
+      const result = await this.hass.callWS({
+        type: "frontend/get_user_data",
+        key
+      });
+      const remote = Array.isArray(result?.value) ? result.value.filter((e2) => typeof e2?.t === "number" && typeof e2?.o === "number" && isFinite(e2.o) && typeof e2?.p === "number" && isFinite(e2.p)) : [];
+      const local = this._loadPvCalibSamples();
+      const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+      const byTs = /* @__PURE__ */ new Map();
+      for (const e2 of local) {
+        if (e2.t >= cutoff) byTs.set(e2.t, e2);
+      }
+      for (const e2 of remote) {
+        if (e2.t >= cutoff) byTs.set(e2.t, e2);
+      }
+      const merged = Array.from(byTs.values()).sort((a2, b2) => a2.t - b2.t);
+      try {
+        const sKey = this._pvCalibStorageKey();
+        if (sKey) window.localStorage?.setItem(sKey, JSON.stringify(merged));
+      } catch (_2) {
+      }
+      this._pvCalibK = this._calibrateK(merged);
+      this.requestUpdate();
     } catch (_2) {
     }
   }
@@ -32454,6 +32537,7 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
 HeliosCard.INIT_DEBOUNCE_MS = 500;
 HeliosCard.PV_CALIB_TTL_MS = 14 * 24 * 36e5;
 HeliosCard.PV_CALIB_MIN_SAMPLES = 20;
+HeliosCard.PV_CALIB_HA_WRITE_MS = 6e4;
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([
   n2({ attribute: false })

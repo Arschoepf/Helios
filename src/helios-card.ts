@@ -398,6 +398,15 @@ export class HeliosCard extends LitElement
             this._initDebounceTimer = undefined;
             this._initInflight      = false;
         }
+        //Flush any pending PV-calibration HA write synchronously
+        //(best-effort) so we don't lose the most recent samples to
+        //a stale timer that will never fire after disconnect.
+        if (this._pvCalibHAWriteTimer !== undefined)
+        {
+            window.clearTimeout(this._pvCalibHAWriteTimer);
+            this._pvCalibHAWriteTimer = undefined;
+            void this._flushPvCalibToHA();
+        }
         this._engine?.cleanup();
         this._engine = undefined;
     }
@@ -472,6 +481,15 @@ export class HeliosCard extends LitElement
         if (lat === undefined || lon === undefined || !apiKey)
         {
             return;
+        }
+
+        //First time hass is available — reconcile the local PV
+        //calibration cache with HA's frontend/user_data storage so
+        //we pull in any samples accumulated on another device
+        //(or recover from a localStorage wipe).
+        if (!this._pvCalibHARead)
+        {
+            void this._reconcilePvCalibWithHA();
         }
 
         const homeKey  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
@@ -2080,19 +2098,32 @@ export class HeliosCard extends LitElement
 
 
     //PV auto-calibration — maintains a rolling 14-day buffer of
-    //(observedWatts, predictedNormalized) pairs aggregated per hour
-    //and persisted to localStorage, then fits a single scalar k via
-    //least squares so that  observed ≈ k · predictedNormalized.
+    //(observedWatts, predictedNormalized) pairs aggregated per hour,
+    //then fits a single scalar k via least squares so that
+    //  observed ≈ k · predictedNormalized
+    //
+    //Storage layout:
+    //  - SOURCE OF TRUTH: HA `frontend/set_user_data` (server-side,
+    //    survives cache wipes / device switches / restarts, included
+    //    in HA backups, per-user). Written debounced every 60 s so we
+    //    don't hammer the WebSocket.
+    //  - LOCAL CACHE: `window.localStorage` — read synchronously at
+    //    boot for an instant first render, then reconciled with HA
+    //    as soon as the WS connection is up.
     //
     //Once enough samples have accumulated (PV_CALIB_MIN_SAMPLES),
     //k is multiplied by future predicted-normalised values to draw
-    //a forecast line on the PV chart. The user never has to enter a
-    //"peak power" — the card learns the mapping from their own
+    //a forecast line on the PV chart. The user never has to enter
+    //a "peak power" — the card learns the mapping from their own
     //history and adapts to seasonal drift via the rolling window.
-    private static readonly PV_CALIB_TTL_MS      = 14 * 24 * 3_600_000;
-    private static readonly PV_CALIB_MIN_SAMPLES = 20;
+    private static readonly PV_CALIB_TTL_MS         = 14 * 24 * 3_600_000;
+    private static readonly PV_CALIB_MIN_SAMPLES    = 20;
+    private static readonly PV_CALIB_HA_WRITE_MS    = 60_000;
 
     private _pvCalibK: number | null = null;
+    private _pvCalibHARead = false;
+    private _pvCalibHAWriteTimer?: number;
+    private _pvCalibPendingSave: Array<{ t: number; o: number; p: number }> | null = null;
 
     private _pvCalibStorageKey(): string | null
     {
@@ -2102,6 +2133,9 @@ export class HeliosCard extends LitElement
         return `helios-pv-calib:${lat.toFixed(3)}_${lon.toFixed(3)}`;
     }
 
+    //Synchronous read from localStorage cache. Used at boot so the
+    //first chart render already has whatever data we have locally;
+    //HA reconciliation lands a few hundred ms later.
     private _loadPvCalibSamples(): Array<{ t: number; o: number; p: number }>
     {
         const key = this._pvCalibStorageKey();
@@ -2112,7 +2146,6 @@ export class HeliosCard extends LitElement
             if (!raw) return [];
             const parsed = JSON.parse(raw) as Array<{ t: number; o: number; p: number }>;
             if (!Array.isArray(parsed)) return [];
-            //Drop entries older than the TTL.
             const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
             return parsed.filter(e => typeof e.t === 'number' && e.t >= cutoff
                                      && typeof e.o === 'number' && isFinite(e.o)
@@ -2121,12 +2154,109 @@ export class HeliosCard extends LitElement
         catch (_) { return []; }
     }
 
+    //Save to localStorage immediately + schedule a debounced HA
+    //write. Two destinations because they each cover a different
+    //failure mode: localStorage gives us instant boot, HA gives us
+    //device-portability + backup safety.
     private _savePvCalibSamples(samples: Array<{ t: number; o: number; p: number }>): void
     {
         const key = this._pvCalibStorageKey();
         if (!key) return;
         try { window.localStorage?.setItem(key, JSON.stringify(samples)); }
         catch (_) {}
+
+        //Debounced HA write.
+        this._pvCalibPendingSave = samples;
+        if (this._pvCalibHAWriteTimer === undefined)
+        {
+            this._pvCalibHAWriteTimer = window.setTimeout(
+                () => this._flushPvCalibToHA(),
+                HeliosCard.PV_CALIB_HA_WRITE_MS
+            );
+        }
+    }
+
+    //Push the latest buffer to HA via frontend/set_user_data.
+    //frontend/get_user_data + frontend/set_user_data accept arbitrary
+    //string keys and store on the server under the current HA user's
+    //profile (.storage/frontend.user_data_{user_id}). Per-user means
+    //multi-account HA installs keep their calibrations separate,
+    //which is the right default when different people may have
+    //different PV setups.
+    private async _flushPvCalibToHA(): Promise<void>
+    {
+        this._pvCalibHAWriteTimer = undefined;
+        const samples = this._pvCalibPendingSave;
+        const key     = this._pvCalibStorageKey();
+        this._pvCalibPendingSave = null;
+        if (!samples || !key) return;
+        if (!this.hass?.callWS) return;
+        try
+        {
+            await this.hass.callWS({
+                type:  'frontend/set_user_data',
+                key,
+                value: samples
+            });
+        }
+        catch (_) {}
+    }
+
+    //Pull the buffer from HA, merge with the local cache (HA wins
+    //on conflict — it's the source of truth), recompute k. Called
+    //once when hass becomes available; subsequent updates flow
+    //through _updatePvCalibration / _savePvCalibSamples.
+    private async _reconcilePvCalibWithHA(): Promise<void>
+    {
+        if (this._pvCalibHARead)            return;
+        if (!this.hass?.callWS)             return;
+        const key = this._pvCalibStorageKey();
+        if (!key)                           return;
+        this._pvCalibHARead = true;
+
+        try
+        {
+            const result = await this.hass.callWS({
+                type: 'frontend/get_user_data',
+                key
+            }) as { value?: unknown };
+
+            const remote = Array.isArray(result?.value)
+                ? (result.value as Array<{ t: number; o: number; p: number }>)
+                    .filter(e => typeof e?.t === 'number'
+                              && typeof e?.o === 'number' && isFinite(e.o)
+                              && typeof e?.p === 'number' && isFinite(e.p))
+                : [];
+
+            const local  = this._loadPvCalibSamples();
+            const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+            //Merge by hour-bucket timestamp; HA wins on conflict.
+            const byTs = new Map<number, { t: number; o: number; p: number }>();
+            for (const e of local)  { if (e.t >= cutoff) byTs.set(e.t, e); }
+            for (const e of remote) { if (e.t >= cutoff) byTs.set(e.t, e); }
+            const merged = Array.from(byTs.values()).sort((a, b) => a.t - b.t);
+
+            //Persist the merged view back to localStorage (instant
+            //read next boot) but DON'T trigger a fresh HA write —
+            //HA already has these samples.
+            try
+            {
+                const sKey = this._pvCalibStorageKey();
+                if (sKey) window.localStorage?.setItem(sKey, JSON.stringify(merged));
+            }
+            catch (_) {}
+
+            this._pvCalibK = this._calibrateK(merged);
+            //Force a re-render so the PV chart picks up the newly
+            //available prediction line if the threshold is crossed.
+            this.requestUpdate();
+        }
+        catch (_)
+        {
+            //HA unreachable or schema error — keep using the local
+            //cache. The next reconcile attempt happens at the next
+            //card init.
+        }
     }
 
     //Bucket the raw PV history into one (avg-watts) value per local
