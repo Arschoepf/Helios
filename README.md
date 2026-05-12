@@ -78,11 +78,17 @@ Every option below is editable visually:
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `maptiler-api-key` | string | — | Required. |
-| `map-style` | `'streets' \| 'topo' \| 'hybrid'` | `'streets'` | Basemap style. `streets` is a sober vector basemap suited to dense urban areas; `topo` is a topographic basemap with contour lines, better in hilly / outdoor settings; `hybrid` is high-resolution satellite imagery with road and label overlays for real-world context (vegetation, rooftops, parking lots) under the solar overlay. Labels and 3D buildings work identically on all three. |
-| `card-theme` | `'light' \| 'dark'` | `'light'` | Card chrome skin — chips, charts, buttons, tooltips and the scrub overlay flip between a light surface (default, on a white plate) and a dark surface (on a near-black plate), so the card sits cleanly inside light or dark Home Assistant dashboards. The 3D map basemap and the configured colour palette (sun, cloud, PV, battery) are unaffected. |
+| `map-style` | `'streets' \| 'topo' \| 'minimal'` | `'streets'` | Basemap style. `streets` is a sober vector basemap suited to dense urban areas; `topo` is a topographic basemap with contour lines, better in hilly / outdoor settings; `minimal` loads streets and prunes every non-essential layer (POI symbols, place names, country labels, road shields) for a stripped basemap that's cheaper to render. The dark variant of streets / topo is used automatically when `card-theme` is `'dark'`. |
+| `card-theme` | `'light' \| 'dark'` | `'light'` | Card chrome skin — chips, charts, buttons, tooltips, the scrub overlay AND the 3D map basemap (via the MapTiler `*-dark` variants) flip between a light surface (white plate) and a dark surface (near-black `#191a1b` plate), so the card sits cleanly inside light or dark Home Assistant dashboards. |
+| `performance-mode` | boolean | `false` | Drops the per-frame heavyweights for low-end devices: 3D terrain mesh disabled (flat ground, pitch preserved), hillshade hidden, canvas pixel ratio forced to 1.0. The 3D buildings keep their extrusion, so the card still reads as 3D. Recovers 3–5× FPS on Safari fullscreen / mid-range mobile. |
+| `auto-rotate-enabled` | boolean | `true` | When `true`, the camera orbits the home slowly during idle. Any pinch / drag / wheel pauses it for 5 s and it resumes from the user's bearing. Disable on low-power devices or if the constant motion is distracting. |
 | `topography-color` | hex | `#5064a0` | Hillshade tint. |
 | `topography-alpha` | 0–1 | `0.65` | Hillshade strength. On `topo`, the basemap already carries some baked-in shading — lower this if the cumulative effect feels too heavy. |
 | `show-labels` | boolean | `true` | Show MapTiler street names, building numbers, POIs and place names on the basemap. |
+| `building-radius` | meters | `100` | Distance around the home within which surrounding buildings are rendered in 3D. Buildings outside the radius are not drawn — the perf win in dense urban areas. Range: 20–1000 m. |
+| `building-cluster-radius` | meters | `0` | Distance around the home within which every building joins the home group at full opacity. Use this to attach verandas, garages and sheds to the main house. Range: 0–100 m. |
+| `building-opacity` | 0–1 | `0.25` | Opacity of the surrounding buildings. The home (and its cluster) always stays at full opacity so it reads as the focal point. |
+| `building-color` | hex | `#d2d2d7` | Base colour for every rendered building, modulated by sun altitude across the day. |
 | `sun-color` | hex | `#EF9F27` | Sun disc + arc + timeline irradiance area. |
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
 | `pv-power-entity` | entity_id | — | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |

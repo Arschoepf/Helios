@@ -4,8 +4,6 @@ export const es: Translations = {
     cardName:        'HELIOS',
     cardDescription: 'Visualización en tiempo real de la energía solar y la cobertura de nubes',
 
-    live: 'En vivo',
-
     placeholder:
     {
         subtitle: 'Exposición solar y cobertura de nubes'
@@ -16,8 +14,7 @@ export const es: Translations = {
         cloudCover:  "Cobertura de nubes: {0}%",
         cloudLow:    "Baja: {0}%",
         cloudMid:    "Media: {0}%",
-        cloudHigh:   "Alta: {0}%",
-        resetLive:   'Volver al directo'
+        cloudHigh:   "Alta: {0}%"
     },
 
     editor:
@@ -32,18 +29,21 @@ export const es: Translations = {
         hillshadeStrength:  'Intensidad del sombreado * (0 → 1)',
         mapSection:         'Mapa',
         mapStyle:           'Estilo del mapa *',
-        mapStyleHint:       'Elige entre el mapa de calles (sobrio, urbano), el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso) o el mapa híbrido (imágenes de satélite de alta resolución con superposición de calles y etiquetas). Las etiquetas y los edificios 3D funcionan igual en los tres.',
+        mapStyleHint:       'Elige entre el mapa de calles (sobrio, urbano) y el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso). Las etiquetas y los edificios 3D funcionan igual en ambos. La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.',
         mapStyleStreet:     'Calles',
         mapStyleTopo:       'Topo',
-        mapStyleHybrid:     'Híbrido',
         cardTheme:          'Tema de la tarjeta *',
-        cardThemeHint:      'Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros. El mapa 3D no se ve afectado.',
+        cardThemeHint:      'Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) y el mapa 3D de fondo entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros.',
         cardThemeLight:     'Claro',
         cardThemeDark:      'Oscuro',
         showLabels:         'Mostrar etiquetas *',
         showLabelsHint:     'Muestra u oculta los nombres de calles, números de edificios, puntos de interés y nombres de zonas en el mapa de fondo.',
         labelsOn:           'Visibles',
         labelsOff:          'Ocultas',
+        autoRotate:         'Rotación automática de la cámara *',
+        autoRotateHint:     'Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (aprox. 1,5°/s, en sentido opuesto al movimiento aparente del sol). Cualquier pellizco, arrastre o rueda la pausa al instante y se reanuda cuando sueltas.',
+        autoRotateOn:       'Activada',
+        autoRotateOff:      'Desactivada',
         timeline:           'Cronología',
         timelineHint:       'Formato de las fechas mostradas en la cronología y en la pastilla del scrub.',
         dateFormat:         'Formato de fecha * (por defecto: mm-dd)',
@@ -66,6 +66,17 @@ export const es: Translations = {
         batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
         batteryPowerEntity: 'Entidad de potencia',
         batteryPowerEntityHelp: 'Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).',
-        batteryColor:       'Color batería *'
+        batteryColor:       'Color batería *',
+        buildingsSection:   'Edificios circundantes',
+        buildingsHint:      'Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».',
+        buildingRadius:        'Radio de visibilidad *',
+        buildingClusterRadius: 'Radio del grupo de la casa *',
+        buildingOpacity:       'Opacidad de los vecinos *',
+        buildingColor:         'Color de los edificios *',
+        performanceMode:       'Modo rendimiento *',
+        performanceModeOn:     'Activado',
+        performanceModeOff:    'Desactivado',
+        performanceModeHint:   'Desactiva el terreno 3D, el relieve y limita la densidad de píxeles. Útil en dispositivos modestos o para sesiones largas. La inclinación y los edificios 3D se mantienen.',
+        mapStyleMinimal:       'Mínimo'
     }
 };

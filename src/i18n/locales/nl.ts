@@ -4,8 +4,6 @@ export const nl: Translations = {
     cardName:        'HELIOS',
     cardDescription: 'Realtime visualisatie van zonne-energie en bewolking',
 
-    live: 'Live',
-
     placeholder:
     {
         subtitle: 'Zonexpositie & bewolking'
@@ -16,8 +14,7 @@ export const nl: Translations = {
         cloudCover:  "Bewolking: {0}%",
         cloudLow:    "Laag: {0}%",
         cloudMid:    "Middel: {0}%",
-        cloudHigh:   "Hoog: {0}%",
-        resetLive:   'Terug naar live'
+        cloudHigh:   "Hoog: {0}%"
     },
 
     editor:
@@ -32,18 +29,21 @@ export const nl: Translations = {
         hillshadeStrength:  'Schaduwsterkte * (0 → 1)',
         mapSection:         'Kaart',
         mapStyle:           'Kaartstijl *',
-        mapStyleHint:       'Kies tussen de stratenkaart (sober, stedelijk), de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein) of de hybride kaart (hoogwaardige satellietbeelden met overlays voor wegen en labels). Labels en 3D-gebouwen werken op alle drie hetzelfde.',
+        mapStyleHint:       'Kies tussen de stratenkaart (sober, stedelijk) en de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein). Labels en 3D-gebouwen werken op beide hetzelfde. De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.',
         mapStyleStreet:     'Straten',
         mapStyleTopo:       'Topo',
-        mapStyleHybrid:     'Hybride',
         cardTheme:          'Kaartthema *',
-        cardThemeHint:      'Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards. De 3D-basemap wordt niet beïnvloed.',
+        cardThemeHint:      'Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) en de 3D-basemap tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards.',
         cardThemeLight:     'Licht',
         cardThemeDark:      'Donker',
         showLabels:         'Labels weergeven *',
         showLabelsHint:     'Toont of verbergt straatnamen, huisnummers, points of interest en buurtnamen op de basiskaart.',
         labelsOn:           'Zichtbaar',
         labelsOff:          'Verborgen',
+        autoRotate:         'Automatische camerarotatie *',
+        autoRotateHint:     'Na een paar seconden inactiviteit draait de camera langzaam rond het huis (ongeveer 1,5°/s, tegen de schijnbare beweging van de zon in). Een knijp-, sleep- of muiswielgebaar pauzeert de rotatie direct; ze hervat zodra je loslaat.',
+        autoRotateOn:       'Aan',
+        autoRotateOff:      'Uit',
         timeline:           'Tijdlijn',
         timelineHint:       'Datumformaat dat op de tijdlijn en in de scrub-chip wordt weergegeven.',
         dateFormat:         'Datumformaat * (standaard: mm-dd)',
@@ -66,6 +66,17 @@ export const nl: Translations = {
         batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
         batteryPowerEntity: 'Vermogen-entiteit',
         batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
-        batteryColor:       'Batterijkleur *'
+        batteryColor:       'Batterijkleur *',
+        buildingsSection:   'Omliggende gebouwen',
+        buildingsHint:      'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
+        buildingRadius:        'Zichtstraal *',
+        buildingClusterRadius: 'Cluster-straal huis *',
+        buildingOpacity:       'Dekking omliggende gebouwen *',
+        buildingColor:         'Gebouwkleur *',
+        performanceMode:       'Prestatiemodus *',
+        performanceModeOn:     'Aan',
+        performanceModeOff:    'Uit',
+        performanceModeHint:   'Schakelt 3D-terrein, reliëfschaduw uit en beperkt de pixeldichtheid. Handig op bescheiden apparaten of voor lange sessies. De camerakanteling en 3D-gebouwen blijven behouden.',
+        mapStyleMinimal:       'Minimaal'
     }
 };

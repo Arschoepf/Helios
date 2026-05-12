@@ -4,8 +4,6 @@ export const de: Translations = {
     cardName:        'HELIOS',
     cardDescription: 'Echtzeit-Visualisierung von Solarenergie und Wolkenbedeckung',
 
-    live: 'Live',
-
     placeholder:
     {
         subtitle: 'Sonneneinstrahlung & Wolkenbedeckung'
@@ -16,8 +14,7 @@ export const de: Translations = {
         cloudCover:  "Bewölkung: {0}%",
         cloudLow:    "Niedrig: {0}%",
         cloudMid:    "Mittel: {0}%",
-        cloudHigh:   "Hoch: {0}%",
-        resetLive:   'Zurück zur Echtzeit'
+        cloudHigh:   "Hoch: {0}%"
     },
 
     editor:
@@ -32,18 +29,21 @@ export const de: Translations = {
         hillshadeStrength:  'Schattierungsstärke * (0 → 1)',
         mapSection:         'Karte',
         mapStyle:           'Kartenstil *',
-        mapStyleHint:       'Wähle zwischen der Straßenkarte (nüchtern, urban), der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände) oder der Hybrid-Karte (hochauflösende Satellitenbilder mit Straßen- und Beschriftungs-Overlay). Beschriftungen und 3D-Gebäude funktionieren auf allen drei gleich.',
+        mapStyleHint:       'Wähle zwischen der Straßenkarte (nüchtern, urban) und der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände). Beschriftungen und 3D-Gebäude funktionieren bei beiden gleich. Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.',
         mapStyleStreet:     'Straßen',
         mapStyleTopo:       'Topo',
-        mapStyleHybrid:     'Hybrid',
         cardTheme:          'Karten-Thema *',
-        cardThemeHint:      'Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt. Die 3D-Grundkarte selbst bleibt unverändert.',
+        cardThemeHint:      'Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) sowie die 3D-Grundkarte zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt.',
         cardThemeLight:     'Hell',
         cardThemeDark:      'Dunkel',
         showLabels:         'Beschriftungen anzeigen *',
         showLabelsHint:     'Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.',
         labelsOn:           'Sichtbar',
         labelsOff:          'Ausgeblendet',
+        autoRotate:         'Automatische Kamerarotation *',
+        autoRotateHint:     'Nach ein paar Sekunden Inaktivität kreist die Kamera langsam um das Haus (ca. 1,5°/s, gegenläufig zur scheinbaren Sonnenbahn). Pinch, Drag oder Mausrad pausieren sie sofort; sie setzt fort, sobald du loslässt.',
+        autoRotateOn:       'Ein',
+        autoRotateOff:      'Aus',
         timeline:           'Zeitachse',
         timelineHint:       'Format der Datumsanzeige auf der Zeitachse und im Scrub-Chip.',
         dateFormat:         'Datumsformat * (Standard: mm-dd)',
@@ -66,6 +66,17 @@ export const de: Translations = {
         batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
         batteryPowerEntity: 'Leistungs-Entität',
         batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
-        batteryColor:       'Batteriefarbe *'
+        batteryColor:       'Batteriefarbe *',
+        buildingsSection:   'Umliegende Gebäude',
+        buildingsHint:      'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
+        buildingRadius:        'Sichtradius *',
+        buildingClusterRadius: 'Cluster-Radius Zuhause *',
+        buildingOpacity:       'Deckkraft Nachbargebäude *',
+        buildingColor:         'Gebäudefarbe *',
+        performanceMode:       'Performance-Modus *',
+        performanceModeOn:     'Ein',
+        performanceModeOff:    'Aus',
+        performanceModeHint:   'Deaktiviert 3D-Terrain, Hillshade und begrenzt die Pixeldichte. Sinnvoll bei leistungsschwachen Geräten oder langen Sitzungen. Kameraneigung und 3D-Gebäude bleiben erhalten.',
+        mapStyleMinimal:       'Minimal'
     }
 };

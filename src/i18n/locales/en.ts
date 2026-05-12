@@ -14,8 +14,6 @@ export const en: Translations = {
     cardName:        'HELIOS',
     cardDescription: 'Real-time solar energy and cloud coverage visualization',
 
-    live: 'Live',
-
     placeholder:
     {
         subtitle: 'Solar exposure & cloud coverage'
@@ -26,8 +24,7 @@ export const en: Translations = {
         cloudCover:  "Cloud cover: {0}%",
         cloudLow:    "Low: {0}%",
         cloudMid:    "Mid: {0}%",
-        cloudHigh:   "High: {0}%",
-        resetLive:   'Back to live'
+        cloudHigh:   "High: {0}%"
     },
 
     editor:
@@ -42,18 +39,21 @@ export const en: Translations = {
         hillshadeStrength:  'Hillshade strength * (0 → 1)',
         mapSection:         'Map',
         mapStyle:           'Map style *',
-        mapStyleHint:       'Choose between the streets basemap (sober, urban), the topographic basemap (contour lines, earth tones, better in hilly terrain) or the hybrid basemap (high-resolution satellite imagery with road and label overlays). Labels and 3D buildings work identically on all three.',
+        mapStyleHint:       'Choose between the streets basemap (sober, urban) and the topographic basemap (contour lines, earth tones, better in hilly terrain). Labels and 3D buildings work identically on both. The dark variant of the chosen style is used automatically when the card theme is set to dark.',
         mapStyleStreet:     'Streets',
         mapStyleTopo:       'Topo',
-        mapStyleHybrid:     'Hybrid',
         cardTheme:          'Card theme *',
-        cardThemeHint:      'Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards. The 3D map basemap is unaffected.',
+        cardThemeHint:      'Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) and the 3D map basemap between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards.',
         cardThemeLight:     'Light',
         cardThemeDark:      'Dark',
         showLabels:         'Show labels *',
         showLabelsHint:     'Toggles street names, building numbers, points of interest and place names on the basemap.',
         labelsOn:           'Shown',
         labelsOff:          'Hidden',
+        autoRotate:         'Camera auto-rotation *',
+        autoRotateHint:     'When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun\'s apparent motion). Any pinch, drag or wheel pauses it instantly and it resumes once you let go.',
+        autoRotateOn:       'On',
+        autoRotateOff:      'Off',
         timeline:           'Timeline',
         timelineHint:       'Format of the date labels shown on the timeline and inside the scrub chip.',
         dateFormat:         'Date format * (default: mm-dd)',
@@ -76,6 +76,17 @@ export const en: Translations = {
         batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
         batteryPowerEntity: 'Power entity',
         batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
-        batteryColor:       'Battery color *'
+        batteryColor:       'Battery color *',
+        buildingsSection:   'Surrounding buildings',
+        buildingsHint:      'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
+        buildingRadius:        'Visibility radius *',
+        buildingClusterRadius: 'Home cluster radius *',
+        buildingOpacity:       'Surrounding opacity *',
+        buildingColor:         'Building color *',
+        performanceMode:       'Performance mode *',
+        performanceModeOn:     'On',
+        performanceModeOff:    'Off',
+        performanceModeHint:   'Disables 3D terrain, hillshade and caps pixel density. Useful on low-end devices or for long sessions. Camera pitch and 3D buildings are preserved.',
+        mapStyleMinimal:       'Minimal'
     }
 };

@@ -72,7 +72,7 @@ export class HeliosCard extends LitElement
     private static readonly OUTLINE_NEAR = 5.0;
     private static readonly SEGMENT_FAR  = 1.0;
     private static readonly SEGMENT_NEAR = 4.0;
-    //v1.3 — sun disc enlarged so the irradiance fill is readable
+    //Sun disc enlarged so the irradiance fill is readable
     //without zooming in. The old radii (6 → 13 px) made the inner
     //fill smaller than ~9 px in diameter at apex, which is the
     //legibility floor for an annulus. The new range (10 → 20 px)
@@ -103,7 +103,7 @@ export class HeliosCard extends LitElement
     @state() private _engine?:        HeliosEngine;
     @state() private _now             = new Date();
     //Cloud-cover values shown in the on-ground disc tooltip. Recreated
-    //in v1.2.1 after the v1.2 cleanup removed them — now they feed the
+    //after the v1.2 cleanup removed them — now they feed the
     //hover popup that appears above the disc rather than the (also
     //removed) sidebar pills.
     @state() private _cloudCover      = -1;
@@ -131,7 +131,6 @@ export class HeliosCard extends LitElement
         pvLabel:           { x: number; y: number };
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
-        ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
     } | null = null;
     //Photovoltaic production state — populated when the user has set
@@ -210,7 +209,7 @@ export class HeliosCard extends LitElement
     //Visual config keys that the engine reacts to via updateConfig().
     //Anything outside this list (notably maptiler-api-key, which is an
     //identity input handled separately) is irrelevant for live updates.
-    //Significantly trimmed in v1.2: most visual styling is now hard-
+    //Significantly trimmed: most visual styling is now hard-
     //coded to keep the new design coherent (uniform building colour
     //and opacity, no radial dot grid).
     private static readonly _VISUAL_CONFIG_KEYS = [
@@ -243,7 +242,16 @@ export class HeliosCard extends LitElement
         //between the light and dark skins), but it must be in the
         //sig so Lit re-renders the card when the user toggles it
         //in the editor.
-        'card-theme'
+        'card-theme',
+        //building-* drive the helios-buildings-* custom layers.
+        //  radius / cluster-radius → invalidate cache and refetch
+        //  opacity / color → cheap paint-property updates
+        'building-radius',
+        'building-cluster-radius',
+        'building-opacity',
+        'building-color',
+        //performance-mode toggles terrain, hillshade and pixelRatio.
+        'performance-mode'
     ] as const;
 
     //Cheap stable signature of the visual config — used to skip
@@ -322,14 +330,67 @@ export class HeliosCard extends LitElement
         super.connectedCallback();
         this._tick();
         this._timer = window.setInterval(() => this._tick(), 1000);
+        this._initVisibilityObserver();
     }
 
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
         window.clearInterval(this._timer);
+        this._visibilityObserver?.disconnect();
+        this._visibilityObserver = undefined;
         this._engine?.cleanup();
         this._engine = undefined;
+    }
+
+    //IntersectionObserver — pause every CSS animation and every SVG
+    //SMIL animation when the card scrolls out of the viewport. The
+    //rotation loop (a requestAnimationFrame in the engine) is left
+    //running because (a) the browser auto-throttles rAF on hidden
+    //tabs and (b) the card looks alive when the user scrolls back.
+    //Only the SVG overlay animations are paused — they're the ones
+    //that run continuously regardless of map state.
+    private _visibilityObserver?: IntersectionObserver;
+
+    private _initVisibilityObserver(): void
+    {
+        if (this._visibilityObserver || typeof IntersectionObserver === 'undefined')
+        {
+            return;
+        }
+        this._visibilityObserver = new IntersectionObserver(entries =>
+        {
+            for (const entry of entries)
+            {
+                this._setAnimationsPaused(!entry.isIntersecting);
+            }
+        }, { threshold: 0 });
+        this._visibilityObserver.observe(this);
+    }
+
+    private _setAnimationsPaused(paused: boolean): void
+    {
+        this.classList.toggle('helios-paused', paused);
+        //SMIL animations are not controlled by CSS animation-play-state.
+        //Walk the shadow tree and call (un)pauseAnimations() on every
+        //SVG root we find. Both methods are no-ops on browsers that
+        //don't support them, so we don't need to feature-detect.
+        const root = this.shadowRoot;
+        if (!root) return;
+        const svgs = root.querySelectorAll('svg');
+        for (const svg of Array.from(svgs))
+        {
+            const s = svg as SVGSVGElement & {
+                pauseAnimations?:  () => void;
+                unpauseAnimations?: () => void;
+            };
+            try
+            {
+                if (paused) s.pauseAnimations?.();
+                else        s.unpauseAnimations?.();
+            }
+            catch (_) {}
+        }
     }
 
     //Engine init policy: re-init only when one of the *identity inputs*
@@ -898,6 +959,14 @@ export class HeliosCard extends LitElement
             const elevation = this.hass.config.elevation;
 
             this._engine?.cleanup();
+            //Defensive: clear anything MapLibre left in the container
+            //(canvas, telemetry div, marker root). Older revisions of
+            //MapLibre occasionally left a dead canvas behind, which
+            //would stack a second 3D context on top of the new one.
+            while (container.firstChild)
+            {
+                container.removeChild(container.firstChild);
+            }
             this._engine = new HeliosEngine(container, this.config, [lon, lat], elevation);
 
             this._engine.onFetchStart = () =>
@@ -964,7 +1033,7 @@ export class HeliosCard extends LitElement
         this._sunScene = this._engine ? this._engine.projectSunScene(t) : null;
     }
 
-    //v1.3 — segments now share one fixed colour (the configured sun
+    //Segments now share one fixed colour (the configured sun
     //colour). Depth perception comes entirely from the per-segment
     //stroke width modulated by `nearness`, kept untouched: it is the
     //2D-on-3D cue we explicitly chose not to overload with another
@@ -1123,7 +1192,7 @@ export class HeliosCard extends LitElement
     //with the container while keeping vertical proportions intact.
     //All path coordinates are computed against this viewBox and
     //the browser handles the actual scaling.
-    //v1.3 — mirror chart.
+    //Mirror chart.
     //
     //Two areas sharing a horizontal midline:
     //  - top half: irradiance W/m², "the sun pushes upward". Filled
@@ -1449,7 +1518,7 @@ export class HeliosCard extends LitElement
         `;
     }
 
-    //v1.3 — the thin track now carries only the cursors. Day
+    //The thin track now carries only the cursors. Day
     //separators live inside the chart card SVG (dotted vertical
     //lines) and the scrub time label has been promoted to a chip
     //above the chart card.
@@ -1906,8 +1975,6 @@ export class HeliosCard extends LitElement
         const apiKey    = String(this.config?.['maptiler-api-key'] ?? '').trim();
         const hasApiKey = apiKey.length > 0;
 
-        const resetTooltip    = t.tooltip.resetLive;
-
 
         //Date+time shown bottom-right: tracks the timeline cursor.
         //  - In live mode it follows wall-clock time (re-rendered every
@@ -2001,11 +2068,6 @@ export class HeliosCard extends LitElement
         //still), saturated → 3 s/cycle (visible motion without being
         //annoying). For PV we saturate at ~5 kW which is a typical
         //residential peak.
-        const pvWattsForFlow = pvRate !== null
-            ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit)
-            : 0;
-        const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5000);
-
         //Battery overlay — two independent chips flanking the PV
         //chip in screen-space: SoC % on the LEFT, signed Power on
         //the RIGHT, mirroring each other around the PV chip's
@@ -2069,19 +2131,19 @@ export class HeliosCard extends LitElement
         const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
 
         //Battery leader L-shape geometry — computed once and reused
-        //for both the polyline `points` attribute and the animated
-        //arrow's `<animateMotion>` path. Only meaningful when a
-        //layout is available; gated by the same flag as the chip
-        //rendering so we don't dereference a null layout below.
+        //for the visible <path> elements (SoC and Power) and for
+        //the animated arrow's <animateMotion> path. Only meaningful
+        //when a layout is available; gated by the same flag as the
+        //chip rendering so we don't dereference a null layout below.
         //
-        //  PV_QUARTER_PX (19) → 1/4 of the PV chip's min-width
-        //  (76 px), used as the horizontal offset of the L's
-        //  vertical leg from the PV chip centre. The SoC L hangs
-        //  from the LEFT-quarter of PV's bottom edge (= 1/4 from
-        //  the left); the Power L from the RIGHT-quarter (= 3/4
-        //  from the left). Constant rather than measured because
-        //  the chips are min-width-clamped to 76 px in the
-        //  common case — see helios-card-css.ts.
+        //  PV_LEG_OFFSET_PX (12) is the horizontal distance from
+        //  the PV chip's centre to each L-leg's vertical drop.
+        //  The SoC L hangs to the LEFT of centre by this amount,
+        //  the Power L to the RIGHT — bringing both legs slightly
+        //  inboard of the chip's quarter-width so the bends sit
+        //  closer to the chip's middle. Constant rather than
+        //  measured because the chips are min-width-clamped to
+        //  76 px in the common case — see helios-card-css.ts.
         //  PV_HALF_HEIGHT_PX (11) places the top of the vertical
         //  leg flush against PV's bottom edge so the line emerges
         //  from the chip rather than from inside it.
@@ -2090,20 +2152,63 @@ export class HeliosCard extends LitElement
         //  edge, so the chip background covers the very tip of
         //  the leader and the visible dash sequence terminates
         //  cleanly at the chip border.
-        const PV_QUARTER_PX        = 19;
+        //  FILLET_R (6) rounds the corner of the L with a quadratic
+        //  Bézier. The visible line and the arrow's <animateMotion>
+        //  path share the same fillet, so the arrow's tangent
+        //  rotates smoothly through the bend instead of snapping
+        //  90° at the corner. SMIL parametrises the path at
+        //  constant linear velocity, so the time spent on the
+        //  fillet shrinks proportionally with `flowDuration`.
+        const PV_LEG_OFFSET_PX     = 12;
         const PV_HALF_HEIGHT_PX    = 11;
+        //Half-width of the PV chip — min-width:76 in .pv-pct-label,
+        //so 38 px from centre to either side. Used for the solar-ray
+        //target snap (left/right side of the chip) when the sun sits
+        //roughly horizontal to the chip.
+        const PV_HALF_WIDTH_PX     = 38;
         const BAT_CHIP_NUDGE_PX    = 32;
-        const lPvBottomY    = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX        : 0;
-        const lShelfY       = layout ? layout.batterySocLabel.y                     : 0;
-        const lLeftQuarterX = layout ? layout.pvLabel.x - PV_QUARTER_PX             : 0;
-        const lRightQuarterX= layout ? layout.pvLabel.x + PV_QUARTER_PX             : 0;
+        const FILLET_R             = 6;
+        //PV chip sits BELOW the SoC / Power shelf, so each L-leader
+        //runs from PV's TOP edge upward to the shelf, then
+        //horizontally to the SoC / Power chip.
+        const lPvEdgeY      = layout ? layout.pvLabel.y - PV_HALF_HEIGHT_PX           : 0;
+        const lShelfY       = layout ? layout.batterySocLabel.y                       : 0;
+        const lSocLegX      = layout ? layout.pvLabel.x - PV_LEG_OFFSET_PX            : 0;
+        const lPowerLegX    = layout ? layout.pvLabel.x + PV_LEG_OFFSET_PX            : 0;
         const lSocEndX      = layout ? layout.batterySocLabel.x   + BAT_CHIP_NUDGE_PX : 0;
         const lPowerEndX    = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
-        const socLeaderPoints   = `${lLeftQuarterX},${lPvBottomY} ${lLeftQuarterX},${lShelfY} ${lSocEndX},${lShelfY}`;
-        const powerLeaderPoints = `${lRightQuarterX},${lPvBottomY} ${lRightQuarterX},${lShelfY} ${lPowerEndX},${lShelfY}`;
-        const powerArrowPath = batteryCharging
-            ? `M ${lRightQuarterX},${lPvBottomY} L ${lRightQuarterX},${lShelfY} L ${lPowerEndX},${lShelfY}`
-            : `M ${lPowerEndX},${lShelfY} L ${lRightQuarterX},${lShelfY} L ${lRightQuarterX},${lPvBottomY}`;
+        //Forward L: PV edge → vertical leg → fillet → horizontal leg
+        //→ end. Direction-agnostic — the vertical leg can travel
+        //either up (PV below the shelf, current layout) or down
+        //(legacy PV-above-shelf layout) because the fillet approach
+        //point follows the sign of (shelfY - pvEdgeY).
+        const buildLPath = (verticalX: number, pvEdgeY: number, shelfY: number, endX: number): string =>
+        {
+            const dirH  = endX  > verticalX ? 1 : -1;
+            const dirV  = shelfY > pvEdgeY  ? 1 : -1;
+            //Clamp the radius so the fillet never overshoots a short
+            //leg — the rounded corner has to fit inside both legs.
+            const r     = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
+            const preY  = shelfY - dirV * r;
+            const postX = verticalX + dirH * r;
+            return `M ${verticalX},${pvEdgeY} L ${verticalX},${preY} Q ${verticalX},${shelfY} ${postX},${shelfY} L ${endX},${shelfY}`;
+        };
+        //Reversed L: end of horizontal leg → fillet → vertical leg →
+        //PV edge. Used for the discharging arrow only.
+        const buildLPathReverse = (verticalX: number, pvEdgeY: number, shelfY: number, endX: number): string =>
+        {
+            const dirH  = endX  > verticalX ? 1 : -1;
+            const dirV  = shelfY > pvEdgeY  ? 1 : -1;
+            const r     = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
+            const preY  = shelfY - dirV * r;
+            const postX = verticalX + dirH * r;
+            return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${pvEdgeY}`;
+        };
+        const socLeaderPath   = buildLPath(lSocLegX,   lPvEdgeY, lShelfY, lSocEndX);
+        const powerLeaderPath = buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
+        const powerArrowPath  = batteryCharging
+            ? buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX)
+            : buildLPathReverse(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
 
         //Solar-arc overlay — sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
@@ -2112,13 +2217,13 @@ export class HeliosCard extends LitElement
         const sunScene  = this._sunScene;
         const showSun   = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
 
-        //v1.3 — fixed colour design system. The configured sun
+        //Fixed colour design system. The configured sun
         //colour paints the arc, the outer rim of the sun disc,
-        //and the inner irradiance fill. The configured cloud
-        //colour paints the on-ground disc and the lower mirror
-        //of the timeline chart.
+        //and the inner irradiance fill. The on-ground cloud disc
+        //is painted in MapLibre paint properties from the engine
+        //(see _updateCloudCoverDisc) so we don't need the cloud
+        //hex in this render block.
         const sunColor      = cfgHex(this.config?.['sun-color'],   DEFAULT_SUN_COLOR_HEX);
-        const cloudColor    = cfgHex(this.config?.['cloud-color'], DEFAULT_CLOUD_COLOR_HEX);
         const sunRimColor   = this._darkenHex(sunColor, 0.20);
         const arcSegments   = showSun ? this._buildArcSegments(sunScene!.arc, sunColor) : [];
 
@@ -2148,6 +2253,52 @@ export class HeliosCard extends LitElement
         //feeling frantic at the top of the day.
         const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1000, 0.8);
 
+        //Solar-ray target — snaps to one of the 4 sides of the PV
+        //chip based on which side faces the sun. The compass angle
+        //is measured from the PV chip's centre to the sun, with 0°
+        //pointing up; ±45° windows around each cardinal direction
+        //pick the matching chip side:
+        //    [-45°,  45°] → TOP
+        //    [ 45°, 135°] → RIGHT
+        //   |angle|>135°  → BOTTOM
+        //    [-135°,-45°] → LEFT
+        //Without this snap, a sun sitting below the chip pulled the
+        //ray through the chip's top, which looked broken.
+        let sunRayTargetX = sunScene?.home.x ?? 0;
+        let sunRayTargetY = sunScene?.home.y ?? 0;
+        if (layout && sunScene)
+        {
+            const dx       = sunScene.sun.x - layout.pvLabel.x;
+            const dy       = sunScene.sun.y - layout.pvLabel.y;
+            const compass  = Math.atan2(dx, -dy);   // 0 = up, +π/2 = right
+            const Q        = Math.PI / 4;           // 45°
+            const absC     = Math.abs(compass);
+            if (absC <= Q)
+            {
+                //Sun is above → attach to top-centre.
+                sunRayTargetX = layout.pvLabel.x;
+                sunRayTargetY = layout.pvLabel.y - PV_HALF_HEIGHT_PX;
+            }
+            else if (absC >= 3 * Q)
+            {
+                //Sun is below → attach to bottom-centre.
+                sunRayTargetX = layout.pvLabel.x;
+                sunRayTargetY = layout.pvLabel.y + PV_HALF_HEIGHT_PX;
+            }
+            else if (compass > 0)
+            {
+                //Sun is to the right → attach to right-centre.
+                sunRayTargetX = layout.pvLabel.x + PV_HALF_WIDTH_PX;
+                sunRayTargetY = layout.pvLabel.y;
+            }
+            else
+            {
+                //Sun is to the left → attach to left-centre.
+                sunRayTargetX = layout.pvLabel.x - PV_HALF_WIDTH_PX;
+                sunRayTargetY = layout.pvLabel.y;
+            }
+        }
+
         const cardTheme = String(this.config?.['card-theme'] ?? 'light').toLowerCase();
         const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';
 
@@ -2163,10 +2314,15 @@ export class HeliosCard extends LitElement
                         class="time-bar"
                         @pointerdown="${this._onTimelinePointerDown}"
                     >
-                        <!--  Top row: scrub time chip, shown above the
-                              chart card with a small breathing gap so
-                              it reads cleanly without competing with
-                              the chart's data ink.  -->
+                        <!--  Top row: scrub-time cluster (icon-only
+                              "back to live" button + scrub-time pill)
+                              shown above the chart card with a small
+                              breathing gap and a thin tether hair down
+                              to the chart's top edge. The cluster
+                              anchors at the cursor's X with edge-aware
+                              clamping; the tether anchors at the same
+                              X without clamping so it always lands
+                              directly above the cursor.  -->
                         <div class="tb-top-row">
                             ${(!this._isLiveMode && this._selectedTime) ? (() => {
                                 const { start, end } = this._timeRange!;
@@ -2181,6 +2337,10 @@ export class HeliosCard extends LitElement
                                         class="tb-sel-label"
                                         style="left:${selPct}%; transform:${xform}"
                                     >${this._formatSelTime(this._selectedTime!)}</div>
+                                    <div
+                                        class="tb-sel-tether"
+                                        style="left:${selPct}%"
+                                    ></div>
                                 `;
                             })() : nothing}
                         </div>
@@ -2221,24 +2381,19 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 ${hasApiKey ? html`
-                    <div class="overlay-top-right">
+                    <div class="overlay-top-center">
                         <div class="clock ${this._isLiveMode ? '' : 'clock-scrubbed'}">
                             <span class="clock-date">${displayDateLabel}</span>
                             <span class="clock-time">${displayTimeLabel}</span>
                         </div>
-                    </div>
-                ` : nothing}
-
-                ${hasApiKey && !this._isLiveMode ? html`
-                    <div class="overlay-top-left">
-                        <button
-                            class="tl-live-btn"
-                            @click="${this._resetToLive}"
-                        >
-                            <ha-icon class="tl-live-icon" icon="mdi:restore"></ha-icon>
-                            <span>${t.live}</span>
-                            <span class="tl-live-tooltip">${resetTooltip}</span>
-                        </button>
+                        ${!this._isLiveMode ? html`
+                            <button
+                                class="clock-tab"
+                                @click="${this._resetToLive}"
+                            >
+                                <ha-icon icon="mdi:restore"></ha-icon>
+                            </button>
+                        ` : nothing}
                     </div>
                 ` : nothing}
 
@@ -2279,7 +2434,7 @@ ${showSun ? html`
                                 class="solar-ray"
                                 style="--sun-flow-duration:${sunFlowDuration}s"
                                 x1="${sunScene!.sun.x}"  y1="${sunScene!.sun.y}"
-                                x2="${sunScene!.home.x}" y2="${sunScene!.home.y}"
+                                x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
                                 stroke="${sunColor}"
                             ></line>
                             <polygon
@@ -2291,7 +2446,7 @@ ${showSun ? html`
                                     dur="${sunFlowDuration}s"
                                     repeatCount="indefinite"
                                     rotate="auto"
-                                    path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunScene!.home.x},${sunScene!.home.y}"
+                                    path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
                                 ></animateMotion>
                             </polygon>
                         ` : nothing}
@@ -2359,33 +2514,12 @@ ${showSun ? html`
                 ` : nothing}
 
                 ${showLabel ? html`
-                    <!--  Sky activity — soft cloud-tinted wisps drifting
-                          horizontally over the on-ground disc, modulated
-                          by the live cloud-cover percentage. Pure CSS,
-                          pointer-transparent, behind the chips so it
-                          never competes for attention. -->
-                    <div
-                        class="sky-activity"
-                        style="
-                            left:${layout!.home.x}px;
-                            top:${layout!.home.y}px;
-                            --sky-cloud-color:${cloudColor};
-                            --sky-intensity:${Math.min(1, cloudPctRound / 100)};
-                        "
-                    >
-                        <span class="sky-wisp sky-wisp-1"></span>
-                        <span class="sky-wisp sky-wisp-2"></span>
-                        <span class="sky-wisp sky-wisp-3"></span>
-                        <span class="sky-wisp sky-wisp-4"></span>
-                        <span class="sky-wisp sky-wisp-5"></span>
-                    </div>
-
                     <svg class="cloud-leader-svg">
                         <line
                             x1="${layout!.cloudLabel.x + 10}"
                             y1="${layout!.cloudLabel.y}"
-                            x2="${layout!.ringEdge.x}"
-                            y2="${layout!.ringEdge.y}"
+                            x2="${layout!.home.x}"
+                            y2="${layout!.home.y}"
                         ></line>
                     </svg>
                     <div
@@ -2410,30 +2544,6 @@ ${showSun ? html`
                 ` : nothing}
 
                 ${showPvLabel ? html`
-                    <svg class="pv-leader-svg">
-                        <line
-                            class="pv-leader-line"
-                            style="--pv-leader-color:${pvColor}; --pv-flow-duration:${pvFlowDuration}s"
-                            x1="${layout!.home.x}"
-                            y1="${layout!.home.y}"
-                            x2="${layout!.pvLabel.x}"
-                            y2="${layout!.pvLabel.y + 10}"
-                        ></line>
-                        ${svg`
-                            <polygon
-                                class="pv-leader-arrow"
-                                points="-6,-4 0,0 -6,4"
-                                fill="${pvColor}"
-                            >
-                                <animateMotion
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${layout!.home.x},${layout!.home.y} L ${layout!.pvLabel.x},${layout!.pvLabel.y + 10}"
-                                ></animateMotion>
-                            </polygon>
-                        `}
-                    </svg>
                     <div
                         class="pv-pct-label"
                         style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}"
@@ -2446,40 +2556,52 @@ ${showSun ? html`
                 ${(showSocChip || showPowerChip) ? html`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV — static, dotted, inverted-L
-                            polyline. Vertical leg drops from PV's
-                            bottom edge at 1/4 of the chip width
-                            (the LEFT quarter), horizontal leg
-                            then runs left to the SoC chip. No
+                            SoC ↔ PV — static, dashed, inverted-L
+                            path with a rounded corner (matching
+                            the PV ↔ Power leader's vocabulary
+                            exactly minus the flow animation).
+                            Vertical leg drops from PV's bottom
+                            edge slightly left of centre, horizontal
+                            leg then runs left to the SoC chip. No
                             animation: SoC has no flow direction.
                         -->
                         ${showSocChip ? svg`
-                            <polyline
+                            <path
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryColor}"
-                                points="${socLeaderPoints}"
-                            ></polyline>
+                                d="${socLeaderPath}"
+                            ></path>
                         ` : nothing}
                         <!--
-                            PV ↔ Power — animated, dotted L with
+                            PV ↔ Power — animated, dashed L with
                             an arrow tracking the sign of the live
-                            power. Vertical leg at 3/4 of PV's
-                            width (the RIGHT quarter), horizontal
-                            leg then runs right to the Power chip.
+                            power. Vertical leg drops from PV's
+                            bottom edge slightly right of centre,
+                            horizontal leg then runs right to the
+                            Power chip.
                             Charging (P > 0) → arrow PV → Power.
                             Discharging (P < 0) → arrow Power → PV
-                            (the polyline class modifier flips the
+                            (the path class modifier flips the
                             dash flow too).
                         -->
                         ${showPowerChip ? svg`
-                            <polyline
+                            <path
                                 class="battery-leader-line battery-leader-line-animated ${batteryCharging ? '' : 'battery-leader-discharging'}"
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
-                                points="${powerLeaderPoints}"
-                            ></polyline>
+                                d="${powerLeaderPath}"
+                            ></path>
+                            <!--
+                                Polygon is centroid-centred at (0,0):
+                                the centroid of (-2,-4), (4,0), (-2,4)
+                                is (0,0), so animateMotion pivots the
+                                arrow about its visual mass rather than
+                                its tip. Through the L's fillet the
+                                arrow stays balanced on the path
+                                instead of swinging off it.
+                            -->
                             <polygon
                                 class="battery-leader-arrow"
-                                points="-6,-4 0,0 -6,4"
+                                points="-2,-4 4,0 -2,4"
                                 fill="${batteryColor}"
                             >
                                 <animateMotion

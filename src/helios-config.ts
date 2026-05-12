@@ -6,7 +6,11 @@ import
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
-    DEFAULT_BATTERY_COLOR_HEX
+    DEFAULT_BATTERY_COLOR_HEX,
+    DEFAULT_BUILDING_RADIUS_M,
+    DEFAULT_BUILDING_OPACITY,
+    DEFAULT_BUILDING_CLUSTER_RADIUS_M,
+    DEFAULT_BUILDING_COLOR_HEX
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -310,6 +314,23 @@ export class HeliosCardEditor extends LitElement
     @state()                        private _cfg: HeliosConfig = { 'maptiler-api-key': '' };
     @state()                        private _pickerReady = false;
 
+    //Per-key debounce timers for slider inputs. Sliders fire @input
+    //on every pixel of drag, which used to cascade an updateConfig +
+    //full re-render through the engine on each tick — visibly painful
+    //during preview. We update the local _cfg synchronously (so the
+    //slider's bound .value tracks the drag perfectly) but only
+    //dispatch the cross-component `config-changed` event after a
+    //short idle window.
+    private static readonly SLIDER_COMMIT_DELAY_MS = 250;
+    private _sliderDebounce: Map<string, number> = new Map();
+
+    public disconnectedCallback(): void
+    {
+        super.disconnectedCallback();
+        for (const t of this._sliderDebounce.values()) window.clearTimeout(t);
+        this._sliderDebounce.clear();
+    }
+
     public setConfig(config: HeliosConfig): void
     {
         this._cfg = { ...config };
@@ -391,18 +412,45 @@ export class HeliosCardEditor extends LitElement
         this._update(key, (e.target as HTMLInputElement).value);
     }
 
-    private _num(key: keyof HeliosConfig, e: Event): void
+    //Slider commit. Updates local state synchronously so the slider
+    //thumb tracks the drag, but defers the cross-component
+    //`config-changed` event by SLIDER_COMMIT_DELAY_MS so the engine
+    //doesn't see a flood of intermediate values.
+    private _numSlider(key: keyof HeliosConfig, e: Event): void
     {
         const v = parseFloat((e.target as HTMLInputElement).value);
-        if (isFinite(v))
+        if (!isFinite(v)) return;
+
+        //Local update only — no event dispatch yet.
+        this._cfg = { ...this._cfg, [key]: v };
+
+        const k        = String(key);
+        const existing = this._sliderDebounce.get(k);
+        if (existing !== undefined) window.clearTimeout(existing);
+        const t = window.setTimeout(() =>
         {
-            this._update(key, v);
-        }
+            this._sliderDebounce.delete(k);
+            this.dispatchEvent(new CustomEvent('config-changed',
+                { detail: { config: this._cfg } }));
+        }, HeliosCardEditor.SLIDER_COMMIT_DELAY_MS);
+        this._sliderDebounce.set(k, t);
+    }
+
+    private _bool(key: keyof HeliosConfig, value: boolean): void
+    {
+        this._update(key, value);
     }
 
     private _color(key: keyof HeliosConfig, e: CustomEvent): void
     {
         this._update(key, e.detail.value);
+    }
+
+    //Format a numeric slider value for display alongside the input.
+    //Integers stay integer; fractional values get 2 decimals.
+    private _fmtNum(v: number, step: number): string
+    {
+        return step >= 1 ? String(Math.round(v)) : v.toFixed(2);
     }
 
     //Filter for the PV entity picker — accepts power/energy device
@@ -479,18 +527,21 @@ export class HeliosCardEditor extends LitElement
                 </label>
                 <label class="field">
                     <span class="label">${t.editor.hillshadeStrength}</span>
-                    <input
-                        type="number" min="0" max="1" step="0.01"
-                        .value="${String(c['topography-alpha'] ?? 0.65)}"
-                        @change="${(e: Event) => this._num('topography-alpha', e)}"
-                    />
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.01"
+                            .value="${String(c['topography-alpha'] ?? 0.65)}"
+                            @input="${(e: Event) => this._numSlider('topography-alpha', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['topography-alpha'] ?? 0.65), 0.01)}</span>
+                    </div>
                 </label>
                 <div class="hint">${t.editor.terrainReliefHint}</div>
 
                 <div class="section-title">${t.editor.mapSection}</div>
                 <div class="field">
                     <span class="label">${t.editor.mapStyle}</span>
-                    <div class="segmented-toggle">
+                    <div class="segmented-toggle segmented-toggle-3">
                         <button
                             type="button"
                             class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'streets' ? 'active' : ''}"
@@ -503,9 +554,9 @@ export class HeliosCardEditor extends LitElement
                         >${t.editor.mapStyleTopo}</button>
                         <button
                             type="button"
-                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'hybrid' ? 'active' : ''}"
-                            @click="${() => this._update('map-style', 'hybrid')}"
-                        >${t.editor.mapStyleHybrid}</button>
+                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'minimal' ? 'active' : ''}"
+                            @click="${() => this._update('map-style', 'minimal')}"
+                        >${t.editor.mapStyleMinimal}</button>
                     </div>
                 </div>
                 <div class="hint">${t.editor.mapStyleHint}</div>
@@ -541,6 +592,82 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.showLabelsHint}</div>
+                <div class="field">
+                    <span class="label">${t.editor.autoRotate}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['auto-rotate-enabled'] !== false) ? 'active' : ''}"
+                            @click="${() => this._update('auto-rotate-enabled', true)}"
+                        >${t.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['auto-rotate-enabled'] === false) ? 'active' : ''}"
+                            @click="${() => this._update('auto-rotate-enabled', false)}"
+                        >${t.editor.autoRotateOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.autoRotateHint}</div>
+                <div class="field">
+                    <span class="label">${t.editor.performanceMode}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['performance-mode'] !== true) ? 'active' : ''}"
+                            @click="${() => this._bool('performance-mode', false)}"
+                        >${t.editor.performanceModeOff}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['performance-mode'] === true) ? 'active' : ''}"
+                            @click="${() => this._bool('performance-mode', true)}"
+                        >${t.editor.performanceModeOn}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.performanceModeHint}</div>
+
+                <div class="section-title">${t.editor.buildingsSection}</div>
+                <label class="field">
+                    <span class="label">${t.editor.buildingRadius}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="20" max="1000" step="10"
+                            .value="${String(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M)}"
+                            @input="${(e: Event) => this._numSlider('building-radius', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.buildingClusterRadius}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="100" step="1"
+                            .value="${String(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M)}"
+                            @input="${(e: Event) => this._numSlider('building-cluster-radius', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M), 1)} m</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.buildingOpacity}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            .value="${String(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY)}"
+                            @input="${(e: Event) => this._numSlider('building-opacity', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.buildingColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c['building-color'], DEFAULT_BUILDING_COLOR_HEX)}"
+                        .ariaLabel="${t.editor.buildingColor}"
+                        @value-changed="${(e: CustomEvent) => this._color('building-color', e)}"
+                    ></helios-color-picker>
+                </label>
+                <div class="hint">${t.editor.buildingsHint}</div>
 
                 <div class="section-title">${t.editor.colors}</div>
                 <label class="field">
@@ -798,6 +925,33 @@ export class HeliosCardEditor extends LitElement
         {
             background: var(--primary-color, #03a9f4);
             color: var(--text-primary-color, #fff);
+        }
+
+        /*  Slider variant — replaces type="number" inputs so the
+            user can never enter a value outside the supported range.
+            The matching value is shown to the right of the track. */
+        .slider-row
+        {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: 180px;
+        }
+
+        .slider-row input[type="range"]
+        {
+            flex: 1;
+            min-width: 0;
+            accent-color: var(--primary-color, #03a9f4);
+        }
+
+        .slider-value
+        {
+            font-variant-numeric: tabular-nums;
+            font-size: 12px;
+            color: var(--secondary-text-color, #727272);
+            min-width: 44px;
+            text-align: right;
         }
 
         code

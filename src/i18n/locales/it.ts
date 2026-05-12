@@ -4,8 +4,6 @@ export const it: Translations = {
     cardName:        'HELIOS',
     cardDescription: 'Visualizzazione in tempo reale dell\'energia solare e della copertura nuvolosa',
 
-    live: 'Live',
-
     placeholder:
     {
         subtitle: 'Esposizione solare e copertura nuvolosa'
@@ -16,8 +14,7 @@ export const it: Translations = {
         cloudCover:  "Copertura nuvolosa: {0}%",
         cloudLow:    "Bassa: {0}%",
         cloudMid:    "Media: {0}%",
-        cloudHigh:   "Alta: {0}%",
-        resetLive:   'Torna al live'
+        cloudHigh:   "Alta: {0}%"
     },
 
     editor:
@@ -32,18 +29,21 @@ export const it: Translations = {
         hillshadeStrength:  'Intensità dell\'ombreggiatura * (0 → 1)',
         mapSection:         'Mappa',
         mapStyle:           'Stile della mappa *',
-        mapStyleHint:       'Scegli tra la mappa stradale (sobria, urbana), la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare) o la mappa ibrida (immagini satellitari ad alta risoluzione con sovrapposizione di strade ed etichette). Le etichette e gli edifici 3D funzionano allo stesso modo su tutte e tre.',
+        mapStyleHint:       'Scegli tra la mappa stradale (sobria, urbana) e la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare). Le etichette e gli edifici 3D funzionano allo stesso modo su entrambe. La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.',
         mapStyleStreet:     'Strade',
         mapStyleTopo:       'Topo',
-        mapStyleHybrid:     'Ibrida',
         cardTheme:          'Tema della scheda *',
-        cardThemeHint:      'Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri. La mappa 3D non è interessata.',
+        cardThemeHint:      'Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) e la mappa 3D di sfondo tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri.',
         cardThemeLight:     'Chiaro',
         cardThemeDark:      'Scuro',
         showLabels:         'Mostra etichette *',
         showLabelsHint:     'Mostra o nasconde i nomi delle vie, i numeri civici, i punti di interesse e i nomi dei quartieri sulla mappa di base.',
         labelsOn:           'Visibili',
         labelsOff:          'Nascoste',
+        autoRotate:         'Rotazione automatica della camera *',
+        autoRotateHint:     'Dopo qualche secondo di inattività, la camera ruota lentamente attorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Pinch, drag o rotellina la mettono in pausa all\'istante e riprende non appena rilasci.',
+        autoRotateOn:       'Attiva',
+        autoRotateOff:      'Disattiva',
         timeline:           'Cronologia',
         timelineHint:       'Formato delle date mostrate sulla cronologia e nella pastiglia di scrub.',
         dateFormat:         'Formato data * (predefinito: mm-dd)',
@@ -66,6 +66,17 @@ export const it: Translations = {
         batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
         batteryPowerEntity: 'Entità di potenza',
         batteryPowerEntityHelp: 'Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l\'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).',
-        batteryColor:       'Colore batteria *'
+        batteryColor:       'Colore batteria *',
+        buildingsSection:   'Edifici circostanti',
+        buildingsHint:      'Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l\'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».',
+        buildingRadius:        'Raggio di visibilità *',
+        buildingClusterRadius: 'Raggio del gruppo casa *',
+        buildingOpacity:       'Opacità degli edifici vicini *',
+        buildingColor:         'Colore degli edifici *',
+        performanceMode:       'Modalità prestazioni *',
+        performanceModeOn:     'Attivata',
+        performanceModeOff:    'Disattivata',
+        performanceModeHint:   'Disattiva il terreno 3D, l\'ombreggiatura del rilievo e limita la densità dei pixel. Utile su dispositivi modesti o per sessioni lunghe. L\'inclinazione e gli edifici 3D rimangono.',
+        mapStyleMinimal:       'Minimale'
     }
 };

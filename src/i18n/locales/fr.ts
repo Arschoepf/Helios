@@ -12,8 +12,6 @@ export const fr: Translations = {
     cardName:        'HELIOS',
     cardDescription: 'Visualisation en temps réel de l\'énergie solaire et de la couverture nuageuse',
 
-    live: 'Direct',
-
     placeholder:
     {
         subtitle: 'Exposition solaire & couverture nuageuse'
@@ -24,8 +22,7 @@ export const fr: Translations = {
         cloudCover:  "Couverture nuageuse : {0}%",
         cloudLow:    "Basse : {0}%",
         cloudMid:    "Moyenne : {0}%",
-        cloudHigh:   "Haute : {0}%",
-        resetLive:   'Revenir à l\'instant présent'
+        cloudHigh:   "Haute : {0}%"
     },
 
     editor:
@@ -40,18 +37,21 @@ export const fr: Translations = {
         hillshadeStrength:  'Intensité de l\'ombrage * (0 → 1)',
         mapSection:         'Carte',
         mapStyle:           'Style de la carte *',
-        mapStyleHint:       'Choisis entre le fond de carte des rues (sobre, urbain), le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée) ou le fond hybride (imagerie satellite haute résolution avec les routes et libellés en surimpression). Les libellés et les bâtiments 3D fonctionnent à l\'identique sur les trois.',
+        mapStyleHint:       'Choisis entre le fond de carte des rues (sobre, urbain) et le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée). Les libellés et les bâtiments 3D fonctionnent à l\'identique sur les deux. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.',
         mapStyleStreet:     'Rues',
         mapStyleTopo:       'Topo',
-        mapStyleHybrid:     'Hybride',
         cardTheme:          'Thème de la carte *',
-        cardThemeHint:      'Bascule l\'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s\'intègre proprement dans un tableau de bord Home Assistant clair ou sombre. La carte 3D elle-même n\'est pas affectée.',
+        cardThemeHint:      'Bascule l\'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) ainsi que le fond de carte 3D entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s\'intègre proprement dans un tableau de bord Home Assistant clair ou sombre.',
         cardThemeLight:     'Clair',
         cardThemeDark:      'Sombre',
         showLabels:         'Afficher les libellés *',
         showLabelsHint:     'Affiche ou masque les noms de rues, numéros de bâtiments, points d\'intérêt et noms de quartiers du fond de carte.',
         labelsOn:           'Affichés',
         labelsOff:          'Masqués',
+        autoRotate:         'Rotation auto de la caméra *',
+        autoRotateHint:     'Après quelques secondes d\'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Tout pincement, glissement ou molette met la rotation en pause immédiatement ; elle reprend dès que tu lâches.',
+        autoRotateOn:       'Activée',
+        autoRotateOff:      'Désactivée',
         timeline:           'Chronologie',
         timelineHint:       'Format des libellés de date affichés sur la chronologie et dans la pastille du scrub.',
         dateFormat:         'Format de date * (par défaut : mm-dd)',
@@ -74,6 +74,17 @@ export const fr: Translations = {
         batterySocEntityHelp: 'Choisis un capteur d\'état de charge de batterie (% — typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.',
         batteryPowerEntity: 'Entité de puissance',
         batteryPowerEntityHelp: 'Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l\'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).',
-        batteryColor:       'Couleur batterie *'
+        batteryColor:       'Couleur batterie *',
+        buildingsSection:   'Bâtiments alentour',
+        buildingsHint:      'Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d\'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».',
+        buildingRadius:        'Rayon de visibilité *',
+        buildingClusterRadius: 'Rayon de regroupement maison *',
+        buildingOpacity:       'Opacité des bâtiments voisins *',
+        buildingColor:         'Couleur des bâtiments *',
+        performanceMode:       'Mode performance *',
+        performanceModeOn:     'Activé',
+        performanceModeOff:    'Désactivé',
+        performanceModeHint:   'Désactive le relief 3D, l\'ombrage du relief et limite la densité de pixels. Utile sur appareils bas/moyen de gamme ou pour les longues sessions. Conserve l\'inclinaison de caméra et les bâtiments en 3D.',
+        mapStyleMinimal:       'Minimal'
     }
 };

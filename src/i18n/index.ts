@@ -19,8 +19,6 @@ export interface Translations
     cardName:        string;
     cardDescription: string;
 
-    live: string;
-
     placeholder:
     {
         subtitle: string;
@@ -32,7 +30,6 @@ export interface Translations
         cloudLow:    string;     //"Low: {0}%"
         cloudMid:    string;     //"Mid: {0}%"
         cloudHigh:   string;     //"High: {0}%"
-        resetLive:   string;
     };
 
     editor:
@@ -50,7 +47,6 @@ export interface Translations
         mapStyleHint:             string;
         mapStyleStreet:           string;
         mapStyleTopo:             string;
-        mapStyleHybrid:           string;
         cardTheme:                string;
         cardThemeHint:            string;
         cardThemeLight:           string;
@@ -59,6 +55,10 @@ export interface Translations
         showLabelsHint:           string;
         labelsOn:                 string;
         labelsOff:                string;
+        autoRotate:               string;
+        autoRotateHint:           string;
+        autoRotateOn:             string;
+        autoRotateOff:            string;
         timeline:                 string;
         timelineHint:             string;
         dateFormat:               string;
@@ -66,16 +66,15 @@ export interface Translations
         timeFormat:               string;
         timeFormat12:             string;
         timeFormat24:             string;
-        //v1.3 — fixed-colour design system. Each phenomenon (sun, cloud)
-        //has one configurable colour reused across the timeline mirror
-        //chart, the on-ground cloud disc and the on-arc sun disc. The
-        //old start/end ramp keys (rampHigh / rampLow / colorRamp /
-        //rampHint) are gone — see MIGRATION.md.
+        //Fixed-colour design system. Each phenomenon (sun, cloud)
+        //has one configurable colour reused across the timeline
+        //mirror chart, the on-ground cloud disc and the on-arc sun
+        //disc.
         colors:                   string;
         colorsHint:               string;
         sunColor:                 string;
         cloudColor:               string;
-        //v1.4 — optional photovoltaic production overlay.
+        //Optional photovoltaic production overlay.
         pvSection:                string;
         pvHint:                   string;
         pvEntity:                 string;
@@ -88,6 +87,26 @@ export interface Translations
         batteryPowerEntity:       string;
         batteryPowerEntityHelp:   string;
         batteryColor:             string;
+        //Radius (m) around the home within which surrounding buildings
+        //are rendered, the cluster radius that grows the home group to
+        //include attached outbuildings, the opacity of the surroundings,
+        //and the building base colour reused everywhere a building is
+        //extruded.
+        buildingsSection:         string;
+        buildingsHint:            string;
+        buildingRadius:           string;
+        buildingClusterRadius:    string;
+        buildingOpacity:          string;
+        buildingColor:            string;
+        //Performance mode disables the heavy per-frame work (terrain
+        //mesh, hillshade, full pixelRatio) for low-end devices.
+        performanceMode:          string;
+        performanceModeOn:        string;
+        performanceModeOff:       string;
+        performanceModeHint:      string;
+        //Third map-style segment: a curated minimal basemap (no POIs,
+        //no place labels, no road shields) for low-end devices.
+        mapStyleMinimal:          string;
     };
 }
 

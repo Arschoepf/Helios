@@ -24753,6 +24753,1381 @@ async function fetchHomePointData(lat, lon, elevation, precision, signal) {
     return null;
   }
 }
+function Point(x2, y3) {
+  this.x = x2;
+  this.y = y3;
+}
+Point.prototype = {
+  /**
+   * Clone this point, returning a new point that can be modified
+   * without affecting the old one.
+   * @return {Point} the clone
+   */
+  clone() {
+    return new Point(this.x, this.y);
+  },
+  /**
+   * Add this point's x & y coordinates to another point,
+   * yielding a new point.
+   * @param {Point} p the other point
+   * @return {Point} output point
+   */
+  add(p2) {
+    return this.clone()._add(p2);
+  },
+  /**
+   * Subtract this point's x & y coordinates to from point,
+   * yielding a new point.
+   * @param {Point} p the other point
+   * @return {Point} output point
+   */
+  sub(p2) {
+    return this.clone()._sub(p2);
+  },
+  /**
+   * Multiply this point's x & y coordinates by point,
+   * yielding a new point.
+   * @param {Point} p the other point
+   * @return {Point} output point
+   */
+  multByPoint(p2) {
+    return this.clone()._multByPoint(p2);
+  },
+  /**
+   * Divide this point's x & y coordinates by point,
+   * yielding a new point.
+   * @param {Point} p the other point
+   * @return {Point} output point
+   */
+  divByPoint(p2) {
+    return this.clone()._divByPoint(p2);
+  },
+  /**
+   * Multiply this point's x & y coordinates by a factor,
+   * yielding a new point.
+   * @param {number} k factor
+   * @return {Point} output point
+   */
+  mult(k2) {
+    return this.clone()._mult(k2);
+  },
+  /**
+   * Divide this point's x & y coordinates by a factor,
+   * yielding a new point.
+   * @param {number} k factor
+   * @return {Point} output point
+   */
+  div(k2) {
+    return this.clone()._div(k2);
+  },
+  /**
+   * Rotate this point around the 0, 0 origin by an angle a,
+   * given in radians
+   * @param {number} a angle to rotate around, in radians
+   * @return {Point} output point
+   */
+  rotate(a2) {
+    return this.clone()._rotate(a2);
+  },
+  /**
+   * Rotate this point around p point by an angle a,
+   * given in radians
+   * @param {number} a angle to rotate around, in radians
+   * @param {Point} p Point to rotate around
+   * @return {Point} output point
+   */
+  rotateAround(a2, p2) {
+    return this.clone()._rotateAround(a2, p2);
+  },
+  /**
+   * Multiply this point by a 4x1 transformation matrix
+   * @param {[number, number, number, number]} m transformation matrix
+   * @return {Point} output point
+   */
+  matMult(m2) {
+    return this.clone()._matMult(m2);
+  },
+  /**
+   * Calculate this point but as a unit vector from 0, 0, meaning
+   * that the distance from the resulting point to the 0, 0
+   * coordinate will be equal to 1 and the angle from the resulting
+   * point to the 0, 0 coordinate will be the same as before.
+   * @return {Point} unit vector point
+   */
+  unit() {
+    return this.clone()._unit();
+  },
+  /**
+   * Compute a perpendicular point, where the new y coordinate
+   * is the old x coordinate and the new x coordinate is the old y
+   * coordinate multiplied by -1
+   * @return {Point} perpendicular point
+   */
+  perp() {
+    return this.clone()._perp();
+  },
+  /**
+   * Return a version of this point with the x & y coordinates
+   * rounded to integers.
+   * @return {Point} rounded point
+   */
+  round() {
+    return this.clone()._round();
+  },
+  /**
+   * Return the magnitude of this point: this is the Euclidean
+   * distance from the 0, 0 coordinate to this point's x and y
+   * coordinates.
+   * @return {number} magnitude
+   */
+  mag() {
+    return Math.sqrt(this.x * this.x + this.y * this.y);
+  },
+  /**
+   * Judge whether this point is equal to another point, returning
+   * true or false.
+   * @param {Point} other the other point
+   * @return {boolean} whether the points are equal
+   */
+  equals(other) {
+    return this.x === other.x && this.y === other.y;
+  },
+  /**
+   * Calculate the distance from this point to another point
+   * @param {Point} p the other point
+   * @return {number} distance
+   */
+  dist(p2) {
+    return Math.sqrt(this.distSqr(p2));
+  },
+  /**
+   * Calculate the distance from this point to another point,
+   * without the square root step. Useful if you're comparing
+   * relative distances.
+   * @param {Point} p the other point
+   * @return {number} distance
+   */
+  distSqr(p2) {
+    const dx = p2.x - this.x, dy = p2.y - this.y;
+    return dx * dx + dy * dy;
+  },
+  /**
+   * Get the angle from the 0, 0 coordinate to this point, in radians
+   * coordinates.
+   * @return {number} angle
+   */
+  angle() {
+    return Math.atan2(this.y, this.x);
+  },
+  /**
+   * Get the angle from this point to another point, in radians
+   * @param {Point} b the other point
+   * @return {number} angle
+   */
+  angleTo(b2) {
+    return Math.atan2(this.y - b2.y, this.x - b2.x);
+  },
+  /**
+   * Get the angle between this point and another point, in radians
+   * @param {Point} b the other point
+   * @return {number} angle
+   */
+  angleWith(b2) {
+    return this.angleWithSep(b2.x, b2.y);
+  },
+  /**
+   * Find the angle of the two vectors, solving the formula for
+   * the cross product a x b = |a||b|sin(θ) for θ.
+   * @param {number} x the x-coordinate
+   * @param {number} y the y-coordinate
+   * @return {number} the angle in radians
+   */
+  angleWithSep(x2, y3) {
+    return Math.atan2(
+      this.x * y3 - this.y * x2,
+      this.x * x2 + this.y * y3
+    );
+  },
+  /** @param {[number, number, number, number]} m */
+  _matMult(m2) {
+    const x2 = m2[0] * this.x + m2[1] * this.y, y3 = m2[2] * this.x + m2[3] * this.y;
+    this.x = x2;
+    this.y = y3;
+    return this;
+  },
+  /** @param {Point} p */
+  _add(p2) {
+    this.x += p2.x;
+    this.y += p2.y;
+    return this;
+  },
+  /** @param {Point} p */
+  _sub(p2) {
+    this.x -= p2.x;
+    this.y -= p2.y;
+    return this;
+  },
+  /** @param {number} k */
+  _mult(k2) {
+    this.x *= k2;
+    this.y *= k2;
+    return this;
+  },
+  /** @param {number} k */
+  _div(k2) {
+    this.x /= k2;
+    this.y /= k2;
+    return this;
+  },
+  /** @param {Point} p */
+  _multByPoint(p2) {
+    this.x *= p2.x;
+    this.y *= p2.y;
+    return this;
+  },
+  /** @param {Point} p */
+  _divByPoint(p2) {
+    this.x /= p2.x;
+    this.y /= p2.y;
+    return this;
+  },
+  _unit() {
+    this._div(this.mag());
+    return this;
+  },
+  _perp() {
+    const y3 = this.y;
+    this.y = this.x;
+    this.x = -y3;
+    return this;
+  },
+  /** @param {number} angle */
+  _rotate(angle) {
+    const cos = Math.cos(angle), sin = Math.sin(angle), x2 = cos * this.x - sin * this.y, y3 = sin * this.x + cos * this.y;
+    this.x = x2;
+    this.y = y3;
+    return this;
+  },
+  /**
+   * @param {number} angle
+   * @param {Point} p
+   */
+  _rotateAround(angle, p2) {
+    const cos = Math.cos(angle), sin = Math.sin(angle), x2 = p2.x + cos * (this.x - p2.x) - sin * (this.y - p2.y), y3 = p2.y + sin * (this.x - p2.x) + cos * (this.y - p2.y);
+    this.x = x2;
+    this.y = y3;
+    return this;
+  },
+  _round() {
+    this.x = Math.round(this.x);
+    this.y = Math.round(this.y);
+    return this;
+  },
+  constructor: Point
+};
+Point.convert = function(p2) {
+  if (p2 instanceof Point) {
+    return (
+      /** @type {Point} */
+      p2
+    );
+  }
+  if (Array.isArray(p2)) {
+    return new Point(+p2[0], +p2[1]);
+  }
+  if (p2.x !== void 0 && p2.y !== void 0) {
+    return new Point(+p2.x, +p2.y);
+  }
+  throw new Error("Expected [x, y] or {x, y} point format");
+};
+class VectorTileFeature {
+  /**
+   * @param {Pbf} pbf
+   * @param {number} end
+   * @param {number} extent
+   * @param {string[]} keys
+   * @param {(number | string | boolean)[]} values
+   */
+  constructor(pbf, end, extent, keys, values) {
+    this.properties = {};
+    this.extent = extent;
+    this.type = 0;
+    this.id = void 0;
+    this._pbf = pbf;
+    this._geometry = -1;
+    this._keys = keys;
+    this._values = values;
+    pbf.readFields(readFeature, this, end);
+  }
+  loadGeometry() {
+    const pbf = this._pbf;
+    pbf.pos = this._geometry;
+    const end = pbf.readVarint() + pbf.pos;
+    const lines = [];
+    let line;
+    let cmd = 1;
+    let length = 0;
+    let x2 = 0;
+    let y3 = 0;
+    while (pbf.pos < end) {
+      if (length <= 0) {
+        const cmdLen = pbf.readVarint();
+        cmd = cmdLen & 7;
+        length = cmdLen >> 3;
+      }
+      length--;
+      if (cmd === 1 || cmd === 2) {
+        x2 += pbf.readSVarint();
+        y3 += pbf.readSVarint();
+        if (cmd === 1) {
+          if (line) lines.push(line);
+          line = [];
+        }
+        if (line) line.push(new Point(x2, y3));
+      } else if (cmd === 7) {
+        if (line) {
+          line.push(line[0].clone());
+        }
+      } else {
+        throw new Error(`unknown command ${cmd}`);
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  bbox() {
+    const pbf = this._pbf;
+    pbf.pos = this._geometry;
+    const end = pbf.readVarint() + pbf.pos;
+    let cmd = 1, length = 0, x2 = 0, y3 = 0, x1 = Infinity, x22 = -Infinity, y1 = Infinity, y22 = -Infinity;
+    while (pbf.pos < end) {
+      if (length <= 0) {
+        const cmdLen = pbf.readVarint();
+        cmd = cmdLen & 7;
+        length = cmdLen >> 3;
+      }
+      length--;
+      if (cmd === 1 || cmd === 2) {
+        x2 += pbf.readSVarint();
+        y3 += pbf.readSVarint();
+        if (x2 < x1) x1 = x2;
+        if (x2 > x22) x22 = x2;
+        if (y3 < y1) y1 = y3;
+        if (y3 > y22) y22 = y3;
+      } else if (cmd !== 7) {
+        throw new Error(`unknown command ${cmd}`);
+      }
+    }
+    return [x1, y1, x22, y22];
+  }
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @return {Feature}
+   */
+  toGeoJSON(x2, y3, z2) {
+    const size = this.extent * Math.pow(2, z2), x0 = this.extent * x2, y0 = this.extent * y3, vtCoords = this.loadGeometry();
+    function projectPoint(p2) {
+      return [
+        (p2.x + x0) * 360 / size - 180,
+        360 / Math.PI * Math.atan(Math.exp((1 - (p2.y + y0) * 2 / size) * Math.PI)) - 90
+      ];
+    }
+    function projectLine(line) {
+      return line.map(projectPoint);
+    }
+    let geometry;
+    if (this.type === 1) {
+      const points = [];
+      for (const line of vtCoords) {
+        points.push(line[0]);
+      }
+      const coordinates = projectLine(points);
+      geometry = points.length === 1 ? { type: "Point", coordinates: coordinates[0] } : { type: "MultiPoint", coordinates };
+    } else if (this.type === 2) {
+      const coordinates = vtCoords.map(projectLine);
+      geometry = coordinates.length === 1 ? { type: "LineString", coordinates: coordinates[0] } : { type: "MultiLineString", coordinates };
+    } else if (this.type === 3) {
+      const polygons = classifyRings(vtCoords);
+      const coordinates = [];
+      for (const polygon of polygons) {
+        coordinates.push(polygon.map(projectLine));
+      }
+      geometry = coordinates.length === 1 ? { type: "Polygon", coordinates: coordinates[0] } : { type: "MultiPolygon", coordinates };
+    } else {
+      throw new Error("unknown feature type");
+    }
+    const result = {
+      type: "Feature",
+      geometry,
+      properties: this.properties
+    };
+    if (this.id != null) {
+      result.id = this.id;
+    }
+    return result;
+  }
+}
+VectorTileFeature.types = ["Unknown", "Point", "LineString", "Polygon"];
+function readFeature(tag, feature, pbf) {
+  if (tag === 1) feature.id = pbf.readVarint();
+  else if (tag === 2) readTag(pbf, feature);
+  else if (tag === 3) feature.type = /** @type {0 | 1 | 2 | 3} */
+  pbf.readVarint();
+  else if (tag === 4) feature._geometry = pbf.pos;
+}
+function readTag(pbf, feature) {
+  const end = pbf.readVarint() + pbf.pos;
+  while (pbf.pos < end) {
+    const key = feature._keys[pbf.readVarint()];
+    const value = feature._values[pbf.readVarint()];
+    feature.properties[key] = value;
+  }
+}
+function classifyRings(rings) {
+  const len = rings.length;
+  if (len <= 1) return [rings];
+  const polygons = [];
+  let polygon, ccw;
+  for (let i2 = 0; i2 < len; i2++) {
+    const area = signedArea(rings[i2]);
+    if (area === 0) continue;
+    if (ccw === void 0) ccw = area < 0;
+    if (ccw === area < 0) {
+      if (polygon) polygons.push(polygon);
+      polygon = [rings[i2]];
+    } else if (polygon) {
+      polygon.push(rings[i2]);
+    }
+  }
+  if (polygon) polygons.push(polygon);
+  return polygons;
+}
+function signedArea(ring) {
+  let sum = 0;
+  for (let i2 = 0, len = ring.length, j = len - 1, p1, p2; i2 < len; j = i2++) {
+    p1 = ring[i2];
+    p2 = ring[j];
+    sum += (p2.x - p1.x) * (p1.y + p2.y);
+  }
+  return sum;
+}
+class VectorTileLayer {
+  /**
+   * @param {Pbf} pbf
+   * @param {number} [end]
+   */
+  constructor(pbf, end) {
+    this.version = 1;
+    this.name = "";
+    this.extent = 4096;
+    this.length = 0;
+    this._pbf = pbf;
+    this._keys = [];
+    this._values = [];
+    this._features = [];
+    pbf.readFields(readLayer, this, end);
+    this.length = this._features.length;
+  }
+  /** return feature `i` from this layer as a `VectorTileFeature`
+   * @param {number} i
+   */
+  feature(i2) {
+    if (i2 < 0 || i2 >= this._features.length) throw new Error("feature index out of bounds");
+    this._pbf.pos = this._features[i2];
+    const end = this._pbf.readVarint() + this._pbf.pos;
+    return new VectorTileFeature(this._pbf, end, this.extent, this._keys, this._values);
+  }
+}
+function readLayer(tag, layer, pbf) {
+  if (tag === 15) layer.version = pbf.readVarint();
+  else if (tag === 1) layer.name = pbf.readString();
+  else if (tag === 5) layer.extent = pbf.readVarint();
+  else if (tag === 2) layer._features.push(pbf.pos);
+  else if (tag === 3) layer._keys.push(pbf.readString());
+  else if (tag === 4) layer._values.push(readValueMessage(pbf));
+}
+function readValueMessage(pbf) {
+  let value = null;
+  const end = pbf.readVarint() + pbf.pos;
+  while (pbf.pos < end) {
+    const tag = pbf.readVarint() >> 3;
+    value = tag === 1 ? pbf.readString() : tag === 2 ? pbf.readFloat() : tag === 3 ? pbf.readDouble() : tag === 4 ? pbf.readVarint64() : tag === 5 ? pbf.readVarint() : tag === 6 ? pbf.readSVarint() : tag === 7 ? pbf.readBoolean() : null;
+  }
+  if (value == null) {
+    throw new Error("unknown feature value");
+  }
+  return value;
+}
+class VectorTile {
+  /**
+   * @param {Pbf} pbf
+   * @param {number} [end]
+   */
+  constructor(pbf, end) {
+    this.layers = pbf.readFields(readTile, {}, end);
+  }
+}
+function readTile(tag, layers, pbf) {
+  if (tag === 3) {
+    const layer = new VectorTileLayer(pbf, pbf.readVarint() + pbf.pos);
+    if (layer.length) layers[layer.name] = layer;
+  }
+}
+const SHIFT_LEFT_32 = (1 << 16) * (1 << 16);
+const SHIFT_RIGHT_32 = 1 / SHIFT_LEFT_32;
+const TEXT_DECODER_MIN_LENGTH = 12;
+const utf8TextDecoder = typeof TextDecoder === "undefined" ? null : new TextDecoder("utf-8");
+const PBF_VARINT = 0;
+const PBF_FIXED64 = 1;
+const PBF_BYTES = 2;
+const PBF_FIXED32 = 5;
+class Pbf {
+  /**
+   * @param {Uint8Array | ArrayBuffer} [buf]
+   */
+  constructor(buf = new Uint8Array(16)) {
+    this.buf = ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf);
+    this.dataView = new DataView(this.buf.buffer);
+    this.pos = 0;
+    this.type = 0;
+    this.length = this.buf.length;
+  }
+  // === READING =================================================================
+  /**
+   * @template T
+   * @param {(tag: number, result: T, pbf: Pbf) => void} readField
+   * @param {T} result
+   * @param {number} [end]
+   */
+  readFields(readField, result, end = this.length) {
+    while (this.pos < end) {
+      const val = this.readVarint(), tag = val >> 3, startPos = this.pos;
+      this.type = val & 7;
+      readField(tag, result, this);
+      if (this.pos === startPos) this.skip(val);
+    }
+    return result;
+  }
+  /**
+   * @template T
+   * @param {(tag: number, result: T, pbf: Pbf) => void} readField
+   * @param {T} result
+   */
+  readMessage(readField, result) {
+    return this.readFields(readField, result, this.readVarint() + this.pos);
+  }
+  readFixed32() {
+    const val = this.dataView.getUint32(this.pos, true);
+    this.pos += 4;
+    return val;
+  }
+  readSFixed32() {
+    const val = this.dataView.getInt32(this.pos, true);
+    this.pos += 4;
+    return val;
+  }
+  // 64-bit int handling is based on github.com/dpw/node-buffer-more-ints (MIT-licensed)
+  readFixed64() {
+    const val = this.dataView.getUint32(this.pos, true) + this.dataView.getUint32(this.pos + 4, true) * SHIFT_LEFT_32;
+    this.pos += 8;
+    return val;
+  }
+  readSFixed64() {
+    const val = this.dataView.getUint32(this.pos, true) + this.dataView.getInt32(this.pos + 4, true) * SHIFT_LEFT_32;
+    this.pos += 8;
+    return val;
+  }
+  readFloat() {
+    const val = this.dataView.getFloat32(this.pos, true);
+    this.pos += 4;
+    return val;
+  }
+  readDouble() {
+    const val = this.dataView.getFloat64(this.pos, true);
+    this.pos += 8;
+    return val;
+  }
+  /**
+   * @param {boolean} [isSigned]
+   */
+  readVarint(isSigned) {
+    const buf = this.buf;
+    let val, b2;
+    b2 = buf[this.pos++];
+    val = b2 & 127;
+    if (b2 < 128) return val;
+    b2 = buf[this.pos++];
+    val |= (b2 & 127) << 7;
+    if (b2 < 128) return val;
+    b2 = buf[this.pos++];
+    val |= (b2 & 127) << 14;
+    if (b2 < 128) return val;
+    b2 = buf[this.pos++];
+    val |= (b2 & 127) << 21;
+    if (b2 < 128) return val;
+    b2 = buf[this.pos];
+    val |= (b2 & 15) << 28;
+    return readVarintRemainder(val, isSigned, this);
+  }
+  readVarint64() {
+    return this.readVarint(true);
+  }
+  readSVarint() {
+    const num = this.readVarint();
+    return num % 2 === 1 ? (num + 1) / -2 : num / 2;
+  }
+  readBoolean() {
+    return Boolean(this.readVarint());
+  }
+  readString() {
+    const end = this.readVarint() + this.pos;
+    const pos = this.pos;
+    this.pos = end;
+    if (end - pos >= TEXT_DECODER_MIN_LENGTH && utf8TextDecoder) {
+      return utf8TextDecoder.decode(this.buf.subarray(pos, end));
+    }
+    return readUtf8(this.buf, pos, end);
+  }
+  readBytes() {
+    const end = this.readVarint() + this.pos, buffer = this.buf.subarray(this.pos, end);
+    this.pos = end;
+    return buffer;
+  }
+  // verbose for performance reasons; doesn't affect gzipped size
+  /**
+   * @param {number[]} [arr]
+   * @param {boolean} [isSigned]
+   */
+  readPackedVarint(arr = [], isSigned) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readVarint(isSigned));
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedSVarint(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readSVarint());
+    return arr;
+  }
+  /** @param {boolean[]} [arr] */
+  readPackedBoolean(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readBoolean());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedFloat(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readFloat());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedDouble(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readDouble());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedFixed32(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readFixed32());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedSFixed32(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readSFixed32());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedFixed64(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readFixed64());
+    return arr;
+  }
+  /** @param {number[]} [arr] */
+  readPackedSFixed64(arr = []) {
+    const end = this.readPackedEnd();
+    while (this.pos < end) arr.push(this.readSFixed64());
+    return arr;
+  }
+  readPackedEnd() {
+    return this.type === PBF_BYTES ? this.readVarint() + this.pos : this.pos + 1;
+  }
+  /** @param {number} val */
+  skip(val) {
+    const type = val & 7;
+    if (type === PBF_VARINT) while (this.buf[this.pos++] > 127) {
+    }
+    else if (type === PBF_BYTES) this.pos = this.readVarint() + this.pos;
+    else if (type === PBF_FIXED32) this.pos += 4;
+    else if (type === PBF_FIXED64) this.pos += 8;
+    else throw new Error(`Unimplemented type: ${type}`);
+  }
+  // === WRITING =================================================================
+  /**
+   * @param {number} tag
+   * @param {number} type
+   */
+  writeTag(tag, type) {
+    this.writeVarint(tag << 3 | type);
+  }
+  /** @param {number} min */
+  realloc(min) {
+    let length = this.length || 16;
+    while (length < this.pos + min) length *= 2;
+    if (length !== this.length) {
+      const buf = new Uint8Array(length);
+      buf.set(this.buf);
+      this.buf = buf;
+      this.dataView = new DataView(buf.buffer);
+      this.length = length;
+    }
+  }
+  finish() {
+    this.length = this.pos;
+    this.pos = 0;
+    return this.buf.subarray(0, this.length);
+  }
+  /** @param {number} val */
+  writeFixed32(val) {
+    this.realloc(4);
+    this.dataView.setInt32(this.pos, val, true);
+    this.pos += 4;
+  }
+  /** @param {number} val */
+  writeSFixed32(val) {
+    this.realloc(4);
+    this.dataView.setInt32(this.pos, val, true);
+    this.pos += 4;
+  }
+  /** @param {number} val */
+  writeFixed64(val) {
+    this.realloc(8);
+    this.dataView.setInt32(this.pos, val & -1, true);
+    this.dataView.setInt32(this.pos + 4, Math.floor(val * SHIFT_RIGHT_32), true);
+    this.pos += 8;
+  }
+  /** @param {number} val */
+  writeSFixed64(val) {
+    this.realloc(8);
+    this.dataView.setInt32(this.pos, val & -1, true);
+    this.dataView.setInt32(this.pos + 4, Math.floor(val * SHIFT_RIGHT_32), true);
+    this.pos += 8;
+  }
+  /** @param {number} val */
+  writeVarint(val) {
+    val = +val || 0;
+    if (val > 268435455 || val < 0) {
+      writeBigVarint(val, this);
+      return;
+    }
+    this.realloc(4);
+    this.buf[this.pos++] = val & 127 | (val > 127 ? 128 : 0);
+    if (val <= 127) return;
+    this.buf[this.pos++] = (val >>>= 7) & 127 | (val > 127 ? 128 : 0);
+    if (val <= 127) return;
+    this.buf[this.pos++] = (val >>>= 7) & 127 | (val > 127 ? 128 : 0);
+    if (val <= 127) return;
+    this.buf[this.pos++] = val >>> 7 & 127;
+  }
+  /** @param {number} val */
+  writeSVarint(val) {
+    this.writeVarint(val < 0 ? -val * 2 - 1 : val * 2);
+  }
+  /** @param {boolean} val */
+  writeBoolean(val) {
+    this.writeVarint(+val);
+  }
+  /** @param {string} str */
+  writeString(str) {
+    str = String(str);
+    this.realloc(str.length * 4);
+    this.pos++;
+    const startPos = this.pos;
+    this.pos = writeUtf8(this.buf, str, this.pos);
+    const len = this.pos - startPos;
+    if (len >= 128) makeRoomForExtraLength(startPos, len, this);
+    this.pos = startPos - 1;
+    this.writeVarint(len);
+    this.pos += len;
+  }
+  /** @param {number} val */
+  writeFloat(val) {
+    this.realloc(4);
+    this.dataView.setFloat32(this.pos, val, true);
+    this.pos += 4;
+  }
+  /** @param {number} val */
+  writeDouble(val) {
+    this.realloc(8);
+    this.dataView.setFloat64(this.pos, val, true);
+    this.pos += 8;
+  }
+  /** @param {Uint8Array} buffer */
+  writeBytes(buffer) {
+    const len = buffer.length;
+    this.writeVarint(len);
+    this.realloc(len);
+    for (let i2 = 0; i2 < len; i2++) this.buf[this.pos++] = buffer[i2];
+  }
+  /**
+   * @template T
+   * @param {(obj: T, pbf: Pbf) => void} fn
+   * @param {T} obj
+   */
+  writeRawMessage(fn, obj) {
+    this.pos++;
+    const startPos = this.pos;
+    fn(obj, this);
+    const len = this.pos - startPos;
+    if (len >= 128) makeRoomForExtraLength(startPos, len, this);
+    this.pos = startPos - 1;
+    this.writeVarint(len);
+    this.pos += len;
+  }
+  /**
+   * @template T
+   * @param {number} tag
+   * @param {(obj: T, pbf: Pbf) => void} fn
+   * @param {T} obj
+   */
+  writeMessage(tag, fn, obj) {
+    this.writeTag(tag, PBF_BYTES);
+    this.writeRawMessage(fn, obj);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedVarint(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedVarint, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedSVarint(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedSVarint, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {boolean[]} arr
+   */
+  writePackedBoolean(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedBoolean, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedFloat(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedFloat, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedDouble(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedDouble, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedFixed32(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedFixed32, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedSFixed32(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedSFixed32, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedFixed64(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedFixed64, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {number[]} arr
+   */
+  writePackedSFixed64(tag, arr) {
+    if (arr.length) this.writeMessage(tag, writePackedSFixed64, arr);
+  }
+  /**
+   * @param {number} tag
+   * @param {Uint8Array} buffer
+   */
+  writeBytesField(tag, buffer) {
+    this.writeTag(tag, PBF_BYTES);
+    this.writeBytes(buffer);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeFixed32Field(tag, val) {
+    this.writeTag(tag, PBF_FIXED32);
+    this.writeFixed32(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeSFixed32Field(tag, val) {
+    this.writeTag(tag, PBF_FIXED32);
+    this.writeSFixed32(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeFixed64Field(tag, val) {
+    this.writeTag(tag, PBF_FIXED64);
+    this.writeFixed64(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeSFixed64Field(tag, val) {
+    this.writeTag(tag, PBF_FIXED64);
+    this.writeSFixed64(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeVarintField(tag, val) {
+    this.writeTag(tag, PBF_VARINT);
+    this.writeVarint(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeSVarintField(tag, val) {
+    this.writeTag(tag, PBF_VARINT);
+    this.writeSVarint(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {string} str
+   */
+  writeStringField(tag, str) {
+    this.writeTag(tag, PBF_BYTES);
+    this.writeString(str);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeFloatField(tag, val) {
+    this.writeTag(tag, PBF_FIXED32);
+    this.writeFloat(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {number} val
+   */
+  writeDoubleField(tag, val) {
+    this.writeTag(tag, PBF_FIXED64);
+    this.writeDouble(val);
+  }
+  /**
+   * @param {number} tag
+   * @param {boolean} val
+   */
+  writeBooleanField(tag, val) {
+    this.writeVarintField(tag, +val);
+  }
+}
+function readVarintRemainder(l2, s2, p2) {
+  const buf = p2.buf;
+  let h2, b2;
+  b2 = buf[p2.pos++];
+  h2 = (b2 & 112) >> 4;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  b2 = buf[p2.pos++];
+  h2 |= (b2 & 127) << 3;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  b2 = buf[p2.pos++];
+  h2 |= (b2 & 127) << 10;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  b2 = buf[p2.pos++];
+  h2 |= (b2 & 127) << 17;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  b2 = buf[p2.pos++];
+  h2 |= (b2 & 127) << 24;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  b2 = buf[p2.pos++];
+  h2 |= (b2 & 1) << 31;
+  if (b2 < 128) return toNum(l2, h2, s2);
+  throw new Error("Expected varint not more than 10 bytes");
+}
+function toNum(low, high, isSigned) {
+  return isSigned ? high * 4294967296 + (low >>> 0) : (high >>> 0) * 4294967296 + (low >>> 0);
+}
+function writeBigVarint(val, pbf) {
+  let low, high;
+  if (val >= 0) {
+    low = val % 4294967296 | 0;
+    high = val / 4294967296 | 0;
+  } else {
+    low = ~(-val % 4294967296);
+    high = ~(-val / 4294967296);
+    if (low ^ 4294967295) {
+      low = low + 1 | 0;
+    } else {
+      low = 0;
+      high = high + 1 | 0;
+    }
+  }
+  if (val >= 18446744073709552e3 || val < -18446744073709552e3) {
+    throw new Error("Given varint doesn't fit into 10 bytes");
+  }
+  pbf.realloc(10);
+  writeBigVarintLow(low, high, pbf);
+  writeBigVarintHigh(high, pbf);
+}
+function writeBigVarintLow(low, high, pbf) {
+  pbf.buf[pbf.pos++] = low & 127 | 128;
+  low >>>= 7;
+  pbf.buf[pbf.pos++] = low & 127 | 128;
+  low >>>= 7;
+  pbf.buf[pbf.pos++] = low & 127 | 128;
+  low >>>= 7;
+  pbf.buf[pbf.pos++] = low & 127 | 128;
+  low >>>= 7;
+  pbf.buf[pbf.pos] = low & 127;
+}
+function writeBigVarintHigh(high, pbf) {
+  const lsb = (high & 7) << 4;
+  pbf.buf[pbf.pos++] |= lsb | ((high >>>= 3) ? 128 : 0);
+  if (!high) return;
+  pbf.buf[pbf.pos++] = high & 127 | ((high >>>= 7) ? 128 : 0);
+  if (!high) return;
+  pbf.buf[pbf.pos++] = high & 127 | ((high >>>= 7) ? 128 : 0);
+  if (!high) return;
+  pbf.buf[pbf.pos++] = high & 127 | ((high >>>= 7) ? 128 : 0);
+  if (!high) return;
+  pbf.buf[pbf.pos++] = high & 127 | ((high >>>= 7) ? 128 : 0);
+  if (!high) return;
+  pbf.buf[pbf.pos++] = high & 127;
+}
+function makeRoomForExtraLength(startPos, len, pbf) {
+  const extraLen = len <= 16383 ? 1 : len <= 2097151 ? 2 : len <= 268435455 ? 3 : Math.floor(Math.log(len) / (Math.LN2 * 7));
+  pbf.realloc(extraLen);
+  for (let i2 = pbf.pos - 1; i2 >= startPos; i2--) pbf.buf[i2 + extraLen] = pbf.buf[i2];
+}
+function writePackedVarint(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeVarint(arr[i2]);
+}
+function writePackedSVarint(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeSVarint(arr[i2]);
+}
+function writePackedFloat(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeFloat(arr[i2]);
+}
+function writePackedDouble(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeDouble(arr[i2]);
+}
+function writePackedBoolean(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeBoolean(arr[i2]);
+}
+function writePackedFixed32(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeFixed32(arr[i2]);
+}
+function writePackedSFixed32(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeSFixed32(arr[i2]);
+}
+function writePackedFixed64(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeFixed64(arr[i2]);
+}
+function writePackedSFixed64(arr, pbf) {
+  for (let i2 = 0; i2 < arr.length; i2++) pbf.writeSFixed64(arr[i2]);
+}
+function readUtf8(buf, pos, end) {
+  let str = "";
+  let i2 = pos;
+  while (i2 < end) {
+    const b0 = buf[i2];
+    let c2 = null;
+    let bytesPerSequence = b0 > 239 ? 4 : b0 > 223 ? 3 : b0 > 191 ? 2 : 1;
+    if (i2 + bytesPerSequence > end) break;
+    let b1, b2, b3;
+    if (bytesPerSequence === 1) {
+      if (b0 < 128) {
+        c2 = b0;
+      }
+    } else if (bytesPerSequence === 2) {
+      b1 = buf[i2 + 1];
+      if ((b1 & 192) === 128) {
+        c2 = (b0 & 31) << 6 | b1 & 63;
+        if (c2 <= 127) {
+          c2 = null;
+        }
+      }
+    } else if (bytesPerSequence === 3) {
+      b1 = buf[i2 + 1];
+      b2 = buf[i2 + 2];
+      if ((b1 & 192) === 128 && (b2 & 192) === 128) {
+        c2 = (b0 & 15) << 12 | (b1 & 63) << 6 | b2 & 63;
+        if (c2 <= 2047 || c2 >= 55296 && c2 <= 57343) {
+          c2 = null;
+        }
+      }
+    } else if (bytesPerSequence === 4) {
+      b1 = buf[i2 + 1];
+      b2 = buf[i2 + 2];
+      b3 = buf[i2 + 3];
+      if ((b1 & 192) === 128 && (b2 & 192) === 128 && (b3 & 192) === 128) {
+        c2 = (b0 & 15) << 18 | (b1 & 63) << 12 | (b2 & 63) << 6 | b3 & 63;
+        if (c2 <= 65535 || c2 >= 1114112) {
+          c2 = null;
+        }
+      }
+    }
+    if (c2 === null) {
+      c2 = 65533;
+      bytesPerSequence = 1;
+    } else if (c2 > 65535) {
+      c2 -= 65536;
+      str += String.fromCharCode(c2 >>> 10 & 1023 | 55296);
+      c2 = 56320 | c2 & 1023;
+    }
+    str += String.fromCharCode(c2);
+    i2 += bytesPerSequence;
+  }
+  return str;
+}
+function writeUtf8(buf, str, pos) {
+  for (let i2 = 0, c2, lead; i2 < str.length; i2++) {
+    c2 = str.charCodeAt(i2);
+    if (c2 > 55295 && c2 < 57344) {
+      if (lead) {
+        if (c2 < 56320) {
+          buf[pos++] = 239;
+          buf[pos++] = 191;
+          buf[pos++] = 189;
+          lead = c2;
+          continue;
+        } else {
+          c2 = lead - 55296 << 10 | c2 - 56320 | 65536;
+          lead = null;
+        }
+      } else {
+        if (c2 > 56319 || i2 + 1 === str.length) {
+          buf[pos++] = 239;
+          buf[pos++] = 191;
+          buf[pos++] = 189;
+        } else {
+          lead = c2;
+        }
+        continue;
+      }
+    } else if (lead) {
+      buf[pos++] = 239;
+      buf[pos++] = 191;
+      buf[pos++] = 189;
+      lead = null;
+    }
+    if (c2 < 128) {
+      buf[pos++] = c2;
+    } else {
+      if (c2 < 2048) {
+        buf[pos++] = c2 >> 6 | 192;
+      } else {
+        if (c2 < 65536) {
+          buf[pos++] = c2 >> 12 | 224;
+        } else {
+          buf[pos++] = c2 >> 18 | 240;
+          buf[pos++] = c2 >> 12 & 63 | 128;
+        }
+        buf[pos++] = c2 >> 6 & 63 | 128;
+      }
+      buf[pos++] = c2 & 63 | 128;
+    }
+  }
+  return pos;
+}
+const EARTH_RADIUS_M = 63710088e-1;
+const HOME_FALLBACK_M = 30;
+function lonLatToTile(lon, lat, z2) {
+  const n3 = Math.pow(2, z2);
+  const latRad = lat * Math.PI / 180;
+  const x2 = Math.floor((lon + 180) / 360 * n3);
+  const y3 = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n3);
+  return { x: x2, y: y3 };
+}
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a2 = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a2));
+}
+function metersToDegLat(m2) {
+  return m2 / 111320;
+}
+function metersToDegLon(m2, atLat) {
+  return m2 / (111320 * Math.cos(atLat * Math.PI / 180));
+}
+function pointInRing(lon, lat, ring) {
+  let inside = false;
+  for (let i2 = 0, j = ring.length - 1; i2 < ring.length; j = i2++) {
+    const xi = ring[i2][0], yi = ring[i2][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-12) + xi;
+    if (intersect) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+function polygonContains(geom, lon, lat) {
+  if (geom.type === "Polygon") {
+    return geom.coordinates.length > 0 && pointInRing(lon, lat, geom.coordinates[0]);
+  }
+  if (geom.type === "MultiPolygon") {
+    return geom.coordinates.some((poly) => poly.length > 0 && pointInRing(lon, lat, poly[0]));
+  }
+  return false;
+}
+function representativePoint(geom) {
+  let ring = null;
+  if (geom.type === "Polygon" && geom.coordinates.length > 0) {
+    ring = geom.coordinates[0];
+  } else if (geom.type === "MultiPolygon" && geom.coordinates.length > 0 && geom.coordinates[0].length > 0) {
+    ring = geom.coordinates[0][0];
+  }
+  if (!ring || ring.length === 0) {
+    return null;
+  }
+  let sx = 0, sy = 0;
+  for (const p2 of ring) {
+    sx += p2[0];
+    sy += p2[1];
+  }
+  return [sx / ring.length, sy / ring.length];
+}
+async function fetchBuildingsAroundHome(opts) {
+  const z2 = Math.max(0, Math.floor(opts.zoom ?? 14));
+  const r2 = Math.max(1, opts.radiusMeters);
+  const cluster = Math.max(0, opts.clusterRadiusMeters ?? 0);
+  const padFactor = 1.15;
+  const dLat = metersToDegLat(r2 * padFactor);
+  const dLon = metersToDegLon(r2 * padFactor, opts.homeLat);
+  const minLat = opts.homeLat - dLat;
+  const maxLat = opts.homeLat + dLat;
+  const minLon = opts.homeLon - dLon;
+  const maxLon = opts.homeLon + dLon;
+  const tlTile = lonLatToTile(minLon, maxLat, z2);
+  const brTile = lonLatToTile(maxLon, minLat, z2);
+  const xMin = Math.min(tlTile.x, brTile.x);
+  const xMax = Math.max(tlTile.x, brTile.x);
+  const yMin = Math.min(tlTile.y, brTile.y);
+  const yMax = Math.max(tlTile.y, brTile.y);
+  const tilesToFetch = [];
+  for (let x2 = xMin; x2 <= xMax; x2++) {
+    for (let y3 = yMin; y3 <= yMax; y3++) {
+      tilesToFetch.push({ x: x2, y: y3 });
+    }
+  }
+  if (tilesToFetch.length > 16) {
+    throw new Error(`[HELIOS] fetchBuildingsAroundHome: ${tilesToFetch.length} tiles requested — radius/zoom misconfigured`);
+  }
+  const features = [];
+  await Promise.all(tilesToFetch.map(async ({ x: x2, y: y3 }) => {
+    const url = `https://api.maptiler.com/tiles/v3/${z2}/${x2}/${y3}.pbf?key=${opts.apiKey}`;
+    let resp;
+    try {
+      resp = await fetch(url, { signal: opts.signal });
+    } catch (e2) {
+      return;
+    }
+    if (!resp.ok) {
+      return;
+    }
+    let buf;
+    try {
+      buf = await resp.arrayBuffer();
+    } catch (_2) {
+      return;
+    }
+    if (buf.byteLength === 0) {
+      return;
+    }
+    let tile;
+    try {
+      tile = new VectorTile(new Pbf(new Uint8Array(buf)));
+    } catch (_2) {
+      return;
+    }
+    const layer = tile.layers["building"];
+    if (!layer) {
+      return;
+    }
+    for (let i2 = 0; i2 < layer.length; i2++) {
+      let geojson;
+      try {
+        geojson = layer.feature(i2).toGeoJSON(x2, y3, z2);
+      } catch (_2) {
+        continue;
+      }
+      if (!geojson.geometry) continue;
+      if (geojson.geometry.type === "Polygon") {
+        features.push(geojson);
+      } else if (geojson.geometry.type === "MultiPolygon") {
+        for (const polyCoords of geojson.geometry.coordinates) {
+          features.push({
+            type: "Feature",
+            geometry: { type: "Polygon", coordinates: polyCoords },
+            properties: { ...geojson.properties ?? {} }
+          });
+        }
+      }
+    }
+  }));
+  const homeCluster = [];
+  const surroundings = [];
+  let homeFallback = null;
+  for (const f2 of features) {
+    const contains = polygonContains(f2.geometry, opts.homeLon, opts.homeLat);
+    const rep = representativePoint(f2.geometry);
+    const d2 = rep ? haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0]) : Infinity;
+    if (contains || cluster > 0 && d2 <= cluster) {
+      homeCluster.push(f2);
+      continue;
+    }
+    if (rep && d2 <= HOME_FALLBACK_M && (!homeFallback || d2 < homeFallback.distance)) {
+      homeFallback = { feature: f2, distance: d2 };
+    }
+    if (d2 <= r2) {
+      surroundings.push(f2);
+    }
+  }
+  if (homeCluster.length === 0 && homeFallback) {
+    homeCluster.push(homeFallback.feature);
+    const idx = surroundings.indexOf(homeFallback.feature);
+    if (idx >= 0) surroundings.splice(idx, 1);
+  }
+  return {
+    home: { type: "FeatureCollection", features: homeCluster },
+    surroundings: { type: "FeatureCollection", features: surroundings }
+  };
+}
+const DEFAULT_BUILDING_RADIUS_M = 100;
+const DEFAULT_BUILDING_OPACITY = 0.25;
+const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
+const DEFAULT_BUILDING_COLOR_HEX = "#d2d2d7";
 const IS_MOBILE = (() => {
   if (typeof navigator === "undefined") {
     return false;
@@ -24836,10 +26211,10 @@ function buildCirclePolygon(centerLon, centerLat, radiusMetres, segments = 64) {
 const CLOUD_DISC_RADIUS_M = 30;
 const CLOUD_DISC_OPACITY = 0.25;
 const CLOUD_RING_COLOR = "#000000";
-const CLOUD_RING_WIDTH_PX = 1;
+const CLOUD_RING_WIDTH_PX = 2;
 const CLOUD_RING_OPACITY = 0.4;
 const CLOUD_CIRCLE_SEGMENTS = 128;
-const CLOUD_LABEL_OFFSET_PX = 100;
+const PV_CHIP_OFFSET_PX = 105;
 const SUN_ARC_RADIUS_M = 40;
 const SUN_ARC_SAMPLES = 96;
 const SUN_ARC_NIGHT_OPACITY = 0.25;
@@ -24875,6 +26250,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._rateLimitStreak = 0;
     this._autoRotateLastFrame = 0;
     this._autoRotateLastUserAction = 0;
+    this._buildingsData = null;
+    this._buildingsFetchKey = "";
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -24883,7 +26260,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._fetchLat = this.homeLat;
     this._fetchLon = this.homeLon;
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
-    const pixelRatio = IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.5) : Math.min(Math.max(dpr, 2), 3);
+    const pixelRatio = this.cfg["performance-mode"] === true ? 1 : IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
     const styleInfo = this._resolveMapStyle();
     this.map = new maplibregl.Map(
       {
@@ -24915,6 +26292,10 @@ const _HeliosEngine = class _HeliosEngine {
       }, 80);
     });
     this._resizeObserver.observe(container);
+    try {
+      window.__heliosMap = this.map;
+    } catch (_2) {
+    }
     this.map.touchZoomRotate.enable({ around: "center" });
     const pinHomeAtCenter = (e2) => {
       if (!this.map || !e2?.originalEvent) {
@@ -24937,6 +26318,8 @@ const _HeliosEngine = class _HeliosEngine {
     const bumpInactivity = () => {
       this._autoRotateLastUserAction = Date.now();
     };
+    this._bumpInactivityCanvas = canvas;
+    this._bumpInactivityHandler = bumpInactivity;
     canvas.addEventListener("mousedown", bumpInactivity);
     canvas.addEventListener("wheel", bumpInactivity, { passive: true });
     canvas.addEventListener("touchstart", bumpInactivity, { passive: true });
@@ -24964,27 +26347,47 @@ const _HeliosEngine = class _HeliosEngine {
   //                                       contour lines and softer
   //                                       earth tones, better in
   //                                       hilly / outdoor settings.
-  //  'hybrid'            → 'hybrid-v4'  — satellite imagery with
-  //                                       roads + label overlays,
-  //                                       useful when the user
-  //                                       wants real-world context
-  //                                       (vegetation, rooftops,
-  //                                       parking lots) under the
-  //                                       solar overlay.
+  //  'minimal'           → 'streets-v4' loaded then pruned in
+  //                                       _onStyleLoad to a curated
+  //                                       whitelist of layers — fewer
+  //                                       per-frame draw calls, best
+  //                                       for low-end devices.
   //
-  //Anything else falls back to 'streets'. `isHybrid` toggles the
-  //sat-hires raster source (added below) so the high-resolution
-  //satellite tiles fade in beyond zoom 15 — without it the base
-  //hybrid style is too soft at the home's locked zoom 18.
+  //Anything else falls back to 'streets'. When `card-theme: dark`
+  //is set, the `-dark` variant of the chosen base style is used so
+  //the basemap matches the dark chrome.
   _resolveMapStyle() {
     const raw = String(this.cfg["map-style"] ?? "streets").toLowerCase();
-    if (raw === "topo") {
-      return { id: "topo-v4", isHybrid: false };
+    const base = raw === "topo" ? "topo-v4" : "streets-v4";
+    const isDark = String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
+    return { id: isDark ? `${base}-dark` : base };
+  }
+  //True when the user picked the curated minimal basemap. The map
+  //still loads streets-v4 (we don't ship a hand-built style); the
+  //pruning happens in _pruneMinimalStyle at style.load time.
+  _isMinimalStyle() {
+    return String(this.cfg["map-style"] ?? "streets").toLowerCase() === "minimal";
+  }
+  _pruneMinimalStyle() {
+    if (!this.map || !this._isMinimalStyle()) {
+      return;
     }
-    if (raw === "hybrid") {
-      return { id: "hybrid-v4", isHybrid: true };
+    const keep = _HeliosEngine.MINIMAL_KEEP_LAYER_IDS;
+    const layers = this.map.getStyle().layers ?? [];
+    for (const l2 of layers) {
+      if (l2.id.startsWith("helios-")) continue;
+      if (keep.has(l2.id)) continue;
+      try {
+        this.map.removeLayer(l2.id);
+      } catch (_2) {
+      }
     }
-    return { id: "streets-v4", isHybrid: false };
+  }
+  //Performance mode — disables the per-frame heavyweights (terrain
+  //mesh + hillshade) and caps pixelRatio at 1.0. The 3D pitch and
+  //extruded buildings are preserved, so the card still reads as 3D.
+  _performanceMode() {
+    return this.cfg["performance-mode"] === true;
   }
   _findHourIndex(t2) {
     const home = this._homeHourlyData;
@@ -25101,6 +26504,8 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     this._mapReady = true;
+    this._pruneMinimalStyle();
+    const perfMode = this._performanceMode();
     if (!this.map.getSource("helios-terrain")) {
       this.map.addSource(
         "helios-terrain",
@@ -25108,47 +26513,21 @@ const _HeliosEngine = class _HeliosEngine {
           type: "raster-dem",
           url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${this.apiKey}`,
           tileSize: 512,
-          maxzoom: 14
+          maxzoom: 12
         }
       );
     }
-    this.map.setTerrain({ source: "helios-terrain", exaggeration: 1.2 });
-    const styleInfo = this._resolveMapStyle();
-    if (styleInfo.isHybrid && !this.map.getSource("sat-hires")) {
-      this.map.addSource(
-        "sat-hires",
-        {
-          type: "raster",
-          url: `https://api.maptiler.com/maps/hybrid-v4/tiles.json?key=${this.apiKey}`,
-          tileSize: 512
-        }
-      );
-      const firstSym = this.map.getStyle().layers?.find((l2) => l2.type === "symbol")?.id;
-      this.map.addLayer(
-        {
-          id: "sat-hires-layer",
-          type: "raster",
-          source: "sat-hires",
-          maxzoom: 22,
-          paint: {
-            "raster-opacity": ["interpolate", ["linear"], ["zoom"], 15, 0, 16, 1],
-            //Calm initial values matching the daytime runtime
-            //modulation in _refreshShadowsAndAtmosphere. Higher
-            //values (sat 0.35 / contrast 0.40) were producing
-            //a "blown out" feel for the first few frames before
-            //the atmosphere pass overrode them, plus they stack
-            //visually with the base raster styling below.
-            "raster-saturation": 0.15,
-            "raster-contrast": 0.15,
-            "raster-brightness-min": 0.03,
-            "raster-resampling": "linear"
-          }
-        },
-        firstSym
-      );
+    if (perfMode) {
+      this.map.setTerrain(null);
+      try {
+        this.map.setPixelRatio(1);
+      } catch (_2) {
+      }
+    } else {
+      this.map.setTerrain({ source: "helios-terrain", exaggeration: 1.2 });
     }
     this.map.getStyle().layers?.forEach((l2) => {
-      if (l2.type === "raster" && l2.id !== "sat-hires-layer") {
+      if (l2.type === "raster") {
         try {
           this.map.setPaintProperty(l2.id, "raster-saturation", 0.1);
           this.map.setPaintProperty(l2.id, "raster-contrast", 0.05);
@@ -25176,6 +26555,9 @@ const _HeliosEngine = class _HeliosEngine {
     if (this.map.getLayer("helios-hillshade")) {
       this.map.removeLayer("helios-hillshade");
     }
+    if (this._performanceMode()) {
+      return;
+    }
     const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
     const { azimuth } = getSunPosition(t2, this.homeLat, this.homeLon);
     const col = toColor(this.cfg["topography-color"], "rgba(80,100,160,1)");
@@ -25187,11 +26569,10 @@ const _HeliosEngine = class _HeliosEngine {
         source: "helios-terrain",
         paint: {
           "hillshade-shadow-color": col,
-          //v1.3 — non-transparent highlights make sun-facing
-          //slopes pop, giving the streets style the depth it
-          //was missing. Soft warm white at moderate opacity so
-          //the hillshade reads as ambient lighting rather than
-          //a paint-stroke effect.
+          //Non-transparent highlights make sun-facing slopes
+          //pop. Soft warm white at moderate opacity so the
+          //hillshade reads as ambient lighting rather than a
+          //paint-stroke effect.
           "hillshade-highlight-color": "rgba(255,250,235,0.55)",
           "hillshade-accent-color": col,
           "hillshade-illumination-direction": azimuth,
@@ -25272,9 +26653,10 @@ const _HeliosEngine = class _HeliosEngine {
   //and refreshed by _updateCloudCoverDisc() whenever the cloud-cover
   //value changes (live tick or scrub).
   //
-  //Z-order: this layer pair is added before `helios-buildings`, so
-  //buildings still emerge through the disc as opaque islands. The
-  //home marker (added after buildings) stays on top of everything.
+  //Z-order: this layer pair is added before the helios-buildings-*
+  //layers, so buildings still emerge through the disc as opaque
+  //islands. The home marker (added after buildings) stays on top
+  //of everything.
   _initCloudCoverDisc() {
     if (!this.map) {
       return;
@@ -25358,7 +26740,7 @@ const _HeliosEngine = class _HeliosEngine {
   //At 0 % cloud cover the disc has zero radius — effectively
   //invisible — while the ring stays visible to anchor the gauge.
   //
-  //v1.2 — fixed cloud colour. The disc's *radius* already encodes
+  //Fixed cloud colour. The disc's *radius* already encodes
   //the cloud-cover percentage (0% = invisible, 100% = full ring);
   //we keep the colour solid so the user-configured cloud-color
   //reads everywhere identically. CLOUD_DISC_OPACITY (set on the
@@ -25404,23 +26786,14 @@ const _HeliosEngine = class _HeliosEngine {
       }
     );
   }
-  //Renders 3D building extrusions as the visual context for the
-  //home location. All buildings are painted in the configured
-  //`building-color` (defaults to a neutral light grey) at a
-  //single shared opacity — the home is identified by the chips
-  //and leader lines on top, not by a special render of the
-  //building itself. The earlier home-fill experiment (beta.9 /
-  //beta.10) was removed because it was visually noisy and the
-  //spatial identification of the home building from vector tiles
-  //was unreliable in dense neighbourhoods.
-  //Toggle MapTiler Streets' label layers (road names, house numbers,
+  //Toggle MapTiler's symbol layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
   //Symbol-type layers are the canonical container for text + icon
   //rendering in MapLibre styles; flipping their `visibility` layout
-  //property is enough to hide everything text-based without touching
-  //the underlying geometry layers (roads, water, terrain). Our own
-  //`helios-*` layers are skipped — they're not labels but we filter
-  //defensively in case a future feature adds one.
+  //property is enough to hide everything text-based without
+  //touching the underlying geometry (roads, water, terrain). Our
+  //own `helios-*` layers are skipped defensively in case a future
+  //feature adds a symbol layer of our own.
   _applyLabelVisibility() {
     if (!this.map) {
       return;
@@ -25438,65 +26811,231 @@ const _HeliosEngine = class _HeliosEngine {
       }
     }
   }
+  //Resolves the configured building radius (metres). Falls back to
+  //DEFAULT_BUILDING_RADIUS_M and clamps to a sane range so a stray
+  //editor value can't accidentally trigger fetching dozens of tiles.
+  _buildingRadiusMeters() {
+    const v2 = Number(this.cfg["building-radius"]);
+    if (!Number.isFinite(v2) || v2 <= 0) {
+      return DEFAULT_BUILDING_RADIUS_M;
+    }
+    return Math.min(1e3, Math.max(20, v2));
+  }
+  //Resolves the configured surroundings opacity (0..1). Falls back
+  //to DEFAULT_BUILDING_OPACITY for missing or invalid input.
+  _buildingOpacity() {
+    const v2 = Number(this.cfg["building-opacity"]);
+    if (!Number.isFinite(v2)) {
+      return DEFAULT_BUILDING_OPACITY;
+    }
+    return Math.min(1, Math.max(0, v2));
+  }
+  //Resolves the cluster radius (metres) — every building whose
+  //centroid is within this radius (or which contains the home
+  //point) becomes part of the home group at full opacity. Allows
+  //attached verandas / outbuildings to read as one with the main
+  //house. 0 = legacy "single-polygon home" behaviour.
+  _buildingClusterRadiusMeters() {
+    const v2 = Number(this.cfg["building-cluster-radius"]);
+    if (!Number.isFinite(v2) || v2 < 0) {
+      return DEFAULT_BUILDING_CLUSTER_RADIUS_M;
+    }
+    return Math.min(100, v2);
+  }
+  //Resolves the configured building base colour. Falls back to the
+  //neutral grey if missing or malformed.
+  _buildingColor() {
+    const v2 = String(this.cfg["building-color"] ?? "").trim();
+    return /^#[0-9a-fA-F]{6}$/.test(v2) ? v2 : DEFAULT_BUILDING_COLOR_HEX;
+  }
+  //Adds the two custom building layers around the home:
+  //
+  //  - helios-buildings-surroundings : every building within the
+  //    configured radius of the home, painted at the configured
+  //    opacity (default ~25%). Conveys urban context without
+  //    competing visually with the data overlays.
+  //  - helios-buildings-home : the home itself (whichever polygon
+  //    contains the home coordinates), painted at full opacity in
+  //    the same neutral grey. Reads as the focal point.
+  //
+  //Compared to the previous single layer fed from MapTiler's
+  //"helios-planet" source-layer, this design (a) renders only the
+  //handful of buildings the user actually cares about, eliminating
+  //the per-frame cost of thousands of fill-extrusions in dense
+  //urban areas, and (b) cleanly isolates the home so future
+  //iterations can give it special treatment (PV-on-roof rendering,
+  //per-room data overlays, etc.) without per-feature MapLibre
+  //expression gymnastics.
+  //
+  //The building GeoJSON is fetched once per (home, radius) combo
+  //in helios-buildings.ts; subsequent calls to _addBuildings()
+  //(e.g. on theme switch, which rebuilds the whole style) reuse
+  //the cached data without re-hitting the API.
   _addBuildings() {
     if (!this.map) {
       return;
     }
-    if (this.map.getLayer("helios-buildings")) {
-      this.map.removeLayer("helios-buildings");
+    for (const lid of ["helios-buildings", "helios-buildings-surroundings", "helios-buildings-home"]) {
+      if (this.map.getLayer(lid)) this.map.removeLayer(lid);
     }
-    this.map.getStyle().layers?.forEach((l2) => {
-      if (l2.type === "fill-extrusion" && l2.id !== "helios-buildings") {
+    const styleObj = this.map.getStyle();
+    const allLayers = styleObj.layers ?? [];
+    const imports = styleObj.imports ?? [];
+    const importIds = imports.map((i2) => i2.id).filter(Boolean);
+    const buildingLayerIds = [];
+    for (const l2 of allLayers) {
+      if (l2.id === "helios-buildings-surroundings" || l2.id === "helios-buildings-home") continue;
+      const sl = l2["source-layer"];
+      const isBuildingSrc = sl === "building" || sl === "building_3d";
+      const isExtrusion = l2.type === "fill-extrusion";
+      const idMentions = typeof l2.id === "string" && l2.id.toLowerCase().includes("building");
+      if (isBuildingSrc || isExtrusion || idMentions) {
+        buildingLayerIds.push(l2.id);
+      }
+    }
+    const buildingConfigKeys = [
+      "3dBuildings",
+      "buildings3d",
+      "show3dBuildings",
+      "show3DBuildings",
+      "building3D",
+      "2dBuildings",
+      "buildings",
+      "showBuildings",
+      "show2dBuildings"
+    ];
+    for (const imp of imports) {
+      for (const key of buildingConfigKeys) {
         try {
-          this.map.setLayoutProperty(l2.id, "visibility", "none");
+          this.map.setConfigProperty(imp.id, key, false);
         } catch (_2) {
         }
       }
-    });
-    if (!this.map.getSource("helios-planet")) {
+    }
+    const idCandidates = (layerId) => {
+      const list = [layerId];
+      for (const iid of importIds) list.push(`${iid}\\${layerId}`);
+      return list;
+    };
+    for (const layerId of buildingLayerIds) {
+      for (const cand of idCandidates(layerId)) {
+        try {
+          if (this.map.getLayer(cand)) this.map.removeLayer(cand);
+        } catch (_2) {
+        }
+        try {
+          this.map.setLayoutProperty(cand, "visibility", "none");
+        } catch (_2) {
+        }
+        try {
+          this.map.setPaintProperty(cand, "fill-extrusion-opacity", 0);
+        } catch (_2) {
+        }
+        try {
+          this.map.setPaintProperty(cand, "fill-extrusion-height", 0);
+        } catch (_2) {
+        }
+        try {
+          this.map.setPaintProperty(cand, "fill-opacity", 0);
+        } catch (_2) {
+        }
+      }
+    }
+    const opacity = this._buildingOpacity();
+    const baseColor = this._buildingColor();
+    const homeData = this._buildingsData?.home ?? { type: "FeatureCollection", features: [] };
+    const surrData = this._buildingsData?.surroundings ?? { type: "FeatureCollection", features: [] };
+    if (!this.map.getSource("helios-buildings-surroundings-src")) {
       this.map.addSource(
-        "helios-planet",
+        "helios-buildings-surroundings-src",
         {
-          type: "vector",
-          url: `https://api.maptiler.com/tiles/v3/tiles.json?key=${this.apiKey}`
+          type: "geojson",
+          data: surrData
         }
       );
+    } else {
+      this.map.getSource("helios-buildings-surroundings-src").setData(surrData);
+    }
+    if (!this.map.getSource("helios-buildings-home-src")) {
+      this.map.addSource(
+        "helios-buildings-home-src",
+        {
+          type: "geojson",
+          data: homeData
+        }
+      );
+    } else {
+      this.map.getSource("helios-buildings-home-src").setData(homeData);
     }
     this.map.addLayer(
       {
-        id: "helios-buildings",
-        source: "helios-planet",
-        "source-layer": "building",
+        id: "helios-buildings-surroundings",
+        source: "helios-buildings-surroundings-src",
         type: "fill-extrusion",
-        minzoom: 15,
         paint: {
-          //Neutral cool grey, hard-coded. We briefly exposed
-          //a `building-color` config but the buildings are
-          //always urban-context backdrop here — making the
-          //colour configurable proved to be a footgun (any
-          //tint with hue ate visual room from the chips and
-          //leaders that carry the actual data) and was
-          //removed in beta.12.
-          "fill-extrusion-color": "rgba(210,210,215,1)",
+          "fill-extrusion-color": baseColor,
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
-          //Opacity ramps in between zoom 15 and 16; top
-          //opacity sits at 0.75 — buildings are present
-          //enough to read as solid massing without burying
-          //the basemap or competing with the chips and
-          //leaders that carry the actual data.
-          "fill-extrusion-opacity": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            15,
-            0,
-            16,
-            0.75
-          ]
+          "fill-extrusion-opacity": opacity
         }
       }
     );
+    this.map.addLayer(
+      {
+        id: "helios-buildings-home",
+        source: "helios-buildings-home-src",
+        type: "fill-extrusion",
+        paint: {
+          "fill-extrusion-color": baseColor,
+          "fill-extrusion-height": ["get", "render_height"],
+          "fill-extrusion-base": ["get", "render_min_height"],
+          "fill-extrusion-opacity": 1
+        }
+      }
+    );
+    this._ensureBuildingsFetched();
+  }
+  //Idempotent fetch helper. Reuses _buildingsData across style
+  //reloads; only re-hits the MapTiler API when the home position
+  //or the configured radius actually changed.
+  _ensureBuildingsFetched() {
+    if (!this.map) {
+      return;
+    }
+    const apiKey = this.apiKey;
+    if (!apiKey) {
+      return;
+    }
+    const radius = this._buildingRadiusMeters();
+    const clusterRadius = this._buildingClusterRadiusMeters();
+    const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${clusterRadius}`;
+    if (this._buildingsData && this._buildingsFetchKey === key) {
+      return;
+    }
+    this._buildingsAbort?.abort();
+    const ac = new AbortController();
+    this._buildingsAbort = ac;
+    this._buildingsFetchKey = key;
+    fetchBuildingsAroundHome(
+      {
+        homeLon: this.homeLon,
+        homeLat: this.homeLat,
+        radiusMeters: radius,
+        clusterRadiusMeters: clusterRadius,
+        apiKey,
+        signal: ac.signal
+      }
+    ).then((result) => {
+      if (ac.signal.aborted || !this.map) return;
+      this._buildingsData = result;
+      const homeSrc = this.map.getSource("helios-buildings-home-src");
+      const surrSrc = this.map.getSource("helios-buildings-surroundings-src");
+      homeSrc?.setData(result.home);
+      surrSrc?.setData(result.surroundings);
+    }).catch((err) => {
+      if (err?.name === "AbortError") return;
+      console.warn("[HELIOS] Buildings fetch failed:", err);
+    });
   }
   //Linear interpolation between two RGB hex strings.
   _lerpHex(a2, b2, t2) {
@@ -25547,7 +27086,6 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     this._lastAtmosphereAlt = altitude;
-    const warmth = altitude < 0 ? 0 : Math.max(0, Math.cos((altitude - 3) / 18 * Math.PI / 2));
     let shadowCol;
     if (altitude < -6) {
       shadowCol = "#0a0e1a";
@@ -25579,47 +27117,6 @@ const _HeliosEngine = class _HeliosEngine {
         const finalExg = Math.min(1, userExg * dramaScale);
         this.map.setPaintProperty("helios-hillshade", "hillshade-exaggeration", finalExg);
         this.map.setPaintProperty("helios-hillshade", "hillshade-shadow-color", shadowCol);
-      } catch (_2) {
-      }
-    }
-    if (this.map.getLayer("sat-hires-layer")) {
-      try {
-        let bMin, bMax, contrast, sat;
-        if (altitude < -6) {
-          bMin = 0;
-          bMax = 0.3;
-          contrast = -0.45;
-          sat = -0.8;
-        } else if (altitude < 0) {
-          const u2 = (altitude + 6) / 6;
-          bMin = 0;
-          bMax = this._lerp(0.3, 0.75, u2);
-          contrast = this._lerp(-0.45, -0.05, u2);
-          sat = this._lerp(-0.8, -0.2, u2);
-        } else if (altitude < 6) {
-          const u2 = altitude / 6;
-          bMin = 0;
-          bMax = this._lerp(0.75, 0.95, u2);
-          contrast = this._lerp(-0.05, 0.2, u2);
-          sat = this._lerp(-0.2, 0.2, u2);
-        } else if (altitude < 20) {
-          const u2 = (altitude - 6) / 14;
-          bMin = this._lerp(0, 0.04, u2);
-          bMax = 0.95;
-          contrast = this._lerp(0.2, 0.18, u2);
-          sat = this._lerp(0.2, 0.15, u2);
-        } else {
-          const u2 = Math.min(1, (altitude - 20) / 40);
-          bMin = 0.03;
-          bMax = 0.95;
-          contrast = this._lerp(0.18, 0.1, u2);
-          sat = this._lerp(0.15, 0.08, u2);
-        }
-        this.map.setPaintProperty("sat-hires-layer", "raster-brightness-min", bMin);
-        this.map.setPaintProperty("sat-hires-layer", "raster-brightness-max", bMax);
-        this.map.setPaintProperty("sat-hires-layer", "raster-contrast", contrast);
-        this.map.setPaintProperty("sat-hires-layer", "raster-saturation", sat);
-        this.map.setPaintProperty("sat-hires-layer", "raster-hue-rotate", warmth * -8);
       } catch (_2) {
       }
     }
@@ -25655,35 +27152,37 @@ const _HeliosEngine = class _HeliosEngine {
       } catch (_2) {
       }
     }
-    if (this.map.getLayer("helios-buildings")) {
-      try {
-        const baseHex = "#d2d2d7";
-        let buildingHex;
-        if (altitude < -6) {
-          buildingHex = this._mixHex(baseHex, "#0a0e1a", 0.85);
-        } else if (altitude < 0) {
-          const u2 = (altitude + 6) / 6;
-          const dark = this._mixHex(baseHex, "#0a0e1a", 0.85);
-          const dusk = this._mixHex(baseHex, "#2a2540", 0.55);
-          buildingHex = this._lerpHex(dark, dusk, u2);
-        } else if (altitude < 6) {
-          const u2 = altitude / 6;
-          const dusk = this._mixHex(baseHex, "#2a2540", 0.55);
-          const warm = this._mixHex(baseHex, "#5a3220", 0.35);
-          buildingHex = this._lerpHex(dusk, warm, u2);
-        } else if (altitude < 20) {
-          const u2 = (altitude - 6) / 14;
-          const warm = this._mixHex(baseHex, "#5a3220", 0.35);
-          buildingHex = this._lerpHex(warm, baseHex, u2);
-        } else {
-          buildingHex = baseHex;
-        }
-        this.map.setPaintProperty("helios-buildings", "fill-extrusion-color", buildingHex);
-      } catch (_2) {
+    try {
+      const baseHex = this._buildingColor();
+      let buildingHex;
+      if (altitude < -6) {
+        buildingHex = this._mixHex(baseHex, "#0a0e1a", 0.85);
+      } else if (altitude < 0) {
+        const u2 = (altitude + 6) / 6;
+        const dark = this._mixHex(baseHex, "#0a0e1a", 0.85);
+        const dusk = this._mixHex(baseHex, "#2a2540", 0.55);
+        buildingHex = this._lerpHex(dark, dusk, u2);
+      } else if (altitude < 6) {
+        const u2 = altitude / 6;
+        const dusk = this._mixHex(baseHex, "#2a2540", 0.55);
+        const warm = this._mixHex(baseHex, "#5a3220", 0.35);
+        buildingHex = this._lerpHex(dusk, warm, u2);
+      } else if (altitude < 20) {
+        const u2 = (altitude - 6) / 14;
+        const warm = this._mixHex(baseHex, "#5a3220", 0.35);
+        buildingHex = this._lerpHex(warm, baseHex, u2);
+      } else {
+        buildingHex = baseHex;
       }
+      for (const lid of ["helios-buildings-surroundings", "helios-buildings-home"]) {
+        if (this.map.getLayer(lid)) {
+          this.map.setPaintProperty(lid, "fill-extrusion-color", buildingHex);
+        }
+      }
+    } catch (_2) {
     }
   }
-  //v1.4 — the 'standard' precision tier was retired: a single
+  //The 'standard' precision tier was retired: a single
   //best-match model produced visibly noisier readings (low-cloud
   //layer stuck at 100 % from altitude bugs, mostly), and the
   //multi-model median fix sat one click away in the editor for
@@ -25777,51 +27276,29 @@ const _HeliosEngine = class _HeliosEngine {
   //  cloudLabel — where the cloud-cover chip should be drawn (in
   //               CSS pixels, relative to the map canvas). Sits to
   //               the screen-LEFT of the cloud disc, just outside
-  //               the 100 % reference ring. Pinning it on the side
-  //               (rather than above) keeps the home's vertical
-  //               axis clear for the PV chip (above) and the
-  //               battery chip (below).
+  //               the 100 % reference ring.
   //  pvLabel    — where the optional PV production chip should be
-  //               drawn. Sits a fixed CLOUD_LABEL_OFFSET_PX above
-  //               the home so the production chip is the prominent
-  //               readout, with the cloud chip retreating onto its
-  //               own feature on the side.
-  //  batterySocLabel  — where the optional battery State-of-
-  //               Charge chip is drawn (icon + percent). Sits to
-  //               the BOTTOM-LEFT of the PV chip, connected via
-  //               an inverted-L polyline whose vertical leg
-  //               drops from PV's bottom edge (at 1/4 of the
-  //               chip width from the left) and whose horizontal
-  //               leg lands on the SoC chip's right side. Static
-  //               (no animation, no arrow) — SoC has no flow
-  //               direction to encode.
-  //  batteryPowerLabel — where the optional battery Power chip
-  //               is drawn (icon + signed instantaneous W/kW).
-  //               Sits to the BOTTOM-RIGHT of the PV chip,
-  //               connected via a regular L polyline whose
-  //               vertical leg drops from PV's bottom edge (at
-  //               3/4 of the chip width from the left) and
-  //               whose horizontal leg lands on the Power
-  //               chip's left side. Animated dashes + arrow
-  //               whose direction follows the sign of the
-  //               power.
-  //  ringEdge   — projection of a fixed geographic point on the
-  //               100 % reference ring (the disc's geographic east
-  //               edge in the northern hemisphere, west edge in
-  //               the south — picked so the chip lands on screen-
-  //               LEFT under each hemisphere's default bearing of
-  //               180° NH / 0° SH). The cloud leader line ends
-  //               here. Pinning to a fixed geographic point — and
-  //               not "screen-leftmost-of-N-samples" as a previous
-  //               revision did — means the chip tracks the same
-  //               world location continuously when the camera
-  //               rotates, instead of teleporting in 30° increments
-  //               between discrete samples. This matches the
-  //               steady, pivot-anchored behaviour of the PV /
-  //               battery chips and keeps the overlay legible
-  //               throughout rotation animations.
-  //  home       — the projected home point, used as the anchor for
-  //               the PV and battery chip leader lines.
+  //               drawn. Sits just below the home so the chip is
+  //               read as the home's "production" badge. The SoC
+  //               and Power chips sit on a shared shelf above it,
+  //               so the cluster has the PV chip at the bottom,
+  //               the home in the middle of the L-leaders, and
+  //               the battery chips at the top.
+  //  batterySocLabel   — battery State-of-Charge chip (icon + %).
+  //               Sits on the shelf, to the LEFT of the home's
+  //               vertical axis, connected to PV by an L polyline
+  //               (PV top-left → up → left → SoC right edge).
+  //               Static (no flow direction to encode).
+  //  batteryPowerLabel — battery Power chip (icon + signed W/kW).
+  //               Sits on the shelf, to the RIGHT of the home's
+  //               vertical axis, connected to PV by an L polyline
+  //               (PV top-right → up → right → Power left edge).
+  //               Animated dashes + arrow tracking the sign of
+  //               the live power.
+  //  home       — the projected home point, used both as the visual
+  //               centre of the cloud disc (the cloud leader ends
+  //               here) and as the anchor for the PV / battery
+  //               chip leader lines.
   //
   //Returns null when the map isn't ready yet — the card treats
   //null as "don't render the overlay this frame".
@@ -25846,14 +27323,14 @@ const _HeliosEngine = class _HeliosEngine {
     const cloudLabelY = ringEdgeY + radDY / radLen * CLOUD_CHIP_NUDGE_PX;
     const BATTERY_CHIP_X_OFFSET_PX = 80;
     const BATTERY_CHIP_Y_OFFSET_PX = 40;
+    const shelfY = home.y - PV_CHIP_OFFSET_PX + BATTERY_CHIP_Y_OFFSET_PX;
     const pvX = home.x;
-    const pvY = home.y - CLOUD_LABEL_OFFSET_PX;
+    const pvY = shelfY + BATTERY_CHIP_Y_OFFSET_PX;
     return {
       cloudLabel: { x: cloudLabelX, y: cloudLabelY },
       pvLabel: { x: pvX, y: pvY },
-      batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
-      batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
-      ringEdge: { x: ringEdgeX, y: ringEdgeY },
+      batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
+      batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       home: { x: home.x, y: home.y }
     };
   }
@@ -26119,17 +27596,46 @@ const _HeliosEngine = class _HeliosEngine {
   }
   updateConfig(cfg) {
     const prevStyleId = this._resolveMapStyle().id;
+    const prevMinimal = this._isMinimalStyle();
+    const prevPerfMode = this._performanceMode();
+    const prevRadius = this._buildingRadiusMeters();
+    const prevCluster = this._buildingClusterRadiusMeters();
+    const prevOpacity = this._buildingOpacity();
+    const prevColor = this._buildingColor();
     this.cfg = { ...cfg };
     if (!this.map) {
       return;
     }
     const nextStyleInfo = this._resolveMapStyle();
-    if (nextStyleInfo.id !== prevStyleId) {
+    const styleNeedsReload = nextStyleInfo.id !== prevStyleId || this._isMinimalStyle() !== prevMinimal;
+    if (styleNeedsReload) {
       this._mapReady = false;
       this.map.setStyle(
         `https://api.maptiler.com/maps/${nextStyleInfo.id}/style.json?key=${this.apiKey}`
       );
       return;
+    }
+    const nextPerfMode = this._performanceMode();
+    if (nextPerfMode !== prevPerfMode) {
+      if (nextPerfMode) {
+        this.map.setTerrain(null);
+        if (this.map.getLayer("helios-hillshade")) {
+          this.map.removeLayer("helios-hillshade");
+        }
+        try {
+          this.map.setPixelRatio(1);
+        } catch (_2) {
+        }
+      } else {
+        this.map.setTerrain({ source: "helios-terrain", exaggeration: 1.2 });
+        this._initHillshade();
+        const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
+        const px = IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
+        try {
+          this.map.setPixelRatio(px);
+        } catch (_2) {
+        }
+      }
     }
     if (this.map.getLayer("helios-hillshade")) {
       const c2 = toColor(this.cfg["topography-color"], "rgba(80,100,160,1)");
@@ -26139,6 +27645,30 @@ const _HeliosEngine = class _HeliosEngine {
       this.map.setPaintProperty("helios-hillshade", "hillshade-exaggeration", a2);
     }
     this._applyLabelVisibility();
+    const nextRadius = this._buildingRadiusMeters();
+    const nextCluster = this._buildingClusterRadiusMeters();
+    const nextOpacity = this._buildingOpacity();
+    const nextColor = this._buildingColor();
+    if (nextRadius !== prevRadius || nextCluster !== prevCluster) {
+      this._buildingsData = null;
+      this._buildingsFetchKey = "";
+      this._addBuildings();
+    } else {
+      if (nextOpacity !== prevOpacity && this.map.getLayer("helios-buildings-surroundings")) {
+        this.map.setPaintProperty(
+          "helios-buildings-surroundings",
+          "fill-extrusion-opacity",
+          nextOpacity
+        );
+      }
+      if (nextColor !== prevColor) {
+        for (const lid of ["helios-buildings-surroundings", "helios-buildings-home"]) {
+          if (this.map.getLayer(lid)) {
+            this.map.setPaintProperty(lid, "fill-extrusion-color", nextColor);
+          }
+        }
+      }
+    }
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
     }
@@ -26157,7 +27687,8 @@ const _HeliosEngine = class _HeliosEngine {
       const dt = Math.max(0, t2 - this._autoRotateLastFrame) / 1e3;
       this._autoRotateLastFrame = t2;
       const sinceUser = Date.now() - this._autoRotateLastUserAction;
-      if (sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
+      const autoRotateEnabled = this.cfg["auto-rotate-enabled"] !== false;
+      if (autoRotateEnabled && sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
         const next = this.map.getBearing() - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
         this.map.setBearing(next);
       }
@@ -26170,23 +27701,77 @@ const _HeliosEngine = class _HeliosEngine {
     window.clearInterval(this._skyTimer);
     window.clearTimeout(this._resizeDebounceTimer);
     this._fetchAbortController?.abort();
+    this._buildingsAbort?.abort();
     this._resizeObserver?.disconnect();
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
       this._autoRotateRaf = void 0;
     }
+    const canvas = this._bumpInactivityCanvas;
+    const handler = this._bumpInactivityHandler;
+    if (canvas && handler) {
+      canvas.removeEventListener("mousedown", handler);
+      canvas.removeEventListener("wheel", handler);
+      canvas.removeEventListener("touchstart", handler);
+      canvas.removeEventListener("touchmove", handler);
+    }
+    let gl = null;
+    try {
+      gl = canvas?.getContext("webgl2") ?? canvas?.getContext("webgl") ?? null;
+    } catch (_2) {
+    }
+    this._bumpInactivityCanvas = void 0;
+    this._bumpInactivityHandler = void 0;
+    this._buildingsData = null;
+    this._buildingsFetchKey = "";
     this.map?.remove();
     this.map = void 0;
     this._mapReady = false;
+    try {
+      gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    } catch (_2) {
+    }
+    try {
+      const w2 = window;
+      if (w2.__heliosMap !== void 0) delete w2.__heliosMap;
+    } catch (_2) {
+    }
   }
 };
+_HeliosEngine.MINIMAL_KEEP_LAYER_IDS = /* @__PURE__ */ new Set([
+  "Background",
+  //Land use / cover that give the ground its colour palette
+  //without adding any extra draw call beyond what's already
+  //present.
+  "Farmland",
+  "Vegetation",
+  "Wood",
+  "Forest",
+  "Grass",
+  "Residential",
+  "Sand",
+  "Ice",
+  //Water everywhere it appears (lakes, rivers, swimming pools)
+  //plus the visible river/stream lines.
+  "Water",
+  "River",
+  "Stream",
+  //Roads: keep the meaningful classes for orientation; drop
+  //tunnels, bridges, hatching, ramps, oneways, shields, etc.
+  "Major road",
+  "Highway",
+  "Minor road z10",
+  "Minor road z12",
+  "Service road",
+  "Pathway",
+  "Track"
+]);
 _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC = 1.5;
 _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS = 5e3;
 let HeliosEngine = _HeliosEngine;
 const en = {
   cardName: "HELIOS",
   cardDescription: "Real-time solar energy and cloud coverage visualization",
-  live: "Live",
   placeholder: {
     subtitle: "Solar exposure & cloud coverage"
   },
@@ -26194,8 +27779,7 @@ const en = {
     cloudCover: "Cloud cover: {0}%",
     cloudLow: "Low: {0}%",
     cloudMid: "Mid: {0}%",
-    cloudHigh: "High: {0}%",
-    resetLive: "Back to live"
+    cloudHigh: "High: {0}%"
   },
   editor: {
     required: "API key",
@@ -26208,18 +27792,21 @@ const en = {
     hillshadeStrength: "Hillshade strength * (0 → 1)",
     mapSection: "Map",
     mapStyle: "Map style *",
-    mapStyleHint: "Choose between the streets basemap (sober, urban), the topographic basemap (contour lines, earth tones, better in hilly terrain) or the hybrid basemap (high-resolution satellite imagery with road and label overlays). Labels and 3D buildings work identically on all three.",
+    mapStyleHint: "Choose between the streets basemap (sober, urban) and the topographic basemap (contour lines, earth tones, better in hilly terrain). Labels and 3D buildings work identically on both. The dark variant of the chosen style is used automatically when the card theme is set to dark.",
     mapStyleStreet: "Streets",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Hybrid",
     cardTheme: "Card theme *",
-    cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards. The 3D map basemap is unaffected.",
+    cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) and the 3D map basemap between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards.",
     cardThemeLight: "Light",
     cardThemeDark: "Dark",
     showLabels: "Show labels *",
     showLabelsHint: "Toggles street names, building numbers, points of interest and place names on the basemap.",
     labelsOn: "Shown",
     labelsOff: "Hidden",
+    autoRotate: "Camera auto-rotation *",
+    autoRotateHint: "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). Any pinch, drag or wheel pauses it instantly and it resumes once you let go.",
+    autoRotateOn: "On",
+    autoRotateOff: "Off",
     timeline: "Timeline",
     timelineHint: "Format of the date labels shown on the timeline and inside the scrub chip.",
     dateFormat: "Date format * (default: mm-dd)",
@@ -26242,13 +27829,23 @@ const en = {
     batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
     batteryPowerEntity: "Power entity",
     batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
-    batteryColor: "Battery color *"
+    batteryColor: "Battery color *",
+    buildingsSection: "Surrounding buildings",
+    buildingsHint: 'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
+    buildingRadius: "Visibility radius *",
+    buildingClusterRadius: "Home cluster radius *",
+    buildingOpacity: "Surrounding opacity *",
+    buildingColor: "Building color *",
+    performanceMode: "Performance mode *",
+    performanceModeOn: "On",
+    performanceModeOff: "Off",
+    performanceModeHint: "Disables 3D terrain, hillshade and caps pixel density. Useful on low-end devices or for long sessions. Camera pitch and 3D buildings are preserved.",
+    mapStyleMinimal: "Minimal"
   }
 };
 const fr = {
   cardName: "HELIOS",
   cardDescription: "Visualisation en temps réel de l'énergie solaire et de la couverture nuageuse",
-  live: "Direct",
   placeholder: {
     subtitle: "Exposition solaire & couverture nuageuse"
   },
@@ -26256,8 +27853,7 @@ const fr = {
     cloudCover: "Couverture nuageuse : {0}%",
     cloudLow: "Basse : {0}%",
     cloudMid: "Moyenne : {0}%",
-    cloudHigh: "Haute : {0}%",
-    resetLive: "Revenir à l'instant présent"
+    cloudHigh: "Haute : {0}%"
   },
   editor: {
     required: "Clé API",
@@ -26270,18 +27866,21 @@ const fr = {
     hillshadeStrength: "Intensité de l'ombrage * (0 → 1)",
     mapSection: "Carte",
     mapStyle: "Style de la carte *",
-    mapStyleHint: "Choisis entre le fond de carte des rues (sobre, urbain), le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée) ou le fond hybride (imagerie satellite haute résolution avec les routes et libellés en surimpression). Les libellés et les bâtiments 3D fonctionnent à l'identique sur les trois.",
+    mapStyleHint: "Choisis entre le fond de carte des rues (sobre, urbain) et le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée). Les libellés et les bâtiments 3D fonctionnent à l'identique sur les deux. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
     mapStyleStreet: "Rues",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Hybride",
     cardTheme: "Thème de la carte *",
-    cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre. La carte 3D elle-même n'est pas affectée.",
+    cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) ainsi que le fond de carte 3D entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre.",
     cardThemeLight: "Clair",
     cardThemeDark: "Sombre",
     showLabels: "Afficher les libellés *",
     showLabelsHint: "Affiche ou masque les noms de rues, numéros de bâtiments, points d'intérêt et noms de quartiers du fond de carte.",
     labelsOn: "Affichés",
     labelsOff: "Masqués",
+    autoRotate: "Rotation auto de la caméra *",
+    autoRotateHint: "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Tout pincement, glissement ou molette met la rotation en pause immédiatement ; elle reprend dès que tu lâches.",
+    autoRotateOn: "Activée",
+    autoRotateOff: "Désactivée",
     timeline: "Chronologie",
     timelineHint: "Format des libellés de date affichés sur la chronologie et dans la pastille du scrub.",
     dateFormat: "Format de date * (par défaut : mm-dd)",
@@ -26304,13 +27903,23 @@ const fr = {
     batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (% — typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
     batteryPowerEntity: "Entité de puissance",
     batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
-    batteryColor: "Couleur batterie *"
+    batteryColor: "Couleur batterie *",
+    buildingsSection: "Bâtiments alentour",
+    buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
+    buildingRadius: "Rayon de visibilité *",
+    buildingClusterRadius: "Rayon de regroupement maison *",
+    buildingOpacity: "Opacité des bâtiments voisins *",
+    buildingColor: "Couleur des bâtiments *",
+    performanceMode: "Mode performance *",
+    performanceModeOn: "Activé",
+    performanceModeOff: "Désactivé",
+    performanceModeHint: "Désactive le relief 3D, l'ombrage du relief et limite la densité de pixels. Utile sur appareils bas/moyen de gamme ou pour les longues sessions. Conserve l'inclinaison de caméra et les bâtiments en 3D.",
+    mapStyleMinimal: "Minimal"
   }
 };
 const de = {
   cardName: "HELIOS",
   cardDescription: "Echtzeit-Visualisierung von Solarenergie und Wolkenbedeckung",
-  live: "Live",
   placeholder: {
     subtitle: "Sonneneinstrahlung & Wolkenbedeckung"
   },
@@ -26318,8 +27927,7 @@ const de = {
     cloudCover: "Bewölkung: {0}%",
     cloudLow: "Niedrig: {0}%",
     cloudMid: "Mittel: {0}%",
-    cloudHigh: "Hoch: {0}%",
-    resetLive: "Zurück zur Echtzeit"
+    cloudHigh: "Hoch: {0}%"
   },
   editor: {
     required: "API-Schlüssel",
@@ -26332,18 +27940,21 @@ const de = {
     hillshadeStrength: "Schattierungsstärke * (0 → 1)",
     mapSection: "Karte",
     mapStyle: "Kartenstil *",
-    mapStyleHint: "Wähle zwischen der Straßenkarte (nüchtern, urban), der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände) oder der Hybrid-Karte (hochauflösende Satellitenbilder mit Straßen- und Beschriftungs-Overlay). Beschriftungen und 3D-Gebäude funktionieren auf allen drei gleich.",
+    mapStyleHint: "Wähle zwischen der Straßenkarte (nüchtern, urban) und der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände). Beschriftungen und 3D-Gebäude funktionieren bei beiden gleich. Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
     mapStyleStreet: "Straßen",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Hybrid",
     cardTheme: "Karten-Thema *",
-    cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt. Die 3D-Grundkarte selbst bleibt unverändert.",
+    cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) sowie die 3D-Grundkarte zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt.",
     cardThemeLight: "Hell",
     cardThemeDark: "Dunkel",
     showLabels: "Beschriftungen anzeigen *",
     showLabelsHint: "Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.",
     labelsOn: "Sichtbar",
     labelsOff: "Ausgeblendet",
+    autoRotate: "Automatische Kamerarotation *",
+    autoRotateHint: "Nach ein paar Sekunden Inaktivität kreist die Kamera langsam um das Haus (ca. 1,5°/s, gegenläufig zur scheinbaren Sonnenbahn). Pinch, Drag oder Mausrad pausieren sie sofort; sie setzt fort, sobald du loslässt.",
+    autoRotateOn: "Ein",
+    autoRotateOff: "Aus",
     timeline: "Zeitachse",
     timelineHint: "Format der Datumsanzeige auf der Zeitachse und im Scrub-Chip.",
     dateFormat: "Datumsformat * (Standard: mm-dd)",
@@ -26366,13 +27977,23 @@ const de = {
     batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
     batteryPowerEntity: "Leistungs-Entität",
     batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
-    batteryColor: "Batteriefarbe *"
+    batteryColor: "Batteriefarbe *",
+    buildingsSection: "Umliegende Gebäude",
+    buildingsHint: 'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
+    buildingRadius: "Sichtradius *",
+    buildingClusterRadius: "Cluster-Radius Zuhause *",
+    buildingOpacity: "Deckkraft Nachbargebäude *",
+    buildingColor: "Gebäudefarbe *",
+    performanceMode: "Performance-Modus *",
+    performanceModeOn: "Ein",
+    performanceModeOff: "Aus",
+    performanceModeHint: "Deaktiviert 3D-Terrain, Hillshade und begrenzt die Pixeldichte. Sinnvoll bei leistungsschwachen Geräten oder langen Sitzungen. Kameraneigung und 3D-Gebäude bleiben erhalten.",
+    mapStyleMinimal: "Minimal"
   }
 };
 const es = {
   cardName: "HELIOS",
   cardDescription: "Visualización en tiempo real de la energía solar y la cobertura de nubes",
-  live: "En vivo",
   placeholder: {
     subtitle: "Exposición solar y cobertura de nubes"
   },
@@ -26380,8 +28001,7 @@ const es = {
     cloudCover: "Cobertura de nubes: {0}%",
     cloudLow: "Baja: {0}%",
     cloudMid: "Media: {0}%",
-    cloudHigh: "Alta: {0}%",
-    resetLive: "Volver al directo"
+    cloudHigh: "Alta: {0}%"
   },
   editor: {
     required: "Clave API",
@@ -26394,18 +28014,21 @@ const es = {
     hillshadeStrength: "Intensidad del sombreado * (0 → 1)",
     mapSection: "Mapa",
     mapStyle: "Estilo del mapa *",
-    mapStyleHint: "Elige entre el mapa de calles (sobrio, urbano), el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso) o el mapa híbrido (imágenes de satélite de alta resolución con superposición de calles y etiquetas). Las etiquetas y los edificios 3D funcionan igual en los tres.",
+    mapStyleHint: "Elige entre el mapa de calles (sobrio, urbano) y el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso). Las etiquetas y los edificios 3D funcionan igual en ambos. La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
     mapStyleStreet: "Calles",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Híbrido",
     cardTheme: "Tema de la tarjeta *",
-    cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros. El mapa 3D no se ve afectado.",
+    cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) y el mapa 3D de fondo entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros.",
     cardThemeLight: "Claro",
     cardThemeDark: "Oscuro",
     showLabels: "Mostrar etiquetas *",
     showLabelsHint: "Muestra u oculta los nombres de calles, números de edificios, puntos de interés y nombres de zonas en el mapa de fondo.",
     labelsOn: "Visibles",
     labelsOff: "Ocultas",
+    autoRotate: "Rotación automática de la cámara *",
+    autoRotateHint: "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (aprox. 1,5°/s, en sentido opuesto al movimiento aparente del sol). Cualquier pellizco, arrastre o rueda la pausa al instante y se reanuda cuando sueltas.",
+    autoRotateOn: "Activada",
+    autoRotateOff: "Desactivada",
     timeline: "Cronología",
     timelineHint: "Formato de las fechas mostradas en la cronología y en la pastilla del scrub.",
     dateFormat: "Formato de fecha * (por defecto: mm-dd)",
@@ -26428,13 +28051,23 @@ const es = {
     batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
     batteryPowerEntity: "Entidad de potencia",
     batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
-    batteryColor: "Color batería *"
+    batteryColor: "Color batería *",
+    buildingsSection: "Edificios circundantes",
+    buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».",
+    buildingRadius: "Radio de visibilidad *",
+    buildingClusterRadius: "Radio del grupo de la casa *",
+    buildingOpacity: "Opacidad de los vecinos *",
+    buildingColor: "Color de los edificios *",
+    performanceMode: "Modo rendimiento *",
+    performanceModeOn: "Activado",
+    performanceModeOff: "Desactivado",
+    performanceModeHint: "Desactiva el terreno 3D, el relieve y limita la densidad de píxeles. Útil en dispositivos modestos o para sesiones largas. La inclinación y los edificios 3D se mantienen.",
+    mapStyleMinimal: "Mínimo"
   }
 };
 const it = {
   cardName: "HELIOS",
   cardDescription: "Visualizzazione in tempo reale dell'energia solare e della copertura nuvolosa",
-  live: "Live",
   placeholder: {
     subtitle: "Esposizione solare e copertura nuvolosa"
   },
@@ -26442,8 +28075,7 @@ const it = {
     cloudCover: "Copertura nuvolosa: {0}%",
     cloudLow: "Bassa: {0}%",
     cloudMid: "Media: {0}%",
-    cloudHigh: "Alta: {0}%",
-    resetLive: "Torna al live"
+    cloudHigh: "Alta: {0}%"
   },
   editor: {
     required: "Chiave API",
@@ -26456,18 +28088,21 @@ const it = {
     hillshadeStrength: "Intensità dell'ombreggiatura * (0 → 1)",
     mapSection: "Mappa",
     mapStyle: "Stile della mappa *",
-    mapStyleHint: "Scegli tra la mappa stradale (sobria, urbana), la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare) o la mappa ibrida (immagini satellitari ad alta risoluzione con sovrapposizione di strade ed etichette). Le etichette e gli edifici 3D funzionano allo stesso modo su tutte e tre.",
+    mapStyleHint: "Scegli tra la mappa stradale (sobria, urbana) e la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare). Le etichette e gli edifici 3D funzionano allo stesso modo su entrambe. La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
     mapStyleStreet: "Strade",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Ibrida",
     cardTheme: "Tema della scheda *",
-    cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri. La mappa 3D non è interessata.",
+    cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) e la mappa 3D di sfondo tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri.",
     cardThemeLight: "Chiaro",
     cardThemeDark: "Scuro",
     showLabels: "Mostra etichette *",
     showLabelsHint: "Mostra o nasconde i nomi delle vie, i numeri civici, i punti di interesse e i nomi dei quartieri sulla mappa di base.",
     labelsOn: "Visibili",
     labelsOff: "Nascoste",
+    autoRotate: "Rotazione automatica della camera *",
+    autoRotateHint: "Dopo qualche secondo di inattività, la camera ruota lentamente attorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Pinch, drag o rotellina la mettono in pausa all'istante e riprende non appena rilasci.",
+    autoRotateOn: "Attiva",
+    autoRotateOff: "Disattiva",
     timeline: "Cronologia",
     timelineHint: "Formato delle date mostrate sulla cronologia e nella pastiglia di scrub.",
     dateFormat: "Formato data * (predefinito: mm-dd)",
@@ -26490,13 +28125,23 @@ const it = {
     batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
     batteryPowerEntity: "Entità di potenza",
     batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
-    batteryColor: "Colore batteria *"
+    batteryColor: "Colore batteria *",
+    buildingsSection: "Edifici circostanti",
+    buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».",
+    buildingRadius: "Raggio di visibilità *",
+    buildingClusterRadius: "Raggio del gruppo casa *",
+    buildingOpacity: "Opacità degli edifici vicini *",
+    buildingColor: "Colore degli edifici *",
+    performanceMode: "Modalità prestazioni *",
+    performanceModeOn: "Attivata",
+    performanceModeOff: "Disattivata",
+    performanceModeHint: "Disattiva il terreno 3D, l'ombreggiatura del rilievo e limita la densità dei pixel. Utile su dispositivi modesti o per sessioni lunghe. L'inclinazione e gli edifici 3D rimangono.",
+    mapStyleMinimal: "Minimale"
   }
 };
 const nl = {
   cardName: "HELIOS",
   cardDescription: "Realtime visualisatie van zonne-energie en bewolking",
-  live: "Live",
   placeholder: {
     subtitle: "Zonexpositie & bewolking"
   },
@@ -26504,8 +28149,7 @@ const nl = {
     cloudCover: "Bewolking: {0}%",
     cloudLow: "Laag: {0}%",
     cloudMid: "Middel: {0}%",
-    cloudHigh: "Hoog: {0}%",
-    resetLive: "Terug naar live"
+    cloudHigh: "Hoog: {0}%"
   },
   editor: {
     required: "API-sleutel",
@@ -26518,18 +28162,21 @@ const nl = {
     hillshadeStrength: "Schaduwsterkte * (0 → 1)",
     mapSection: "Kaart",
     mapStyle: "Kaartstijl *",
-    mapStyleHint: "Kies tussen de stratenkaart (sober, stedelijk), de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein) of de hybride kaart (hoogwaardige satellietbeelden met overlays voor wegen en labels). Labels en 3D-gebouwen werken op alle drie hetzelfde.",
+    mapStyleHint: "Kies tussen de stratenkaart (sober, stedelijk) en de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein). Labels en 3D-gebouwen werken op beide hetzelfde. De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
     mapStyleStreet: "Straten",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Hybride",
     cardTheme: "Kaartthema *",
-    cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards. De 3D-basemap wordt niet beïnvloed.",
+    cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) en de 3D-basemap tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards.",
     cardThemeLight: "Licht",
     cardThemeDark: "Donker",
     showLabels: "Labels weergeven *",
     showLabelsHint: "Toont of verbergt straatnamen, huisnummers, points of interest en buurtnamen op de basiskaart.",
     labelsOn: "Zichtbaar",
     labelsOff: "Verborgen",
+    autoRotate: "Automatische camerarotatie *",
+    autoRotateHint: "Na een paar seconden inactiviteit draait de camera langzaam rond het huis (ongeveer 1,5°/s, tegen de schijnbare beweging van de zon in). Een knijp-, sleep- of muiswielgebaar pauzeert de rotatie direct; ze hervat zodra je loslaat.",
+    autoRotateOn: "Aan",
+    autoRotateOff: "Uit",
     timeline: "Tijdlijn",
     timelineHint: "Datumformaat dat op de tijdlijn en in de scrub-chip wordt weergegeven.",
     dateFormat: "Datumformaat * (standaard: mm-dd)",
@@ -26552,13 +28199,23 @@ const nl = {
     batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
     batteryPowerEntity: "Vermogen-entiteit",
     batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
-    batteryColor: "Batterijkleur *"
+    batteryColor: "Batterijkleur *",
+    buildingsSection: "Omliggende gebouwen",
+    buildingsHint: 'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
+    buildingRadius: "Zichtstraal *",
+    buildingClusterRadius: "Cluster-straal huis *",
+    buildingOpacity: "Dekking omliggende gebouwen *",
+    buildingColor: "Gebouwkleur *",
+    performanceMode: "Prestatiemodus *",
+    performanceModeOn: "Aan",
+    performanceModeOff: "Uit",
+    performanceModeHint: "Schakelt 3D-terrein, reliëfschaduw uit en beperkt de pixeldichtheid. Handig op bescheiden apparaten of voor lange sessies. De camerakanteling en 3D-gebouwen blijven behouden.",
+    mapStyleMinimal: "Minimaal"
   }
 };
 const pt = {
   cardName: "HELIOS",
   cardDescription: "Visualização em tempo real da energia solar e da cobertura de nuvens",
-  live: "Direto",
   placeholder: {
     subtitle: "Exposição solar e cobertura de nuvens"
   },
@@ -26566,8 +28223,7 @@ const pt = {
     cloudCover: "Cobertura de nuvens: {0}%",
     cloudLow: "Baixa: {0}%",
     cloudMid: "Média: {0}%",
-    cloudHigh: "Alta: {0}%",
-    resetLive: "Voltar ao direto"
+    cloudHigh: "Alta: {0}%"
   },
   editor: {
     required: "Chave API",
@@ -26580,18 +28236,21 @@ const pt = {
     hillshadeStrength: "Intensidade do sombreado * (0 → 1)",
     mapSection: "Mapa",
     mapStyle: "Estilo do mapa *",
-    mapStyleHint: "Escolhe entre o mapa de ruas (sóbrio, urbano), o mapa topográfico (curvas de nível, tons terrosos, ideal em terreno montanhoso) ou o mapa híbrido (imagens de satélite de alta resolução com sobreposição de estradas e etiquetas). As etiquetas e os edifícios 3D funcionam de forma idêntica nos três.",
+    mapStyleHint: "Escolhe entre o mapa de ruas (sóbrio, urbano) e o mapa topográfico (curvas de nível, tons terrosos, ideal em terreno montanhoso). As etiquetas e os edifícios 3D funcionam de forma idêntica em ambos. A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
     mapStyleStreet: "Ruas",
     mapStyleTopo: "Topo",
-    mapStyleHybrid: "Híbrido",
     cardTheme: "Tema do cartão *",
-    cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros. O mapa 3D não é afetado.",
+    cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) e o mapa 3D de fundo entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros.",
     cardThemeLight: "Claro",
     cardThemeDark: "Escuro",
     showLabels: "Mostrar etiquetas *",
     showLabelsHint: "Mostra ou oculta os nomes das ruas, números de edifícios, pontos de interesse e nomes de bairros no mapa de fundo.",
     labelsOn: "Visíveis",
     labelsOff: "Ocultas",
+    autoRotate: "Rotação automática da câmara *",
+    autoRotateHint: "Após alguns segundos de inatividade, a câmara orbita lentamente em torno da casa (cerca de 1,5°/s, em sentido oposto ao movimento aparente do sol). Qualquer beliscão, arrastar ou roda pausa-a instantaneamente e retoma assim que largas.",
+    autoRotateOn: "Ligada",
+    autoRotateOff: "Desligada",
     timeline: "Linha temporal",
     timelineHint: "Formato das datas mostradas na linha temporal e na pastilha do scrub.",
     dateFormat: "Formato de data * (predefinição: mm-dd)",
@@ -26614,7 +28273,18 @@ const pt = {
     batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (% — normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
     batteryPowerEntity: "Entidade de potência",
     batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
-    batteryColor: "Cor da bateria *"
+    batteryColor: "Cor da bateria *",
+    buildingsSection: "Edifícios circundantes",
+    buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».",
+    buildingRadius: "Raio de visibilidade *",
+    buildingClusterRadius: "Raio do grupo da casa *",
+    buildingOpacity: "Opacidade dos vizinhos *",
+    buildingColor: "Cor dos edifícios *",
+    performanceMode: "Modo de desempenho *",
+    performanceModeOn: "Ativado",
+    performanceModeOff: "Desativado",
+    performanceModeHint: "Desativa o terreno 3D, o relevo e limita a densidade de píxeis. Útil em dispositivos modestos ou em sessões longas. A inclinação e os edifícios 3D mantêm-se.",
+    mapStyleMinimal: "Mínimo"
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -26926,9 +28596,16 @@ const heliosCardStyles = i$3`
         border-top:    5px solid #1f6feb;
     }
 
-    /*  Scrub-time chip — sits in the top row above the chart card,
-        tinted in the scrub-cursor blue so the displayed instant is
-        visibly not "now". */
+    /*  Scrub-time pill — sits in the top row above the chart card
+        when the user has scrubbed away from "now". Tinted in the
+        scrub-cursor blue so the displayed instant is visibly not
+        "now". Anchored at the cursor's X via an inline left
+        percentage, with edge-clamping handled by the inline
+        transform so the pill never bleeds past the card edges.
+        Pointer-transparent so dragging the timeline through it
+        still scrubs — the "back to live" affordance lives in the
+        clock tab above the card, not next to the pill, to keep the
+        timeline's hit area uncontested on mobile. */
     .tb-sel-label
     {
         position: absolute;
@@ -26944,6 +28621,27 @@ const heliosCardStyles = i$3`
         pointer-events: none;
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
         font-variant-numeric: tabular-nums;
+        z-index: 3;
+    }
+
+    /*  Scrub tether — a 6 px vertical hair that drops from the
+        bottom edge of the scrub cluster to the top edge of the
+        chart card, anchored at the cursor's X. Carries the
+        scrub-cursor blue so it reads as continuous with the cursor's
+        downward triangle inside the chart. The tether is rendered
+        as a sibling of the cluster (not a child) and uses the same
+        left-percentage anchor without the cluster's edge-clamping
+        transform, so it always lands directly above the cursor even
+        when the cluster shifts to avoid clipping. */
+    .tb-sel-tether
+    {
+        position: absolute;
+        bottom: -6px;
+        height: 6px;
+        width: 1px;
+        background: rgba(31, 111, 235, 0.95);
+        transform: translateX(-50%);
+        pointer-events: none;
         z-index: 3;
     }
 
@@ -27032,18 +28730,25 @@ const heliosCardStyles = i$3`
     /*  Top corner overlays. Date/time chip on the right; "back to
         live" chip on the left when scrubbed. */
 
-    .overlay-top-right,
-    .overlay-top-left
+    /*  Top-row overlay — the clock centres horizontally above the
+        card, with an optional "back to live" tab hanging from its
+        bottom-centre when the user has scrubbed away from now. The
+        wrapper is a vertical flex column so the tab stacks under
+        the clock automatically; both elements share the same X
+        anchor (the column's centre = the card's centre). */
+    .overlay-top-center
     {
         position: absolute;
-        top: 14px;
+        /*  Matches the timeline's bottom: 8px so the clock and the
+            timeline sit at symmetric distance from the card edges. */
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 5;
         display: flex;
+        flex-direction: column;
         align-items: center;
     }
-
-    .overlay-top-right { right: 14px; }
-    .overlay-top-left  { left:  14px; }
 
     /*  Date/time chip — same chip language as the on-map readouts. */
     .clock
@@ -27063,90 +28768,54 @@ const heliosCardStyles = i$3`
         font-variant-numeric: tabular-nums;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         white-space: nowrap;
+        position: relative;
+        z-index: 2;
     }
 
     .clock-date { opacity: 0.75; }
     .clock-time { opacity: 1;    }
 
-    /*  "Back to live" button — same chip as the clock, clickable.
-        position:relative so the tooltip pseudo-element anchors to
-        the button itself. */
-    .tl-live-btn
+    /*  "Back to live" tab — hangs from the bottom-centre of the
+        clock as a small folder-style tab when the user has scrubbed
+        away from now. Same blue plate as the on-chart scrub cursor
+        and the scrub-time pill, white restore icon centred. The
+        top corners are squared and the top edge sits 1 px UNDER the
+        clock's bottom border (negative margin) so the two chips
+        visually merge into one stacked control. Mobile-friendly tap
+        target (~26 × 22 px, well above the 24 × 24 px iOS minimum)
+        without competing with the timeline scrub gesture below. */
+    .clock-tab
     {
-        position: relative;
-        pointer-events: auto;
+        margin-top: -1px;
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 2px 6px 2px 4px;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size:    12px;
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        white-space: nowrap;
-        cursor: pointer;
-        /*  Paint-only transition. Animating transform here would
-            keep the button on a GPU compositing layer permanently
-            and soften the tooltip text rendered as a child. */
-        transition: background 0.15s;
-    }
-
-    .tl-live-btn ha-icon
-    {
-        --mdc-icon-size: 12px;
-        color: #000000;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    .tl-live-btn:hover  { background: #f3f3f3; }
-    .tl-live-btn:active { background: #e8e8e8; }
-
-    /*  Live-button tooltip — rendered as a real DOM element (not a
-        pseudo-element) so its text gets sub-pixel anti-aliasing,
-        matching the cloud-disc tooltip rendered the same way. */
-    .tl-live-tooltip
-    {
-        position: absolute;
-        left: calc(100% + 6px);
-        top: 50%;
-        transform: translateY(-50%);
-        background: rgba(0, 0, 0, 0.78);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 6px;
-        padding: 6px 10px;
+        justify-content: center;
+        min-width: 40px;
+        height: 24px;
+        padding: 0 12px;
+        background: rgba(31, 111, 235, 0.95);
         color: white;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size: 11px;
-        font-weight: 400;
-        line-height: 1.4;
-        white-space: nowrap;
-        text-transform: none;
-        letter-spacing: normal;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
-        pointer-events: none;
-        z-index: 100;
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.1s ease, visibility 0.1s ease;
+        border: 1px solid rgba(20, 78, 168, 0.95);
+        border-top: 0;
+        border-radius: 0 0 3px 3px;
+        cursor: pointer;
+        pointer-events: auto;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        transition: background 0.12s;
+        position: relative;
+        z-index: 1;
     }
 
-    .tl-live-btn:hover .tl-live-tooltip,
-    .tl-live-btn:focus .tl-live-tooltip
+    .clock-tab:hover  { background: rgba(24, 92, 199, 0.95); }
+    .clock-tab:active { background: rgba(20, 78, 168, 0.95); }
+
+    .clock-tab ha-icon
     {
-        opacity: 1;
-        visibility: visible;
+        --mdc-icon-size: 18px;
+        color: white;
+        display: inline-flex;
+        align-items: center;
     }
-
 
     /*  Cloud-cover percentage chip — floating above the cloud disc
         on the ground with a leader line down to its feature. */
@@ -27221,45 +28890,6 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  PV leader line — dashes flow from the home up to the chip
-        at a speed proportional to live production. */
-    .pv-leader-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 5;
-    }
-
-    .pv-leader-line
-    {
-        stroke: var(--pv-leader-color, #27B36B);
-        stroke-width: 1.5;
-        stroke-opacity: 0.85;
-        stroke-linecap: round;
-        stroke-dasharray: 6 5;
-        animation: pv-leader-flow var(--pv-flow-duration, 30s) linear infinite;
-    }
-
-    /*  Negative offset shifts dashes from line start (home) toward
-        end (chip). Cycle length = sum of dasharray pattern. */
-    @keyframes pv-leader-flow
-    {
-        from { stroke-dashoffset: 0;  }
-        to   { stroke-dashoffset: -11; }
-    }
-
-    /*  PV leader arrow — small triangle riding the leader line via
-        SVG <animateMotion>. Same fill as the line; the rotate="auto"
-        on animateMotion keeps the tip pointing in the direction of
-        travel (home → chip). */
-    .pv-leader-arrow
-    {
-        opacity: 0.9;
-    }
-
     /*  Battery chips (SoC on the left of PV, Power on the right) —
         same frame as the PV chip, tinted in the user-configured
         battery colour. Shares min-width and centred text with the
@@ -27300,20 +28930,24 @@ const heliosCardStyles = i$3`
     }
 
     /*  Battery leaders.
-        - SoC ↔ PV is a short static dotted hairline (.battery-
-          leader-line on its own) — same vocabulary as the cloud
-          leader. The SoC value has no sign so there's no flow
-          direction to encode.
-        - PV ↔ Power is animated (.battery-leader-line-animated
-          modifier on top of .battery-leader-line) with dashes
-          flowing at a speed proportional to |P| — exactly like
-          the PV leader's visual language — and a small arrow
-          polygon riding the line via SVG <animateMotion>. The
+        Both SoC ↔ PV and PV ↔ Power share the exact same visual
+        vocabulary: dashed L-shaped path with a rounded fillet at
+        the bend (so an arrow riding the path rotates smoothly
+        through the corner instead of snapping).
+        - .battery-leader-line carries the static styling (stroke
+          colour, width, opacity, dash pattern). Used on its own
+          for SoC ↔ PV — the SoC value has no sign so there's no
+          flow direction to animate.
+        - .battery-leader-line-animated layers the flow animation
+          on top: the dashes drift at a speed proportional to |P|
+          (via --battery-flow-duration), exactly like the PV
+          leader's visual language. A small arrow polygon rides
+          the path via SVG <animateMotion>; the
           .battery-leader-discharging class flips the dash flow
           direction (CSS animation-direction: reverse) so the
-          dashes move from chip → PV when the battery is
-          discharging; the arrow path is also flipped inline by
-          the renderer so the two cues stay in sync. */
+          dashes move from chip → PV when discharging, and the
+          arrow path is flipped inline by the renderer so the
+          two cues stay in sync. */
     .battery-leader-svg
     {
         position: absolute;
@@ -27331,13 +28965,12 @@ const heliosCardStyles = i$3`
         stroke-opacity: 0.85;
         stroke-linecap: round;
         stroke-linejoin: round;
-        stroke-dasharray: 2 3;
+        stroke-dasharray: 6 5;
         fill: none;
     }
 
     .battery-leader-line-animated
     {
-        stroke-dasharray: 6 5;
         animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
     }
 
@@ -27431,58 +29064,6 @@ const heliosCardStyles = i$3`
     .solar-svg .solar-ray-arrow
     {
         opacity: 0.85;
-    }
-
-
-    /*  Sky activity — soft cloud-tinted wisps drifting horizontally
-        over the on-ground disc. Pure-CSS atmospheric texture; pointer-
-        transparent and behind the chips. The whole layer's opacity
-        is modulated by --sky-intensity (= live cloud cover / 100), so
-        the effect crescendos with the cloudiness without ever
-        distracting from the data layers. */
-    .sky-activity
-    {
-        position: absolute;
-        width: 220px;
-        height: 220px;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-        z-index: 3;
-        opacity: var(--sky-intensity, 0);
-        transition: opacity 1.2s ease;
-        overflow: hidden;
-    }
-
-    .sky-wisp
-    {
-        position: absolute;
-        width: 56px;
-        height: 14px;
-        border-radius: 50%;
-        background: var(--sky-cloud-color, #5A8DC4);
-        opacity: 0;
-        filter: blur(6px);
-        will-change: transform, opacity;
-    }
-
-    /*  Five wisps with staggered phases and slightly different
-        speeds — even at full opacity the eye reads it as gentle
-        weather drift rather than a synchronised animation. The
-        negative animation-delay starts each puff mid-cycle so the
-        layer is populated immediately on render instead of waiting
-        the full duration for the first puff to enter. */
-    .sky-wisp-1 { top: 28%; animation: sky-drift 22s linear infinite     0s; }
-    .sky-wisp-2 { top: 46%; animation: sky-drift 28s linear infinite   -10s; }
-    .sky-wisp-3 { top: 62%; animation: sky-drift 18s linear infinite    -4s; }
-    .sky-wisp-4 { top: 38%; animation: sky-drift 32s linear infinite   -18s; }
-    .sky-wisp-5 { top: 70%; animation: sky-drift 25s linear infinite   -14s; }
-
-    @keyframes sky-drift
-    {
-        0%   { transform: translateX(-60px) scaleX(0.9); opacity: 0;    }
-        15%  { opacity: 0.45; }
-        85%  { opacity: 0.45; }
-        100% { transform: translateX(280px) scaleX(1.1); opacity: 0;    }
     }
 
 
@@ -27595,7 +29176,7 @@ const heliosCardStyles = i$3`
     /*  Cards (chart panels) and hairlines on the chart. */
     ha-card.theme-dark .tb-chart-card
     {
-        background: #14161c;
+        background: #191a1b;
         border-color: #4a4d55;
     }
 
@@ -27634,14 +29215,22 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label
     {
-        background: #14161c;
+        background: #191a1b;
         color:       #e6e6e6;
-        border-color: #cccccc;
+        /*  Light-mode borders are pure black on a white plate —
+            high contrast but visually contained because the plate
+            and the basemap below it are both bright. In dark mode
+            the same 1 px ring at #cccccc reads as the brightest
+            ink on the card and dominates the chip. Drop the
+            opacity so the border behaves as a delimiter rather
+            than a focal element. Matches the chart-card and
+            segmented-toggle borders elsewhere in dark mode. */
+        border-color: rgba(255, 255, 255, 0.20);
     }
 
     ha-card.theme-dark .tb-day-label
     {
-        background: #1a1c22;
+        background: #1f2021;
     }
 
     ha-card.theme-dark .tl-live-btn ha-icon,
@@ -27651,17 +29240,28 @@ const heliosCardStyles = i$3`
         color: #e6e6e6;
     }
 
-    ha-card.theme-dark .tl-live-btn:hover  { background: #24262c; }
-    ha-card.theme-dark .tl-live-btn:active { background: #303238; }
+    ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
+    ha-card.theme-dark .tl-live-btn:active { background: #353637; }
 
     /*  PV and battery chips — they keep the user-configured tint
         on the border / text / icon (so a green PV chip reads as
         green on either skin), but the surface flips to the dark
-        plate so the tint stays readable. */
-    ha-card.theme-dark .pv-pct-label,
+        plate so the tint stays readable. The border drops to 50 %
+        opacity of the configured colour: at full saturation the
+        ring would dominate the chip against a near-black plate
+        and a darkened map, fighting the value just like the
+        neutral-chip border above. The text and icon stay at full
+        saturation so the colour identity is carried by the
+        readable elements, not the frame. */
+    ha-card.theme-dark .pv-pct-label
+    {
+        background: #191a1b;
+        border-color: color-mix(in srgb, var(--pv-leader-color, #27B36B) 50%, transparent);
+    }
     ha-card.theme-dark .battery-pct-label
     {
-        background: #14161c;
+        background: #191a1b;
+        border-color: color-mix(in srgb, var(--battery-leader-color, #D32F2F) 50%, transparent);
     }
 
     /*  Cloud-cover leader (chip → disc) flips polarity so it's
@@ -27680,6 +29280,40 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .solar-svg .solar-arc-outline
     {
         stroke: rgba(255, 255, 255, 0.45);
+    }
+
+
+    /*  ---------------------------------------------------------
+        Animation perf hooks
+        ---------------------------------------------------------
+
+        1. .helios-paused — set on the host element by the card's
+           IntersectionObserver when the card scrolls out of the
+           viewport. Pauses every CSS animation (SVG dash-flow,
+           offset-path arrow flow, placeholder spin / pulse) until
+           the card returns. SMIL <animateMotion> is paused in
+           parallel via svg.pauseAnimations() in the card script.
+
+        2. prefers-reduced-motion — respects the user's system
+           setting. When the user has asked for reduced motion at
+           the OS level, every helios animation and transition is
+           disabled. The card still functions; it just doesn't move.
+    */
+    :host(.helios-paused) *,
+    :host(.helios-paused) *::before,
+    :host(.helios-paused) *::after
+    {
+        animation-play-state: paused !important;
+    }
+
+    @media (prefers-reduced-motion: reduce)
+    {
+        *, *::before, *::after
+        {
+            animation-duration:         0ms !important;
+            animation-iteration-count:  1   !important;
+            transition-duration:        0ms !important;
+        }
     }
 `;
 var __defProp$1 = Object.defineProperty;
@@ -27985,6 +29619,7 @@ let HeliosCardEditor = class extends i {
     super(...arguments);
     this._cfg = { "maptiler-api-key": "" };
     this._pickerReady = false;
+    this._sliderDebounce = /* @__PURE__ */ new Map();
     this._pvEntityFilter = (entity) => {
       if (!entity || !entity.attributes) return false;
       const dc = entity.attributes.device_class;
@@ -28004,6 +29639,11 @@ let HeliosCardEditor = class extends i {
       const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
       return u2 === "W" || u2 === "kW" || u2 === "MW";
     };
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    for (const t2 of this._sliderDebounce.values()) window.clearTimeout(t2);
+    this._sliderDebounce.clear();
   }
   setConfig(config) {
     this._cfg = { ...config };
@@ -28063,14 +29703,36 @@ let HeliosCardEditor = class extends i {
   _str(key, e2) {
     this._update(key, e2.target.value);
   }
-  _num(key, e2) {
+  //Slider commit. Updates local state synchronously so the slider
+  //thumb tracks the drag, but defers the cross-component
+  //`config-changed` event by SLIDER_COMMIT_DELAY_MS so the engine
+  //doesn't see a flood of intermediate values.
+  _numSlider(key, e2) {
     const v2 = parseFloat(e2.target.value);
-    if (isFinite(v2)) {
-      this._update(key, v2);
-    }
+    if (!isFinite(v2)) return;
+    this._cfg = { ...this._cfg, [key]: v2 };
+    const k2 = String(key);
+    const existing = this._sliderDebounce.get(k2);
+    if (existing !== void 0) window.clearTimeout(existing);
+    const t2 = window.setTimeout(() => {
+      this._sliderDebounce.delete(k2);
+      this.dispatchEvent(new CustomEvent(
+        "config-changed",
+        { detail: { config: this._cfg } }
+      ));
+    }, HeliosCardEditor.SLIDER_COMMIT_DELAY_MS);
+    this._sliderDebounce.set(k2, t2);
+  }
+  _bool(key, value) {
+    this._update(key, value);
   }
   _color(key, e2) {
     this._update(key, e2.detail.value);
+  }
+  //Format a numeric slider value for display alongside the input.
+  //Integers stay integer; fractional values get 2 decimals.
+  _fmtNum(v2, step) {
+    return step >= 1 ? String(Math.round(v2)) : v2.toFixed(2);
   }
   render() {
     const c2 = this._cfg;
@@ -28105,18 +29767,21 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <label class="field">
                     <span class="label">${t2.editor.hillshadeStrength}</span>
-                    <input
-                        type="number" min="0" max="1" step="0.01"
-                        .value="${String(c2["topography-alpha"] ?? 0.65)}"
-                        @change="${(e2) => this._num("topography-alpha", e2)}"
-                    />
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.01"
+                            .value="${String(c2["topography-alpha"] ?? 0.65)}"
+                            @input="${(e2) => this._numSlider("topography-alpha", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["topography-alpha"] ?? 0.65), 0.01)}</span>
+                    </div>
                 </label>
                 <div class="hint">${t2.editor.terrainReliefHint}</div>
 
                 <div class="section-title">${t2.editor.mapSection}</div>
                 <div class="field">
                     <span class="label">${t2.editor.mapStyle}</span>
-                    <div class="segmented-toggle">
+                    <div class="segmented-toggle segmented-toggle-3">
                         <button
                             type="button"
                             class="seg-option ${String(c2["map-style"] ?? "streets") === "streets" ? "active" : ""}"
@@ -28129,9 +29794,9 @@ let HeliosCardEditor = class extends i {
                         >${t2.editor.mapStyleTopo}</button>
                         <button
                             type="button"
-                            class="seg-option ${String(c2["map-style"] ?? "streets") === "hybrid" ? "active" : ""}"
-                            @click="${() => this._update("map-style", "hybrid")}"
-                        >${t2.editor.mapStyleHybrid}</button>
+                            class="seg-option ${String(c2["map-style"] ?? "streets") === "minimal" ? "active" : ""}"
+                            @click="${() => this._update("map-style", "minimal")}"
+                        >${t2.editor.mapStyleMinimal}</button>
                     </div>
                 </div>
                 <div class="hint">${t2.editor.mapStyleHint}</div>
@@ -28167,6 +29832,82 @@ let HeliosCardEditor = class extends i {
                     </div>
                 </div>
                 <div class="hint">${t2.editor.showLabelsHint}</div>
+                <div class="field">
+                    <span class="label">${t2.editor.autoRotate}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${c2["auto-rotate-enabled"] !== false ? "active" : ""}"
+                            @click="${() => this._update("auto-rotate-enabled", true)}"
+                        >${t2.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${c2["auto-rotate-enabled"] === false ? "active" : ""}"
+                            @click="${() => this._update("auto-rotate-enabled", false)}"
+                        >${t2.editor.autoRotateOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.autoRotateHint}</div>
+                <div class="field">
+                    <span class="label">${t2.editor.performanceMode}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${c2["performance-mode"] !== true ? "active" : ""}"
+                            @click="${() => this._bool("performance-mode", false)}"
+                        >${t2.editor.performanceModeOff}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${c2["performance-mode"] === true ? "active" : ""}"
+                            @click="${() => this._bool("performance-mode", true)}"
+                        >${t2.editor.performanceModeOn}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.performanceModeHint}</div>
+
+                <div class="section-title">${t2.editor.buildingsSection}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.buildingRadius}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="20" max="1000" step="10"
+                            .value="${String(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M)}"
+                            @input="${(e2) => this._numSlider("building-radius", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t2.editor.buildingClusterRadius}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="100" step="1"
+                            .value="${String(c2["building-cluster-radius"] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M)}"
+                            @input="${(e2) => this._numSlider("building-cluster-radius", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["building-cluster-radius"] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M), 1)} m</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t2.editor.buildingOpacity}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            .value="${String(c2["building-opacity"] ?? DEFAULT_BUILDING_OPACITY)}"
+                            @input="${(e2) => this._numSlider("building-opacity", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["building-opacity"] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t2.editor.buildingColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["building-color"], DEFAULT_BUILDING_COLOR_HEX)}"
+                        .ariaLabel="${t2.editor.buildingColor}"
+                        @value-changed="${(e2) => this._color("building-color", e2)}"
+                    ></helios-color-picker>
+                </label>
+                <div class="hint">${t2.editor.buildingsHint}</div>
 
                 <div class="section-title">${t2.editor.colors}</div>
                 <label class="field">
@@ -28306,6 +30047,7 @@ let HeliosCardEditor = class extends i {
         `;
   }
 };
+HeliosCardEditor.SLIDER_COMMIT_DELAY_MS = 250;
 HeliosCardEditor.styles = i$3`
         .editor
         {
@@ -28424,6 +30166,33 @@ HeliosCardEditor.styles = i$3`
         {
             background: var(--primary-color, #03a9f4);
             color: var(--text-primary-color, #fff);
+        }
+
+        /*  Slider variant — replaces type="number" inputs so the
+            user can never enter a value outside the supported range.
+            The matching value is shown to the right of the track. */
+        .slider-row
+        {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: 180px;
+        }
+
+        .slider-row input[type="range"]
+        {
+            flex: 1;
+            min-width: 0;
+            accent-color: var(--primary-color, #03a9f4);
+        }
+
+        .slider-value
+        {
+            font-variant-numeric: tabular-nums;
+            font-size: 12px;
+            color: var(--secondary-text-color, #727272);
+            min-width: 44px;
+            text-align: right;
         }
 
         code
@@ -28559,12 +30328,40 @@ let HeliosCard = class extends i {
     super.connectedCallback();
     this._tick();
     this._timer = window.setInterval(() => this._tick(), 1e3);
+    this._initVisibilityObserver();
   }
   disconnectedCallback() {
     super.disconnectedCallback();
     window.clearInterval(this._timer);
+    this._visibilityObserver?.disconnect();
+    this._visibilityObserver = void 0;
     this._engine?.cleanup();
     this._engine = void 0;
+  }
+  _initVisibilityObserver() {
+    if (this._visibilityObserver || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    this._visibilityObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        this._setAnimationsPaused(!entry.isIntersecting);
+      }
+    }, { threshold: 0 });
+    this._visibilityObserver.observe(this);
+  }
+  _setAnimationsPaused(paused) {
+    this.classList.toggle("helios-paused", paused);
+    const root = this.shadowRoot;
+    if (!root) return;
+    const svgs = root.querySelectorAll("svg");
+    for (const svg2 of Array.from(svgs)) {
+      const s2 = svg2;
+      try {
+        if (paused) s2.pauseAnimations?.();
+        else s2.unpauseAnimations?.();
+      } catch (_2) {
+      }
+    }
   }
   //Engine init policy: re-init only when one of the *identity inputs*
   //changes (API key, home coordinates, map style). We resize the
@@ -28935,6 +30732,9 @@ let HeliosCard = class extends i {
       }
       const elevation = this.hass.config.elevation;
       this._engine?.cleanup();
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
       this._engine = new HeliosEngine(container, this.config, [lon, lat], elevation);
       this._engine.onFetchStart = () => {
         this._fetching = true;
@@ -28978,7 +30778,7 @@ let HeliosCard = class extends i {
     const t2 = this._selectedTime ?? this._now;
     this._sunScene = this._engine ? this._engine.projectSunScene(t2) : null;
   }
-  //v1.3 — segments now share one fixed colour (the configured sun
+  //Segments now share one fixed colour (the configured sun
   //colour). Depth perception comes entirely from the per-segment
   //stroke width modulated by `nearness`, kept untouched: it is the
   //2D-on-3D cue we explicitly chose not to overload with another
@@ -29085,7 +30885,7 @@ let HeliosCard = class extends i {
   //with the container while keeping vertical proportions intact.
   //All path coordinates are computed against this viewBox and
   //the browser handles the actual scaling.
-  //v1.3 — mirror chart.
+  //Mirror chart.
   //
   //Two areas sharing a horizontal midline:
   //  - top half: irradiance W/m², "the sun pushes upward". Filled
@@ -29312,7 +31112,7 @@ let HeliosCard = class extends i {
             </svg>
         `;
   }
-  //v1.3 — the thin track now carries only the cursors. Day
+  //The thin track now carries only the cursors. Day
   //separators live inside the chart card SVG (dotted vertical
   //lines) and the scrub time label has been promoted to a chip
   //above the chart card.
@@ -29604,7 +31404,6 @@ let HeliosCard = class extends i {
     const t2 = pickTranslations(this.hass?.language);
     const apiKey = String(this.config?.["maptiler-api-key"] ?? "").trim();
     const hasApiKey = apiKey.length > 0;
-    const resetTooltip = t2.tooltip.resetLive;
     const displayDate = !this._isLiveMode && this._selectedTime ? this._selectedTime : this._now;
     const displayDateLabel = formatDate(displayDate, this.config?.["date-format"]);
     const is12h = String(this.config?.["time-format"] ?? "24h").toLowerCase() === "12h";
@@ -29629,8 +31428,6 @@ let HeliosCard = class extends i {
     const pvRate = pvEntityId !== "" && layout !== null ? pvScrubbing ? this._pvRateAtTime(this._selectedTime) : this._pvCurrent !== null ? this._currentPvRate() : null : null;
     const showPvLabel = hasApiKey && layout !== null && pvEntityId !== "" && !pvScrubFuture && pvRate !== null;
     const pvDisplayValue = showPvLabel ? this._formatPvValue(pvRate.value, pvRate.unit) : "";
-    const pvWattsForFlow = pvRate !== null ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit) : 0;
-    const pvFlowDuration = HeliosCard._flowDuration(pvWattsForFlow, 5e3);
     const batterySocEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
     const batteryPowerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
     const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
@@ -29646,22 +31443,39 @@ let HeliosCard = class extends i {
     const batteryCharging = showPowerChip && activeBatteryPower > 0;
     const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
     const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
-    const PV_QUARTER_PX = 19;
+    const PV_LEG_OFFSET_PX = 12;
     const PV_HALF_HEIGHT_PX = 11;
+    const PV_HALF_WIDTH_PX = 38;
     const BAT_CHIP_NUDGE_PX = 32;
-    const lPvBottomY = layout ? layout.pvLabel.y + PV_HALF_HEIGHT_PX : 0;
+    const FILLET_R = 6;
+    const lPvEdgeY = layout ? layout.pvLabel.y - PV_HALF_HEIGHT_PX : 0;
     const lShelfY = layout ? layout.batterySocLabel.y : 0;
-    const lLeftQuarterX = layout ? layout.pvLabel.x - PV_QUARTER_PX : 0;
-    const lRightQuarterX = layout ? layout.pvLabel.x + PV_QUARTER_PX : 0;
+    const lSocLegX = layout ? layout.pvLabel.x - PV_LEG_OFFSET_PX : 0;
+    const lPowerLegX = layout ? layout.pvLabel.x + PV_LEG_OFFSET_PX : 0;
     const lSocEndX = layout ? layout.batterySocLabel.x + BAT_CHIP_NUDGE_PX : 0;
     const lPowerEndX = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
-    const socLeaderPoints = `${lLeftQuarterX},${lPvBottomY} ${lLeftQuarterX},${lShelfY} ${lSocEndX},${lShelfY}`;
-    const powerLeaderPoints = `${lRightQuarterX},${lPvBottomY} ${lRightQuarterX},${lShelfY} ${lPowerEndX},${lShelfY}`;
-    const powerArrowPath = batteryCharging ? `M ${lRightQuarterX},${lPvBottomY} L ${lRightQuarterX},${lShelfY} L ${lPowerEndX},${lShelfY}` : `M ${lPowerEndX},${lShelfY} L ${lRightQuarterX},${lShelfY} L ${lRightQuarterX},${lPvBottomY}`;
+    const buildLPath = (verticalX, pvEdgeY, shelfY, endX) => {
+      const dirH = endX > verticalX ? 1 : -1;
+      const dirV = shelfY > pvEdgeY ? 1 : -1;
+      const r2 = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
+      const preY = shelfY - dirV * r2;
+      const postX = verticalX + dirH * r2;
+      return `M ${verticalX},${pvEdgeY} L ${verticalX},${preY} Q ${verticalX},${shelfY} ${postX},${shelfY} L ${endX},${shelfY}`;
+    };
+    const buildLPathReverse = (verticalX, pvEdgeY, shelfY, endX) => {
+      const dirH = endX > verticalX ? 1 : -1;
+      const dirV = shelfY > pvEdgeY ? 1 : -1;
+      const r2 = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
+      const preY = shelfY - dirV * r2;
+      const postX = verticalX + dirH * r2;
+      return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${pvEdgeY}`;
+    };
+    const socLeaderPath = buildLPath(lSocLegX, lPvEdgeY, lShelfY, lSocEndX);
+    const powerLeaderPath = buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
+    const powerArrowPath = batteryCharging ? buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX) : buildLPathReverse(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
-    const cloudColor = cfgHex(this.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
     const sunRimColor = this._darkenHex(sunColor, 0.2);
     const arcSegments = showSun ? this._buildArcSegments(sunScene.arc, sunColor) : [];
     const showRay = showSun && sunScene.sun.altitude > 0;
@@ -29670,6 +31484,28 @@ let HeliosCard = class extends i {
     const sunFillRatio = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1e3)));
     const showSunLabel = showSun && sunScene.sun.altitude > 0;
     const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1e3, 0.8);
+    let sunRayTargetX = sunScene?.home.x ?? 0;
+    let sunRayTargetY = sunScene?.home.y ?? 0;
+    if (layout && sunScene) {
+      const dx = sunScene.sun.x - layout.pvLabel.x;
+      const dy = sunScene.sun.y - layout.pvLabel.y;
+      const compass = Math.atan2(dx, -dy);
+      const Q = Math.PI / 4;
+      const absC = Math.abs(compass);
+      if (absC <= Q) {
+        sunRayTargetX = layout.pvLabel.x;
+        sunRayTargetY = layout.pvLabel.y - PV_HALF_HEIGHT_PX;
+      } else if (absC >= 3 * Q) {
+        sunRayTargetX = layout.pvLabel.x;
+        sunRayTargetY = layout.pvLabel.y + PV_HALF_HEIGHT_PX;
+      } else if (compass > 0) {
+        sunRayTargetX = layout.pvLabel.x + PV_HALF_WIDTH_PX;
+        sunRayTargetY = layout.pvLabel.y;
+      } else {
+        sunRayTargetX = layout.pvLabel.x - PV_HALF_WIDTH_PX;
+        sunRayTargetY = layout.pvLabel.y;
+      }
+    }
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
     return b`
@@ -29684,10 +31520,15 @@ let HeliosCard = class extends i {
                         class="time-bar"
                         @pointerdown="${this._onTimelinePointerDown}"
                     >
-                        <!--  Top row: scrub time chip, shown above the
-                              chart card with a small breathing gap so
-                              it reads cleanly without competing with
-                              the chart's data ink.  -->
+                        <!--  Top row: scrub-time cluster (icon-only
+                              "back to live" button + scrub-time pill)
+                              shown above the chart card with a small
+                              breathing gap and a thin tether hair down
+                              to the chart's top edge. The cluster
+                              anchors at the cursor's X with edge-aware
+                              clamping; the tether anchors at the same
+                              X without clamping so it always lands
+                              directly above the cursor.  -->
                         <div class="tb-top-row">
                             ${!this._isLiveMode && this._selectedTime ? (() => {
       const { start, end } = this._timeRange;
@@ -29702,6 +31543,10 @@ let HeliosCard = class extends i {
                                         class="tb-sel-label"
                                         style="left:${selPct}%; transform:${xform}"
                                     >${this._formatSelTime(this._selectedTime)}</div>
+                                    <div
+                                        class="tb-sel-tether"
+                                        style="left:${selPct}%"
+                                    ></div>
                                 `;
     })() : A}
                         </div>
@@ -29742,24 +31587,19 @@ let HeliosCard = class extends i {
                 ` : A}
 
                 ${hasApiKey ? b`
-                    <div class="overlay-top-right">
+                    <div class="overlay-top-center">
                         <div class="clock ${this._isLiveMode ? "" : "clock-scrubbed"}">
                             <span class="clock-date">${displayDateLabel}</span>
                             <span class="clock-time">${displayTimeLabel}</span>
                         </div>
-                    </div>
-                ` : A}
-
-                ${hasApiKey && !this._isLiveMode ? b`
-                    <div class="overlay-top-left">
-                        <button
-                            class="tl-live-btn"
-                            @click="${this._resetToLive}"
-                        >
-                            <ha-icon class="tl-live-icon" icon="mdi:restore"></ha-icon>
-                            <span>${t2.live}</span>
-                            <span class="tl-live-tooltip">${resetTooltip}</span>
-                        </button>
+                        ${!this._isLiveMode ? b`
+                            <button
+                                class="clock-tab"
+                                @click="${this._resetToLive}"
+                            >
+                                <ha-icon icon="mdi:restore"></ha-icon>
+                            </button>
+                        ` : A}
                     </div>
                 ` : A}
 
@@ -29796,7 +31636,7 @@ ${showSun ? b`
                                 class="solar-ray"
                                 style="--sun-flow-duration:${sunFlowDuration}s"
                                 x1="${sunScene.sun.x}"  y1="${sunScene.sun.y}"
-                                x2="${sunScene.home.x}" y2="${sunScene.home.y}"
+                                x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
                                 stroke="${sunColor}"
                             ></line>
                             <polygon
@@ -29808,7 +31648,7 @@ ${showSun ? b`
                                     dur="${sunFlowDuration}s"
                                     repeatCount="indefinite"
                                     rotate="auto"
-                                    path="M ${sunScene.sun.x},${sunScene.sun.y} L ${sunScene.home.x},${sunScene.home.y}"
+                                    path="M ${sunScene.sun.x},${sunScene.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
                                 ></animateMotion>
                             </polygon>
                         ` : A}
@@ -29860,33 +31700,12 @@ ${showSun ? b`
                 ` : A}
 
                 ${showLabel ? b`
-                    <!--  Sky activity — soft cloud-tinted wisps drifting
-                          horizontally over the on-ground disc, modulated
-                          by the live cloud-cover percentage. Pure CSS,
-                          pointer-transparent, behind the chips so it
-                          never competes for attention. -->
-                    <div
-                        class="sky-activity"
-                        style="
-                            left:${layout.home.x}px;
-                            top:${layout.home.y}px;
-                            --sky-cloud-color:${cloudColor};
-                            --sky-intensity:${Math.min(1, cloudPctRound / 100)};
-                        "
-                    >
-                        <span class="sky-wisp sky-wisp-1"></span>
-                        <span class="sky-wisp sky-wisp-2"></span>
-                        <span class="sky-wisp sky-wisp-3"></span>
-                        <span class="sky-wisp sky-wisp-4"></span>
-                        <span class="sky-wisp sky-wisp-5"></span>
-                    </div>
-
                     <svg class="cloud-leader-svg">
                         <line
                             x1="${layout.cloudLabel.x + 10}"
                             y1="${layout.cloudLabel.y}"
-                            x2="${layout.ringEdge.x}"
-                            y2="${layout.ringEdge.y}"
+                            x2="${layout.home.x}"
+                            y2="${layout.home.y}"
                         ></line>
                     </svg>
                     <div
@@ -29911,30 +31730,6 @@ ${showSun ? b`
                 ` : A}
 
                 ${showPvLabel ? b`
-                    <svg class="pv-leader-svg">
-                        <line
-                            class="pv-leader-line"
-                            style="--pv-leader-color:${pvColor}; --pv-flow-duration:${pvFlowDuration}s"
-                            x1="${layout.home.x}"
-                            y1="${layout.home.y}"
-                            x2="${layout.pvLabel.x}"
-                            y2="${layout.pvLabel.y + 10}"
-                        ></line>
-                        ${w`
-                            <polygon
-                                class="pv-leader-arrow"
-                                points="-6,-4 0,0 -6,4"
-                                fill="${pvColor}"
-                            >
-                                <animateMotion
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${layout.home.x},${layout.home.y} L ${layout.pvLabel.x},${layout.pvLabel.y + 10}"
-                                ></animateMotion>
-                            </polygon>
-                        `}
-                    </svg>
                     <div
                         class="pv-pct-label"
                         style="left:${layout.pvLabel.x}px; top:${layout.pvLabel.y}px; --pv-leader-color:${pvColor}"
@@ -29947,40 +31742,52 @@ ${showSun ? b`
                 ${showSocChip || showPowerChip ? b`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV — static, dotted, inverted-L
-                            polyline. Vertical leg drops from PV's
-                            bottom edge at 1/4 of the chip width
-                            (the LEFT quarter), horizontal leg
-                            then runs left to the SoC chip. No
+                            SoC ↔ PV — static, dashed, inverted-L
+                            path with a rounded corner (matching
+                            the PV ↔ Power leader's vocabulary
+                            exactly minus the flow animation).
+                            Vertical leg drops from PV's bottom
+                            edge slightly left of centre, horizontal
+                            leg then runs left to the SoC chip. No
                             animation: SoC has no flow direction.
                         -->
                         ${showSocChip ? w`
-                            <polyline
+                            <path
                                 class="battery-leader-line"
                                 style="--battery-leader-color:${batteryColor}"
-                                points="${socLeaderPoints}"
-                            ></polyline>
+                                d="${socLeaderPath}"
+                            ></path>
                         ` : A}
                         <!--
-                            PV ↔ Power — animated, dotted L with
+                            PV ↔ Power — animated, dashed L with
                             an arrow tracking the sign of the live
-                            power. Vertical leg at 3/4 of PV's
-                            width (the RIGHT quarter), horizontal
-                            leg then runs right to the Power chip.
+                            power. Vertical leg drops from PV's
+                            bottom edge slightly right of centre,
+                            horizontal leg then runs right to the
+                            Power chip.
                             Charging (P > 0) → arrow PV → Power.
                             Discharging (P < 0) → arrow Power → PV
-                            (the polyline class modifier flips the
+                            (the path class modifier flips the
                             dash flow too).
                         -->
                         ${showPowerChip ? w`
-                            <polyline
+                            <path
                                 class="battery-leader-line battery-leader-line-animated ${batteryCharging ? "" : "battery-leader-discharging"}"
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
-                                points="${powerLeaderPoints}"
-                            ></polyline>
+                                d="${powerLeaderPath}"
+                            ></path>
+                            <!--
+                                Polygon is centroid-centred at (0,0):
+                                the centroid of (-2,-4), (4,0), (-2,4)
+                                is (0,0), so animateMotion pivots the
+                                arrow about its visual mass rather than
+                                its tip. Through the L's fillet the
+                                arrow stays balanced on the path
+                                instead of swinging off it.
+                            -->
                             <polygon
                                 class="battery-leader-arrow"
-                                points="-6,-4 0,0 -6,4"
+                                points="-2,-4 4,0 -2,4"
                                 fill="${batteryColor}"
                             >
                                 <animateMotion
@@ -30154,7 +31961,16 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   //between the light and dark skins), but it must be in the
   //sig so Lit re-renders the card when the user toggles it
   //in the editor.
-  "card-theme"
+  "card-theme",
+  //building-* drive the helios-buildings-* custom layers.
+  //  radius / cluster-radius → invalidate cache and refetch
+  //  opacity / color → cheap paint-property updates
+  "building-radius",
+  "building-cluster-radius",
+  "building-opacity",
+  "building-color",
+  //performance-mode toggles terrain, hillshade and pixelRatio.
+  "performance-mode"
 ];
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([

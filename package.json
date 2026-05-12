@@ -1,6 +1,6 @@
 {
   "name": "helios",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "HELIOS - real-time solar exposure, cloud cover and PV production card for Home Assistant",
   "type": "module",
   "private": true,
@@ -12,8 +12,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@mapbox/vector-tile": "^2.0.4",
     "lit": "^3.3.2",
-    "maplibre-gl": "^5.2.0"
+    "maplibre-gl": "^5.2.0",
+    "pbf": "^4.0.1"
   },
   "devDependencies": {
     "terser": "^5.30.0",
