@@ -29312,6 +29312,61 @@ const heliosCardStyles = i$3`
     {
         stroke: rgba(255, 255, 255, 0.45);
     }
+
+
+    /*  ---------------------------------------------------------
+        Animation perf hooks
+        ---------------------------------------------------------
+
+        1. .helios-paused — set on the host element by the card's
+           IntersectionObserver when the card scrolls out of the
+           viewport. Pauses every CSS animation (SVG dash-flow,
+           offset-path arrow flow, placeholder spin / pulse) until
+           the card returns. SMIL <animateMotion> is paused in
+           parallel via svg.pauseAnimations() in the card script.
+
+        2. prefers-reduced-motion — respects the user's system
+           setting. When the user has asked for reduced motion at
+           the OS level, every helios animation and transition is
+           disabled. The card still functions; it just doesn't move.
+    */
+    :host(.helios-paused) *,
+    :host(.helios-paused) *::before,
+    :host(.helios-paused) *::after
+    {
+        animation-play-state: paused !important;
+    }
+
+    @media (prefers-reduced-motion: reduce)
+    {
+        *, *::before, *::after
+        {
+            animation-duration:         0ms !important;
+            animation-iteration-count:  1   !important;
+            transition-duration:        0ms !important;
+        }
+    }
+
+
+    /*  CSS offset-path arrows — replace SVG SMIL <animateMotion>
+        for the straight-line leader arrows (PV chip, solar ray).
+        offset-path is GPU-accelerated on the compositor; SMIL runs
+        on the CPU. The path itself is set inline by the renderer
+        (it changes on every camera rotation), the animation just
+        sweeps offset-distance from 0 % to 100 % at the configured
+        duration. */
+    .helios-flow-arrow
+    {
+        offset-rotate:        auto;
+        offset-anchor:        50% 50%;
+        animation:            helios-arrow-flow var(--flow-dur, 30s) linear infinite;
+    }
+
+    @keyframes helios-arrow-flow
+    {
+        from { offset-distance: 0%;   }
+        to   { offset-distance: 100%; }
+    }
 `;
 var __defProp$1 = Object.defineProperty;
 var __getOwnPropDesc$1 = Object.getOwnPropertyDescriptor;
@@ -30325,12 +30380,40 @@ let HeliosCard = class extends i {
     super.connectedCallback();
     this._tick();
     this._timer = window.setInterval(() => this._tick(), 1e3);
+    this._initVisibilityObserver();
   }
   disconnectedCallback() {
     super.disconnectedCallback();
     window.clearInterval(this._timer);
+    this._visibilityObserver?.disconnect();
+    this._visibilityObserver = void 0;
     this._engine?.cleanup();
     this._engine = void 0;
+  }
+  _initVisibilityObserver() {
+    if (this._visibilityObserver || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    this._visibilityObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        this._setAnimationsPaused(!entry.isIntersecting);
+      }
+    }, { threshold: 0 });
+    this._visibilityObserver.observe(this);
+  }
+  _setAnimationsPaused(paused) {
+    this.classList.toggle("helios-paused", paused);
+    const root = this.shadowRoot;
+    if (!root) return;
+    const svgs = root.querySelectorAll("svg");
+    for (const svg2 of Array.from(svgs)) {
+      const s2 = svg2;
+      try {
+        if (paused) s2.pauseAnimations?.();
+        else s2.unpauseAnimations?.();
+      } catch (_2) {
+      }
+    }
   }
   //Engine init policy: re-init only when one of the *identity inputs*
   //changes (API key, home coordinates, map style). We resize the
@@ -31583,17 +31666,11 @@ ${showSun ? b`
                                 stroke="${sunColor}"
                             ></line>
                             <polygon
-                                class="solar-ray-arrow"
+                                class="solar-ray-arrow helios-flow-arrow"
                                 points="-6,-4 0,0 -6,4"
                                 fill="${sunColor}"
-                            >
-                                <animateMotion
-                                    dur="${sunFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${sunScene.sun.x},${sunScene.sun.y} L ${sunScene.home.x},${sunScene.home.y}"
-                                ></animateMotion>
-                            </polygon>
+                                style="offset-path: path('M ${sunScene.sun.x},${sunScene.sun.y} L ${sunScene.home.x},${sunScene.home.y}'); --flow-dur: ${sunFlowDuration}s"
+                            ></polygon>
                         ` : A}
                         ${(() => {
       const r2 = HeliosCard.SUN_R_FAR + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene.sun.nearness;
@@ -31684,17 +31761,11 @@ ${showSun ? b`
                         ></line>
                         ${w`
                             <polygon
-                                class="pv-leader-arrow"
+                                class="pv-leader-arrow helios-flow-arrow"
                                 points="-6,-4 0,0 -6,4"
                                 fill="${pvColor}"
-                            >
-                                <animateMotion
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${layout.home.x},${layout.home.y} L ${layout.pvLabel.x},${layout.pvLabel.y + 10}"
-                                ></animateMotion>
-                            </polygon>
+                                style="offset-path: path('M ${layout.home.x},${layout.home.y} L ${layout.pvLabel.x},${layout.pvLabel.y + 10}'); --flow-dur: ${pvFlowDuration}s"
+                            ></polygon>
                         `}
                     </svg>
                     <div
@@ -31746,24 +31817,18 @@ ${showSun ? b`
                             <!--
                                 Polygon is centroid-centred at (0,0):
                                 the centroid of (-2,-4), (4,0), (-2,4)
-                                is (0,0), so animateMotion pivots the
+                                is (0,0), so offset-path pivots the
                                 arrow about its visual mass rather than
                                 its tip. Through the L's fillet the
                                 arrow stays balanced on the path
                                 instead of swinging off it.
                             -->
                             <polygon
-                                class="battery-leader-arrow"
+                                class="battery-leader-arrow helios-flow-arrow"
                                 points="-2,-4 4,0 -2,4"
                                 fill="${batteryColor}"
-                            >
-                                <animateMotion
-                                    dur="${batteryFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="${powerArrowPath}"
-                                ></animateMotion>
-                            </polygon>
+                                style="offset-path: path('${powerArrowPath}'); --flow-dur: ${batteryFlowDuration}s"
+                            ></polygon>
                         ` : A}
                     </svg>
                     ${showSocChip ? b`

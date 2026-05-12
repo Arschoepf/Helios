@@ -1030,4 +1030,59 @@ export const heliosCardStyles = css`
     {
         stroke: rgba(255, 255, 255, 0.45);
     }
+
+
+    /*  ---------------------------------------------------------
+        Animation perf hooks
+        ---------------------------------------------------------
+
+        1. .helios-paused — set on the host element by the card's
+           IntersectionObserver when the card scrolls out of the
+           viewport. Pauses every CSS animation (SVG dash-flow,
+           offset-path arrow flow, placeholder spin / pulse) until
+           the card returns. SMIL <animateMotion> is paused in
+           parallel via svg.pauseAnimations() in the card script.
+
+        2. prefers-reduced-motion — respects the user's system
+           setting. When the user has asked for reduced motion at
+           the OS level, every helios animation and transition is
+           disabled. The card still functions; it just doesn't move.
+    */
+    :host(.helios-paused) *,
+    :host(.helios-paused) *::before,
+    :host(.helios-paused) *::after
+    {
+        animation-play-state: paused !important;
+    }
+
+    @media (prefers-reduced-motion: reduce)
+    {
+        *, *::before, *::after
+        {
+            animation-duration:         0ms !important;
+            animation-iteration-count:  1   !important;
+            transition-duration:        0ms !important;
+        }
+    }
+
+
+    /*  CSS offset-path arrows — replace SVG SMIL <animateMotion>
+        for the straight-line leader arrows (PV chip, solar ray).
+        offset-path is GPU-accelerated on the compositor; SMIL runs
+        on the CPU. The path itself is set inline by the renderer
+        (it changes on every camera rotation), the animation just
+        sweeps offset-distance from 0 % to 100 % at the configured
+        duration. */
+    .helios-flow-arrow
+    {
+        offset-rotate:        auto;
+        offset-anchor:        50% 50%;
+        animation:            helios-arrow-flow var(--flow-dur, 30s) linear infinite;
+    }
+
+    @keyframes helios-arrow-flow
+    {
+        from { offset-distance: 0%;   }
+        to   { offset-distance: 100%; }
+    }
 `;

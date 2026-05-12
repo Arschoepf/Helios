@@ -331,14 +331,67 @@ export class HeliosCard extends LitElement
         super.connectedCallback();
         this._tick();
         this._timer = window.setInterval(() => this._tick(), 1000);
+        this._initVisibilityObserver();
     }
 
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
         window.clearInterval(this._timer);
+        this._visibilityObserver?.disconnect();
+        this._visibilityObserver = undefined;
         this._engine?.cleanup();
         this._engine = undefined;
+    }
+
+    //IntersectionObserver — pause every CSS animation and every SVG
+    //SMIL animation when the card scrolls out of the viewport. The
+    //rotation loop (a requestAnimationFrame in the engine) is left
+    //running because (a) the browser auto-throttles rAF on hidden
+    //tabs and (b) the card looks alive when the user scrolls back.
+    //Only the SVG overlay animations are paused — they're the ones
+    //that run continuously regardless of map state.
+    private _visibilityObserver?: IntersectionObserver;
+
+    private _initVisibilityObserver(): void
+    {
+        if (this._visibilityObserver || typeof IntersectionObserver === 'undefined')
+        {
+            return;
+        }
+        this._visibilityObserver = new IntersectionObserver(entries =>
+        {
+            for (const entry of entries)
+            {
+                this._setAnimationsPaused(!entry.isIntersecting);
+            }
+        }, { threshold: 0 });
+        this._visibilityObserver.observe(this);
+    }
+
+    private _setAnimationsPaused(paused: boolean): void
+    {
+        this.classList.toggle('helios-paused', paused);
+        //SMIL animations are not controlled by CSS animation-play-state.
+        //Walk the shadow tree and call (un)pauseAnimations() on every
+        //SVG root we find. Both methods are no-ops on browsers that
+        //don't support them, so we don't need to feature-detect.
+        const root = this.shadowRoot;
+        if (!root) return;
+        const svgs = root.querySelectorAll('svg');
+        for (const svg of Array.from(svgs))
+        {
+            const s = svg as SVGSVGElement & {
+                pauseAnimations?:  () => void;
+                unpauseAnimations?: () => void;
+            };
+            try
+            {
+                if (paused) s.pauseAnimations?.();
+                else        s.unpauseAnimations?.();
+            }
+            catch (_) {}
+        }
     }
 
     //Engine init policy: re-init only when one of the *identity inputs*
@@ -2077,9 +2130,9 @@ export class HeliosCard extends LitElement
 
         //Battery leader L-shape geometry — computed once and reused
         //for the visible <path> elements (SoC and Power) and for
-        //the animated arrow's <animateMotion> path. Only meaningful
-        //when a layout is available; gated by the same flag as the
-        //chip rendering so we don't dereference a null layout below.
+        //the animated arrow's offset-path. Only meaningful when a
+        //layout is available; gated by the same flag as the chip
+        //rendering so we don't dereference a null layout below.
         //
         //  PV_LEG_OFFSET_PX (12) is the horizontal distance from
         //  the PV chip's centre to each L-leg's vertical drop.
@@ -2098,14 +2151,12 @@ export class HeliosCard extends LitElement
         //  the leader and the visible dash sequence terminates
         //  cleanly at the chip border.
         //  FILLET_R (6) rounds the corner of the L with a quadratic
-        //  Bézier. The visible line and the arrow's <animateMotion>
-        //  path share the same fillet, so the arrow's tangent
-        //  rotates smoothly through the bend instead of snapping
-        //  90° at the corner. Because <animateMotion> parametrises
-        //  the path at constant linear velocity, the time spent on
-        //  the fillet shrinks proportionally with `flowDuration`,
-        //  which makes the rotation rate at the bend track the
-        //  arrow's overall speed naturally.
+        //  Bézier. The visible line and the arrow's offset-path
+        //  share the same fillet, so the arrow's tangent rotates
+        //  smoothly through the bend instead of snapping 90° at
+        //  the corner. CSS offset-path parametrises by length at
+        //  constant linear velocity, so the time spent on the
+        //  fillet scales proportionally with `flowDuration`.
         const PV_LEG_OFFSET_PX     = 12;
         const PV_HALF_HEIGHT_PX    = 11;
         const BAT_CHIP_NUDGE_PX    = 32;
@@ -2328,17 +2379,11 @@ ${showSun ? html`
                                 stroke="${sunColor}"
                             ></line>
                             <polygon
-                                class="solar-ray-arrow"
+                                class="solar-ray-arrow helios-flow-arrow"
                                 points="-6,-4 0,0 -6,4"
                                 fill="${sunColor}"
-                            >
-                                <animateMotion
-                                    dur="${sunFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunScene!.home.x},${sunScene!.home.y}"
-                                ></animateMotion>
-                            </polygon>
+                                style="offset-path: path('M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunScene!.home.x},${sunScene!.home.y}'); --flow-dur: ${sunFlowDuration}s"
+                            ></polygon>
                         ` : nothing}
                         ${(() => {
                             //Sun disc — three concentric layers:
@@ -2445,17 +2490,11 @@ ${showSun ? html`
                         ></line>
                         ${svg`
                             <polygon
-                                class="pv-leader-arrow"
+                                class="pv-leader-arrow helios-flow-arrow"
                                 points="-6,-4 0,0 -6,4"
                                 fill="${pvColor}"
-                            >
-                                <animateMotion
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${layout!.home.x},${layout!.home.y} L ${layout!.pvLabel.x},${layout!.pvLabel.y + 10}"
-                                ></animateMotion>
-                            </polygon>
+                                style="offset-path: path('M ${layout!.home.x},${layout!.home.y} L ${layout!.pvLabel.x},${layout!.pvLabel.y + 10}'); --flow-dur: ${pvFlowDuration}s"
+                            ></polygon>
                         `}
                     </svg>
                     <div
@@ -2507,24 +2546,18 @@ ${showSun ? html`
                             <!--
                                 Polygon is centroid-centred at (0,0):
                                 the centroid of (-2,-4), (4,0), (-2,4)
-                                is (0,0), so animateMotion pivots the
+                                is (0,0), so offset-path pivots the
                                 arrow about its visual mass rather than
                                 its tip. Through the L's fillet the
                                 arrow stays balanced on the path
                                 instead of swinging off it.
                             -->
                             <polygon
-                                class="battery-leader-arrow"
+                                class="battery-leader-arrow helios-flow-arrow"
                                 points="-2,-4 4,0 -2,4"
                                 fill="${batteryColor}"
-                            >
-                                <animateMotion
-                                    dur="${batteryFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="${powerArrowPath}"
-                                ></animateMotion>
-                            </polygon>
+                                style="offset-path: path('${powerArrowPath}'); --flow-dur: ${batteryFlowDuration}s"
+                            ></polygon>
                         ` : nothing}
                     </svg>
                     ${showSocChip ? html`
