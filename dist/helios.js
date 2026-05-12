@@ -26359,6 +26359,7 @@ const _HeliosEngine = class _HeliosEngine {
     canvas.addEventListener("wheel", bumpInactivity, { passive: true });
     canvas.addEventListener("touchstart", bumpInactivity, { passive: true });
     canvas.addEventListener("touchmove", bumpInactivity, { passive: true });
+    canvas.style.touchAction = "none";
     const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
     let dragRotating = false;
     let lastPointerX = 0;

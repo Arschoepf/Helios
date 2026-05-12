@@ -780,6 +780,16 @@ export class HeliosEngine
         //Custom drag-rotate. Left-click drag on desktop, single-finger
         //drag on touch. Two-finger pinch-rotate still works via
         //MapLibre's touchZoomRotate handler (left enabled in init).
+        //
+        //MapLibre's canvas ships with touch-action: pan-x pan-y, which
+        //reserves single-finger drags for native browser scrolling —
+        //pointer events for those gestures never reach our handler.
+        //Overriding to touch-action: none means every gesture on the
+        //canvas surface becomes a card interaction (the user scrolls
+        //the dashboard by touching outside the card, the same way
+        //Google Maps and other map widgets behave on mobile).
+        canvas.style.touchAction = 'none';
+
         const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
         let dragRotating  = false;
         let lastPointerX  = 0;
