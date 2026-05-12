@@ -26295,7 +26295,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._fetchLat = this.homeLat;
     this._fetchLon = this.homeLon;
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
-    const pixelRatio = IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.5) : Math.min(Math.max(dpr, 2), 3);
+    const pixelRatio = IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
     const styleInfo = this._resolveMapStyle();
     this.map = new maplibregl.Map(
       {
@@ -26512,7 +26512,7 @@ const _HeliosEngine = class _HeliosEngine {
           type: "raster-dem",
           url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${this.apiKey}`,
           tileSize: 512,
-          maxzoom: 14
+          maxzoom: 12
         }
       );
     }

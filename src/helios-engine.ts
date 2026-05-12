@@ -508,12 +508,17 @@ export class HeliosEngine
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
 
-        //Pixel ratio: clamp [2, 3] on desktop for sharpness, [1, 1.5]
-        //on mobile to halve fragment-shader load.
+        //Pixel ratio caps. v1.2.0-beta.11 lowered both ends after
+        //user-confirmed perf testing: at pitch 55° + continuous
+        //auto-rotation, each rendered pixel is sampled multiple
+        //times (terrain mesh, hillshade pass, extrusion pass, basemap
+        //layers) so going from 3 → 2 on desktop and 1.5 → 1.25 on
+        //mobile slashes per-frame fragment work without a visible
+        //quality regression on the card-sized viewport (~600–800 px).
         const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
         const pixelRatio = IS_MOBILE
-            ? Math.min(Math.max(dpr, 1), 1.5)
-            : Math.min(Math.max(dpr, 2), 3);
+            ? Math.min(Math.max(dpr, 1), 1.25)
+            : Math.min(Math.max(dpr, 1.5), 2);
 
         const styleInfo = this._resolveMapStyle();
 
@@ -845,12 +850,22 @@ export class HeliosEngine
 
         if (!this.map.getSource('helios-terrain'))
         {
+            //maxzoom: 12 (down from 14 in beta.10 and earlier). The
+            //DEM is sampled every ~20 m of ground at z=12, vs ~5 m
+            //at z=14. At map zoom 18 / pitch 55° with the camera
+            //locked over the home, the user-visible relief is the
+            //mid-scale landscape (~100 m+ features) — the finer
+            //per-5-m detail is invisible. Cutting maxzoom from 14
+            //to 12 means MapLibre's terrain mesh has ~16× fewer
+            //vertices to project per rotation frame, which beta.11
+            //tester rotation confirmed is the dominant per-frame
+            //cost.
             this.map.addSource('helios-terrain',
             {
                 type:     'raster-dem',
                 url:      `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${this.apiKey}`,
                 tileSize: 512,
-                maxzoom:  14
+                maxzoom:  12
             });
         }
         this.map.setTerrain({ source: 'helios-terrain', exaggeration: 1.2 });
