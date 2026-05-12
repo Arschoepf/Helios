@@ -26305,7 +26305,11 @@ const _HeliosEngine = class _HeliosEngine {
         dragPan: false,
         scrollZoom: false,
         doubleClickZoom: false,
-        dragRotate: true,
+        //MapLibre's default dragRotate binds to right-click drag,
+        //which is not what users expect on a 3D card. We disable
+        //it and wire our own pointer handlers below so a left-click
+        //drag (mouse) or single-finger drag (touch) rotates.
+        dragRotate: false,
         touchZoomRotate: true,
         touchPitch: false,
         boxZoom: false,
@@ -26355,6 +26359,41 @@ const _HeliosEngine = class _HeliosEngine {
     canvas.addEventListener("wheel", bumpInactivity, { passive: true });
     canvas.addEventListener("touchstart", bumpInactivity, { passive: true });
     canvas.addEventListener("touchmove", bumpInactivity, { passive: true });
+    const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
+    let dragRotating = false;
+    let lastPointerX = 0;
+    let activeId = null;
+    const onDown = (e2) => {
+      if (e2.pointerType === "mouse" && e2.button !== 0) return;
+      if (activeId !== null) return;
+      dragRotating = true;
+      activeId = e2.pointerId;
+      lastPointerX = e2.clientX;
+      try {
+        canvas.setPointerCapture(e2.pointerId);
+      } catch (_2) {
+      }
+    };
+    const onMove = (e2) => {
+      if (!dragRotating || !this.map || e2.pointerId !== activeId) return;
+      const dx = e2.clientX - lastPointerX;
+      lastPointerX = e2.clientX;
+      this.map.setBearing(this.map.getBearing() - dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+    };
+    const onEnd = (e2) => {
+      if (e2.pointerId !== activeId) return;
+      dragRotating = false;
+      activeId = null;
+      try {
+        canvas.releasePointerCapture(e2.pointerId);
+      } catch (_2) {
+      }
+    };
+    canvas.addEventListener("pointerdown", onDown);
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerup", onEnd);
+    canvas.addEventListener("pointercancel", onEnd);
+    this._dragRotateHandlers = { canvas, onDown, onMove, onEnd };
     this._webglLostHandler = (e2) => {
       e2.preventDefault();
       bumpStat("contextLostEvents");
@@ -26965,10 +27004,12 @@ const _HeliosEngine = class _HeliosEngine {
     };
     for (const layerId of buildingLayerIds) {
       for (const cand of idCandidates(layerId)) {
+        if (!this.map.getLayer(cand)) continue;
         try {
-          if (this.map.getLayer(cand)) this.map.removeLayer(cand);
+          this.map.removeLayer(cand);
         } catch (_2) {
         }
+        if (!this.map.getLayer(cand)) continue;
         try {
           this.map.setLayoutProperty(cand, "visibility", "none");
         } catch (_2) {
@@ -27765,6 +27806,13 @@ const _HeliosEngine = class _HeliosEngine {
       canvas.removeEventListener("touchstart", this._bumpInactivityHandler);
       canvas.removeEventListener("touchmove", this._bumpInactivityHandler);
     }
+    if (this._dragRotateHandlers) {
+      const h2 = this._dragRotateHandlers;
+      h2.canvas.removeEventListener("pointerdown", h2.onDown);
+      h2.canvas.removeEventListener("pointermove", h2.onMove);
+      h2.canvas.removeEventListener("pointerup", h2.onEnd);
+      h2.canvas.removeEventListener("pointercancel", h2.onEnd);
+    }
     if (canvas && this._webglLostHandler) {
       canvas.removeEventListener("webglcontextlost", this._webglLostHandler);
     }
@@ -27826,6 +27874,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._homeHourlyData = null;
     this._bumpInactivityCanvas = void 0;
     this._bumpInactivityHandler = void 0;
+    this._dragRotateHandlers = void 0;
     this._mapPinHandler = void 0;
     this._mapStyleLoadHandler = void 0;
     this._mapLoadHandler = void 0;
@@ -30852,6 +30901,13 @@ let HeliosCard = class extends i {
   }
   _initEngine() {
     if (this._isInEditorPreview) {
+      try {
+        const w2 = window;
+        if (w2.__heliosStats) {
+          w2.__heliosStats.enginesSkippedAsPreview = (w2.__heliosStats.enginesSkippedAsPreview ?? 0) + 1;
+        }
+      } catch (_2) {
+      }
       return;
     }
     this._initInflight = true;

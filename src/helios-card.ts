@@ -1012,6 +1012,18 @@ export class HeliosCard extends LitElement
         //rendering.
         if (this._isInEditorPreview)
         {
+            //Bump a counter so we can see in __heliosStats how many
+            //preview cards the detection actually caught.
+            try
+            {
+                const w = window as unknown as { __heliosStats?: { enginesSkippedAsPreview?: number } };
+                if (w.__heliosStats)
+                {
+                    w.__heliosStats.enginesSkippedAsPreview =
+                        (w.__heliosStats.enginesSkippedAsPreview ?? 0) + 1;
+                }
+            }
+            catch (_) {}
             return;
         }
         this._initInflight = true;

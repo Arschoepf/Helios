@@ -129,13 +129,14 @@ export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
 //under heavy editor activity.
 interface HeliosStats
 {
-    enginesCreated:      number;
-    enginesCleanedUp:    number;
-    updateConfigCalls:   number;
-    styleReloads:        number;
-    addBuildingsCalls:   number;
-    buildingFetchStarts: number;
-    contextLostEvents:   number;
+    enginesCreated:           number;
+    enginesCleanedUp:         number;
+    enginesSkippedAsPreview?: number;
+    updateConfigCalls:        number;
+    styleReloads:             number;
+    addBuildingsCalls:        number;
+    buildingFetchStarts:      number;
+    contextLostEvents:        number;
 }
 function bumpStat(key: keyof HeliosStats): void
 {
@@ -563,6 +564,19 @@ export class HeliosEngine
     private _bumpInactivityCanvas?: HTMLCanvasElement;
     private _bumpInactivityHandler?: () => void;
 
+    //Single-pointer drag-rotate state. We disable MapLibre's default
+    //right-click dragRotate and replace it with a pointer-driven
+    //rotation that responds to left-click on desktop and to a single
+    //finger drag on touch — what users intuitively expect on a 3D
+    //card. The two-finger pinch-rotate path (touchZoomRotate) is
+    //preserved so two-finger rotation still works on touch.
+    private _dragRotateHandlers?: {
+        canvas:  HTMLCanvasElement;
+        onDown:  (e: PointerEvent) => void;
+        onMove:  (e: PointerEvent) => void;
+        onEnd:   (e: PointerEvent) => void;
+    };
+
     //Stored references for every map.on() / canvas.addEventListener
     //we register on the MapLibre map and its canvas. cleanup() uses
     //these to call map.off() / removeEventListener explicitly before
@@ -662,7 +676,11 @@ export class HeliosEngine
             dragPan:         false,
             scrollZoom:      false,
             doubleClickZoom: false,
-            dragRotate:      true,
+            //MapLibre's default dragRotate binds to right-click drag,
+            //which is not what users expect on a 3D card. We disable
+            //it and wire our own pointer handlers below so a left-click
+            //drag (mouse) or single-finger drag (touch) rotates.
+            dragRotate:      false,
             touchZoomRotate: true,
             touchPitch:      false,
             boxZoom:         false,
@@ -758,6 +776,48 @@ export class HeliosEngine
         canvas.addEventListener('wheel',      bumpInactivity, { passive: true });
         canvas.addEventListener('touchstart', bumpInactivity, { passive: true });
         canvas.addEventListener('touchmove',  bumpInactivity, { passive: true });
+
+        //Custom drag-rotate. Left-click drag on desktop, single-finger
+        //drag on touch. Two-finger pinch-rotate still works via
+        //MapLibre's touchZoomRotate handler (left enabled in init).
+        const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
+        let dragRotating  = false;
+        let lastPointerX  = 0;
+        let activeId: number | null = null;
+
+        const onDown = (e: PointerEvent) =>
+        {
+            //Mouse: left button only. Touch / pen: always start.
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            //Single-pointer rotation; ignore additional touches so the
+            //two-finger pinch-rotate gesture stays with MapLibre.
+            if (activeId !== null) return;
+            dragRotating = true;
+            activeId     = e.pointerId;
+            lastPointerX = e.clientX;
+            try { canvas.setPointerCapture(e.pointerId); }
+            catch (_) {}
+        };
+        const onMove = (e: PointerEvent) =>
+        {
+            if (!dragRotating || !this.map || e.pointerId !== activeId) return;
+            const dx = e.clientX - lastPointerX;
+            lastPointerX = e.clientX;
+            this.map.setBearing(this.map.getBearing() - dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+        };
+        const onEnd = (e: PointerEvent) =>
+        {
+            if (e.pointerId !== activeId) return;
+            dragRotating = false;
+            activeId     = null;
+            try { canvas.releasePointerCapture(e.pointerId); }
+            catch (_) {}
+        };
+        canvas.addEventListener('pointerdown',   onDown);
+        canvas.addEventListener('pointermove',   onMove);
+        canvas.addEventListener('pointerup',     onEnd);
+        canvas.addEventListener('pointercancel', onEnd);
+        this._dragRotateHandlers = { canvas, onDown, onMove, onEnd };
 
         //WebGL context-loss recovery. iOS Safari recycles WebGL
         //contexts aggressively under memory pressure; without a
@@ -1624,8 +1684,22 @@ export class HeliosEngine
         {
             for (const cand of idCandidates(layerId))
             {
-                try { if (this.map.getLayer(cand)) this.map.removeLayer(cand); }
+                //Skip candidates that don't correspond to a real layer
+                //in the merged style. The previous version called set*
+                //blindly, which made MapLibre fire an "error" event per
+                //attempt — our error handler then echoed each to the
+                //console. Gating at the source removes both the noise
+                //and the wasted dispatch.
+                if (!this.map.getLayer(cand)) continue;
+
+                try { this.map.removeLayer(cand); }
                 catch (_) {}
+
+                //If removeLayer worked, the layer is gone — done. The
+                //paint / layout fallbacks below are for the rare case
+                //of imported layers where removeLayer is a silent no-op.
+                if (!this.map.getLayer(cand)) continue;
+
                 try { this.map.setLayoutProperty(cand, 'visibility', 'none'); }
                 catch (_) {}
                 try { this.map.setPaintProperty(cand, 'fill-extrusion-opacity', 0); }
@@ -2863,14 +2937,22 @@ export class HeliosEngine
 
         const canvas = this._bumpInactivityCanvas;
 
-        //Step 1 — DOM listeners on the canvas (inactivity bumper +
-        //WebGL context lost/restored).
+        //Step 1 — DOM listeners on the canvas (inactivity bumper,
+        //single-pointer drag-rotate, WebGL context lost/restored).
         if (canvas && this._bumpInactivityHandler)
         {
             canvas.removeEventListener('mousedown',  this._bumpInactivityHandler);
             canvas.removeEventListener('wheel',      this._bumpInactivityHandler);
             canvas.removeEventListener('touchstart', this._bumpInactivityHandler);
             canvas.removeEventListener('touchmove',  this._bumpInactivityHandler);
+        }
+        if (this._dragRotateHandlers)
+        {
+            const h = this._dragRotateHandlers;
+            h.canvas.removeEventListener('pointerdown',   h.onDown);
+            h.canvas.removeEventListener('pointermove',   h.onMove);
+            h.canvas.removeEventListener('pointerup',     h.onEnd);
+            h.canvas.removeEventListener('pointercancel', h.onEnd);
         }
         if (canvas && this._webglLostHandler)
         {
@@ -2955,6 +3037,7 @@ export class HeliosEngine
         this._homeHourlyData    = null;
         this._bumpInactivityCanvas  = undefined;
         this._bumpInactivityHandler = undefined;
+        this._dragRotateHandlers    = undefined;
         this._mapPinHandler         = undefined;
         this._mapStyleLoadHandler   = undefined;
         this._mapLoadHandler        = undefined;
