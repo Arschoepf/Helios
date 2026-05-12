@@ -1064,25 +1064,4 @@ export const heliosCardStyles = css`
             transition-duration:        0ms !important;
         }
     }
-
-
-    /*  CSS offset-path arrows — replace SVG SMIL <animateMotion>
-        for the straight-line leader arrows (PV chip, solar ray).
-        offset-path is GPU-accelerated on the compositor; SMIL runs
-        on the CPU. The path itself is set inline by the renderer
-        (it changes on every camera rotation), the animation just
-        sweeps offset-distance from 0 % to 100 % at the configured
-        duration. */
-    .helios-flow-arrow
-    {
-        offset-rotate:        auto;
-        offset-anchor:        50% 50%;
-        animation:            helios-arrow-flow var(--flow-dur, 30s) linear infinite;
-    }
-
-    @keyframes helios-arrow-flow
-    {
-        from { offset-distance: 0%;   }
-        to   { offset-distance: 100%; }
-    }
 `;

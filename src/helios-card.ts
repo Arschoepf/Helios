@@ -2130,9 +2130,9 @@ export class HeliosCard extends LitElement
 
         //Battery leader L-shape geometry — computed once and reused
         //for the visible <path> elements (SoC and Power) and for
-        //the animated arrow's offset-path. Only meaningful when a
-        //layout is available; gated by the same flag as the chip
-        //rendering so we don't dereference a null layout below.
+        //the animated arrow's <animateMotion> path. Only meaningful
+        //when a layout is available; gated by the same flag as the
+        //chip rendering so we don't dereference a null layout below.
         //
         //  PV_LEG_OFFSET_PX (12) is the horizontal distance from
         //  the PV chip's centre to each L-leg's vertical drop.
@@ -2151,12 +2151,12 @@ export class HeliosCard extends LitElement
         //  the leader and the visible dash sequence terminates
         //  cleanly at the chip border.
         //  FILLET_R (6) rounds the corner of the L with a quadratic
-        //  Bézier. The visible line and the arrow's offset-path
-        //  share the same fillet, so the arrow's tangent rotates
-        //  smoothly through the bend instead of snapping 90° at
-        //  the corner. CSS offset-path parametrises by length at
+        //  Bézier. The visible line and the arrow's <animateMotion>
+        //  path share the same fillet, so the arrow's tangent
+        //  rotates smoothly through the bend instead of snapping
+        //  90° at the corner. SMIL parametrises the path at
         //  constant linear velocity, so the time spent on the
-        //  fillet scales proportionally with `flowDuration`.
+        //  fillet shrinks proportionally with `flowDuration`.
         const PV_LEG_OFFSET_PX     = 12;
         const PV_HALF_HEIGHT_PX    = 11;
         const BAT_CHIP_NUDGE_PX    = 32;
@@ -2379,11 +2379,17 @@ ${showSun ? html`
                                 stroke="${sunColor}"
                             ></line>
                             <polygon
-                                class="solar-ray-arrow helios-flow-arrow"
+                                class="solar-ray-arrow"
                                 points="-6,-4 0,0 -6,4"
                                 fill="${sunColor}"
-                                style="offset-path: path('M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunScene!.home.x},${sunScene!.home.y}'); --flow-dur: ${sunFlowDuration}s"
-                            ></polygon>
+                            >
+                                <animateMotion
+                                    dur="${sunFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunScene!.home.x},${sunScene!.home.y}"
+                                ></animateMotion>
+                            </polygon>
                         ` : nothing}
                         ${(() => {
                             //Sun disc — three concentric layers:
@@ -2490,11 +2496,17 @@ ${showSun ? html`
                         ></line>
                         ${svg`
                             <polygon
-                                class="pv-leader-arrow helios-flow-arrow"
+                                class="pv-leader-arrow"
                                 points="-6,-4 0,0 -6,4"
                                 fill="${pvColor}"
-                                style="offset-path: path('M ${layout!.home.x},${layout!.home.y} L ${layout!.pvLabel.x},${layout!.pvLabel.y + 10}'); --flow-dur: ${pvFlowDuration}s"
-                            ></polygon>
+                            >
+                                <animateMotion
+                                    dur="${pvFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="M ${layout!.home.x},${layout!.home.y} L ${layout!.pvLabel.x},${layout!.pvLabel.y + 10}"
+                                ></animateMotion>
+                            </polygon>
                         `}
                     </svg>
                     <div
@@ -2546,18 +2558,24 @@ ${showSun ? html`
                             <!--
                                 Polygon is centroid-centred at (0,0):
                                 the centroid of (-2,-4), (4,0), (-2,4)
-                                is (0,0), so offset-path pivots the
+                                is (0,0), so animateMotion pivots the
                                 arrow about its visual mass rather than
                                 its tip. Through the L's fillet the
                                 arrow stays balanced on the path
                                 instead of swinging off it.
                             -->
                             <polygon
-                                class="battery-leader-arrow helios-flow-arrow"
+                                class="battery-leader-arrow"
                                 points="-2,-4 4,0 -2,4"
                                 fill="${batteryColor}"
-                                style="offset-path: path('${powerArrowPath}'); --flow-dur: ${batteryFlowDuration}s"
-                            ></polygon>
+                            >
+                                <animateMotion
+                                    dur="${batteryFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="${powerArrowPath}"
+                                ></animateMotion>
+                            </polygon>
                         ` : nothing}
                     </svg>
                     ${showSocChip ? html`
