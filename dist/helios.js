@@ -29616,6 +29616,7 @@ let HeliosCardEditor = class extends i {
     super(...arguments);
     this._cfg = { "maptiler-api-key": "" };
     this._pickerReady = false;
+    this._sliderDebounce = /* @__PURE__ */ new Map();
     this._pvEntityFilter = (entity) => {
       if (!entity || !entity.attributes) return false;
       const dc = entity.attributes.device_class;
@@ -29635,6 +29636,11 @@ let HeliosCardEditor = class extends i {
       const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
       return u2 === "W" || u2 === "kW" || u2 === "MW";
     };
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    for (const t2 of this._sliderDebounce.values()) window.clearTimeout(t2);
+    this._sliderDebounce.clear();
   }
   setConfig(config) {
     this._cfg = { ...config };
@@ -29694,11 +29700,25 @@ let HeliosCardEditor = class extends i {
   _str(key, e2) {
     this._update(key, e2.target.value);
   }
-  _num(key, e2) {
+  //Slider commit. Updates local state synchronously so the slider
+  //thumb tracks the drag, but defers the cross-component
+  //`config-changed` event by SLIDER_COMMIT_DELAY_MS so the engine
+  //doesn't see a flood of intermediate values.
+  _numSlider(key, e2) {
     const v2 = parseFloat(e2.target.value);
-    if (isFinite(v2)) {
-      this._update(key, v2);
-    }
+    if (!isFinite(v2)) return;
+    this._cfg = { ...this._cfg, [key]: v2 };
+    const k2 = String(key);
+    const existing = this._sliderDebounce.get(k2);
+    if (existing !== void 0) window.clearTimeout(existing);
+    const t2 = window.setTimeout(() => {
+      this._sliderDebounce.delete(k2);
+      this.dispatchEvent(new CustomEvent(
+        "config-changed",
+        { detail: { config: this._cfg } }
+      ));
+    }, HeliosCardEditor.SLIDER_COMMIT_DELAY_MS);
+    this._sliderDebounce.set(k2, t2);
   }
   _bool(key, value) {
     this._update(key, value);
@@ -29748,7 +29768,7 @@ let HeliosCardEditor = class extends i {
                         <input
                             type="range" min="0" max="1" step="0.01"
                             .value="${String(c2["topography-alpha"] ?? 0.65)}"
-                            @input="${(e2) => this._num("topography-alpha", e2)}"
+                            @input="${(e2) => this._numSlider("topography-alpha", e2)}"
                         />
                         <span class="slider-value">${this._fmtNum(Number(c2["topography-alpha"] ?? 0.65), 0.01)}</span>
                     </div>
@@ -29849,7 +29869,7 @@ let HeliosCardEditor = class extends i {
                         <input
                             type="range" min="20" max="1000" step="10"
                             .value="${String(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M)}"
-                            @input="${(e2) => this._num("building-radius", e2)}"
+                            @input="${(e2) => this._numSlider("building-radius", e2)}"
                         />
                         <span class="slider-value">${this._fmtNum(Number(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
                     </div>
@@ -29860,7 +29880,7 @@ let HeliosCardEditor = class extends i {
                         <input
                             type="range" min="0" max="100" step="1"
                             .value="${String(c2["building-cluster-radius"] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M)}"
-                            @input="${(e2) => this._num("building-cluster-radius", e2)}"
+                            @input="${(e2) => this._numSlider("building-cluster-radius", e2)}"
                         />
                         <span class="slider-value">${this._fmtNum(Number(c2["building-cluster-radius"] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M), 1)} m</span>
                     </div>
@@ -29871,7 +29891,7 @@ let HeliosCardEditor = class extends i {
                         <input
                             type="range" min="0" max="1" step="0.05"
                             .value="${String(c2["building-opacity"] ?? DEFAULT_BUILDING_OPACITY)}"
-                            @input="${(e2) => this._num("building-opacity", e2)}"
+                            @input="${(e2) => this._numSlider("building-opacity", e2)}"
                         />
                         <span class="slider-value">${this._fmtNum(Number(c2["building-opacity"] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
                     </div>
@@ -30024,6 +30044,7 @@ let HeliosCardEditor = class extends i {
         `;
   }
 };
+HeliosCardEditor.SLIDER_COMMIT_DELAY_MS = 250;
 HeliosCardEditor.styles = i$3`
         .editor
         {

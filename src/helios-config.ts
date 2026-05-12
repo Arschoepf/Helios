@@ -314,6 +314,23 @@ export class HeliosCardEditor extends LitElement
     @state()                        private _cfg: HeliosConfig = { 'maptiler-api-key': '' };
     @state()                        private _pickerReady = false;
 
+    //Per-key debounce timers for slider inputs. Sliders fire @input
+    //on every pixel of drag, which used to cascade an updateConfig +
+    //full re-render through the engine on each tick — visibly painful
+    //during preview. We update the local _cfg synchronously (so the
+    //slider's bound .value tracks the drag perfectly) but only
+    //dispatch the cross-component `config-changed` event after a
+    //short idle window.
+    private static readonly SLIDER_COMMIT_DELAY_MS = 250;
+    private _sliderDebounce: Map<string, number> = new Map();
+
+    public disconnectedCallback(): void
+    {
+        super.disconnectedCallback();
+        for (const t of this._sliderDebounce.values()) window.clearTimeout(t);
+        this._sliderDebounce.clear();
+    }
+
     public setConfig(config: HeliosConfig): void
     {
         this._cfg = { ...config };
@@ -395,13 +412,28 @@ export class HeliosCardEditor extends LitElement
         this._update(key, (e.target as HTMLInputElement).value);
     }
 
-    private _num(key: keyof HeliosConfig, e: Event): void
+    //Slider commit. Updates local state synchronously so the slider
+    //thumb tracks the drag, but defers the cross-component
+    //`config-changed` event by SLIDER_COMMIT_DELAY_MS so the engine
+    //doesn't see a flood of intermediate values.
+    private _numSlider(key: keyof HeliosConfig, e: Event): void
     {
         const v = parseFloat((e.target as HTMLInputElement).value);
-        if (isFinite(v))
+        if (!isFinite(v)) return;
+
+        //Local update only — no event dispatch yet.
+        this._cfg = { ...this._cfg, [key]: v };
+
+        const k        = String(key);
+        const existing = this._sliderDebounce.get(k);
+        if (existing !== undefined) window.clearTimeout(existing);
+        const t = window.setTimeout(() =>
         {
-            this._update(key, v);
-        }
+            this._sliderDebounce.delete(k);
+            this.dispatchEvent(new CustomEvent('config-changed',
+                { detail: { config: this._cfg } }));
+        }, HeliosCardEditor.SLIDER_COMMIT_DELAY_MS);
+        this._sliderDebounce.set(k, t);
     }
 
     private _bool(key: keyof HeliosConfig, value: boolean): void
@@ -499,7 +531,7 @@ export class HeliosCardEditor extends LitElement
                         <input
                             type="range" min="0" max="1" step="0.01"
                             .value="${String(c['topography-alpha'] ?? 0.65)}"
-                            @input="${(e: Event) => this._num('topography-alpha', e)}"
+                            @input="${(e: Event) => this._numSlider('topography-alpha', e)}"
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['topography-alpha'] ?? 0.65), 0.01)}</span>
                     </div>
@@ -600,7 +632,7 @@ export class HeliosCardEditor extends LitElement
                         <input
                             type="range" min="20" max="1000" step="10"
                             .value="${String(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M)}"
-                            @input="${(e: Event) => this._num('building-radius', e)}"
+                            @input="${(e: Event) => this._numSlider('building-radius', e)}"
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
                     </div>
@@ -611,7 +643,7 @@ export class HeliosCardEditor extends LitElement
                         <input
                             type="range" min="0" max="100" step="1"
                             .value="${String(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M)}"
-                            @input="${(e: Event) => this._num('building-cluster-radius', e)}"
+                            @input="${(e: Event) => this._numSlider('building-cluster-radius', e)}"
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M), 1)} m</span>
                     </div>
@@ -622,7 +654,7 @@ export class HeliosCardEditor extends LitElement
                         <input
                             type="range" min="0" max="1" step="0.05"
                             .value="${String(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY)}"
-                            @input="${(e: Event) => this._num('building-opacity', e)}"
+                            @input="${(e: Event) => this._numSlider('building-opacity', e)}"
                         />
                         <span class="slider-value">${this._fmtNum(Number(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
                     </div>
