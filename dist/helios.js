@@ -28749,6 +28749,17 @@ const heliosCardStyles = i$3`
         opacity: 0.55;
     }
 
+    /*  Daily peak-production highlight — for each natural day in the
+        timeline, a 1-hour-wide vertical band painted in the configured
+        PV colour at low opacity marks the hour where production is
+        (or is predicted to be) highest. Drawn behind the chart area
+        so the curves remain legible on top. */
+    .hc-pv-peak
+    {
+        opacity: 0.18;
+        pointer-events: none;
+    }
+
     /*  Faint dotted day separators inside the chart card. */
     .hc-day-sep
     {
@@ -31412,6 +31423,46 @@ let HeliosCard = class extends i {
         predictedSamples.push({ t: series.times[i2], v: pct * k2 });
       }
     }
+    const HOUR_MS = 36e5;
+    const peakByHour = /* @__PURE__ */ new Map();
+    const observedHourly = this._aggregatePvWattsPerHour();
+    for (const [hourTs, watts] of observedHourly) {
+      if (hourTs < startMs || hourTs >= endMsAbs) continue;
+      peakByHour.set(hourTs, watts);
+    }
+    if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
+      for (let i2 = 0; i2 < series.times.length; i2++) {
+        const tMs = series.times[i2].getTime();
+        const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+        if (hourTs < startMs || hourTs >= endMsAbs) continue;
+        if (peakByHour.has(hourTs)) continue;
+        const pct = computePvPower(series.times[i2], lat, lon, series.cloud[i2] ?? 0);
+        if (pct <= 0) continue;
+        peakByHour.set(hourTs, pct * k2);
+      }
+    }
+    const peakColumns = [];
+    const dayWalker = new Date(range.start);
+    dayWalker.setHours(0, 0, 0, 0);
+    while (dayWalker.getTime() < endMsAbs) {
+      const dayStart = dayWalker.getTime();
+      const dayEnd = dayStart + 24 * HOUR_MS;
+      let peakHourTs = -1;
+      let peakWatts = 0;
+      for (const [hourTs, watts] of peakByHour) {
+        if (hourTs < dayStart || hourTs >= dayEnd) continue;
+        if (watts > peakWatts) {
+          peakHourTs = hourTs;
+          peakWatts = watts;
+        }
+      }
+      if (peakHourTs >= 0 && peakWatts > 10) {
+        const x1 = (peakHourTs - startMs) / rangeMs * W;
+        const x2 = (peakHourTs + HOUR_MS - startMs) / rangeMs * W;
+        peakColumns.push({ x1, x2 });
+      }
+      dayWalker.setDate(dayWalker.getDate() + 1);
+    }
     let yMax = 1;
     for (const s2 of samples) {
       if (s2.v > yMax) yMax = s2.v;
@@ -31440,6 +31491,14 @@ let HeliosCard = class extends i {
                 viewBox="0 0 ${W} ${H2}"
                 preserveAspectRatio="none"
             >
+                ${peakColumns.map((c2) => w`
+                    <rect
+                        class="hc-pv-peak"
+                        x="${c2.x1.toFixed(2)}" y="0"
+                        width="${(c2.x2 - c2.x1).toFixed(2)}" height="${H2}"
+                        fill="${pvColor}"
+                    ></rect>
+                `)}
                 ${dayXs.map((x2) => w`
                     <line
                         class="hc-day-sep"

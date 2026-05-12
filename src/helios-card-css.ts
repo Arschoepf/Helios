@@ -226,6 +226,17 @@ export const heliosCardStyles = css`
         opacity: 0.55;
     }
 
+    /*  Daily peak-production highlight — for each natural day in the
+        timeline, a 1-hour-wide vertical band painted in the configured
+        PV colour at low opacity marks the hour where production is
+        (or is predicted to be) highest. Drawn behind the chart area
+        so the curves remain legible on top. */
+    .hc-pv-peak
+    {
+        opacity: 0.18;
+        pointer-events: none;
+    }
+
     /*  Faint dotted day separators inside the chart card. */
     .hc-day-sep
     {

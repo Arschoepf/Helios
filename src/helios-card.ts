@@ -1641,6 +1641,67 @@ export class HeliosCard extends LitElement
             }
         }
 
+        //Per-day peak-production highlight columns.
+        //
+        //For every natural day touched by the timeline, find the
+        //hourly bucket with the highest production and render a
+        //thin vertical band at that hour in the PV colour at low
+        //opacity. Observed PV beats prediction when both exist
+        //(real measurement is more trustworthy than the
+        //extrapolated curve), so today's column tracks the actual
+        //peak as the day unfolds; future days fall back to
+        //predicted-only since no observation exists yet.
+        const HOUR_MS = 3_600_000;
+        const peakByHour = new Map<number, number>();
+        const observedHourly = this._aggregatePvWattsPerHour();
+        for (const [hourTs, watts] of observedHourly)
+        {
+            if (hourTs < startMs || hourTs >= endMsAbs) continue;
+            peakByHour.set(hourTs, watts);
+        }
+        if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
+        {
+            for (let i = 0; i < series.times.length; i++)
+            {
+                const tMs    = series.times[i].getTime();
+                const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+                if (hourTs < startMs || hourTs >= endMsAbs) continue;
+                if (peakByHour.has(hourTs))                 continue;
+                const pct = computePvPower(series.times[i], lat, lon, series.cloud[i] ?? 0);
+                if (pct <= 0) continue;
+                peakByHour.set(hourTs, pct * k);
+            }
+        }
+        const peakColumns: Array<{ x1: number; x2: number }> = [];
+        const dayWalker = new Date(range.start);
+        dayWalker.setHours(0, 0, 0, 0);
+        while (dayWalker.getTime() < endMsAbs)
+        {
+            const dayStart = dayWalker.getTime();
+            const dayEnd   = dayStart + 24 * HOUR_MS;
+            let peakHourTs = -1;
+            let peakWatts  = 0;
+            for (const [hourTs, watts] of peakByHour)
+            {
+                if (hourTs < dayStart || hourTs >= dayEnd) continue;
+                if (watts > peakWatts)
+                {
+                    peakHourTs = hourTs;
+                    peakWatts  = watts;
+                }
+            }
+            //Skip days with no meaningful production (~ all-dark or
+            //panels offline) — a zero-height column would still be
+            //rendered but it's just visual noise.
+            if (peakHourTs >= 0 && peakWatts > 10)
+            {
+                const x1 = ((peakHourTs - startMs)            / rangeMs) * W;
+                const x2 = ((peakHourTs + HOUR_MS - startMs)  / rangeMs) * W;
+                peakColumns.push({ x1, x2 });
+            }
+            dayWalker.setDate(dayWalker.getDate() + 1);
+        }
+
         //Auto-scale: the Y axis maps 0 to the bottom edge and the
         //series' running max to the top edge. With a min of 1 we
         //avoid division-by-zero when the series is all-zero (early
@@ -1682,6 +1743,14 @@ export class HeliosCard extends LitElement
                 viewBox="0 0 ${W} ${H}"
                 preserveAspectRatio="none"
             >
+                ${peakColumns.map(c => svg`
+                    <rect
+                        class="hc-pv-peak"
+                        x="${c.x1.toFixed(2)}" y="0"
+                        width="${(c.x2 - c.x1).toFixed(2)}" height="${H}"
+                        fill="${pvColor}"
+                    ></rect>
+                `)}
                 ${dayXs.map(x => svg`
                     <line
                         class="hc-day-sep"
