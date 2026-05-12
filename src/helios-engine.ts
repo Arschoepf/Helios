@@ -156,6 +156,27 @@ function bumpStat(key: keyof HeliosStats): void
     w.__heliosStats[key] = (w.__heliosStats[key] ?? 0) + 1;
 }
 
+
+//Module-level cap on the number of HeliosEngine instances alive at
+//the same time.
+//
+//Home Assistant's dashboard editor creates a fresh preview card on
+//every config edit and does not always fire `disconnectedCallback`
+//on the previous preview — instrumented telemetry showed up to 14
+//orphaned engines after only a handful of edits, each still holding
+//a WebGL context. Safari mobile caps active contexts at ~8 and
+//starts recycling aggressively once the cap is hit, which is the
+//root cause of both the FPS drift and the iOS black-screen lockup.
+//
+//We solve this from our side by tracking every live engine in a
+//module-level Set and force-cleaning the oldest one whenever a new
+//engine is about to push the count over the limit. The user's
+//currently-visible card is always the most recent engine, so the
+//victim of force-cleanup is always an orphan preview the user
+//can't see.
+const MAX_LIVE_ENGINES = 2;
+const _liveEngines = new Set<HeliosEngine>();
+
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
 
 //Sources of the irradiance value displayed in the PV legend.
@@ -586,6 +607,23 @@ export class HeliosEngine
         this.apiKey  = String(config['maptiler-api-key'] ?? '').trim();
 
         bumpStat('enginesCreated');
+
+        //Evict the oldest live engine if we're at the cap. Set
+        //iteration follows insertion order so the first value is the
+        //longest-lived — typically an orphaned editor-preview engine
+        //the user can no longer see.
+        while (_liveEngines.size >= MAX_LIVE_ENGINES)
+        {
+            const oldest = _liveEngines.values().next().value;
+            if (!oldest) break;
+            console.warn('[HELIOS] WebGL context cap reached — force-cleaning the oldest engine');
+            try { oldest.cleanup(); }
+            catch (_) {}
+            //cleanup() removes it from the set, but be defensive in
+            //case it threw before reaching that line.
+            _liveEngines.delete(oldest);
+        }
+        _liveEngines.add(this);
 
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
@@ -2786,6 +2824,7 @@ export class HeliosEngine
     public cleanup(): void
     {
         bumpStat('enginesCleanedUp');
+        _liveEngines.delete(this);
         this._clearWeatherTimer();
         window.clearInterval(this._skyTimer);
         window.clearTimeout(this._resizeDebounceTimer);
