@@ -505,6 +505,25 @@ export class HeliosEngine
     private _bumpInactivityCanvas?: HTMLCanvasElement;
     private _bumpInactivityHandler?: () => void;
 
+    //Stored references for every map.on() / canvas.addEventListener
+    //we register on the MapLibre map and its canvas. cleanup() uses
+    //these to call map.off() / removeEventListener explicitly before
+    //map.remove(), so a buggy map.remove() (which we've seen on iOS
+    //Safari) can't leave dangling closures that keep the dead engine
+    //+ its GeoJSON + its WebGL context alive across re-inits.
+    private _mapPinHandler?:       (e: { originalEvent?: unknown }) => void;
+    private _mapStyleLoadHandler?: () => void;
+    private _mapLoadHandler?:      () => void;
+    private _mapMoveHandler?:      () => void;
+    private _mapErrorHandler?:     (e: { error?: { message?: string } }) => void;
+    private _webglLostHandler?:    (e: Event) => void;
+    private _webglRestoredHandler?: () => void;
+
+    //Card-level hook fired when the WebGL context has been lost
+    //(iOS Safari aggressively recycles WebGL contexts under memory
+    //pressure). The card listens and triggers a clean re-init.
+    public onContextLost?: () => void;
+
     //Cached result of the building fetch around the home. The home
     //doesn't move during a session, so we fetch once and reuse the
     //GeoJSON across style reloads (theme switches, basemap changes)
@@ -614,35 +633,35 @@ export class HeliosEngine
         //We gate on `originalEvent` so future programmatic eases
         //(e.g. recenter()) can still animate freely without being
         //fought frame-by-frame by this snap.
-        const pinHomeAtCenter = (e: any) =>
+        this._mapPinHandler = (e: { originalEvent?: unknown }) =>
         {
-            if (!this.map || !e?.originalEvent)
-            {
-                return;
-            }
+            if (!this.map || !e?.originalEvent) return;
             const c = this.map.getCenter();
             if (c.lng !== this.homeLon || c.lat !== this.homeLat)
             {
                 this.map.setCenter([this.homeLon, this.homeLat]);
             }
         };
-        this.map.on('rotate', pinHomeAtCenter);
-        this.map.on('move',   pinHomeAtCenter);
+        this.map.on('rotate', this._mapPinHandler);
+        this.map.on('move',   this._mapPinHandler);
 
-        this.map.on('style.load', () => this._onStyleLoad());
-        this.map.on('load',       () =>
+        this._mapStyleLoadHandler = () => this._onStyleLoad();
+        this.map.on('style.load', this._mapStyleLoadHandler);
+
+        this._mapLoadHandler = () =>
         {
             this.map?.resize();
             this._startAutoRotateLoop();
-        });
+        };
+        this.map.on('load', this._mapLoadHandler);
 
         //Map transform broadcaster — relays move events to the card so
-        //it can keep HTML overlays (the percentage label and its
-        //leader line) aligned with the underlying canvas. We listen
-        //on `move` rather than the higher-level `moveend` so the
-        //overlays track the camera frame-by-frame during programmatic
+        //it can keep HTML overlays aligned with the underlying canvas.
+        //We listen on `move` rather than `moveend` so the overlays
+        //track the camera frame-by-frame during programmatic
         //animations rather than snapping at the end.
-        this.map.on('move', () => this.onMapTransform?.());
+        this._mapMoveHandler = () => this.onMapTransform?.();
+        this.map.on('move', this._mapMoveHandler);
 
         //Auto-rotation pause — any DOM-level interaction on the canvas
         //(mouse, touch, wheel) bumps the inactivity timer so the
@@ -663,15 +682,38 @@ export class HeliosEngine
         canvas.addEventListener('touchstart', bumpInactivity, { passive: true });
         canvas.addEventListener('touchmove',  bumpInactivity, { passive: true });
 
+        //WebGL context-loss recovery. iOS Safari recycles WebGL
+        //contexts aggressively under memory pressure; without a
+        //handler the canvas freezes on a black frame and the user
+        //thinks the dashboard is broken. We preventDefault on the
+        //lost event (which lets the browser try to restore), flip
+        //_mapReady to false so dependent code path bails, and emit
+        //onContextLost — the card uses that to fully tear down and
+        //re-init the engine on the next animation frame.
+        this._webglLostHandler = (e: Event) =>
+        {
+            e.preventDefault();
+            this._mapReady = false;
+            console.warn('[HELIOS] WebGL context lost — requesting card re-init');
+            this.onContextLost?.();
+        };
+        this._webglRestoredHandler = () =>
+        {
+            console.info('[HELIOS] WebGL context restored');
+        };
+        canvas.addEventListener('webglcontextlost',     this._webglLostHandler,    false);
+        canvas.addEventListener('webglcontextrestored', this._webglRestoredHandler, false);
+
         //Surface MapLibre internal errors (auth, tile fetch, WebGL) to
         //the browser console rather than letting them silently cascade.
         //Without this hook, an invalid API key just produces silent 403s
         //and the user sees a frozen card with no diagnostic.
-        this.map.on('error', (e: any) =>
+        this._mapErrorHandler = (e: { error?: { message?: string } }) =>
         {
-            const msg = e?.error?.message ?? e?.error ?? 'unknown error';
+            const msg = e?.error?.message ?? 'unknown error';
             console.warn('[HELIOS] MapLibre error:', msg);
-        });
+        };
+        this.map.on('error', this._mapErrorHandler);
 
         this._refreshWeather();
     }
@@ -2711,26 +2753,46 @@ export class HeliosEngine
             this._autoRotateRaf = undefined;
         }
 
-        //Detach the inactivity bumper listeners we registered on the
-        //canvas, and grab the WebGL context off the same canvas so
-        //we can force-lose it after MapLibre tears the map down.
+        //Tear-down strategy: explicit + defensive + force-lose.
         //
-        //Why both at once: the closures keep `this` alive (which
-        //transitively holds the dead MapLibre map + every cached
-        //GeoJSON we fed it) until they are detached. And browsers
-        //don't always release the WebGL context slot when the canvas
-        //alone is GC'd — manual `loseContext` is the only reliable
-        //path to release the slot, which is the root of the perf
-        //drift after several editor re-inits.
-        const canvas  = this._bumpInactivityCanvas;
-        const handler = this._bumpInactivityHandler;
-        if (canvas && handler)
+        //We can't trust MapLibre's map.remove() alone to release
+        //every listener / source / WebGL resource — on iOS Safari
+        //in particular, a dirty remove() leaves closures pinning
+        //the dead engine, GeoJSON sources lingering in the GPU,
+        //and the WebGL context slot occupied (browsers cap at
+        //8-16 active contexts). The drift after several editor
+        //re-inits was the symptom; this multi-step cleanup is the
+        //fix.
+        //
+        //Order matters: detach DOM listeners first (so MapLibre's
+        //own teardown sees a clean canvas), then unhook every
+        //map.on() we registered explicitly, then remove our custom
+        //sources/layers (saves the GPU work even if remove() would
+        //do it), THEN call map.remove(), THEN force-lose the WebGL
+        //context to release the slot.
+
+        const canvas = this._bumpInactivityCanvas;
+
+        //Step 1 — DOM listeners on the canvas (inactivity bumper +
+        //WebGL context lost/restored).
+        if (canvas && this._bumpInactivityHandler)
         {
-            canvas.removeEventListener('mousedown',  handler);
-            canvas.removeEventListener('wheel',      handler);
-            canvas.removeEventListener('touchstart', handler);
-            canvas.removeEventListener('touchmove',  handler);
+            canvas.removeEventListener('mousedown',  this._bumpInactivityHandler);
+            canvas.removeEventListener('wheel',      this._bumpInactivityHandler);
+            canvas.removeEventListener('touchstart', this._bumpInactivityHandler);
+            canvas.removeEventListener('touchmove',  this._bumpInactivityHandler);
         }
+        if (canvas && this._webglLostHandler)
+        {
+            canvas.removeEventListener('webglcontextlost', this._webglLostHandler);
+        }
+        if (canvas && this._webglRestoredHandler)
+        {
+            canvas.removeEventListener('webglcontextrestored', this._webglRestoredHandler);
+        }
+
+        //Grab the WebGL context BEFORE map.remove() destroys it —
+        //we'll force-lose it at the end of cleanup to release the slot.
         let gl: WebGLRenderingContext | WebGL2RenderingContext | null = null;
         try
         {
@@ -2739,24 +2801,93 @@ export class HeliosEngine
               ?? null;
         }
         catch (_) {}
-        this._bumpInactivityCanvas  = undefined;
-        this._bumpInactivityHandler = undefined;
 
-        //Drop the cached buildings GeoJSON before tearing down the map
-        //so the next engine starts from a clean slate. Several hundred
-        //kilobytes per re-init in dense areas.
+        //Step 2 — every map.on() listener we hold an explicit
+        //reference for. map.remove() should clean these up but
+        //doing it ourselves means any leftover closure that
+        //captures `this` is severed BEFORE the engine is dropped.
+        if (this.map)
+        {
+            try
+            {
+                if (this._mapPinHandler)
+                {
+                    this.map.off('rotate', this._mapPinHandler);
+                    this.map.off('move',   this._mapPinHandler);
+                }
+                if (this._mapStyleLoadHandler) this.map.off('style.load', this._mapStyleLoadHandler);
+                if (this._mapLoadHandler)      this.map.off('load',       this._mapLoadHandler);
+                if (this._mapMoveHandler)      this.map.off('move',       this._mapMoveHandler);
+                if (this._mapErrorHandler)     this.map.off('error',      this._mapErrorHandler);
+            }
+            catch (_) {}
+        }
+
+        //Step 3 — explicit removal of every helios-* layer and
+        //source so MapLibre doesn't have to walk them itself.
+        //removeLayer must precede removeSource (MapLibre rejects
+        //removing a source still backing live layers).
+        if (this.map)
+        {
+            for (const lid of [
+                'helios-hillshade',
+                'helios-night-shade',
+                'helios-cloud-disc',
+                'helios-cloud-disc-ring',
+                'helios-cloud-ring',
+                'helios-buildings-surroundings',
+                'helios-buildings-home'
+            ])
+            {
+                try { if (this.map.getLayer(lid)) this.map.removeLayer(lid); }
+                catch (_) {}
+            }
+            for (const sid of [
+                'helios-terrain',
+                'helios-night-shade',
+                'helios-cloud-rings',
+                'helios-buildings-surroundings-src',
+                'helios-buildings-home-src'
+            ])
+            {
+                try { if (this.map.getSource(sid)) this.map.removeSource(sid); }
+                catch (_) {}
+            }
+            try { this.map.setTerrain(null); }
+            catch (_) {}
+        }
+
+        //Step 4 — drop heavy instance state BEFORE map.remove() so
+        //the dead engine, once unreachable, holds nothing but
+        //handles that have already been released.
         this._buildingsData     = null;
         this._buildingsFetchKey = '';
+        this._homeHourlyData    = null;
+        this._bumpInactivityCanvas  = undefined;
+        this._bumpInactivityHandler = undefined;
+        this._mapPinHandler         = undefined;
+        this._mapStyleLoadHandler   = undefined;
+        this._mapLoadHandler        = undefined;
+        this._mapMoveHandler        = undefined;
+        this._mapErrorHandler       = undefined;
+        this._webglLostHandler      = undefined;
+        this._webglRestoredHandler  = undefined;
+        this.onContextLost          = undefined;
 
+        //Step 5 — MapLibre teardown.
         this.map?.remove();
         this.map       = undefined;
         this._mapReady = false;
 
+        //Step 6 — force the WebGL context slot to release. Browsers
+        //don't always reclaim it from canvas GC alone, and the cap
+        //(8-16 active contexts) is the dominant cause of perf drift
+        //+ random page refresh + iOS Safari black screen after
+        //several re-inits.
         try { gl?.getExtension('WEBGL_lose_context')?.loseContext(); }
         catch (_) {}
 
-        //Don't leave the debug global pointing at the disposed map —
-        //it would keep the WebGL context alive in some browsers.
+        //Step 7 — clear the debug global so it doesn't pin the dead map.
         try
         {
             const w = window as unknown as { __heliosMap?: unknown };

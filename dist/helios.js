@@ -26297,23 +26297,24 @@ const _HeliosEngine = class _HeliosEngine {
     } catch (_2) {
     }
     this.map.touchZoomRotate.enable({ around: "center" });
-    const pinHomeAtCenter = (e2) => {
-      if (!this.map || !e2?.originalEvent) {
-        return;
-      }
+    this._mapPinHandler = (e2) => {
+      if (!this.map || !e2?.originalEvent) return;
       const c2 = this.map.getCenter();
       if (c2.lng !== this.homeLon || c2.lat !== this.homeLat) {
         this.map.setCenter([this.homeLon, this.homeLat]);
       }
     };
-    this.map.on("rotate", pinHomeAtCenter);
-    this.map.on("move", pinHomeAtCenter);
-    this.map.on("style.load", () => this._onStyleLoad());
-    this.map.on("load", () => {
+    this.map.on("rotate", this._mapPinHandler);
+    this.map.on("move", this._mapPinHandler);
+    this._mapStyleLoadHandler = () => this._onStyleLoad();
+    this.map.on("style.load", this._mapStyleLoadHandler);
+    this._mapLoadHandler = () => {
       this.map?.resize();
       this._startAutoRotateLoop();
-    });
-    this.map.on("move", () => this.onMapTransform?.());
+    };
+    this.map.on("load", this._mapLoadHandler);
+    this._mapMoveHandler = () => this.onMapTransform?.();
+    this.map.on("move", this._mapMoveHandler);
     const canvas = this.map.getCanvas();
     const bumpInactivity = () => {
       this._autoRotateLastUserAction = Date.now();
@@ -26324,10 +26325,22 @@ const _HeliosEngine = class _HeliosEngine {
     canvas.addEventListener("wheel", bumpInactivity, { passive: true });
     canvas.addEventListener("touchstart", bumpInactivity, { passive: true });
     canvas.addEventListener("touchmove", bumpInactivity, { passive: true });
-    this.map.on("error", (e2) => {
-      const msg = e2?.error?.message ?? e2?.error ?? "unknown error";
+    this._webglLostHandler = (e2) => {
+      e2.preventDefault();
+      this._mapReady = false;
+      console.warn("[HELIOS] WebGL context lost — requesting card re-init");
+      this.onContextLost?.();
+    };
+    this._webglRestoredHandler = () => {
+      console.info("[HELIOS] WebGL context restored");
+    };
+    canvas.addEventListener("webglcontextlost", this._webglLostHandler, false);
+    canvas.addEventListener("webglcontextrestored", this._webglRestoredHandler, false);
+    this._mapErrorHandler = (e2) => {
+      const msg = e2?.error?.message ?? "unknown error";
       console.warn("[HELIOS] MapLibre error:", msg);
-    });
+    };
+    this.map.on("error", this._mapErrorHandler);
     this._refreshWeather();
   }
   //_weatherTimer holds either a setInterval id (regular refresh) or
@@ -27708,22 +27721,81 @@ const _HeliosEngine = class _HeliosEngine {
       this._autoRotateRaf = void 0;
     }
     const canvas = this._bumpInactivityCanvas;
-    const handler = this._bumpInactivityHandler;
-    if (canvas && handler) {
-      canvas.removeEventListener("mousedown", handler);
-      canvas.removeEventListener("wheel", handler);
-      canvas.removeEventListener("touchstart", handler);
-      canvas.removeEventListener("touchmove", handler);
+    if (canvas && this._bumpInactivityHandler) {
+      canvas.removeEventListener("mousedown", this._bumpInactivityHandler);
+      canvas.removeEventListener("wheel", this._bumpInactivityHandler);
+      canvas.removeEventListener("touchstart", this._bumpInactivityHandler);
+      canvas.removeEventListener("touchmove", this._bumpInactivityHandler);
+    }
+    if (canvas && this._webglLostHandler) {
+      canvas.removeEventListener("webglcontextlost", this._webglLostHandler);
+    }
+    if (canvas && this._webglRestoredHandler) {
+      canvas.removeEventListener("webglcontextrestored", this._webglRestoredHandler);
     }
     let gl = null;
     try {
       gl = canvas?.getContext("webgl2") ?? canvas?.getContext("webgl") ?? null;
     } catch (_2) {
     }
-    this._bumpInactivityCanvas = void 0;
-    this._bumpInactivityHandler = void 0;
+    if (this.map) {
+      try {
+        if (this._mapPinHandler) {
+          this.map.off("rotate", this._mapPinHandler);
+          this.map.off("move", this._mapPinHandler);
+        }
+        if (this._mapStyleLoadHandler) this.map.off("style.load", this._mapStyleLoadHandler);
+        if (this._mapLoadHandler) this.map.off("load", this._mapLoadHandler);
+        if (this._mapMoveHandler) this.map.off("move", this._mapMoveHandler);
+        if (this._mapErrorHandler) this.map.off("error", this._mapErrorHandler);
+      } catch (_2) {
+      }
+    }
+    if (this.map) {
+      for (const lid of [
+        "helios-hillshade",
+        "helios-night-shade",
+        "helios-cloud-disc",
+        "helios-cloud-disc-ring",
+        "helios-cloud-ring",
+        "helios-buildings-surroundings",
+        "helios-buildings-home"
+      ]) {
+        try {
+          if (this.map.getLayer(lid)) this.map.removeLayer(lid);
+        } catch (_2) {
+        }
+      }
+      for (const sid of [
+        "helios-terrain",
+        "helios-night-shade",
+        "helios-cloud-rings",
+        "helios-buildings-surroundings-src",
+        "helios-buildings-home-src"
+      ]) {
+        try {
+          if (this.map.getSource(sid)) this.map.removeSource(sid);
+        } catch (_2) {
+        }
+      }
+      try {
+        this.map.setTerrain(null);
+      } catch (_2) {
+      }
+    }
     this._buildingsData = null;
     this._buildingsFetchKey = "";
+    this._homeHourlyData = null;
+    this._bumpInactivityCanvas = void 0;
+    this._bumpInactivityHandler = void 0;
+    this._mapPinHandler = void 0;
+    this._mapStyleLoadHandler = void 0;
+    this._mapLoadHandler = void 0;
+    this._mapMoveHandler = void 0;
+    this._mapErrorHandler = void 0;
+    this._webglLostHandler = void 0;
+    this._webglRestoredHandler = void 0;
+    this.onContextLost = void 0;
     this.map?.remove();
     this.map = void 0;
     this._mapReady = false;
@@ -27792,7 +27864,7 @@ const en = {
     hillshadeStrength: "Hillshade strength * (0 → 1)",
     mapSection: "Map",
     mapStyle: "Map style *",
-    mapStyleHint: "Choose between the streets basemap (sober, urban) and the topographic basemap (contour lines, earth tones, better in hilly terrain). Labels and 3D buildings work identically on both. The dark variant of the chosen style is used automatically when the card theme is set to dark.",
+    mapStyleHint: "Three basemaps: Streets (sober, urban), Topo (contour lines and earth tones, better in hilly terrain), or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). 3D buildings and labels behave identically on Streets and Topo. The dark variant of the chosen style is used automatically when the card theme is set to dark.",
     mapStyleStreet: "Streets",
     mapStyleTopo: "Topo",
     cardTheme: "Card theme *",
@@ -27819,7 +27891,7 @@ const en = {
     sunColor: "Sun color *",
     cloudColor: "Cloud color *",
     pvSection: "Solar production",
-    pvHint: "Optional. When set, a chip appears on the home (instant production, computed over the last minute) and a dedicated graph is added above the timeline. The line between the home and the chip animates at a speed proportional to the live production. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).",
+    pvHint: "Optional. When set, a chip appears near the home with the instant production (computed over the last minute) and a dedicated graph is added above the timeline. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).",
     pvEntity: "Production entity",
     pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
     pvColor: "Production color *",
@@ -27866,7 +27938,7 @@ const fr = {
     hillshadeStrength: "Intensité de l'ombrage * (0 → 1)",
     mapSection: "Carte",
     mapStyle: "Style de la carte *",
-    mapStyleHint: "Choisis entre le fond de carte des rues (sobre, urbain) et le fond de carte topographique (lignes de niveau, tons terreux, idéal en zone vallonnée). Les libellés et les bâtiments 3D fonctionnent à l'identique sur les deux. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
+    mapStyleHint: "Trois fonds de carte : Rues (sobre, urbain), Topo (lignes de niveau et tons terreux, idéal en zone vallonnée) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). Les bâtiments 3D et les libellés se comportent à l'identique sur Rues et Topo. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
     mapStyleStreet: "Rues",
     mapStyleTopo: "Topo",
     cardTheme: "Thème de la carte *",
@@ -27878,7 +27950,7 @@ const fr = {
     labelsOn: "Affichés",
     labelsOff: "Masqués",
     autoRotate: "Rotation auto de la caméra *",
-    autoRotateHint: "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Tout pincement, glissement ou molette met la rotation en pause immédiatement ; elle reprend dès que tu lâches.",
+    autoRotateHint: "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Tout pincement, glissement ou molette met la rotation en pause immédiatement, elle reprend dès que tu lâches.",
     autoRotateOn: "Activée",
     autoRotateOff: "Désactivée",
     timeline: "Chronologie",
@@ -27893,7 +27965,7 @@ const fr = {
     sunColor: "Couleur du soleil *",
     cloudColor: "Couleur des nuages *",
     pvSection: "Production photovoltaïque",
-    pvHint: "Optionnel. Si renseigné, une pastille apparaît sur la maison (production instantanée, calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. La ligne entre la maison et la pastille s'anime à une vitesse proportionnelle à la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
+    pvHint: "Optionnel. Si renseigné, une pastille apparaît près de la maison avec la production instantanée (calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
     pvEntity: "Entité de production",
     pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
     pvColor: "Couleur de production *",
@@ -27940,7 +28012,7 @@ const de = {
     hillshadeStrength: "Schattierungsstärke * (0 → 1)",
     mapSection: "Karte",
     mapStyle: "Kartenstil *",
-    mapStyleHint: "Wähle zwischen der Straßenkarte (nüchtern, urban) und der topografischen Karte (Höhenlinien, Erdtöne, ideal in hügeligem Gelände). Beschriftungen und 3D-Gebäude funktionieren bei beiden gleich. Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
+    mapStyleHint: "Drei Basiskarten: Straßen (nüchtern, urban), Topo (Höhenlinien und Erdtöne, ideal in hügeligem Gelände) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). 3D-Gebäude und Beschriftungen verhalten sich auf Straßen und Topo identisch. Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
     mapStyleStreet: "Straßen",
     mapStyleTopo: "Topo",
     cardTheme: "Karten-Thema *",
@@ -27967,7 +28039,7 @@ const de = {
     sunColor: "Sonnenfarbe *",
     cloudColor: "Wolkenfarbe *",
     pvSection: "Solarproduktion",
-    pvHint: "Optional. Wenn gesetzt, erscheint auf dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Die Linie zwischen Haus und Chip animiert mit einer Geschwindigkeit proportional zur Produktion. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
+    pvHint: "Optional. Wenn gesetzt, erscheint nahe dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
     pvEntity: "Produktions-Entität",
     pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
     pvColor: "Produktionsfarbe *",
@@ -28014,7 +28086,7 @@ const es = {
     hillshadeStrength: "Intensidad del sombreado * (0 → 1)",
     mapSection: "Mapa",
     mapStyle: "Estilo del mapa *",
-    mapStyleHint: "Elige entre el mapa de calles (sobrio, urbano) y el mapa topográfico (líneas de nivel, tonos terrosos, ideal en terreno montañoso). Las etiquetas y los edificios 3D funcionan igual en ambos. La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
+    mapStyleHint: "Tres mapas base: Calles (sobrio, urbano), Topo (líneas de nivel y tonos terrosos, ideal en terreno montañoso) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). Los edificios 3D y las etiquetas se comportan igual en Calles y Topo. La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
     mapStyleStreet: "Calles",
     mapStyleTopo: "Topo",
     cardTheme: "Tema de la tarjeta *",
@@ -28041,7 +28113,7 @@ const es = {
     sunColor: "Color del sol *",
     cloudColor: "Color de las nubes *",
     pvSection: "Producción solar",
-    pvHint: "Opcional. Si se define, aparece una pastilla en la casa (producción instantánea, calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. La línea entre la casa y la pastilla se anima a una velocidad proporcional a la producción. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
+    pvHint: "Opcional. Si se define, aparece una pastilla cerca de la casa con la producción instantánea (calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
     pvEntity: "Entidad de producción",
     pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
     pvColor: "Color de producción *",
@@ -28088,7 +28160,7 @@ const it = {
     hillshadeStrength: "Intensità dell'ombreggiatura * (0 → 1)",
     mapSection: "Mappa",
     mapStyle: "Stile della mappa *",
-    mapStyleHint: "Scegli tra la mappa stradale (sobria, urbana) e la mappa topografica (curve di livello, toni terrosi, ideale in terreno collinare). Le etichette e gli edifici 3D funzionano allo stesso modo su entrambe. La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
+    mapStyleHint: "Tre mappe di base: Strade (sobria, urbana), Topo (curve di livello e toni terrosi, ideale in terreno collinare) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). Gli edifici 3D e le etichette si comportano allo stesso modo su Strade e Topo. La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
     mapStyleStreet: "Strade",
     mapStyleTopo: "Topo",
     cardTheme: "Tema della scheda *",
@@ -28115,7 +28187,7 @@ const it = {
     sunColor: "Colore del sole *",
     cloudColor: "Colore delle nuvole *",
     pvSection: "Produzione solare",
-    pvHint: "Opzionale. Se impostato, una pastiglia appare sulla casa (produzione istantanea, calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. La linea tra la casa e la pastiglia si anima a una velocità proporzionale alla produzione. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
+    pvHint: "Opzionale. Se impostato, una pastiglia appare vicino alla casa con la produzione istantanea (calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
     pvEntity: "Entità di produzione",
     pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
     pvColor: "Colore di produzione *",
@@ -28162,7 +28234,7 @@ const nl = {
     hillshadeStrength: "Schaduwsterkte * (0 → 1)",
     mapSection: "Kaart",
     mapStyle: "Kaartstijl *",
-    mapStyleHint: "Kies tussen de stratenkaart (sober, stedelijk) en de topografische kaart (hoogtelijnen, aardse tinten, beter in heuvelachtig terrein). Labels en 3D-gebouwen werken op beide hetzelfde. De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
+    mapStyleHint: "Drie basiskaarten: Straten (sober, stedelijk), Topo (hoogtelijnen en aardse tinten, ideaal in heuvelachtig terrein) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). 3D-gebouwen en labels gedragen zich identiek op Straten en Topo. De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
     mapStyleStreet: "Straten",
     mapStyleTopo: "Topo",
     cardTheme: "Kaartthema *",
@@ -28189,7 +28261,7 @@ const nl = {
     sunColor: "Zonkleur *",
     cloudColor: "Wolkenkleur *",
     pvSection: "Zonneproductie",
-    pvHint: "Optioneel. Als ingesteld verschijnt op het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. De lijn tussen het huis en de chip animeert met een snelheid evenredig aan de productie. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
+    pvHint: "Optioneel. Als ingesteld verschijnt bij het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
     pvEntity: "Productie-entiteit",
     pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
     pvColor: "Productiekleur *",
@@ -28236,7 +28308,7 @@ const pt = {
     hillshadeStrength: "Intensidade do sombreado * (0 → 1)",
     mapSection: "Mapa",
     mapStyle: "Estilo do mapa *",
-    mapStyleHint: "Escolhe entre o mapa de ruas (sóbrio, urbano) e o mapa topográfico (curvas de nível, tons terrosos, ideal em terreno montanhoso). As etiquetas e os edifícios 3D funcionam de forma idêntica em ambos. A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
+    mapStyleHint: "Três mapas base: Ruas (sóbrio, urbano), Topo (curvas de nível e tons terrosos, ideal em terreno montanhoso) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). Os edifícios 3D e as etiquetas comportam-se de forma idêntica em Ruas e Topo. A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
     mapStyleStreet: "Ruas",
     mapStyleTopo: "Topo",
     cardTheme: "Tema do cartão *",
@@ -28263,7 +28335,7 @@ const pt = {
     sunColor: "Cor do sol *",
     cloudColor: "Cor das nuvens *",
     pvSection: "Produção solar",
-    pvHint: "Opcional. Quando definido, surge uma pastilha sobre a casa (produção instantânea, calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. A linha entre a casa e a pastilha anima a uma velocidade proporcional à produção. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
+    pvHint: "Opcional. Quando definido, surge uma pastilha perto da casa com a produção instantânea (calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
     pvEntity: "Entidade de produção",
     pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
     pvColor: "Cor de produção *",
@@ -30763,6 +30835,11 @@ let HeliosCard = class extends i {
       this._engine.onMapTransform = () => {
         this._refreshOverlays();
       };
+      this._engine.onContextLost = () => {
+        this._lastApiKey = "";
+        this._lastHomeKey = "";
+        if (!this._initInflight) this._initEngine();
+      };
       this._initInflight = false;
     });
   }
@@ -31443,7 +31520,7 @@ let HeliosCard = class extends i {
     const batteryCharging = showPowerChip && activeBatteryPower > 0;
     const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
     const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
-    const PV_LEG_OFFSET_PX = 12;
+    const PV_LEG_OFFSET_PX = 7;
     const PV_HALF_HEIGHT_PX = 11;
     const PV_HALF_WIDTH_PX = 38;
     const BAT_CHIP_NUDGE_PX = 32;
