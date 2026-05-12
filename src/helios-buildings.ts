@@ -1,33 +1,29 @@
 //Self-sourced building footprints around the home.
 //
-//Why this module exists: rendering buildings through MapTiler's
-//"helios-planet" vector source as a single fill-extrusion layer
-//forces MapLibre to draw every building in the viewport at every
-//frame. In dense urban areas that's several thousand extrusions per
-//frame — visible jank on mobile, heavy battery drain, and beta
-//testers (rightly) complained.
-//
-//Filtering after-the-fact via MapLibre paint expressions (distance,
-//feature-state) was attempted and abandoned: per-feature distance
-//evaluation on tiled vector sources produced flicker and inconsistent
-//opacities at tile boundaries (geometry is clipped per tile, so a
-//building that spans two tiles renders as two features with
-//independently-evaluated paint properties).
+//Rendering buildings through MapTiler's full vector basemap as a
+//single fill-extrusion layer forces MapLibre to draw every building
+//in the viewport at every frame. In dense urban areas that's
+//several thousand extrusions per frame — visible jank on mobile and
+//heavy battery drain. Filtering after-the-fact via MapLibre paint
+//expressions (distance, feature-state) produces flicker and
+//inconsistent opacities at tile boundaries because the geometry is
+//clipped per tile, so a building that spans two tiles renders as
+//two features with independently-evaluated paint properties.
 //
 //The fix is architectural: we fetch the MapTiler v3 vector tiles
-//ourselves once at startup (and only the 1–4 tiles that cover the
-//radius around the home), decode them with @mapbox/vector-tile,
-//filter features by distance, identify the polygon that contains the
-//home point, and emit TWO GeoJSON FeatureCollections that the engine
+//ourselves once at startup (only the 1–4 tiles that cover the radius
+//around the home), decode them with @mapbox/vector-tile, filter
+//features by distance, identify the polygon(s) that make up the
+//home, and emit TWO GeoJSON FeatureCollections that the engine
 //feeds into two distinct fill-extrusion layers:
 //
-//  - helios-buildings-home          : 1 feature, opacity 1.0
-//  - helios-buildings-surroundings  : N features, opacity from config
+//  - helios-buildings-home          : home polygon(s) at full opacity
+//  - helios-buildings-surroundings  : neighbours at configured opacity
 //
-//Tiles are fetched once: the home doesn't move during a session, so
-//there is no listener on pan/zoom. Only style reloads (which wipe
-//sources/layers) trigger a re-emit — but the cached GeoJSON is
-//reused; the network fetch is not repeated.
+//Tiles are fetched once per (home, radius, cluster) tuple: the home
+//doesn't move during a session, so there is no listener on pan/zoom.
+//Style reloads (theme switches) reuse the cached GeoJSON without
+//re-hitting the MapTiler API.
 
 import { VectorTile } from '@mapbox/vector-tile';
 import Pbf from 'pbf';

@@ -11,11 +11,11 @@ export interface HeliosConfig
     'maptiler-api-key':       string;
     'topography-color'?:      unknown;
     'topography-alpha'?:      unknown;
-    //v1.0 — when false, all of MapTiler Streets' label layers
+    //When false, all of MapTiler Streets' label layers
     //(road names, building numbers, POI labels, place names) are
     //hidden for a cleaner, minimalist basemap. Default: true.
     'show-labels'?:           unknown;
-    //v1.2 — fixed-colour design system. Each metric has one
+    //Fixed-colour design system. Each metric has one
     //configurable colour reused everywhere it appears (timeline mirror
     //chart + on-arc sun disc for sun, on-ground disc + timeline lower
     //half for cloud). The previous start/end ramp keys
@@ -26,7 +26,7 @@ export interface HeliosConfig
     //by hue interpolation.
     'sun-color'?:             unknown;
     'cloud-color'?:           unknown;
-    //v1.4 — optional photovoltaic production overlay.
+    //Optional photovoltaic production overlay.
     //  pv-power-entity : Home Assistant entity id of a numeric sensor
     //                    representing solar production (instantaneous
     //                    power in W/kW for an impact-readable curve,
@@ -40,7 +40,7 @@ export interface HeliosConfig
     //                    to read cleanly on the white chart card.
     'pv-power-entity'?:       unknown;
     'pv-color'?:              unknown;
-    //v1.1 — optional home-battery overlay. A single chip below the
+    //Optional home-battery overlay. A single chip below the
     //home shows the battery State-of-Charge (%) and the live signed
     //power draw (positive while charging, negative while discharging),
     //mirroring the PV chip above the home. Either entity is optional;
@@ -61,11 +61,11 @@ export interface HeliosConfig
     'battery-power-entity'?:  unknown;
     'battery-color'?:         unknown;
     'date-format'?:           unknown;
-    //v1.0 — '12h' | '24h'. Default: '24h'. Picks between locale-
+    //'12h' | '24h'. Default: '24h'. Picks between locale-
     //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
     //rendering of the date/time chip at the top-right of the card.
     'time-format'?:           unknown;
-    //v1.1 — picks the MapTiler base style. 'streets' (default) renders
+    //Picks the MapTiler base style. 'streets' (default) renders
     //a sober vector basemap suited to dense urban areas; 'topo' renders
     //a topographic basemap with contour lines and softer earth tones,
     //better in hilly / outdoor settings. The label visibility toggle
@@ -143,7 +143,7 @@ export interface WeatherData
     cloudMid:       number;        //% — mid-level clouds (3–8 km)
     cloudHigh:      number;        //% — high-level clouds (≥ 8 km)
     cloudIntensity: CloudIntensity;
-    //v1.2 — gradients retired. The card no longer paints a ramp band
+    //Gradients retired. The card no longer paints a ramp band
     //under the timeline; the new mirror chart carries both metrics
     //natively. Fields kept on WeatherData for ABI stability and now
     //always emit the empty string.
@@ -235,7 +235,7 @@ function parseHex(v: unknown, fallback: RGB): RGB
     return [r, g, b];
 }
 
-//Fixed-colour design system (v1.2).
+//Fixed-colour design system.
 //
 //Each metric has its own colour, fixed and configurable. We don't
 //interpolate hues to convey intensity any more — instead we vary the
@@ -360,13 +360,13 @@ const CLOUD_RING_OPACITY        = 0.4;
 //add in later phases.
 const CLOUD_CIRCLE_SEGMENTS     = 128;
 
-//Vertical screen-space offset (CSS px) of the PV chip above the
-//home position. The chip is an HTML overlay anchored above the
-//projected home regardless of pitch or rotation. The battery SoC
-//and Power chips are positioned relative to the PV chip, so this
-//single constant determines how far above the home the whole
-//PV / battery chip cluster sits.
-const PV_CHIP_OFFSET_PX         = 65;
+//Vertical screen-space offset (CSS px) used to anchor the PV /
+//battery chip cluster relative to the projected home. The SoC and
+//Power chips sit on a shared shelf this many pixels above the home
+//(minus the battery vertical offset); the PV chip is mirrored
+//below the shelf. Adjusting this single constant slides the whole
+//cluster up or down without disturbing its internal geometry.
+const PV_CHIP_OFFSET_PX         = 105;
 
 
 //Solar-arc parameters. The arc traces the sun's full 24h
@@ -895,7 +895,7 @@ export class HeliosEngine
         const pvPower         = useShortwave ? pvPowerShortwave : pvPowerHaurwitz;
         const irradianceSource: IrradianceSource = useShortwave ? 'shortwave' : 'haurwitz';
 
-        //v1.2 — the cloudGradient and irradianceGradient fields are
+        //The cloudGradient and irradianceGradient fields are
         //retained on WeatherData for ABI stability, but the card no
         //longer paints a ramp band underneath the timeline; the new
         //mirror chart carries both metrics natively.
@@ -1265,7 +1265,7 @@ export class HeliosEngine
     //At 0 % cloud cover the disc has zero radius — effectively
     //invisible — while the ring stays visible to anchor the gauge.
     //
-    //v1.2 — fixed cloud colour. The disc's *radius* already encodes
+    //Fixed cloud colour. The disc's *radius* already encodes
     //the cloud-cover percentage (0% = invisible, 100% = full ring);
     //we keep the colour solid so the user-configured cloud-color
     //reads everywhere identically. CLOUD_DISC_OPACITY (set on the
@@ -1881,7 +1881,7 @@ export class HeliosEngine
         catch (_) {}
     }
 
-    //v1.4 — the 'standard' precision tier was retired: a single
+    //The 'standard' precision tier was retired: a single
     //best-match model produced visibly noisier readings (low-cloud
     //layer stuck at 100 % from altitude bugs, mostly), and the
     //multi-model median fix sat one click away in the editor for
@@ -1924,7 +1924,7 @@ export class HeliosEngine
 
             if (this._selectedTime === null)
             {
-                //v1.4 — refresh every 10 min (was 1 h). Open-Meteo
+                //Refresh every 10 min (was 1 h). Open-Meteo
                 //updates its forecast every 15 min on the server,
                 //so 10 min on the client gives us near-fresh data
                 //without ever lagging more than a model cycle. Well

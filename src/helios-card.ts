@@ -72,7 +72,7 @@ export class HeliosCard extends LitElement
     private static readonly OUTLINE_NEAR = 5.0;
     private static readonly SEGMENT_FAR  = 1.0;
     private static readonly SEGMENT_NEAR = 4.0;
-    //v1.3 — sun disc enlarged so the irradiance fill is readable
+    //Sun disc enlarged so the irradiance fill is readable
     //without zooming in. The old radii (6 → 13 px) made the inner
     //fill smaller than ~9 px in diameter at apex, which is the
     //legibility floor for an annulus. The new range (10 → 20 px)
@@ -103,7 +103,7 @@ export class HeliosCard extends LitElement
     @state() private _engine?:        HeliosEngine;
     @state() private _now             = new Date();
     //Cloud-cover values shown in the on-ground disc tooltip. Recreated
-    //in v1.2.1 after the v1.2 cleanup removed them — now they feed the
+    //after the v1.2 cleanup removed them — now they feed the
     //hover popup that appears above the disc rather than the (also
     //removed) sidebar pills.
     @state() private _cloudCover      = -1;
@@ -209,7 +209,7 @@ export class HeliosCard extends LitElement
     //Visual config keys that the engine reacts to via updateConfig().
     //Anything outside this list (notably maptiler-api-key, which is an
     //identity input handled separately) is irrelevant for live updates.
-    //Significantly trimmed in v1.2: most visual styling is now hard-
+    //Significantly trimmed: most visual styling is now hard-
     //coded to keep the new design coherent (uniform building colour
     //and opacity, no radial dot grid).
     private static readonly _VISUAL_CONFIG_KEYS = [
@@ -1033,7 +1033,7 @@ export class HeliosCard extends LitElement
         this._sunScene = this._engine ? this._engine.projectSunScene(t) : null;
     }
 
-    //v1.3 — segments now share one fixed colour (the configured sun
+    //Segments now share one fixed colour (the configured sun
     //colour). Depth perception comes entirely from the per-segment
     //stroke width modulated by `nearness`, kept untouched: it is the
     //2D-on-3D cue we explicitly chose not to overload with another
@@ -1192,7 +1192,7 @@ export class HeliosCard extends LitElement
     //with the container while keeping vertical proportions intact.
     //All path coordinates are computed against this viewBox and
     //the browser handles the actual scaling.
-    //v1.3 — mirror chart.
+    //Mirror chart.
     //
     //Two areas sharing a horizontal midline:
     //  - top half: irradiance W/m², "the sun pushes upward". Filled
@@ -1518,7 +1518,7 @@ export class HeliosCard extends LitElement
         `;
     }
 
-    //v1.3 — the thin track now carries only the cursors. Day
+    //The thin track now carries only the cursors. Day
     //separators live inside the chart card SVG (dotted vertical
     //lines) and the scrub time label has been promoted to a chip
     //above the chart card.
@@ -2217,7 +2217,7 @@ export class HeliosCard extends LitElement
         const sunScene  = this._sunScene;
         const showSun   = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
 
-        //v1.3 — fixed colour design system. The configured sun
+        //Fixed colour design system. The configured sun
         //colour paints the arc, the outer rim of the sun disc,
         //and the inner irradiance fill. The on-ground cloud disc
         //is painted in MapLibre paint properties from the engine

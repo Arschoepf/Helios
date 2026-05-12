@@ -26214,7 +26214,7 @@ const CLOUD_RING_COLOR = "#000000";
 const CLOUD_RING_WIDTH_PX = 2;
 const CLOUD_RING_OPACITY = 0.4;
 const CLOUD_CIRCLE_SEGMENTS = 128;
-const PV_CHIP_OFFSET_PX = 65;
+const PV_CHIP_OFFSET_PX = 105;
 const SUN_ARC_RADIUS_M = 40;
 const SUN_ARC_SAMPLES = 96;
 const SUN_ARC_NIGHT_OPACITY = 0.25;
@@ -26740,7 +26740,7 @@ const _HeliosEngine = class _HeliosEngine {
   //At 0 % cloud cover the disc has zero radius — effectively
   //invisible — while the ring stays visible to anchor the gauge.
   //
-  //v1.2 — fixed cloud colour. The disc's *radius* already encodes
+  //Fixed cloud colour. The disc's *radius* already encodes
   //the cloud-cover percentage (0% = invisible, 100% = full ring);
   //we keep the colour solid so the user-configured cloud-color
   //reads everywhere identically. CLOUD_DISC_OPACITY (set on the
@@ -27182,7 +27182,7 @@ const _HeliosEngine = class _HeliosEngine {
     } catch (_2) {
     }
   }
-  //v1.4 — the 'standard' precision tier was retired: a single
+  //The 'standard' precision tier was retired: a single
   //best-match model produced visibly noisier readings (low-cloud
   //layer stuck at 100 % from altitude bugs, mostly), and the
   //multi-model median fix sat one click away in the editor for
@@ -30778,7 +30778,7 @@ let HeliosCard = class extends i {
     const t2 = this._selectedTime ?? this._now;
     this._sunScene = this._engine ? this._engine.projectSunScene(t2) : null;
   }
-  //v1.3 — segments now share one fixed colour (the configured sun
+  //Segments now share one fixed colour (the configured sun
   //colour). Depth perception comes entirely from the per-segment
   //stroke width modulated by `nearness`, kept untouched: it is the
   //2D-on-3D cue we explicitly chose not to overload with another
@@ -30885,7 +30885,7 @@ let HeliosCard = class extends i {
   //with the container while keeping vertical proportions intact.
   //All path coordinates are computed against this viewBox and
   //the browser handles the actual scaling.
-  //v1.3 — mirror chart.
+  //Mirror chart.
   //
   //Two areas sharing a horizontal midline:
   //  - top half: irradiance W/m², "the sun pushes upward". Filled
@@ -31112,7 +31112,7 @@ let HeliosCard = class extends i {
             </svg>
         `;
   }
-  //v1.3 — the thin track now carries only the cursors. Day
+  //The thin track now carries only the cursors. Day
   //separators live inside the chart card SVG (dotted vertical
   //lines) and the scrub time label has been promoted to a chip
   //above the chart card.

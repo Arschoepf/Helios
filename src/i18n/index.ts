@@ -66,16 +66,15 @@ export interface Translations
         timeFormat:               string;
         timeFormat12:             string;
         timeFormat24:             string;
-        //v1.3 — fixed-colour design system. Each phenomenon (sun, cloud)
-        //has one configurable colour reused across the timeline mirror
-        //chart, the on-ground cloud disc and the on-arc sun disc. The
-        //old start/end ramp keys (rampHigh / rampLow / colorRamp /
-        //rampHint) are gone — see MIGRATION.md.
+        //Fixed-colour design system. Each phenomenon (sun, cloud)
+        //has one configurable colour reused across the timeline
+        //mirror chart, the on-ground cloud disc and the on-arc sun
+        //disc.
         colors:                   string;
         colorsHint:               string;
         sunColor:                 string;
         cloudColor:               string;
-        //v1.4 — optional photovoltaic production overlay.
+        //Optional photovoltaic production overlay.
         pvSection:                string;
         pvHint:                   string;
         pvEntity:                 string;
