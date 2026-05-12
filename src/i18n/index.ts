@@ -107,6 +107,12 @@ export interface Translations
         //Third map-style segment: a curated minimal basemap (no POIs,
         //no place labels, no road shields) for low-end devices.
         mapStyleMinimal:          string;
+        //Terrain mesh density — 'smooth' (default, fluid) vs 'fine'
+        //(more relief detail, heavier rotation cost).
+        terrainDetail:            string;
+        terrainDetailSmooth:      string;
+        terrainDetailFine:        string;
+        terrainDetailHint:        string;
     };
 }
 

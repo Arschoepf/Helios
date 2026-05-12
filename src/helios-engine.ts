@@ -110,6 +110,11 @@ export interface HeliosConfig
     //preserved so the 3D buildings still read as 3D), hillshade
     //hidden, canvas pixel ratio forced to 1.0. Default false.
     'performance-mode'?:       unknown;
+    //Terrain mesh density. 'smooth' (default) samples the DEM at
+    //z=12 — ~20 m per vertex, fluid on every device. 'fine' bumps
+    //the source maxzoom to 14 — ~5 m per vertex, more detail in
+    //the relief but ~16× more mesh vertices to project per frame.
+    'terrain-detail'?:         unknown;
 }
 
 //Default values for the building config — exposed so the visual
@@ -949,6 +954,17 @@ export class HeliosEngine
         return this.cfg['performance-mode'] === true;
     }
 
+    //Terrain DEM maxzoom — 'smooth' (default) at z=12, 'fine' at z=14.
+    //z=14 ~16× more mesh vertices than z=12 per frame, which moves
+    //rotation cost considerably; only useful when the user values
+    //the finer relief over fluidity.
+    private _terrainMaxzoom(): number
+    {
+        return String(this.cfg['terrain-detail'] ?? 'smooth').toLowerCase() === 'fine'
+            ? 14
+            : 12;
+    }
+
     private _findHourIndex(t: Date): number
     {
         const home = this._homeHourlyData;
@@ -1135,16 +1151,18 @@ export class HeliosEngine
 
         if (!this.map.getSource('helios-terrain'))
         {
-            //DEM sampled every ~20 m at z=12 — sufficient relief at
-            //pitch 55° / zoom 18; ~16× fewer mesh vertices per
-            //rotation frame than z=14, which dominates the per-frame
-            //cost on Safari fullscreen.
+            //DEM sampling step depends on the `terrain-detail` config:
+            //z=12 (~20 m / vertex) for the smooth default, z=14
+            //(~5 m / vertex) when the user opts into fine detail.
+            //z=14 has ~16× more mesh vertices to project per rotation
+            //frame than z=12 — the difference is mostly visible at
+            //pitch 55° on hilly home locations.
             this.map.addSource('helios-terrain',
             {
                 type:     'raster-dem',
                 url:      `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${this.apiKey}`,
                 tileSize: 512,
-                maxzoom:  12
+                maxzoom:  this._terrainMaxzoom()
             });
         }
         //Performance mode drops the terrain mesh entirely (flat
@@ -1620,7 +1638,13 @@ export class HeliosEngine
         //Drop any stale helios-buildings* layer so re-runs of
         //_addBuildings (on style reload, theme switch, etc.) are
         //idempotent.
-        for (const lid of ['helios-buildings', 'helios-buildings-surroundings', 'helios-buildings-home'])
+        for (const lid of [
+            'helios-buildings',
+            'helios-buildings-surroundings',
+            'helios-buildings-home',
+            'helios-buildings-surroundings-outline',
+            'helios-buildings-home-outline'
+        ])
         {
             if (this.map.getLayer(lid)) this.map.removeLayer(lid);
         }
@@ -1785,6 +1809,36 @@ export class HeliosEngine
                 'fill-extrusion-height':  ['get', 'render_height'],
                 'fill-extrusion-base':    ['get', 'render_min_height'],
                 'fill-extrusion-opacity': 1
+            }
+        });
+
+        //Cell-shaded outlines: a thin black line on the surroundings'
+        //ground footprint, a thicker / darker line on the home so the
+        //focal building reads even when its colour matches the
+        //surroundings. Drawn ON TOP of the extrusions so the outlines
+        //sit over the building edges at ground level.
+        this.map.addLayer(
+        {
+            id:     'helios-buildings-surroundings-outline',
+            source: 'helios-buildings-surroundings-src',
+            type:   'line',
+            paint:
+            {
+                'line-color':   '#000000',
+                'line-width':   1,
+                'line-opacity': 0.35
+            }
+        });
+        this.map.addLayer(
+        {
+            id:     'helios-buildings-home-outline',
+            source: 'helios-buildings-home-src',
+            type:   'line',
+            paint:
+            {
+                'line-color':   '#000000',
+                'line-width':   2,
+                'line-opacity': 0.85
             }
         });
 
@@ -2244,10 +2298,15 @@ export class HeliosEngine
     //               (PV top-right → up → right → Power left edge).
     //               Animated dashes + arrow tracking the sign of
     //               the live power.
-    //  home       — the projected home point, used both as the visual
-    //               centre of the cloud disc (the cloud leader ends
-    //               here) and as the anchor for the PV / battery
-    //               chip leader lines.
+    //  ringEdge   — projected position of the cloud disc's 100 %
+    //               reference ring edge, in the hemisphere-aware
+    //               anchor direction (east of home in NH, west in
+    //               SH). The card uses (home, ringEdge) plus the
+    //               live cloud-cover percentage to interpolate the
+    //               actual fill-disc edge along the same direction.
+    //  home       — the projected home point, used as the anchor for
+    //               the PV / battery chip leader lines and as the
+    //               centre of the cloud fill disc.
     //
     //Returns null when the map isn't ready yet — the card treats
     //null as "don't render the overlay this frame".
@@ -2256,6 +2315,7 @@ export class HeliosEngine
         pvLabel:           { x: number; y: number };
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
+        ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
     } | null
     {
@@ -2319,6 +2379,7 @@ export class HeliosEngine
             pvLabel:           { x: pvX,                            y: pvY         },
             batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
             batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
+            ringEdge:          { x: ringEdgeX,                      y: ringEdgeY   },
             home:              { x: home.x,                         y: home.y      }
         };
     }
@@ -2738,11 +2799,12 @@ export class HeliosEngine
         bumpStat('updateConfigCalls');
         const prevStyleId  = this._resolveMapStyle().id;
         const prevMinimal  = this._isMinimalStyle();
-        const prevPerfMode = this._performanceMode();
-        const prevRadius   = this._buildingRadiusMeters();
-        const prevCluster  = this._buildingClusterRadiusMeters();
-        const prevOpacity  = this._buildingOpacity();
-        const prevColor    = this._buildingColor();
+        const prevPerfMode    = this._performanceMode();
+        const prevTerrainMax  = this._terrainMaxzoom();
+        const prevRadius      = this._buildingRadiusMeters();
+        const prevCluster     = this._buildingClusterRadiusMeters();
+        const prevOpacity     = this._buildingOpacity();
+        const prevColor       = this._buildingColor();
         this.cfg = { ...cfg };
 
         if (!this.map)
@@ -2750,16 +2812,19 @@ export class HeliosEngine
             return;
         }
 
-        //Map-style or minimal-pruning toggle changed → reload the
-        //basemap. setStyle() replaces sources, layers, sprites and
-        //glyphs; our custom sources get wiped and re-added by the
-        //_onStyleLoad handler. Drop _mapReady while the new style
-        //is in flight so other code paths don't operate on a
-        //half-loaded style.
+        //Map-style, minimal-pruning toggle or terrain-detail change
+        //→ reload the basemap. setStyle() replaces sources, layers,
+        //sprites and glyphs; our custom sources (terrain included)
+        //get wiped and re-added by the _onStyleLoad handler with
+        //the current config values. Drop _mapReady while the new
+        //style is in flight so other code paths don't operate on
+        //a half-loaded style.
         const nextStyleInfo = this._resolveMapStyle();
+        const nextTerrainMax = this._terrainMaxzoom();
         const styleNeedsReload =
-               nextStyleInfo.id !== prevStyleId
-            || this._isMinimalStyle() !== prevMinimal;
+               nextStyleInfo.id   !== prevStyleId
+            || this._isMinimalStyle() !== prevMinimal
+            || nextTerrainMax     !== prevTerrainMax;
         if (styleNeedsReload)
         {
             bumpStat('styleReloads');
@@ -3018,7 +3083,9 @@ export class HeliosEngine
                 'helios-cloud-disc-ring',
                 'helios-cloud-ring',
                 'helios-buildings-surroundings',
-                'helios-buildings-home'
+                'helios-buildings-home',
+                'helios-buildings-surroundings-outline',
+                'helios-buildings-home-outline'
             ])
             {
                 try { if (this.map.getLayer(lid)) this.map.removeLayer(lid); }

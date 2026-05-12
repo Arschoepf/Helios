@@ -24569,7 +24569,7 @@ function computeIrradianceWm2(date, lat, lon, cloudCoverPct) {
   return Math.max(0, ghiClear * kCloud);
 }
 const PAST_DAYS = 2;
-const FORECAST_DAYS = 2;
+const FORECAST_DAYS = 3;
 const RATE_LIMIT_BACKOFF_MS = [
   5 * 6e4,
   15 * 6e4,
@@ -26474,6 +26474,13 @@ const _HeliosEngine = class _HeliosEngine {
   _performanceMode() {
     return this.cfg["performance-mode"] === true;
   }
+  //Terrain DEM maxzoom — 'smooth' (default) at z=12, 'fine' at z=14.
+  //z=14 ~16× more mesh vertices than z=12 per frame, which moves
+  //rotation cost considerably; only useful when the user values
+  //the finer relief over fluidity.
+  _terrainMaxzoom() {
+    return String(this.cfg["terrain-detail"] ?? "smooth").toLowerCase() === "fine" ? 14 : 12;
+  }
   _findHourIndex(t2) {
     const home = this._homeHourlyData;
     if (!home || !home.times.length) {
@@ -26598,7 +26605,7 @@ const _HeliosEngine = class _HeliosEngine {
           type: "raster-dem",
           url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${this.apiKey}`,
           tileSize: 512,
-          maxzoom: 12
+          maxzoom: this._terrainMaxzoom()
         }
       );
     }
@@ -26961,7 +26968,13 @@ const _HeliosEngine = class _HeliosEngine {
     if (!this.map) {
       return;
     }
-    for (const lid of ["helios-buildings", "helios-buildings-surroundings", "helios-buildings-home"]) {
+    for (const lid of [
+      "helios-buildings",
+      "helios-buildings-surroundings",
+      "helios-buildings-home",
+      "helios-buildings-surroundings-outline",
+      "helios-buildings-home-outline"
+    ]) {
       if (this.map.getLayer(lid)) this.map.removeLayer(lid);
     }
     const styleObj = this.map.getStyle();
@@ -27078,6 +27091,30 @@ const _HeliosEngine = class _HeliosEngine {
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
           "fill-extrusion-opacity": 1
+        }
+      }
+    );
+    this.map.addLayer(
+      {
+        id: "helios-buildings-surroundings-outline",
+        source: "helios-buildings-surroundings-src",
+        type: "line",
+        paint: {
+          "line-color": "#000000",
+          "line-width": 1,
+          "line-opacity": 0.35
+        }
+      }
+    );
+    this.map.addLayer(
+      {
+        id: "helios-buildings-home-outline",
+        source: "helios-buildings-home-src",
+        type: "line",
+        paint: {
+          "line-color": "#000000",
+          "line-width": 2,
+          "line-opacity": 0.85
         }
       }
     );
@@ -27384,10 +27421,15 @@ const _HeliosEngine = class _HeliosEngine {
   //               (PV top-right → up → right → Power left edge).
   //               Animated dashes + arrow tracking the sign of
   //               the live power.
-  //  home       — the projected home point, used both as the visual
-  //               centre of the cloud disc (the cloud leader ends
-  //               here) and as the anchor for the PV / battery
-  //               chip leader lines.
+  //  ringEdge   — projected position of the cloud disc's 100 %
+  //               reference ring edge, in the hemisphere-aware
+  //               anchor direction (east of home in NH, west in
+  //               SH). The card uses (home, ringEdge) plus the
+  //               live cloud-cover percentage to interpolate the
+  //               actual fill-disc edge along the same direction.
+  //  home       — the projected home point, used as the anchor for
+  //               the PV / battery chip leader lines and as the
+  //               centre of the cloud fill disc.
   //
   //Returns null when the map isn't ready yet — the card treats
   //null as "don't render the overlay this frame".
@@ -27420,6 +27462,7 @@ const _HeliosEngine = class _HeliosEngine {
       pvLabel: { x: pvX, y: pvY },
       batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
+      ringEdge: { x: ringEdgeX, y: ringEdgeY },
       home: { x: home.x, y: home.y }
     };
   }
@@ -27688,6 +27731,7 @@ const _HeliosEngine = class _HeliosEngine {
     const prevStyleId = this._resolveMapStyle().id;
     const prevMinimal = this._isMinimalStyle();
     const prevPerfMode = this._performanceMode();
+    const prevTerrainMax = this._terrainMaxzoom();
     const prevRadius = this._buildingRadiusMeters();
     const prevCluster = this._buildingClusterRadiusMeters();
     const prevOpacity = this._buildingOpacity();
@@ -27697,7 +27741,8 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     const nextStyleInfo = this._resolveMapStyle();
-    const styleNeedsReload = nextStyleInfo.id !== prevStyleId || this._isMinimalStyle() !== prevMinimal;
+    const nextTerrainMax = this._terrainMaxzoom();
+    const styleNeedsReload = nextStyleInfo.id !== prevStyleId || this._isMinimalStyle() !== prevMinimal || nextTerrainMax !== prevTerrainMax;
     if (styleNeedsReload) {
       bumpStat("styleReloads");
       this._mapReady = false;
@@ -27846,7 +27891,9 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-cloud-disc-ring",
         "helios-cloud-ring",
         "helios-buildings-surroundings",
-        "helios-buildings-home"
+        "helios-buildings-home",
+        "helios-buildings-surroundings-outline",
+        "helios-buildings-home-outline"
       ]) {
         try {
           if (this.map.getLayer(lid)) this.map.removeLayer(lid);
@@ -28000,7 +28047,11 @@ const en = {
     performanceModeOn: "On",
     performanceModeOff: "Off",
     performanceModeHint: "Disables 3D terrain, hillshade and caps pixel density. Useful on low-end devices or for long sessions. Camera pitch and 3D buildings are preserved.",
-    mapStyleMinimal: "Minimal"
+    mapStyleMinimal: "Minimal",
+    terrainDetail: "Terrain detail *",
+    terrainDetailSmooth: "Smooth",
+    terrainDetailFine: "Fine",
+    terrainDetailHint: "Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame — only worth it on capable desktops."
   }
 };
 const fr = {
@@ -28065,7 +28116,7 @@ const fr = {
     batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
     batteryColor: "Couleur batterie *",
     buildingsSection: "Bâtiments alentour",
-    buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
+    buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
     buildingRadius: "Rayon de visibilité *",
     buildingClusterRadius: "Rayon de regroupement maison *",
     buildingOpacity: "Opacité des bâtiments voisins *",
@@ -28074,7 +28125,11 @@ const fr = {
     performanceModeOn: "Activé",
     performanceModeOff: "Désactivé",
     performanceModeHint: "Désactive le relief 3D, l'ombrage du relief et limite la densité de pixels. Utile sur appareils bas/moyen de gamme ou pour les longues sessions. Conserve l'inclinaison de caméra et les bâtiments en 3D.",
-    mapStyleMinimal: "Minimal"
+    mapStyleMinimal: "Minimal",
+    terrainDetail: "Détail du terrain *",
+    terrainDetailSmooth: "Lissé",
+    terrainDetailFine: "Précis",
+    terrainDetailHint: "Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation — réservé aux PC desktops puissants."
   }
 };
 const de = {
@@ -28148,7 +28203,11 @@ const de = {
     performanceModeOn: "Ein",
     performanceModeOff: "Aus",
     performanceModeHint: "Deaktiviert 3D-Terrain, Hillshade und begrenzt die Pixeldichte. Sinnvoll bei leistungsschwachen Geräten oder langen Sitzungen. Kameraneigung und 3D-Gebäude bleiben erhalten.",
-    mapStyleMinimal: "Minimal"
+    mapStyleMinimal: "Minimal",
+    terrainDetail: "Geländedetail *",
+    terrainDetailSmooth: "Geglättet",
+    terrainDetailFine: "Fein",
+    terrainDetailHint: "Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe — nur auf leistungsfähigen Desktops sinnvoll."
   }
 };
 const es = {
@@ -28222,7 +28281,11 @@ const es = {
     performanceModeOn: "Activado",
     performanceModeOff: "Desactivado",
     performanceModeHint: "Desactiva el terreno 3D, el relieve y limita la densidad de píxeles. Útil en dispositivos modestos o para sesiones largas. La inclinación y los edificios 3D se mantienen.",
-    mapStyleMinimal: "Mínimo"
+    mapStyleMinimal: "Mínimo",
+    terrainDetail: "Detalle del terreno *",
+    terrainDetailSmooth: "Suave",
+    terrainDetailFine: "Preciso",
+    terrainDetailHint: "Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación — útil solo en PCs potentes."
   }
 };
 const it = {
@@ -28296,7 +28359,11 @@ const it = {
     performanceModeOn: "Attivata",
     performanceModeOff: "Disattivata",
     performanceModeHint: "Disattiva il terreno 3D, l'ombreggiatura del rilievo e limita la densità dei pixel. Utile su dispositivi modesti o per sessioni lunghe. L'inclinazione e gli edifici 3D rimangono.",
-    mapStyleMinimal: "Minimale"
+    mapStyleMinimal: "Minimale",
+    terrainDetail: "Dettaglio del terreno *",
+    terrainDetailSmooth: "Levigato",
+    terrainDetailFine: "Fine",
+    terrainDetailHint: "Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione — utile solo su PC desktop potenti."
   }
 };
 const nl = {
@@ -28370,7 +28437,11 @@ const nl = {
     performanceModeOn: "Aan",
     performanceModeOff: "Uit",
     performanceModeHint: "Schakelt 3D-terrein, reliëfschaduw uit en beperkt de pixeldichtheid. Handig op bescheiden apparaten of voor lange sessies. De camerakanteling en 3D-gebouwen blijven behouden.",
-    mapStyleMinimal: "Minimaal"
+    mapStyleMinimal: "Minimaal",
+    terrainDetail: "Terrein-detail *",
+    terrainDetailSmooth: "Vloeiend",
+    terrainDetailFine: "Fijn",
+    terrainDetailHint: "Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe — alleen zinvol op krachtige desktops."
   }
 };
 const pt = {
@@ -28444,7 +28515,11 @@ const pt = {
     performanceModeOn: "Ativado",
     performanceModeOff: "Desativado",
     performanceModeHint: "Desativa o terreno 3D, o relevo e limita a densidade de píxeis. Útil em dispositivos modestos ou em sessões longas. A inclinação e os edifícios 3D mantêm-se.",
-    mapStyleMinimal: "Mínimo"
+    mapStyleMinimal: "Mínimo",
+    terrainDetail: "Detalhe do terreno *",
+    terrainDetailSmooth: "Suave",
+    terrainDetailFine: "Preciso",
+    terrainDetailHint: "Suave (predefinição) amostra o relevo a cada ~20 m e mantém-se fluido em qualquer dispositivo. Preciso amostra a cada ~5 m para um relevo mais detalhado mas ~16× mais vértices a projetar por frame de rotação — útil apenas em PCs potentes."
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -28661,6 +28736,17 @@ const heliosCardStyles = i$3`
         vector-effect: non-scaling-stroke;
         opacity: 0.95;
         pointer-events: none;
+    }
+
+    /*  PV prediction line — overlays the observed PV chart for hours
+        past "now" using the auto-calibrated scalar fit from history.
+        Dashed + half opacity makes it visually distinct from the
+        recorded curve while staying in the configured PV colour so
+        it reads as "the same quantity, projected". */
+    .hc-chart-predicted
+    {
+        stroke-dasharray: 4 3;
+        opacity: 0.55;
     }
 
     /*  Faint dotted day separators inside the chart card. */
@@ -29961,6 +30047,22 @@ let HeliosCardEditor = class extends i {
                 </div>
                 <div class="hint">${t2.editor.mapStyleHint}</div>
                 <div class="field">
+                    <span class="label">${t2.editor.terrainDetail}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["terrain-detail"] ?? "smooth") === "smooth" ? "active" : ""}"
+                            @click="${() => this._update("terrain-detail", "smooth")}"
+                        >${t2.editor.terrainDetailSmooth}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["terrain-detail"] ?? "smooth") === "fine" ? "active" : ""}"
+                            @click="${() => this._update("terrain-detail", "fine")}"
+                        >${t2.editor.terrainDetailFine}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.terrainDetailHint}</div>
+                <div class="field">
                     <span class="label">${t2.editor.cardTheme}</span>
                     <div class="segmented-toggle">
                         <button
@@ -30438,6 +30540,7 @@ let HeliosCard = class extends i {
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
     this._boundPointerUp = (e2) => this._onTimelinePointerUp(e2);
+    this._pvCalibK = null;
   }
   //Cheap stable signature of the visual config — used to skip
   //updateConfig() when nothing the engine cares about has changed.
@@ -30893,6 +30996,7 @@ let HeliosCard = class extends i {
         values.push(v2);
       }
       this._pvHistory = { times, values };
+      this._updatePvCalibration();
     } catch (e2) {
       console.warn("[HELIOS] PV history fetch failed:", e2);
       this._pvHistory = { times: [], values: [] };
@@ -30957,6 +31061,7 @@ let HeliosCard = class extends i {
         this._timeRange = data.timeRange;
         this._isLiveMode = data.isLiveTime;
         this._chartSeries = this._engine?.getTimelineSeries() ?? null;
+        this._updatePvCalibration();
         this._refreshOverlays();
       };
       this._engine.onCloudHover = (e2) => {
@@ -31280,11 +31385,29 @@ let HeliosCard = class extends i {
       samples.push({ t: t2, v: v2 });
     }
     const xOf = (t2) => (t2.getTime() - startMs) / rangeMs * W;
+    const k2 = this._pvCalibK;
+    const lat = this.hass?.config?.latitude;
+    const lon = this.hass?.config?.longitude;
+    const series = this._chartSeries;
+    const predictedSamples = [];
+    if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
+      const nowMs = Date.now();
+      for (let i2 = 0; i2 < series.times.length; i2++) {
+        const tMs = series.times[i2].getTime();
+        if (tMs < nowMs) continue;
+        if (tMs < startMs) continue;
+        if (tMs > endMsAbs) continue;
+        const pct = computePvPower(series.times[i2], lat, lon, series.cloud[i2] ?? 0);
+        if (pct <= 0) continue;
+        predictedSamples.push({ t: series.times[i2], v: pct * k2 });
+      }
+    }
     let yMax = 1;
     for (const s2 of samples) {
-      if (s2.v > yMax) {
-        yMax = s2.v;
-      }
+      if (s2.v > yMax) yMax = s2.v;
+    }
+    for (const s2 of predictedSamples) {
+      if (s2.v > yMax) yMax = s2.v;
     }
     const yOf = (v2) => H2 - Math.max(0, Math.min(1, v2 / yMax)) * H2;
     const points = samples.map((s2) => `${xOf(s2.t).toFixed(2)},${yOf(s2.v).toFixed(2)}`);
@@ -31295,6 +31418,11 @@ let HeliosCard = class extends i {
       const xN = xOf(samples[samples.length - 1].t);
       area = `M ${x0},${H2} L ${points.join(" L ")} L ${xN},${H2} Z`;
       line = `M ${points.join(" L ")}`;
+    }
+    let predictedLine = "";
+    if (predictedSamples.length >= 2) {
+      const pPoints = predictedSamples.map((s2) => `${xOf(s2.t).toFixed(2)},${yOf(s2.v).toFixed(2)}`);
+      predictedLine = `M ${pPoints.join(" L ")}`;
     }
     return b`
             <svg
@@ -31318,6 +31446,13 @@ let HeliosCard = class extends i {
                     <path
                         class="hc-chart-line"
                         d="${line}"
+                        stroke="${pvColor}"
+                    ></path>
+                ` : A}
+                ${predictedLine ? w`
+                    <path
+                        class="hc-chart-line hc-chart-predicted"
+                        d="${predictedLine}"
                         stroke="${pvColor}"
                     ></path>
                 ` : A}
@@ -31561,6 +31696,125 @@ let HeliosCard = class extends i {
     if (lu === "mw") return value * 1e6;
     if (lu === "w") return value;
     return 0;
+  }
+  _pvCalibStorageKey() {
+    const lat = this.hass?.config?.latitude;
+    const lon = this.hass?.config?.longitude;
+    if (typeof lat !== "number" || typeof lon !== "number") return null;
+    return `helios-pv-calib:${lat.toFixed(3)}_${lon.toFixed(3)}`;
+  }
+  _loadPvCalibSamples() {
+    const key = this._pvCalibStorageKey();
+    if (!key) return [];
+    try {
+      const raw = window.localStorage?.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+      return parsed.filter((e2) => typeof e2.t === "number" && e2.t >= cutoff && typeof e2.o === "number" && isFinite(e2.o) && typeof e2.p === "number" && isFinite(e2.p));
+    } catch (_2) {
+      return [];
+    }
+  }
+  _savePvCalibSamples(samples) {
+    const key = this._pvCalibStorageKey();
+    if (!key) return;
+    try {
+      window.localStorage?.setItem(key, JSON.stringify(samples));
+    } catch (_2) {
+    }
+  }
+  //Bucket the raw PV history into one (avg-watts) value per local
+  //hour, handling cumulative-energy sensors via the same
+  //differentiation logic the chart renderer uses.
+  _aggregatePvWattsPerHour() {
+    const out = /* @__PURE__ */ new Map();
+    const hist = this._pvHistory;
+    if (!hist || hist.times.length === 0) return out;
+    const lu = (this._pvUnit || "").toLowerCase();
+    const isCumulativeEnergy = lu === "wh" || lu === "kwh" || lu === "mwh";
+    let times = hist.times;
+    let values = hist.values;
+    if (isCumulativeEnergy && times.length >= 2) {
+      const dTimes = [];
+      const dValues = [];
+      for (let i2 = 1; i2 < times.length; i2++) {
+        const dtH = (times[i2].getTime() - times[i2 - 1].getTime()) / 36e5;
+        if (dtH <= 0 || dtH > 6) continue;
+        const dv = values[i2] - values[i2 - 1];
+        if (dv < 0) continue;
+        dTimes.push(times[i2]);
+        dValues.push(dv / dtH);
+      }
+      times = dTimes;
+      values = dValues;
+    }
+    const sums = /* @__PURE__ */ new Map();
+    const counts = /* @__PURE__ */ new Map();
+    for (let i2 = 0; i2 < times.length; i2++) {
+      const ts = times[i2].getTime();
+      const v2 = values[i2];
+      if (!isFinite(v2)) continue;
+      const w2 = this._pvNormalizeToWatts(v2, this._pvUnit ?? "");
+      const hourTs = Math.floor(ts / 36e5) * 36e5;
+      sums.set(hourTs, (sums.get(hourTs) ?? 0) + w2);
+      counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
+    }
+    for (const [hourTs, sum] of sums) {
+      const c2 = counts.get(hourTs) ?? 1;
+      out.set(hourTs, sum / c2);
+    }
+    return out;
+  }
+  //Refresh the per-hour calibration buffer from the current
+  //_pvHistory and _chartSeries, merge with the persisted buffer,
+  //prune old entries, save, and recompute k. Called whenever either
+  //input changes.
+  _updatePvCalibration() {
+    const lat = this.hass?.config?.latitude;
+    const lon = this.hass?.config?.longitude;
+    if (typeof lat !== "number" || typeof lon !== "number") return;
+    const series = this._chartSeries;
+    if (!series || series.times.length === 0) return;
+    const buckets = this._aggregatePvWattsPerHour();
+    if (buckets.size === 0) {
+      this._pvCalibK = this._calibrateK(this._loadPvCalibSamples());
+      return;
+    }
+    const cloudByHour = /* @__PURE__ */ new Map();
+    for (let i2 = 0; i2 < series.times.length; i2++) {
+      const hourTs = Math.floor(series.times[i2].getTime() / 36e5) * 36e5;
+      cloudByHour.set(hourTs, series.cloud[i2] ?? 0);
+    }
+    const existing = this._loadPvCalibSamples();
+    const byTs = /* @__PURE__ */ new Map();
+    for (const s2 of existing) byTs.set(s2.t, s2);
+    for (const [hourTs, observedW] of buckets) {
+      const cloud = cloudByHour.get(hourTs);
+      if (cloud === void 0) continue;
+      const tCentered = new Date(hourTs + 30 * 6e4);
+      const predictedPct = computePvPower(tCentered, lat, lon, cloud);
+      if (predictedPct < 1) continue;
+      if (observedW < 5) continue;
+      byTs.set(hourTs, { t: hourTs, o: observedW, p: predictedPct });
+    }
+    const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+    const merged = Array.from(byTs.values()).filter((e2) => e2.t >= cutoff).sort((a2, b2) => a2.t - b2.t);
+    this._savePvCalibSamples(merged);
+    this._pvCalibK = this._calibrateK(merged);
+  }
+  _calibrateK(samples) {
+    if (samples.length < HeliosCard.PV_CALIB_MIN_SAMPLES) return null;
+    let sumXY = 0, sumXX = 0;
+    for (const s2 of samples) {
+      sumXY += s2.o * s2.p;
+      sumXX += s2.p * s2.p;
+    }
+    if (sumXX <= 0) return null;
+    const k2 = sumXY / sumXX;
+    if (!isFinite(k2) || k2 <= 0 || k2 > 1e3) return null;
+    return k2;
   }
   //Map a "rate" magnitude to an animation duration in seconds.
   //  rate <= 0           → 30 s        (paused — night / no production)
@@ -31913,15 +32167,22 @@ ${showSun ? b`
                     </div>
                 ` : A}
 
+                ${showLabel ? (() => {
+      const pct = Math.max(0, Math.min(100, this._cloudCover));
+      const tFill = pct / 100;
+      const endX = layout.home.x + (layout.ringEdge.x - layout.home.x) * tFill;
+      const endY = layout.home.y + (layout.ringEdge.y - layout.home.y) * tFill;
+      return b`
+                        <svg class="cloud-leader-svg">
+                            <line
+                                x1="${layout.cloudLabel.x + 10}"
+                                y1="${layout.cloudLabel.y}"
+                                x2="${endX}"
+                                y2="${endY}"
+                            ></line>
+                        </svg>`;
+    })() : A}
                 ${showLabel ? b`
-                    <svg class="cloud-leader-svg">
-                        <line
-                            x1="${layout.cloudLabel.x + 10}"
-                            y1="${layout.cloudLabel.y}"
-                            x2="${layout.home.x}"
-                            y2="${layout.home.y}"
-                        ></line>
-                    </svg>
                     <div
                         class="cloud-pct-label"
                         style="left:${layout.cloudLabel.x}px; top:${layout.cloudLabel.y}px"
@@ -32186,9 +32447,13 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   "building-opacity",
   "building-color",
   //performance-mode toggles terrain, hillshade and pixelRatio.
-  "performance-mode"
+  "performance-mode",
+  //terrain-detail picks the DEM maxzoom (smooth / fine).
+  "terrain-detail"
 ];
 HeliosCard.INIT_DEBOUNCE_MS = 500;
+HeliosCard.PV_CALIB_TTL_MS = 14 * 24 * 36e5;
+HeliosCard.PV_CALIB_MIN_SAMPLES = 20;
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([
   n2({ attribute: false })

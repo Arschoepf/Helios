@@ -27,7 +27,12 @@ export interface SampleHourly
 //ally possible but kill the UX in practice — forecasts past 48 h
 //get noisy, and the timeline becomes too dense to scrub precisely.
 const PAST_DAYS     = 2;
-const FORECAST_DAYS = 2;
+//Open-Meteo counts today inside `forecast_days`, so FORECAST_DAYS=3
+//yields today + 2 future days. Combined with PAST_DAYS=2, the
+//timeline spans 5 days total — 2 past, today, 2 forecast — which is
+//the practical window: beyond +2 days the cloud-cover forecast loses
+//predictive value.
+const FORECAST_DAYS = 3;
 
 //Exponential back-off on consecutive HTTP 429 (rate-limited)
 //responses, indexed by streak count. After exhausting the table we

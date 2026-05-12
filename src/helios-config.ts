@@ -561,6 +561,22 @@ export class HeliosCardEditor extends LitElement
                 </div>
                 <div class="hint">${t.editor.mapStyleHint}</div>
                 <div class="field">
+                    <span class="label">${t.editor.terrainDetail}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['terrain-detail'] ?? 'smooth')) === 'smooth' ? 'active' : ''}"
+                            @click="${() => this._update('terrain-detail', 'smooth')}"
+                        >${t.editor.terrainDetailSmooth}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['terrain-detail'] ?? 'smooth')) === 'fine' ? 'active' : ''}"
+                            @click="${() => this._update('terrain-detail', 'fine')}"
+                        >${t.editor.terrainDetailFine}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.terrainDetailHint}</div>
+                <div class="field">
                     <span class="label">${t.editor.cardTheme}</span>
                     <div class="segmented-toggle">
                         <button

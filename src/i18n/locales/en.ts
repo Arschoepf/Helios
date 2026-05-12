@@ -87,6 +87,10 @@ export const en: Translations = {
         performanceModeOn:     'On',
         performanceModeOff:    'Off',
         performanceModeHint:   'Disables 3D terrain, hillshade and caps pixel density. Useful on low-end devices or for long sessions. Camera pitch and 3D buildings are preserved.',
-        mapStyleMinimal:       'Minimal'
+        mapStyleMinimal:       'Minimal',
+        terrainDetail:         'Terrain detail *',
+        terrainDetailSmooth:   'Smooth',
+        terrainDetailFine:     'Fine',
+        terrainDetailHint:     'Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame — only worth it on capable desktops.'
     }
 };

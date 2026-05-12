@@ -215,6 +215,17 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
+    /*  PV prediction line — overlays the observed PV chart for hours
+        past "now" using the auto-calibrated scalar fit from history.
+        Dashed + half opacity makes it visually distinct from the
+        recorded curve while staying in the configured PV colour so
+        it reads as "the same quantity, projected". */
+    .hc-chart-predicted
+    {
+        stroke-dasharray: 4 3;
+        opacity: 0.55;
+    }
+
     /*  Faint dotted day separators inside the chart card. */
     .hc-day-sep
     {

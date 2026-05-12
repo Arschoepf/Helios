@@ -9,6 +9,7 @@ import
     DEFAULT_PV_COLOR_HEX,
     DEFAULT_BATTERY_COLOR_HEX
 } from './helios-engine';
+import { computePvPower } from './helios-sun';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './helios-card-css';
 //Side-effect import: registers <helios-color-picker> and
@@ -131,6 +132,7 @@ export class HeliosCard extends LitElement
         pvLabel:           { x: number; y: number };
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
+        ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
     } | null = null;
     //Photovoltaic production state — populated when the user has set
@@ -251,7 +253,9 @@ export class HeliosCard extends LitElement
         'building-opacity',
         'building-color',
         //performance-mode toggles terrain, hillshade and pixelRatio.
-        'performance-mode'
+        'performance-mode',
+        //terrain-detail picks the DEM maxzoom (smooth / fine).
+        'terrain-detail'
     ] as const;
 
     //Cheap stable signature of the visual config — used to skip
@@ -966,6 +970,10 @@ export class HeliosCard extends LitElement
             }
 
             this._pvHistory = { times, values };
+            //Refresh the calibration buffer with the new history slice.
+            //Safe to call when _homeHourlyData isn't ready yet — the
+            //helper bails out and tries again next time.
+            this._updatePvCalibration();
         }
         catch (e)
         {
@@ -1103,6 +1111,9 @@ export class HeliosCard extends LitElement
                 //cadence as the gradients above, since both consume
                 //the engine's hourly data refresh.
                 this._chartSeries        = this._engine?.getTimelineSeries() ?? null;
+                //Fresh hourly cloud data — refresh the PV calibration
+                //fit so the prediction line follows the latest weather.
+                this._updatePvCalibration();
                 //First weather update is also our cue to ask the
                 //engine for the initial label layout — by this point
                 //the map has loaded its style and the projection
@@ -1588,19 +1599,41 @@ export class HeliosCard extends LitElement
         const xOf = (t: Date): number =>
             ((t.getTime() - startMs) / rangeMs) * W;
 
+        //Predicted PV for hours from "now" forward — uses the live
+        //calibration scalar (W per percent of STC) learned from past
+        //samples. Skipped silently when there aren't enough samples
+        //yet to trust the fit (see _calibrateK / PV_CALIB_MIN_SAMPLES).
+        const k = this._pvCalibK;
+        const lat = this.hass?.config?.latitude;
+        const lon = this.hass?.config?.longitude;
+        const series = this._chartSeries;
+        const predictedSamples: Array<{ t: Date; v: number }> = [];
+        if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
+        {
+            const nowMs = Date.now();
+            for (let i = 0; i < series.times.length; i++)
+            {
+                const tMs = series.times[i].getTime();
+                if (tMs <  nowMs)   continue;             //future only
+                if (tMs <  startMs) continue;
+                if (tMs >  endMsAbs) continue;
+                const pct = computePvPower(series.times[i], lat, lon, series.cloud[i] ?? 0);
+                if (pct <= 0) continue;
+                predictedSamples.push({ t: series.times[i], v: pct * k });
+            }
+        }
+
         //Auto-scale: the Y axis maps 0 to the bottom edge and the
         //series' running max to the top edge. With a min of 1 we
         //avoid division-by-zero when the series is all-zero (early
         //morning, prolonged outage) and keep the curve visibly
         //pinned to the baseline rather than silently disappearing.
+        //Predicted samples also feed into yMax so the forecast line
+        //doesn't clip when expected production exceeds anything
+        //the user has produced lately.
         let yMax = 1;
-        for (const s of samples)
-        {
-            if (s.v > yMax)
-            {
-                yMax = s.v;
-            }
-        }
+        for (const s of samples)          { if (s.v > yMax) yMax = s.v; }
+        for (const s of predictedSamples) { if (s.v > yMax) yMax = s.v; }
         const yOf = (v: number): number =>
             H - Math.max(0, Math.min(1, v / yMax)) * H;
 
@@ -1615,6 +1648,14 @@ export class HeliosCard extends LitElement
             const xN = xOf(samples[samples.length - 1].t);
             area = `M ${x0},${H} L ${points.join(' L ')} L ${xN},${H} Z`;
             line = `M ${points.join(' L ')}`;
+        }
+
+        let predictedLine = '';
+        if (predictedSamples.length >= 2)
+        {
+            const pPoints = predictedSamples.map(s =>
+                `${xOf(s.t).toFixed(2)},${yOf(s.v).toFixed(2)}`);
+            predictedLine = `M ${pPoints.join(' L ')}`;
         }
 
         return html`
@@ -1639,6 +1680,13 @@ export class HeliosCard extends LitElement
                     <path
                         class="hc-chart-line"
                         d="${line}"
+                        stroke="${pvColor}"
+                    ></path>
+                ` : nothing}
+                ${predictedLine ? svg`
+                    <path
+                        class="hc-chart-line hc-chart-predicted"
+                        d="${predictedLine}"
                         stroke="${pvColor}"
                     ></path>
                 ` : nothing}
@@ -2028,6 +2076,184 @@ export class HeliosCard extends LitElement
         //differentiate) — treat as 0 so the animation pauses
         //instead of mis-scaling.
         return 0;
+    }
+
+
+    //PV auto-calibration — maintains a rolling 14-day buffer of
+    //(observedWatts, predictedNormalized) pairs aggregated per hour
+    //and persisted to localStorage, then fits a single scalar k via
+    //least squares so that  observed ≈ k · predictedNormalized.
+    //
+    //Once enough samples have accumulated (PV_CALIB_MIN_SAMPLES),
+    //k is multiplied by future predicted-normalised values to draw
+    //a forecast line on the PV chart. The user never has to enter a
+    //"peak power" — the card learns the mapping from their own
+    //history and adapts to seasonal drift via the rolling window.
+    private static readonly PV_CALIB_TTL_MS      = 14 * 24 * 3_600_000;
+    private static readonly PV_CALIB_MIN_SAMPLES = 20;
+
+    private _pvCalibK: number | null = null;
+
+    private _pvCalibStorageKey(): string | null
+    {
+        const lat = this.hass?.config?.latitude;
+        const lon = this.hass?.config?.longitude;
+        if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+        return `helios-pv-calib:${lat.toFixed(3)}_${lon.toFixed(3)}`;
+    }
+
+    private _loadPvCalibSamples(): Array<{ t: number; o: number; p: number }>
+    {
+        const key = this._pvCalibStorageKey();
+        if (!key) return [];
+        try
+        {
+            const raw = window.localStorage?.getItem(key);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw) as Array<{ t: number; o: number; p: number }>;
+            if (!Array.isArray(parsed)) return [];
+            //Drop entries older than the TTL.
+            const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+            return parsed.filter(e => typeof e.t === 'number' && e.t >= cutoff
+                                     && typeof e.o === 'number' && isFinite(e.o)
+                                     && typeof e.p === 'number' && isFinite(e.p));
+        }
+        catch (_) { return []; }
+    }
+
+    private _savePvCalibSamples(samples: Array<{ t: number; o: number; p: number }>): void
+    {
+        const key = this._pvCalibStorageKey();
+        if (!key) return;
+        try { window.localStorage?.setItem(key, JSON.stringify(samples)); }
+        catch (_) {}
+    }
+
+    //Bucket the raw PV history into one (avg-watts) value per local
+    //hour, handling cumulative-energy sensors via the same
+    //differentiation logic the chart renderer uses.
+    private _aggregatePvWattsPerHour(): Map<number, number>
+    {
+        const out  = new Map<number, number>();
+        const hist = this._pvHistory;
+        if (!hist || hist.times.length === 0) return out;
+
+        const lu = (this._pvUnit || '').toLowerCase();
+        const isCumulativeEnergy = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
+
+        let times:  Date[]   = hist.times;
+        let values: number[] = hist.values;
+        if (isCumulativeEnergy && times.length >= 2)
+        {
+            const dTimes:  Date[]   = [];
+            const dValues: number[] = [];
+            for (let i = 1; i < times.length; i++)
+            {
+                const dtH = (times[i].getTime() - times[i - 1].getTime()) / 3_600_000;
+                if (dtH <= 0 || dtH > 6) continue;
+                const dv = values[i] - values[i - 1];
+                if (dv < 0) continue;
+                dTimes.push(times[i]);
+                dValues.push(dv / dtH);
+            }
+            times  = dTimes;
+            values = dValues;
+        }
+
+        //Sum + count per hour bucket, then divide.
+        const sums   = new Map<number, number>();
+        const counts = new Map<number, number>();
+        for (let i = 0; i < times.length; i++)
+        {
+            const ts = times[i].getTime();
+            const v  = values[i];
+            if (!isFinite(v)) continue;
+            const w = this._pvNormalizeToWatts(v, this._pvUnit ?? '');
+            //Floor to the hour boundary.
+            const hourTs = Math.floor(ts / 3_600_000) * 3_600_000;
+            sums.set  (hourTs, (sums.get(hourTs)   ?? 0) + w);
+            counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
+        }
+        for (const [hourTs, sum] of sums)
+        {
+            const c = counts.get(hourTs) ?? 1;
+            out.set(hourTs, sum / c);
+        }
+        return out;
+    }
+
+    //Refresh the per-hour calibration buffer from the current
+    //_pvHistory and _chartSeries, merge with the persisted buffer,
+    //prune old entries, save, and recompute k. Called whenever either
+    //input changes.
+    private _updatePvCalibration(): void
+    {
+        const lat = this.hass?.config?.latitude;
+        const lon = this.hass?.config?.longitude;
+        if (typeof lat !== 'number' || typeof lon !== 'number') return;
+        const series = this._chartSeries;
+        if (!series || series.times.length === 0) return;
+
+        const buckets = this._aggregatePvWattsPerHour();
+        if (buckets.size === 0)
+        {
+            //Nothing to learn from this pass — recompute k from
+            //whatever's still in localStorage so we don't lose it.
+            this._pvCalibK = this._calibrateK(this._loadPvCalibSamples());
+            return;
+        }
+
+        //Index hourly weather by hour-floor timestamp for O(1) lookup.
+        const cloudByHour = new Map<number, number>();
+        for (let i = 0; i < series.times.length; i++)
+        {
+            const hourTs = Math.floor(series.times[i].getTime() / 3_600_000) * 3_600_000;
+            cloudByHour.set(hourTs, series.cloud[i] ?? 0);
+        }
+
+        const existing = this._loadPvCalibSamples();
+        const byTs     = new Map<number, { t: number; o: number; p: number }>();
+        for (const s of existing) byTs.set(s.t, s);
+
+        for (const [hourTs, observedW] of buckets)
+        {
+            const cloud = cloudByHour.get(hourTs);
+            if (cloud === undefined) continue;
+            const tCentered = new Date(hourTs + 30 * 60_000);   //hour midpoint
+            const predictedPct = computePvPower(tCentered, lat, lon, cloud);
+            //Skip entries where there's no signal to learn from.
+            if (predictedPct < 1)   continue;      //nighttime or near
+            if (observedW    < 5)   continue;      //panels offline / pre-dawn noise
+            byTs.set(hourTs, { t: hourTs, o: observedW, p: predictedPct });
+        }
+
+        //Prune old entries again before saving.
+        const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+        const merged = Array.from(byTs.values())
+            .filter(e => e.t >= cutoff)
+            .sort((a, b) => a.t - b.t);
+
+        this._savePvCalibSamples(merged);
+        this._pvCalibK = this._calibrateK(merged);
+    }
+
+    private _calibrateK(samples: Array<{ t: number; o: number; p: number }>): number | null
+    {
+        if (samples.length < HeliosCard.PV_CALIB_MIN_SAMPLES) return null;
+        let sumXY = 0, sumXX = 0;
+        for (const s of samples)
+        {
+            sumXY += s.o * s.p;
+            sumXX += s.p * s.p;
+        }
+        if (sumXX <= 0) return null;
+        const k = sumXY / sumXX;
+        //Sanity: a residential install peaks around 1 kW per kWp at
+        //full sun. computePvPower saturates at 100, so a typical k
+        //sits in [5, 250] (W per percent of STC). Reject anything
+        //wildly outside — bad data or a misconfigured entity.
+        if (!isFinite(k) || k <= 0 || k > 1000) return null;
+        return k;
     }
 
     //Map a "rate" magnitude to an animation duration in seconds.
@@ -2655,15 +2881,32 @@ ${showSun ? html`
                     </div>
                 ` : nothing}
 
+                ${showLabel ? (() =>
+                {
+                    //Endpoint = fill-disc edge in the chip-to-home
+                    //direction. The fill disc shares the ring's
+                    //centre (= home) and scales linearly with cloud
+                    //cover %; at 0 % the radius is zero and the line
+                    //terminates at home, at 100 % it reaches the
+                    //full ring edge. Pinning the endpoint to the
+                    //live fill — rather than to a static ring or
+                    //the home centre — keeps the leader "hugging"
+                    //the disc as it grows and shrinks.
+                    const pct  = Math.max(0, Math.min(100, this._cloudCover));
+                    const tFill = pct / 100;
+                    const endX  = layout!.home.x + (layout!.ringEdge.x - layout!.home.x) * tFill;
+                    const endY  = layout!.home.y + (layout!.ringEdge.y - layout!.home.y) * tFill;
+                    return html`
+                        <svg class="cloud-leader-svg">
+                            <line
+                                x1="${layout!.cloudLabel.x + 10}"
+                                y1="${layout!.cloudLabel.y}"
+                                x2="${endX}"
+                                y2="${endY}"
+                            ></line>
+                        </svg>`;
+                })() : nothing}
                 ${showLabel ? html`
-                    <svg class="cloud-leader-svg">
-                        <line
-                            x1="${layout!.cloudLabel.x + 10}"
-                            y1="${layout!.cloudLabel.y}"
-                            x2="${layout!.home.x}"
-                            y2="${layout!.home.y}"
-                        ></line>
-                    </svg>
                     <div
                         class="cloud-pct-label"
                         style="left:${layout!.cloudLabel.x}px; top:${layout!.cloudLabel.y}px"

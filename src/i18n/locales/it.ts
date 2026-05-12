@@ -77,6 +77,10 @@ export const it: Translations = {
         performanceModeOn:     'Attivata',
         performanceModeOff:    'Disattivata',
         performanceModeHint:   'Disattiva il terreno 3D, l\'ombreggiatura del rilievo e limita la densità dei pixel. Utile su dispositivi modesti o per sessioni lunghe. L\'inclinazione e gli edifici 3D rimangono.',
-        mapStyleMinimal:       'Minimale'
+        mapStyleMinimal:       'Minimale',
+        terrainDetail:         'Dettaglio del terreno *',
+        terrainDetailSmooth:   'Levigato',
+        terrainDetailFine:     'Fine',
+        terrainDetailHint:     'Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione — utile solo su PC desktop potenti.'
     }
 };

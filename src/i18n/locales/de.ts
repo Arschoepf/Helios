@@ -77,6 +77,10 @@ export const de: Translations = {
         performanceModeOn:     'Ein',
         performanceModeOff:    'Aus',
         performanceModeHint:   'Deaktiviert 3D-Terrain, Hillshade und begrenzt die Pixeldichte. Sinnvoll bei leistungsschwachen Geräten oder langen Sitzungen. Kameraneigung und 3D-Gebäude bleiben erhalten.',
-        mapStyleMinimal:       'Minimal'
+        mapStyleMinimal:       'Minimal',
+        terrainDetail:         'Geländedetail *',
+        terrainDetailSmooth:   'Geglättet',
+        terrainDetailFine:     'Fein',
+        terrainDetailHint:     'Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe — nur auf leistungsfähigen Desktops sinnvoll.'
     }
 };
