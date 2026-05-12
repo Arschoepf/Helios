@@ -26286,6 +26286,10 @@ const _HeliosEngine = class _HeliosEngine {
       }, 80);
     });
     this._resizeObserver.observe(container);
+    try {
+      window.__heliosMap = this.map;
+    } catch (_2) {
+    }
     this.map.touchZoomRotate.enable({ around: "center" });
     const pinHomeAtCenter = (e2) => {
       if (!this.map || !e2?.originalEvent) {
@@ -26820,14 +26824,32 @@ const _HeliosEngine = class _HeliosEngine {
     if (this.map.getLayer("helios-buildings-home")) {
       this.map.removeLayer("helios-buildings-home");
     }
+    const buildingLayerIds = [];
     this.map.getStyle().layers?.forEach((l2) => {
-      if (l2.type === "fill-extrusion" && l2.id !== "helios-buildings-surroundings" && l2.id !== "helios-buildings-home") {
-        try {
-          this.map.setLayoutProperty(l2.id, "visibility", "none");
-        } catch (_2) {
-        }
+      if (l2.id === "helios-buildings-surroundings" || l2.id === "helios-buildings-home") {
+        return;
+      }
+      const sourceLayer = l2["source-layer"];
+      const isBuildingSrc = sourceLayer === "building" || sourceLayer === "building_3d";
+      const isExtrusion = l2.type === "fill-extrusion";
+      const idMentions = typeof l2.id === "string" && l2.id.toLowerCase().includes("building");
+      if (isBuildingSrc || isExtrusion || idMentions) {
+        buildingLayerIds.push(l2.id);
       }
     });
+    for (const id of buildingLayerIds) {
+      try {
+        this.map.setLayoutProperty(id, "visibility", "none");
+      } catch (_2) {
+      }
+      try {
+        if (this.map.getLayer(id)) this.map.removeLayer(id);
+      } catch (_2) {
+      }
+    }
+    if (buildingLayerIds.length > 0) {
+      console.debug("[HELIOS] Suppressed native building layers:", buildingLayerIds);
+    }
     const opacity = this._buildingOpacity();
     const homeData = this._buildingsData?.home ?? { type: "FeatureCollection", features: [] };
     const surrData = this._buildingsData?.surroundings ?? { type: "FeatureCollection", features: [] };

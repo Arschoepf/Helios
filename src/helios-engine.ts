@@ -560,6 +560,17 @@ export class HeliosEngine
 
         this._resizeObserver.observe(container);
 
+        //v1.2.0-beta.7 — expose the map on the global window for
+        //in-browser debugging via the dev tools console. Plain
+        //console.log of `__heliosMap.getStyle().layers` is the
+        //single most useful thing when tracking down style-import
+        //weirdness (MapLibre 5 / MapTiler v4 silently no-op'ing
+        //layer manipulations). Cheap to leave on; not a security
+        //surface — anyone with dev-tools open already has full
+        //access to the page.
+        try { (window as unknown as { __heliosMap?: Map }).__heliosMap = this.map; }
+        catch (_) {}
+
         //Lock the pinch-rotate pivot to the canvas centre. By default,
         //TwoFingersTouchZoomRotateHandler rotates around the centroid
         //of the two fingers — visually, the home orbits around the
@@ -1302,23 +1313,52 @@ export class HeliosEngine
             this.map.removeLayer('helios-buildings-home');
         }
 
-        //Hide any fill-extrusion layer the active style ships natively.
-        //The Streets style includes its own 3D buildings; without this
-        //pass our two helios building layers would Z-fight against
-        //them since both extrude footprints at the same heights.
+        //Suppress every native building layer the active style ships.
+        //
+        //We tried `setLayoutProperty(id, 'visibility', 'none')` first
+        //(MapTiler streets-v2 etc.) and it worked. With MapTiler
+        //streets-v4 / topo-v4 the base style relies on MapLibre 5
+        //"style imports" — imported layers are listed by
+        //`getStyle().layers` but `setLayoutProperty` on them is a
+        //silent no-op, leaving the native 3D extrusions visible on
+        //top of our radius-trimmed set and producing the reported
+        //"buildings visible at kilometres" regression.
+        //
+        //The robust fix is to remove the layers outright; removeLayer
+        //ignores import scoping. We target every layer whose type is
+        //fill-extrusion (3D blocks) OR whose source-layer is one of
+        //the known v3 building source-layers (catches flat 2D
+        //building footprints too) OR whose id mentions building
+        //(belt-and-suspenders for any other style variant). Our own
+        //two helios building layers are spared by id.
+        const buildingLayerIds: string[] = [];
         this.map.getStyle().layers?.forEach(l =>
         {
-            if (l.type === 'fill-extrusion'
-                && l.id !== 'helios-buildings-surroundings'
-                && l.id !== 'helios-buildings-home')
+            if (l.id === 'helios-buildings-surroundings'
+             || l.id === 'helios-buildings-home')
             {
-                try
-                {
-                    this.map!.setLayoutProperty(l.id, 'visibility', 'none');
-                }
-                catch (_) {}
+                return;
+            }
+            const sourceLayer = (l as { 'source-layer'?: string })['source-layer'];
+            const isBuildingSrc = sourceLayer === 'building' || sourceLayer === 'building_3d';
+            const isExtrusion   = l.type === 'fill-extrusion';
+            const idMentions    = typeof l.id === 'string' && l.id.toLowerCase().includes('building');
+            if (isBuildingSrc || isExtrusion || idMentions)
+            {
+                buildingLayerIds.push(l.id);
             }
         });
+        for (const id of buildingLayerIds)
+        {
+            try { this.map.setLayoutProperty(id, 'visibility', 'none'); }
+            catch (_) {}
+            try { if (this.map.getLayer(id)) this.map.removeLayer(id); }
+            catch (_) {}
+        }
+        if (buildingLayerIds.length > 0)
+        {
+            console.debug('[HELIOS] Suppressed native building layers:', buildingLayerIds);
+        }
 
         const opacity   = this._buildingOpacity();
         const homeData  = this._buildingsData?.home
