@@ -1013,6 +1013,20 @@ export class HeliosCard extends LitElement
             {
                 this._refreshOverlays();
             };
+            //WebGL context loss recovery — iOS Safari recycles
+            //contexts under memory pressure. The engine emits this
+            //hook from its webglcontextlost listener; we tear down
+            //the dead engine and re-init from scratch on the next
+            //animation frame so the user never sees a stuck black
+            //canvas. The _lastApiKey / _lastHomeKey are reset so
+            //the identity-change branch of updated() takes the
+            //re-init path.
+            this._engine.onContextLost = () =>
+            {
+                this._lastApiKey  = '';
+                this._lastHomeKey = '';
+                if (!this._initInflight) this._initEngine();
+            };
 
             this._initInflight = false;
         });
@@ -2159,7 +2173,7 @@ export class HeliosCard extends LitElement
         //  90° at the corner. SMIL parametrises the path at
         //  constant linear velocity, so the time spent on the
         //  fillet shrinks proportionally with `flowDuration`.
-        const PV_LEG_OFFSET_PX     = 12;
+        const PV_LEG_OFFSET_PX     = 7;
         const PV_HALF_HEIGHT_PX    = 11;
         //Half-width of the PV chip — min-width:76 in .pv-pct-label,
         //so 38 px from centre to either side. Used for the solar-ray
