@@ -451,7 +451,9 @@ export const heliosCardStyles = css`
     .overlay-top-center
     {
         position: absolute;
-        top: 14px;
+        /*  Matches the timeline's bottom: 8px so the clock and the
+            timeline sit at symmetric distance from the card edges. */
+        top: 8px;
         left: 50%;
         transform: translateX(-50%);
         z-index: 5;
@@ -500,9 +502,9 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 26px;
-        height: 18px;
-        padding: 0 6px;
+        min-width: 40px;
+        height: 24px;
+        padding: 0 12px;
         background: rgba(31, 111, 235, 0.95);
         color: white;
         border: 1px solid rgba(20, 78, 168, 0.95);
@@ -521,7 +523,7 @@ export const heliosCardStyles = css`
 
     .clock-tab ha-icon
     {
-        --mdc-icon-size: 14px;
+        --mdc-icon-size: 18px;
         color: white;
         display: inline-flex;
         align-items: center;

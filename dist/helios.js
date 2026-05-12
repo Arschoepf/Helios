@@ -26214,7 +26214,7 @@ const CLOUD_RING_COLOR = "#000000";
 const CLOUD_RING_WIDTH_PX = 2;
 const CLOUD_RING_OPACITY = 0.4;
 const CLOUD_CIRCLE_SEGMENTS = 128;
-const CLOUD_LABEL_OFFSET_PX = 100;
+const PV_CHIP_OFFSET_PX = 65;
 const SUN_ARC_RADIUS_M = 40;
 const SUN_ARC_SAMPLES = 96;
 const SUN_ARC_NIGHT_OPACITY = 0.25;
@@ -27279,8 +27279,8 @@ const _HeliosEngine = class _HeliosEngine {
   //               axis clear for the PV chip (above) and the
   //               battery chip (below).
   //  pvLabel    — where the optional PV production chip should be
-  //               drawn. Sits a fixed CLOUD_LABEL_OFFSET_PX above
-  //               the home so the production chip is the prominent
+  //               drawn. Sits a fixed PV_CHIP_OFFSET_PX above the
+  //               home so the production chip is the prominent
   //               readout, with the cloud chip retreating onto its
   //               own feature on the side.
   //  batterySocLabel  — where the optional battery State-of-
@@ -27302,23 +27302,10 @@ const _HeliosEngine = class _HeliosEngine {
   //               chip's left side. Animated dashes + arrow
   //               whose direction follows the sign of the
   //               power.
-  //  ringEdge   — projection of a fixed geographic point on the
-  //               100 % reference ring (the disc's geographic east
-  //               edge in the northern hemisphere, west edge in
-  //               the south — picked so the chip lands on screen-
-  //               LEFT under each hemisphere's default bearing of
-  //               180° NH / 0° SH). The cloud leader line ends
-  //               here. Pinning to a fixed geographic point — and
-  //               not "screen-leftmost-of-N-samples" as a previous
-  //               revision did — means the chip tracks the same
-  //               world location continuously when the camera
-  //               rotates, instead of teleporting in 30° increments
-  //               between discrete samples. This matches the
-  //               steady, pivot-anchored behaviour of the PV /
-  //               battery chips and keeps the overlay legible
-  //               throughout rotation animations.
-  //  home       — the projected home point, used as the anchor for
-  //               the PV and battery chip leader lines.
+  //  home       — the projected home point, used both as the visual
+  //               centre of the cloud disc (the cloud leader ends
+  //               here) and as the anchor for the PV / battery
+  //               chip leader lines.
   //
   //Returns null when the map isn't ready yet — the card treats
   //null as "don't render the overlay this frame".
@@ -27344,13 +27331,12 @@ const _HeliosEngine = class _HeliosEngine {
     const BATTERY_CHIP_X_OFFSET_PX = 80;
     const BATTERY_CHIP_Y_OFFSET_PX = 40;
     const pvX = home.x;
-    const pvY = home.y - CLOUD_LABEL_OFFSET_PX;
+    const pvY = home.y - PV_CHIP_OFFSET_PX;
     return {
       cloudLabel: { x: cloudLabelX, y: cloudLabelY },
       pvLabel: { x: pvX, y: pvY },
       batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
       batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
-      ringEdge: { x: ringEdgeX, y: ringEdgeY },
       home: { x: home.x, y: home.y }
     };
   }
@@ -28733,7 +28719,9 @@ const heliosCardStyles = i$3`
     .overlay-top-center
     {
         position: absolute;
-        top: 14px;
+        /*  Matches the timeline's bottom: 8px so the clock and the
+            timeline sit at symmetric distance from the card edges. */
+        top: 8px;
         left: 50%;
         transform: translateX(-50%);
         z-index: 5;
@@ -28782,9 +28770,9 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 26px;
-        height: 18px;
-        padding: 0 6px;
+        min-width: 40px;
+        height: 24px;
+        padding: 0 12px;
         background: rgba(31, 111, 235, 0.95);
         color: white;
         border: 1px solid rgba(20, 78, 168, 0.95);
@@ -28803,7 +28791,7 @@ const heliosCardStyles = i$3`
 
     .clock-tab ha-icon
     {
-        --mdc-icon-size: 14px;
+        --mdc-icon-size: 18px;
         color: white;
         display: inline-flex;
         align-items: center;
@@ -31511,6 +31499,8 @@ let HeliosCard = class extends i {
     const sunFillRatio = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1e3)));
     const showSunLabel = showSun && sunScene.sun.altitude > 0;
     const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1e3, 0.8);
+    const sunRayTargetX = layout ? layout.pvLabel.x : sunScene?.home.x ?? 0;
+    const sunRayTargetY = layout ? layout.pvLabel.y - PV_HALF_HEIGHT_PX : sunScene?.home.y ?? 0;
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
     return b`
@@ -31641,7 +31631,7 @@ ${showSun ? b`
                                 class="solar-ray"
                                 style="--sun-flow-duration:${sunFlowDuration}s"
                                 x1="${sunScene.sun.x}"  y1="${sunScene.sun.y}"
-                                x2="${sunScene.home.x}" y2="${sunScene.home.y}"
+                                x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
                                 stroke="${sunColor}"
                             ></line>
                             <polygon
@@ -31653,7 +31643,7 @@ ${showSun ? b`
                                     dur="${sunFlowDuration}s"
                                     repeatCount="indefinite"
                                     rotate="auto"
-                                    path="M ${sunScene.sun.x},${sunScene.sun.y} L ${sunScene.home.x},${sunScene.home.y}"
+                                    path="M ${sunScene.sun.x},${sunScene.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
                                 ></animateMotion>
                             </polygon>
                         ` : A}
@@ -31709,8 +31699,8 @@ ${showSun ? b`
                         <line
                             x1="${layout.cloudLabel.x + 10}"
                             y1="${layout.cloudLabel.y}"
-                            x2="${layout.ringEdge.x}"
-                            y2="${layout.ringEdge.y}"
+                            x2="${layout.home.x}"
+                            y2="${layout.home.y}"
                         ></line>
                     </svg>
                     <div

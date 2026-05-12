@@ -131,7 +131,6 @@ export class HeliosCard extends LitElement
         pvLabel:           { x: number; y: number };
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
-        ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
     } | null = null;
     //Photovoltaic production state — populated when the user has set
@@ -2240,6 +2239,14 @@ export class HeliosCard extends LitElement
         //feeling frantic at the top of the day.
         const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1000, 0.8);
 
+        //Solar-ray target — the tip points at the TOP-CENTRE of the
+        //PV chip (where the chip's "tip" visually meets the leader)
+        //so the irradiance ray reads as feeding the PV reading
+        //directly. Falls back to the projected home when the chip
+        //layout isn't available yet (very first frames).
+        const sunRayTargetX = layout ? layout.pvLabel.x                     : (sunScene?.home.x ?? 0);
+        const sunRayTargetY = layout ? layout.pvLabel.y - PV_HALF_HEIGHT_PX : (sunScene?.home.y ?? 0);
+
         const cardTheme = String(this.config?.['card-theme'] ?? 'light').toLowerCase();
         const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';
 
@@ -2375,7 +2382,7 @@ ${showSun ? html`
                                 class="solar-ray"
                                 style="--sun-flow-duration:${sunFlowDuration}s"
                                 x1="${sunScene!.sun.x}"  y1="${sunScene!.sun.y}"
-                                x2="${sunScene!.home.x}" y2="${sunScene!.home.y}"
+                                x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
                                 stroke="${sunColor}"
                             ></line>
                             <polygon
@@ -2387,7 +2394,7 @@ ${showSun ? html`
                                     dur="${sunFlowDuration}s"
                                     repeatCount="indefinite"
                                     rotate="auto"
-                                    path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunScene!.home.x},${sunScene!.home.y}"
+                                    path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
                                 ></animateMotion>
                             </polygon>
                         ` : nothing}
@@ -2459,8 +2466,8 @@ ${showSun ? html`
                         <line
                             x1="${layout!.cloudLabel.x + 10}"
                             y1="${layout!.cloudLabel.y}"
-                            x2="${layout!.ringEdge.x}"
-                            y2="${layout!.ringEdge.y}"
+                            x2="${layout!.home.x}"
+                            y2="${layout!.home.y}"
                         ></line>
                     </svg>
                     <div

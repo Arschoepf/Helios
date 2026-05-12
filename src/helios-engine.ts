@@ -360,13 +360,13 @@ const CLOUD_RING_OPACITY        = 0.4;
 //add in later phases.
 const CLOUD_CIRCLE_SEGMENTS     = 128;
 
-//Vertical screen-space offset of the percentage label above the
-//home position, in CSS pixels. The label hovers this many pixels
-//above where the home projects on screen, regardless of pitch or
-//rotation — it's an HTML overlay, not a ground-anchored object.
-//A leader line bridges the gap between the label and the top of
-//the cloud-cover ring projected on the ground.
-const CLOUD_LABEL_OFFSET_PX     = 100;
+//Vertical screen-space offset (CSS px) of the PV chip above the
+//home position. The chip is an HTML overlay anchored above the
+//projected home regardless of pitch or rotation. The battery SoC
+//and Power chips are positioned relative to the PV chip, so this
+//single constant determines how far above the home the whole
+//PV / battery chip cluster sits.
+const PV_CHIP_OFFSET_PX         = 65;
 
 
 //Solar-arc parameters. The arc traces the sun's full 24h
@@ -2005,8 +2005,8 @@ export class HeliosEngine
     //               axis clear for the PV chip (above) and the
     //               battery chip (below).
     //  pvLabel    — where the optional PV production chip should be
-    //               drawn. Sits a fixed CLOUD_LABEL_OFFSET_PX above
-    //               the home so the production chip is the prominent
+    //               drawn. Sits a fixed PV_CHIP_OFFSET_PX above the
+    //               home so the production chip is the prominent
     //               readout, with the cloud chip retreating onto its
     //               own feature on the side.
     //  batterySocLabel  — where the optional battery State-of-
@@ -2028,23 +2028,10 @@ export class HeliosEngine
     //               chip's left side. Animated dashes + arrow
     //               whose direction follows the sign of the
     //               power.
-    //  ringEdge   — projection of a fixed geographic point on the
-    //               100 % reference ring (the disc's geographic east
-    //               edge in the northern hemisphere, west edge in
-    //               the south — picked so the chip lands on screen-
-    //               LEFT under each hemisphere's default bearing of
-    //               180° NH / 0° SH). The cloud leader line ends
-    //               here. Pinning to a fixed geographic point — and
-    //               not "screen-leftmost-of-N-samples" as a previous
-    //               revision did — means the chip tracks the same
-    //               world location continuously when the camera
-    //               rotates, instead of teleporting in 30° increments
-    //               between discrete samples. This matches the
-    //               steady, pivot-anchored behaviour of the PV /
-    //               battery chips and keeps the overlay legible
-    //               throughout rotation animations.
-    //  home       — the projected home point, used as the anchor for
-    //               the PV and battery chip leader lines.
+    //  home       — the projected home point, used both as the visual
+    //               centre of the cloud disc (the cloud leader ends
+    //               here) and as the anchor for the PV / battery
+    //               chip leader lines.
     //
     //Returns null when the map isn't ready yet — the card treats
     //null as "don't render the overlay this frame".
@@ -2053,7 +2040,6 @@ export class HeliosEngine
         pvLabel:           { x: number; y: number };
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
-        ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
     } | null
     {
@@ -2106,15 +2092,14 @@ export class HeliosEngine
         const BATTERY_CHIP_X_OFFSET_PX = 80;
         const BATTERY_CHIP_Y_OFFSET_PX = 40;
         const pvX = home.x;
-        const pvY = home.y - CLOUD_LABEL_OFFSET_PX;
+        const pvY = home.y - PV_CHIP_OFFSET_PX;
 
         return {
-            cloudLabel:        { x: cloudLabelX,                  y: cloudLabelY                       },
-            pvLabel:           { x: pvX,                          y: pvY                               },
-            batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
-            batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX },
-            ringEdge:          { x: ringEdgeX,                    y: ringEdgeY                        },
-            home:              { x: home.x,                       y: home.y                           }
+            cloudLabel:        { x: cloudLabelX,                    y: cloudLabelY                     },
+            pvLabel:           { x: pvX,                            y: pvY                             },
+            batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX  },
+            batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: pvY + BATTERY_CHIP_Y_OFFSET_PX  },
+            home:              { x: home.x,                         y: home.y                          }
         };
     }
 
