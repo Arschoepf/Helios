@@ -30444,6 +30444,11 @@ let HeliosCard = class extends i {
     window.clearInterval(this._timer);
     this._visibilityObserver?.disconnect();
     this._visibilityObserver = void 0;
+    if (this._initDebounceTimer !== void 0) {
+      window.clearTimeout(this._initDebounceTimer);
+      this._initDebounceTimer = void 0;
+      this._initInflight = false;
+    }
     this._engine?.cleanup();
     this._engine = void 0;
   }
@@ -30820,9 +30825,17 @@ let HeliosCard = class extends i {
       this._pvFetching = false;
     }
   }
-  //Engine setup
   _initEngine() {
     this._initInflight = true;
+    if (this._initDebounceTimer !== void 0) {
+      window.clearTimeout(this._initDebounceTimer);
+    }
+    this._initDebounceTimer = window.setTimeout(() => {
+      this._initDebounceTimer = void 0;
+      this._initEngineNow();
+    }, HeliosCard.INIT_DEBOUNCE_MS);
+  }
+  _initEngineNow() {
     requestAnimationFrame(() => {
       const container = this.shadowRoot?.getElementById("map-container");
       if (!container || !this.config || !this.hass?.config) {
@@ -32086,6 +32099,7 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   //performance-mode toggles terrain, hillshade and pixelRatio.
   "performance-mode"
 ];
+HeliosCard.INIT_DEBOUNCE_MS = 500;
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([
   n2({ attribute: false })

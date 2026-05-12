@@ -339,6 +339,16 @@ export class HeliosCard extends LitElement
         window.clearInterval(this._timer);
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
+        //If the card is destroyed before the debounce fires, drop the
+        //pending init entirely — no engine, no WebGL context, no leak.
+        //This is the whole point of the debounce: short-lived editor
+        //preview cards never get an engine.
+        if (this._initDebounceTimer !== undefined)
+        {
+            window.clearTimeout(this._initDebounceTimer);
+            this._initDebounceTimer = undefined;
+            this._initInflight      = false;
+        }
         this._engine?.cleanup();
         this._engine = undefined;
     }
@@ -926,10 +936,47 @@ export class HeliosCard extends LitElement
 
     //Engine setup
 
+    //Debounce window before an engine is actually constructed. The
+    //Home Assistant dashboard editor creates a fresh helios-card
+    //preview instance on every config edit, and v1.2.2 telemetry
+    //showed 24 card instances spun up during a single 5-edit
+    //session — most of them destroyed in well under half a second.
+    //Each card instance triggered a full MapLibre engine
+    //instantiation, which created a WebGL context. Safari mobile
+    //caps active contexts at ~8 and starts recycling under that
+    //load — the root cause of the FPS drift and the iOS
+    //black-screen lockup.
+    //
+    //The fix: defer the actual engine construction by 500 ms.
+    //  - A card that's destroyed inside that window never spawns
+    //    an engine and never holds a WebGL context.
+    //  - A card that survives the window (the user's actual
+    //    dashboard card, or the stable editor preview the user is
+    //    looking at) gets its engine after a barely-perceptible
+    //    half-second delay.
+    private static readonly INIT_DEBOUNCE_MS = 500;
+    private _initDebounceTimer?: number;
+
     private _initEngine(): void
     {
         this._initInflight = true;
 
+        //Cancel any pending debounce — a fresh _initEngine() call
+        //means the identity / config has just changed and we want
+        //the timer to restart its 500 ms clock.
+        if (this._initDebounceTimer !== undefined)
+        {
+            window.clearTimeout(this._initDebounceTimer);
+        }
+        this._initDebounceTimer = window.setTimeout(() =>
+        {
+            this._initDebounceTimer = undefined;
+            this._initEngineNow();
+        }, HeliosCard.INIT_DEBOUNCE_MS);
+    }
+
+    private _initEngineNow(): void
+    {
         requestAnimationFrame(() =>
         {
             const container = this.shadowRoot?.getElementById('map-container') as HTMLElement | null;
