@@ -1423,29 +1423,6 @@ export class HeliosEngine
             }
         }
 
-        //Verify: re-read the merged style and see what's left.
-        const remaining = ((this.map.getStyle() as {
-            layers?: Array<{ id: string; type: string; 'source-layer'?: string }>
-        }).layers ?? [])
-            .filter(l =>
-            {
-                if (l.id === 'helios-buildings-surroundings'
-                 || l.id === 'helios-buildings-home') return false;
-                const sl = l['source-layer'];
-                return l.type === 'fill-extrusion'
-                    || sl === 'building'
-                    || sl === 'building_3d'
-                    || (typeof l.id === 'string' && l.id.toLowerCase().includes('building'));
-            })
-            .map(l => `${l.id}(${l.type})`);
-
-        console.debug('[HELIOS] Building suppression report:',
-        {
-            detected:  buildingLayerIds,
-            imports:   importIds,
-            remaining
-        });
-
         const opacity   = this._buildingOpacity();
         const homeData  = this._buildingsData?.home
                        ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection;
