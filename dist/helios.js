@@ -26379,7 +26379,7 @@ const _HeliosEngine = class _HeliosEngine {
       if (!dragRotating || !this.map || e2.pointerId !== activeId) return;
       const dx = e2.clientX - lastPointerX;
       lastPointerX = e2.clientX;
-      this.map.setBearing(this.map.getBearing() - dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+      this.map.setBearing(this.map.getBearing() + dx * ROTATE_SENSITIVITY_DEG_PER_PX);
     };
     const onEnd = (e2) => {
       if (e2.pointerId !== activeId) return;

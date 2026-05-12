@@ -818,7 +818,12 @@ export class HeliosEngine
             if (!dragRotating || !this.map || e.pointerId !== activeId) return;
             const dx = e.clientX - lastPointerX;
             lastPointerX = e.clientX;
-            this.map.setBearing(this.map.getBearing() - dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+            //Positive dx (drag right) bumps bearing up so the map
+            //content under the finger / cursor follows the gesture
+            //direction — what you'd intuitively expect on a touchable
+            //3D widget. The negated form (subtract) read inverted on
+            //both desktop and mobile.
+            this.map.setBearing(this.map.getBearing() + dx * ROTATE_SENSITIVITY_DEG_PER_PX);
         };
         const onEnd = (e: PointerEvent) =>
         {
