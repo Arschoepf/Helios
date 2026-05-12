@@ -76,8 +76,15 @@ export const fr: Translations = {
         batteryPowerEntityHelp: 'Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l\'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).',
         batteryColor:       'Couleur batterie *',
         buildingsSection:   'Bâtiments alentour',
-        buildingsHint:      'Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données.',
-        buildingRadius:     'Rayon de visibilité (m) *',
-        buildingOpacity:    'Opacité des bâtiments voisins * (0 → 1)'
+        buildingsHint:      'Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d\'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».',
+        buildingRadius:        'Rayon de visibilité *',
+        buildingClusterRadius: 'Rayon de regroupement maison *',
+        buildingOpacity:       'Opacité des bâtiments voisins *',
+        buildingColor:         'Couleur des bâtiments *',
+        performanceMode:       'Mode performance *',
+        performanceModeOn:     'Activé',
+        performanceModeOff:    'Désactivé',
+        performanceModeHint:   'Désactive le relief 3D, l\'ombrage du relief et limite la densité de pixels. Utile sur appareils bas/moyen de gamme ou pour les longues sessions. Conserve l\'inclinaison de caméra et les bâtiments en 3D.',
+        mapStyleMinimal:       'Minimal'
     }
 };

@@ -26021,6 +26021,7 @@ function representativePoint(geom) {
 async function fetchBuildingsAroundHome(opts) {
   const z2 = Math.max(0, Math.floor(opts.zoom ?? 14));
   const r2 = Math.max(1, opts.radiusMeters);
+  const cluster = Math.max(0, opts.clusterRadiusMeters ?? 0);
   const padFactor = 1.15;
   const dLat = metersToDegLat(r2 * padFactor);
   const dLon = metersToDegLon(r2 * padFactor, opts.homeLat);
@@ -26095,41 +26096,38 @@ async function fetchBuildingsAroundHome(opts) {
       }
     }
   }));
-  let homeFeature = null;
-  let homeFallback = null;
+  const homeCluster = [];
   const surroundings = [];
+  let homeFallback = null;
   for (const f2 of features) {
     const contains = polygonContains(f2.geometry, opts.homeLon, opts.homeLat);
-    if (contains && !homeFeature) {
-      homeFeature = f2;
-      continue;
-    }
     const rep = representativePoint(f2.geometry);
-    if (!rep) {
+    const d2 = rep ? haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0]) : Infinity;
+    if (contains || cluster > 0 && d2 <= cluster) {
+      homeCluster.push(f2);
       continue;
     }
-    const d2 = haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0]);
-    if (!homeFeature && d2 <= HOME_FALLBACK_M) {
-      if (!homeFallback || d2 < homeFallback.distance) {
-        homeFallback = { feature: f2, distance: d2 };
-      }
+    if (rep && d2 <= HOME_FALLBACK_M && (!homeFallback || d2 < homeFallback.distance)) {
+      homeFallback = { feature: f2, distance: d2 };
     }
     if (d2 <= r2) {
       surroundings.push(f2);
     }
   }
-  if (!homeFeature && homeFallback) {
-    homeFeature = homeFallback.feature;
+  if (homeCluster.length === 0 && homeFallback) {
+    homeCluster.push(homeFallback.feature);
     const idx = surroundings.indexOf(homeFallback.feature);
     if (idx >= 0) surroundings.splice(idx, 1);
   }
   return {
-    home: { type: "FeatureCollection", features: homeFeature ? [homeFeature] : [] },
+    home: { type: "FeatureCollection", features: homeCluster },
     surroundings: { type: "FeatureCollection", features: surroundings }
   };
 }
 const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
+const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
+const DEFAULT_BUILDING_COLOR_HEX = "#d2d2d7";
 const IS_MOBILE = (() => {
   if (typeof navigator === "undefined") {
     return false;
@@ -26262,7 +26260,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._fetchLat = this.homeLat;
     this._fetchLon = this.homeLon;
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
-    const pixelRatio = IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
+    const pixelRatio = this.cfg["performance-mode"] === true ? 1 : IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
     const styleInfo = this._resolveMapStyle();
     this.map = new maplibregl.Map(
       {
@@ -26341,21 +26339,53 @@ const _HeliosEngine = class _HeliosEngine {
     }
   }
   //Resolves the active MapTiler style id from `map-style` config.
-  //Two values are accepted:
+  //Three values are accepted:
   //  'streets' (default) → 'streets-v4' — sober urban basemap.
   //  'topo'              → 'topo-v4'    — topographic basemap with
   //                                       contour lines and softer
   //                                       earth tones, better in
   //                                       hilly / outdoor settings.
+  //  'minimal'           → 'streets-v4' loaded then pruned in
+  //                                       _onStyleLoad to a curated
+  //                                       whitelist of layers — fewer
+  //                                       per-frame draw calls, best
+  //                                       for low-end devices.
   //
   //Anything else falls back to 'streets'. When `card-theme: dark`
-  //is set, the `-dark` variant of the chosen style is used so the
-  //basemap matches the dark chrome.
+  //is set, the `-dark` variant of the chosen base style is used so
+  //the basemap matches the dark chrome.
   _resolveMapStyle() {
     const raw = String(this.cfg["map-style"] ?? "streets").toLowerCase();
     const base = raw === "topo" ? "topo-v4" : "streets-v4";
     const isDark = String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
     return { id: isDark ? `${base}-dark` : base };
+  }
+  //True when the user picked the curated minimal basemap. The map
+  //still loads streets-v4 (we don't ship a hand-built style); the
+  //pruning happens in _pruneMinimalStyle at style.load time.
+  _isMinimalStyle() {
+    return String(this.cfg["map-style"] ?? "streets").toLowerCase() === "minimal";
+  }
+  _pruneMinimalStyle() {
+    if (!this.map || !this._isMinimalStyle()) {
+      return;
+    }
+    const keep = _HeliosEngine.MINIMAL_KEEP_LAYER_IDS;
+    const layers = this.map.getStyle().layers ?? [];
+    for (const l2 of layers) {
+      if (l2.id.startsWith("helios-")) continue;
+      if (keep.has(l2.id)) continue;
+      try {
+        this.map.removeLayer(l2.id);
+      } catch (_2) {
+      }
+    }
+  }
+  //Performance mode — disables the per-frame heavyweights (terrain
+  //mesh + hillshade) and caps pixelRatio at 1.0. The 3D pitch and
+  //extruded buildings are preserved, so the card still reads as 3D.
+  _performanceMode() {
+    return this.cfg["performance-mode"] === true;
   }
   _findHourIndex(t2) {
     const home = this._homeHourlyData;
@@ -26472,6 +26502,8 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     this._mapReady = true;
+    this._pruneMinimalStyle();
+    const perfMode = this._performanceMode();
     if (!this.map.getSource("helios-terrain")) {
       this.map.addSource(
         "helios-terrain",
@@ -26483,7 +26515,15 @@ const _HeliosEngine = class _HeliosEngine {
         }
       );
     }
-    this.map.setTerrain({ source: "helios-terrain", exaggeration: 1.2 });
+    if (perfMode) {
+      this.map.setTerrain(null);
+      try {
+        this.map.setPixelRatio(1);
+      } catch (_2) {
+      }
+    } else {
+      this.map.setTerrain({ source: "helios-terrain", exaggeration: 1.2 });
+    }
     this.map.getStyle().layers?.forEach((l2) => {
       if (l2.type === "raster") {
         try {
@@ -26513,6 +26553,9 @@ const _HeliosEngine = class _HeliosEngine {
     if (this.map.getLayer("helios-hillshade")) {
       this.map.removeLayer("helios-hillshade");
     }
+    if (this._performanceMode()) {
+      return;
+    }
     const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
     const { azimuth } = getSunPosition(t2, this.homeLat, this.homeLon);
     const col = toColor(this.cfg["topography-color"], "rgba(80,100,160,1)");
@@ -26524,11 +26567,10 @@ const _HeliosEngine = class _HeliosEngine {
         source: "helios-terrain",
         paint: {
           "hillshade-shadow-color": col,
-          //v1.3 — non-transparent highlights make sun-facing
-          //slopes pop, giving the streets style the depth it
-          //was missing. Soft warm white at moderate opacity so
-          //the hillshade reads as ambient lighting rather than
-          //a paint-stroke effect.
+          //Non-transparent highlights make sun-facing slopes
+          //pop. Soft warm white at moderate opacity so the
+          //hillshade reads as ambient lighting rather than a
+          //paint-stroke effect.
           "hillshade-highlight-color": "rgba(255,250,235,0.55)",
           "hillshade-accent-color": col,
           "hillshade-illumination-direction": azimuth,
@@ -26742,23 +26784,14 @@ const _HeliosEngine = class _HeliosEngine {
       }
     );
   }
-  //Renders 3D building extrusions as the visual context for the
-  //home location. All buildings are painted in the configured
-  //`building-color` (defaults to a neutral light grey) at a
-  //single shared opacity — the home is identified by the chips
-  //and leader lines on top, not by a special render of the
-  //building itself. The earlier home-fill experiment (beta.9 /
-  //beta.10) was removed because it was visually noisy and the
-  //spatial identification of the home building from vector tiles
-  //was unreliable in dense neighbourhoods.
-  //Toggle MapTiler Streets' label layers (road names, house numbers,
+  //Toggle MapTiler's symbol layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
   //Symbol-type layers are the canonical container for text + icon
   //rendering in MapLibre styles; flipping their `visibility` layout
-  //property is enough to hide everything text-based without touching
-  //the underlying geometry layers (roads, water, terrain). Our own
-  //`helios-*` layers are skipped — they're not labels but we filter
-  //defensively in case a future feature adds one.
+  //property is enough to hide everything text-based without
+  //touching the underlying geometry (roads, water, terrain). Our
+  //own `helios-*` layers are skipped defensively in case a future
+  //feature adds a symbol layer of our own.
   _applyLabelVisibility() {
     if (!this.map) {
       return;
@@ -26777,9 +26810,8 @@ const _HeliosEngine = class _HeliosEngine {
     }
   }
   //Resolves the configured building radius (metres). Falls back to
-  //DEFAULT_BUILDING_RADIUS_M for missing or invalid input. Clamped
-  //to a sane range so a stray editor value can't accidentally
-  //trigger fetching dozens of tiles.
+  //DEFAULT_BUILDING_RADIUS_M and clamps to a sane range so a stray
+  //editor value can't accidentally trigger fetching dozens of tiles.
   _buildingRadiusMeters() {
     const v2 = Number(this.cfg["building-radius"]);
     if (!Number.isFinite(v2) || v2 <= 0) {
@@ -26795,6 +26827,24 @@ const _HeliosEngine = class _HeliosEngine {
       return DEFAULT_BUILDING_OPACITY;
     }
     return Math.min(1, Math.max(0, v2));
+  }
+  //Resolves the cluster radius (metres) — every building whose
+  //centroid is within this radius (or which contains the home
+  //point) becomes part of the home group at full opacity. Allows
+  //attached verandas / outbuildings to read as one with the main
+  //house. 0 = legacy "single-polygon home" behaviour.
+  _buildingClusterRadiusMeters() {
+    const v2 = Number(this.cfg["building-cluster-radius"]);
+    if (!Number.isFinite(v2) || v2 < 0) {
+      return DEFAULT_BUILDING_CLUSTER_RADIUS_M;
+    }
+    return Math.min(100, v2);
+  }
+  //Resolves the configured building base colour. Falls back to the
+  //neutral grey if missing or malformed.
+  _buildingColor() {
+    const v2 = String(this.cfg["building-color"] ?? "").trim();
+    return /^#[0-9a-fA-F]{6}$/.test(v2) ? v2 : DEFAULT_BUILDING_COLOR_HEX;
   }
   //Adds the two custom building layers around the home:
   //
@@ -26823,14 +26873,8 @@ const _HeliosEngine = class _HeliosEngine {
     if (!this.map) {
       return;
     }
-    if (this.map.getLayer("helios-buildings")) {
-      this.map.removeLayer("helios-buildings");
-    }
-    if (this.map.getLayer("helios-buildings-surroundings")) {
-      this.map.removeLayer("helios-buildings-surroundings");
-    }
-    if (this.map.getLayer("helios-buildings-home")) {
-      this.map.removeLayer("helios-buildings-home");
+    for (const lid of ["helios-buildings", "helios-buildings-surroundings", "helios-buildings-home"]) {
+      if (this.map.getLayer(lid)) this.map.removeLayer(lid);
     }
     const styleObj = this.map.getStyle();
     const allLayers = styleObj.layers ?? [];
@@ -26896,6 +26940,7 @@ const _HeliosEngine = class _HeliosEngine {
       }
     }
     const opacity = this._buildingOpacity();
+    const baseColor = this._buildingColor();
     const homeData = this._buildingsData?.home ?? { type: "FeatureCollection", features: [] };
     const surrData = this._buildingsData?.surroundings ?? { type: "FeatureCollection", features: [] };
     if (!this.map.getSource("helios-buildings-surroundings-src")) {
@@ -26926,12 +26971,7 @@ const _HeliosEngine = class _HeliosEngine {
         source: "helios-buildings-surroundings-src",
         type: "fill-extrusion",
         paint: {
-          //Neutral cool grey — same hard-coded tone as the
-          //old single-layer rendering. We briefly exposed a
-          //`building-color` config; making it adjustable
-          //proved a footgun (any hue ate visual room from
-          //the data overlays) and it was retired in beta.12.
-          "fill-extrusion-color": "rgba(210,210,215,1)",
+          "fill-extrusion-color": baseColor,
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
           "fill-extrusion-opacity": opacity
@@ -26944,7 +26984,7 @@ const _HeliosEngine = class _HeliosEngine {
         source: "helios-buildings-home-src",
         type: "fill-extrusion",
         paint: {
-          "fill-extrusion-color": "rgba(210,210,215,1)",
+          "fill-extrusion-color": baseColor,
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
           "fill-extrusion-opacity": 1
@@ -26965,7 +27005,8 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     const radius = this._buildingRadiusMeters();
-    const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}`;
+    const clusterRadius = this._buildingClusterRadiusMeters();
+    const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${clusterRadius}`;
     if (this._buildingsData && this._buildingsFetchKey === key) {
       return;
     }
@@ -26978,6 +27019,7 @@ const _HeliosEngine = class _HeliosEngine {
         homeLon: this.homeLon,
         homeLat: this.homeLat,
         radiusMeters: radius,
+        clusterRadiusMeters: clusterRadius,
         apiKey,
         signal: ac.signal
       }
@@ -27109,7 +27151,7 @@ const _HeliosEngine = class _HeliosEngine {
       }
     }
     try {
-      const baseHex = "#d2d2d7";
+      const baseHex = this._buildingColor();
       let buildingHex;
       if (altitude < -6) {
         buildingHex = this._mixHex(baseHex, "#0a0e1a", 0.85);
@@ -27574,19 +27616,46 @@ const _HeliosEngine = class _HeliosEngine {
   }
   updateConfig(cfg) {
     const prevStyleId = this._resolveMapStyle().id;
+    const prevMinimal = this._isMinimalStyle();
+    const prevPerfMode = this._performanceMode();
     const prevRadius = this._buildingRadiusMeters();
+    const prevCluster = this._buildingClusterRadiusMeters();
     const prevOpacity = this._buildingOpacity();
+    const prevColor = this._buildingColor();
     this.cfg = { ...cfg };
     if (!this.map) {
       return;
     }
     const nextStyleInfo = this._resolveMapStyle();
-    if (nextStyleInfo.id !== prevStyleId) {
+    const styleNeedsReload = nextStyleInfo.id !== prevStyleId || this._isMinimalStyle() !== prevMinimal;
+    if (styleNeedsReload) {
       this._mapReady = false;
       this.map.setStyle(
         `https://api.maptiler.com/maps/${nextStyleInfo.id}/style.json?key=${this.apiKey}`
       );
       return;
+    }
+    const nextPerfMode = this._performanceMode();
+    if (nextPerfMode !== prevPerfMode) {
+      if (nextPerfMode) {
+        this.map.setTerrain(null);
+        if (this.map.getLayer("helios-hillshade")) {
+          this.map.removeLayer("helios-hillshade");
+        }
+        try {
+          this.map.setPixelRatio(1);
+        } catch (_2) {
+        }
+      } else {
+        this.map.setTerrain({ source: "helios-terrain", exaggeration: 1.2 });
+        this._initHillshade();
+        const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
+        const px = IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
+        try {
+          this.map.setPixelRatio(px);
+        } catch (_2) {
+        }
+      }
     }
     if (this.map.getLayer("helios-hillshade")) {
       const c2 = toColor(this.cfg["topography-color"], "rgba(80,100,160,1)");
@@ -27597,17 +27666,28 @@ const _HeliosEngine = class _HeliosEngine {
     }
     this._applyLabelVisibility();
     const nextRadius = this._buildingRadiusMeters();
+    const nextCluster = this._buildingClusterRadiusMeters();
     const nextOpacity = this._buildingOpacity();
-    if (nextRadius !== prevRadius) {
+    const nextColor = this._buildingColor();
+    if (nextRadius !== prevRadius || nextCluster !== prevCluster) {
       this._buildingsData = null;
       this._buildingsFetchKey = "";
       this._addBuildings();
-    } else if (nextOpacity !== prevOpacity && this.map.getLayer("helios-buildings-surroundings")) {
-      this.map.setPaintProperty(
-        "helios-buildings-surroundings",
-        "fill-extrusion-opacity",
-        nextOpacity
-      );
+    } else {
+      if (nextOpacity !== prevOpacity && this.map.getLayer("helios-buildings-surroundings")) {
+        this.map.setPaintProperty(
+          "helios-buildings-surroundings",
+          "fill-extrusion-opacity",
+          nextOpacity
+        );
+      }
+      if (nextColor !== prevColor) {
+        for (const lid of ["helios-buildings-surroundings", "helios-buildings-home"]) {
+          if (this.map.getLayer(lid)) {
+            this.map.setPaintProperty(lid, "fill-extrusion-color", nextColor);
+          }
+        }
+      }
     }
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
@@ -27652,6 +27732,34 @@ const _HeliosEngine = class _HeliosEngine {
     this._mapReady = false;
   }
 };
+_HeliosEngine.MINIMAL_KEEP_LAYER_IDS = /* @__PURE__ */ new Set([
+  "Background",
+  //Land use / cover that give the ground its colour palette
+  //without adding any extra draw call beyond what's already
+  //present.
+  "Farmland",
+  "Vegetation",
+  "Wood",
+  "Forest",
+  "Grass",
+  "Residential",
+  "Sand",
+  "Ice",
+  //Water everywhere it appears (lakes, rivers, swimming pools)
+  //plus the visible river/stream lines.
+  "Water",
+  "River",
+  "Stream",
+  //Roads: keep the meaningful classes for orientation; drop
+  //tunnels, bridges, hatching, ramps, oneways, shields, etc.
+  "Major road",
+  "Highway",
+  "Minor road z10",
+  "Minor road z12",
+  "Service road",
+  "Pathway",
+  "Track"
+]);
 _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC = 1.5;
 _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS = 5e3;
 let HeliosEngine = _HeliosEngine;
@@ -27717,9 +27825,16 @@ const en = {
     batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
     batteryColor: "Battery color *",
     buildingsSection: "Surrounding buildings",
-    buildingsHint: "To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays.",
-    buildingRadius: "Visibility radius (m) *",
-    buildingOpacity: "Surrounding opacity * (0 → 1)"
+    buildingsHint: 'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
+    buildingRadius: "Visibility radius *",
+    buildingClusterRadius: "Home cluster radius *",
+    buildingOpacity: "Surrounding opacity *",
+    buildingColor: "Building color *",
+    performanceMode: "Performance mode *",
+    performanceModeOn: "On",
+    performanceModeOff: "Off",
+    performanceModeHint: "Disables 3D terrain, hillshade and caps pixel density. Useful on low-end devices or for long sessions. Camera pitch and 3D buildings are preserved.",
+    mapStyleMinimal: "Minimal"
   }
 };
 const fr = {
@@ -27784,9 +27899,16 @@ const fr = {
     batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
     batteryColor: "Couleur batterie *",
     buildingsSection: "Bâtiments alentour",
-    buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données.",
-    buildingRadius: "Rayon de visibilité (m) *",
-    buildingOpacity: "Opacité des bâtiments voisins * (0 → 1)"
+    buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
+    buildingRadius: "Rayon de visibilité *",
+    buildingClusterRadius: "Rayon de regroupement maison *",
+    buildingOpacity: "Opacité des bâtiments voisins *",
+    buildingColor: "Couleur des bâtiments *",
+    performanceMode: "Mode performance *",
+    performanceModeOn: "Activé",
+    performanceModeOff: "Désactivé",
+    performanceModeHint: "Désactive le relief 3D, l'ombrage du relief et limite la densité de pixels. Utile sur appareils bas/moyen de gamme ou pour les longues sessions. Conserve l'inclinaison de caméra et les bâtiments en 3D.",
+    mapStyleMinimal: "Minimal"
   }
 };
 const de = {
@@ -27851,9 +27973,16 @@ const de = {
     batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
     batteryColor: "Batteriefarbe *",
     buildingsSection: "Umliegende Gebäude",
-    buildingsHint: "Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren.",
-    buildingRadius: "Sichtradius (m) *",
-    buildingOpacity: "Deckkraft Nachbargebäude * (0 → 1)"
+    buildingsHint: 'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
+    buildingRadius: "Sichtradius *",
+    buildingClusterRadius: "Cluster-Radius Zuhause *",
+    buildingOpacity: "Deckkraft Nachbargebäude *",
+    buildingColor: "Gebäudefarbe *",
+    performanceMode: "Performance-Modus *",
+    performanceModeOn: "Ein",
+    performanceModeOff: "Aus",
+    performanceModeHint: "Deaktiviert 3D-Terrain, Hillshade und begrenzt die Pixeldichte. Sinnvoll bei leistungsschwachen Geräten oder langen Sitzungen. Kameraneigung und 3D-Gebäude bleiben erhalten.",
+    mapStyleMinimal: "Minimal"
   }
 };
 const es = {
@@ -27918,9 +28047,16 @@ const es = {
     batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
     batteryColor: "Color batería *",
     buildingsSection: "Edificios circundantes",
-    buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos.",
-    buildingRadius: "Radio de visibilidad (m) *",
-    buildingOpacity: "Opacidad de los vecinos * (0 → 1)"
+    buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».",
+    buildingRadius: "Radio de visibilidad *",
+    buildingClusterRadius: "Radio del grupo de la casa *",
+    buildingOpacity: "Opacidad de los vecinos *",
+    buildingColor: "Color de los edificios *",
+    performanceMode: "Modo rendimiento *",
+    performanceModeOn: "Activado",
+    performanceModeOff: "Desactivado",
+    performanceModeHint: "Desactiva el terreno 3D, el relieve y limita la densidad de píxeles. Útil en dispositivos modestos o para sesiones largas. La inclinación y los edificios 3D se mantienen.",
+    mapStyleMinimal: "Mínimo"
   }
 };
 const it = {
@@ -27985,9 +28121,16 @@ const it = {
     batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
     batteryColor: "Colore batteria *",
     buildingsSection: "Edifici circostanti",
-    buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati.",
-    buildingRadius: "Raggio di visibilità (m) *",
-    buildingOpacity: "Opacità degli edifici vicini * (0 → 1)"
+    buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».",
+    buildingRadius: "Raggio di visibilità *",
+    buildingClusterRadius: "Raggio del gruppo casa *",
+    buildingOpacity: "Opacità degli edifici vicini *",
+    buildingColor: "Colore degli edifici *",
+    performanceMode: "Modalità prestazioni *",
+    performanceModeOn: "Attivata",
+    performanceModeOff: "Disattivata",
+    performanceModeHint: "Disattiva il terreno 3D, l'ombreggiatura del rilievo e limita la densità dei pixel. Utile su dispositivi modesti o per sessioni lunghe. L'inclinazione e gli edifici 3D rimangono.",
+    mapStyleMinimal: "Minimale"
   }
 };
 const nl = {
@@ -28052,9 +28195,16 @@ const nl = {
     batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
     batteryColor: "Batterijkleur *",
     buildingsSection: "Omliggende gebouwen",
-    buildingsHint: "Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren.",
-    buildingRadius: "Zichtstraal (m) *",
-    buildingOpacity: "Dekking omliggende gebouwen * (0 → 1)"
+    buildingsHint: 'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
+    buildingRadius: "Zichtstraal *",
+    buildingClusterRadius: "Cluster-straal huis *",
+    buildingOpacity: "Dekking omliggende gebouwen *",
+    buildingColor: "Gebouwkleur *",
+    performanceMode: "Prestatiemodus *",
+    performanceModeOn: "Aan",
+    performanceModeOff: "Uit",
+    performanceModeHint: "Schakelt 3D-terrein, reliëfschaduw uit en beperkt de pixeldichtheid. Handig op bescheiden apparaten of voor lange sessies. De camerakanteling en 3D-gebouwen blijven behouden.",
+    mapStyleMinimal: "Minimaal"
   }
 };
 const pt = {
@@ -28119,9 +28269,16 @@ const pt = {
     batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
     batteryColor: "Cor da bateria *",
     buildingsSection: "Edifícios circundantes",
-    buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados.",
-    buildingRadius: "Raio de visibilidade (m) *",
-    buildingOpacity: "Opacidade dos vizinhos * (0 → 1)"
+    buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».",
+    buildingRadius: "Raio de visibilidade *",
+    buildingClusterRadius: "Raio do grupo da casa *",
+    buildingOpacity: "Opacidade dos vizinhos *",
+    buildingColor: "Cor dos edifícios *",
+    performanceMode: "Modo de desempenho *",
+    performanceModeOn: "Ativado",
+    performanceModeOff: "Desativado",
+    performanceModeHint: "Desativa o terreno 3D, o relevo e limita a densidade de píxeis. Útil em dispositivos modestos ou em sessões longas. A inclinação e os edifícios 3D mantêm-se.",
+    mapStyleMinimal: "Mínimo"
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -29543,8 +29700,16 @@ let HeliosCardEditor = class extends i {
       this._update(key, v2);
     }
   }
+  _bool(key, value) {
+    this._update(key, value);
+  }
   _color(key, e2) {
     this._update(key, e2.detail.value);
+  }
+  //Format a numeric slider value for display alongside the input.
+  //Integers stay integer; fractional values get 2 decimals.
+  _fmtNum(v2, step) {
+    return step >= 1 ? String(Math.round(v2)) : v2.toFixed(2);
   }
   render() {
     const c2 = this._cfg;
@@ -29579,18 +29744,21 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <label class="field">
                     <span class="label">${t2.editor.hillshadeStrength}</span>
-                    <input
-                        type="number" min="0" max="1" step="0.01"
-                        .value="${String(c2["topography-alpha"] ?? 0.65)}"
-                        @change="${(e2) => this._num("topography-alpha", e2)}"
-                    />
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.01"
+                            .value="${String(c2["topography-alpha"] ?? 0.65)}"
+                            @input="${(e2) => this._num("topography-alpha", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["topography-alpha"] ?? 0.65), 0.01)}</span>
+                    </div>
                 </label>
                 <div class="hint">${t2.editor.terrainReliefHint}</div>
 
                 <div class="section-title">${t2.editor.mapSection}</div>
                 <div class="field">
                     <span class="label">${t2.editor.mapStyle}</span>
-                    <div class="segmented-toggle">
+                    <div class="segmented-toggle segmented-toggle-3">
                         <button
                             type="button"
                             class="seg-option ${String(c2["map-style"] ?? "streets") === "streets" ? "active" : ""}"
@@ -29601,6 +29769,11 @@ let HeliosCardEditor = class extends i {
                             class="seg-option ${String(c2["map-style"] ?? "streets") === "topo" ? "active" : ""}"
                             @click="${() => this._update("map-style", "topo")}"
                         >${t2.editor.mapStyleTopo}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["map-style"] ?? "streets") === "minimal" ? "active" : ""}"
+                            @click="${() => this._update("map-style", "minimal")}"
+                        >${t2.editor.mapStyleMinimal}</button>
                     </div>
                 </div>
                 <div class="hint">${t2.editor.mapStyleHint}</div>
@@ -29652,23 +29825,64 @@ let HeliosCardEditor = class extends i {
                     </div>
                 </div>
                 <div class="hint">${t2.editor.autoRotateHint}</div>
+                <div class="field">
+                    <span class="label">${t2.editor.performanceMode}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${c2["performance-mode"] !== true ? "active" : ""}"
+                            @click="${() => this._bool("performance-mode", false)}"
+                        >${t2.editor.performanceModeOff}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${c2["performance-mode"] === true ? "active" : ""}"
+                            @click="${() => this._bool("performance-mode", true)}"
+                        >${t2.editor.performanceModeOn}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.performanceModeHint}</div>
 
                 <div class="section-title">${t2.editor.buildingsSection}</div>
                 <label class="field">
                     <span class="label">${t2.editor.buildingRadius}</span>
-                    <input
-                        type="number" min="20" max="1000" step="10"
-                        .value="${String(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M)}"
-                        @change="${(e2) => this._num("building-radius", e2)}"
-                    />
+                    <div class="slider-row">
+                        <input
+                            type="range" min="20" max="1000" step="10"
+                            .value="${String(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M)}"
+                            @input="${(e2) => this._num("building-radius", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t2.editor.buildingClusterRadius}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="100" step="1"
+                            .value="${String(c2["building-cluster-radius"] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M)}"
+                            @input="${(e2) => this._num("building-cluster-radius", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["building-cluster-radius"] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M), 1)} m</span>
+                    </div>
                 </label>
                 <label class="field">
                     <span class="label">${t2.editor.buildingOpacity}</span>
-                    <input
-                        type="number" min="0" max="1" step="0.05"
-                        .value="${String(c2["building-opacity"] ?? DEFAULT_BUILDING_OPACITY)}"
-                        @change="${(e2) => this._num("building-opacity", e2)}"
-                    />
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            .value="${String(c2["building-opacity"] ?? DEFAULT_BUILDING_OPACITY)}"
+                            @input="${(e2) => this._num("building-opacity", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["building-opacity"] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t2.editor.buildingColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["building-color"], DEFAULT_BUILDING_COLOR_HEX)}"
+                        .ariaLabel="${t2.editor.buildingColor}"
+                        @value-changed="${(e2) => this._color("building-color", e2)}"
+                    ></helios-color-picker>
                 </label>
                 <div class="hint">${t2.editor.buildingsHint}</div>
 
@@ -29928,6 +30142,33 @@ HeliosCardEditor.styles = i$3`
         {
             background: var(--primary-color, #03a9f4);
             color: var(--text-primary-color, #fff);
+        }
+
+        /*  Slider variant — replaces type="number" inputs so the
+            user can never enter a value outside the supported range.
+            The matching value is shown to the right of the track. */
+        .slider-row
+        {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: 180px;
+        }
+
+        .slider-row input[type="range"]
+        {
+            flex: 1;
+            min-width: 0;
+            accent-color: var(--primary-color, #03a9f4);
+        }
+
+        .slider-value
+        {
+            font-variant-numeric: tabular-nums;
+            font-size: 12px;
+            color: var(--secondary-text-color, #727272);
+            min-width: 44px;
+            text-align: right;
         }
 
         code
@@ -31667,12 +31908,15 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   //sig so Lit re-renders the card when the user toggles it
   //in the editor.
   "card-theme",
-  //building-radius / building-opacity drive the helios-buildings-*
-  //custom layers (radius triggers a refetch + GeoJSON refresh,
-  //opacity is a cheap paint-property update on the surroundings
-  //layer).
+  //building-* drive the helios-buildings-* custom layers.
+  //  radius / cluster-radius → invalidate cache and refetch
+  //  opacity / color → cheap paint-property updates
   "building-radius",
-  "building-opacity"
+  "building-cluster-radius",
+  "building-opacity",
+  "building-color",
+  //performance-mode toggles terrain, hillshade and pixelRatio.
+  "performance-mode"
 ];
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([

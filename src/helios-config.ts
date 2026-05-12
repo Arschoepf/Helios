@@ -8,7 +8,9 @@ import
     DEFAULT_PV_COLOR_HEX,
     DEFAULT_BATTERY_COLOR_HEX,
     DEFAULT_BUILDING_RADIUS_M,
-    DEFAULT_BUILDING_OPACITY
+    DEFAULT_BUILDING_OPACITY,
+    DEFAULT_BUILDING_CLUSTER_RADIUS_M,
+    DEFAULT_BUILDING_COLOR_HEX
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -402,9 +404,21 @@ export class HeliosCardEditor extends LitElement
         }
     }
 
+    private _bool(key: keyof HeliosConfig, value: boolean): void
+    {
+        this._update(key, value);
+    }
+
     private _color(key: keyof HeliosConfig, e: CustomEvent): void
     {
         this._update(key, e.detail.value);
+    }
+
+    //Format a numeric slider value for display alongside the input.
+    //Integers stay integer; fractional values get 2 decimals.
+    private _fmtNum(v: number, step: number): string
+    {
+        return step >= 1 ? String(Math.round(v)) : v.toFixed(2);
     }
 
     //Filter for the PV entity picker — accepts power/energy device
@@ -481,18 +495,21 @@ export class HeliosCardEditor extends LitElement
                 </label>
                 <label class="field">
                     <span class="label">${t.editor.hillshadeStrength}</span>
-                    <input
-                        type="number" min="0" max="1" step="0.01"
-                        .value="${String(c['topography-alpha'] ?? 0.65)}"
-                        @change="${(e: Event) => this._num('topography-alpha', e)}"
-                    />
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.01"
+                            .value="${String(c['topography-alpha'] ?? 0.65)}"
+                            @input="${(e: Event) => this._num('topography-alpha', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['topography-alpha'] ?? 0.65), 0.01)}</span>
+                    </div>
                 </label>
                 <div class="hint">${t.editor.terrainReliefHint}</div>
 
                 <div class="section-title">${t.editor.mapSection}</div>
                 <div class="field">
                     <span class="label">${t.editor.mapStyle}</span>
-                    <div class="segmented-toggle">
+                    <div class="segmented-toggle segmented-toggle-3">
                         <button
                             type="button"
                             class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'streets' ? 'active' : ''}"
@@ -503,6 +520,11 @@ export class HeliosCardEditor extends LitElement
                             class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'topo' ? 'active' : ''}"
                             @click="${() => this._update('map-style', 'topo')}"
                         >${t.editor.mapStyleTopo}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'minimal' ? 'active' : ''}"
+                            @click="${() => this._update('map-style', 'minimal')}"
+                        >${t.editor.mapStyleMinimal}</button>
                     </div>
                 </div>
                 <div class="hint">${t.editor.mapStyleHint}</div>
@@ -554,23 +576,64 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.autoRotateHint}</div>
+                <div class="field">
+                    <span class="label">${t.editor.performanceMode}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['performance-mode'] !== true) ? 'active' : ''}"
+                            @click="${() => this._bool('performance-mode', false)}"
+                        >${t.editor.performanceModeOff}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['performance-mode'] === true) ? 'active' : ''}"
+                            @click="${() => this._bool('performance-mode', true)}"
+                        >${t.editor.performanceModeOn}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.performanceModeHint}</div>
 
                 <div class="section-title">${t.editor.buildingsSection}</div>
                 <label class="field">
                     <span class="label">${t.editor.buildingRadius}</span>
-                    <input
-                        type="number" min="20" max="1000" step="10"
-                        .value="${String(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M)}"
-                        @change="${(e: Event) => this._num('building-radius', e)}"
-                    />
+                    <div class="slider-row">
+                        <input
+                            type="range" min="20" max="1000" step="10"
+                            .value="${String(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M)}"
+                            @input="${(e: Event) => this._num('building-radius', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.buildingClusterRadius}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="100" step="1"
+                            .value="${String(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M)}"
+                            @input="${(e: Event) => this._num('building-cluster-radius', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['building-cluster-radius'] ?? DEFAULT_BUILDING_CLUSTER_RADIUS_M), 1)} m</span>
+                    </div>
                 </label>
                 <label class="field">
                     <span class="label">${t.editor.buildingOpacity}</span>
-                    <input
-                        type="number" min="0" max="1" step="0.05"
-                        .value="${String(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY)}"
-                        @change="${(e: Event) => this._num('building-opacity', e)}"
-                    />
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            .value="${String(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY)}"
+                            @input="${(e: Event) => this._num('building-opacity', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.buildingColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c['building-color'], DEFAULT_BUILDING_COLOR_HEX)}"
+                        .ariaLabel="${t.editor.buildingColor}"
+                        @value-changed="${(e: CustomEvent) => this._color('building-color', e)}"
+                    ></helios-color-picker>
                 </label>
                 <div class="hint">${t.editor.buildingsHint}</div>
 
@@ -830,6 +893,33 @@ export class HeliosCardEditor extends LitElement
         {
             background: var(--primary-color, #03a9f4);
             color: var(--text-primary-color, #fff);
+        }
+
+        /*  Slider variant — replaces type="number" inputs so the
+            user can never enter a value outside the supported range.
+            The matching value is shown to the right of the track. */
+        .slider-row
+        {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: 180px;
+        }
+
+        .slider-row input[type="range"]
+        {
+            flex: 1;
+            min-width: 0;
+            accent-color: var(--primary-color, #03a9f4);
+        }
+
+        .slider-value
+        {
+            font-variant-numeric: tabular-nums;
+            font-size: 12px;
+            color: var(--secondary-text-color, #727272);
+            min-width: 44px;
+            text-align: right;
         }
 
         code

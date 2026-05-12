@@ -68,8 +68,15 @@ export const de: Translations = {
         batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
         batteryColor:       'Batteriefarbe *',
         buildingsSection:   'Umliegende Gebäude',
-        buildingsHint:      'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren.',
-        buildingRadius:     'Sichtradius (m) *',
-        buildingOpacity:    'Deckkraft Nachbargebäude * (0 → 1)'
+        buildingsHint:      'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
+        buildingRadius:        'Sichtradius *',
+        buildingClusterRadius: 'Cluster-Radius Zuhause *',
+        buildingOpacity:       'Deckkraft Nachbargebäude *',
+        buildingColor:         'Gebäudefarbe *',
+        performanceMode:       'Performance-Modus *',
+        performanceModeOn:     'Ein',
+        performanceModeOff:    'Aus',
+        performanceModeHint:   'Deaktiviert 3D-Terrain, Hillshade und begrenzt die Pixeldichte. Sinnvoll bei leistungsschwachen Geräten oder langen Sitzungen. Kameraneigung und 3D-Gebäude bleiben erhalten.',
+        mapStyleMinimal:       'Minimal'
     }
 };

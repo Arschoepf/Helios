@@ -74,37 +74,50 @@ export interface HeliosConfig
     //set, the dark variants of these styles (streets-v4-dark /
     //topo-v4-dark) are used so the basemap matches the chrome.
     'map-style'?:             unknown;
-    //v1.1.0-beta.8 — picks the card chrome theme. 'light' (default)
-    //paints chips, charts, buttons, tooltips and the scrub overlay
-    //on a white surface; 'dark' switches to a near-black surface
-    //with light-grey text so the card sits cleanly inside dark HA
-    //dashboards. The 3D map basemap and the configured colour
-    //palette (sun, cloud, PV, battery) are unaffected.
+    //Picks the card chrome theme. 'light' (default) paints chips,
+    //charts, buttons, tooltips and the scrub overlay on a white
+    //surface; 'dark' switches to a near-black surface with light-
+    //grey text so the card sits cleanly inside dark HA dashboards.
+    //The 3D map basemap and the configured colour palette (sun,
+    //cloud, PV, battery) are unaffected.
     'card-theme'?:            unknown;
-    //v1.2 — opts the idle-camera orbit in or out. Default: true
-    //(orbit enabled). When set to false, the camera stays at the
-    //user's bearing forever; pinch-rotate still works normally.
-    //Useful on low-power devices or for users who find the
-    //constant motion distracting.
-    'auto-rotate-enabled'?:   unknown;
-    //v1.2.0-beta.6 — radius (in metres) around the home within which
-    //surrounding buildings are rendered. Buildings outside this radius
-    //are not drawn at all, which is a hard perf win in dense urban
-    //areas (rendering thousands of fill-extrusions per frame was the
-    //main pain point reported by beta testers). The user's own home
-    //is always rendered regardless of radius. Default: 100.
-    'building-radius'?:       unknown;
-    //v1.2.0-beta.6 — opacity of the surrounding buildings (0..1). The
-    //home itself stays at full opacity so it reads as the focal point.
-    //Default: 0.25 (a "ghost" surround that conveys urban context
-    //without competing with the data overlays).
-    'building-opacity'?:      unknown;
+    //Opts the idle-camera orbit in or out. Default: true (orbit
+    //enabled). When false, the camera stays at the user's bearing
+    //forever; pinch-rotate still works normally. Useful on low-power
+    //devices or for users who find the constant motion distracting.
+    'auto-rotate-enabled'?:    unknown;
+    //Radius (m) around the home within which surrounding buildings are
+    //rendered. Buildings outside are not drawn at all. Default 100 m.
+    'building-radius'?:        unknown;
+    //Opacity 0..1 of the surrounding buildings; home stays at 1.0.
+    //Default 0.25 — a "ghost" surround that conveys urban context
+    //without competing with the data overlays.
+    'building-opacity'?:       unknown;
+    //Cluster radius (m) around the home: every building whose centroid
+    //sits within this radius (or which contains the home point) is
+    //treated as part of the home and painted at full opacity. Used
+    //to keep verandas, garages and outbuildings physically attached
+    //to the main house from rendering as semi-transparent "neighbours".
+    //Default 0 (legacy single-polygon home detection).
+    'building-cluster-radius'?: unknown;
+    //Hex colour of every rendered building (home and surroundings
+    //share the same base tone, modulated by sun altitude). The
+    //surrounding extrusions remain visually distinct via opacity,
+    //not hue. Default neutral cool grey #d2d2d7.
+    'building-color'?:         unknown;
+    //Drops the most expensive per-frame work for low-end devices /
+    //long sessions: terrain mesh disabled (flat ground, pitch is
+    //preserved so the 3D buildings still read as 3D), hillshade
+    //hidden, canvas pixel ratio forced to 1.0. Default false.
+    'performance-mode'?:       unknown;
 }
 
-//Default values for the building radius/opacity config — exposed so
-//the visual editor can render the matching placeholder hints.
-export const DEFAULT_BUILDING_RADIUS_M = 100;
-export const DEFAULT_BUILDING_OPACITY  = 0.25;
+//Default values for the building config — exposed so the visual
+//editor can render the matching placeholder / slider defaults.
+export const DEFAULT_BUILDING_RADIUS_M         = 100;
+export const DEFAULT_BUILDING_OPACITY          = 0.25;
+export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
+export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
 
@@ -508,17 +521,18 @@ export class HeliosEngine
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
 
-        //Pixel ratio caps. v1.2.0-beta.11 lowered both ends after
-        //user-confirmed perf testing: at pitch 55° + continuous
-        //auto-rotation, each rendered pixel is sampled multiple
-        //times (terrain mesh, hillshade pass, extrusion pass, basemap
-        //layers) so going from 3 → 2 on desktop and 1.5 → 1.25 on
-        //mobile slashes per-frame fragment work without a visible
-        //quality regression on the card-sized viewport (~600–800 px).
+        //Pixel ratio caps. At pitch 55° + continuous auto-rotation,
+        //each rendered pixel is sampled multiple times (terrain mesh,
+        //hillshade, extrusion, basemap) so the desktop cap sits at 2
+        //(not the native 2-3 of Retina) and mobile at 1.25, slashing
+        //per-frame fragment work without a visible quality regression
+        //on the card-sized viewport. Performance-mode forces 1.0.
         const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
-        const pixelRatio = IS_MOBILE
-            ? Math.min(Math.max(dpr, 1), 1.25)
-            : Math.min(Math.max(dpr, 1.5), 2);
+        const pixelRatio = (this.cfg['performance-mode'] === true)
+            ? 1.0
+            : (IS_MOBILE
+                ? Math.min(Math.max(dpr, 1), 1.25)
+                : Math.min(Math.max(dpr, 1.5), 2));
 
         const styleInfo = this._resolveMapStyle();
 
@@ -565,14 +579,11 @@ export class HeliosEngine
 
         this._resizeObserver.observe(container);
 
-        //v1.2.0-beta.7 — expose the map on the global window for
-        //in-browser debugging via the dev tools console. Plain
-        //console.log of `__heliosMap.getStyle().layers` is the
-        //single most useful thing when tracking down style-import
-        //weirdness (MapLibre 5 / MapTiler v4 silently no-op'ing
-        //layer manipulations). Cheap to leave on; not a security
-        //surface — anyone with dev-tools open already has full
-        //access to the page.
+        //Expose the map on the global window for in-browser
+        //debugging. `__heliosMap.getStyle().layers` is the single
+        //most useful thing when investigating layer / style issues.
+        //Cheap to leave on; anyone with dev-tools open already has
+        //full access to the page.
         try { (window as unknown as { __heliosMap?: Map }).__heliosMap = this.map; }
         catch (_) {}
 
@@ -653,22 +664,80 @@ export class HeliosEngine
     }
 
     //Resolves the active MapTiler style id from `map-style` config.
-    //Two values are accepted:
+    //Three values are accepted:
     //  'streets' (default) → 'streets-v4' — sober urban basemap.
     //  'topo'              → 'topo-v4'    — topographic basemap with
     //                                       contour lines and softer
     //                                       earth tones, better in
     //                                       hilly / outdoor settings.
+    //  'minimal'           → 'streets-v4' loaded then pruned in
+    //                                       _onStyleLoad to a curated
+    //                                       whitelist of layers — fewer
+    //                                       per-frame draw calls, best
+    //                                       for low-end devices.
     //
     //Anything else falls back to 'streets'. When `card-theme: dark`
-    //is set, the `-dark` variant of the chosen style is used so the
-    //basemap matches the dark chrome.
+    //is set, the `-dark` variant of the chosen base style is used so
+    //the basemap matches the dark chrome.
     private _resolveMapStyle(): { id: string }
     {
-        const raw = String(this.cfg['map-style'] ?? 'streets').toLowerCase();
-        const base = raw === 'topo' ? 'topo-v4' : 'streets-v4';
+        const raw    = String(this.cfg['map-style'] ?? 'streets').toLowerCase();
+        const base   = raw === 'topo' ? 'topo-v4' : 'streets-v4';
         const isDark = String(this.cfg['card-theme'] ?? 'light').toLowerCase() === 'dark';
         return { id: isDark ? `${base}-dark` : base };
+    }
+
+    //True when the user picked the curated minimal basemap. The map
+    //still loads streets-v4 (we don't ship a hand-built style); the
+    //pruning happens in _pruneMinimalStyle at style.load time.
+    private _isMinimalStyle(): boolean
+    {
+        return String(this.cfg['map-style'] ?? 'streets').toLowerCase() === 'minimal';
+    }
+
+    //Layers we keep when `map-style: minimal` is active. Everything
+    //else is removed outright in _pruneMinimalStyle — removeLayer is
+    //immune to MapLibre 5 style-import scoping (the bare removeLayer
+    //call was confirmed effective on the streets-v4 layer set).
+    private static readonly MINIMAL_KEEP_LAYER_IDS: ReadonlySet<string> = new Set([
+        'Background',
+        //Land use / cover that give the ground its colour palette
+        //without adding any extra draw call beyond what's already
+        //present.
+        'Farmland', 'Vegetation', 'Wood', 'Forest', 'Grass',
+        'Residential', 'Sand', 'Ice',
+        //Water everywhere it appears (lakes, rivers, swimming pools)
+        //plus the visible river/stream lines.
+        'Water', 'River', 'Stream',
+        //Roads: keep the meaningful classes for orientation; drop
+        //tunnels, bridges, hatching, ramps, oneways, shields, etc.
+        'Major road', 'Highway', 'Minor road z10', 'Minor road z12',
+        'Service road', 'Pathway', 'Track'
+    ]);
+
+    private _pruneMinimalStyle(): void
+    {
+        if (!this.map || !this._isMinimalStyle())
+        {
+            return;
+        }
+        const keep   = HeliosEngine.MINIMAL_KEEP_LAYER_IDS;
+        const layers = this.map.getStyle().layers ?? [];
+        for (const l of layers)
+        {
+            if (l.id.startsWith('helios-')) continue;
+            if (keep.has(l.id))             continue;
+            try { this.map.removeLayer(l.id); }
+            catch (_) {}
+        }
+    }
+
+    //Performance mode — disables the per-frame heavyweights (terrain
+    //mesh + hillshade) and caps pixelRatio at 1.0. The 3D pitch and
+    //extruded buildings are preserved, so the card still reads as 3D.
+    private _performanceMode(): boolean
+    {
+        return this.cfg['performance-mode'] === true;
     }
 
     private _findHourIndex(t: Date): number
@@ -848,18 +917,19 @@ export class HeliosEngine
         }
         this._mapReady = true;
 
+        //Minimal basemap: prune all native layers outside the
+        //curated whitelist before any helios-* layer is added,
+        //so we don't waste setup work on layers that won't render.
+        this._pruneMinimalStyle();
+
+        const perfMode = this._performanceMode();
+
         if (!this.map.getSource('helios-terrain'))
         {
-            //maxzoom: 12 (down from 14 in beta.10 and earlier). The
-            //DEM is sampled every ~20 m of ground at z=12, vs ~5 m
-            //at z=14. At map zoom 18 / pitch 55° with the camera
-            //locked over the home, the user-visible relief is the
-            //mid-scale landscape (~100 m+ features) — the finer
-            //per-5-m detail is invisible. Cutting maxzoom from 14
-            //to 12 means MapLibre's terrain mesh has ~16× fewer
-            //vertices to project per rotation frame, which beta.11
-            //tester rotation confirmed is the dominant per-frame
-            //cost.
+            //DEM sampled every ~20 m at z=12 — sufficient relief at
+            //pitch 55° / zoom 18; ~16× fewer mesh vertices per
+            //rotation frame than z=14, which dominates the per-frame
+            //cost on Safari fullscreen.
             this.map.addSource('helios-terrain',
             {
                 type:     'raster-dem',
@@ -868,7 +938,18 @@ export class HeliosEngine
                 maxzoom:  12
             });
         }
-        this.map.setTerrain({ source: 'helios-terrain', exaggeration: 1.2 });
+        //Performance mode drops the terrain mesh entirely (flat
+        //ground). Pitch is preserved, so the 3D buildings still
+        //read as 3D, but the per-frame mesh projection cost is gone.
+        if (perfMode)
+        {
+            this.map.setTerrain(null);
+            try { this.map.setPixelRatio(1.0); } catch (_) {}
+        }
+        else
+        {
+            this.map.setTerrain({ source: 'helios-terrain', exaggeration: 1.2 });
+        }
 
         this.map.getStyle().layers?.forEach(l =>
         {
@@ -883,19 +964,14 @@ export class HeliosEngine
             }
         });
 
-        //Layer order matters here. We add hillshade and night-shade
-        //first (they tint the ground), then the cloud-cover disc
-        //(painted on the ground beneath buildings so they emerge
-        //through it as islands), then buildings on top. The 3D
-        //solar overlays (arc, sun, incidence ray) are NOT MapLibre
-        //layers — they live as HTML/SVG above the canvas and use
-        //screen-space projection of geographic + altitude points
-        //(see projectScenePoint() below). Going through the canvas
-        //via a Three.js custom layer was tried and rejected: even
-        //when the cube was correctly rendered into the framebuffer,
-        //MapLibre's compositing pipeline ended up overpainting it
-        //in a way we couldn't reliably override. HTML overlays
-        //sidestep the entire GL pipeline and let us style with CSS.
+        //Layer order: hillshade and night-shade first (they tint the
+        //ground), then the cloud-cover disc (under the buildings so
+        //they emerge through it as islands), then buildings on top.
+        //The 3D solar overlays (arc, sun, incidence ray) live as
+        //HTML/SVG above the canvas — a Three.js custom layer was
+        //tried and rejected because MapLibre's compositor would
+        //overpaint it unpredictably; HTML overlays sidestep the GL
+        //pipeline entirely.
         this._initHillshade();
         this._initNightShade();
         this._initCloudCoverDisc();
@@ -926,6 +1002,13 @@ export class HeliosEngine
         {
             this.map.removeLayer('helios-hillshade');
         }
+        //Performance mode: skip hillshade entirely. The fragment
+        //shader pass is one of the dominant per-frame costs on
+        //Safari fullscreen.
+        if (this._performanceMode())
+        {
+            return;
+        }
 
         const t   = this._selectedTime ?? new Date();
         const { azimuth } = getSunPosition(t, this.homeLat, this.homeLon);
@@ -940,11 +1023,10 @@ export class HeliosEngine
             paint:
             {
                 'hillshade-shadow-color':           col,
-                //v1.3 — non-transparent highlights make sun-facing
-                //slopes pop, giving the streets style the depth it
-                //was missing. Soft warm white at moderate opacity so
-                //the hillshade reads as ambient lighting rather than
-                //a paint-stroke effect.
+                //Non-transparent highlights make sun-facing slopes
+                //pop. Soft warm white at moderate opacity so the
+                //hillshade reads as ambient lighting rather than a
+                //paint-stroke effect.
                 'hillshade-highlight-color':        'rgba(255,250,235,0.55)',
                 'hillshade-accent-color':           col,
                 'hillshade-illumination-direction': azimuth,
@@ -1216,23 +1298,14 @@ export class HeliosEngine
         });
     }
 
-    //Renders 3D building extrusions as the visual context for the
-    //home location. All buildings are painted in the configured
-    //`building-color` (defaults to a neutral light grey) at a
-    //single shared opacity — the home is identified by the chips
-    //and leader lines on top, not by a special render of the
-    //building itself. The earlier home-fill experiment (beta.9 /
-    //beta.10) was removed because it was visually noisy and the
-    //spatial identification of the home building from vector tiles
-    //was unreliable in dense neighbourhoods.
-    //Toggle MapTiler Streets' label layers (road names, house numbers,
+    //Toggle MapTiler's symbol layers (road names, house numbers,
     //POIs, place names) on or off based on the `show-labels` config.
     //Symbol-type layers are the canonical container for text + icon
     //rendering in MapLibre styles; flipping their `visibility` layout
-    //property is enough to hide everything text-based without touching
-    //the underlying geometry layers (roads, water, terrain). Our own
-    //`helios-*` layers are skipped — they're not labels but we filter
-    //defensively in case a future feature adds one.
+    //property is enough to hide everything text-based without
+    //touching the underlying geometry (roads, water, terrain). Our
+    //own `helios-*` layers are skipped defensively in case a future
+    //feature adds a symbol layer of our own.
     private _applyLabelVisibility(): void
     {
         if (!this.map)
@@ -1257,9 +1330,8 @@ export class HeliosEngine
     }
 
     //Resolves the configured building radius (metres). Falls back to
-    //DEFAULT_BUILDING_RADIUS_M for missing or invalid input. Clamped
-    //to a sane range so a stray editor value can't accidentally
-    //trigger fetching dozens of tiles.
+    //DEFAULT_BUILDING_RADIUS_M and clamps to a sane range so a stray
+    //editor value can't accidentally trigger fetching dozens of tiles.
     private _buildingRadiusMeters(): number
     {
         const v = Number(this.cfg['building-radius']);
@@ -1280,6 +1352,29 @@ export class HeliosEngine
             return DEFAULT_BUILDING_OPACITY;
         }
         return Math.min(1, Math.max(0, v));
+    }
+
+    //Resolves the cluster radius (metres) — every building whose
+    //centroid is within this radius (or which contains the home
+    //point) becomes part of the home group at full opacity. Allows
+    //attached verandas / outbuildings to read as one with the main
+    //house. 0 = legacy "single-polygon home" behaviour.
+    private _buildingClusterRadiusMeters(): number
+    {
+        const v = Number(this.cfg['building-cluster-radius']);
+        if (!Number.isFinite(v) || v < 0)
+        {
+            return DEFAULT_BUILDING_CLUSTER_RADIUS_M;
+        }
+        return Math.min(100, v);
+    }
+
+    //Resolves the configured building base colour. Falls back to the
+    //neutral grey if missing or malformed.
+    private _buildingColor(): string
+    {
+        const v = String(this.cfg['building-color'] ?? '').trim();
+        return /^#[0-9a-fA-F]{6}$/.test(v) ? v : DEFAULT_BUILDING_COLOR_HEX;
     }
 
     //Adds the two custom building layers around the home:
@@ -1312,47 +1407,26 @@ export class HeliosEngine
             return;
         }
 
-        //Drop the v1.0 layer if a stale build left it around — it
-        //pulled from MapTiler's vector source and would render
-        //thousands of extrusions next to our trimmed-down ones.
-        if (this.map.getLayer('helios-buildings'))
+        //Drop any stale helios-buildings* layer so re-runs of
+        //_addBuildings (on style reload, theme switch, etc.) are
+        //idempotent.
+        for (const lid of ['helios-buildings', 'helios-buildings-surroundings', 'helios-buildings-home'])
         {
-            this.map.removeLayer('helios-buildings');
-        }
-        if (this.map.getLayer('helios-buildings-surroundings'))
-        {
-            this.map.removeLayer('helios-buildings-surroundings');
-        }
-        if (this.map.getLayer('helios-buildings-home'))
-        {
-            this.map.removeLayer('helios-buildings-home');
+            if (this.map.getLayer(lid)) this.map.removeLayer(lid);
         }
 
-        //Suppress every native building layer the active style ships.
+        //Suppress every native building layer the active style ships
+        //so they don't Z-fight against helios-buildings-* extrusions.
         //
-        //MapTiler streets-v4 / topo-v4 use MapLibre 5 "style imports":
-        //the basemap is referenced as an external sub-style. Imported
-        //layers are read-only through the flat APIs:
-        //`setLayoutProperty(id, ...)` and `removeLayer(id)` against a
-        //bare id are both silent no-ops, leaving the native 3D
-        //extrusions covering the map and making the radius filter
-        //look broken (beta.6 / beta.7 symptom).
-        //
-        //The supported APIs for imported content are:
-        //  - setConfigProperty(importId, key, value): MapTiler v4
-        //    styles expose schema flags like `3dBuildings`,
-        //    `buildings3d`, etc. — toggling them off is the
-        //    cleanest path.
-        //  - Scoped layer ids `importId\\layerId`: works for
-        //    removeLayer / setPaintProperty / setLayoutProperty on
-        //    imported layers in v5.
-        //
-        //We try both, plus zeroing paint properties as a final
-        //fallback (paint pipelines and layout pipelines have
-        //independent guards inside MapLibre, so an opacity:0 may
-        //land even when visibility:none didn't). Whatever sticks
-        //wins; we log a report so a regression in MapTiler's style
-        //schema doesn't fail silently again.
+        //MapLibre 5 styles can be assembled from style "imports". For
+        //imported layers, `setLayoutProperty('visibility','none')` is
+        //a silent no-op against the bare id and `removeLayer(bareId)`
+        //may be too. The robust path: per import, set config flags off
+        //(`3dBuildings`, `buildings3d`, etc.) AND attempt removal /
+        //paint-zeroing under the scoped id `${importId}\\${layerId}`.
+        //Paint pipelines and layout pipelines have independent guards
+        //inside MapLibre, so opacity:0 may land even when visibility:
+        //none didn't — we use both belt and suspenders.
         const styleObj = this.map.getStyle() as {
             layers?:  Array<{ id: string; type: string; 'source-layer'?: string }>;
             imports?: Array<{ id: string }>;
@@ -1423,11 +1497,12 @@ export class HeliosEngine
             }
         }
 
-        const opacity   = this._buildingOpacity();
-        const homeData  = this._buildingsData?.home
-                       ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection;
-        const surrData  = this._buildingsData?.surroundings
-                       ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection;
+        const opacity      = this._buildingOpacity();
+        const baseColor    = this._buildingColor();
+        const homeData     = this._buildingsData?.home
+                          ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection;
+        const surrData     = this._buildingsData?.surroundings
+                          ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection;
 
         if (!this.map.getSource('helios-buildings-surroundings-src'))
         {
@@ -1468,12 +1543,7 @@ export class HeliosEngine
             type:   'fill-extrusion',
             paint:
             {
-                //Neutral cool grey — same hard-coded tone as the
-                //old single-layer rendering. We briefly exposed a
-                //`building-color` config; making it adjustable
-                //proved a footgun (any hue ate visual room from
-                //the data overlays) and it was retired in beta.12.
-                'fill-extrusion-color':   'rgba(210,210,215,1)',
+                'fill-extrusion-color':   baseColor,
                 'fill-extrusion-height':  ['get', 'render_height'],
                 'fill-extrusion-base':    ['get', 'render_min_height'],
                 'fill-extrusion-opacity': opacity
@@ -1487,7 +1557,7 @@ export class HeliosEngine
             type:   'fill-extrusion',
             paint:
             {
-                'fill-extrusion-color':   'rgba(210,210,215,1)',
+                'fill-extrusion-color':   baseColor,
                 'fill-extrusion-height':  ['get', 'render_height'],
                 'fill-extrusion-base':    ['get', 'render_min_height'],
                 'fill-extrusion-opacity': 1
@@ -1515,8 +1585,9 @@ export class HeliosEngine
         {
             return;
         }
-        const radius = this._buildingRadiusMeters();
-        const key    = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}`;
+        const radius        = this._buildingRadiusMeters();
+        const clusterRadius = this._buildingClusterRadiusMeters();
+        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${clusterRadius}`;
 
         if (this._buildingsData && this._buildingsFetchKey === key)
         {
@@ -1533,11 +1604,12 @@ export class HeliosEngine
 
         fetchBuildingsAroundHome(
         {
-            homeLon:      this.homeLon,
-            homeLat:      this.homeLat,
-            radiusMeters: radius,
+            homeLon:             this.homeLon,
+            homeLat:             this.homeLat,
+            radiusMeters:        radius,
+            clusterRadiusMeters: clusterRadius,
             apiKey,
-            signal:       ac.signal
+            signal:              ac.signal
         })
         .then(result =>
         {
@@ -1743,15 +1815,12 @@ export class HeliosEngine
         }
 
         //Buildings — modulate their colour by sun altitude so they
-        //participate in the time-of-day mood. We blend a fixed daylight
-        //reference (light grey) towards a cool dark ink at night and
-        //towards a warm tint around sunrise/sunset. With the v1.2
-        //unified palette there is no longer a user-configurable colour
-        //to honour, so the daylight base is hard-coded to the same
-        //rgba(210,210,215,1) used by _addBuildings().
+        //participate in the time-of-day mood. We blend the configured
+        //daylight reference towards a cool dark ink at night and
+        //towards a warm tint around sunrise/sunset.
         try
         {
-            const baseHex = '#d2d2d7';
+            const baseHex = this._buildingColor();
 
             let buildingHex: string;
             if (altitude < -6)
@@ -2462,8 +2531,12 @@ export class HeliosEngine
     public updateConfig(cfg: HeliosConfig): void
     {
         const prevStyleId  = this._resolveMapStyle().id;
+        const prevMinimal  = this._isMinimalStyle();
+        const prevPerfMode = this._performanceMode();
         const prevRadius   = this._buildingRadiusMeters();
+        const prevCluster  = this._buildingClusterRadiusMeters();
         const prevOpacity  = this._buildingOpacity();
+        const prevColor    = this._buildingColor();
         this.cfg = { ...cfg };
 
         if (!this.map)
@@ -2471,35 +2544,53 @@ export class HeliosEngine
             return;
         }
 
-        //Map-style change → reload the basemap. setStyle() replaces
-        //the entire style.json (sources, layers, sprites, glyphs);
-        //our custom sources (helios-terrain, helios-cloud, helios-
-        //planet) are wiped along with it and have to be re-added.
-        //_onStyleLoad already does that on the resulting `style.load`
-        //event — the same path used at initial load — so the only
-        //extra work here is dropping `_mapReady` while the new style
-        //is in flight, to prevent any code path that checks it from
-        //operating on a half-loaded style.
+        //Map-style or minimal-pruning toggle changed → reload the
+        //basemap. setStyle() replaces sources, layers, sprites and
+        //glyphs; our custom sources get wiped and re-added by the
+        //_onStyleLoad handler. Drop _mapReady while the new style
+        //is in flight so other code paths don't operate on a
+        //half-loaded style.
         const nextStyleInfo = this._resolveMapStyle();
-        if (nextStyleInfo.id !== prevStyleId)
+        const styleNeedsReload =
+               nextStyleInfo.id !== prevStyleId
+            || this._isMinimalStyle() !== prevMinimal;
+        if (styleNeedsReload)
         {
             this._mapReady = false;
             this.map.setStyle(
                 `https://api.maptiler.com/maps/${nextStyleInfo.id}/style.json?key=${this.apiKey}`
             );
-            //_onStyleLoad will re-init terrain/hillshade/cloud disc/
-            //buildings/labels and re-render the current selection,
-            //so we return early — touching paint properties or
-            //running _renderForCurrentSelection right now would race
-            //against the in-flight style load.
             return;
         }
 
-        //Hillshade is the only style-customisable layer driven by
-        //paint properties: the cloud-color is consumed via
-        //_updateCloudCoverDisc on the next render cycle, and the
-        //sun-color is consumed by the card's SVG overlay (no
-        //MapLibre layer involved).
+        //Performance-mode toggle: apply terrain / hillshade / pixel-
+        //ratio changes in-place. Avoids the full style reload.
+        const nextPerfMode = this._performanceMode();
+        if (nextPerfMode !== prevPerfMode)
+        {
+            if (nextPerfMode)
+            {
+                this.map.setTerrain(null);
+                if (this.map.getLayer('helios-hillshade'))
+                {
+                    this.map.removeLayer('helios-hillshade');
+                }
+                try { this.map.setPixelRatio(1.0); } catch (_) {}
+            }
+            else
+            {
+                this.map.setTerrain({ source: 'helios-terrain', exaggeration: 1.2 });
+                this._initHillshade();
+                const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
+                const px  = IS_MOBILE
+                    ? Math.min(Math.max(dpr, 1), 1.25)
+                    : Math.min(Math.max(dpr, 1.5), 2);
+                try { this.map.setPixelRatio(px); } catch (_) {}
+            }
+        }
+
+        //Hillshade paint update — only when the layer still exists
+        //(performance-mode removes it).
         if (this.map.getLayer('helios-hillshade'))
         {
             const c = toColor(this.cfg['topography-color'], 'rgba(80,100,160,1)');
@@ -2509,31 +2600,42 @@ export class HeliosEngine
             this.map.setPaintProperty('helios-hillshade', 'hillshade-exaggeration', a);
         }
 
-        //Re-apply the label-visibility toggle on every config change —
-        //setLayoutProperty is cheap (no geometry rebuild) so we don't
-        //bother diffing the old vs new value.
         this._applyLabelVisibility();
 
-        //React to building-radius / building-opacity changes. A
-        //radius change invalidates the cached GeoJSON so the next
-        //_addBuildings() call refetches; an opacity-only change is
-        //a cheap paint property update — no refetch needed.
+        //Building updates. Radius or cluster-radius changes invalidate
+        //the cached GeoJSON and trigger a refetch via _addBuildings.
+        //Opacity / colour changes are cheap paint-property updates.
         const nextRadius  = this._buildingRadiusMeters();
+        const nextCluster = this._buildingClusterRadiusMeters();
         const nextOpacity = this._buildingOpacity();
-        if (nextRadius !== prevRadius)
+        const nextColor   = this._buildingColor();
+        if (nextRadius !== prevRadius || nextCluster !== prevCluster)
         {
             this._buildingsData     = null;
             this._buildingsFetchKey = '';
             this._addBuildings();
         }
-        else if (nextOpacity !== prevOpacity
-              && this.map.getLayer('helios-buildings-surroundings'))
+        else
         {
-            this.map.setPaintProperty(
-                'helios-buildings-surroundings',
-                'fill-extrusion-opacity',
-                nextOpacity
-            );
+            if (nextOpacity !== prevOpacity
+             && this.map.getLayer('helios-buildings-surroundings'))
+            {
+                this.map.setPaintProperty(
+                    'helios-buildings-surroundings',
+                    'fill-extrusion-opacity',
+                    nextOpacity
+                );
+            }
+            if (nextColor !== prevColor)
+            {
+                for (const lid of ['helios-buildings-surroundings', 'helios-buildings-home'])
+                {
+                    if (this.map.getLayer(lid))
+                    {
+                        this.map.setPaintProperty(lid, 'fill-extrusion-color', nextColor);
+                    }
+                }
+            }
         }
 
         if (this._homeHourlyData && this._mapReady)

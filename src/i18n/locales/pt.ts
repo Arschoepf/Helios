@@ -68,8 +68,15 @@ export const pt: Translations = {
         batteryPowerEntityHelp: 'Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).',
         batteryColor:       'Cor da bateria *',
         buildingsSection:   'Edifícios circundantes',
-        buildingsHint:      'Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados.',
-        buildingRadius:     'Raio de visibilidade (m) *',
-        buildingOpacity:    'Opacidade dos vizinhos * (0 → 1)'
+        buildingsHint:      'Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».',
+        buildingRadius:        'Raio de visibilidade *',
+        buildingClusterRadius: 'Raio do grupo da casa *',
+        buildingOpacity:       'Opacidade dos vizinhos *',
+        buildingColor:         'Cor dos edifícios *',
+        performanceMode:       'Modo de desempenho *',
+        performanceModeOn:     'Ativado',
+        performanceModeOff:    'Desativado',
+        performanceModeHint:   'Desativa o terreno 3D, o relevo e limita a densidade de píxeis. Útil em dispositivos modestos ou em sessões longas. A inclinação e os edifícios 3D mantêm-se.',
+        mapStyleMinimal:       'Mínimo'
     }
 };

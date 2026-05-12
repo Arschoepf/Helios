@@ -68,8 +68,15 @@ export const nl: Translations = {
         batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
         batteryColor:       'Batterijkleur *',
         buildingsSection:   'Omliggende gebouwen',
-        buildingsHint:      'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren.',
-        buildingRadius:     'Zichtstraal (m) *',
-        buildingOpacity:    'Dekking omliggende gebouwen * (0 → 1)'
+        buildingsHint:      'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
+        buildingRadius:        'Zichtstraal *',
+        buildingClusterRadius: 'Cluster-straal huis *',
+        buildingOpacity:       'Dekking omliggende gebouwen *',
+        buildingColor:         'Gebouwkleur *',
+        performanceMode:       'Prestatiemodus *',
+        performanceModeOn:     'Aan',
+        performanceModeOff:    'Uit',
+        performanceModeHint:   'Schakelt 3D-terrein, reliëfschaduw uit en beperkt de pixeldichtheid. Handig op bescheiden apparaten of voor lange sessies. De camerakanteling en 3D-gebouwen blijven behouden.',
+        mapStyleMinimal:       'Minimaal'
     }
 };

@@ -88,13 +88,26 @@ export interface Translations
         batteryPowerEntity:       string;
         batteryPowerEntityHelp:   string;
         batteryColor:             string;
-        //v1.2.0-beta.6 — radius (m) around the home within which
-        //surrounding buildings are rendered, and the opacity of
-        //those surroundings (the home itself stays fully opaque).
+        //Radius (m) around the home within which surrounding buildings
+        //are rendered, the cluster radius that grows the home group to
+        //include attached outbuildings, the opacity of the surroundings,
+        //and the building base colour reused everywhere a building is
+        //extruded.
         buildingsSection:         string;
         buildingsHint:            string;
         buildingRadius:           string;
+        buildingClusterRadius:    string;
         buildingOpacity:          string;
+        buildingColor:            string;
+        //Performance mode disables the heavy per-frame work (terrain
+        //mesh, hillshade, full pixelRatio) for low-end devices.
+        performanceMode:          string;
+        performanceModeOn:        string;
+        performanceModeOff:       string;
+        performanceModeHint:      string;
+        //Third map-style segment: a curated minimal basemap (no POIs,
+        //no place labels, no road shields) for low-end devices.
+        mapStyleMinimal:          string;
     };
 }
 

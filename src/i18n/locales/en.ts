@@ -78,8 +78,15 @@ export const en: Translations = {
         batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
         batteryColor:       'Battery color *',
         buildingsSection:   'Surrounding buildings',
-        buildingsHint:      'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays.',
-        buildingRadius:     'Visibility radius (m) *',
-        buildingOpacity:    'Surrounding opacity * (0 → 1)'
+        buildingsHint:      'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
+        buildingRadius:        'Visibility radius *',
+        buildingClusterRadius: 'Home cluster radius *',
+        buildingOpacity:       'Surrounding opacity *',
+        buildingColor:         'Building color *',
+        performanceMode:       'Performance mode *',
+        performanceModeOn:     'On',
+        performanceModeOff:    'Off',
+        performanceModeHint:   'Disables 3D terrain, hillshade and caps pixel density. Useful on low-end devices or for long sessions. Camera pitch and 3D buildings are preserved.',
+        mapStyleMinimal:       'Minimal'
     }
 };

@@ -40,17 +40,23 @@ export interface BuildingsResult
 
 export interface FetchBuildingsOptions
 {
-    homeLon:       number;
-    homeLat:       number;
-    radiusMeters:  number;
-    apiKey:        string;
+    homeLon:              number;
+    homeLat:              number;
+    radiusMeters:         number;
+    //Cluster radius (m). Every building whose centroid sits within
+    //this radius — OR which contains the home point — is grouped
+    //into the "home" feature collection at full opacity. Allows
+    //attached verandas / outbuildings to read as one with the main
+    //house. 0 = legacy single-polygon home behaviour.
+    clusterRadiusMeters?: number;
+    apiKey:               string;
     //Tile zoom level to fetch. MapTiler v3 carries the `building`
-    //layer with `render_height` from z=14 onwards. z=14 keeps the
-    //tile count to 1 (rarely 2) for radii under ~500 m, which is
+    //source-layer with `render_height` from z=14 onwards. z=14 keeps
+    //the tile count to 1 (rarely 2) for radii under ~500 m, which is
     //the smallest network footprint while still giving us proper
     //extrusion heights.
-    zoom?:         number;
-    signal?:       AbortSignal;
+    zoom?:                number;
+    signal?:              AbortSignal;
 }
 
 const EARTH_RADIUS_M    = 6_371_008.8;
@@ -165,6 +171,7 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
 {
     const z          = Math.max(0, Math.floor(opts.zoom ?? 14));
     const r          = Math.max(1, opts.radiusMeters);
+    const cluster    = Math.max(0, opts.clusterRadiusMeters ?? 0);
 
     //Bounding box around the home in degrees, derived from the
     //radius. We over-estimate by a few percent so a building whose
@@ -267,23 +274,15 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
             }
             if (!geojson.geometry) continue;
 
-            //v1.2.0-beta.10 — split MultiPolygons into individual
-            //Polygon features.
-            //
+            //Split MultiPolygons into independent Polygon features.
             //MapTiler's v3 vector-tile encoder groups multiple
             //unrelated buildings into a single MultiPolygon feature
-            //(observed: a single feature carrying 24 sub-polygons
-            //in a rural French hamlet). Beta.9 captured one such
-            //MultiPolygon as the "home" because the home point sat
-            //inside one of its sub-polygons — and rendered ALL 24
-            //buildings at full opacity, which read as "buildings
-            //visible at kilometres". Splitting at decode time means
-            //downstream filtering (home detection, radius cutoff)
-            //operates at the granularity of one building per feature.
-            //L-shaped or multi-wing buildings split into parts that
-            //will still render identically when extruded at the same
-            //height, so the visual outcome is unchanged for genuine
-            //multi-part buildings.
+            //(observed: 24 sub-polygons in one rural French tile).
+            //Without splitting, home detection would capture the
+            //whole MultiPolygon and render every grouped building at
+            //full opacity. Genuine multi-part buildings (L-shaped,
+            //multi-wing) render identically because every part shares
+            //the same `render_height`.
             if (geojson.geometry.type === 'Polygon')
             {
                 features.push(geojson);
@@ -303,37 +302,38 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
         }
     }));
 
-    //Filter by radius and identify the home polygon.
-    let homeFeature: GeoJSON.Feature | null = null;
-    let homeFallback: { feature: GeoJSON.Feature; distance: number } | null = null;
+    //Classify each feature into one of three buckets:
+    //  - home cluster: contains the home point OR is within
+    //    `cluster` metres of it (attached verandas / outbuildings)
+    //  - surroundings: within `r` metres but outside the cluster
+    //  - discarded: outside `r`
+    //
+    //If no feature contains the home point and no feature is within
+    //the cluster radius, fall back to the closest building within
+    //HOME_FALLBACK_M — covers HA coordinates that land on a garden
+    //or driveway a few metres off the actual house footprint.
+    const homeCluster: GeoJSON.Feature[] = [];
     const surroundings: GeoJSON.Feature[] = [];
+    let homeFallback: { feature: GeoJSON.Feature; distance: number } | null = null;
 
     for (const f of features)
     {
         const contains = polygonContains(f.geometry, opts.homeLon, opts.homeLat);
-        if (contains && !homeFeature)
+        const rep      = representativePoint(f.geometry);
+        const d        = rep
+            ? haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0])
+            : Infinity;
+
+        if (contains || (cluster > 0 && d <= cluster))
         {
-            homeFeature = f;
+            homeCluster.push(f);
             continue;
         }
 
-        const rep = representativePoint(f.geometry);
-        if (!rep)
+        if (rep && d <= HOME_FALLBACK_M
+            && (!homeFallback || d < homeFallback.distance))
         {
-            continue;
-        }
-        const d = haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0]);
-
-        //Fallback candidate for the home: closest building within
-        //HOME_FALLBACK_M of the configured home point. Only used if
-        //no polygon actually contains the point (HA latitude on a
-        //garden, parking spot, etc.).
-        if (!homeFeature && d <= HOME_FALLBACK_M)
-        {
-            if (!homeFallback || d < homeFallback.distance)
-            {
-                homeFallback = { feature: f, distance: d };
-            }
+            homeFallback = { feature: f, distance: d };
         }
 
         if (d <= r)
@@ -342,17 +342,16 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
         }
     }
 
-    if (!homeFeature && homeFallback)
+    //Promote the fallback when no feature was in the cluster.
+    if (homeCluster.length === 0 && homeFallback)
     {
-        homeFeature = homeFallback.feature;
-        //Remove the fallback from surroundings (it was added there
-        //on its first pass since we hadn't promoted it to home yet).
+        homeCluster.push(homeFallback.feature);
         const idx = surroundings.indexOf(homeFallback.feature);
         if (idx >= 0) surroundings.splice(idx, 1);
     }
 
     return {
-        home:         { type: 'FeatureCollection', features: homeFeature ? [homeFeature] : [] },
+        home:         { type: 'FeatureCollection', features: homeCluster },
         surroundings: { type: 'FeatureCollection', features: surroundings }
     };
 }

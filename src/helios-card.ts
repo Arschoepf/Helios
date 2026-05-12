@@ -244,12 +244,15 @@ export class HeliosCard extends LitElement
         //sig so Lit re-renders the card when the user toggles it
         //in the editor.
         'card-theme',
-        //building-radius / building-opacity drive the helios-buildings-*
-        //custom layers (radius triggers a refetch + GeoJSON refresh,
-        //opacity is a cheap paint-property update on the surroundings
-        //layer).
+        //building-* drive the helios-buildings-* custom layers.
+        //  radius / cluster-radius → invalidate cache and refetch
+        //  opacity / color → cheap paint-property updates
         'building-radius',
-        'building-opacity'
+        'building-cluster-radius',
+        'building-opacity',
+        'building-color',
+        //performance-mode toggles terrain, hillshade and pixelRatio.
+        'performance-mode'
     ] as const;
 
     //Cheap stable signature of the visual config — used to skip
