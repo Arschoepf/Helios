@@ -26128,6 +26128,22 @@ const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
 const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 const DEFAULT_BUILDING_COLOR_HEX = "#d2d2d7";
+function bumpStat(key) {
+  if (typeof window === "undefined") return;
+  const w2 = window;
+  if (!w2.__heliosStats) {
+    w2.__heliosStats = {
+      enginesCreated: 0,
+      enginesCleanedUp: 0,
+      updateConfigCalls: 0,
+      styleReloads: 0,
+      addBuildingsCalls: 0,
+      buildingFetchStarts: 0,
+      contextLostEvents: 0
+    };
+  }
+  w2.__heliosStats[key] = (w2.__heliosStats[key] ?? 0) + 1;
+}
 const IS_MOBILE = (() => {
   if (typeof navigator === "undefined") {
     return false;
@@ -26257,6 +26273,7 @@ const _HeliosEngine = class _HeliosEngine {
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
     this.cfg = { ...config };
     this.apiKey = String(config["maptiler-api-key"] ?? "").trim();
+    bumpStat("enginesCreated");
     this._fetchLat = this.homeLat;
     this._fetchLon = this.homeLon;
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
@@ -26327,6 +26344,7 @@ const _HeliosEngine = class _HeliosEngine {
     canvas.addEventListener("touchmove", bumpInactivity, { passive: true });
     this._webglLostHandler = (e2) => {
       e2.preventDefault();
+      bumpStat("contextLostEvents");
       this._mapReady = false;
       console.warn("[HELIOS] WebGL context lost — requesting card re-init");
       this.onContextLost?.();
@@ -26885,6 +26903,7 @@ const _HeliosEngine = class _HeliosEngine {
   //(e.g. on theme switch, which rebuilds the whole style) reuse
   //the cached data without re-hitting the API.
   _addBuildings() {
+    bumpStat("addBuildingsCalls");
     if (!this.map) {
       return;
     }
@@ -27029,6 +27048,7 @@ const _HeliosEngine = class _HeliosEngine {
     const ac = new AbortController();
     this._buildingsAbort = ac;
     this._buildingsFetchKey = key;
+    bumpStat("buildingFetchStarts");
     fetchBuildingsAroundHome(
       {
         homeLon: this.homeLon,
@@ -27608,6 +27628,7 @@ const _HeliosEngine = class _HeliosEngine {
     };
   }
   updateConfig(cfg) {
+    bumpStat("updateConfigCalls");
     const prevStyleId = this._resolveMapStyle().id;
     const prevMinimal = this._isMinimalStyle();
     const prevPerfMode = this._performanceMode();
@@ -27622,6 +27643,7 @@ const _HeliosEngine = class _HeliosEngine {
     const nextStyleInfo = this._resolveMapStyle();
     const styleNeedsReload = nextStyleInfo.id !== prevStyleId || this._isMinimalStyle() !== prevMinimal;
     if (styleNeedsReload) {
+      bumpStat("styleReloads");
       this._mapReady = false;
       this.map.setStyle(
         `https://api.maptiler.com/maps/${nextStyleInfo.id}/style.json?key=${this.apiKey}`
@@ -27710,6 +27732,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._autoRotateRaf = requestAnimationFrame(tick);
   }
   cleanup() {
+    bumpStat("enginesCleanedUp");
     this._clearWeatherTimer();
     window.clearInterval(this._skyTimer);
     window.clearTimeout(this._resizeDebounceTimer);

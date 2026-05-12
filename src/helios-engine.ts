@@ -119,6 +119,43 @@ export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
 
+
+//Lifecycle instrumentation. Counters live on window.__heliosStats
+//so a user can inspect them at any point ("did this engine actually
+//get torn down? how many setStyle calls did my last edit trigger?").
+//Cheap, no I/O, only mutates a small object. Comparing the diff
+//between a fresh page load and an after-edit snapshot is the
+//cleanest path to identify which lifecycle path is accumulating
+//under heavy editor activity.
+interface HeliosStats
+{
+    enginesCreated:      number;
+    enginesCleanedUp:    number;
+    updateConfigCalls:   number;
+    styleReloads:        number;
+    addBuildingsCalls:   number;
+    buildingFetchStarts: number;
+    contextLostEvents:   number;
+}
+function bumpStat(key: keyof HeliosStats): void
+{
+    if (typeof window === 'undefined') return;
+    const w = window as unknown as { __heliosStats?: HeliosStats };
+    if (!w.__heliosStats)
+    {
+        w.__heliosStats = {
+            enginesCreated:      0,
+            enginesCleanedUp:    0,
+            updateConfigCalls:   0,
+            styleReloads:        0,
+            addBuildingsCalls:   0,
+            buildingFetchStarts: 0,
+            contextLostEvents:   0
+        };
+    }
+    w.__heliosStats[key] = (w.__heliosStats[key] ?? 0) + 1;
+}
+
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
 
 //Sources of the irradiance value displayed in the PV legend.
@@ -548,6 +585,8 @@ export class HeliosEngine
         this.cfg     = { ...config };
         this.apiKey  = String(config['maptiler-api-key'] ?? '').trim();
 
+        bumpStat('enginesCreated');
+
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
 
@@ -693,6 +732,7 @@ export class HeliosEngine
         this._webglLostHandler = (e: Event) =>
         {
             e.preventDefault();
+            bumpStat('contextLostEvents');
             this._mapReady = false;
             console.warn('[HELIOS] WebGL context lost — requesting card re-init');
             this.onContextLost?.();
@@ -1457,6 +1497,7 @@ export class HeliosEngine
     //the cached data without re-hitting the API.
     private _addBuildings(): void
     {
+        bumpStat('addBuildingsCalls');
         if (!this.map)
         {
             return;
@@ -1656,6 +1697,7 @@ export class HeliosEngine
         const ac = new AbortController();
         this._buildingsAbort   = ac;
         this._buildingsFetchKey = key;
+        bumpStat('buildingFetchStarts');
 
         fetchBuildingsAroundHome(
         {
@@ -2565,6 +2607,7 @@ export class HeliosEngine
 
     public updateConfig(cfg: HeliosConfig): void
     {
+        bumpStat('updateConfigCalls');
         const prevStyleId  = this._resolveMapStyle().id;
         const prevMinimal  = this._isMinimalStyle();
         const prevPerfMode = this._performanceMode();
@@ -2591,6 +2634,7 @@ export class HeliosEngine
             || this._isMinimalStyle() !== prevMinimal;
         if (styleNeedsReload)
         {
+            bumpStat('styleReloads');
             this._mapReady = false;
             this.map.setStyle(
                 `https://api.maptiler.com/maps/${nextStyleInfo.id}/style.json?key=${this.apiKey}`
@@ -2741,6 +2785,7 @@ export class HeliosEngine
 
     public cleanup(): void
     {
+        bumpStat('enginesCleanedUp');
         this._clearWeatherTimer();
         window.clearInterval(this._skyTimer);
         window.clearTimeout(this._resizeDebounceTimer);
