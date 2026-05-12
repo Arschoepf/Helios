@@ -278,6 +278,52 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
     let homeFallback: { feature: GeoJSON.Feature; distance: number } | null = null;
     const surroundings: GeoJSON.Feature[] = [];
 
+    //v1.2.0-beta.9 diagnostic — beta.8 confirmed the native MapTiler
+    //building layers are now removed, so any 3D buildings the user
+    //still sees can only be coming from helios-buildings-* layers,
+    //which means this filter is either letting too many features
+    //through or rejecting too few. Log the first few decoded
+    //features and their computed distances so we can see exactly
+    //which step is broken (toGeoJSON returning tile-local coords
+    //vs lon/lat, swapped axes, wrong haversine output, etc.).
+    const sampleProbes: Array<{
+        kind: string;
+        firstCoord: [number, number] | null;
+        rep: [number, number] | null;
+        distM: number | null
+    }> = [];
+    for (let i = 0; i < Math.min(5, features.length); i++)
+    {
+        const f = features[i];
+        const rep = representativePoint(f.geometry);
+        let firstCoord: [number, number] | null = null;
+        if (f.geometry.type === 'Polygon' && (f.geometry.coordinates[0] as number[][])?.length)
+        {
+            const p = (f.geometry.coordinates[0] as number[][])[0];
+            firstCoord = [p[0], p[1]];
+        }
+        else if (f.geometry.type === 'MultiPolygon' && (f.geometry.coordinates[0] as number[][][])?.[0]?.length)
+        {
+            const p = (f.geometry.coordinates[0] as number[][][])[0][0];
+            firstCoord = [p[0], p[1]];
+        }
+        sampleProbes.push({
+            kind: f.geometry.type,
+            firstCoord,
+            rep,
+            distM: rep ? haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0]) : null
+        });
+    }
+    console.debug('[HELIOS Buildings] fetch', {
+        home:        [opts.homeLat, opts.homeLon],
+        radiusM:     r,
+        zoom:        z,
+        tileCount:   tilesToFetch.length,
+        firstTile:   tilesToFetch[0] ?? null,
+        featuresDecoded: features.length,
+        sampleProbes
+    });
+
     for (const f of features)
     {
         const contains = polygonContains(f.geometry, opts.homeLon, opts.homeLat);
@@ -320,6 +366,12 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
         const idx = surroundings.indexOf(homeFallback.feature);
         if (idx >= 0) surroundings.splice(idx, 1);
     }
+
+    console.debug('[HELIOS Buildings] filter result', {
+        homeKept:        homeFeature ? 1 : 0,
+        usedFallback:    !!(homeFallback && !sampleProbes.find(s => s.distM === 0)),
+        surroundingsKept: surroundings.length
+    });
 
     return {
         home:         { type: 'FeatureCollection', features: homeFeature ? [homeFeature] : [] },

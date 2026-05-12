@@ -26090,6 +26090,34 @@ async function fetchBuildingsAroundHome(opts) {
   let homeFeature = null;
   let homeFallback = null;
   const surroundings = [];
+  const sampleProbes = [];
+  for (let i2 = 0; i2 < Math.min(5, features.length); i2++) {
+    const f2 = features[i2];
+    const rep = representativePoint(f2.geometry);
+    let firstCoord = null;
+    if (f2.geometry.type === "Polygon" && f2.geometry.coordinates[0]?.length) {
+      const p2 = f2.geometry.coordinates[0][0];
+      firstCoord = [p2[0], p2[1]];
+    } else if (f2.geometry.type === "MultiPolygon" && f2.geometry.coordinates[0]?.[0]?.length) {
+      const p2 = f2.geometry.coordinates[0][0][0];
+      firstCoord = [p2[0], p2[1]];
+    }
+    sampleProbes.push({
+      kind: f2.geometry.type,
+      firstCoord,
+      rep,
+      distM: rep ? haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0]) : null
+    });
+  }
+  console.debug("[HELIOS Buildings] fetch", {
+    home: [opts.homeLat, opts.homeLon],
+    radiusM: r2,
+    zoom: z2,
+    tileCount: tilesToFetch.length,
+    firstTile: tilesToFetch[0] ?? null,
+    featuresDecoded: features.length,
+    sampleProbes
+  });
   for (const f2 of features) {
     const contains = polygonContains(f2.geometry, opts.homeLon, opts.homeLat);
     if (contains && !homeFeature) {
@@ -26115,6 +26143,11 @@ async function fetchBuildingsAroundHome(opts) {
     const idx = surroundings.indexOf(homeFallback.feature);
     if (idx >= 0) surroundings.splice(idx, 1);
   }
+  console.debug("[HELIOS Buildings] filter result", {
+    homeKept: homeFeature ? 1 : 0,
+    usedFallback: !!(homeFallback && !sampleProbes.find((s2) => s2.distM === 0)),
+    surroundingsKept: surroundings.length
+  });
   return {
     home: { type: "FeatureCollection", features: homeFeature ? [homeFeature] : [] },
     surroundings: { type: "FeatureCollection", features: surroundings }
