@@ -26144,6 +26144,8 @@ function bumpStat(key) {
   }
   w2.__heliosStats[key] = (w2.__heliosStats[key] ?? 0) + 1;
 }
+const MAX_LIVE_ENGINES = 2;
+const _liveEngines = /* @__PURE__ */ new Set();
 const IS_MOBILE = (() => {
   if (typeof navigator === "undefined") {
     return false;
@@ -26274,6 +26276,17 @@ const _HeliosEngine = class _HeliosEngine {
     this.cfg = { ...config };
     this.apiKey = String(config["maptiler-api-key"] ?? "").trim();
     bumpStat("enginesCreated");
+    while (_liveEngines.size >= MAX_LIVE_ENGINES) {
+      const oldest = _liveEngines.values().next().value;
+      if (!oldest) break;
+      console.warn("[HELIOS] WebGL context cap reached — force-cleaning the oldest engine");
+      try {
+        oldest.cleanup();
+      } catch (_2) {
+      }
+      _liveEngines.delete(oldest);
+    }
+    _liveEngines.add(this);
     this._fetchLat = this.homeLat;
     this._fetchLon = this.homeLon;
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
@@ -27733,6 +27746,7 @@ const _HeliosEngine = class _HeliosEngine {
   }
   cleanup() {
     bumpStat("enginesCleanedUp");
+    _liveEngines.delete(this);
     this._clearWeatherTimer();
     window.clearInterval(this._skyTimer);
     window.clearTimeout(this._resizeDebounceTimer);
