@@ -26318,6 +26318,8 @@ const _HeliosEngine = class _HeliosEngine {
     const bumpInactivity = () => {
       this._autoRotateLastUserAction = Date.now();
     };
+    this._bumpInactivityCanvas = canvas;
+    this._bumpInactivityHandler = bumpInactivity;
     canvas.addEventListener("mousedown", bumpInactivity);
     canvas.addEventListener("wheel", bumpInactivity, { passive: true });
     canvas.addEventListener("touchstart", bumpInactivity, { passive: true });
@@ -27713,9 +27715,26 @@ const _HeliosEngine = class _HeliosEngine {
       cancelAnimationFrame(this._autoRotateRaf);
       this._autoRotateRaf = void 0;
     }
+    const canvas = this._bumpInactivityCanvas;
+    const handler = this._bumpInactivityHandler;
+    if (canvas && handler) {
+      canvas.removeEventListener("mousedown", handler);
+      canvas.removeEventListener("wheel", handler);
+      canvas.removeEventListener("touchstart", handler);
+      canvas.removeEventListener("touchmove", handler);
+    }
+    this._bumpInactivityCanvas = void 0;
+    this._bumpInactivityHandler = void 0;
+    this._buildingsData = null;
+    this._buildingsFetchKey = "";
     this.map?.remove();
     this.map = void 0;
     this._mapReady = false;
+    try {
+      const w2 = window;
+      if (w2.__heliosMap !== void 0) delete w2.__heliosMap;
+    } catch (_2) {
+    }
   }
 };
 _HeliosEngine.MINIMAL_KEEP_LAYER_IDS = /* @__PURE__ */ new Set([

@@ -493,6 +493,17 @@ export class HeliosEngine
     private _autoRotateRaf?:           number;
     private _autoRotateLastFrame:      number = 0;
     private _autoRotateLastUserAction: number = 0;
+    //Inactivity-bumper bookkeeping — we hold both the canvas and the
+    //listener reference so cleanup() can fully detach them. Without
+    //this, every engine re-init (API key change, home-coords change,
+    //map-style change) accumulates the four listeners + their closure
+    //(which captures `this`, hence the entire dead engine + its old
+    //MapLibre context) until the browser starts recycling WebGL
+    //contexts under pressure — visible as random dashboard reloads
+    //during editing and creeping FPS degradation after several
+    //re-inits within the same session.
+    private _bumpInactivityCanvas?: HTMLCanvasElement;
+    private _bumpInactivityHandler?: () => void;
 
     //Cached result of the building fetch around the home. The home
     //doesn't move during a session, so we fetch once and reuse the
@@ -645,6 +656,8 @@ export class HeliosEngine
         {
             this._autoRotateLastUserAction = Date.now();
         };
+        this._bumpInactivityCanvas  = canvas;
+        this._bumpInactivityHandler = bumpInactivity;
         canvas.addEventListener('mousedown',  bumpInactivity);
         canvas.addEventListener('wheel',      bumpInactivity, { passive: true });
         canvas.addEventListener('touchstart', bumpInactivity, { passive: true });
@@ -2702,8 +2715,40 @@ export class HeliosEngine
             cancelAnimationFrame(this._autoRotateRaf);
             this._autoRotateRaf = undefined;
         }
+
+        //Detach the inactivity bumper listeners we registered on the
+        //canvas. Without this, the closures keep `this` alive (and
+        //therefore the dead MapLibre map + every cached GeoJSON we
+        //fed it) across re-inits.
+        const canvas = this._bumpInactivityCanvas;
+        const handler = this._bumpInactivityHandler;
+        if (canvas && handler)
+        {
+            canvas.removeEventListener('mousedown',  handler);
+            canvas.removeEventListener('wheel',      handler);
+            canvas.removeEventListener('touchstart', handler);
+            canvas.removeEventListener('touchmove',  handler);
+        }
+        this._bumpInactivityCanvas  = undefined;
+        this._bumpInactivityHandler = undefined;
+
+        //Drop the cached buildings GeoJSON before tearing down the map
+        //so the next engine starts from a clean slate. Several hundred
+        //kilobytes per re-init in dense areas.
+        this._buildingsData     = null;
+        this._buildingsFetchKey = '';
+
         this.map?.remove();
         this.map       = undefined;
         this._mapReady = false;
+
+        //Don't leave the debug global pointing at the disposed map —
+        //it would keep the WebGL context alive in some browsers.
+        try
+        {
+            const w = window as unknown as { __heliosMap?: unknown };
+            if (w.__heliosMap !== undefined) delete w.__heliosMap;
+        }
+        catch (_) {}
     }
 }
