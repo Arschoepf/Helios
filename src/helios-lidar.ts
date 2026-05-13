@@ -18,46 +18,45 @@ export interface LidarSource
     //on every home-position change without measurable cost.
     covers(lat: number, lon: number): boolean;
 
-    //Fetch + consolidate height data around the home. Implementations
-    //decode whatever wire format the upstream API exposes, threshold
-    //by height, classify cells against the supplied building
-    //footprints, and return:
+    //Fetch the raw LiDAR rasters around the home. Implementations
+    //decode whatever wire format the upstream API exposes and return
+    //a single LidarRasters bundle holding MNH (height above ground)
+    //and MNT (bare-earth elevation) rasters covering the same bbox,
+    //plus the metadata the engine needs to project them.
     //
-    //  - `regions`: one Polygon per connected region (NOT per cell);
-    //    the engine consumes these as shadow-projector input, the
-    //    polygons themselves are never rendered. Each emitted feature
-    //    must carry numeric `render_height` and `render_min_height`
-    //    properties (helios-shadows.ts contract).
-    //
-    //  - `cells`: one Point per classified cell, used to render the
-    //    optional "scanner" point cloud overlay. Each feature carries
-    //    `height` (m above ground) and `kind` ('home' | 'building' |
-    //    'vegetation') properties.
-    //
-    //  - `terrain`: optional raw bare-earth (MNT) heights for the
-    //    same bbox. When provided, the engine builds a custom DEM
-    //    source that replaces the MapTiler terrain in the home area.
-    //    Null when the provider has no MNT data or the second fetch
-    //    failed; the engine then falls back to MapTiler's global DEM.
+    //Returns `rasters: null` when the fetch failed end-to-end (the
+    //LiDAR pipeline silently no-ops in that case). Partial failures
+    //surface as a null `rasters` too: we don't ship half a DEM.
     fetch(opts: LidarFetchOptions): Promise<LidarFetchResult>;
 }
 
 export interface LidarFetchResult
 {
-    regions: GeoJSON.FeatureCollection;
-    cells:   GeoJSON.FeatureCollection;
-    terrain: LidarTerrainData | null;
+    rasters: LidarRasters | null;
 }
 
-export interface LidarTerrainData
+export interface LidarRasters
 {
-    //Bare-earth (MNT) heights in metres above mean sea level. Row-
-    //major, top-down (row 0 = NORTH edge of `bounds`). Length must
-    //equal width * height.
-    heights: Float32Array;
-    width:   number;
-    height:  number;
-    bounds:  { minLon: number; minLat: number; maxLon: number; maxLat: number };
+    //Raster dimensions; same for MNH and MNT, both decode at the
+    //provider's requested resolution.
+    width:  number;
+    height: number;
+    //Geographic bounds, row 0 is the north edge of `maxLat`. The
+    //bbox is slightly padded outwards from the requested radius so
+    //the engine can shadow-test points up to the visible disc.
+    bounds: { minLon: number; minLat: number; maxLon: number; maxLat: number };
+    //Average ground-cell size in metres (mean of lon / lat pitch).
+    //The engine uses it as the step size for the per-pixel shadow
+    //ray cast.
+    cellPitchM: number;
+    //Heights above local ground (MNH). Row-major, top-down. A value
+    //of 0 means "no significant above-ground feature here" (filtered
+    //by the provider's threshold + max).
+    mnh: Float32Array;
+    //Bare-earth elevation (MNT) in metres above mean sea level. Same
+    //orientation as `mnh`. Drives the custom DEM source that replaces
+    //MapTiler terrain in the LiDAR area.
+    mnt: Float32Array;
 }
 
 export interface LidarFetchOptions
@@ -66,21 +65,14 @@ export interface LidarFetchOptions
     homeLon:      number;
     radiusMeters: number;
     //Pixel count per side requested from the upstream raster. Higher
-    //means finer ground sampling, larger payload and more work in the
-    //consolidation pass. The engine derives this from the user-set
-    //lidar-precision level (helios-engine.ts:LIDAR_PRECISION_RASTER).
+    //means finer ground sampling and a larger payload. The engine
+    //derives this from the user-set `lidar-precision` level.
     rasterSize:   number;
     //Hard limit on the haversine distance from the home, in metres.
-    //Cells beyond this are dropped so the rendered shadow zones stay
-    //inside the visible disc. Providers still fetch a padded bbox so
-    //edge features can still cast their shadow inward.
+    //Providers fetch a padded bbox but clamp output cells beyond
+    //this so the rendered scanner stays inside the visible disc.
     cropRadiusMeters?: number;
-    //MapTiler home polygons. Cells inside (after BUILDING_MASK_PAD_M
-    //inflation) are classified as 'home', else cells inside a
-    //surroundingFootprints polygon become 'building', else 'vegetation'.
-    homeFootprints?:        GeoJSON.FeatureCollection;
-    surroundingFootprints?: GeoJSON.FeatureCollection;
-    signal?:                AbortSignal;
+    signal?:           AbortSignal;
 }
 
 import { franceLidarHd } from './helios-lidar/helios-lidar-fr';

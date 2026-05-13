@@ -16,18 +16,27 @@
 //Helios cards on the same dashboard never trip on each other.
 
 import maplibregl from 'maplibre-gl';
-import type { LidarTerrainData } from './helios-lidar';
+
+//Slim view of the MNT data the protocol handler needs. The engine
+//builds this from its cached LidarRasters by picking the MNT field.
+export interface LidarTerrainData
+{
+    heights: Float32Array;
+    width:   number;
+    height:  number;
+    bounds:  { minLon: number; minLat: number; maxLon: number; maxLat: number };
+}
 
 export const LIDAR_TERRAIN_PROTOCOL = 'helios-lidar-dem';
 
-//Web-Mercator zoom at which we serve the LiDAR DEM tiles. We expose
-//z=12..15: the LiDAR-covered area is encoded at every level, and
-//tiles outside the bbox are proxied verbatim from MapTiler at the
-//requested level so the camera always sees a continuous DEM (no
-//cliff at the LiDAR boundary as it rotates). z=15 is fine enough for
-//the card's locked z=18 (3 levels of overzoom).
+//Web-Mercator zoom at which we serve the LiDAR DEM tiles. MapTiler's
+//terrain-rgb-v2 caps at native z=14 (some keys go to z=12), so any
+//higher zoom would force the camera to see encoded-zero fallback
+//tiles outside the LiDAR bbox and produce a sea-level cliff at the
+//boundary. MapLibre auto-overzooms our z=14 tiles for the card's
+//locked z=18 viewing distance, no detail visible past that anyway.
 export const LIDAR_TERRAIN_MIN_ZOOM = 12;
-export const LIDAR_TERRAIN_MAX_ZOOM = 15;
+export const LIDAR_TERRAIN_MAX_ZOOM = 14;
 
 //Tile resolution served by the protocol. 512 matches MapTiler's
 //terrain-rgb tileSize so our DEM source can drop in with no extra
@@ -274,6 +283,44 @@ async function encodeTile(entry: TerrainEntry, z: number, x: number, y: number):
 //bytes unchanged. The PNG is already in Mapbox encoding, which is
 //what our raster-dem source declares, so the browser can decode it
 //directly with no re-encoding pass on our side.
+//Discover MapTiler's actual tile URL template + native zoom limit
+//from the terrain-rgb-v2 tiles.json. Hard-coding the URL pattern
+//worked until MapTiler started serving WebP instead of PNG for some
+//tiles and the assumed extension started 404'ing, leaving holes in
+//the terrain composite outside the LiDAR bbox. Reading tiles.json
+//once per key keeps the proxy in sync with whatever MapTiler is
+//actually serving today.
+interface MaptilerTilesInfo
+{
+    template: string;     //e.g. "https://.../{z}/{x}/{y}.png?key=..."
+    maxzoom:  number;
+}
+const _maptilerInfoCache = new Map<string, Promise<MaptilerTilesInfo | null>>();
+
+function fetchMaptilerInfo(key: string): Promise<MaptilerTilesInfo | null>
+{
+    const cached = _maptilerInfoCache.get(key);
+    if (cached) return cached;
+    const p = (async (): Promise<MaptilerTilesInfo | null> =>
+    {
+        try
+        {
+            const resp = await fetch(`https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${key}`);
+            if (!resp.ok) return null;
+            const json = await resp.json() as { tiles?: string[]; maxzoom?: number };
+            const template = json.tiles?.[0];
+            if (!template) return null;
+            return {
+                template,
+                maxzoom: typeof json.maxzoom === 'number' ? json.maxzoom : 14
+            };
+        }
+        catch (_) { return null; }
+    })();
+    _maptilerInfoCache.set(key, p);
+    return p;
+}
+
 async function fetchMaptilerTile(
     key: string | null,
     z:   number,
@@ -282,22 +329,27 @@ async function fetchMaptilerTile(
 ): Promise<ArrayBuffer | null>
 {
     if (!key) return null;
-    //terrain-rgb-v2 is served as WebP by MapTiler; the .png variant
-    //404s for many tiles and turns into a flat sea-level cliff at the
-    //LiDAR bbox edge. WebP first, with a PNG fallback for the rare
-    //tiles where the server hands back an older PNG-only response.
-    for (const ext of ['webp', 'png'])
+    const info = await fetchMaptilerInfo(key);
+    if (!info) return null;
+
+    //MapTiler stops generating tiles past its native maxzoom; asking
+    //for higher zoom levels 404s. MapLibre auto-overzooms our DEM
+    //source up to the rendered zoom anyway, so we just return null
+    //here and let MapLibre fall back to the lower-zoom tile.
+    if (z > info.maxzoom) return null;
+
+    const url = info.template
+        .replace('{z}', String(z))
+        .replace('{x}', String(x))
+        .replace('{y}', String(y));
+
+    try
     {
-        try
-        {
-            const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.${ext}?key=${key}`;
-            const resp = await fetch(url);
-            if (!resp.ok) continue;
-            return await resp.arrayBuffer();
-        }
-        catch (_) { /* try the next extension */ }
+        const resp = await fetch(url);
+        if (!resp.ok) return null;
+        return await resp.arrayBuffer();
     }
-    return null;
+    catch (_) { return null; }
 }
 
 //Same MapTiler fetch, but decodes the PNG into a float array of
