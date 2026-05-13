@@ -84,6 +84,6 @@ export const de: Translations = {
         terrainDetailHint:     'Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe, nur auf leistungsfähigen Desktops sinnvoll.',
         lidarVegetation:       'LiDAR-Vegetation *',
         lidarVegetationOff:    'Aus',
-        lidarVegetationHint:   'Derzeit nur in Frankreich verfügbar. Lädt IGN-LiDAR-HD-Höhen rund um das Zuhause und stellt Bäume als 3D-Blöcke mit echten Schlagschatten dar. Der Wert ist die Zellgröße: kleiner heißt feinere Bäume, größere Netzwerklast. 4.5m läuft überall, 2.3m nur auf Desktops.'
+        lidarVegetationHint:   'Derzeit nur in Frankreich verfügbar. Lädt IGN-LiDAR-HD-Höhen rund um das Zuhause und stellt Bäume als 3D-Blöcke mit echten Schlagschatten dar. Der Wert ist die Zellgröße: kleiner heißt feinere Bäume, größere Netzwerklast. 4.5m läuft überall, 1.5m liegt nahe an der nativen IGN-Auflösung, aber nur auf Desktops.'
     }
 };

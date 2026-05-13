@@ -25958,7 +25958,7 @@ function writeUtf8(buf, str, pos) {
   }
   return pos;
 }
-const EARTH_RADIUS_M = 63710088e-1;
+const EARTH_RADIUS_M$1 = 63710088e-1;
 const HOME_FALLBACK_M = 30;
 function lonLatToTile(lon, lat, z2) {
   const n3 = Math.pow(2, z2);
@@ -25967,12 +25967,12 @@ function lonLatToTile(lon, lat, z2) {
   const y3 = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n3);
   return { x: x2, y: y3 };
 }
-function haversineMeters(lat1, lon1, lat2, lon2) {
+function haversineMeters$1(lat1, lon1, lat2, lon2) {
   const toRad = Math.PI / 180;
   const dLat = (lat2 - lat1) * toRad;
   const dLon = (lon2 - lon1) * toRad;
   const a2 = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a2));
+  return 2 * EARTH_RADIUS_M$1 * Math.asin(Math.sqrt(a2));
 }
 function metersToDegLat(m2) {
   return m2 / 111320;
@@ -26102,7 +26102,7 @@ async function fetchBuildingsAroundHome(opts) {
   for (const f2 of features) {
     const contains = polygonContains(f2.geometry, opts.homeLon, opts.homeLat);
     const rep = representativePoint(f2.geometry);
-    const d2 = rep ? haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0]) : Infinity;
+    const d2 = rep ? haversineMeters$1(opts.homeLat, opts.homeLon, rep[1], rep[0]) : Infinity;
     if (contains || cluster > 0 && d2 <= cluster) {
       homeCluster.push(f2);
       continue;
@@ -26279,8 +26279,18 @@ const franceLidarHd = {
     }
     const pxLon = (maxLon - minLon) / rasterSize;
     const pxLat = (maxLat - minLat) / rasterSize;
-    const halfLon = pxLon / 2;
-    const halfLat = pxLat / 2;
+    const hexFactor = 0.85;
+    const rLon = pxLon / 2 * hexFactor;
+    const rLat = pxLat / 2 * hexFactor;
+    const HEX_OFFSETS = [
+      [0, 1],
+      [-0.866, 0.5],
+      [-0.866, -0.5],
+      [0, -1],
+      [0.866, -0.5],
+      [0.866, 0.5]
+    ];
+    const cropM = opts.cropRadiusMeters && opts.cropRadiusMeters > 0 ? opts.cropRadiusMeters : null;
     const out = [];
     let hMin = Infinity, hMax = -Infinity, kept = 0;
     for (let j = 0; j < rasterSize; j++) {
@@ -26290,22 +26300,24 @@ const franceLidarHd = {
         if (!isFinite(h2) || h2 < HEIGHT_THRESH_M || h2 > HEIGHT_MAX_M) continue;
         const cLon = minLon + (i2 + 0.5) * pxLon;
         if (cellInsideAnyBBox(cLon, cLat, bboxes)) continue;
-        const x0 = cLon - halfLon, x1 = cLon + halfLon;
-        const y0 = cLat - halfLat, y1 = cLat + halfLat;
+        if (cropM !== null && haversineMeters(opts.homeLat, opts.homeLon, cLat, cLon) > cropM) {
+          continue;
+        }
+        let hash = (i2 * 73856093 ^ j * 19349663) >>> 0;
+        hash = hash * 668265263 >>> 0;
+        const jitter = 0.85 + hash / 4294967296 * 0.3;
+        const adjHeight = h2 * jitter;
+        const ring = new Array(7);
+        for (let k2 = 0; k2 < 6; k2++) {
+          const o2 = HEX_OFFSETS[k2];
+          ring[k2] = [cLon + o2[0] * rLon, cLat + o2[1] * rLat];
+        }
+        ring[6] = ring[0];
         out.push({
           type: "Feature",
-          geometry: {
-            type: "Polygon",
-            coordinates: [[
-              [x0, y0],
-              [x1, y0],
-              [x1, y1],
-              [x0, y1],
-              [x0, y0]
-            ]]
-          },
+          geometry: { type: "Polygon", coordinates: [ring] },
           properties: {
-            render_height: h2,
+            render_height: adjHeight,
             render_min_height: 0
           }
         });
@@ -26324,6 +26336,14 @@ const franceLidarHd = {
     return { type: "FeatureCollection", features: out };
   }
 };
+const EARTH_RADIUS_M = 63710088e-1;
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a2 = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a2));
+}
 function polygonBBox(geom) {
   let rings = null;
   if (geom.type === "Polygon") {
@@ -26373,7 +26393,8 @@ const DEFAULT_LIDAR_VEGETATION = "4.5m";
 const LIDAR_VEGETATION_RASTER = {
   "4.5m": 256,
   "3m": 384,
-  "2.3m": 512
+  "2.3m": 512,
+  "1.5m": 768
 };
 function bumpStat(key) {
   if (typeof window === "undefined") return;
@@ -26735,7 +26756,9 @@ const _HeliosEngine = class _HeliosEngine {
   //canonical values from LidarVegetationLevel.
   _lidarVegetationLevel() {
     const v2 = String(this.cfg["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION).toLowerCase();
-    if (v2 === "off" || v2 === "4.5m" || v2 === "3m" || v2 === "2.3m") return v2;
+    if (v2 === "off" || v2 === "4.5m" || v2 === "3m" || v2 === "2.3m" || v2 === "1.5m") {
+      return v2;
+    }
     return DEFAULT_LIDAR_VEGETATION;
   }
   _findHourIndex(t2) {
@@ -27377,7 +27400,7 @@ const _HeliosEngine = class _HeliosEngine {
             "fill-extrusion-color": "#4a6741",
             "fill-extrusion-height": ["get", "render_height"],
             "fill-extrusion-base": 0,
-            "fill-extrusion-opacity": 0.55
+            "fill-extrusion-opacity": 0.78
           }
         }
       );
@@ -27530,6 +27553,12 @@ const _HeliosEngine = class _HeliosEngine {
         homeLon: this.homeLon,
         radiusMeters: radius,
         rasterSize,
+        //Visible disc the vegetation is allowed to extend to. The
+        //source fetches a slightly padded bbox to catch trees on
+        //the edge that still cast their shadow inward, but only
+        //emits cells inside this radius so the layer matches the
+        //buildings disc and stays performance-friendly.
+        cropRadiusMeters: radius,
         buildingFootprints: bldgFc,
         signal: ac.signal
       }
@@ -28484,7 +28513,7 @@ const en = {
     terrainDetailHint: "Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame — only worth it on capable desktops.",
     lidarVegetation: "LiDAR vegetation *",
     lidarVegetationOff: "Off",
-    lidarVegetationHint: "France only for now. Streams IGN LiDAR HD heights around the home and renders trees as 3D blocks with real cast shadows. The value is the cell size: smaller = finer trees, larger payload. 4.5m is comfortable on any device, 2.3m is desktop-only."
+    lidarVegetationHint: "France only for now. Streams IGN LiDAR HD heights around the home and renders trees as 3D blocks with real cast shadows. The value is the cell size: smaller = finer trees, larger payload. 4.5m is comfortable on any device, 1.5m approaches IGN native resolution but is desktop-only."
   }
 };
 const fr = {
@@ -28564,8 +28593,8 @@ const fr = {
     terrainDetailFine: "Précis",
     terrainDetailHint: "Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation, réservé aux PC desktops puissants.",
     lidarVegetation: "Végétation LiDAR *",
-    lidarVegetationOff: "Désactivée",
-    lidarVegetationHint: "France uniquement pour l'instant. Récupère les hauteurs IGN LiDAR HD autour de la maison et affiche les arbres en blocs 3D avec leurs vraies ombres portées. La valeur est la taille des cellules : plus petite, arbres plus fins, charge réseau accrue. 4.5m passe partout, 2.3m réservé au desktop."
+    lidarVegetationOff: "Off",
+    lidarVegetationHint: "France uniquement pour l'instant. Récupère les hauteurs IGN LiDAR HD autour de la maison et affiche les arbres en blocs 3D avec leurs vraies ombres portées. La valeur est la taille des cellules : plus petite, arbres plus fins, charge réseau accrue. 4.5m passe partout, 1.5m proche du natif IGN mais desktop uniquement."
   }
 };
 const de = {
@@ -28646,7 +28675,7 @@ const de = {
     terrainDetailHint: "Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe, nur auf leistungsfähigen Desktops sinnvoll.",
     lidarVegetation: "LiDAR-Vegetation *",
     lidarVegetationOff: "Aus",
-    lidarVegetationHint: "Derzeit nur in Frankreich verfügbar. Lädt IGN-LiDAR-HD-Höhen rund um das Zuhause und stellt Bäume als 3D-Blöcke mit echten Schlagschatten dar. Der Wert ist die Zellgröße: kleiner heißt feinere Bäume, größere Netzwerklast. 4.5m läuft überall, 2.3m nur auf Desktops."
+    lidarVegetationHint: "Derzeit nur in Frankreich verfügbar. Lädt IGN-LiDAR-HD-Höhen rund um das Zuhause und stellt Bäume als 3D-Blöcke mit echten Schlagschatten dar. Der Wert ist die Zellgröße: kleiner heißt feinere Bäume, größere Netzwerklast. 4.5m läuft überall, 1.5m liegt nahe an der nativen IGN-Auflösung, aber nur auf Desktops."
   }
 };
 const es = {
@@ -28726,8 +28755,8 @@ const es = {
     terrainDetailFine: "Preciso",
     terrainDetailHint: "Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación, útil solo en PCs potentes.",
     lidarVegetation: "Vegetación LiDAR *",
-    lidarVegetationOff: "Desactivada",
-    lidarVegetationHint: "Solo Francia por ahora. Descarga las alturas IGN LiDAR HD alrededor de la casa y dibuja los árboles como bloques 3D con sombras proyectadas reales. El valor es el tamaño de celda: menor, árboles más finos, mayor carga de red. 4.5m va bien en cualquier dispositivo, 2.3m solo en escritorio."
+    lidarVegetationOff: "Off",
+    lidarVegetationHint: "Solo Francia por ahora. Descarga las alturas IGN LiDAR HD alrededor de la casa y dibuja los árboles como bloques 3D con sombras proyectadas reales. El valor es el tamaño de celda: menor, árboles más finos, mayor carga de red. 4.5m va bien en cualquier dispositivo, 1.5m se acerca a la resolución nativa IGN pero solo en escritorio."
   }
 };
 const it = {
@@ -28807,8 +28836,8 @@ const it = {
     terrainDetailFine: "Fine",
     terrainDetailHint: "Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione, utile solo su PC desktop potenti.",
     lidarVegetation: "Vegetazione LiDAR *",
-    lidarVegetationOff: "Disattivata",
-    lidarVegetationHint: "Solo Francia per ora. Scarica le altezze IGN LiDAR HD intorno alla casa e disegna gli alberi come blocchi 3D con vere ombre portate. Il valore è la dimensione della cella: più piccolo, alberi più dettagliati, più traffico di rete. 4.5m va bene ovunque, 2.3m solo su desktop."
+    lidarVegetationOff: "Off",
+    lidarVegetationHint: "Solo Francia per ora. Scarica le altezze IGN LiDAR HD intorno alla casa e disegna gli alberi come blocchi 3D con vere ombre portate. Il valore è la dimensione della cella: più piccolo, alberi più dettagliati, più traffico di rete. 4.5m va bene ovunque, 1.5m si avvicina alla risoluzione nativa IGN ma solo su desktop."
   }
 };
 const nl = {
@@ -28889,7 +28918,7 @@ const nl = {
     terrainDetailHint: "Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe, alleen zinvol op krachtige desktops.",
     lidarVegetation: "LiDAR-vegetatie *",
     lidarVegetationOff: "Uit",
-    lidarVegetationHint: "Voorlopig alleen Frankrijk. Haalt IGN LiDAR HD-hoogtes rond het huis op en toont bomen als 3D-blokken met echte slagschaduwen. De waarde is de celgrootte: kleiner, fijnere bomen, meer netwerklast. 4.5m werkt overal, 2.3m alleen op desktop."
+    lidarVegetationHint: "Voorlopig alleen Frankrijk. Haalt IGN LiDAR HD-hoogtes rond het huis op en toont bomen als 3D-blokken met echte slagschaduwen. De waarde is de celgrootte: kleiner, fijnere bomen, meer netwerklast. 4.5m werkt overal, 1.5m komt dicht bij de IGN-natieve resolutie maar alleen op desktop."
   }
 };
 const pt = {
@@ -28969,8 +28998,8 @@ const pt = {
     terrainDetailFine: "Preciso",
     terrainDetailHint: "Suave (predefinição) amostra o relevo a cada ~20 m e mantém-se fluido em qualquer dispositivo. Preciso amostra a cada ~5 m para um relevo mais detalhado mas ~16× mais vértices a projetar por frame de rotação, útil apenas em PCs potentes.",
     lidarVegetation: "Vegetação LiDAR *",
-    lidarVegetationOff: "Desligada",
-    lidarVegetationHint: "Apenas França por agora. Recupera as alturas IGN LiDAR HD à volta de casa e desenha as árvores como blocos 3D com sombras projetadas reais. O valor é o tamanho da célula: menor, árvores mais finas, mais tráfego de rede. 4.5m funciona em qualquer dispositivo, 2.3m só em desktop."
+    lidarVegetationOff: "Off",
+    lidarVegetationHint: "Apenas França por agora. Recupera as alturas IGN LiDAR HD à volta de casa e desenha as árvores como blocos 3D com sombras projetadas reais. O valor é o tamanho da célula: menor, árvores mais finas, mais tráfego de rede. 4.5m funciona em qualquer dispositivo, 1.5m aproxima-se da resolução nativa IGN mas só em desktop."
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -30635,7 +30664,7 @@ let HeliosCardEditor = class extends i {
 
                 <div class="field">
                     <span class="label">${t2.editor.lidarVegetation}</span>
-                    <div class="segmented-toggle">
+                    <div class="segmented-toggle segmented-toggle-5">
                         <button
                             type="button"
                             class="seg-option ${String(c2["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION) === "off" ? "active" : ""}"
@@ -30656,6 +30685,11 @@ let HeliosCardEditor = class extends i {
                             class="seg-option ${String(c2["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION) === "2.3m" ? "active" : ""}"
                             @click="${() => this._update("lidar-vegetation", "2.3m")}"
                         >2.3m</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION) === "1.5m" ? "active" : ""}"
+                            @click="${() => this._update("lidar-vegetation", "1.5m")}"
+                        >1.5m</button>
                     </div>
                 </div>
                 <div class="hint">${t2.editor.lidarVegetationHint}</div>
@@ -30890,6 +30924,23 @@ HeliosCardEditor.styles = i$3`
             background: var(--card-background-color, #fff);
         }
 
+        /*  Five-option variant for the LiDAR vegetation toggle. Wider
+            base width plus flex-wrap so cramped editor widths break
+            the buttons onto a second row instead of cropping the
+            last label. */
+        .segmented-toggle-5
+        {
+            width: 100%;
+            min-width: 240px;
+            flex-wrap: wrap;
+            border-radius: 6px;
+            row-gap: 0;
+        }
+        .segmented-toggle-5 .seg-option
+        {
+            min-width: 48px;
+        }
+
         .seg-option
         {
             flex: 1;
@@ -30996,7 +31047,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.8"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.9"}`,
       labelStyle,
       versionStyle
     );

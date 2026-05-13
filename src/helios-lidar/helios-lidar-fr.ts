@@ -168,20 +168,39 @@ export const franceLidarHd: LidarVegetationSource =
 
         const pxLon = (maxLon - minLon) / rasterSize;
         const pxLat = (maxLat - minLat) / rasterSize;
-        const halfLon = pxLon / 2;
-        const halfLat = pxLat / 2;
+        //Hexagonal cells instead of square ones. Each pixel becomes a
+        //6-vertex regular hexagon scaled to ~85 % of the pixel size,
+        //which leaves a small gap between neighbours and breaks the
+        //"flat slab" impression of adjacent equal-height cells. The
+        //radius is computed independently in lon and lat degrees so
+        //the hex is regular in metres, not in degree space.
+        const hexFactor = 0.85;
+        const rLon = (pxLon / 2) * hexFactor;
+        const rLat = (pxLat / 2) * hexFactor;
+        //Precompute the 6 unit-vector offsets for the hexagon vertices.
+        //Pointy-top orientation: starts at the top, rotates CCW.
+        const HEX_OFFSETS: Array<[number, number]> = [
+            [ 0.0,   1.0  ],
+            [-0.866, 0.5  ],
+            [-0.866, -0.5 ],
+            [ 0.0,   -1.0 ],
+            [ 0.866, -0.5 ],
+            [ 0.866, 0.5  ]
+        ];
 
-        //One Polygon Feature per LiDAR cell. Beta.3 to .6 collapsed
-        //cells into connected regions and emitted one convex-hull
-        //polygon per region, but the hull over-approximated wildly:
-        //a U-shaped tree line filled in its own opening, two close
-        //regions merged into one via 8-connectivity, and the result
-        //looked like a giant flat-topped tree block sitting where
-        //there was no actual canopy. Per-cell emission preserves
-        //the actual height field: each ~9 m cell becomes its own
-        //small extrusion at the LiDAR-reported height, no hull, no
-        //averaging. The 3D extrusion still hides the under-canopy
-        //part of the shadow polygon downstream.
+        //Optional circular crop. When set, cells whose centre is more
+        //than `cropRadiusMeters` from the home are dropped, so the
+        //rendered vegetation disc matches the buildings disc.
+        const cropM = opts.cropRadiusMeters && opts.cropRadiusMeters > 0
+            ? opts.cropRadiusMeters
+            : null;
+
+        //One Polygon Feature per LiDAR cell at the cell's actual
+        //height, with a deterministic per-cell jitter in the height
+        //(85-115 %) so adjacent trees in a forest break their plateau
+        //and look more like individual crowns than a single block.
+        //Hash is i * 73856093 XOR j * 19349663, classic spatial-hash
+        //primes, fold to [0, 1).
         //
         //Row j = 0 is the NORTH edge of the bbox in WMS image
         //convention (top-down). Latitude decreases as j grows.
@@ -199,20 +218,33 @@ export const franceLidarHd: LidarVegetationSource =
                 const cLon = minLon + (i + 0.5) * pxLon;
                 if (cellInsideAnyBBox(cLon, cLat, bboxes)) continue;
 
-                const x0 = cLon - halfLon, x1 = cLon + halfLon;
-                const y0 = cLat - halfLat, y1 = cLat + halfLat;
+                if (cropM !== null
+                    && haversineMeters(opts.homeLat, opts.homeLon, cLat, cLon) > cropM)
+                {
+                    continue;
+                }
+
+                //Per-cell height jitter, deterministic from (i, j).
+                let hash = ((i * 73856093) ^ (j * 19349663)) >>> 0;
+                hash = (hash * 668265263) >>> 0;
+                const jitter = 0.85 + (hash / 4294967296) * 0.30;
+                const adjHeight = h * jitter;
+
+                //Build the hex ring around (cLon, cLat).
+                const ring: number[][] = new Array(7);
+                for (let k = 0; k < 6; k++)
+                {
+                    const o = HEX_OFFSETS[k];
+                    ring[k] = [cLon + o[0] * rLon, cLat + o[1] * rLat];
+                }
+                ring[6] = ring[0];
+
                 out.push({
                     type:     'Feature',
-                    geometry:
-                    {
-                        type:        'Polygon',
-                        coordinates: [[
-                            [x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]
-                        ]]
-                    },
+                    geometry: { type: 'Polygon', coordinates: [ring] },
                     properties:
                     {
-                        render_height:     h,
+                        render_height:     adjHeight,
                         render_min_height: 0
                     }
                 });
@@ -241,6 +273,23 @@ export const franceLidarHd: LidarVegetationSource =
 };
 
 //----------------------------------------------------------------- helpers
+
+const EARTH_RADIUS_M = 6_371_008.8;
+
+//Great-circle distance in metres, used for the circular vegetation
+//crop. The cells we test are at most a couple of hundred metres from
+//the home so a flat-earth approximation would also work, but the
+//classic haversine is cheap and unambiguous.
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number
+{
+    const toRad = Math.PI / 180;
+    const dLat  = (lat2 - lat1) * toRad;
+    const dLon  = (lon2 - lon1) * toRad;
+    const a     = Math.sin(dLat / 2) ** 2
+                + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad)
+                * Math.sin(dLon / 2) ** 2;
+    return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a));
+}
 
 function polygonBBox(geom: GeoJSON.Geometry): { minLon: number; minLat: number; maxLon: number; maxLat: number } | null
 {

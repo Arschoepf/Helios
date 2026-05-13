@@ -94,6 +94,6 @@ export const en: Translations = {
         terrainDetailHint:     'Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame — only worth it on capable desktops.',
         lidarVegetation:       'LiDAR vegetation *',
         lidarVegetationOff:    'Off',
-        lidarVegetationHint:   'France only for now. Streams IGN LiDAR HD heights around the home and renders trees as 3D blocks with real cast shadows. The value is the cell size: smaller = finer trees, larger payload. 4.5m is comfortable on any device, 2.3m is desktop-only.'
+        lidarVegetationHint:   'France only for now. Streams IGN LiDAR HD heights around the home and renders trees as 3D blocks with real cast shadows. The value is the cell size: smaller = finer trees, larger payload. 4.5m is comfortable on any device, 1.5m approaches IGN native resolution but is desktop-only.'
     }
 };

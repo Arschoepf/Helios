@@ -134,14 +134,17 @@ export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
 //  '4.5m'  - 256 x 256 raster (~256 KB float32)
 //  '3m'    - 384 x 384 raster (~590 KB)
 //  '2.3m'  - 512 x 512 raster (~1 MB)
-export type LidarVegetationLevel = 'off' | '4.5m' | '3m' | '2.3m';
+//  '1.5m'  - 768 x 768 raster (~2.3 MB), close to IGN's native 50 cm,
+//            desktop-grade only (~180k extrusion features rendered).
+export type LidarVegetationLevel = 'off' | '4.5m' | '3m' | '2.3m' | '1.5m';
 export const DEFAULT_LIDAR_VEGETATION: LidarVegetationLevel = '4.5m';
 //Pixel count per side for each level. Kept here next to the type so
 //adding a new level later means one line per file rather than a hunt.
 export const LIDAR_VEGETATION_RASTER: Record<Exclude<LidarVegetationLevel, 'off'>, number> = {
     '4.5m': 256,
     '3m':   384,
-    '2.3m': 512
+    '2.3m': 512,
+    '1.5m': 768
 };
 
 
@@ -998,7 +1001,10 @@ export class HeliosEngine
     private _lidarVegetationLevel(): LidarVegetationLevel
     {
         const v = String(this.cfg['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION).toLowerCase();
-        if (v === 'off' || v === '4.5m' || v === '3m' || v === '2.3m') return v as LidarVegetationLevel;
+        if (v === 'off' || v === '4.5m' || v === '3m' || v === '2.3m' || v === '1.5m')
+        {
+            return v as LidarVegetationLevel;
+        }
         return DEFAULT_LIDAR_VEGETATION;
     }
 
@@ -1888,7 +1894,7 @@ export class HeliosEngine
                     'fill-extrusion-color':   '#4a6741',
                     'fill-extrusion-height':  ['get', 'render_height'],
                     'fill-extrusion-base':    0,
-                    'fill-extrusion-opacity': 0.55
+                    'fill-extrusion-opacity': 0.78
                 }
             });
         }
@@ -2097,6 +2103,12 @@ export class HeliosEngine
             homeLon:            this.homeLon,
             radiusMeters:       radius,
             rasterSize,
+            //Visible disc the vegetation is allowed to extend to. The
+            //source fetches a slightly padded bbox to catch trees on
+            //the edge that still cast their shadow inward, but only
+            //emits cells inside this radius so the layer matches the
+            //buildings disc and stays performance-friendly.
+            cropRadiusMeters:   radius,
             buildingFootprints: bldgFc,
             signal:             ac.signal
         })

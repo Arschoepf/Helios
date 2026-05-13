@@ -83,7 +83,7 @@ export const pt: Translations = {
         terrainDetailFine:     'Preciso',
         terrainDetailHint:     'Suave (predefinição) amostra o relevo a cada ~20 m e mantém-se fluido em qualquer dispositivo. Preciso amostra a cada ~5 m para um relevo mais detalhado mas ~16× mais vértices a projetar por frame de rotação, útil apenas em PCs potentes.',
         lidarVegetation:       'Vegetação LiDAR *',
-        lidarVegetationOff:    'Desligada',
-        lidarVegetationHint:   'Apenas França por agora. Recupera as alturas IGN LiDAR HD à volta de casa e desenha as árvores como blocos 3D com sombras projetadas reais. O valor é o tamanho da célula: menor, árvores mais finas, mais tráfego de rede. 4.5m funciona em qualquer dispositivo, 2.3m só em desktop.'
+        lidarVegetationOff:    'Off',
+        lidarVegetationHint:   'Apenas França por agora. Recupera as alturas IGN LiDAR HD à volta de casa e desenha as árvores como blocos 3D com sombras projetadas reais. O valor é o tamanho da célula: menor, árvores mais finas, mais tráfego de rede. 4.5m funciona em qualquer dispositivo, 1.5m aproxima-se da resolução nativa IGN mas só em desktop.'
     }
 };

@@ -55,6 +55,11 @@ export interface LidarFetchOptions
     //downstream. The engine derives this from the user-configured
     //vegetation level (helios-engine.ts:LIDAR_VEGETATION_RASTER).
     rasterSize:   number;
+    //Hard limit on the haversine distance from the home, in metres.
+    //Cells beyond this are dropped so the rendered vegetation disc
+    //matches the buildings disc. Provider implementations still fetch
+    //a padded bbox so shadows of trees on the edge can extend inward.
+    cropRadiusMeters?: number;
     //Footprints already known from MapTiler (home + surroundings).
     //Cells whose centre falls inside any of these are dropped to
     //avoid double-counting buildings as vegetation pillars.

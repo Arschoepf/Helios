@@ -688,7 +688,7 @@ export class HeliosCardEditor extends LitElement
 
                 <div class="field">
                     <span class="label">${t.editor.lidarVegetation}</span>
-                    <div class="segmented-toggle">
+                    <div class="segmented-toggle segmented-toggle-5">
                         <button
                             type="button"
                             class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === 'off' ? 'active' : ''}"
@@ -709,6 +709,11 @@ export class HeliosCardEditor extends LitElement
                             class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '2.3m' ? 'active' : ''}"
                             @click="${() => this._update('lidar-vegetation', '2.3m')}"
                         >2.3m</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '1.5m' ? 'active' : ''}"
+                            @click="${() => this._update('lidar-vegetation', '1.5m')}"
+                        >1.5m</button>
                     </div>
                 </div>
                 <div class="hint">${t.editor.lidarVegetationHint}</div>
@@ -940,6 +945,23 @@ export class HeliosCardEditor extends LitElement
             overflow: hidden;
             border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
             background: var(--card-background-color, #fff);
+        }
+
+        /*  Five-option variant for the LiDAR vegetation toggle. Wider
+            base width plus flex-wrap so cramped editor widths break
+            the buttons onto a second row instead of cropping the
+            last label. */
+        .segmented-toggle-5
+        {
+            width: 100%;
+            min-width: 240px;
+            flex-wrap: wrap;
+            border-radius: 6px;
+            row-gap: 0;
+        }
+        .segmented-toggle-5 .seg-option
+        {
+            min-width: 48px;
         }
 
         .seg-option
