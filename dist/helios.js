@@ -26427,14 +26427,14 @@ const _HeliosEngine = class _HeliosEngine {
   }
   //Resolves the active MapTiler style id from `map-style` config.
   //Three values are accepted:
-  //  'streets' (default) → 'streets-v4' — sober urban basemap.
-  //  'topo'              → 'topo-v4'    — topographic basemap with
+  //  'streets' (default) → 'streets-v4', sober urban basemap.
+  //  'topo'              → 'topo-v4'   , topographic basemap with
   //                                       contour lines and softer
   //                                       earth tones, better in
   //                                       hilly / outdoor settings.
   //  'minimal'           → 'streets-v4' loaded then pruned in
   //                                       _onStyleLoad to a curated
-  //                                       whitelist of layers — fewer
+  //                                       whitelist of layers, fewer
   //                                       per-frame draw calls, best
   //                                       for low-end devices.
   //
@@ -26468,13 +26468,13 @@ const _HeliosEngine = class _HeliosEngine {
       }
     }
   }
-  //Performance mode — disables the per-frame heavyweights (terrain
+  //Performance mode, disables the per-frame heavyweights (terrain
   //mesh + hillshade) and caps pixelRatio at 1.0. The 3D pitch and
   //extruded buildings are preserved, so the card still reads as 3D.
   _performanceMode() {
     return this.cfg["performance-mode"] === true;
   }
-  //Terrain DEM maxzoom — 'smooth' (default) at z=12, 'fine' at z=14.
+  //Terrain DEM maxzoom, 'smooth' (default) at z=12, 'fine' at z=14.
   //z=14 ~16× more mesh vertices than z=12 per frame, which moves
   //rotation cost considerably; only useful when the user values
   //the finer relief over fluidity.
@@ -26579,8 +26579,6 @@ const _HeliosEngine = class _HeliosEngine {
         cloudMid: w2.cloudMid,
         cloudHigh: w2.cloudHigh,
         cloudIntensity: w2.cloudIntensity,
-        cloudGradient: "",
-        irradianceGradient: "",
         timeRange: this._getTimeRange(),
         isLiveTime: this._selectedTime === null,
         pvPower,
@@ -26825,12 +26823,12 @@ const _HeliosEngine = class _HeliosEngine {
   //percentage. Called from _renderForCurrentSelection so it ticks
   //both with live time progression and with manual scrubbing.
   //
-  //  cloudPct ∈ [0, 100]    — coverage at the home location now
+  //  cloudPct ∈ [0, 100]   , coverage at the home location now
   //
   //The ring (100 % reference) has fixed radius CLOUD_DISC_RADIUS_M.
   //The disc scales linearly: radius = CLOUD_DISC_RADIUS_M * pct/100.
-  //At 0 % cloud cover the disc has zero radius — effectively
-  //invisible — while the ring stays visible to anchor the gauge.
+  //At 0 % cloud cover the disc has zero radius, effectively
+  //invisible, while the ring stays visible to anchor the gauge.
   //
   //Fixed cloud colour. The disc's *radius* already encodes
   //the cloud-cover percentage (0% = invisible, 100% = full ring);
@@ -26922,7 +26920,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return Math.min(1, Math.max(0, v2));
   }
-  //Resolves the cluster radius (metres) — every building whose
+  //Resolves the cluster radius (metres), every building whose
   //centroid is within this radius (or which contains the home
   //point) becomes part of the home group at full opacity. Allows
   //attached verandas / outbuildings to read as one with the main
@@ -26944,25 +26942,14 @@ const _HeliosEngine = class _HeliosEngine {
   //
   //  - helios-buildings-surroundings : every building within the
   //    configured radius of the home, painted at the configured
-  //    opacity (default ~25%). Conveys urban context without
-  //    competing visually with the data overlays.
-  //  - helios-buildings-home : the home itself (whichever polygon
-  //    contains the home coordinates), painted at full opacity in
-  //    the same neutral grey. Reads as the focal point.
-  //
-  //Compared to the previous single layer fed from MapTiler's
-  //"helios-planet" source-layer, this design (a) renders only the
-  //handful of buildings the user actually cares about, eliminating
-  //the per-frame cost of thousands of fill-extrusions in dense
-  //urban areas, and (b) cleanly isolates the home so future
-  //iterations can give it special treatment (PV-on-roof rendering,
-  //per-room data overlays, etc.) without per-feature MapLibre
-  //expression gymnastics.
+  //    opacity. Urban context without competing with the data overlays.
+  //  - helios-buildings-home : the polygon containing the home
+  //    coordinates, painted at full opacity in the same neutral grey.
+  //    Reads as the focal point.
   //
   //The building GeoJSON is fetched once per (home, radius) combo
-  //in helios-buildings.ts; subsequent calls to _addBuildings()
-  //(e.g. on theme switch, which rebuilds the whole style) reuse
-  //the cached data without re-hitting the API.
+  //in helios-buildings.ts; subsequent calls (e.g. on theme switch,
+  //which rebuilds the whole style) reuse the cached data.
   _addBuildings() {
     bumpStat("addBuildingsCalls");
     if (!this.map) {
@@ -27199,7 +27186,7 @@ const _HeliosEngine = class _HeliosEngine {
   //
   //Short-circuits when the sun has moved less than 0.5° since the
   //last call (≈ 2 min of motion). setPaintProperty isn't free on
-  //mobile — repeating the full pass once a minute would burn frames
+  //mobile, repeating the full pass once a minute would burn frames
   //for no perceptible visual change.
   _refreshShadowsAndAtmosphere() {
     if (!this.map) {
@@ -27308,14 +27295,9 @@ const _HeliosEngine = class _HeliosEngine {
     } catch (_2) {
     }
   }
-  //The 'standard' precision tier was retired: a single
-  //best-match model produced visibly noisier readings (low-cloud
-  //layer stuck at 100 % from altitude bugs, mostly), and the
-  //multi-model median fix sat one click away in the editor for
-  //users who often missed it. We now always run in the multi-
-  //model 'high' mode. The function is kept so the rest of the
-  //engine can stay precision-aware in case a future tier is
-  //added.
+  //Precision is fixed to 'high' (multi-model median). The function
+  //is kept so the rest of the engine stays precision-aware if a
+  //tier is added later.
   _resolvedPrecision() {
     return "high";
   }
@@ -27368,13 +27350,11 @@ const _HeliosEngine = class _HeliosEngine {
       this.onFetchEnd?.();
     }
   }
-  //"Reset view" — re-anchor the camera on the home and restore the
-  //default pitch/bearing. With v1.2's fully locked camera the user
-  //can't drift it away through interaction, so this is now an
-  //animation-only entry point: it serves as the resting target for
-  //future scripted camera motions (intro orbit, narrative tilt,
-  //sun-vs-shadow comparison flyovers...) and as a one-tap reset if
-  //any of those animations leaves the camera in an unexpected pose.
+  //"Reset view", re-anchor the camera on the home and restore the
+  //default pitch/bearing. The interactive camera is locked, so this
+  //is an animation-only entry point: resting target for scripted
+  //motions (intro orbit, narrative tilt, sun-vs-shadow flyovers...)
+  //and one-tap reset if any of those leaves the camera off-pose.
   recenter() {
     if (!this.map) {
       return;
@@ -27389,7 +27369,7 @@ const _HeliosEngine = class _HeliosEngine {
         zoom: 18,
         pitch: 55,
         //Same hemisphere-aware bearing as the initial setup
-        //above — recentering must restore the resting pose,
+        //above, recentering must restore the resting pose,
         //not flip the orientation.
         bearing: this.homeLat >= 0 ? 180 : 0,
         duration: dur
@@ -27399,39 +27379,39 @@ const _HeliosEngine = class _HeliosEngine {
   //Compute the screen-space layout of the on-map readout chips and
   //the leader lines that tie them to the home / on-ground ring.
   //
-  //  cloudLabel — where the cloud-cover chip should be drawn (in
+  //  cloudLabel, where the cloud-cover chip should be drawn (in
   //               CSS pixels, relative to the map canvas). Sits to
   //               the screen-LEFT of the cloud disc, just outside
   //               the 100 % reference ring.
-  //  pvLabel    — where the optional PV production chip should be
+  //  pvLabel   , where the optional PV production chip should be
   //               drawn. Sits just below the home so the chip is
   //               read as the home's "production" badge. The SoC
   //               and Power chips sit on a shared shelf above it,
   //               so the cluster has the PV chip at the bottom,
   //               the home in the middle of the L-leaders, and
   //               the battery chips at the top.
-  //  batterySocLabel   — battery State-of-Charge chip (icon + %).
+  //  batterySocLabel  , battery State-of-Charge chip (icon + %).
   //               Sits on the shelf, to the LEFT of the home's
   //               vertical axis, connected to PV by an L polyline
   //               (PV top-left → up → left → SoC right edge).
   //               Static (no flow direction to encode).
-  //  batteryPowerLabel — battery Power chip (icon + signed W/kW).
+  //  batteryPowerLabel, battery Power chip (icon + signed W/kW).
   //               Sits on the shelf, to the RIGHT of the home's
   //               vertical axis, connected to PV by an L polyline
   //               (PV top-right → up → right → Power left edge).
   //               Animated dashes + arrow tracking the sign of
   //               the live power.
-  //  ringEdge   — projected position of the cloud disc's 100 %
+  //  ringEdge  , projected position of the cloud disc's 100 %
   //               reference ring edge, in the hemisphere-aware
   //               anchor direction (east of home in NH, west in
   //               SH). The card uses (home, ringEdge) plus the
   //               live cloud-cover percentage to interpolate the
   //               actual fill-disc edge along the same direction.
-  //  home       — the projected home point, used as the anchor for
+  //  home      , the projected home point, used as the anchor for
   //               the PV / battery chip leader lines and as the
   //               centre of the cloud fill disc.
   //
-  //Returns null when the map isn't ready yet — the card treats
+  //Returns null when the map isn't ready yet, the card treats
   //null as "don't render the overlay this frame".
   projectHomeLabelLayout() {
     if (!this.map) {
@@ -27470,14 +27450,14 @@ const _HeliosEngine = class _HeliosEngine {
   //screen-space pixels using MapLibre's current camera matrices.
   //
   //Procedure (per the MapLibre v5 official 3D-model example):
-  //  1. modelMatrix = transform.getMatrixForModel(LngLat, alt) —
+  //  1. modelMatrix = transform.getMatrixForModel(LngLat, alt) ,
   //     translates / rotates a model from its local frame into
   //     Mercator world coordinates at the requested location and
   //     altitude.
   //  2. projMatrix = transform.getProjectionDataForCustomLayer()
-  //     .mainMatrix — Mercator world to gl clip space.
+  //     .mainMatrix, Mercator world to gl clip space.
   //  3. Multiply both matrices to get the full MVP.
-  //  4. Apply MVP to (0, 0, 0, 1) — the local-frame origin, which
+  //  4. Apply MVP to (0, 0, 0, 1), the local-frame origin, which
   //     becomes our 3D point after step 1.
   //  5. Perspective-divide by w to get clip-space coordinates in
   //     [-1, +1].
@@ -27490,8 +27470,8 @@ const _HeliosEngine = class _HeliosEngine {
   //Returns x/y in CSS pixels relative to the map canvas, plus depth
   //(the post-projection w component, which is monotonic in distance
   //from the camera). Callers can use depth to scale visual elements
-  //based on how far they are from the viewer — bigger when close,
-  //smaller when far — to give the otherwise flat top-down-ish view
+  //based on how far they are from the viewer, bigger when close,
+  //smaller when far, to give the otherwise flat top-down-ish view
   //a sense of perspective beyond what pitch alone provides.
   _projectScenePoint(lon, lat, altitudeM) {
     if (!this.map) {
@@ -27542,13 +27522,13 @@ const _HeliosEngine = class _HeliosEngine {
   //
   //Each arc point also carries the irradiance (W/m²) at that
   //instant, computed with the current cloud cover applied
-  //uniformly across the day — that's a simplification (real cloud
+  //uniformly across the day, that's a simplification (real cloud
   //cover varies hour-to-hour) but keeps the visualisation reactive
   //to the live weather without needing the per-hour forecast for
   //the arc itself. The sun position carries the same.
   //
   //Each arc point and the sun also carry a `nearness` value in
-  //[0..1] — 1 means closest to the camera (nearest depth in the
+  //[0..1], 1 means closest to the camera (nearest depth in the
   //batch), 0 means furthest. The card uses this to scale segment
   //thickness and the sun disc radius so the trajectory reads with
   //a real sense of perspective rather than as a flat ribbon.
@@ -28588,7 +28568,7 @@ const heliosCardStyles = i$3`
         card's vocabulary (sun arc, sun + halo, low-poly buildings
         with a brighter central home, ground cloud disc, leader
         chips) over a light day-mode sky gradient. The brand chrome
-        (title + subtitle) sits at the bottom — the MapTiler key
+        (title + subtitle) sits at the bottom, the MapTiler key
         prompt lives in the README, not on the catalogue thumbnail. */
 
     .placeholder
@@ -28618,7 +28598,7 @@ const heliosCardStyles = i$3`
         z-index: 1;
     }
 
-    /*  Sun halo pulses gently — same visual language as the live
+    /*  Sun halo pulses gently, same visual language as the live
         card's breathing sun. Only the glow circle scales; the
         inner orange disc stays fixed so the brand colour reads
         cleanly at the centre. */
@@ -28641,7 +28621,7 @@ const heliosCardStyles = i$3`
         /*  Title centred horizontally, vertically anchored at 65 %
             from the BOTTOM of the placeholder (so 35 % from the
             top). Sits just above the iso buildings and visually
-            below the solar arc apex — feels less "crammed in the
+            below the solar arc apex, feels less "crammed in the
             middle" than a strict 50 % vertical centre. */
         top: 35%;
         left: 50%;
@@ -28662,7 +28642,7 @@ const heliosCardStyles = i$3`
         text-shadow: 0 1px 1px rgba(255,255,255,0.6);
         line-height: 1;
         white-space: nowrap;
-        /*  Optical centre — letter-spacing piles up on the right of
+        /*  Optical centre, letter-spacing piles up on the right of
             the last glyph so the visual centre of the wordmark
             sits a few pixels left of the geometric centre. The
             padding-left compensates so HELIOS reads centred. */
@@ -28670,7 +28650,7 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Timeline — pinned to the bottom of the card with uniform
+    /*  Timeline, pinned to the bottom of the card with uniform
         breathing space. The whole bar accepts pointer events for
         scrub. */
 
@@ -28704,7 +28684,7 @@ const heliosCardStyles = i$3`
         height: 18px;
     }
 
-    /*  Chart card — bordered white panel hosting the area chart,
+    /*  Chart card, bordered white panel hosting the area chart,
         day-label chips on the midline, dotted day separators and
         the live + scrub HTML cursor overlays. */
     .tb-chart-card
@@ -28738,7 +28718,7 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
-    /*  PV prediction line — overlays the observed PV chart for hours
+    /*  PV prediction line, overlays the observed PV chart for hours
         past "now" using the auto-calibrated scalar fit from history.
         Dashed + half opacity makes it visually distinct from the
         recorded curve while staying in the configured PV colour so
@@ -28749,7 +28729,7 @@ const heliosCardStyles = i$3`
         opacity: 0.55;
     }
 
-    /*  Daily peak-production highlight — for each natural day in the
+    /*  Daily peak-production highlight, for each natural day in the
         timeline, a 1-hour-wide vertical band painted in the configured
         PV colour at low opacity marks the hour where production is
         (or is predicted to be) highest. Drawn behind the chart area
@@ -28790,7 +28770,7 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
-    /*  Live cursor — solid black vertical line spanning the chart,
+    /*  Live cursor, solid black vertical line spanning the chart,
         with a triangle marker pointing down from the top edge. */
     .tb-cursor-now
     {
@@ -28818,7 +28798,7 @@ const heliosCardStyles = i$3`
         border-top:    5px solid #000000;
     }
 
-    /*  Scrub cursor — same anatomy, dashed and tinted blue so live
+    /*  Scrub cursor, same anatomy, dashed and tinted blue so live
         and scrubbed positions are unmistakable side by side. */
     .tb-cursor-sel
     {
@@ -28853,14 +28833,14 @@ const heliosCardStyles = i$3`
         border-top:    5px solid #1f6feb;
     }
 
-    /*  Scrub-time pill — sits in the top row above the chart card
+    /*  Scrub-time pill, sits in the top row above the chart card
         when the user has scrubbed away from "now". Tinted in the
         scrub-cursor blue so the displayed instant is visibly not
         "now". Anchored at the cursor's X via an inline left
         percentage, with edge-clamping handled by the inline
         transform so the pill never bleeds past the card edges.
         Pointer-transparent so dragging the timeline through it
-        still scrubs — the "back to live" affordance lives in the
+        still scrubs, the "back to live" affordance lives in the
         clock tab above the card, not next to the pill, to keep the
         timeline's hit area uncontested on mobile. */
     .tb-sel-label
@@ -28881,7 +28861,7 @@ const heliosCardStyles = i$3`
         z-index: 3;
     }
 
-    /*  Scrub tether — a 6 px vertical hair that drops from the
+    /*  Scrub tether, a 6 px vertical hair that drops from the
         bottom edge of the scrub cluster to the top edge of the
         chart card, anchored at the cursor's X. Carries the
         scrub-cursor blue so it reads as continuous with the cursor's
@@ -28902,7 +28882,7 @@ const heliosCardStyles = i$3`
         z-index: 3;
     }
 
-    /*  Day labels — small white chips overlaying the chart midline.
+    /*  Day labels, small white chips overlaying the chart midline.
         Same chip language as the on-map cloud and W/m² readouts. */
     .tb-day-labels
     {
@@ -28946,7 +28926,7 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Spinner — centred on the map while a fetch is in flight. */
+    /*  Spinner, centred on the map while a fetch is in flight. */
 
     .spinner-center
     {
@@ -28987,7 +28967,7 @@ const heliosCardStyles = i$3`
     /*  Top corner overlays. Date/time chip on the right; "back to
         live" chip on the left when scrubbed. */
 
-    /*  Top-row overlay — the clock centres horizontally above the
+    /*  Top-row overlay, the clock centres horizontally above the
         card, with an optional "back to live" tab hanging from its
         bottom-centre when the user has scrubbed away from now. The
         wrapper is a vertical flex column so the tab stacks under
@@ -29007,7 +28987,7 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Date/time chip — same chip language as the on-map readouts. */
+    /*  Date/time chip, same chip language as the on-map readouts. */
     .clock
     {
         display: inline-flex;
@@ -29032,7 +29012,7 @@ const heliosCardStyles = i$3`
     .clock-date { opacity: 0.75; }
     .clock-time { opacity: 1;    }
 
-    /*  "Back to live" tab — hangs from the bottom-centre of the
+    /*  "Back to live" tab, hangs from the bottom-centre of the
         clock as a small folder-style tab when the user has scrubbed
         away from now. Same blue plate as the on-chart scrub cursor
         and the scrub-time pill, white restore icon centred. The
@@ -29074,7 +29054,7 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Cloud-cover percentage chip — floating above the cloud disc
+    /*  Cloud-cover percentage chip, floating above the cloud disc
         on the ground with a leader line down to its feature. */
     .cloud-pct-label
     {
@@ -29105,7 +29085,7 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Photovoltaic production chip — same frame as cloud/W/m² but
+    /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
         text + icon) for instant identification.
         --pv-leader-color is set inline by the renderer. The
@@ -29147,7 +29127,7 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Battery chips (SoC on the left of PV, Power on the right) —
+    /*  Battery chips (SoC on the left of PV, Power on the right) ,
         same frame as the PV chip, tinted in the user-configured
         battery colour. Shares min-width and centred text with the
         PV chip so the visible dotted-leader gap on each side of PV
@@ -29193,7 +29173,7 @@ const heliosCardStyles = i$3`
         through the corner instead of snapping).
         - .battery-leader-line carries the static styling (stroke
           colour, width, opacity, dash pattern). Used on its own
-          for SoC ↔ PV — the SoC value has no sign so there's no
+          for SoC ↔ PV, the SoC value has no sign so there's no
           flow direction to animate.
         - .battery-leader-line-animated layers the flow animation
           on top: the dashes drift at a speed proportional to |P|
@@ -29247,7 +29227,7 @@ const heliosCardStyles = i$3`
         opacity: 0.9;
     }
 
-    /*  Cloud-cover leader line — black hairline from chip to disc. */
+    /*  Cloud-cover leader line, black hairline from chip to disc. */
     .cloud-leader-svg
     {
         position: absolute;
@@ -29266,7 +29246,7 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Solar overlay — sun arc, current sun disc, incidence ray.
+    /*  Solar overlay, sun arc, current sun disc, incidence ray.
         Single SVG layer spanning the card; opacity fades to 0 at
         night via inline style from the engine. */
     .solar-svg
@@ -29280,13 +29260,13 @@ const heliosCardStyles = i$3`
         transition: opacity 600ms ease-out;
     }
 
-    /*  Arc — first pass paints a dark outline for legibility on
+    /*  Arc, first pass paints a dark outline for legibility on
         light basemaps; second pass paints the configured sun
         colour on top. Stroke widths are set inline per segment. */
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
-    /*  Below-horizon segments — round dots at fixed spacing so the
+    /*  Below-horizon segments, round dots at fixed spacing so the
         eye reads "this is happening underground" without colour or
         depth scaling having to carry the signal. dasharray "0 N"
         with linecap round renders true circles on every browser. */
@@ -29296,7 +29276,7 @@ const heliosCardStyles = i$3`
         stroke-dasharray: 0 8;
     }
 
-    /*  Incidence ray — dashes flow from the sun toward the home at
+    /*  Incidence ray, dashes flow from the sun toward the home at
         a speed proportional to live irradiance. */
     .solar-svg .solar-ray
     {
@@ -29313,7 +29293,7 @@ const heliosCardStyles = i$3`
         to   { stroke-dashoffset: -10; }
     }
 
-    /*  Solar ray arrow — tiny triangle riding the incidence ray
+    /*  Solar ray arrow, tiny triangle riding the incidence ray
         toward the home, animated via SVG <animateMotion> at the
         same duration as the dash flow so the arrow advances in
         lockstep with the pointillé. rotate="auto" keeps the tip
@@ -29324,7 +29304,7 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Cloud-cover disc tooltip — floats above the on-ground disc
+    /*  Cloud-cover disc tooltip, floats above the on-ground disc
         on hover. Position set inline from the engine's onCloudHover
         event in canvas pixel coordinates. */
     .cloud-tooltip
@@ -29347,7 +29327,7 @@ const heliosCardStyles = i$3`
         white-space: nowrap;
     }
 
-    /*  Flipped variant — applied when the cursor is in the right
+    /*  Flipped variant, applied when the cursor is in the right
         half of the card so the tooltip stays inside the bounds. */
     .cloud-tooltip-flip
     {
@@ -29367,7 +29347,7 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Solar irradiance label — chip pinned above the live sun
+    /*  Solar irradiance label, chip pinned above the live sun
         position, same chip language as the cloud and PV chips. */
     .solar-pct-label
     {
@@ -29401,11 +29381,11 @@ const heliosCardStyles = i$3`
 
 
     /*  ============================================================
-        Dark theme — opt-in via the \`card-theme: dark\` config.
+        Dark theme, opt-in via the \`card-theme: dark\` config.
 
         The whole card is already painted on top of a 3D map, so
         "dark mode" here is really about the chrome (chips, charts,
-        cursors, day labels, leader lines, tooltips) — the basemap
+        cursors, day labels, leader lines, tooltips), the basemap
         keeps its own colours. Strategy:
 
           - chip surfaces flip from a solid white plate to a solid
@@ -29413,14 +29393,14 @@ const heliosCardStyles = i$3`
             darkened tile over the map instead of a
             bright sticker.
           - chip text / borders / icons go from black to a soft
-            light-grey (#e6e6e6 text, #cccccc borders) — pure white
+            light-grey (#e6e6e6 text, #cccccc borders), pure white
             would clip detail against bright basemap patches.
           - chart hairlines (midline, day separators, hour ticks,
             live cursor) flip from black-on-white to white-on-near-
             black with the same opacity envelopes as the light skin
             so the visual weight stays balanced.
           - chart fills (PV / cloud / irradiance) are user-coloured
-            and unchanged — they read fine on both surfaces.
+            and unchanged, they read fine on both surfaces.
           - the scrub blue (#1f6feb) and the live tooltip dark
             plate already read on dark backgrounds, so they're left
             alone.
@@ -29474,7 +29454,7 @@ const heliosCardStyles = i$3`
     {
         background: #191a1b;
         color:       #e6e6e6;
-        /*  Light-mode borders are pure black on a white plate —
+        /*  Light-mode borders are pure black on a white plate ,
             high contrast but visually contained because the plate
             and the basemap below it are both bright. In dark mode
             the same 1 px ring at #cccccc reads as the brightest
@@ -29500,7 +29480,7 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
     ha-card.theme-dark .tl-live-btn:active { background: #353637; }
 
-    /*  PV and battery chips — they keep the user-configured tint
+    /*  PV and battery chips, they keep the user-configured tint
         on the border / text / icon (so a green PV chip reads as
         green on either skin), but the surface flips to the dark
         plate so the tint stays readable. The border drops to 50 %
@@ -29529,7 +29509,7 @@ const heliosCardStyles = i$3`
         stroke-opacity: 0.55;
     }
 
-    /*  Solar arc outline — the light skin paints a black halo
+    /*  Solar arc outline, the light skin paints a black halo
         behind the configured sun colour for legibility on bright
         basemaps; in dark mode that halo would disappear into the
         map, so we paint a faint white halo instead. The arc and
@@ -29544,14 +29524,14 @@ const heliosCardStyles = i$3`
         Animation perf hooks
         ---------------------------------------------------------
 
-        1. .helios-paused — set on the host element by the card's
+        1. .helios-paused, set on the host element by the card's
            IntersectionObserver when the card scrolls out of the
            viewport. Pauses every CSS animation (SVG dash-flow,
            offset-path arrow flow, placeholder spin / pulse) until
            the card returns. SMIL <animateMotion> is paused in
            parallel via svg.pauseAnimations() in the card script.
 
-        2. prefers-reduced-motion — respects the user's system
+        2. prefers-reduced-motion, respects the user's system
            setting. When the user has asked for reduced motion at
            the OS level, every helios animation and transition is
            disabled. The card still functions; it just doesn't move.
@@ -29913,7 +29893,7 @@ let HeliosCardEditor = class extends i {
   //In a fresh tab, or in HA versions that don't pre-load it for
   //custom cards, the tag is unknown until something on the page
   //pulls it in. We force the load by creating a transient
-  //"entities" card and asking for its config element — the side
+  //"entities" card and asking for its config element, the side
   //effect registers ha-entity-picker. While the load is pending we
   //fall back to a plain text input so the field is never broken.
   async _ensureEntityPicker() {
@@ -30441,7 +30421,7 @@ HeliosCardEditor.styles = i$3`
             color: var(--text-primary-color, #fff);
         }
 
-        /*  Slider variant — replaces type="number" inputs so the
+        /*  Slider variant, replaces type="number" inputs so the
             user can never enter a value outside the supported range.
             The matching value is shown to the right of the track. */
         .slider-row
@@ -30555,7 +30535,7 @@ let HeliosCard = class extends i {
     this._pvCalibHARead = false;
     this._pvCalibPendingSave = null;
   }
-  //Cheap stable signature of the visual config — used to skip
+  //Cheap stable signature of the visual config, used to skip
   //updateConfig() when nothing the engine cares about has changed.
   _computeConfigSig() {
     if (!this.config) {
@@ -30576,8 +30556,7 @@ let HeliosCard = class extends i {
   static getStubConfig() {
     return { "maptiler-api-key": "" };
   }
-  //Sizing for masonry view (legacy). 1 unit = 50 px so 12 ≈ 600 px,
-  //matching the historical default height of the card.
+  //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
   getCardSize() {
     return 12;
   }
@@ -30675,7 +30654,7 @@ let HeliosCard = class extends i {
   }
   //Engine init policy: re-init only when one of the *identity inputs*
   //changes (API key, home coordinates, map style). We resize the
-  //existing engine when the container reflows — we never tear down
+  //existing engine when the container reflows, we never tear down
   //the MapLibre stack just because a sibling fragment re-rendered.
   //Doing so would trash the user's in-progress edits in the
   //dashboard editor.
@@ -30722,7 +30701,7 @@ let HeliosCard = class extends i {
   //  - the entity's historical state changes over the active time
   //    range (fetched asynchronously via the history WebSocket
   //    command), plotted on the dedicated graph above the main
-  //    timeline. Only past + current data is fetched — the future
+  //    timeline. Only past + current data is fetched, the future
   //    half of the timeline range is intentionally left blank
   //    because production data simply doesn't exist yet.
   _refreshPv() {
@@ -30778,8 +30757,8 @@ let HeliosCard = class extends i {
     this._pvFetchKey = fetchKey;
     this._fetchPvHistory(entity, this._timeRange.start, this._timeRange.end);
   }
-  //Battery overlay — pulls live state from hass.states on every Lit
-  //cycle (no rolling buffer like PV — battery entities are typically
+  //Battery overlay, pulls live state from hass.states on every Lit
+  //cycle (no rolling buffer like PV, battery entities are typically
   //power sensors that already expose an instantaneous reading) and,
   //when at least one entity is configured AND the timeline range is
   //set, fetches a historical series so the chip can show what the
@@ -30844,7 +30823,7 @@ let HeliosCard = class extends i {
   //(when configured) are bundled into one `entity_ids` array so we
   //pay one WS roundtrip instead of two. Either side of the result
   //may end up empty (entity not yet existing, no state changes in
-  //range, etc.) and that's fine — the chip will show only the side
+  //range, etc.) and that's fine, the chip will show only the side
   //that did return data.
   async _fetchBatteryHistory(socEntity, powerEntity, start, end) {
     if (!this.hass?.callWS) {
@@ -31120,7 +31099,7 @@ let HeliosCard = class extends i {
   //colour). Depth perception comes entirely from the per-segment
   //stroke width modulated by `nearness`, kept untouched: it is the
   //2D-on-3D cue we explicitly chose not to overload with another
-  //dimension. Irradiance is still kept on the segment shape — the
+  //dimension. Irradiance is still kept on the segment shape, the
   //caller doesn't use it any more, but removing it would broaden
   //the change surface unnecessarily; we just stop *colouring* with
   //it.
@@ -31343,7 +31322,7 @@ let HeliosCard = class extends i {
   //the scrub cursor line up vertically across both blocks. The
   //curve is plotted from this._pvHistory (fetched via the HA
   //history WebSocket command); future data is intentionally left
-  //blank — the curve naturally stops at the last recorded sample
+  //blank, the curve naturally stops at the last recorded sample
   //since there's no production data after "now".
   _renderPvChart() {
     const range = this._timeRange;
@@ -31609,7 +31588,7 @@ let HeliosCard = class extends i {
   //bracketing the requested instant; for a power entity we just
   //return the value of the closest historical sample. Returns
   //null when the requested time falls outside the fetched
-  //history window — the chip is then hidden by the caller, which
+  //history window, the chip is then hidden by the caller, which
   //is the right behaviour for the future half of the timeline
   //(no production data exists there yet).
   _pvRateAtTime(time) {
@@ -31757,7 +31736,7 @@ let HeliosCard = class extends i {
     return { value: 0, unit: rateUnit };
   }
   //Convert a PV rate into watts. Used to drive animation speeds on
-  //a unit-agnostic scale — the leader-line dash flow saturates at a
+  //a unit-agnostic scale, the leader-line dash flow saturates at a
   //fixed wattage no matter what unit the user's sensor is in.
   _pvNormalizeToWatts(value, unit) {
     const lu = (unit || "").toLowerCase();
@@ -31832,7 +31811,7 @@ let HeliosCard = class extends i {
     }
   }
   //Pull the buffer from HA, merge with the local cache (HA wins
-  //on conflict — it's the source of truth), recompute k. Called
+  //on conflict, it's the source of truth), recompute k. Called
   //once when hass becomes available; subsequent updates flow
   //through _updatePvCalibration / _savePvCalibSamples.
   async _reconcilePvCalibWithHA() {
@@ -31959,14 +31938,14 @@ let HeliosCard = class extends i {
     return k2;
   }
   //Map a "rate" magnitude to an animation duration in seconds.
-  //  rate <= 0           → 30 s        (paused — night / no production)
-  //  rate  = saturation  → minDuration (fastest — full power)
+  //  rate <= 0           → 30 s        (paused, night / no production)
+  //  rate  = saturation  → minDuration (fastest, full power)
   //
   //Ease-out cubic ramp: half-saturation already feels meaningfully
   //faster than the night baseline, which gives the user the
   //feeling of raw power pushing through the line. The minDuration
   //is exposed so callers can tune the saturated-end pace per
-  //channel — the sun ray spans the full map and benefits from a
+  //channel, the sun ray spans the full map and benefits from a
   //slightly slower flow than the PV leader, which is short and
   //local.
   static _flowDuration(rate, saturation, minDuration = 0.4) {
@@ -31981,7 +31960,7 @@ let HeliosCard = class extends i {
   //auto-rescales W → kW when the magnitude crosses a threshold so
   //a 4500 W reading prints as "4.5 kW" rather than the noisier
   //"4500 W". Energy units (kWh / Wh) keep their native unit and
-  //get a single decimal — daily totals usually sit in the 0–50 kWh
+  //get a single decimal, daily totals usually sit in the 0–50 kWh
   //band where one decimal is the right amount of precision.
   _formatPvValue(value, unit) {
     const u2 = (unit || "").trim();
@@ -32161,7 +32140,7 @@ let HeliosCard = class extends i {
     })() : A}
                         </div>
 
-                        <!--  Optional PV production graph — only
+                        <!--  Optional PV production graph, only
                               rendered when the user has set the
                               pv-power-entity config. Same chip
                               styling as the main chart card; sits
@@ -32218,7 +32197,7 @@ ${showSun ? b`
                         class="solar-svg"
                         style="opacity:${sunScene.daylight}"
                     >
-                        <!--  Arc — single colour pass, depth conveyed
+                        <!--  Arc, single colour pass, depth conveyed
                               by per-segment stroke-width modulation.
                               First pass paints a faint dark outline
                               for legibility against bright basemap
@@ -32297,7 +32276,7 @@ ${showSun ? b`
                 <!--  Always-visible W/m² label, pinned above the sun
                       disc. Same visual language as the cloud-cover
                       label above the home: black border, white card,
-                      tabular numerals — they read as a matched pair
+                      tabular numerals, they read as a matched pair
                       of cartographic readouts.  -->
                 ${showSunLabel ? b`
                     <div
@@ -32359,7 +32338,7 @@ ${showSun ? b`
                 ${showSocChip || showPowerChip ? b`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV — static, dashed, inverted-L
+                            SoC ↔ PV, static, dashed, inverted-L
                             path with a rounded corner (matching
                             the PV ↔ Power leader's vocabulary
                             exactly minus the flow animation).
@@ -32376,7 +32355,7 @@ ${showSun ? b`
                             ></path>
                         ` : A}
                         <!--
-                            PV ↔ Power — animated, dashed L with
+                            PV ↔ Power, animated, dashed L with
                             an arrow tracking the sign of the live
                             power. Vertical leg drops from PV's
                             bottom edge slightly right of centre,
@@ -32442,7 +32421,7 @@ ${showSun ? b`
         `;
   }
   //Darken a #rrggbb hex by a factor in [0, 1] (0 = unchanged,
-  //1 = pure black). Multiplicative on each channel — keeps the
+  //1 = pure black). Multiplicative on each channel, keeps the
   //hue intact, just lowers the value. Used to derive the slightly
   //darker rim colour around the sun disc from the configured sun
   //colour, so the rim stays visible against the disc fill without
@@ -32510,7 +32489,7 @@ ${showSun ? b`
                         <polygon points="177,198 215,218 215,260 177,240" fill="#ccccd0" />
                     </g>
 
-                    <!-- Solar arc — drawn over the buildings so it
+                    <!-- Solar arc, drawn over the buildings so it
                          visually inhabits the sky. -->
                     <path
                         d="M 50 230 Q 215 60 360 230"
@@ -32556,41 +32535,27 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   "show-labels",
   "sun-color",
   "cloud-color",
-  //pv-color is purely a card-level visual (the chart fill /
-  //stroke) but we still include it so the config sig changes
-  //and Lit re-renders the chart. pv-power-entity is included
-  //too so changing it triggers a fresh history fetch.
+  //pv-color is card-level; included so the sig changes and Lit
+  //re-renders the chart. pv-power-entity triggers a fresh fetch.
   "pv-color",
   "pv-power-entity",
-  //map-style triggers a MapLibre setStyle() inside updateConfig,
-  //so the engine reloads the basemap (terrain, hillshade, cloud
-  //disc, buildings and label visibility are all re-applied via
-  //the resulting `style.load`).
+  //map-style triggers a MapLibre setStyle(), the engine reloads
+  //terrain, hillshade, cloud disc, buildings and labels on the
+  //resulting `style.load`.
   "map-style",
-  //Battery overlay — soc and power entities feed the live chip
-  //below the home; battery-color tints the chip border, text
-  //and animated leader. Including them in the visual sig means
-  //changing the entity in the editor triggers a re-render that
-  //picks up the new readings on the next hass property update.
   "battery-soc-entity",
   "battery-power-entity",
   "battery-color",
-  //card-theme is purely a card-level visual (it switches the
-  //ha-card's class to flip CSS variables / chip colours
-  //between the light and dark skins), but it must be in the
-  //sig so Lit re-renders the card when the user toggles it
-  //in the editor.
+  //card-theme is card-level (light/dark skin) but must be in the
+  //sig so Lit re-renders when the user toggles it.
   "card-theme",
-  //building-* drive the helios-buildings-* custom layers.
-  //  radius / cluster-radius → invalidate cache and refetch
-  //  opacity / color → cheap paint-property updates
+  //building-radius / cluster-radius invalidate cache and refetch;
+  //opacity / color are cheap paint-property updates.
   "building-radius",
   "building-cluster-radius",
   "building-opacity",
   "building-color",
-  //performance-mode toggles terrain, hillshade and pixelRatio.
   "performance-mode",
-  //terrain-detail picks the DEM maxzoom (smooth / fine).
   "terrain-detail"
 ];
 HeliosCard.INIT_DEBOUNCE_MS = 500;

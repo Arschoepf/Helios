@@ -1,4 +1,4 @@
-//Solar position and irradiance math — pure functions, no DOM, no
+//Solar position and irradiance math, pure functions, no DOM, no
 //map. Validated against the NOAA SPA reference implementation across
 //376 (time, location) samples spanning a full year and 8 latitudes.
 //Mean altitude error 0.30°, mean azimuth error 0.36°. The dominant
@@ -50,9 +50,9 @@ export function getSunPosition(date: Date, lat: number, lon: number):
 //        GHI_clear = 1098 · cos(z) · exp(-0.059 / cos(z))   W/m²
 //     This already includes the diffuse component; the previous
 //     direct-only Meinel formulation under-estimated GHI by 30–40 %.
-//     Validated against PVGIS/NREL benchmarks — MAE ~62 W/m² across
+//     Validated against PVGIS/NREL benchmarks, MAE ~62 W/m² across
 //     altitudes from 5° to 90° (vs ~139 for Meinel).
-//  3. Cloud attenuation — Kasten-Czeplak (1980) cubic law:
+//  3. Cloud attenuation, Kasten-Czeplak (1980) cubic law:
 //        k = 1 - 0.75 · (cloudCover/100)^3.4
 //     Algebraically identical to the standard oktas formulation.
 //     Thin clouds barely attenuate; total overcast cuts ~75 %.
@@ -79,7 +79,7 @@ export function computePvPower(date: Date, lat: number, lon: number, cloudCoverP
 //horizontal irradiance in W/m² rather than the clamped 0–100 % PV
 //figure. Used by the solar-arc visualisation: the per-vertex W/m²
 //reading drives the on-map W/m² label and the line-flow speed.
-//Returns 0 below the horizon — callers can use the zero as a
+//Returns 0 below the horizon, callers can use the zero as a
 //"night" sentinel without an extra altitude check.
 export function computeIrradianceWm2(date: Date, lat: number, lon: number, cloudCoverPct: number): number
 {

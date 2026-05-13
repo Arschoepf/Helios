@@ -1,8 +1,8 @@
-# HELIOS — v1.2.0
+# HELIOS, v1.3.0
 
 HELIOS is a Home Assistant Lovelace custom card that visualises solar
 conditions at a home in real time: sun arc, irradiance, cloud cover,
-optional PV production, optional home-battery state — all stitched
+optional PV production, optional home-battery state, all stitched
 onto a 3D MapLibre map centred on the home and reflected in a
 scrubbable 5-day timeline.
 
@@ -12,7 +12,83 @@ scrubbable 5-day timeline.
 
 Each entry consolidates everything between two stable releases.
 
-### v1.2.0 — Performance, customization, home cluster
+### v1.3.0, Auto-calibrating PV, terrain detail, mobile rotation, stability
+
+A feature-rich iteration on top of v1.2.0. Adds auto-calibrating PV
+prediction with persistence, terrain-detail control, building
+outlines, peak-production highlights, and a mobile-friendly single-
+pointer rotation handler. Also consolidates a long string of
+stability hotfixes (memory leaks, iOS WebGL recovery, editor-preview
+engine skip, engine-count cap). No breaking changes; existing
+configs work without modification.
+
+**Auto-calibrating PV prediction.**
+The card learns the user's installation by ratio-matching its
+Haurwitz/Kasten-Czeplak prediction against the live PV power sensor.
+A rolling calibration buffer keeps a recent history of `(predicted,
+actual)` samples and produces a smoothed gain so the predicted curve
+on the PV chart matches the user's setup over time. The buffer is
+persisted server-side via Home Assistant's `frontend/user_data`, so
+it survives browser cache wipes, device switches, and dashboard
+restarts.
+
+**PV chart improvements.**
+
+- Daily peak-production highlight columns mark each day's maximum
+  on the PV chart so the eye lands on the relevant slice without
+  reading the axis.
+- The leader between the cloud-cover chip and the cloud disc now
+  terminates at the edge of the filled disc (sized by the live
+  cloud percentage) instead of the fixed reference ring.
+
+**Terrain detail.**
+New `terrain-detail` option toggles the DEM `maxzoom` between a
+smooth low-detail mesh (default) and a finer terrain pass for users
+in dramatic relief.
+
+**Building outlines.**
+Both `helios-buildings-home` and `helios-buildings-surroundings`
+layers are accompanied by a stroke outline so building footprints
+stay legible at low opacity.
+
+**Mobile drag rotation.**
+
+- Custom single-pointer rotation handler replaces MapLibre's
+  default right-click `dragRotate` so left-click / single-finger
+  touch rotates the map cleanly on mobile.
+- `touch-action: none` is forced on the MapLibre canvas so the
+  browser doesn't intercept the gesture as a scroll.
+- Manual drag direction is inverted so the map follows the gesture
+  (drag right → world rotates with the finger).
+
+**Editor and lifecycle stability.**
+
+- Engine initialisation is debounced by 500 ms; cards that live for
+  less than that (HA dashboard editor preview, rapid config edits)
+  never spawn a MapLibre engine or claim a WebGL context.
+- A module-level cap on live `HeliosEngine` instances force-cleans
+  the oldest when a new one would push the count over the Safari
+  mobile WebGL ceiling.
+- A hard skip on cards rendered inside HA's dashboard editor
+  preview prevents context exhaustion during config editing.
+- `window.__heliosStats` exposes lifecycle counters
+  (engine create / cleanup / skipped-as-preview) for in-browser
+  forensics.
+
+**Memory hardening.**
+
+- iOS WebGL recovery: the context is force-released via
+  `WEBGL_lose_context.loseContext()` after `map.remove()`.
+- Pre-cleanup of the map container drains leftover canvas nodes
+  before each engine re-init.
+- Layer-style warnings are silenced at the source by gating
+  `setPaintProperty` on `map.getLayer()` existence.
+
+**i18n.**
+French punctuation polish (non-breaking spaces before `:`, `;`, `?`,
+`!`). New key: `terrainDetail`.
+
+### v1.2.0, Performance, customization, home cluster
 
 A performance-first iteration on top of v1.1.0, plus several
 requested customization knobs and a structural fix to the building
@@ -20,7 +96,7 @@ rendering pipeline that resolves the dominant FPS bottleneck
 reported on v1.1.0. No breaking changes; existing configs work
 without modification.
 
-**Buildings — fully self-sourced.**
+**Buildings, fully self-sourced.**
 The 3D buildings used to come from MapTiler's full vector basemap
 with no spatial filter, painting thousands of fill-extrusions per
 frame in dense urban areas. The card now fetches the MapTiler v3
@@ -30,37 +106,37 @@ unrelated buildings together at the source, filters by haversine
 distance, and emits two GeoJSON collections rendered as two
 distinct fill-extrusion layers:
 
-- `helios-buildings-home` — the home and any attached outbuildings,
+- `helios-buildings-home`, the home and any attached outbuildings,
   at full opacity.
-- `helios-buildings-surroundings` — neighbours within the configured
+- `helios-buildings-surroundings`, neighbours within the configured
   visibility radius, at the configured opacity.
 
 The native MapTiler building layers (`Building`, `Building 3D`,
-`Building number`) are removed at style load — the bare `removeLayer`
+`Building number`) are removed at style load, the bare `removeLayer`
 calls work reliably on the current MapTiler v4 style which doesn't
 use MapLibre 5 style imports.
 
 **New configuration options:**
 
-- `building-radius` (m, default 100, range 20–1000) — visibility
+- `building-radius` (m, default 100, range 20–1000), visibility
   radius for neighbour buildings.
-- `building-cluster-radius` (m, default 0, range 0–100) — distance
+- `building-cluster-radius` (m, default 0, range 0–100), distance
   around the home within which every building joins the home group
   at full opacity. Lets verandas, garages and sheds read as one
   with the main house.
-- `building-opacity` (0..1, default 0.25) — opacity of the
+- `building-opacity` (0..1, default 0.25), opacity of the
   neighbour buildings.
-- `building-color` (hex, default `#d2d2d7`) — base colour for every
+- `building-color` (hex, default `#d2d2d7`), base colour for every
   rendered building, modulated by sun altitude through the day.
-- `performance-mode` (boolean, default `false`) — disables the 3D
+- `performance-mode` (boolean, default `false`), disables the 3D
   terrain mesh and hillshade and forces pixelRatio to 1.0. Pitch and
   3D buildings are preserved, so the card still reads as 3D but
   recovers 3–5× FPS on low-end devices.
-- `map-style: 'minimal'` — a third option alongside `'streets'` and
+- `map-style: 'minimal'`, a third option alongside `'streets'` and
   `'topo'` that loads streets-v4 then prunes every non-essential
   layer (POI symbols, place names, country labels, road shields)
   for a stripped basemap.
-- `auto-rotate-enabled` (boolean, default `true`) — opt out of the
+- `auto-rotate-enabled` (boolean, default `true`), opt out of the
   slow ambient camera orbit.
 
 **Layout polish.**
@@ -71,7 +147,7 @@ use MapLibre 5 style imports.
 - The PV / SoC / Power chip cluster moved closer to the home; the PV
   chip is mirrored below the SoC / Power shelf, placing it next to
   the home as a focal badge.
-- The PV-to-home dashed leader was retired — the chip's position
+- The PV-to-home dashed leader was retired, the chip's position
   already conveys the relationship.
 - The solar ray now snaps to the side of the PV chip that faces the
   sun (top / right / bottom / left, ±45° windows from up).
@@ -89,7 +165,7 @@ use MapLibre 5 style imports.
 
 - An `IntersectionObserver` pauses every CSS animation and every
   SVG SMIL animation when the card scrolls out of the viewport.
-- `prefers-reduced-motion` is respected — system-level reduced-
+- `prefers-reduced-motion` is respected, system-level reduced-
   motion setting disables every Helios animation and transition.
 
 **Memory and stability.**
@@ -98,7 +174,7 @@ use MapLibre 5 style imports.
   `cleanup()`; their closure used to keep dead MapLibre maps alive
   across editor re-inits.
 - The WebGL context is force-released via
-  `WEBGL_lose_context.loseContext()` after `map.remove()` — browsers
+  `WEBGL_lose_context.loseContext()` after `map.remove()`, browsers
   cap active WebGL contexts at 8–16 and weren't always reclaiming
   the slot when MapLibre alone released the resources.
 - The map container is drained of leftover canvas nodes before each
@@ -106,7 +182,7 @@ use MapLibre 5 style imports.
 
 **Internals.**
 
-- Terrain DEM `maxzoom` lowered from 14 to 12 — terrain mesh has
+- Terrain DEM `maxzoom` lowered from 14 to 12, terrain mesh has
   ~16× fewer vertices to project per rotation frame, invisible at
   pitch 55° / zoom 18 over the home.
 - `pixelRatio` cap lowered from `[2, 3]` to `[1.5, 2]` on desktop
@@ -122,7 +198,7 @@ New keys: `mapStyleMinimal`, `buildingsSection`, `buildingsHint`,
 `performanceModeOff`, `performanceModeHint`. Removed:
 `mapStyleHybrid` (the hybrid style is gone).
 
-### v1.1.0 — Home battery, PV production, dark theme
+### v1.1.0, Home battery, PV production, dark theme
 
 Major feature pass on top of v1.0.0. Three optional overlays became
 available, the card got a dark skin, and the basemap / camera
@@ -152,7 +228,7 @@ switches to a near-black surface so the card sits cleanly in dark
 HA dashboards. Surface tone settled on `#191a1b`.
 
 **Topographic basemap** (`map-style: 'topo'`).
-A second basemap option alongside the default streets variant —
+A second basemap option alongside the default streets variant ,
 softer earth tones and contour lines for hilly / outdoor settings.
 
 **Other polish.**
@@ -162,12 +238,12 @@ softer earth tones and contour lines for hilly / outdoor settings.
 - The cloud-cover chip moved off the home's vertical axis to a
   fixed geographic anchor east (NH) / west (SH) of the disc, giving
   the home's axis to the PV chip.
-- Solid chip surfaces (fully opaque `#ffffff` / `#14161c`) — earlier
+- Solid chip surfaces (fully opaque `#ffffff` / `#14161c`), earlier
   translucent versions fought the values' legibility.
 
-**i18n.** 7 locales — `en`, `fr`, `de`, `es`, `it`, `nl`, `pt`.
+**i18n.** 7 locales, `en`, `fr`, `de`, `es`, `it`, `nl`, `pt`.
 
-### v1.0.0 — Initial HACS release
+### v1.0.0, Initial HACS release
 
 First public release. Core feature set:
 
@@ -191,39 +267,39 @@ HELIOS is a Home Assistant Lovelace card that visualises solar
 conditions at the user's home. The full picture sits on a single
 3D MapLibre map:
 
-* **Sun arc** — the sun's full 24 h trajectory across the sky,
+* **Sun arc**, the sun's full 24 h trajectory across the sky,
   projected onto the screen with depth (thicker stroke when in
   front of the camera, thinner behind). Below-horizon segments
   render as discrete dots so "underground" portions of the arc are
   visible without competing with daylight ones.
-* **Sun disc** — the live position on the arc. The inner fill
+* **Sun disc**, the live position on the arc. The inner fill
   scales with irradiance (full at 1 000 W/m², empty at night),
   conveying the W/m² reading geometrically.
-* **Incidence ray** — dashed line from the sun to the PV chip,
+* **Incidence ray**, dashed line from the sun to the PV chip,
   animated to flow at a speed proportional to live irradiance.
   Snaps to the side of the PV chip facing the sun.
-* **Cloud cover disc** — a translucent disc on the ground, centred
+* **Cloud cover disc**, a translucent disc on the ground, centred
   on the home, scaled by the live cloud-cover percentage and
   outlined in the configured cloud colour. A fixed black ring
   marks the 100 % reference.
-* **Solar irradiance chip** — pinned above the sun disc, shows the
+* **Solar irradiance chip**, pinned above the sun disc, shows the
   live W/m² figure.
-* **Cloud cover chip** — pinned just outside the cloud disc, shows
+* **Cloud cover chip**, pinned just outside the cloud disc, shows
   the live cloud %. Hovering the disc reveals a low/mid/high
   breakdown tooltip.
-* **PV production chip** *(optional)* — when a `pv-power-entity`
+* **PV production chip** *(optional)*, when a `pv-power-entity`
   is configured, a chip near the home shows the *instantaneous*
   production in W or kW. Cumulative-energy sensors (kWh) are
   differentiated automatically over a rolling 60 s window.
-* **Home battery chips** *(optional)* — State-of-Charge and signed
+* **Home battery chips** *(optional)*, State-of-Charge and signed
   instantaneous Power flank the PV chip, each connected to PV by
   an L-shaped leader. The Power leader's dashes flow with the
   sign of the live power.
-* **Date/time chip** — top-centre of the card, follows the
+* **Date/time chip**, top-centre of the card, follows the
   timeline cursor (live or scrubbed).
-* **Back-to-live tab** — hangs under the date/time chip while
+* **Back-to-live tab**, hangs under the date/time chip while
   scrubbing.
-* **Timeline** — bottom of the card, 5 days wide. Dual-area chart
+* **Timeline**, bottom of the card, 5 days wide. Dual-area chart
   with irradiance (top) and cloud cover (bottom) sharing a
   midline that doubles as a date axis. A second chart for PV
   production appears above when configured. Click or drag to
@@ -240,7 +316,7 @@ Helios/
 ├── dist/                           Generated by `npm run build` (committed for HACS)
 │   └── helios.js                   Single bundle
 ├── src/
-│   ├── helios-card.ts              Lit card class — composes everything
+│   ├── helios-card.ts              Lit card class, composes everything
 │   ├── helios-card-css.ts          Card styles (extracted for readability)
 │   ├── helios-config.ts            Visual editor + color picker + config helpers
 │   ├── helios-engine.ts            Map orchestration + projection + layers
@@ -261,29 +337,29 @@ Helios/
 
 Each `src/helios-*.ts` file has a clearly bounded responsibility:
 
-* **helios-card.ts** — top-level Lit element. Owns `render()`,
+* **helios-card.ts**, top-level Lit element. Owns `render()`,
   the live readings state, the timeline scrub, the PV state and
   the lifecycle hooks. Mostly composition; no heavy logic.
-* **helios-card-css.ts** — single `css\`...\`` literal exported
+* **helios-card-css.ts**, single `css\`...\`` literal exported
   as `heliosCardStyles`. Imported once from the card.
-* **helios-config.ts** — `<helios-card-editor>` (visual editor),
+* **helios-config.ts**, `<helios-card-editor>` (visual editor),
   `<helios-color-picker>` (custom palette + hex picker that
   side-steps the iOS Safari `<input type="color">` crash inside
   HA's nested Shadow DOM), plus `cfgHex` / `formatDate` helpers.
-* **helios-engine.ts** — MapLibre setup, hillshade and night-
+* **helios-engine.ts**, MapLibre setup, hillshade and night-
   shade layers, building extrusions, cloud-cover disc, screen-
   space projections (sun arc, sun disc, incidence ray, label
   positions). Holds the public API consumed by the card
   (`onWeatherUpdate`, `projectSunScene`, `setSelectedTime`,
   `getTimelineSeries`, etc.).
-* **helios-buildings.ts** — pure module: fetches MapTiler v3
+* **helios-buildings.ts**, pure module: fetches MapTiler v3
   vector tiles around the home, decodes them with
   `@mapbox/vector-tile`, splits MultiPolygons, filters features
   by haversine distance, identifies the home cluster. Returns
   two GeoJSON `FeatureCollection`s consumed by the engine.
-* **helios-sun.ts** — `getSunPosition`, `computePvPower`,
+* **helios-sun.ts**, `getSunPosition`, `computePvPower`,
   `computeIrradianceWm2`. Pure functions; no DOM, no map.
-* **helios-weather.ts** — `fetchHomePointData` and friends:
+* **helios-weather.ts**, `fetchHomePointData` and friends:
   multi-model Open-Meteo fetch with median fusion, regional
   model selection, in-browser cache, and the 429 back-off
   schedule. No DOM, no map.
@@ -388,8 +464,8 @@ To publish a release:
    bundle).
 2. Tag the commit and push:
    ```bash
-   git tag v1.2.0
-   git push origin v1.2.0
+   git tag v1.3.0
+   git push origin v1.3.0
    ```
 3. Create a GitHub Release (HACS needs a Release, not just a tag).
    The `release.yml` workflow rebuilds `dist/helios.js` from the
@@ -399,15 +475,15 @@ To publish a release:
 
 ## Known limitations
 
-* **Equatorial azimuth** — peak ~9° error near the equator at the
+* **Equatorial azimuth**, peak ~9° error near the equator at the
   solstices because of the simplified declination formula.
   Acceptable for the visual hillshade direction; if higher precision
   is ever needed, swap in a NOAA-SPA implementation.
-* **MapTiler key required** — the free MapTiler tier (100 k tile
+* **MapTiler key required**, the free MapTiler tier (100 k tile
   loads / month) is more than enough for a typical Helios install,
   but every dashboard load and rotation cycle does consume tile
   quota. Open-Meteo doesn't need a key.
-* **WebGL contexts on long-lived dashboards** — browsers cap
+* **WebGL contexts on long-lived dashboards**, browsers cap
   concurrent WebGL contexts at 8–16. Helios releases its context
   cleanly on every re-init via `WEBGL_lose_context`, but if you
   stack many MapLibre-backed cards in the same dashboard you may

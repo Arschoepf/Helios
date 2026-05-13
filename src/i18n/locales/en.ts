@@ -1,11 +1,11 @@
 import type { Translations } from '../index';
 
 /*
- * English — reference locale.
+ * English, reference locale.
  *
  * The Translations type (defined in ../index.ts) is derived from this
  * object's runtime shape. Because we annotate `en` with that very
- * type, it must contain all keys but is NOT typed as a literal — so
+ * type, it must contain all keys but is NOT typed as a literal, so
  * other locales can supply any string for each key. Adding a new key
  * here automatically widens Translations and triggers a TypeScript
  * error in every locale that hasn't been updated.

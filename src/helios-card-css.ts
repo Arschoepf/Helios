@@ -1,7 +1,7 @@
 import { css, unsafeCSS } from 'lit';
 //MapLibre's stylesheet ships under dist/maplibre-gl.css. Vite's
 //`?inline` query suffix returns the file content as a raw string
-//instead of injecting a global <style> tag — we need the rules
+//instead of injecting a global <style> tag, we need the rules
 //*inside* our shadow root, not in document <head>. Without these
 //rules .maplibregl-canvas falls back to the default `position:
 //static`, which makes the canvas participate in the layout flow:
@@ -65,7 +65,7 @@ export const heliosCardStyles = css`
         card's vocabulary (sun arc, sun + halo, low-poly buildings
         with a brighter central home, ground cloud disc, leader
         chips) over a light day-mode sky gradient. The brand chrome
-        (title + subtitle) sits at the bottom — the MapTiler key
+        (title + subtitle) sits at the bottom, the MapTiler key
         prompt lives in the README, not on the catalogue thumbnail. */
 
     .placeholder
@@ -95,7 +95,7 @@ export const heliosCardStyles = css`
         z-index: 1;
     }
 
-    /*  Sun halo pulses gently — same visual language as the live
+    /*  Sun halo pulses gently, same visual language as the live
         card's breathing sun. Only the glow circle scales; the
         inner orange disc stays fixed so the brand colour reads
         cleanly at the centre. */
@@ -118,7 +118,7 @@ export const heliosCardStyles = css`
         /*  Title centred horizontally, vertically anchored at 65 %
             from the BOTTOM of the placeholder (so 35 % from the
             top). Sits just above the iso buildings and visually
-            below the solar arc apex — feels less "crammed in the
+            below the solar arc apex, feels less "crammed in the
             middle" than a strict 50 % vertical centre. */
         top: 35%;
         left: 50%;
@@ -139,7 +139,7 @@ export const heliosCardStyles = css`
         text-shadow: 0 1px 1px rgba(255,255,255,0.6);
         line-height: 1;
         white-space: nowrap;
-        /*  Optical centre — letter-spacing piles up on the right of
+        /*  Optical centre, letter-spacing piles up on the right of
             the last glyph so the visual centre of the wordmark
             sits a few pixels left of the geometric centre. The
             padding-left compensates so HELIOS reads centred. */
@@ -147,7 +147,7 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Timeline — pinned to the bottom of the card with uniform
+    /*  Timeline, pinned to the bottom of the card with uniform
         breathing space. The whole bar accepts pointer events for
         scrub. */
 
@@ -181,7 +181,7 @@ export const heliosCardStyles = css`
         height: 18px;
     }
 
-    /*  Chart card — bordered white panel hosting the area chart,
+    /*  Chart card, bordered white panel hosting the area chart,
         day-label chips on the midline, dotted day separators and
         the live + scrub HTML cursor overlays. */
     .tb-chart-card
@@ -215,7 +215,7 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  PV prediction line — overlays the observed PV chart for hours
+    /*  PV prediction line, overlays the observed PV chart for hours
         past "now" using the auto-calibrated scalar fit from history.
         Dashed + half opacity makes it visually distinct from the
         recorded curve while staying in the configured PV colour so
@@ -226,7 +226,7 @@ export const heliosCardStyles = css`
         opacity: 0.55;
     }
 
-    /*  Daily peak-production highlight — for each natural day in the
+    /*  Daily peak-production highlight, for each natural day in the
         timeline, a 1-hour-wide vertical band painted in the configured
         PV colour at low opacity marks the hour where production is
         (or is predicted to be) highest. Drawn behind the chart area
@@ -267,7 +267,7 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Live cursor — solid black vertical line spanning the chart,
+    /*  Live cursor, solid black vertical line spanning the chart,
         with a triangle marker pointing down from the top edge. */
     .tb-cursor-now
     {
@@ -295,7 +295,7 @@ export const heliosCardStyles = css`
         border-top:    5px solid #000000;
     }
 
-    /*  Scrub cursor — same anatomy, dashed and tinted blue so live
+    /*  Scrub cursor, same anatomy, dashed and tinted blue so live
         and scrubbed positions are unmistakable side by side. */
     .tb-cursor-sel
     {
@@ -330,14 +330,14 @@ export const heliosCardStyles = css`
         border-top:    5px solid #1f6feb;
     }
 
-    /*  Scrub-time pill — sits in the top row above the chart card
+    /*  Scrub-time pill, sits in the top row above the chart card
         when the user has scrubbed away from "now". Tinted in the
         scrub-cursor blue so the displayed instant is visibly not
         "now". Anchored at the cursor's X via an inline left
         percentage, with edge-clamping handled by the inline
         transform so the pill never bleeds past the card edges.
         Pointer-transparent so dragging the timeline through it
-        still scrubs — the "back to live" affordance lives in the
+        still scrubs, the "back to live" affordance lives in the
         clock tab above the card, not next to the pill, to keep the
         timeline's hit area uncontested on mobile. */
     .tb-sel-label
@@ -358,7 +358,7 @@ export const heliosCardStyles = css`
         z-index: 3;
     }
 
-    /*  Scrub tether — a 6 px vertical hair that drops from the
+    /*  Scrub tether, a 6 px vertical hair that drops from the
         bottom edge of the scrub cluster to the top edge of the
         chart card, anchored at the cursor's X. Carries the
         scrub-cursor blue so it reads as continuous with the cursor's
@@ -379,7 +379,7 @@ export const heliosCardStyles = css`
         z-index: 3;
     }
 
-    /*  Day labels — small white chips overlaying the chart midline.
+    /*  Day labels, small white chips overlaying the chart midline.
         Same chip language as the on-map cloud and W/m² readouts. */
     .tb-day-labels
     {
@@ -423,7 +423,7 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Spinner — centred on the map while a fetch is in flight. */
+    /*  Spinner, centred on the map while a fetch is in flight. */
 
     .spinner-center
     {
@@ -464,7 +464,7 @@ export const heliosCardStyles = css`
     /*  Top corner overlays. Date/time chip on the right; "back to
         live" chip on the left when scrubbed. */
 
-    /*  Top-row overlay — the clock centres horizontally above the
+    /*  Top-row overlay, the clock centres horizontally above the
         card, with an optional "back to live" tab hanging from its
         bottom-centre when the user has scrubbed away from now. The
         wrapper is a vertical flex column so the tab stacks under
@@ -484,7 +484,7 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Date/time chip — same chip language as the on-map readouts. */
+    /*  Date/time chip, same chip language as the on-map readouts. */
     .clock
     {
         display: inline-flex;
@@ -509,7 +509,7 @@ export const heliosCardStyles = css`
     .clock-date { opacity: 0.75; }
     .clock-time { opacity: 1;    }
 
-    /*  "Back to live" tab — hangs from the bottom-centre of the
+    /*  "Back to live" tab, hangs from the bottom-centre of the
         clock as a small folder-style tab when the user has scrubbed
         away from now. Same blue plate as the on-chart scrub cursor
         and the scrub-time pill, white restore icon centred. The
@@ -551,7 +551,7 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Cloud-cover percentage chip — floating above the cloud disc
+    /*  Cloud-cover percentage chip, floating above the cloud disc
         on the ground with a leader line down to its feature. */
     .cloud-pct-label
     {
@@ -582,7 +582,7 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Photovoltaic production chip — same frame as cloud/W/m² but
+    /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
         text + icon) for instant identification.
         --pv-leader-color is set inline by the renderer. The
@@ -624,7 +624,7 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Battery chips (SoC on the left of PV, Power on the right) —
+    /*  Battery chips (SoC on the left of PV, Power on the right) ,
         same frame as the PV chip, tinted in the user-configured
         battery colour. Shares min-width and centred text with the
         PV chip so the visible dotted-leader gap on each side of PV
@@ -670,7 +670,7 @@ export const heliosCardStyles = css`
         through the corner instead of snapping).
         - .battery-leader-line carries the static styling (stroke
           colour, width, opacity, dash pattern). Used on its own
-          for SoC ↔ PV — the SoC value has no sign so there's no
+          for SoC ↔ PV, the SoC value has no sign so there's no
           flow direction to animate.
         - .battery-leader-line-animated layers the flow animation
           on top: the dashes drift at a speed proportional to |P|
@@ -724,7 +724,7 @@ export const heliosCardStyles = css`
         opacity: 0.9;
     }
 
-    /*  Cloud-cover leader line — black hairline from chip to disc. */
+    /*  Cloud-cover leader line, black hairline from chip to disc. */
     .cloud-leader-svg
     {
         position: absolute;
@@ -743,7 +743,7 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Solar overlay — sun arc, current sun disc, incidence ray.
+    /*  Solar overlay, sun arc, current sun disc, incidence ray.
         Single SVG layer spanning the card; opacity fades to 0 at
         night via inline style from the engine. */
     .solar-svg
@@ -757,13 +757,13 @@ export const heliosCardStyles = css`
         transition: opacity 600ms ease-out;
     }
 
-    /*  Arc — first pass paints a dark outline for legibility on
+    /*  Arc, first pass paints a dark outline for legibility on
         light basemaps; second pass paints the configured sun
         colour on top. Stroke widths are set inline per segment. */
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
-    /*  Below-horizon segments — round dots at fixed spacing so the
+    /*  Below-horizon segments, round dots at fixed spacing so the
         eye reads "this is happening underground" without colour or
         depth scaling having to carry the signal. dasharray "0 N"
         with linecap round renders true circles on every browser. */
@@ -773,7 +773,7 @@ export const heliosCardStyles = css`
         stroke-dasharray: 0 8;
     }
 
-    /*  Incidence ray — dashes flow from the sun toward the home at
+    /*  Incidence ray, dashes flow from the sun toward the home at
         a speed proportional to live irradiance. */
     .solar-svg .solar-ray
     {
@@ -790,7 +790,7 @@ export const heliosCardStyles = css`
         to   { stroke-dashoffset: -10; }
     }
 
-    /*  Solar ray arrow — tiny triangle riding the incidence ray
+    /*  Solar ray arrow, tiny triangle riding the incidence ray
         toward the home, animated via SVG <animateMotion> at the
         same duration as the dash flow so the arrow advances in
         lockstep with the pointillé. rotate="auto" keeps the tip
@@ -801,7 +801,7 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Cloud-cover disc tooltip — floats above the on-ground disc
+    /*  Cloud-cover disc tooltip, floats above the on-ground disc
         on hover. Position set inline from the engine's onCloudHover
         event in canvas pixel coordinates. */
     .cloud-tooltip
@@ -824,7 +824,7 @@ export const heliosCardStyles = css`
         white-space: nowrap;
     }
 
-    /*  Flipped variant — applied when the cursor is in the right
+    /*  Flipped variant, applied when the cursor is in the right
         half of the card so the tooltip stays inside the bounds. */
     .cloud-tooltip-flip
     {
@@ -844,7 +844,7 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Solar irradiance label — chip pinned above the live sun
+    /*  Solar irradiance label, chip pinned above the live sun
         position, same chip language as the cloud and PV chips. */
     .solar-pct-label
     {
@@ -878,11 +878,11 @@ export const heliosCardStyles = css`
 
 
     /*  ============================================================
-        Dark theme — opt-in via the \`card-theme: dark\` config.
+        Dark theme, opt-in via the \`card-theme: dark\` config.
 
         The whole card is already painted on top of a 3D map, so
         "dark mode" here is really about the chrome (chips, charts,
-        cursors, day labels, leader lines, tooltips) — the basemap
+        cursors, day labels, leader lines, tooltips), the basemap
         keeps its own colours. Strategy:
 
           - chip surfaces flip from a solid white plate to a solid
@@ -890,14 +890,14 @@ export const heliosCardStyles = css`
             darkened tile over the map instead of a
             bright sticker.
           - chip text / borders / icons go from black to a soft
-            light-grey (#e6e6e6 text, #cccccc borders) — pure white
+            light-grey (#e6e6e6 text, #cccccc borders), pure white
             would clip detail against bright basemap patches.
           - chart hairlines (midline, day separators, hour ticks,
             live cursor) flip from black-on-white to white-on-near-
             black with the same opacity envelopes as the light skin
             so the visual weight stays balanced.
           - chart fills (PV / cloud / irradiance) are user-coloured
-            and unchanged — they read fine on both surfaces.
+            and unchanged, they read fine on both surfaces.
           - the scrub blue (#1f6feb) and the live tooltip dark
             plate already read on dark backgrounds, so they're left
             alone.
@@ -951,7 +951,7 @@ export const heliosCardStyles = css`
     {
         background: #191a1b;
         color:       #e6e6e6;
-        /*  Light-mode borders are pure black on a white plate —
+        /*  Light-mode borders are pure black on a white plate ,
             high contrast but visually contained because the plate
             and the basemap below it are both bright. In dark mode
             the same 1 px ring at #cccccc reads as the brightest
@@ -977,7 +977,7 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
     ha-card.theme-dark .tl-live-btn:active { background: #353637; }
 
-    /*  PV and battery chips — they keep the user-configured tint
+    /*  PV and battery chips, they keep the user-configured tint
         on the border / text / icon (so a green PV chip reads as
         green on either skin), but the surface flips to the dark
         plate so the tint stays readable. The border drops to 50 %
@@ -1006,7 +1006,7 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.55;
     }
 
-    /*  Solar arc outline — the light skin paints a black halo
+    /*  Solar arc outline, the light skin paints a black halo
         behind the configured sun colour for legibility on bright
         basemaps; in dark mode that halo would disappear into the
         map, so we paint a faint white halo instead. The arc and
@@ -1021,14 +1021,14 @@ export const heliosCardStyles = css`
         Animation perf hooks
         ---------------------------------------------------------
 
-        1. .helios-paused — set on the host element by the card's
+        1. .helios-paused, set on the host element by the card's
            IntersectionObserver when the card scrolls out of the
            viewport. Pauses every CSS animation (SVG dash-flow,
            offset-path arrow flow, placeholder spin / pulse) until
            the card returns. SMIL <animateMotion> is paused in
            parallel via svg.pauseAnimations() in the card script.
 
-        2. prefers-reduced-motion — respects the user's system
+        2. prefers-reduced-motion, respects the user's system
            setting. When the user has asked for reduced motion at
            the OS level, every helios animation and transition is
            disabled. The card still functions; it just doesn't move.

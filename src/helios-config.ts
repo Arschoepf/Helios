@@ -32,7 +32,7 @@ export function cfgHex(v: unknown, fallback: string): string
 }
 
 
-//Locale-independent date formatter. Tokens: yyyy, yy, mm, dd —
+//Locale-independent date formatter. Tokens: yyyy, yy, mm, dd ,
 //anything else is preserved verbatim. Falls back to "mm-dd" when
 //the format is empty, undefined, or contains unsafe characters.
 const VALID_DATE_FORMAT_RE = /^[\-\/\. _:0-9A-Za-z]+$/;
@@ -69,7 +69,7 @@ export function formatDate(d: Date, rawFormat: unknown): string
 //Custom color picker.
 //
 //Why custom: <input type="color"> opens a native popover, which iOS
-//Safari crashes on when invoked from a deeply nested Shadow DOM —
+//Safari crashes on when invoked from a deeply nested Shadow DOM ,
 //exactly HA's setup (dashboard editor → custom card editor → Lit
 //root). We replace it with an in-shadow swatch + popover exposing a
 //curated 42-colour palette plus a hex text input for free entry.
@@ -304,7 +304,7 @@ export class HeliosColorPicker extends LitElement
 }
 
 
-//Visual editor — exposes every config option through native HA form
+//Visual editor, exposes every config option through native HA form
 //controls (text inputs, color picker, entity picker). Wired into the
 //card via HeliosCard.getConfigElement().
 @customElement('helios-card-editor')
@@ -316,7 +316,7 @@ export class HeliosCardEditor extends LitElement
 
     //Per-key debounce timers for slider inputs. Sliders fire @input
     //on every pixel of drag, which used to cascade an updateConfig +
-    //full re-render through the engine on each tick — visibly painful
+    //full re-render through the engine on each tick, visibly painful
     //during preview. We update the local _cfg synchronously (so the
     //slider's bound .value tracks the drag perfectly) but only
     //dispatch the cross-component `config-changed` event after a
@@ -346,7 +346,7 @@ export class HeliosCardEditor extends LitElement
     //In a fresh tab, or in HA versions that don't pre-load it for
     //custom cards, the tag is unknown until something on the page
     //pulls it in. We force the load by creating a transient
-    //"entities" card and asking for its config element — the side
+    //"entities" card and asking for its config element, the side
     //effect registers ha-entity-picker. While the load is pending we
     //fall back to a plain text input so the field is never broken.
     private async _ensureEntityPicker(): Promise<void>
@@ -421,7 +421,7 @@ export class HeliosCardEditor extends LitElement
         const v = parseFloat((e.target as HTMLInputElement).value);
         if (!isFinite(v)) return;
 
-        //Local update only — no event dispatch yet.
+        //Local update only, no event dispatch yet.
         this._cfg = { ...this._cfg, [key]: v };
 
         const k        = String(key);
@@ -453,7 +453,7 @@ export class HeliosCardEditor extends LitElement
         return step >= 1 ? String(Math.round(v)) : v.toFixed(2);
     }
 
-    //Filter for the PV entity picker — accepts power/energy device
+    //Filter for the PV entity picker, accepts power/energy device
     //classes (the canonical case) plus any sensor whose unit looks
     //like W/kW/MW or Wh/kWh/MWh. The unit fallback covers custom
     //template sensors that don't bother declaring a device_class.
@@ -467,7 +467,7 @@ export class HeliosCardEditor extends LitElement
             || u === 'Wh' || u === 'kWh' || u === 'MWh';
     };
 
-    //Filter for the battery SoC picker — sensors with device_class
+    //Filter for the battery SoC picker, sensors with device_class
     //'battery' (the canonical case used by every BMS integration)
     //or any sensor with a percent unit. Energy/power sensors are
     //intentionally excluded; SoC is a percentage by design.
@@ -479,7 +479,7 @@ export class HeliosCardEditor extends LitElement
         return u === '%';
     };
 
-    //Filter for the battery power picker — power-only (no energy).
+    //Filter for the battery power picker, power-only (no energy).
     //The chip needs an instantaneous reading; cumulative kWh totals
     //wouldn't make sense here without on-the-fly differentiation,
     //which we deliberately don't do for battery (PV does, battery
@@ -943,7 +943,7 @@ export class HeliosCardEditor extends LitElement
             color: var(--text-primary-color, #fff);
         }
 
-        /*  Slider variant — replaces type="number" inputs so the
+        /*  Slider variant, replaces type="number" inputs so the
             user can never enter a value outside the supported range.
             The matching value is shown to the right of the track. */
         .slider-row
