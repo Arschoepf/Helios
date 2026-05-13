@@ -136,34 +136,45 @@ export const franceLidarHd: LidarVegetationSource =
 
         const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
 
-        //Pre-compute EXPANDED building bboxes for the cell mask.
+        //Pre-compute EXPANDED bboxes for the home AND surrounding
+        //footprints separately so each LiDAR cell can be CLASSIFIED:
+        //inside a home polygon -> kind='home', inside a surrounding
+        //polygon -> kind='building', outside both -> kind='vegetation'.
         //Each MapTiler footprint is inflated by BUILDING_MASK_PAD_M on
-        //all four sides. The vector-tile geometry is often a few metres
+        //all four sides; the vector-tile geometry is often a few metres
         //smaller than the actual building (walls, eaves, attached
-        //sheds), and a LiDAR cell sitting right on a wall or just past
-        //a missing detail comes back as a 5-20 m "vegetation" cell.
-        //The padding catches those cells. We drop the polygon-interior
-        //test on purpose: a bbox-only check filters slightly too much
-        //in concave corners, but the trade-off favours fewer phantom
-        //buildings appearing as a green block next to the home.
-        const buildings = opts.buildingFootprints?.features ?? [];
+        //sheds), and we want the wall-cells to be claimed by the
+        //building rather than leak through as "vegetation". Bbox-only
+        //test, no polygon-interior step: in L-shaped corners this
+        //slightly over-classifies a few cells as building, which is
+        //the right trade-off for a clean home / vegetation boundary.
         const padDegLat = BUILDING_MASK_PAD_M / M_PER_DEG_LAT;
         const padDegLon = BUILDING_MASK_PAD_M
                         / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
-        const bboxes: Array<{ minLon: number; minLat: number; maxLon: number; maxLat: number }> = [];
-        for (const b of buildings)
+        const inflate = (geom: GeoJSON.Geometry) =>
         {
-            if (!b.geometry) continue;
-            const bb = polygonBBox(b.geometry);
-            if (bb)
-            {
-                bboxes.push({
-                    minLon: bb.minLon - padDegLon,
-                    minLat: bb.minLat - padDegLat,
-                    maxLon: bb.maxLon + padDegLon,
-                    maxLat: bb.maxLat + padDegLat
-                });
-            }
+            const bb = polygonBBox(geom);
+            if (!bb) return null;
+            return {
+                minLon: bb.minLon - padDegLon,
+                minLat: bb.minLat - padDegLat,
+                maxLon: bb.maxLon + padDegLon,
+                maxLat: bb.maxLat + padDegLat
+            };
+        };
+        const homeBboxes: Array<{ minLon: number; minLat: number; maxLon: number; maxLat: number }> = [];
+        for (const f of opts.homeFootprints?.features ?? [])
+        {
+            if (!f.geometry) continue;
+            const bb = inflate(f.geometry);
+            if (bb) homeBboxes.push(bb);
+        }
+        const surrBboxes: Array<{ minLon: number; minLat: number; maxLon: number; maxLat: number }> = [];
+        for (const f of opts.surroundingFootprints?.features ?? [])
+        {
+            if (!f.geometry) continue;
+            const bb = inflate(f.geometry);
+            if (bb) surrBboxes.push(bb);
         }
 
         const pxLon = (maxLon - minLon) / rasterSize;
@@ -196,16 +207,23 @@ export const franceLidarHd: LidarVegetationSource =
             : null;
 
         //One Polygon Feature per LiDAR cell at the cell's actual
-        //height, with a deterministic per-cell jitter in the height
-        //(85-115 %) so adjacent trees in a forest break their plateau
-        //and look more like individual crowns than a single block.
+        //height, with a deterministic per-cell jitter (85-115 %) so
+        //adjacent cells break their plateau and look more like
+        //individual crowns / roof shingles than a single block. Each
+        //cell is classified as 'home' / 'building' / 'vegetation'
+        //via the inflated MapTiler bboxes (see above); the engine
+        //routes the three classes to their own renderable source.
+        //
         //Hash is i * 73856093 XOR j * 19349663, classic spatial-hash
-        //primes, fold to [0, 1).
+        //primes, fold to [0, 1). Vegetation gets the full jitter
+        //range, buildings get a tighter one (95-105 %) so their tops
+        //stay readable as flat-ish surfaces.
         //
         //Row j = 0 is the NORTH edge of the bbox in WMS image
         //convention (top-down). Latitude decreases as j grows.
         const out: GeoJSON.Feature[] = [];
-        let hMin = Infinity, hMax = -Infinity, kept = 0;
+        let hMin = Infinity, hMax = -Infinity;
+        let keptHome = 0, keptBldg = 0, keptVeg = 0;
 
         for (let j = 0; j < rasterSize; j++)
         {
@@ -216,7 +234,6 @@ export const franceLidarHd: LidarVegetationSource =
                 if (!isFinite(h) || h < HEIGHT_THRESH_M || h > HEIGHT_MAX_M) continue;
 
                 const cLon = minLon + (i + 0.5) * pxLon;
-                if (cellInsideAnyBBox(cLon, cLat, bboxes)) continue;
 
                 if (cropM !== null
                     && haversineMeters(opts.homeLat, opts.homeLon, cLat, cLon) > cropM)
@@ -224,10 +241,20 @@ export const franceLidarHd: LidarVegetationSource =
                     continue;
                 }
 
-                //Per-cell height jitter, deterministic from (i, j).
+                //Classify. Home wins over surrounding when the bboxes
+                //happen to overlap (rare but defensive).
+                let kind: 'home' | 'building' | 'vegetation' = 'vegetation';
+                if (cellInsideAnyBBox(cLon, cLat, homeBboxes))      kind = 'home';
+                else if (cellInsideAnyBBox(cLon, cLat, surrBboxes)) kind = 'building';
+
+                //Per-cell height jitter, deterministic from (i, j),
+                //tighter for buildings so roofs stay recognisable.
                 let hash = ((i * 73856093) ^ (j * 19349663)) >>> 0;
                 hash = (hash * 668265263) >>> 0;
-                const jitter = 0.85 + (hash / 4294967296) * 0.30;
+                const u = hash / 4294967296;
+                const jitter = kind === 'vegetation'
+                    ? (0.85 + u * 0.30)
+                    : (0.97 + u * 0.06);
                 const adjHeight = h * jitter;
 
                 //Build the hex ring around (cLon, cLat).
@@ -245,27 +272,30 @@ export const franceLidarHd: LidarVegetationSource =
                     properties:
                     {
                         render_height:     adjHeight,
-                        render_min_height: 0
+                        render_min_height: 0,
+                        kind
                     }
                 });
 
-                kept++;
+                if (kind === 'home')          keptHome++;
+                else if (kind === 'building') keptBldg++;
+                else                          keptVeg++;
                 if (h < hMin) hMin = h;
                 if (h > hMax) hMax = h;
             }
         }
 
-        //One-shot diagnostic, cheap, runs once per fetch.
-        if (kept > 0)
+        const totalKept = keptHome + keptBldg + keptVeg;
+        if (totalKept > 0)
         {
             console.info(
-                `[HELIOS] LiDAR vegetation: ${kept} cells emitted, ` +
+                `[HELIOS] LiDAR cells: ${keptHome} home + ${keptBldg} building + ${keptVeg} vegetation, ` +
                 `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
             );
         }
         else
         {
-            console.info('[HELIOS] LiDAR vegetation: no cells passed the threshold');
+            console.info('[HELIOS] LiDAR cells: no cells passed the threshold');
         }
 
         return { type: 'FeatureCollection', features: out };

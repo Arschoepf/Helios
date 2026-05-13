@@ -84,6 +84,6 @@ export const nl: Translations = {
         terrainDetailHint:     'Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe, alleen zinvol op krachtige desktops.',
         lidarVegetation:       'LiDAR-vegetatie *',
         lidarVegetationOff:    'Uit',
-        lidarVegetationHint:   'Voorlopig alleen Frankrijk. Haalt IGN LiDAR HD-hoogtes rond het huis op en toont bomen als 3D-blokken met echte slagschaduwen. De waarde is de celgrootte: kleiner, fijnere bomen, meer netwerklast. 4.5m werkt overal, 1.5m komt dicht bij de IGN-natieve resolutie maar alleen op desktop.'
+        lidarVegetationHint:   'Voorlopig alleen Frankrijk. Haalt IGN LiDAR HD-hoogtes rond het huis op en toont ZOWEL gebouwen ALS bomen als 3D-blokken per cel met echte slagschaduwen, in plaats van de MapTiler-extrusies. De waarde is de celgrootte: kleiner, fijner detail, meer netwerklast. 4.5m werkt overal, 1m sluit aan op de IGN-natieve sampling (~300k features) en alleen op krachtige desktops.'
     }
 };

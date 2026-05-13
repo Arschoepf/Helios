@@ -714,6 +714,11 @@ export class HeliosCardEditor extends LitElement
                             class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '1.5m' ? 'active' : ''}"
                             @click="${() => this._update('lidar-vegetation', '1.5m')}"
                         >1.5m</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '1m' ? 'active' : ''}"
+                            @click="${() => this._update('lidar-vegetation', '1m')}"
+                        >1m</button>
                     </div>
                 </div>
                 <div class="hint">${t.editor.lidarVegetationHint}</div>

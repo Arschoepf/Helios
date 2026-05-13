@@ -60,12 +60,22 @@ export interface LidarFetchOptions
     //matches the buildings disc. Provider implementations still fetch
     //a padded bbox so shadows of trees on the edge can extend inward.
     cropRadiusMeters?: number;
-    //Footprints already known from MapTiler (home + surroundings).
-    //Cells whose centre falls inside any of these are dropped to
-    //avoid double-counting buildings as vegetation pillars.
-    buildingFootprints?: GeoJSON.FeatureCollection;
+    //Home polygons from MapTiler. Cells whose centre falls inside any
+    //of these (after BUILDING_MASK_PAD_M inflation) are CLASSIFIED as
+    //'home' rather than filtered. The engine uses the per-cell LiDAR
+    //height for the rendered home extrusion, with the MapTiler
+    //footprint kept only for the ground-level outline.
+    homeFootprints?:         GeoJSON.FeatureCollection;
+    //Surrounding-building polygons from MapTiler. Cells inside any of
+    //these are classified as 'building'.
+    surroundingFootprints?:  GeoJSON.FeatureCollection;
     signal?:      AbortSignal;
 }
+
+//A LiDAR feature is one Polygon cell with a height and a kind that
+//tells the renderer how to colour / layer it. Providers must set
+//`kind` on every emitted feature.
+export type LidarCellKind = 'home' | 'building' | 'vegetation';
 
 //Registered providers, ordered by preference. The first one that
 //covers the home wins. Currently France (IGN LiDAR HD) only; future
