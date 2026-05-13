@@ -26124,6 +26124,87 @@ async function fetchBuildingsAroundHome(opts) {
     surroundings: { type: "FeatureCollection", features: surroundings }
   };
 }
+const M_PER_DEG_LAT = 111320;
+function projectBuildingShadows(buildings, opts) {
+  const empty = { type: "FeatureCollection", features: [] };
+  const minAlt = opts.minAltitudeDeg ?? 1.5;
+  if (opts.sunAltitudeDeg <= minAlt) {
+    return empty;
+  }
+  const D2 = Math.PI / 180;
+  const azR = opts.sunAzimuthDeg * D2;
+  const altR = opts.sunAltitudeDeg * D2;
+  const sunDx = Math.sin(azR);
+  const sunDy = Math.cos(azR);
+  const shadowDx = -sunDx;
+  const shadowDy = -sunDy;
+  const tanAlt = Math.tan(altR);
+  const mPerDegLon = M_PER_DEG_LAT * Math.cos(opts.homeLat * D2);
+  const minH = opts.minHeightM ?? 2;
+  const out = [];
+  for (const feat of buildings.features) {
+    const geom = feat.geometry;
+    if (!geom) continue;
+    const props = feat.properties ?? {};
+    const top = typeof props["render_height"] === "number" ? props["render_height"] : 0;
+    const base = typeof props["render_min_height"] === "number" ? props["render_min_height"] : 0;
+    const h2 = Math.max(0, top - base);
+    if (h2 < minH) continue;
+    const lenM = h2 / tanAlt;
+    const dLatDeg = shadowDy * lenM / M_PER_DEG_LAT;
+    const dLonDeg = shadowDx * lenM / mPerDegLon;
+    let polygons = null;
+    if (geom.type === "Polygon") {
+      polygons = [geom.coordinates];
+    } else if (geom.type === "MultiPolygon") {
+      polygons = geom.coordinates;
+    }
+    if (!polygons) continue;
+    for (const poly of polygons) {
+      if (!poly.length) continue;
+      const outer = poly[0];
+      if (outer.length < 3) continue;
+      const cloud = [];
+      for (const p2 of outer) {
+        const lon = p2[0], lat = p2[1];
+        cloud.push([lon, lat]);
+        cloud.push([lon + dLonDeg, lat + dLatDeg]);
+      }
+      const hull = convexHull(cloud);
+      if (hull.length < 3) continue;
+      hull.push([hull[0][0], hull[0][1]]);
+      out.push({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [hull] },
+        properties: {}
+      });
+    }
+  }
+  return { type: "FeatureCollection", features: out };
+}
+function convexHull(pts) {
+  if (pts.length < 3) return pts.slice();
+  const arr = pts.slice().sort((a2, b2) => a2[0] - b2[0] || a2[1] - b2[1]);
+  const cross = (o2, a2, b2) => (a2[0] - o2[0]) * (b2[1] - o2[1]) - (a2[1] - o2[1]) * (b2[0] - o2[0]);
+  const lower = [];
+  for (const p2 of arr) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p2) <= 0) {
+      lower.pop();
+    }
+    lower.push(p2);
+  }
+  const upper = [];
+  for (let i2 = arr.length - 1; i2 >= 0; i2--) {
+    const p2 = arr[i2];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p2) <= 0) {
+      upper.pop();
+    }
+    upper.push(p2);
+  }
+  lower.pop();
+  upper.pop();
+  return lower.concat(upper);
+}
 const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
 const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
@@ -27055,6 +27136,29 @@ const _HeliosEngine = class _HeliosEngine {
     } else {
       this.map.getSource("helios-buildings-home-src").setData(homeData);
     }
+    if (!this.map.getSource("helios-building-shadows-src")) {
+      this.map.addSource(
+        "helios-building-shadows-src",
+        {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] }
+        }
+      );
+    }
+    if (!this.map.getLayer("helios-building-shadows")) {
+      this.map.addLayer(
+        {
+          id: "helios-building-shadows",
+          source: "helios-building-shadows-src",
+          type: "fill",
+          paint: {
+            "fill-color": "#000000",
+            "fill-opacity": 0.32,
+            "fill-antialias": true
+          }
+        }
+      );
+    }
     this.map.addLayer(
       {
         id: "helios-buildings-surroundings",
@@ -27145,6 +27249,8 @@ const _HeliosEngine = class _HeliosEngine {
       const surrSrc = this.map.getSource("helios-buildings-surroundings-src");
       homeSrc?.setData(result.home);
       surrSrc?.setData(result.surroundings);
+      this._lastAtmosphereAlt = -999;
+      this._refreshShadowsAndAtmosphere();
     }).catch((err) => {
       if (err?.name === "AbortError") return;
       console.warn("[HELIOS] Buildings fetch failed:", err);
@@ -27291,6 +27397,39 @@ const _HeliosEngine = class _HeliosEngine {
         if (this.map.getLayer(lid)) {
           this.map.setPaintProperty(lid, "fill-extrusion-color", buildingHex);
         }
+      }
+    } catch (_2) {
+    }
+    try {
+      const polar = altitude > 0 ? Math.max(0, Math.min(89, 90 - altitude)) : 89;
+      this.map.setLight(
+        {
+          anchor: "map",
+          position: [1.15, azimuth, polar],
+          color: "#ffffff",
+          intensity: 0.5
+        }
+      );
+    } catch (_2) {
+    }
+    try {
+      const shadowsSrc = this.map.getSource("helios-building-shadows-src");
+      if (shadowsSrc) {
+        const all = [];
+        if (this._buildingsData) {
+          all.push(...this._buildingsData.home.features);
+          all.push(...this._buildingsData.surroundings.features);
+        }
+        const fc = { type: "FeatureCollection", features: all };
+        const shadowFc = projectBuildingShadows(
+          fc,
+          {
+            sunAzimuthDeg: azimuth,
+            sunAltitudeDeg: altitude,
+            homeLat: this.homeLat
+          }
+        );
+        shadowsSrc.setData(shadowFc);
       }
     } catch (_2) {
     }

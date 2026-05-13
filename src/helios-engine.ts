@@ -3,6 +3,7 @@ import type { Map } from 'maplibre-gl';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './helios-sun';
 import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './helios-weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildings';
+import { projectBuildingShadows } from './helios-shadows';
 
 //Public types
 
@@ -1756,6 +1757,36 @@ export class HeliosEngine
                 .setData(homeData);
         }
 
+        //Ground-projected shadows. Source starts empty and is
+        //repopulated on every atmosphere tick from helios-shadows.ts.
+        //The fill layer is drawn BEFORE the building extrusions so
+        //buildings render on top of their own shadow, the visible
+        //shadow surface is the part that falls on the ground around
+        //and behind the building.
+        if (!this.map.getSource('helios-building-shadows-src'))
+        {
+            this.map.addSource('helios-building-shadows-src',
+            {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
+            });
+        }
+        if (!this.map.getLayer('helios-building-shadows'))
+        {
+            this.map.addLayer(
+            {
+                id:     'helios-building-shadows',
+                source: 'helios-building-shadows-src',
+                type:   'fill',
+                paint:
+                {
+                    'fill-color':     '#000000',
+                    'fill-opacity':   0.32,
+                    'fill-antialias': true
+                }
+            });
+        }
+
         //Surroundings first, then home, so the home draws on top in
         //the rare case the polygons overlap (the home footprint
         //should also be absent from the surroundings collection, but
@@ -1876,6 +1907,11 @@ export class HeliosEngine
                             maplibregl.GeoJSONSource | undefined;
             homeSrc?.setData(result.home);
             surrSrc?.setData(result.surroundings);
+            //Buildings just arrived, the shadow source is still empty,
+            //bypass the "sun hardly moved" guard so the next call paints
+            //a full atmosphere pass and populates the shadow polygons.
+            this._lastAtmosphereAlt = -999;
+            this._refreshShadowsAndAtmosphere();
         })
         .catch(err =>
         {
@@ -2118,6 +2154,62 @@ export class HeliosEngine
                 {
                     this.map.setPaintProperty(lid, 'fill-extrusion-color', buildingHex);
                 }
+            }
+        }
+        catch (_) {}
+
+        //Sun-driven face shading on the building extrusions. MapLibre
+        //positions the light as [radial, azimuth, polar]: azimuth in
+        //degrees clockwise from north (matches getSunPosition's
+        //convention exactly), polar from 0 (directly above) to 180
+        //(directly below). With anchor='map' the light follows the
+        //ground orientation so rotating the camera does not rotate
+        //the lighting, which is what we want when scrubbing time.
+        //
+        //At and below the horizon we clamp the polar angle just shy
+        //of 90 deg, the building tints above already convey night, a
+        //below-horizon polar would invert the face shading and look
+        //wrong on the few buildings that remain visible at twilight.
+        try
+        {
+            const polar = altitude > 0
+                ? Math.max(0, Math.min(89, 90 - altitude))
+                : 89;
+            this.map.setLight(
+            {
+                anchor:    'map',
+                position:  [1.15, azimuth, polar],
+                color:     '#ffffff',
+                intensity: 0.5
+            });
+        }
+        catch (_) {}
+
+        //Ground shadow polygons. Recomputed from the current building
+        //footprints at every atmosphere tick, then pushed into the
+        //source the shadow fill layer reads. When the sun is too low
+        //the helper returns an empty FeatureCollection, which clears
+        //the layer cleanly.
+        try
+        {
+            const shadowsSrc = this.map.getSource('helios-building-shadows-src') as
+                               maplibregl.GeoJSONSource | undefined;
+            if (shadowsSrc)
+            {
+                const all: GeoJSON.Feature[] = [];
+                if (this._buildingsData)
+                {
+                    all.push(...this._buildingsData.home.features);
+                    all.push(...this._buildingsData.surroundings.features);
+                }
+                const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: all };
+                const shadowFc = projectBuildingShadows(fc,
+                {
+                    sunAzimuthDeg:  azimuth,
+                    sunAltitudeDeg: altitude,
+                    homeLat:        this.homeLat
+                });
+                shadowsSrc.setData(shadowFc);
             }
         }
         catch (_) {}
