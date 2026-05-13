@@ -152,7 +152,9 @@ export function projectExtrusionShadows(
 //translated copy, exactly the shadow silhouette for a convex base.
 //Vegetation cells from a LiDAR raster are 4-vertex squares, so the
 //hull degenerates to a 6-vertex hexagon, ideal cheap shadow shape.
-function convexHull(pts: Array<[number, number]>): Array<[number, number]>
+//Exported so the LiDAR pipeline can also use it to enclose
+//connected vegetation regions in a single polygon before projecting.
+export function convexHull(pts: Array<[number, number]>): Array<[number, number]>
 {
     if (pts.length < 3) return pts.slice();
 

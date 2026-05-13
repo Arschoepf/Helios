@@ -22,6 +22,7 @@
 //Reference: https://geoservices.ign.fr/lidarhd
 
 import type { LidarVegetationSource, LidarFetchOptions } from './helios-lidar';
+import { convexHull } from './helios-shadows';
 
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
 const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
@@ -40,10 +41,13 @@ const M_PER_DEG_LAT = 111_320;
 //network footprint:
 //  RASTER_SIZE     - pixels per side; 128 = 64 KB float32 per request
 //  HEIGHT_THRESH_M - keep cells at or above this height (skip grass)
+//  HEIGHT_MAX_M    - sanity clamp; anything above (giant sequoias top
+//                    out at 95 m) is treated as a garbage value
 //  BBOX_PAD_FACTOR - over-fetch slightly so trees on the edge of the
 //                    visible radius still cast their shadow inward
 const RASTER_SIZE     = 128;
 const HEIGHT_THRESH_M = 3;
+const HEIGHT_MAX_M    = 100;
 const BBOX_PAD_FACTOR = 1.15;
 
 export const franceLidarHd: LidarVegetationSource =
@@ -141,44 +145,141 @@ export const franceLidarHd: LidarVegetationSource =
         const halfLon = pxLon / 2;
         const halfLat = pxLat / 2;
 
-        const out: GeoJSON.Feature[] = [];
+        //Pass 1: build a binary vegetation mask. A cell qualifies
+        //when its height is in [HEIGHT_THRESH_M, HEIGHT_MAX_M] AND
+        //its centre is not inside any known building footprint.
+        //Heights are kept in a parallel float array so we can
+        //average them per region in pass 3.
+        //
+        //Row j = 0 is the NORTH edge of the bbox in WMS image
+        //convention (top-down). Latitude decreases as j grows.
+        const N    = RASTER_SIZE * RASTER_SIZE;
+        const mask = new Uint8Array(N);
+        const hOk  = new Float32Array(N);
+        let hMin = Infinity, hMax = -Infinity, kept = 0;
 
         for (let j = 0; j < RASTER_SIZE; j++)
         {
-            //Row j = 0 is the NORTH edge of the bbox in WMS image
-            //convention (top-down). Latitude decreases as j grows.
             const cLat = maxLat - (j + 0.5) * pxLat;
             for (let i = 0; i < RASTER_SIZE; i++)
             {
-                const h = heights[j * RASTER_SIZE + i];
-                if (!isFinite(h) || h < HEIGHT_THRESH_M) continue;
+                const idx = j * RASTER_SIZE + i;
+                const h   = heights[idx];
+                if (!isFinite(h) || h < HEIGHT_THRESH_M || h > HEIGHT_MAX_M) continue;
 
                 const cLon = minLon + (i + 0.5) * pxLon;
-
                 if (cellInsideAnyBuilding(cLon, cLat, bboxes)) continue;
 
-                //One cell = one small square Polygon. We center on
-                //(cLon, cLat) so the shadow projection treats it like
-                //a tiny tree-sized building and the resulting hexagon
-                //extends naturally to the opposite-of-sun direction.
-                const x0 = cLon - halfLon, x1 = cLon + halfLon;
-                const y0 = cLat - halfLat, y1 = cLat + halfLat;
-                out.push({
-                    type:       'Feature',
-                    geometry:
-                    {
-                        type:        'Polygon',
-                        coordinates: [[
-                            [x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]
-                        ]]
-                    },
-                    properties:
-                    {
-                        render_height:     h,
-                        render_min_height: 0
-                    }
-                });
+                mask[idx] = 1;
+                hOk[idx]  = h;
+                kept++;
+                if (h < hMin) hMin = h;
+                if (h > hMax) hMax = h;
             }
+        }
+
+        //Pass 2: 8-connected flood fill to identify contiguous
+        //vegetation regions. Each region becomes ONE shadow polygon
+        //downstream, so what used to be thousands of overlapping
+        //per-cell shadows in a forest collapses into a single
+        //region polygon, no visual stacking.
+        const labels = new Int32Array(N);
+        const stack: number[] = [];
+        const components: Array<{ cells: number[]; heightSum: number }> = [];
+        let nextLabel = 0;
+
+        for (let seed = 0; seed < N; seed++)
+        {
+            if (!mask[seed] || labels[seed]) continue;
+
+            nextLabel++;
+            const cells: number[] = [];
+            let heightSum = 0;
+            stack.length = 0;
+            stack.push(seed);
+
+            while (stack.length)
+            {
+                const idx = stack.pop()!;
+                if (labels[idx] || !mask[idx]) continue;
+                labels[idx] = nextLabel;
+                cells.push(idx);
+                heightSum += hOk[idx];
+
+                const x = idx % RASTER_SIZE;
+                const y = (idx / RASTER_SIZE) | 0;
+                for (let dy = -1; dy <= 1; dy++)
+                {
+                    for (let dx = -1; dx <= 1; dx++)
+                    {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx < 0 || nx >= RASTER_SIZE || ny < 0 || ny >= RASTER_SIZE) continue;
+                        const nIdx = ny * RASTER_SIZE + nx;
+                        if (mask[nIdx] && !labels[nIdx]) stack.push(nIdx);
+                    }
+                }
+            }
+            components.push({ cells, heightSum });
+        }
+
+        //Pass 3: turn each component into a single Polygon feature.
+        //We collect all four corners of every cell in the component
+        //and take their convex hull. For non-convex regions (an L or
+        //a horseshoe) the hull over-approximates slightly, but the
+        //shadow is dark and the over-coverage is hidden by the body
+        //of the region itself; the visual gain over per-cell stacking
+        //is enormous and the cost is roughly O(M log M) per region.
+        //Height fed to the shadow projector is the average of the
+        //region's cells: a sensible mid-point between "tallest tree
+        //dominates" (max) and "lots of waist-height noise lowers the
+        //shadow" (min).
+        const out: GeoJSON.Feature[] = [];
+        for (const comp of components)
+        {
+            const corners: Array<[number, number]> = [];
+            for (const idx of comp.cells)
+            {
+                const x = idx % RASTER_SIZE;
+                const y = (idx / RASTER_SIZE) | 0;
+                const cLon = minLon + (x + 0.5) * pxLon;
+                const cLat = maxLat - (y + 0.5) * pxLat;
+                corners.push([cLon - halfLon, cLat - halfLat]);
+                corners.push([cLon + halfLon, cLat - halfLat]);
+                corners.push([cLon + halfLon, cLat + halfLat]);
+                corners.push([cLon - halfLon, cLat + halfLat]);
+            }
+            const hull = convexHull(corners);
+            if (hull.length < 3) continue;
+            hull.push([hull[0][0], hull[0][1]]);
+
+            const avgHeight = comp.heightSum / comp.cells.length;
+            out.push({
+                type:       'Feature',
+                geometry:   { type: 'Polygon', coordinates: [hull] },
+                properties:
+                {
+                    render_height:     avgHeight,
+                    render_min_height: 0
+                }
+            });
+        }
+
+        //One-shot diagnostic so we can confirm sane inputs in the
+        //browser console without sprinkling logs through the engine.
+        //Cheap (one console call per fetch, fetches happen once per
+        //home / radius change).
+        if (kept > 0)
+        {
+            console.info(
+                `[HELIOS] LiDAR vegetation: ${kept} cells kept, ` +
+                `${components.length} regions, ` +
+                `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
+            );
+        }
+        else
+        {
+            console.info('[HELIOS] LiDAR vegetation: no cells passed the threshold');
         }
 
         return { type: 'FeatureCollection', features: out };

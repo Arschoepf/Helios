@@ -1800,10 +1800,10 @@ export class HeliosEngine
         //Vegetation shadows. Same shape as building shadows but a
         //separate source/layer so a LiDAR fetch failure (no coverage,
         //IGN downtime, CORS, ...) leaves the building shadows
-        //untouched. Opacity is a touch lower than buildings, MNH
-        //cells are noisier and tend to overlap each other; a hard
-        //black would compound into very dark patches under dense
-        //canopy.
+        //untouched. Opacity matches buildings now that the lidar
+        //pipeline emits one polygon per connected vegetation region
+        //rather than one polygon per pixel cell, no more cumulative
+        //stacking under dense canopy.
         if (!this.map.getSource('helios-vegetation-shadows-src'))
         {
             this.map.addSource('helios-vegetation-shadows-src',
@@ -1822,8 +1822,8 @@ export class HeliosEngine
                 paint:
                 {
                     'fill-color':     '#000000',
-                    'fill-opacity':   0.22,
-                    'fill-antialias': false
+                    'fill-opacity':   0.30,
+                    'fill-antialias': true
                 }
             });
         }
