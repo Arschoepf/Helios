@@ -28,7 +28,6 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 
 ## Screenshots
 
-![HELIOS PREVIEW 01](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_01.gif)
 ![HELIOS PREVIEW 02](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_02.png)
 ![HELIOS PREVIEW 02](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_03.png)
 
