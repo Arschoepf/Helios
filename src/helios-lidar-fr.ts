@@ -46,7 +46,7 @@ const M_PER_DEG_LAT = 111_320;
 //  BBOX_PAD_FACTOR - over-fetch slightly so trees on the edge of the
 //                    visible radius still cast their shadow inward
 const RASTER_SIZE     = 128;
-const HEIGHT_THRESH_M = 3;
+const HEIGHT_THRESH_M = 5;
 const HEIGHT_MAX_M    = 100;
 const BBOX_PAD_FACTOR = 1.15;
 

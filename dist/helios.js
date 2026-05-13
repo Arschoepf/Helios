@@ -26210,7 +26210,7 @@ const LAYER_MNH = "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
 const FR_BBOX = { minLat: 41, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 const M_PER_DEG_LAT = 111320;
 const RASTER_SIZE = 128;
-const HEIGHT_THRESH_M = 3;
+const HEIGHT_THRESH_M = 5;
 const HEIGHT_MAX_M = 100;
 const BBOX_PAD_FACTOR = 1.15;
 const franceLidarHd = {
@@ -26567,7 +26567,6 @@ const _HeliosEngine = class _HeliosEngine {
     this._buildingsFetchKey = "";
     this._vegetationData = null;
     this._vegetationFetchKey = "";
-    this._vegRenderLogged = false;
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -27392,9 +27391,33 @@ const _HeliosEngine = class _HeliosEngine {
           source: "helios-vegetation-shadows-src",
           type: "fill",
           paint: {
-            "fill-color": "#ff0000",
-            "fill-opacity": 0.6,
+            "fill-color": "#000000",
+            "fill-opacity": 0.32,
             "fill-antialias": true
+          }
+        }
+      );
+    }
+    if (!this.map.getSource("helios-vegetation-src")) {
+      this.map.addSource(
+        "helios-vegetation-src",
+        {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] }
+        }
+      );
+    }
+    if (!this.map.getLayer("helios-vegetation")) {
+      this.map.addLayer(
+        {
+          id: "helios-vegetation",
+          source: "helios-vegetation-src",
+          type: "fill-extrusion",
+          paint: {
+            "fill-extrusion-color": "#4a6741",
+            "fill-extrusion-height": ["get", "render_height"],
+            "fill-extrusion-base": 0,
+            "fill-extrusion-opacity": 0.55
           }
         }
       );
@@ -27539,6 +27562,8 @@ const _HeliosEngine = class _HeliosEngine {
     ).then((result) => {
       if (ac.signal.aborted || !this.map) return;
       this._vegetationData = result;
+      const vegRaw = this.map.getSource("helios-vegetation-src");
+      vegRaw?.setData(result);
       this._lastAtmosphereAlt = -999;
       this._refreshShadowsAndAtmosphere();
     }).catch((err) => {
@@ -27725,7 +27750,6 @@ const _HeliosEngine = class _HeliosEngine {
     }
     try {
       const vegSrc = this.map.getSource("helios-vegetation-shadows-src");
-      const hasLayer = !!this.map.getLayer("helios-vegetation-shadows");
       if (vegSrc) {
         const fc = this._vegetationData ?? { type: "FeatureCollection", features: [] };
         const shadowFc = projectExtrusionShadows(
@@ -27734,31 +27758,10 @@ const _HeliosEngine = class _HeliosEngine {
             sunAzimuthDeg: azimuth,
             sunAltitudeDeg: altitude,
             homeLat: this.homeLat,
-            minHeightM: 3
+            minHeightM: 5
           }
         );
-        if (fc.features.length > 0) {
-          if (!this._vegRenderLogged && shadowFc.features.length > 0) {
-            this._vegRenderLogged = true;
-            const first = shadowFc.features[0].geometry;
-            const ring = first.coordinates[0];
-            let minLon = Infinity, minLat = Infinity;
-            let maxLon = -Infinity, maxLat = -Infinity;
-            for (const [lon, lat] of ring) {
-              if (lon < minLon) minLon = lon;
-              if (lat < minLat) minLat = lat;
-              if (lon > maxLon) maxLon = lon;
-              if (lat > maxLat) maxLat = lat;
-            }
-            console.info(
-              `[HELIOS] veg shadows render check: layer=${hasLayer} output=${shadowFc.features.length} polys first bbox=[${minLon.toFixed(6)}, ${minLat.toFixed(6)}, ${maxLon.toFixed(6)}, ${maxLat.toFixed(6)}] home=[${this.homeLon.toFixed(6)}, ${this.homeLat.toFixed(6)}] (inspect via window.__heliosMap)`
-            );
-          }
-          console.info(`[HELIOS] veg shadows: ${fc.features.length} regions in -> ${shadowFc.features.length} polygons out -> source updated`);
-        }
         vegSrc.setData(shadowFc);
-      } else {
-        console.warn("[HELIOS] veg shadows: source helios-vegetation-shadows-src not found, layer=" + hasLayer);
       }
     } catch (_2) {
     }
@@ -30966,7 +30969,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.5"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.6"}`,
       labelStyle,
       versionStyle
     );

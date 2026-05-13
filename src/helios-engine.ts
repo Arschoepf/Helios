@@ -610,10 +610,6 @@ export class HeliosEngine
     private _vegetationData:     GeoJSON.FeatureCollection | null = null;
     private _vegetationFetchKey: string = '';
     private _vegetationAbort?:   AbortController;
-    //Beta.5 debug guard: throttles the verbose render-check log to a
-    //single fire per engine instance, otherwise the timeline scrub
-    //would spam the console.
-    private _vegRenderLogged:    boolean = false;
 
     constructor(
         container:    HTMLElement,
@@ -1805,16 +1801,6 @@ export class HeliosEngine
         //separate source/layer so a LiDAR fetch failure (no coverage,
         //IGN downtime, CORS, ...) leaves the building shadows
         //untouched.
-        //
-        //DEBUG (beta.5): the fill is temporarily bright red at 0.6
-        //opacity instead of the production black at 0.30. beta.3/4
-        //confirmed the data pipeline pushes 89 polygons into the
-        //source on every tick but nothing was visible on the map.
-        //Bright red is impossible to miss if the layer renders; if
-        //it stays invisible, a MapTiler landuse / forest fill is
-        //drawing on top of our shadow specifically over vegetation,
-        //and we need to set `beforeId` to a high-enough id when
-        //adding the layer.
         if (!this.map.getSource('helios-vegetation-shadows-src'))
         {
             this.map.addSource('helios-vegetation-shadows-src',
@@ -1832,9 +1818,46 @@ export class HeliosEngine
                 type:   'fill',
                 paint:
                 {
-                    'fill-color':     '#ff0000',
-                    'fill-opacity':   0.60,
+                    'fill-color':     '#000000',
+                    'fill-opacity':   0.32,
                     'fill-antialias': true
+                }
+            });
+        }
+
+        //Vegetation as low 3D extrusions. The shadow projection above
+        //emits a polygon equal to the convex hull of (canopy footprint
+        //union projected footprint). Without a 3D occluder over the
+        //canopy itself, the whole bounded shape reads as a shadow,
+        //including the part that visually represents the trees rather
+        //than the ground beneath. That doubled the apparent shadow
+        //coverage in beta.5: the actual ground "ombres portees" is
+        //just the offset trail, the rest is canopy that should look
+        //like canopy. Rendering each region as a 3D extrusion at
+        //avg_height lets MapLibre's depth buffer hide the canopy part
+        //of the shadow, exactly the same trick the building pipeline
+        //relies on. Colour stays muted so the trees do not dominate.
+        if (!this.map.getSource('helios-vegetation-src'))
+        {
+            this.map.addSource('helios-vegetation-src',
+            {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
+            });
+        }
+        if (!this.map.getLayer('helios-vegetation'))
+        {
+            this.map.addLayer(
+            {
+                id:     'helios-vegetation',
+                source: 'helios-vegetation-src',
+                type:   'fill-extrusion',
+                paint:
+                {
+                    'fill-extrusion-color':   '#4a6741',
+                    'fill-extrusion-height':  ['get', 'render_height'],
+                    'fill-extrusion-base':    0,
+                    'fill-extrusion-opacity': 0.55
                 }
             });
         }
@@ -2029,6 +2052,12 @@ export class HeliosEngine
         {
             if (ac.signal.aborted || !this.map) return;
             this._vegetationData = result;
+            //Push the region footprints into the 3D extrusion source
+            //so MapLibre paints muted-green "tree blocks" that occlude
+            //the under-canopy part of the shadow polygon.
+            const vegRaw = this.map.getSource('helios-vegetation-src') as
+                           maplibregl.GeoJSONSource | undefined;
+            vegRaw?.setData(result);
             //Bypass the "sun hardly moved" guard so the vegetation
             //shadows render on the next atmosphere call rather than
             //waiting for the sun to drift 0.5 deg.
@@ -2346,7 +2375,6 @@ export class HeliosEngine
         {
             const vegSrc = this.map.getSource('helios-vegetation-shadows-src') as
                            maplibregl.GeoJSONSource | undefined;
-            const hasLayer = !!this.map.getLayer('helios-vegetation-shadows');
             if (vegSrc)
             {
                 const fc = this._vegetationData
@@ -2356,44 +2384,9 @@ export class HeliosEngine
                     sunAzimuthDeg:  azimuth,
                     sunAltitudeDeg: altitude,
                     homeLat:        this.homeLat,
-                    minHeightM:     3
+                    minHeightM:     5
                 });
-                //Once per first useful refresh, print enough context to
-                //debug the rendering side: layer present?, polygon count,
-                //bbox of the first polygon (to verify coords are in the
-                //visible area). Throttled with a flag so subsequent ticks
-                //do not flood the console.
-                if (fc.features.length > 0)
-                {
-                    if (!this._vegRenderLogged && shadowFc.features.length > 0)
-                    {
-                        this._vegRenderLogged = true;
-                        const first = shadowFc.features[0].geometry as GeoJSON.Polygon;
-                        const ring  = first.coordinates[0];
-                        let minLon =  Infinity, minLat =  Infinity;
-                        let maxLon = -Infinity, maxLat = -Infinity;
-                        for (const [lon, lat] of ring)
-                        {
-                            if (lon < minLon) minLon = lon;
-                            if (lat < minLat) minLat = lat;
-                            if (lon > maxLon) maxLon = lon;
-                            if (lat > maxLat) maxLat = lat;
-                        }
-                        console.info(
-                            `[HELIOS] veg shadows render check: layer=${hasLayer} ` +
-                            `output=${shadowFc.features.length} polys ` +
-                            `first bbox=[${minLon.toFixed(6)}, ${minLat.toFixed(6)}, ${maxLon.toFixed(6)}, ${maxLat.toFixed(6)}] ` +
-                            `home=[${this.homeLon.toFixed(6)}, ${this.homeLat.toFixed(6)}] ` +
-                            `(inspect via window.__heliosMap)`
-                        );
-                    }
-                    console.info(`[HELIOS] veg shadows: ${fc.features.length} regions in -> ${shadowFc.features.length} polygons out -> source updated`);
-                }
                 vegSrc.setData(shadowFc);
-            }
-            else
-            {
-                console.warn('[HELIOS] veg shadows: source helios-vegetation-shadows-src not found, layer=' + hasLayer);
             }
         }
         catch (_) {}
