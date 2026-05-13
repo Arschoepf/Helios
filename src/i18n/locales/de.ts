@@ -91,6 +91,11 @@ export const de: Translations = {
         shadowPrecisionUltra:  'Ultra',
         shadowPrecisionHint:   'Derzeit nur in Frankreich verfügbar.',
         shadowOpacity:         'Schatten-Deckkraft *',
-        shadowOpacityHint:     'Deckkraft der am Boden geworfenen Schatten.'
+        shadowOpacityHint:     'Deckkraft der am Boden geworfenen Schatten.',
+        buildingShadows:       'MapTiler-Gebäudeschatten *',
+        buildingShadowsOn:     'Sichtbar',
+        buildingShadowsOff:    'Ausgeblendet',
+        buildingShadowsHint:   'Wenn LiDAR nicht verfügbar ist (Präzision aus oder Wohnsitz außerhalb Frankreich), werden Schatten aus den flachen MapTiler-Grundrissen abgeschätzt. In flachem oder dichtem städtischem Gebiet ausblenden, wo die Näherung wie Rauschen wirkt. LiDAR-Schatten bleiben unberührt.',
+        lidarPointCloud:       'LiDAR-Scanner-Ansicht'
     }
 };

@@ -17,13 +17,25 @@
 //
 //Reference: https://geoservices.ign.fr/lidarhd
 
-import type { LidarSource, LidarFetchOptions } from '../helios-lidar';
+import type {
+    LidarSource,
+    LidarFetchOptions,
+    LidarFetchResult,
+    LidarTerrainData
+} from '../helios-lidar';
 import { convexHull } from '../helios-shadows';
 
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
 //IGN reprojects the native LAMB-93 product to WGS84G server-side so
 //we can stay in lon/lat and avoid a coordinate transform.
+//
+//  MNH (Modele Numerique de Hauteur), height above local ground;
+//       drives the shadow projector and the point-cloud overlay.
+//  MNT (Modele Numerique de Terrain), bare-earth ground elevation;
+//       drives the custom DEM source that replaces MapTiler terrain
+//       in the home area when LiDAR mode is on.
 const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
+const LAYER_MNT  = 'IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
 
 //Bounding box of metropolitan France + Corsica, padded by ~0.3 deg
 //so coastal homes still trigger a fetch.
@@ -59,9 +71,13 @@ export const franceLidarHd: LidarSource =
             && lon >= FR_BBOX.minLon && lon <= FR_BBOX.maxLon;
     },
 
-    async fetch(opts: LidarFetchOptions): Promise<GeoJSON.FeatureCollection>
+    async fetch(opts: LidarFetchOptions): Promise<LidarFetchResult>
     {
-        const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+        const empty: LidarFetchResult = {
+            regions: { type: 'FeatureCollection', features: [] },
+            cells:   { type: 'FeatureCollection', features: [] },
+            terrain: null
+        };
 
         //Defensive clamp on the caller-supplied raster size.
         const rasterSize = Math.min(2048, Math.max(64, Math.round(opts.rasterSize)));
@@ -76,42 +92,24 @@ export const franceLidarHd: LidarSource =
         const minLon = opts.homeLon - dLon;
         const maxLon = opts.homeLon + dLon;
 
-        //WMS 1.3.0 with EPSG:4326 wants axis order (lat, lon).
-        const params = new URLSearchParams({
-            SERVICE: 'WMS',
-            VERSION: '1.3.0',
-            REQUEST: 'GetMap',
-            LAYERS:  LAYER_MNH,
-            STYLES:  '',
-            CRS:     'EPSG:4326',
-            BBOX:    `${minLat},${minLon},${maxLat},${maxLon}`,
-            WIDTH:   String(rasterSize),
-            HEIGHT:  String(rasterSize),
-            FORMAT:  'image/x-bil;bits=32'
-        });
+        //Both layers share the same bbox + raster size; the MNT call
+        //runs in parallel so the LiDAR pipeline pays one network RTT
+        //rather than two.
+        const [heights, mntHeights] = await Promise.all([
+            fetchBilLayer(LAYER_MNH, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal),
+            fetchBilLayer(LAYER_MNT, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal)
+        ]);
 
-        let resp: Response;
-        try
-        {
-            resp = await fetch(`${WMS_URL}?${params.toString()}`, { signal: opts.signal });
-        }
-        catch (_)
-        {
-            return empty;
-        }
-        if (!resp.ok) return empty;
+        if (!heights) return empty;
 
-        let buf: ArrayBuffer;
-        try { buf = await resp.arrayBuffer(); }
-        catch (_) { return empty; }
-
-        //A short response means the server returned a ServiceException
-        //XML rather than the binary raster (typical when the layer name
-        //drifts); bail rather than read garbage as floats.
-        const expectedBytes = rasterSize * rasterSize * 4;
-        if (buf.byteLength < expectedBytes) return empty;
-
-        const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
+        const terrain: LidarTerrainData | null = mntHeights
+            ? {
+                heights: mntHeights,
+                width:   rasterSize,
+                height:  rasterSize,
+                bounds:  { minLon, minLat, maxLon, maxLat }
+              }
+            : null;
 
         //MapTiler footprints inflated by BUILDING_MASK_PAD_M on every
         //side. Bbox-only test downstream (no polygon-interior step):
@@ -241,11 +239,14 @@ export const franceLidarHd: LidarSource =
         //Pass 3, one Polygon per region. Convex hull of cell corners
         //(slight over-approximation for L-shapes is invisible since
         //the polygon itself is never rendered, only its shadow).
-        const out: GeoJSON.Feature[] = [];
+        const regionsOut: GeoJSON.Feature[] = [];
+        const keptLabels = new Uint8Array(nextLabel + 1);
         let dropped = 0;
-        for (const comp of components)
+        for (let li = 0; li < components.length; li++)
         {
+            const comp = components[li];
             if (comp.cells.length < MIN_REGION_CELLS) { dropped++; continue; }
+            keptLabels[li + 1] = 1;
 
             const corners: Array<[number, number]> = [];
             for (const idx of comp.cells)
@@ -263,7 +264,7 @@ export const franceLidarHd: LidarSource =
             if (hull.length < 3) continue;
             hull.push([hull[0][0], hull[0][1]]);
 
-            out.push({
+            regionsOut.push({
                 type:       'Feature',
                 geometry:   { type: 'Polygon', coordinates: [hull] },
                 properties:
@@ -274,21 +275,52 @@ export const franceLidarHd: LidarSource =
             });
         }
 
+        //Pass 4, emit per-cell Points for the optional point-cloud
+        //overlay. We only emit cells that belong to a kept region so
+        //the scanner view stays consistent with the shadow shape (a
+        //single-pixel artefact is filtered out of both views in lock-
+        //step). KIND_NAMES maps the numeric class to the string the
+        //engine's circle-color expression keys on.
+        const KIND_NAMES = ['', 'home', 'building', 'vegetation'];
+        const cellsOut: GeoJSON.Feature[] = [];
+        for (let idx = 0; idx < N; idx++)
+        {
+            const lab = labels[idx];
+            if (!lab || !keptLabels[lab]) continue;
+            const k = kindArr[idx];
+            if (!k) continue;
+            const x = idx % rasterSize;
+            const y = (idx / rasterSize) | 0;
+            const cLon = minLon + (x + 0.5) * pxLon;
+            const cLat = maxLat - (y + 0.5) * pxLat;
+            cellsOut.push({
+                type:       'Feature',
+                geometry:   { type: 'Point', coordinates: [cLon, cLat] },
+                properties: { height: hOk[idx], kind: KIND_NAMES[k] }
+            });
+        }
+
         const totalKept = nHome + nBldg + nVeg;
         if (totalKept > 0)
         {
             console.info(
-                `[HELIOS] LiDAR shadows: ${nHome} home + ${nBldg} building + ${nVeg} vegetation cells -> ` +
-                `${out.length} regions (${dropped} dropped < ${MIN_REGION_CELLS} cells), ` +
-                `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
+                `[HELIOS] LiDAR: ${nHome} home + ${nBldg} building + ${nVeg} vegetation cells -> ` +
+                `${regionsOut.length} regions (${dropped} dropped < ${MIN_REGION_CELLS} cells), ` +
+                `${cellsOut.length} points, ` +
+                `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m` +
+                (terrain ? `, MNT raster ${rasterSize}x${rasterSize}` : ', no MNT')
             );
         }
         else
         {
-            console.info('[HELIOS] LiDAR shadows: no cells passed the threshold');
+            console.info('[HELIOS] LiDAR: no cells passed the threshold');
         }
 
-        return { type: 'FeatureCollection', features: out };
+        return {
+            regions: { type: 'FeatureCollection', features: regionsOut },
+            cells:   { type: 'FeatureCollection', features: cellsOut },
+            terrain
+        };
     }
 };
 
@@ -356,4 +388,54 @@ function cellInsideAnyBBox(lon: number, lat: number, bboxes: InflatedBBox[]): bo
         }
     }
     return false;
+}
+
+//Single WMS GetMap call for one IGN elevation layer at the given
+//bbox + raster size. Returns null on any network / decode failure;
+//the caller then either bails (MNH required) or falls back to the
+//global terrain (MNT optional). The same response can be a small
+//ServiceException XML when the layer name drifts, hence the strict
+//byte-length check before reading the buffer as Float32.
+async function fetchBilLayer(
+    layer:      string,
+    minLat:     number,
+    minLon:     number,
+    maxLat:     number,
+    maxLon:     number,
+    rasterSize: number,
+    signal?:    AbortSignal
+): Promise<Float32Array | null>
+{
+    const params = new URLSearchParams({
+        SERVICE: 'WMS',
+        VERSION: '1.3.0',
+        REQUEST: 'GetMap',
+        LAYERS:  layer,
+        STYLES:  '',
+        CRS:     'EPSG:4326',
+        BBOX:    `${minLat},${minLon},${maxLat},${maxLon}`,
+        WIDTH:   String(rasterSize),
+        HEIGHT:  String(rasterSize),
+        FORMAT:  'image/x-bil;bits=32'
+    });
+
+    let resp: Response;
+    try
+    {
+        resp = await fetch(`${WMS_URL}?${params.toString()}`, { signal });
+    }
+    catch (_)
+    {
+        return null;
+    }
+    if (!resp.ok) return null;
+
+    let buf: ArrayBuffer;
+    try { buf = await resp.arrayBuffer(); }
+    catch (_) { return null; }
+
+    const expectedBytes = rasterSize * rasterSize * 4;
+    if (buf.byteLength < expectedBytes) return null;
+
+    return new Float32Array(buf, 0, rasterSize * rasterSize);
 }

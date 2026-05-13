@@ -91,6 +91,11 @@ export const nl: Translations = {
         shadowPrecisionUltra:  'Ultra',
         shadowPrecisionHint:   'Voorlopig alleen beschikbaar in Frankrijk.',
         shadowOpacity:         'Schaduwdekking *',
-        shadowOpacityHint:     'Dekking van de op de grond geprojecteerde schaduwen.'
+        shadowOpacityHint:     'Dekking van de op de grond geprojecteerde schaduwen.',
+        buildingShadows:       'MapTiler-gebouwschaduwen *',
+        buildingShadowsOn:     'Zichtbaar',
+        buildingShadowsOff:    'Verborgen',
+        buildingShadowsHint:   'Wanneer LiDAR niet beschikbaar is (precisie uit, of huis buiten Frankrijk) worden schaduwen benaderd op basis van de platte MapTiler-omtreklijnen. Verbergen in vlakke of dichte stedelijke gebieden waar de benadering meer ruis dan informatie oplevert. LiDAR-schaduwen blijven ongewijzigd.',
+        lidarPointCloud:       'LiDAR-scannerweergave'
     }
 };

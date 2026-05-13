@@ -194,6 +194,10 @@ export class HeliosCard extends LitElement
     @state() private _timeRange:    { start: Date; end: Date } | null = null;
     @state() private _selectedTime: Date | null = null;
     @state() private _isLiveMode    = true;
+    //LiDAR point-cloud "scanner" overlay visibility, toggled by the
+    //user via a small button overlay on the map. Not persisted in the
+    //config: this is a one-off inspection mode, not a permanent style.
+    @state() private _pointCloudOn  = false;
 
     private _timer?:           number;
     private _lastApiKey        = '';
@@ -1294,6 +1298,12 @@ export class HeliosCard extends LitElement
         this._selectedTime = null;
         this._isLiveMode   = true;
         this._engine?.setSelectedTime(null);
+    }
+
+    private _togglePointCloud(): void
+    {
+        this._pointCloudOn = !this._pointCloudOn;
+        this._engine?.setPointCloudVisible(this._pointCloudOn);
     }
 
 
@@ -2920,6 +2930,19 @@ export class HeliosCard extends LitElement
                                 <ha-icon icon="mdi:restore"></ha-icon>
                             </button>
                         ` : nothing}
+                    </div>
+                ` : nothing}
+
+                ${hasApiKey && this._engine?.hasLidarPointCloud() ? html`
+                    <div class="overlay-top-right">
+                        <button
+                            class="map-btn ${this._pointCloudOn ? 'map-btn-on' : ''}"
+                            title="${t.editor.lidarPointCloud}"
+                            aria-label="${t.editor.lidarPointCloud}"
+                            @click="${this._togglePointCloud}"
+                        >
+                            <ha-icon icon="mdi:dots-grid"></ha-icon>
+                        </button>
                     </div>
                 ` : nothing}
 

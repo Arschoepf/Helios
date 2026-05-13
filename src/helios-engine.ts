@@ -4,7 +4,15 @@ import { getSunPosition, computePvPower, computeIrradianceWm2 } from './helios-s
 import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './helios-weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildings';
 import { projectExtrusionShadows } from './helios-shadows';
-import { findLidarSource } from './helios-lidar';
+import { findLidarSource, type LidarFetchResult } from './helios-lidar';
+import {
+    LIDAR_TERRAIN_PROTOCOL,
+    LIDAR_TERRAIN_MIN_ZOOM,
+    LIDAR_TERRAIN_MAX_ZOOM,
+    registerLidarTerrain,
+    unregisterLidarTerrain,
+    getLidarTerrainBounds
+} from './helios-lidar-terrain';
 
 //Public types
 
@@ -123,6 +131,14 @@ export interface HeliosConfig
     'shadow-precision'?:       unknown;
     //Opacity of the cast ground shadow layer, 0..1. Default 0.32.
     'shadow-opacity'?:         unknown;
+    //Whether the MapTiler-derived shadow projection runs when the
+    //LiDAR pipeline is inactive (precision = off, or the home falls
+    //outside any provider's coverage). LiDAR-driven shadows are
+    //unaffected, they always render when LiDAR data is present.
+    //Default true (legacy 1.4.0 behaviour). Useful in flat or dense
+    //urban areas where the MapTiler shadow approximation reads as
+    //noise rather than data.
+    'building-shadows-enabled'?: unknown;
 }
 
 //Default values for the building config, exposed so the visual
@@ -632,13 +648,22 @@ export class HeliosEngine
     private _buildingsFetchKey: string = '';
     private _buildingsAbort?:   AbortController;
 
-    //Cached LiDAR consolidated regions, fetched once per
-    //(lat, lon, radius, raster, provider) tuple and reused across
-    //style reloads. Null until the fetch completes or the home is
-    //outside any provider's coverage (see helios-lidar.ts).
-    private _lidarData:     GeoJSON.FeatureCollection | null = null;
+    //Cached LiDAR fetch result (regions + per-cell points + optional
+    //MNT raster), fetched once per (lat, lon, radius, raster,
+    //provider) tuple and reused across style reloads. Null until the
+    //fetch completes or the home is outside any provider's coverage
+    //(see helios-lidar.ts).
+    private _lidarData:     LidarFetchResult | null = null;
     private _lidarFetchKey: string = '';
     private _lidarAbort?:   AbortController;
+    //Stable id used as the per-engine key when registering the LiDAR
+    //terrain raster with the maplibregl custom protocol. Built from
+    //the home coordinates so two cards on the same dashboard can
+    //register their own MNT data without colliding.
+    private _engineId:      string = '';
+    //Visibility of the optional LiDAR point-cloud "scanner" overlay.
+    //Card-side runtime state, not persisted in the config.
+    private _pointCloudVisible: boolean = false;
 
     constructor(
         container:    HTMLElement,
@@ -676,6 +701,11 @@ export class HeliosEngine
 
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
+
+        //Engine id stable for the lifetime of this card instance.
+        //Lat/lon-derived so two cards on the same dashboard don't share
+        //a custom-protocol slot.
+        this._engineId = `e${Math.abs(Math.floor(this.homeLat * 1e4))}-${Math.abs(Math.floor(this.homeLon * 1e4))}-${Math.floor(Math.random() * 1e6)}`;
 
         //Pixel ratio caps. At pitch 55° + continuous auto-rotation,
         //each rendered pixel is sampled multiple times (terrain mesh,
@@ -1023,6 +1053,21 @@ export class HeliosEngine
     private _lidarActive(): boolean
     {
         return this._shadowPrecisionLevel() !== 'off' && this._lidarData !== null;
+    }
+
+    //True when the LiDAR pipeline returned an MNT raster the engine
+    //can register as a custom DEM source. Implies _lidarActive.
+    private _lidarTerrainAvailable(): boolean
+    {
+        return this._lidarActive() && this._lidarData?.terrain != null;
+    }
+
+    //MapTiler-derived shadows are gated on the user's config toggle.
+    //LiDAR-driven shadows ignore this flag (they always render when
+    //the pipeline yields data).
+    private _maptilerShadowsEnabled(): boolean
+    {
+        return this.cfg['building-shadows-enabled'] !== false;
     }
 
     private _shadowOpacity(): number
@@ -1919,11 +1964,88 @@ export class HeliosEngine
             }
         });
 
+        //LiDAR point-cloud "scanner" overlay. One source feeding two
+        //layers: thin stick from the ground up to the cell height,
+        //capped by a slightly wider dot at the top so the user reads
+        //it as a lollipop, the natural visual idiom for a point cloud.
+        //Both layers default to invisible; the card toggles them on
+        //via setPointCloudVisible().
+        if (!this.map.getSource('helios-lidar-points-src'))
+        {
+            this.map.addSource('helios-lidar-points-src',
+            {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
+            });
+        }
+        if (!this.map.getSource('helios-lidar-points-caps-src'))
+        {
+            this.map.addSource('helios-lidar-points-caps-src',
+            {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
+            });
+        }
+
+        //Colour expression: home green / building grey-blue / vegetation
+        //a soft warm orange. Same hues we already lean on in the card
+        //(buildings stay grey-cool, vegetation gets a warm pop so the
+        //tree clusters around the home read clearly against buildings).
+        const cloudColorExpr = [
+            'match',
+            ['get', 'kind'],
+            'home',       '#27B36B',
+            'building',   '#9aa8c4',
+            'vegetation', '#f59e0b',
+            '#cccccc'
+        ] as unknown as string;
+
+        if (!this.map.getLayer('helios-lidar-points-stick'))
+        {
+            this.map.addLayer(
+            {
+                id:     'helios-lidar-points-stick',
+                source: 'helios-lidar-points-src',
+                type:   'fill-extrusion',
+                layout: { visibility: this._pointCloudVisible ? 'visible' : 'none' },
+                paint:
+                {
+                    'fill-extrusion-color':   cloudColorExpr,
+                    'fill-extrusion-height':  ['get', 'top'],
+                    'fill-extrusion-base':    0,
+                    'fill-extrusion-opacity': 0.55
+                }
+            });
+        }
+        if (!this.map.getLayer('helios-lidar-points-cap'))
+        {
+            this.map.addLayer(
+            {
+                id:     'helios-lidar-points-cap',
+                source: 'helios-lidar-points-caps-src',
+                type:   'fill-extrusion',
+                layout: { visibility: this._pointCloudVisible ? 'visible' : 'none' },
+                paint:
+                {
+                    'fill-extrusion-color':   cloudColorExpr,
+                    'fill-extrusion-height':  ['get', 'top'],
+                    'fill-extrusion-base':    ['get', 'capBase'],
+                    'fill-extrusion-opacity': 0.95
+                }
+            });
+        }
+
         //Kick off the fetch in the background. Layers are already
         //wired and will start drawing as soon as the GeoJSON sources
         //get populated. If cached data exists for this (home, radius)
         //combo we skip the network call entirely.
         this._ensureBuildingsFetched();
+
+        //Re-push any LiDAR point data that survived a style reload
+        //(setStyle wipes geojson sources; this restores them).
+        this._pushPointCloudData();
+        //Same for the LiDAR DEM source on style reload.
+        this._applyLidarTerrain();
     }
 
     //Idempotent fetch helper. Reuses _buildingsData across style
@@ -2008,6 +2130,9 @@ export class HeliosEngine
             this._lidarAbort?.abort();
             this._lidarData     = null;
             this._lidarFetchKey = '';
+            unregisterLidarTerrain(this._engineId);
+            this._applyLidarTerrain();
+            this._pushPointCloudData();
             this._pushRenderableSources();
             return;
         }
@@ -2042,6 +2167,20 @@ export class HeliosEngine
         {
             if (ac.signal.aborted || !this.map) return;
             this._lidarData = result;
+            //Custom DEM swap: when MNT data came in we register it
+            //with the maplibregl protocol and re-point setTerrain to
+            //the LiDAR source. Falls back gracefully when MNT is
+            //missing (we keep MapTiler's global terrain).
+            if (result.terrain)
+            {
+                registerLidarTerrain(this._engineId, result.terrain);
+            }
+            else
+            {
+                unregisterLidarTerrain(this._engineId);
+            }
+            this._applyLidarTerrain();
+            this._pushPointCloudData();
             this._pushRenderableSources();
             //Bypass the "sun hardly moved" guard so the shadow pass
             //runs immediately on the new data.
@@ -2055,6 +2194,67 @@ export class HeliosEngine
         });
     }
 
+    //Idempotent terrain source swap. When LiDAR MNT is available AND
+    //the engine isn't in performance mode (which disables terrain
+    //altogether), we add a `helios-lidar-terrain` raster-dem source
+    //pointing at the custom protocol and call setTerrain() with it.
+    //When MNT goes away (precision toggled off, home moved out of
+    //coverage, fetch failed), we revert to the global MapTiler DEM.
+    private _applyLidarTerrain(): void
+    {
+        if (!this.map) return;
+        if (this._performanceMode())
+        {
+            //Performance mode disables terrain entirely; nothing to do.
+            return;
+        }
+
+        const haveLidarDem = this._lidarTerrainAvailable();
+        const haveSource   = !!this.map.getSource('helios-lidar-terrain');
+
+        if (haveLidarDem && !haveSource)
+        {
+            const bounds = getLidarTerrainBounds(this._engineId);
+            try
+            {
+                this.map.addSource('helios-lidar-terrain',
+                {
+                    type:     'raster-dem',
+                    tiles:    [`${LIDAR_TERRAIN_PROTOCOL}://${this._engineId}/{z}/{x}/{y}`],
+                    tileSize: 512,
+                    minzoom:  LIDAR_TERRAIN_MIN_ZOOM,
+                    maxzoom:  LIDAR_TERRAIN_MAX_ZOOM,
+                    encoding: 'mapbox',
+                    bounds:   bounds ?? undefined
+                });
+            }
+            catch (e) { console.warn('[HELIOS] LiDAR terrain addSource failed:', e); }
+        }
+        else if (!haveLidarDem && haveSource)
+        {
+            //Detach the layer's reference before removing, MapLibre
+            //refuses to drop a source still used by setTerrain.
+            try { this.map.setTerrain({ source: 'helios-terrain', exaggeration: 1.2 }); }
+            catch (_) {}
+            try { this.map.removeSource('helios-lidar-terrain'); }
+            catch (_) {}
+            return;
+        }
+
+        if (haveLidarDem)
+        {
+            try
+            {
+                //Slight extra exaggeration on the LiDAR DEM: the
+                //higher native resolution means subtle relief reads
+                //less than on the smoothed MapTiler DEM, so we lift
+                //the vertical scale a touch to compensate.
+                this.map.setTerrain({ source: 'helios-lidar-terrain', exaggeration: 1.4 });
+            }
+            catch (e) { console.warn('[HELIOS] setTerrain (lidar) failed:', e); }
+        }
+    }
+
     //Pushes the MapTiler footprints into the building rendering
     //sources. Buildings are always MapTiler-driven; LiDAR data is
     //used exclusively for shadow projection (see _refreshShadowsAndAtmosphere).
@@ -2066,6 +2266,106 @@ export class HeliosEngine
         const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
         homeSrc?.setData(this._buildingsData?.home         ?? empty);
         surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
+    }
+
+    //Builds the GeoJSON for the point-cloud sticks + caps from the
+    //cached LiDAR cells. Each input Point becomes a small square
+    //polygon (~0.4 m wide for the stick, ~1.2 m for the cap) whose
+    //extruded height encodes the cell's measured height above ground.
+    //One pass produces both collections so we don't iterate the cells
+    //twice.
+    private _pushPointCloudData(): void
+    {
+        if (!this.map) return;
+        const stickSrc = this.map.getSource('helios-lidar-points-src')       as maplibregl.GeoJSONSource | undefined;
+        const capSrc   = this.map.getSource('helios-lidar-points-caps-src') as maplibregl.GeoJSONSource | undefined;
+        if (!stickSrc || !capSrc) return;
+
+        const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+        const cells = this._lidarData?.cells;
+        if (!cells || cells.features.length === 0)
+        {
+            stickSrc.setData(empty);
+            capSrc.setData(empty);
+            return;
+        }
+
+        const STICK_HALF_M = 0.2;
+        const CAP_HALF_M   = 0.6;
+        const CAP_HEIGHT_M = 0.8;
+        const mPerDegLat   = 111_320;
+        const mPerDegLon   = mPerDegLat * Math.cos(this.homeLat * Math.PI / 180);
+
+        const sticks: GeoJSON.Feature[] = [];
+        const caps:   GeoJSON.Feature[] = [];
+
+        const makeSquare = (lon: number, lat: number, halfM: number): GeoJSON.Polygon =>
+        {
+            const dLat = halfM / mPerDegLat;
+            const dLon = halfM / mPerDegLon;
+            return {
+                type: 'Polygon',
+                coordinates: [[
+                    [lon - dLon, lat - dLat],
+                    [lon + dLon, lat - dLat],
+                    [lon + dLon, lat + dLat],
+                    [lon - dLon, lat + dLat],
+                    [lon - dLon, lat - dLat]
+                ]]
+            };
+        };
+
+        for (const f of cells.features)
+        {
+            if (!f.geometry || f.geometry.type !== 'Point') continue;
+            const [lon, lat] = f.geometry.coordinates as [number, number];
+            const top  = Number((f.properties as { height?: unknown } | null)?.height ?? 0);
+            const kind = String((f.properties as { kind?: unknown }   | null)?.kind   ?? '');
+            if (!isFinite(top) || top <= 0) continue;
+
+            sticks.push({
+                type:       'Feature',
+                geometry:   makeSquare(lon, lat, STICK_HALF_M),
+                properties: { top, kind }
+            });
+            caps.push({
+                type:       'Feature',
+                geometry:   makeSquare(lon, lat, CAP_HALF_M),
+                properties: { top, capBase: Math.max(0, top - CAP_HEIGHT_M), kind }
+            });
+        }
+
+        stickSrc.setData({ type: 'FeatureCollection', features: sticks });
+        capSrc.setData({ type: 'FeatureCollection', features: caps });
+    }
+
+    //Toggle visibility of the LiDAR point-cloud "scanner" overlay.
+    //Visibility is layer-level rather than data-level so flipping the
+    //toggle is instantaneous (no GeoJSON re-parse) once the cells are
+    //in. When no LiDAR data is available yet, the layers stay empty
+    //and the toggle simply primes the visibility state for when data
+    //arrives.
+    public setPointCloudVisible(visible: boolean): void
+    {
+        this._pointCloudVisible = visible;
+        if (!this.map) return;
+        const vis = visible ? 'visible' : 'none';
+        for (const lid of ['helios-lidar-points-stick', 'helios-lidar-points-cap'])
+        {
+            if (this.map.getLayer(lid))
+            {
+                try { this.map.setLayoutProperty(lid, 'visibility', vis); }
+                catch (_) {}
+            }
+        }
+    }
+
+    //True when the LiDAR pipeline has yielded cells the point-cloud
+    //overlay could render. The card uses this to disable the toggle
+    //button until there's something to show.
+    public hasLidarPointCloud(): boolean
+    {
+        return !!(this._lidarData?.cells.features.length);
     }
 
     //Linear interpolation between two RGB hex strings.
@@ -2335,8 +2635,10 @@ export class HeliosEngine
 
         //Unified shadow projection. Input is the consolidated LiDAR
         //regions when active, otherwise the MapTiler home + surroundings
-        //footprints (1.3.x behaviour). The result fills the single
-        //helios-building-shadows-src.
+        //footprints (1.3.x behaviour). The MapTiler path is gated on
+        //`building-shadows-enabled` so users in flat / dense urban
+        //areas can suppress the approximate cast-shadows while LiDAR
+        //shadows (always physically grounded) remain visible.
         try
         {
             const shadowsSrc = this.map.getSource('helios-building-shadows-src') as
@@ -2346,9 +2648,9 @@ export class HeliosEngine
                 let input: GeoJSON.FeatureCollection;
                 if (this._lidarActive() && this._lidarData)
                 {
-                    input = this._lidarData;
+                    input = this._lidarData.regions;
                 }
-                else if (this._buildingsData)
+                else if (this._buildingsData && this._maptilerShadowsEnabled())
                 {
                     input = {
                         type:     'FeatureCollection',
@@ -3026,6 +3328,7 @@ export class HeliosEngine
         const prevColor       = this._buildingColor();
         const prevPrecision   = this._shadowPrecisionLevel();
         const prevShadowOpa   = this._shadowOpacity();
+        const prevMaptilerSh  = this._maptilerShadowsEnabled();
         this.cfg = { ...cfg };
 
         if (!this.map)
@@ -3079,6 +3382,9 @@ export class HeliosEngine
                     ? Math.min(Math.max(dpr, 1), 1.25)
                     : Math.min(Math.max(dpr, 1.5), 2);
                 try { this.map.setPixelRatio(px); } catch (_) {}
+                //Restore the LiDAR DEM swap if one was registered before
+                //performance mode wiped it.
+                this._applyLidarTerrain();
             }
         }
 
@@ -3149,6 +3455,16 @@ export class HeliosEngine
         {
             try { this.map.setPaintProperty('helios-building-shadows', 'fill-opacity', nextShadowOpa); }
             catch (_) {}
+        }
+
+        //MapTiler-shadows toggle: rerun the shadow pass so the
+        //shadow GeoJSON is recomputed (now empty when off + LiDAR
+        //inactive, or repopulated when toggled back on).
+        const nextMaptilerSh = this._maptilerShadowsEnabled();
+        if (nextMaptilerSh !== prevMaptilerSh)
+        {
+            this._lastAtmosphereAlt = -999;
+            this._refreshShadowsAndAtmosphere();
         }
 
         if (this._homeHourlyData && this._mapReady)
@@ -3226,6 +3542,8 @@ export class HeliosEngine
         window.clearTimeout(this._resizeDebounceTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
+        this._lidarAbort?.abort();
+        unregisterLidarTerrain(this._engineId);
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
         {
@@ -3326,25 +3644,35 @@ export class HeliosEngine
                 'helios-buildings-surroundings',
                 'helios-buildings-home',
                 'helios-buildings-surroundings-outline',
-                'helios-buildings-home-outline'
+                'helios-buildings-home-outline',
+                'helios-building-shadows',
+                'helios-lidar-points-stick',
+                'helios-lidar-points-cap'
             ])
             {
                 try { if (this.map.getLayer(lid)) this.map.removeLayer(lid); }
                 catch (_) {}
             }
+            //setTerrain(null) before removing the DEM sources, MapLibre
+            //refuses to remove a source still referenced by a live
+            //terrain binding.
+            try { this.map.setTerrain(null); }
+            catch (_) {}
             for (const sid of [
                 'helios-terrain',
+                'helios-lidar-terrain',
                 'helios-night-shade',
                 'helios-cloud-rings',
                 'helios-buildings-surroundings-src',
-                'helios-buildings-home-src'
+                'helios-buildings-home-src',
+                'helios-building-shadows-src',
+                'helios-lidar-points-src',
+                'helios-lidar-points-caps-src'
             ])
             {
                 try { if (this.map.getSource(sid)) this.map.removeSource(sid); }
                 catch (_) {}
             }
-            try { this.map.setTerrain(null); }
-            catch (_) {}
         }
 
         //Step 4, drop heavy instance state BEFORE map.remove() so
@@ -3352,6 +3680,8 @@ export class HeliosEngine
         //handles that have already been released.
         this._buildingsData     = null;
         this._buildingsFetchKey = '';
+        this._lidarData         = null;
+        this._lidarFetchKey     = '';
         this._homeHourlyData    = null;
         this._bumpInactivityCanvas  = undefined;
         this._bumpInactivityHandler = undefined;

@@ -551,6 +551,63 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
+    /*  Top-right control rail. Hosts on-card map controls (currently
+        the LiDAR scanner toggle). Mirrors the clock's top spacing on
+        the opposite edge so the two overlays sit at the same height. */
+    .overlay-top-right
+    {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        pointer-events: none;
+    }
+
+    /*  Square chip-button: same visual language as the date/time clock
+        (white surface, 1px black border, ha-icon glyph) so the on-map
+        controls don't introduce a new style vocabulary. */
+    .map-btn
+    {
+        pointer-events: auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  28px;
+        height: 28px;
+        padding: 0;
+        background: #ffffff;
+        color:      #000000;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        cursor: pointer;
+        transition: background 0.12s, color 0.12s;
+    }
+
+    .map-btn:hover  { background: #f4f4f4; }
+    .map-btn:active { background: #ececec; }
+
+    /*  Active state: same blue plate as the "back to live" tab and the
+        scrub cursor, telling the user this control is currently on. */
+    .map-btn.map-btn-on
+    {
+        background: rgba(31, 111, 235, 0.95);
+        color: #ffffff;
+        border-color: rgba(20, 78, 168, 0.95);
+    }
+    .map-btn.map-btn-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .map-btn.map-btn-on:active { background: rgba(20, 78, 168, 0.95); }
+
+    .map-btn ha-icon
+    {
+        --mdc-icon-size: 18px;
+        display: inline-flex;
+        align-items: center;
+    }
+
     /*  Cloud-cover percentage chip, floating above the cloud disc
         on the ground with a leader line down to its feature. */
     .cloud-pct-label
@@ -947,7 +1004,8 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .tl-live-btn,
     ha-card.theme-dark .tb-day-label,
     ha-card.theme-dark .cloud-pct-label,
-    ha-card.theme-dark .solar-pct-label
+    ha-card.theme-dark .solar-pct-label,
+    ha-card.theme-dark .map-btn:not(.map-btn-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -969,13 +1027,16 @@ export const heliosCardStyles = css`
 
     ha-card.theme-dark .tl-live-btn ha-icon,
     ha-card.theme-dark .cloud-pct-label ha-icon,
-    ha-card.theme-dark .solar-pct-label ha-icon
+    ha-card.theme-dark .solar-pct-label ha-icon,
+    ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon
     {
         color: #e6e6e6;
     }
 
     ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
     ha-card.theme-dark .tl-live-btn:active { background: #353637; }
+    ha-card.theme-dark .map-btn:not(.map-btn-on):hover  { background: #292a2b; }
+    ha-card.theme-dark .map-btn:not(.map-btn-on):active { background: #353637; }
 
     /*  PV and battery chips, they keep the user-configured tint
         on the border / text / icon (so a green PV chip reads as

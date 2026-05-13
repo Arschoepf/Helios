@@ -99,6 +99,11 @@ export const fr: Translations = {
         shadowPrecisionUltra:  'Ultra',
         shadowPrecisionHint:   'Uniquement disponible en France pour l\'instant.',
         shadowOpacity:         'Opacité des ombres *',
-        shadowOpacityHint:     'Opacité des ombres projetées au sol.'
+        shadowOpacityHint:     'Opacité des ombres projetées au sol.',
+        buildingShadows:       'Ombres MapTiler *',
+        buildingShadowsOn:     'Affichées',
+        buildingShadowsOff:    'Masquées',
+        buildingShadowsHint:   'Quand le LiDAR n\'est pas disponible (précision off, ou hors France), les ombres sont approximées à partir des empreintes plates MapTiler. À masquer en zone plate ou très urbaine où l\'approximation ressemble plus à du bruit qu\'à de la donnée. Sans effet sur les ombres LiDAR.',
+        lidarPointCloud:       'Vue scanner LiDAR'
     }
 };

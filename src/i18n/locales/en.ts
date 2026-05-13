@@ -101,6 +101,11 @@ export const en: Translations = {
         shadowPrecisionUltra:  'Ultra',
         shadowPrecisionHint:   'Only available in France for now.',
         shadowOpacity:         'Shadow opacity *',
-        shadowOpacityHint:     'Opacity of the cast ground shadows.'
+        shadowOpacityHint:     'Opacity of the cast ground shadows.',
+        buildingShadows:       'MapTiler building shadows *',
+        buildingShadowsOn:     'Shown',
+        buildingShadowsOff:    'Hidden',
+        buildingShadowsHint:   'When LiDAR is unavailable (precision off, or home outside France), shadows are approximated from the flat MapTiler footprints. Hide them in flat or dense urban areas where the approximation reads as noise. LiDAR-driven shadows are unaffected.',
+        lidarPointCloud:       'LiDAR scanner view'
     }
 };

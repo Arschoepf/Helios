@@ -21,13 +21,43 @@ export interface LidarSource
     //Fetch + consolidate height data around the home. Implementations
     //decode whatever wire format the upstream API exposes, threshold
     //by height, classify cells against the supplied building
-    //footprints, and return ONE Polygon per connected region (NOT
-    //per cell): the engine consumes these as shadow-projector input,
-    //the polygons themselves are never rendered.
+    //footprints, and return:
     //
-    //Each emitted feature must carry numeric `render_height` and
-    //`render_min_height` properties (helios-shadows.ts contract).
-    fetch(opts: LidarFetchOptions): Promise<GeoJSON.FeatureCollection>;
+    //  - `regions`: one Polygon per connected region (NOT per cell);
+    //    the engine consumes these as shadow-projector input, the
+    //    polygons themselves are never rendered. Each emitted feature
+    //    must carry numeric `render_height` and `render_min_height`
+    //    properties (helios-shadows.ts contract).
+    //
+    //  - `cells`: one Point per classified cell, used to render the
+    //    optional "scanner" point cloud overlay. Each feature carries
+    //    `height` (m above ground) and `kind` ('home' | 'building' |
+    //    'vegetation') properties.
+    //
+    //  - `terrain`: optional raw bare-earth (MNT) heights for the
+    //    same bbox. When provided, the engine builds a custom DEM
+    //    source that replaces the MapTiler terrain in the home area.
+    //    Null when the provider has no MNT data or the second fetch
+    //    failed; the engine then falls back to MapTiler's global DEM.
+    fetch(opts: LidarFetchOptions): Promise<LidarFetchResult>;
+}
+
+export interface LidarFetchResult
+{
+    regions: GeoJSON.FeatureCollection;
+    cells:   GeoJSON.FeatureCollection;
+    terrain: LidarTerrainData | null;
+}
+
+export interface LidarTerrainData
+{
+    //Bare-earth (MNT) heights in metres above mean sea level. Row-
+    //major, top-down (row 0 = NORTH edge of `bounds`). Length must
+    //equal width * height.
+    heights: Float32Array;
+    width:   number;
+    height:  number;
+    bounds:  { minLon: number; minLat: number; maxLon: number; maxLat: number };
 }
 
 export interface LidarFetchOptions

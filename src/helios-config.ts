@@ -737,6 +737,23 @@ export class HeliosCardEditor extends LitElement
                 </label>
                 <div class="hint">${t.editor.shadowOpacityHint}</div>
 
+                <div class="field">
+                    <span class="label">${t.editor.buildingShadows}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['building-shadows-enabled'] !== false) ? 'active' : ''}"
+                            @click="${() => this._update('building-shadows-enabled', true)}"
+                        >${t.editor.buildingShadowsOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['building-shadows-enabled'] === false) ? 'active' : ''}"
+                            @click="${() => this._update('building-shadows-enabled', false)}"
+                        >${t.editor.buildingShadowsOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.buildingShadowsHint}</div>
+
                 <div class="section-title">${t.editor.colors}</div>
                 <label class="field">
                     <span class="label">${t.editor.sunColor}</span>

@@ -129,6 +129,16 @@ export interface Translations
         //Opacity of the cast ground shadows, 0..1 slider in the editor.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
+        //Toggle for the MapTiler-derived shadow approximation. LiDAR-
+        //driven shadows ignore this flag; this only affects the
+        //fallback path when LiDAR is off or out of coverage.
+        buildingShadows:          string;
+        buildingShadowsOn:        string;
+        buildingShadowsOff:       string;
+        buildingShadowsHint:      string;
+        //Label/tooltip of the on-card toggle button that shows or hides
+        //the LiDAR point cloud "scanner" view.
+        lidarPointCloud:          string;
     };
 }
 

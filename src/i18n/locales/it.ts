@@ -91,6 +91,11 @@ export const it: Translations = {
         shadowPrecisionUltra:  'Ultra',
         shadowPrecisionHint:   'Solo disponibile in Francia per ora.',
         shadowOpacity:         'Opacità delle ombre *',
-        shadowOpacityHint:     'Opacità delle ombre proiettate a terra.'
+        shadowOpacityHint:     'Opacità delle ombre proiettate a terra.',
+        buildingShadows:       'Ombre MapTiler *',
+        buildingShadowsOn:     'Visibili',
+        buildingShadowsOff:    'Nascoste',
+        buildingShadowsHint:   'Quando LiDAR non è disponibile (precisione disattivata o casa fuori dalla Francia), le ombre vengono approssimate dalle impronte piatte MapTiler. Nascondi in zone piatte o urbane dense dove l\'approssimazione si legge come rumore. Le ombre LiDAR non sono interessate.',
+        lidarPointCloud:       'Vista scanner LiDAR'
     }
 };
