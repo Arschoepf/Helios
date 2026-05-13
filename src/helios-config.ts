@@ -10,7 +10,8 @@ import
     DEFAULT_BUILDING_RADIUS_M,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
-    DEFAULT_BUILDING_COLOR_HEX
+    DEFAULT_BUILDING_COLOR_HEX,
+    DEFAULT_LIDAR_VEGETATION
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -684,6 +685,33 @@ export class HeliosCardEditor extends LitElement
                     ></helios-color-picker>
                 </label>
                 <div class="hint">${t.editor.buildingsHint}</div>
+
+                <div class="field">
+                    <span class="label">${t.editor.lidarVegetation}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === 'off' ? 'active' : ''}"
+                            @click="${() => this._update('lidar-vegetation', 'off')}"
+                        >${t.editor.lidarVegetationOff}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '4.5m' ? 'active' : ''}"
+                            @click="${() => this._update('lidar-vegetation', '4.5m')}"
+                        >4.5m</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '3m' ? 'active' : ''}"
+                            @click="${() => this._update('lidar-vegetation', '3m')}"
+                        >3m</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '2.3m' ? 'active' : ''}"
+                            @click="${() => this._update('lidar-vegetation', '2.3m')}"
+                        >2.3m</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.lidarVegetationHint}</div>
 
                 <div class="section-title">${t.editor.colors}</div>
                 <label class="field">

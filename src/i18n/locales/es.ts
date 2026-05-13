@@ -81,6 +81,9 @@ export const es: Translations = {
         terrainDetail:         'Detalle del terreno *',
         terrainDetailSmooth:   'Suave',
         terrainDetailFine:     'Preciso',
-        terrainDetailHint:     'Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación — útil solo en PCs potentes.'
+        terrainDetailHint:     'Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación, útil solo en PCs potentes.',
+        lidarVegetation:       'Vegetación LiDAR *',
+        lidarVegetationOff:    'Desactivada',
+        lidarVegetationHint:   'Solo Francia por ahora. Descarga las alturas IGN LiDAR HD alrededor de la casa y dibuja los árboles como bloques 3D con sombras proyectadas reales. El valor es el tamaño de celda: menor, árboles más finos, mayor carga de red. 4.5m va bien en cualquier dispositivo, 2.3m solo en escritorio.'
     }
 };

@@ -114,6 +114,11 @@ export interface HeliosConfig
     //the source maxzoom to 14, ~5 m per vertex, more detail in
     //the relief but ~16× more mesh vertices to project per frame.
     'terrain-detail'?:         unknown;
+    //Vegetation pulled from IGN LiDAR HD (France only). The value
+    //is one of 'off' | '4.5m' | '3m' | '2.3m', controlling the cell
+    //size of the per-pixel extrusion grid. 'off' skips the whole
+    //pipeline. Default '4.5m' (256x256 raster on a ~600 m bbox).
+    'lidar-vegetation'?:       unknown;
 }
 
 //Default values for the building config, exposed so the visual
@@ -122,6 +127,22 @@ export const DEFAULT_BUILDING_RADIUS_M         = 100;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
+//LiDAR vegetation toggle / resolution selector. Values are the
+//approximate ground-sample distance of one cell, mapping to the
+//WMS raster size requested upstream:
+//  'off'   - pipeline disabled, no IGN call, no vegetation rendered
+//  '4.5m'  - 256 x 256 raster (~256 KB float32)
+//  '3m'    - 384 x 384 raster (~590 KB)
+//  '2.3m'  - 512 x 512 raster (~1 MB)
+export type LidarVegetationLevel = 'off' | '4.5m' | '3m' | '2.3m';
+export const DEFAULT_LIDAR_VEGETATION: LidarVegetationLevel = '4.5m';
+//Pixel count per side for each level. Kept here next to the type so
+//adding a new level later means one line per file rather than a hunt.
+export const LIDAR_VEGETATION_RASTER: Record<Exclude<LidarVegetationLevel, 'off'>, number> = {
+    '4.5m': 256,
+    '3m':   384,
+    '2.3m': 512
+};
 
 
 //Lifecycle instrumentation. Counters live on window.__heliosStats
@@ -969,6 +990,16 @@ export class HeliosEngine
         return String(this.cfg['terrain-detail'] ?? 'smooth').toLowerCase() === 'fine'
             ? 14
             : 12;
+    }
+
+    //Reads the user-configured LiDAR vegetation level, normalises
+    //anything off-spec to the default, and returns one of the four
+    //canonical values from LidarVegetationLevel.
+    private _lidarVegetationLevel(): LidarVegetationLevel
+    {
+        const v = String(this.cfg['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION).toLowerCase();
+        if (v === 'off' || v === '4.5m' || v === '3m' || v === '2.3m') return v as LidarVegetationLevel;
+        return DEFAULT_LIDAR_VEGETATION;
     }
 
     private _findHourIndex(t: Date): number
@@ -2016,11 +2047,31 @@ export class HeliosEngine
         if (!this.map) return;
         if (!this._buildingsData) return;
 
+        //User opted out of vegetation entirely, abort any in-flight
+        //fetch, clear the cached data, and empty both sources so the
+        //next refresh paints no extrusions and no shadows.
+        const level = this._lidarVegetationLevel();
+        if (level === 'off')
+        {
+            this._vegetationAbort?.abort();
+            this._vegetationData     = null;
+            this._vegetationFetchKey = '';
+            const emptyFc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+            const vegRaw    = this.map.getSource('helios-vegetation-src')         as maplibregl.GeoJSONSource | undefined;
+            const vegShadow = this.map.getSource('helios-vegetation-shadows-src') as maplibregl.GeoJSONSource | undefined;
+            vegRaw?.setData(emptyFc);
+            vegShadow?.setData(emptyFc);
+            return;
+        }
+
         const source = findLidarSource(this.homeLat, this.homeLon);
         if (!source) return;
 
-        const radius = this._buildingRadiusMeters();
-        const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}`;
+        const radius     = this._buildingRadiusMeters();
+        const rasterSize = LIDAR_VEGETATION_RASTER[level];
+        //Key includes the raster size so flipping from 4.5m to 3m
+        //invalidates the cache and refetches at the new resolution.
+        const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
         if (this._vegetationData && this._vegetationFetchKey === key) return;
 
         this._vegetationAbort?.abort();
@@ -2045,6 +2096,7 @@ export class HeliosEngine
             homeLat:            this.homeLat,
             homeLon:            this.homeLon,
             radiusMeters:       radius,
+            rasterSize,
             buildingFootprints: bldgFc,
             signal:             ac.signal
         })
@@ -3043,6 +3095,7 @@ export class HeliosEngine
         const prevCluster     = this._buildingClusterRadiusMeters();
         const prevOpacity     = this._buildingOpacity();
         const prevColor       = this._buildingColor();
+        const prevLidarVeg    = this._lidarVegetationLevel();
         this.cfg = { ...cfg };
 
         if (!this.map)
@@ -3146,6 +3199,17 @@ export class HeliosEngine
                     }
                 }
             }
+        }
+
+        //LiDAR vegetation level toggle: switching 'off' clears both
+        //sources, switching between resolutions invalidates the cache
+        //(the fetch-key includes the raster size) and refetches at
+        //the new sampling. _ensureVegetationFetched handles both
+        //paths internally.
+        const nextLidarVeg = this._lidarVegetationLevel();
+        if (nextLidarVeg !== prevLidarVeg)
+        {
+            this._ensureVegetationFetched();
         }
 
         if (this._homeHourlyData && this._mapReady)

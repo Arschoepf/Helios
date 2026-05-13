@@ -89,6 +89,9 @@ export const fr: Translations = {
         terrainDetail:         'Détail du terrain *',
         terrainDetailSmooth:   'Lissé',
         terrainDetailFine:     'Précis',
-        terrainDetailHint:     'Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation — réservé aux PC desktops puissants.'
+        terrainDetailHint:     'Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation, réservé aux PC desktops puissants.',
+        lidarVegetation:       'Végétation LiDAR *',
+        lidarVegetationOff:    'Désactivée',
+        lidarVegetationHint:   'France uniquement pour l\'instant. Récupère les hauteurs IGN LiDAR HD autour de la maison et affiche les arbres en blocs 3D avec leurs vraies ombres portées. La valeur est la taille des cellules : plus petite, arbres plus fins, charge réseau accrue. 4.5m passe partout, 2.3m réservé au desktop.'
     }
 };

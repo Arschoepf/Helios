@@ -21,7 +21,7 @@
 //
 //Reference: https://geoservices.ign.fr/lidarhd
 
-import type { LidarVegetationSource, LidarFetchOptions } from './helios-lidar';
+import type { LidarVegetationSource, LidarFetchOptions } from '../helios-lidar';
 
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
 const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
@@ -37,14 +37,14 @@ const FR_BBOX = { minLat: 41.0, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 const M_PER_DEG_LAT = 111_320;
 
 //Fetch parameters. Tune here if we want sharper trees vs lighter
-//network footprint:
-//  RASTER_SIZE     - pixels per side; 128 = 64 KB float32 per request
+//network footprint. The raster size is now caller-driven (passed via
+//LidarFetchOptions.rasterSize) so the editor can expose it; the
+//remaining constants stay here.
 //  HEIGHT_THRESH_M - keep cells at or above this height (skip grass)
 //  HEIGHT_MAX_M    - sanity clamp; anything above (giant sequoias top
 //                    out at 95 m) is treated as a garbage value
 //  BBOX_PAD_FACTOR - over-fetch slightly so trees on the edge of the
 //                    visible radius still cast their shadow inward
-const RASTER_SIZE         = 128;
 const HEIGHT_THRESH_M     = 5;
 const HEIGHT_MAX_M        = 100;
 const BBOX_PAD_FACTOR     = 1.15;
@@ -69,6 +69,12 @@ export const franceLidarHd: LidarVegetationSource =
     {
         const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
+        //Pixel count per side, caller-driven (the engine maps the
+        //user-configured vegetation level to a specific value). We
+        //clamp defensively so a bad config value cannot send a 50000-
+        //pixel request to IGN.
+        const rasterSize = Math.min(2048, Math.max(64, Math.round(opts.rasterSize)));
+
         const r = Math.max(1, opts.radiusMeters);
         const dLat = (r * BBOX_PAD_FACTOR) / M_PER_DEG_LAT;
         const dLon = (r * BBOX_PAD_FACTOR)
@@ -90,8 +96,8 @@ export const franceLidarHd: LidarVegetationSource =
             STYLES:  '',
             CRS:     'EPSG:4326',
             BBOX:    `${minLat},${minLon},${maxLat},${maxLon}`,
-            WIDTH:   String(RASTER_SIZE),
-            HEIGHT:  String(RASTER_SIZE),
+            WIDTH:   String(rasterSize),
+            HEIGHT:  String(rasterSize),
             FORMAT:  'image/x-bil;bits=32'
         });
 
@@ -122,13 +128,13 @@ export const franceLidarHd: LidarVegetationSource =
         //means the server returned an exception XML instead of binary
         //(common when the layer name drifts), bail rather than read
         //garbage as floats.
-        const expectedBytes = RASTER_SIZE * RASTER_SIZE * 4;
+        const expectedBytes = rasterSize * rasterSize * 4;
         if (buf.byteLength < expectedBytes)
         {
             return empty;
         }
 
-        const heights = new Float32Array(buf, 0, RASTER_SIZE * RASTER_SIZE);
+        const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
 
         //Pre-compute EXPANDED building bboxes for the cell mask.
         //Each MapTiler footprint is inflated by BUILDING_MASK_PAD_M on
@@ -160,8 +166,8 @@ export const franceLidarHd: LidarVegetationSource =
             }
         }
 
-        const pxLon = (maxLon - minLon) / RASTER_SIZE;
-        const pxLat = (maxLat - minLat) / RASTER_SIZE;
+        const pxLon = (maxLon - minLon) / rasterSize;
+        const pxLat = (maxLat - minLat) / rasterSize;
         const halfLon = pxLon / 2;
         const halfLat = pxLat / 2;
 
@@ -182,12 +188,12 @@ export const franceLidarHd: LidarVegetationSource =
         const out: GeoJSON.Feature[] = [];
         let hMin = Infinity, hMax = -Infinity, kept = 0;
 
-        for (let j = 0; j < RASTER_SIZE; j++)
+        for (let j = 0; j < rasterSize; j++)
         {
             const cLat = maxLat - (j + 0.5) * pxLat;
-            for (let i = 0; i < RASTER_SIZE; i++)
+            for (let i = 0; i < rasterSize; i++)
             {
-                const h = heights[j * RASTER_SIZE + i];
+                const h = heights[j * rasterSize + i];
                 if (!isFinite(h) || h < HEIGHT_THRESH_M || h > HEIGHT_MAX_M) continue;
 
                 const cLon = minLon + (i + 0.5) * pxLon;

@@ -50,6 +50,11 @@ export interface LidarFetchOptions
     homeLat:      number;
     homeLon:      number;
     radiusMeters: number;
+    //Pixel count per side requested from the upstream raster. Higher
+    //means finer ground sampling, larger payload, more features
+    //downstream. The engine derives this from the user-configured
+    //vegetation level (helios-engine.ts:LIDAR_VEGETATION_RASTER).
+    rasterSize:   number;
     //Footprints already known from MapTiler (home + surroundings).
     //Cells whose centre falls inside any of these are dropped to
     //avoid double-counting buildings as vegetation pillars.
@@ -59,8 +64,9 @@ export interface LidarFetchOptions
 
 //Registered providers, ordered by preference. The first one that
 //covers the home wins. Currently France (IGN LiDAR HD) only; future
-//providers (US 3DEP, German DGM, ...) plug in here.
-import { franceLidarHd } from './helios-lidar-fr';
+//providers (US 3DEP, German DGM, ...) live alongside in the
+//./helios-lidar/ subfolder and are registered the same way.
+import { franceLidarHd } from './helios-lidar/helios-lidar-fr';
 
 export const LIDAR_SOURCES: LidarVegetationSource[] = [
     franceLidarHd

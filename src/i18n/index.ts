@@ -113,6 +113,14 @@ export interface Translations
         terrainDetailSmooth:      string;
         terrainDetailFine:        string;
         terrainDetailHint:        string;
+        //IGN LiDAR HD vegetation, 4 levels: Off, 4.5m, 3m, 2.3m.
+        //The label set is shared across locales because the values
+        //are numeric units; only the section title and hint are
+        //translated. The hint must mention that this is France-only
+        //while IGN's LiDAR HD survey is the only data source wired in.
+        lidarVegetation:          string;
+        lidarVegetationOff:       string;
+        lidarVegetationHint:      string;
     };
 }
 

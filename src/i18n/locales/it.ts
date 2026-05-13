@@ -81,6 +81,9 @@ export const it: Translations = {
         terrainDetail:         'Dettaglio del terreno *',
         terrainDetailSmooth:   'Levigato',
         terrainDetailFine:     'Fine',
-        terrainDetailHint:     'Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione — utile solo su PC desktop potenti.'
+        terrainDetailHint:     'Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione, utile solo su PC desktop potenti.',
+        lidarVegetation:       'Vegetazione LiDAR *',
+        lidarVegetationOff:    'Disattivata',
+        lidarVegetationHint:   'Solo Francia per ora. Scarica le altezze IGN LiDAR HD intorno alla casa e disegna gli alberi come blocchi 3D con vere ombre portate. Il valore è la dimensione della cella: più piccolo, alberi più dettagliati, più traffico di rete. 4.5m va bene ovunque, 2.3m solo su desktop.'
     }
 };
