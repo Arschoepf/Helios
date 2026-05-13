@@ -6,3 +6,8 @@ declare module '*.css?inline' {
     const css: string;
     export default css;
 }
+
+//Inlined at build time from package.json by vite.config.ts. Used
+//for the install banner printed to the browser console at module
+//load (see helios-card.ts).
+declare const __HELIOS_VERSION__: string;

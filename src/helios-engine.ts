@@ -2346,7 +2346,18 @@ export class HeliosEngine
                     homeLat:        this.homeLat,
                     minHeightM:     3
                 });
+                //One-line trace, fires only when there is something to
+                //project, lets us check the rendering side independently
+                //of the data side (the LiDAR fetch has its own log).
+                if (fc.features.length > 0)
+                {
+                    console.info(`[HELIOS] veg shadows: ${fc.features.length} regions in -> ${shadowFc.features.length} polygons out -> source updated`);
+                }
                 vegSrc.setData(shadowFc);
+            }
+            else
+            {
+                console.warn('[HELIOS] veg shadows: source helios-vegetation-shadows-src not found');
             }
         }
         catch (_) {}

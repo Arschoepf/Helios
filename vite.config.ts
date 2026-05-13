@@ -1,4 +1,7 @@
 import { defineConfig } from 'vite';
+import { readFileSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
 /*
  * Build configuration for HACS distribution.
@@ -9,8 +12,17 @@ import { defineConfig } from 'vite';
  *
  * The bundle is a single ES module dropped into `dist/`. HACS
  * searches `dist/` first, so this layout is what gets shipped.
+ *
+ * __HELIOS_VERSION__ is inlined from package.json at build time so
+ * the bundle can print a single source-of-truth banner to the
+ * browser console without a runtime fetch or a duplicated constant
+ * to keep in sync with package.json.
  */
 export default defineConfig({
+    define:
+    {
+        __HELIOS_VERSION__: JSON.stringify(pkg.version)
+    },
     build:
     {
         outDir: 'dist',

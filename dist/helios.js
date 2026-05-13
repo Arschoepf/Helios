@@ -27735,7 +27735,12 @@ const _HeliosEngine = class _HeliosEngine {
             minHeightM: 3
           }
         );
+        if (fc.features.length > 0) {
+          console.info(`[HELIOS] veg shadows: ${fc.features.length} regions in -> ${shadowFc.features.length} polygons out -> source updated`);
+        }
         vegSrc.setData(shadowFc);
+      } else {
+        console.warn("[HELIOS] veg shadows: source helios-vegetation-shadows-src not found");
       }
     } catch (_2) {
     }
@@ -30934,6 +30939,20 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
       preview: true
     }
   );
+}
+{
+  const flagKey = "__heliosBannerPrinted";
+  const w2 = window;
+  if (!w2[flagKey]) {
+    w2[flagKey] = true;
+    const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
+    const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
+    console.info(
+      `%c☀ HELIOS%c v${"1.4.0-beta.4"}`,
+      labelStyle,
+      versionStyle
+    );
+  }
 }
 let HeliosCard = class extends i {
   constructor() {

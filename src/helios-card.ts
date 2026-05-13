@@ -50,6 +50,28 @@ if (!window.customCards.some(c => c.type === 'helios-card'))
     });
 }
 
+//Install banner. Same shape as the styled "X-CARD vY.Z IS INSTALLED"
+//lines other HACS frontends print, two adjacent chips with the card
+//name on the left and the build version on the right. Guarded so a
+//bundle reload (HMR, several Helios cards on the same dashboard, ...)
+//does not print it twice. The version is inlined at build time from
+//package.json by vite.config.ts.
+{
+    const flagKey = '__heliosBannerPrinted';
+    const w = window as unknown as Record<string, unknown>;
+    if (!w[flagKey])
+    {
+        w[flagKey] = true;
+        const labelStyle   = 'background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;';
+        const versionStyle = 'background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;';
+        console.info(
+            `%c☀ HELIOS%c v${__HELIOS_VERSION__}`,
+            labelStyle,
+            versionStyle
+        );
+    }
+}
+
 
 
 
