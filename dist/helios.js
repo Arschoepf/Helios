@@ -25980,7 +25980,7 @@ function metersToDegLat(m2) {
 function metersToDegLon(m2, atLat) {
   return m2 / (111320 * Math.cos(atLat * Math.PI / 180));
 }
-function pointInRing$1(lon, lat, ring) {
+function pointInRing(lon, lat, ring) {
   let inside = false;
   for (let i2 = 0, j = ring.length - 1; i2 < ring.length; j = i2++) {
     const xi = ring[i2][0], yi = ring[i2][1];
@@ -25994,10 +25994,10 @@ function pointInRing$1(lon, lat, ring) {
 }
 function polygonContains(geom, lon, lat) {
   if (geom.type === "Polygon") {
-    return geom.coordinates.length > 0 && pointInRing$1(lon, lat, geom.coordinates[0]);
+    return geom.coordinates.length > 0 && pointInRing(lon, lat, geom.coordinates[0]);
   }
   if (geom.type === "MultiPolygon") {
-    return geom.coordinates.some((poly) => poly.length > 0 && pointInRing$1(lon, lat, poly[0]));
+    return geom.coordinates.some((poly) => poly.length > 0 && pointInRing(lon, lat, poly[0]));
   }
   return false;
 }
@@ -26213,6 +26213,7 @@ const RASTER_SIZE = 128;
 const HEIGHT_THRESH_M = 5;
 const HEIGHT_MAX_M = 100;
 const BBOX_PAD_FACTOR = 1.15;
+const BUILDING_MASK_PAD_M = 5;
 const franceLidarHd = {
   id: "fr-ign-lidarhd",
   name: "IGN LiDAR HD (France)",
@@ -26261,95 +26262,61 @@ const franceLidarHd = {
     }
     const heights = new Float32Array(buf, 0, RASTER_SIZE * RASTER_SIZE);
     const buildings = opts.buildingFootprints?.features ?? [];
+    const padDegLat = BUILDING_MASK_PAD_M / M_PER_DEG_LAT;
+    const padDegLon = BUILDING_MASK_PAD_M / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
     const bboxes = [];
     for (const b2 of buildings) {
       if (!b2.geometry) continue;
       const bb = polygonBBox(b2.geometry);
-      if (bb) bboxes.push({ ...bb, geom: b2.geometry });
+      if (bb) {
+        bboxes.push({
+          minLon: bb.minLon - padDegLon,
+          minLat: bb.minLat - padDegLat,
+          maxLon: bb.maxLon + padDegLon,
+          maxLat: bb.maxLat + padDegLat
+        });
+      }
     }
     const pxLon = (maxLon - minLon) / RASTER_SIZE;
     const pxLat = (maxLat - minLat) / RASTER_SIZE;
     const halfLon = pxLon / 2;
     const halfLat = pxLat / 2;
-    const N2 = RASTER_SIZE * RASTER_SIZE;
-    const mask = new Uint8Array(N2);
-    const hOk = new Float32Array(N2);
+    const out = [];
     let hMin = Infinity, hMax = -Infinity, kept = 0;
     for (let j = 0; j < RASTER_SIZE; j++) {
       const cLat = maxLat - (j + 0.5) * pxLat;
       for (let i2 = 0; i2 < RASTER_SIZE; i2++) {
-        const idx = j * RASTER_SIZE + i2;
-        const h2 = heights[idx];
+        const h2 = heights[j * RASTER_SIZE + i2];
         if (!isFinite(h2) || h2 < HEIGHT_THRESH_M || h2 > HEIGHT_MAX_M) continue;
         const cLon = minLon + (i2 + 0.5) * pxLon;
-        if (cellInsideAnyBuilding(cLon, cLat, bboxes)) continue;
-        mask[idx] = 1;
-        hOk[idx] = h2;
+        if (cellInsideAnyBBox(cLon, cLat, bboxes)) continue;
+        const x0 = cLon - halfLon, x1 = cLon + halfLon;
+        const y0 = cLat - halfLat, y1 = cLat + halfLat;
+        out.push({
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: [[
+              [x0, y0],
+              [x1, y0],
+              [x1, y1],
+              [x0, y1],
+              [x0, y0]
+            ]]
+          },
+          properties: {
+            render_height: h2,
+            render_min_height: 0
+          }
+        });
         kept++;
         if (h2 < hMin) hMin = h2;
         if (h2 > hMax) hMax = h2;
       }
     }
-    const labels = new Int32Array(N2);
-    const stack = [];
-    const components = [];
-    let nextLabel = 0;
-    for (let seed = 0; seed < N2; seed++) {
-      if (!mask[seed] || labels[seed]) continue;
-      nextLabel++;
-      const cells = [];
-      let heightSum = 0;
-      stack.length = 0;
-      stack.push(seed);
-      while (stack.length) {
-        const idx = stack.pop();
-        if (labels[idx] || !mask[idx]) continue;
-        labels[idx] = nextLabel;
-        cells.push(idx);
-        heightSum += hOk[idx];
-        const x2 = idx % RASTER_SIZE;
-        const y3 = idx / RASTER_SIZE | 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = x2 + dx, ny = y3 + dy;
-            if (nx < 0 || nx >= RASTER_SIZE || ny < 0 || ny >= RASTER_SIZE) continue;
-            const nIdx = ny * RASTER_SIZE + nx;
-            if (mask[nIdx] && !labels[nIdx]) stack.push(nIdx);
-          }
-        }
-      }
-      components.push({ cells, heightSum });
-    }
-    const out = [];
-    for (const comp of components) {
-      const corners = [];
-      for (const idx of comp.cells) {
-        const x2 = idx % RASTER_SIZE;
-        const y3 = idx / RASTER_SIZE | 0;
-        const cLon = minLon + (x2 + 0.5) * pxLon;
-        const cLat = maxLat - (y3 + 0.5) * pxLat;
-        corners.push([cLon - halfLon, cLat - halfLat]);
-        corners.push([cLon + halfLon, cLat - halfLat]);
-        corners.push([cLon + halfLon, cLat + halfLat]);
-        corners.push([cLon - halfLon, cLat + halfLat]);
-      }
-      const hull = convexHull(corners);
-      if (hull.length < 3) continue;
-      hull.push([hull[0][0], hull[0][1]]);
-      const avgHeight = comp.heightSum / comp.cells.length;
-      out.push({
-        type: "Feature",
-        geometry: { type: "Polygon", coordinates: [hull] },
-        properties: {
-          render_height: avgHeight,
-          render_min_height: 0
-        }
-      });
-    }
     if (kept > 0) {
       console.info(
-        `[HELIOS] LiDAR vegetation: ${kept} cells kept, ${components.length} regions, height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
+        `[HELIOS] LiDAR vegetation: ${kept} cells emitted, height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
       );
     } else {
       console.info("[HELIOS] LiDAR vegetation: no cells passed the threshold");
@@ -26381,34 +26348,13 @@ function polygonBBox(geom) {
   }
   return { minLon, minLat, maxLon, maxLat };
 }
-function cellInsideAnyBuilding(lon, lat, bboxes) {
+function cellInsideAnyBBox(lon, lat, bboxes) {
   for (const b2 of bboxes) {
-    if (lon < b2.minLon || lon > b2.maxLon || lat < b2.minLat || lat > b2.maxLat) continue;
-    if (pointInGeometry(lon, lat, b2.geom)) return true;
-  }
-  return false;
-}
-function pointInGeometry(lon, lat, geom) {
-  if (geom.type === "Polygon") {
-    const rings = geom.coordinates;
-    return rings.length > 0 && pointInRing(lon, lat, rings[0]);
-  }
-  if (geom.type === "MultiPolygon") {
-    for (const poly of geom.coordinates) {
-      if (poly.length > 0 && pointInRing(lon, lat, poly[0])) return true;
+    if (lon >= b2.minLon && lon <= b2.maxLon && lat >= b2.minLat && lat <= b2.maxLat) {
+      return true;
     }
   }
   return false;
-}
-function pointInRing(lon, lat, ring) {
-  let inside = false;
-  for (let i2 = 0, j = ring.length - 1; i2 < ring.length; j = i2++) {
-    const xi = ring[i2][0], yi = ring[i2][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-12) + xi;
-    if (intersect) inside = !inside;
-  }
-  return inside;
 }
 const LIDAR_SOURCES = [
   franceLidarHd
@@ -30969,7 +30915,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.6"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.7"}`,
       labelStyle,
       versionStyle
     );

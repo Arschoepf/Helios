@@ -22,7 +22,6 @@
 //Reference: https://geoservices.ign.fr/lidarhd
 
 import type { LidarVegetationSource, LidarFetchOptions } from './helios-lidar';
-import { convexHull } from './helios-shadows';
 
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
 const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
@@ -45,10 +44,15 @@ const M_PER_DEG_LAT = 111_320;
 //                    out at 95 m) is treated as a garbage value
 //  BBOX_PAD_FACTOR - over-fetch slightly so trees on the edge of the
 //                    visible radius still cast their shadow inward
-const RASTER_SIZE     = 128;
-const HEIGHT_THRESH_M = 5;
-const HEIGHT_MAX_M    = 100;
-const BBOX_PAD_FACTOR = 1.15;
+const RASTER_SIZE         = 128;
+const HEIGHT_THRESH_M     = 5;
+const HEIGHT_MAX_M        = 100;
+const BBOX_PAD_FACTOR     = 1.15;
+//Outward inflation of each MapTiler building footprint when masking
+//cells. MapTiler's vector geometry is often a few metres smaller than
+//the actual structure; the padding catches the wall-cells and
+//attached sheds that would otherwise leak through as "vegetation".
+const BUILDING_MASK_PAD_M = 5;
 
 export const franceLidarHd: LidarVegetationSource =
 {
@@ -126,18 +130,34 @@ export const franceLidarHd: LidarVegetationSource =
 
         const heights = new Float32Array(buf, 0, RASTER_SIZE * RASTER_SIZE);
 
-        //Pre-compute building bboxes for the cell-vs-building mask.
-        //Naive O(cells x buildings) point-in-polygon would still be
-        //fast enough here (16k cells, a few hundred buildings), but
-        //the bbox prefilter cuts most of the work to a few comparisons
-        //per cell.
+        //Pre-compute EXPANDED building bboxes for the cell mask.
+        //Each MapTiler footprint is inflated by BUILDING_MASK_PAD_M on
+        //all four sides. The vector-tile geometry is often a few metres
+        //smaller than the actual building (walls, eaves, attached
+        //sheds), and a LiDAR cell sitting right on a wall or just past
+        //a missing detail comes back as a 5-20 m "vegetation" cell.
+        //The padding catches those cells. We drop the polygon-interior
+        //test on purpose: a bbox-only check filters slightly too much
+        //in concave corners, but the trade-off favours fewer phantom
+        //buildings appearing as a green block next to the home.
         const buildings = opts.buildingFootprints?.features ?? [];
-        const bboxes: Array<{ minLon: number; minLat: number; maxLon: number; maxLat: number; geom: GeoJSON.Geometry }> = [];
+        const padDegLat = BUILDING_MASK_PAD_M / M_PER_DEG_LAT;
+        const padDegLon = BUILDING_MASK_PAD_M
+                        / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
+        const bboxes: Array<{ minLon: number; minLat: number; maxLon: number; maxLat: number }> = [];
         for (const b of buildings)
         {
             if (!b.geometry) continue;
             const bb = polygonBBox(b.geometry);
-            if (bb) bboxes.push({ ...bb, geom: b.geometry });
+            if (bb)
+            {
+                bboxes.push({
+                    minLon: bb.minLon - padDegLon,
+                    minLat: bb.minLat - padDegLat,
+                    maxLon: bb.maxLon + padDegLon,
+                    maxLat: bb.maxLat + padDegLat
+                });
+            }
         }
 
         const pxLon = (maxLon - minLon) / RASTER_SIZE;
@@ -145,17 +165,21 @@ export const franceLidarHd: LidarVegetationSource =
         const halfLon = pxLon / 2;
         const halfLat = pxLat / 2;
 
-        //Pass 1: build a binary vegetation mask. A cell qualifies
-        //when its height is in [HEIGHT_THRESH_M, HEIGHT_MAX_M] AND
-        //its centre is not inside any known building footprint.
-        //Heights are kept in a parallel float array so we can
-        //average them per region in pass 3.
+        //One Polygon Feature per LiDAR cell. Beta.3 to .6 collapsed
+        //cells into connected regions and emitted one convex-hull
+        //polygon per region, but the hull over-approximated wildly:
+        //a U-shaped tree line filled in its own opening, two close
+        //regions merged into one via 8-connectivity, and the result
+        //looked like a giant flat-topped tree block sitting where
+        //there was no actual canopy. Per-cell emission preserves
+        //the actual height field: each ~9 m cell becomes its own
+        //small extrusion at the LiDAR-reported height, no hull, no
+        //averaging. The 3D extrusion still hides the under-canopy
+        //part of the shadow polygon downstream.
         //
         //Row j = 0 is the NORTH edge of the bbox in WMS image
         //convention (top-down). Latitude decreases as j grows.
-        const N    = RASTER_SIZE * RASTER_SIZE;
-        const mask = new Uint8Array(N);
-        const hOk  = new Float32Array(N);
+        const out: GeoJSON.Feature[] = [];
         let hMin = Infinity, hMax = -Infinity, kept = 0;
 
         for (let j = 0; j < RASTER_SIZE; j++)
@@ -163,117 +187,41 @@ export const franceLidarHd: LidarVegetationSource =
             const cLat = maxLat - (j + 0.5) * pxLat;
             for (let i = 0; i < RASTER_SIZE; i++)
             {
-                const idx = j * RASTER_SIZE + i;
-                const h   = heights[idx];
+                const h = heights[j * RASTER_SIZE + i];
                 if (!isFinite(h) || h < HEIGHT_THRESH_M || h > HEIGHT_MAX_M) continue;
 
                 const cLon = minLon + (i + 0.5) * pxLon;
-                if (cellInsideAnyBuilding(cLon, cLat, bboxes)) continue;
+                if (cellInsideAnyBBox(cLon, cLat, bboxes)) continue;
 
-                mask[idx] = 1;
-                hOk[idx]  = h;
+                const x0 = cLon - halfLon, x1 = cLon + halfLon;
+                const y0 = cLat - halfLat, y1 = cLat + halfLat;
+                out.push({
+                    type:     'Feature',
+                    geometry:
+                    {
+                        type:        'Polygon',
+                        coordinates: [[
+                            [x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]
+                        ]]
+                    },
+                    properties:
+                    {
+                        render_height:     h,
+                        render_min_height: 0
+                    }
+                });
+
                 kept++;
                 if (h < hMin) hMin = h;
                 if (h > hMax) hMax = h;
             }
         }
 
-        //Pass 2: 8-connected flood fill to identify contiguous
-        //vegetation regions. Each region becomes ONE shadow polygon
-        //downstream, so what used to be thousands of overlapping
-        //per-cell shadows in a forest collapses into a single
-        //region polygon, no visual stacking.
-        const labels = new Int32Array(N);
-        const stack: number[] = [];
-        const components: Array<{ cells: number[]; heightSum: number }> = [];
-        let nextLabel = 0;
-
-        for (let seed = 0; seed < N; seed++)
-        {
-            if (!mask[seed] || labels[seed]) continue;
-
-            nextLabel++;
-            const cells: number[] = [];
-            let heightSum = 0;
-            stack.length = 0;
-            stack.push(seed);
-
-            while (stack.length)
-            {
-                const idx = stack.pop()!;
-                if (labels[idx] || !mask[idx]) continue;
-                labels[idx] = nextLabel;
-                cells.push(idx);
-                heightSum += hOk[idx];
-
-                const x = idx % RASTER_SIZE;
-                const y = (idx / RASTER_SIZE) | 0;
-                for (let dy = -1; dy <= 1; dy++)
-                {
-                    for (let dx = -1; dx <= 1; dx++)
-                    {
-                        if (dx === 0 && dy === 0) continue;
-                        const nx = x + dx, ny = y + dy;
-                        if (nx < 0 || nx >= RASTER_SIZE || ny < 0 || ny >= RASTER_SIZE) continue;
-                        const nIdx = ny * RASTER_SIZE + nx;
-                        if (mask[nIdx] && !labels[nIdx]) stack.push(nIdx);
-                    }
-                }
-            }
-            components.push({ cells, heightSum });
-        }
-
-        //Pass 3: turn each component into a single Polygon feature.
-        //We collect all four corners of every cell in the component
-        //and take their convex hull. For non-convex regions (an L or
-        //a horseshoe) the hull over-approximates slightly, but the
-        //shadow is dark and the over-coverage is hidden by the body
-        //of the region itself; the visual gain over per-cell stacking
-        //is enormous and the cost is roughly O(M log M) per region.
-        //Height fed to the shadow projector is the average of the
-        //region's cells: a sensible mid-point between "tallest tree
-        //dominates" (max) and "lots of waist-height noise lowers the
-        //shadow" (min).
-        const out: GeoJSON.Feature[] = [];
-        for (const comp of components)
-        {
-            const corners: Array<[number, number]> = [];
-            for (const idx of comp.cells)
-            {
-                const x = idx % RASTER_SIZE;
-                const y = (idx / RASTER_SIZE) | 0;
-                const cLon = minLon + (x + 0.5) * pxLon;
-                const cLat = maxLat - (y + 0.5) * pxLat;
-                corners.push([cLon - halfLon, cLat - halfLat]);
-                corners.push([cLon + halfLon, cLat - halfLat]);
-                corners.push([cLon + halfLon, cLat + halfLat]);
-                corners.push([cLon - halfLon, cLat + halfLat]);
-            }
-            const hull = convexHull(corners);
-            if (hull.length < 3) continue;
-            hull.push([hull[0][0], hull[0][1]]);
-
-            const avgHeight = comp.heightSum / comp.cells.length;
-            out.push({
-                type:       'Feature',
-                geometry:   { type: 'Polygon', coordinates: [hull] },
-                properties:
-                {
-                    render_height:     avgHeight,
-                    render_min_height: 0
-                }
-            });
-        }
-
-        //One-shot diagnostic so we can confirm sane inputs in the
-        //browser console without sprinkling logs through the engine.
-        //Cheap (one console call per fetch, fetches happen once per
-        //home / radius change).
+        //One-shot diagnostic, cheap, runs once per fetch.
         if (kept > 0)
         {
             console.info(
-                `[HELIOS] LiDAR vegetation: ${kept} cells kept, ` +
-                `${components.length} regions, ` +
+                `[HELIOS] LiDAR vegetation: ${kept} cells emitted, ` +
                 `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
             );
         }
@@ -323,48 +271,24 @@ function polygonBBox(geom: GeoJSON.Geometry): { minLon: number; minLat: number; 
     return { minLon, minLat, maxLon, maxLat };
 }
 
-//Bbox prefilter then ray-cast. Returns true as soon as one
-//building polygon contains the cell centre.
-function cellInsideAnyBuilding(
+//Bbox-only mask test. The bboxes passed in are already inflated by
+//BUILDING_MASK_PAD_M on every side, so any cell whose centre lands
+//inside an inflated bbox is treated as a building cell and dropped.
+//Slightly over-filters in concave corners of L-shaped footprints,
+//which is the right trade-off here: we'd rather miss a few real
+//vegetation cells than render a phantom green block next to the
+//home because MapTiler's footprint stopped a metre before the wall.
+function cellInsideAnyBBox(
     lon: number, lat: number,
-    bboxes: Array<{ minLon: number; minLat: number; maxLon: number; maxLat: number; geom: GeoJSON.Geometry }>
+    bboxes: Array<{ minLon: number; minLat: number; maxLon: number; maxLat: number }>
 ): boolean
 {
     for (const b of bboxes)
     {
-        if (lon < b.minLon || lon > b.maxLon || lat < b.minLat || lat > b.maxLat) continue;
-        if (pointInGeometry(lon, lat, b.geom)) return true;
-    }
-    return false;
-}
-
-function pointInGeometry(lon: number, lat: number, geom: GeoJSON.Geometry): boolean
-{
-    if (geom.type === 'Polygon')
-    {
-        const rings = geom.coordinates as number[][][];
-        return rings.length > 0 && pointInRing(lon, lat, rings[0]);
-    }
-    if (geom.type === 'MultiPolygon')
-    {
-        for (const poly of geom.coordinates as number[][][][])
+        if (lon >= b.minLon && lon <= b.maxLon && lat >= b.minLat && lat <= b.maxLat)
         {
-            if (poly.length > 0 && pointInRing(lon, lat, poly[0])) return true;
+            return true;
         }
     }
     return false;
-}
-
-function pointInRing(lon: number, lat: number, ring: number[][]): boolean
-{
-    let inside = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++)
-    {
-        const xi = ring[i][0], yi = ring[i][1];
-        const xj = ring[j][0], yj = ring[j][1];
-        const intersect = ((yi > lat) !== (yj > lat))
-                       && (lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-12) + xi);
-        if (intersect) inside = !inside;
-    }
-    return inside;
 }
