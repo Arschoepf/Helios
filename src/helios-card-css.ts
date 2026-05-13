@@ -608,6 +608,37 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
+    /*  Busy spinner shown inside the map button while a chunked
+        compute job is running (e.g. the LiDAR irradiance pass). Pure
+        CSS, no extra DOM: same disc as the .spinner used at the
+        centre of the card but sized to fit the button. The active
+        (on) skin uses a white ring against the blue plate; the
+        idle skin uses a grey-on-white ring matching the chip border. */
+    .map-btn-spinner
+    {
+        width:  16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 2px solid rgba(0, 0, 0, 0.18);
+        border-top-color: #000000;
+        animation: helios-spin 0.9s linear infinite;
+    }
+    .map-btn.map-btn-on .map-btn-spinner
+    {
+        border-color:     rgba(255, 255, 255, 0.40);
+        border-top-color: #ffffff;
+    }
+    ha-card.theme-dark .map-btn:not(.map-btn-on) .map-btn-spinner
+    {
+        border-color:     rgba(255, 255, 255, 0.20);
+        border-top-color: #e6e6e6;
+    }
+    @keyframes helios-spin
+    {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+    }
+
     /*  Cloud-cover percentage chip, floating above the cloud disc
         on the ground with a leader line down to its feature. */
     .cloud-pct-label

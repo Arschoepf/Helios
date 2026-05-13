@@ -93,7 +93,11 @@ export function projectExtrusionShadows(
             out.push({
                 type:       'Feature',
                 geometry:   { type: 'Polygon', coordinates: [hull] },
-                properties: {}
+                //Preserve the casting region's render_height so a
+                //downstream irradiance pass can compare it to a
+                //candidate point's height (a tall point isn't in the
+                //shadow of a short region beneath it).
+                properties: { render_height: h }
             });
         }
     }

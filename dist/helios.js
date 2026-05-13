@@ -25980,7 +25980,7 @@ function metersToDegLat(m2) {
 function metersToDegLon(m2, atLat) {
   return m2 / (111320 * Math.cos(atLat * Math.PI / 180));
 }
-function pointInRing(lon, lat, ring) {
+function pointInRing$1(lon, lat, ring) {
   let inside = false;
   for (let i2 = 0, j = ring.length - 1; i2 < ring.length; j = i2++) {
     const xi = ring[i2][0], yi = ring[i2][1];
@@ -25994,10 +25994,10 @@ function pointInRing(lon, lat, ring) {
 }
 function polygonContains(geom, lon, lat) {
   if (geom.type === "Polygon") {
-    return geom.coordinates.length > 0 && pointInRing(lon, lat, geom.coordinates[0]);
+    return geom.coordinates.length > 0 && pointInRing$1(lon, lat, geom.coordinates[0]);
   }
   if (geom.type === "MultiPolygon") {
-    return geom.coordinates.some((poly) => poly.length > 0 && pointInRing(lon, lat, poly[0]));
+    return geom.coordinates.some((poly) => poly.length > 0 && pointInRing$1(lon, lat, poly[0]));
   }
   return false;
 }
@@ -26169,7 +26169,11 @@ function projectExtrusionShadows(extrusions, opts) {
       out.push({
         type: "Feature",
         geometry: { type: "Polygon", coordinates: [hull] },
-        properties: {}
+        //Preserve the casting region's render_height so a
+        //downstream irradiance pass can compare it to a
+        //candidate point's height (a tall point isn't in the
+        //shadow of a short region beneath it).
+        properties: { render_height: h2 }
       });
     }
   }
@@ -26377,13 +26381,33 @@ const franceLidarHd = {
         properties: { height: hOk[idx], kind: KIND_NAMES[k2] }
       });
     }
+    const TARGET_PER_SIDE = 96;
+    const stride = Math.max(1, Math.floor(rasterSize / TARGET_PER_SIDE));
+    let nTerrain = 0;
+    for (let j = stride >> 1; j < rasterSize; j += stride) {
+      for (let i2 = stride >> 1; i2 < rasterSize; i2 += stride) {
+        const idx = j * rasterSize + i2;
+        if (kindArr[idx]) continue;
+        const cLon = minLon + (i2 + 0.5) * pxLon;
+        const cLat = maxLat - (j + 0.5) * pxLat;
+        if (cropM !== null && haversineMeters(opts.homeLat, opts.homeLon, cLat, cLon) > cropM) {
+          continue;
+        }
+        cellsOut.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [cLon, cLat] },
+          properties: { height: 0, kind: "terrain" }
+        });
+        nTerrain++;
+      }
+    }
     const totalKept = nHome + nBldg + nVeg;
     if (totalKept > 0) {
       console.info(
-        `[HELIOS] LiDAR: ${nHome} home + ${nBldg} building + ${nVeg} vegetation cells -> ${regionsOut.length} regions (${dropped} dropped < ${MIN_REGION_CELLS} cells), ${cellsOut.length} points, height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m` + (terrain ? `, MNT raster ${rasterSize}x${rasterSize}` : ", no MNT")
+        `[HELIOS] LiDAR: ${nHome} home + ${nBldg} building + ${nVeg} vegetation cells + ${nTerrain} terrain -> ${regionsOut.length} regions (${dropped} dropped < ${MIN_REGION_CELLS} cells), ${cellsOut.length} points, height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m` + (terrain ? `, MNT raster ${rasterSize}x${rasterSize}` : ", no MNT")
       );
     } else {
-      console.info("[HELIOS] LiDAR: no cells passed the threshold");
+      console.info(`[HELIOS] LiDAR: no MNH cells passed the threshold (${nTerrain} terrain points)`);
     }
     return {
       regions: { type: "FeatureCollection", features: regionsOut },
@@ -26472,7 +26496,7 @@ function findLidarSource(lat, lon) {
   return null;
 }
 const LIDAR_TERRAIN_PROTOCOL = "helios-lidar-dem";
-const LIDAR_TERRAIN_MIN_ZOOM = 15;
+const LIDAR_TERRAIN_MIN_ZOOM = 12;
 const LIDAR_TERRAIN_MAX_ZOOM = 15;
 const TILE_SIZE = 512;
 const _entries = /* @__PURE__ */ new Map();
@@ -26497,23 +26521,17 @@ function ensureProtocolRegistered() {
     const key = `${z2}/${x2}/${y3}`;
     const cached = entry.cache.get(key);
     if (cached) return { data: cached.slice(0) };
-    const bytes = await encodeTile(entry.data, z2, x2, y3);
+    const bytes = await encodeTile(entry, z2, x2, y3);
     entry.cache.set(key, bytes);
     return { data: bytes.slice(0) };
   });
 }
-function registerLidarTerrain(engineId, data) {
+function registerLidarTerrain(engineId, data, maptilerKey) {
   ensureProtocolRegistered();
-  _entries.set(engineId, { data, cache: /* @__PURE__ */ new Map() });
+  _entries.set(engineId, { data, maptilerKey, cache: /* @__PURE__ */ new Map() });
 }
 function unregisterLidarTerrain(engineId) {
   _entries.delete(engineId);
-}
-function getLidarTerrainBounds(engineId) {
-  const e2 = _entries.get(engineId);
-  if (!e2) return null;
-  const b2 = e2.data.bounds;
-  return [b2.minLon, b2.minLat, b2.maxLon, b2.maxLat];
 }
 function encodeHeight(h2, out, off) {
   const v2 = Math.max(0, Math.round((h2 + 1e4) * 10));
@@ -26552,16 +26570,24 @@ function tileBounds(z2, x2, y3) {
   const toLat = (rad) => 180 / Math.PI * Math.atan(0.5 * (Math.exp(rad) - Math.exp(-rad)));
   return { n: toLat(n3), s: toLat(s2), w: w2, e: e2 };
 }
-async function encodeTile(d2, z2, x2, y3) {
+async function encodeTile(entry, z2, x2, y3) {
+  const d2 = entry.data;
   const { n: n3, s: s2, w: w2, e: e2 } = tileBounds(z2, x2, y3);
-  if (e2 <= d2.bounds.minLon || w2 >= d2.bounds.maxLon || n3 <= d2.bounds.minLat || s2 >= d2.bounds.maxLat) {
-    return emptyTile();
+  const tileFullyInsideLidar = w2 >= d2.bounds.minLon && e2 <= d2.bounds.maxLon && s2 >= d2.bounds.minLat && n3 <= d2.bounds.maxLat;
+  const tileFullyOutsideLidar = e2 <= d2.bounds.minLon || w2 >= d2.bounds.maxLon || n3 <= d2.bounds.minLat || s2 >= d2.bounds.maxLat;
+  if (tileFullyOutsideLidar) {
+    const proxied = await fetchMaptilerTile(entry.maptilerKey, z2, x2, y3);
+    return proxied ?? emptyTile();
   }
   const canvas = document.createElement("canvas");
   canvas.width = TILE_SIZE;
   canvas.height = TILE_SIZE;
   const ctx = canvas.getContext("2d");
   if (!ctx) return emptyTile();
+  let maptilerHeights = null;
+  if (!tileFullyInsideLidar) {
+    maptilerHeights = await fetchMaptilerTileHeights(entry.maptilerKey, z2, x2, y3);
+  }
   const img = ctx.createImageData(TILE_SIZE, TILE_SIZE);
   const buf = img.data;
   const yToLat = (py) => {
@@ -26577,13 +26603,62 @@ async function encodeTile(d2, z2, x2, y3) {
       const lon = w2 + (e2 - w2) * ((px + 0.5) / TILE_SIZE);
       const h2 = sampleHeight(d2, lon, lat);
       const off = (py * TILE_SIZE + px) * 4;
-      encodeHeight(isFinite(h2) ? h2 : 0, buf, off);
+      const final = isFinite(h2) ? h2 : maptilerHeights ? maptilerHeights[py * TILE_SIZE + px] : 0;
+      encodeHeight(final, buf, off);
     }
   }
   ctx.putImageData(img, 0, 0);
   const blob = await new Promise((resolve) => canvas.toBlob((b2) => resolve(b2), "image/png"));
   if (!blob) return emptyTile();
   return await blob.arrayBuffer();
+}
+async function fetchMaptilerTile(key, z2, x2, y3) {
+  if (!key) return null;
+  try {
+    const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z2}/${x2}/${y3}.png?key=${key}`;
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    return await resp.arrayBuffer();
+  } catch (_2) {
+    return null;
+  }
+}
+async function fetchMaptilerTileHeights(key, z2, x2, y3) {
+  if (!key) return null;
+  const blob = await fetchMaptilerTile(key, z2, x2, y3);
+  if (!blob) return null;
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(new Blob([blob], { type: "image/png" }));
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = TILE_SIZE;
+        canvas.height = TILE_SIZE;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, TILE_SIZE, TILE_SIZE);
+        const data = ctx.getImageData(0, 0, TILE_SIZE, TILE_SIZE).data;
+        const out = new Float32Array(TILE_SIZE * TILE_SIZE);
+        for (let i2 = 0, j = 0; i2 < data.length; i2 += 4, j++) {
+          out[j] = -1e4 + (data[i2] * 65536 + data[i2 + 1] * 256 + data[i2 + 2]) * 0.1;
+        }
+        resolve(out);
+      } catch (_2) {
+        resolve(null);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
 }
 let _emptyTileCache = null;
 function emptyTile() {
@@ -26717,6 +26792,18 @@ function buildCirclePolygon(centerLon, centerLat, radiusMetres, segments = 64) {
   ring.push(ring[0]);
   return ring;
 }
+function pointInRing(lon, lat, ring) {
+  let inside = false;
+  const n3 = ring.length;
+  for (let i2 = 0, j = n3 - 1; i2 < n3; j = i2++) {
+    const xi = ring[i2][0], yi = ring[i2][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    if (yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
 const CLOUD_DISC_RADIUS_M = 30;
 const CLOUD_DISC_OPACITY = 0.25;
 const CLOUD_RING_COLOR = "#000000";
@@ -26765,6 +26852,9 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarFetchKey = "";
     this._engineId = "";
     this._pointCloudVisible = false;
+    this._pointCloudSticks = { type: "FeatureCollection", features: [] };
+    this._pointCloudCaps = { type: "FeatureCollection", features: [] };
+    this._irradianceJobId = 0;
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -27674,17 +27764,7 @@ const _HeliosEngine = class _HeliosEngine {
         }
       );
     }
-    const cloudColorExpr = [
-      "match",
-      ["get", "kind"],
-      "home",
-      "#27B36B",
-      "building",
-      "#9aa8c4",
-      "vegetation",
-      "#f59e0b",
-      "#cccccc"
-    ];
+    const cellColorExpr = ["get", "color"];
     if (!this.map.getLayer("helios-lidar-points-stick")) {
       this.map.addLayer(
         {
@@ -27693,7 +27773,7 @@ const _HeliosEngine = class _HeliosEngine {
           type: "fill-extrusion",
           layout: { visibility: this._pointCloudVisible ? "visible" : "none" },
           paint: {
-            "fill-extrusion-color": cloudColorExpr,
+            "fill-extrusion-color": cellColorExpr,
             "fill-extrusion-height": ["get", "top"],
             "fill-extrusion-base": 0,
             "fill-extrusion-opacity": 0.55
@@ -27709,7 +27789,7 @@ const _HeliosEngine = class _HeliosEngine {
           type: "fill-extrusion",
           layout: { visibility: this._pointCloudVisible ? "visible" : "none" },
           paint: {
-            "fill-extrusion-color": cloudColorExpr,
+            "fill-extrusion-color": cellColorExpr,
             "fill-extrusion-height": ["get", "top"],
             "fill-extrusion-base": ["get", "capBase"],
             "fill-extrusion-opacity": 0.95
@@ -27808,7 +27888,7 @@ const _HeliosEngine = class _HeliosEngine {
       if (ac.signal.aborted || !this.map) return;
       this._lidarData = result;
       if (result.terrain) {
-        registerLidarTerrain(this._engineId, result.terrain);
+        registerLidarTerrain(this._engineId, result.terrain, this.apiKey || null);
       } else {
         unregisterLidarTerrain(this._engineId);
       }
@@ -27836,7 +27916,6 @@ const _HeliosEngine = class _HeliosEngine {
     const haveLidarDem = this._lidarTerrainAvailable();
     const haveSource = !!this.map.getSource("helios-lidar-terrain");
     if (haveLidarDem && !haveSource) {
-      const bounds = getLidarTerrainBounds(this._engineId);
       try {
         this.map.addSource(
           "helios-lidar-terrain",
@@ -27846,8 +27925,7 @@ const _HeliosEngine = class _HeliosEngine {
             tileSize: 512,
             minzoom: LIDAR_TERRAIN_MIN_ZOOM,
             maxzoom: LIDAR_TERRAIN_MAX_ZOOM,
-            encoding: "mapbox",
-            bounds: bounds ?? void 0
+            encoding: "mapbox"
           }
         );
       } catch (e2) {
@@ -27884,30 +27962,40 @@ const _HeliosEngine = class _HeliosEngine {
     surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
   }
   //Builds the GeoJSON for the point-cloud sticks + caps from the
-  //cached LiDAR cells. Each input Point becomes a small square
-  //polygon (~0.4 m wide for the stick, ~1.2 m for the cap) whose
-  //extruded height encodes the cell's measured height above ground.
-  //One pass produces both collections so we don't iterate the cells
-  //twice.
+  //cached LiDAR cells. Three cell kinds are folded into the same
+  //two collections:
+  //   - terrain cells (height == 0): only emit a thin flat cap at
+  //     ground level (the stick would be invisible at h=0 and would
+  //     just waste a feature slot).
+  //   - building / vegetation / home cells (height > 0): emit a
+  //     0.4 m × 0.4 m stick from 0 to top, capped by a 1.2 m × 1.2 m
+  //     square between (top − 0.8 m) and top, the lollipop the user
+  //     reads as a 3D point cloud dot.
+  //
+  //Every feature defaults to a white `color`; the irradiance pass
+  //overwrites it once it lands. We keep both collections cached in
+  //_pointCloudSticks / _pointCloudCaps so the recolour step doesn't
+  //need to rebuild any geometry, just mutate properties and push.
   _pushPointCloudData() {
     if (!this.map) return;
     const stickSrc = this.map.getSource("helios-lidar-points-src");
     const capSrc = this.map.getSource("helios-lidar-points-caps-src");
     if (!stickSrc || !capSrc) return;
-    const empty = { type: "FeatureCollection", features: [] };
+    this._pointCloudSticks = { type: "FeatureCollection", features: [] };
+    this._pointCloudCaps = { type: "FeatureCollection", features: [] };
     const cells = this._lidarData?.cells;
     if (!cells || cells.features.length === 0) {
-      stickSrc.setData(empty);
-      capSrc.setData(empty);
+      stickSrc.setData(this._pointCloudSticks);
+      capSrc.setData(this._pointCloudCaps);
       return;
     }
     const STICK_HALF_M = 0.2;
     const CAP_HALF_M = 0.6;
     const CAP_HEIGHT_M = 0.8;
+    const TERRAIN_HALF = 0.5;
+    const TERRAIN_TOP_M = 0.3;
     const mPerDegLat = 111320;
     const mPerDegLon = mPerDegLat * Math.cos(this.homeLat * Math.PI / 180);
-    const sticks = [];
-    const caps = [];
     const makeSquare = (lon, lat, halfM) => {
       const dLat = halfM / mPerDegLat;
       const dLon = halfM / mPerDegLon;
@@ -27927,28 +28015,162 @@ const _HeliosEngine = class _HeliosEngine {
       const [lon, lat] = f2.geometry.coordinates;
       const top = Number(f2.properties?.height ?? 0);
       const kind = String(f2.properties?.kind ?? "");
-      if (!isFinite(top) || top <= 0) continue;
-      sticks.push({
+      if (!isFinite(top)) continue;
+      if (kind === "terrain" || top <= 0) {
+        this._pointCloudCaps.features.push({
+          type: "Feature",
+          geometry: makeSquare(lon, lat, TERRAIN_HALF),
+          properties: { top: TERRAIN_TOP_M, capBase: 0, kind, color: "#ffffff" }
+        });
+        continue;
+      }
+      this._pointCloudSticks.features.push({
         type: "Feature",
         geometry: makeSquare(lon, lat, STICK_HALF_M),
-        properties: { top, kind }
+        properties: { top, kind, color: "#ffffff" }
       });
-      caps.push({
+      this._pointCloudCaps.features.push({
         type: "Feature",
         geometry: makeSquare(lon, lat, CAP_HALF_M),
-        properties: { top, capBase: Math.max(0, top - CAP_HEIGHT_M), kind }
+        properties: { top, capBase: Math.max(0, top - CAP_HEIGHT_M), kind, color: "#ffffff" }
       });
     }
-    stickSrc.setData({ type: "FeatureCollection", features: sticks });
-    capSrc.setData({ type: "FeatureCollection", features: caps });
+    stickSrc.setData(this._pointCloudSticks);
+    capSrc.setData(this._pointCloudCaps);
+    if (this._pointCloudVisible) {
+      this._recomputePointCloudIrradiance();
+    }
+  }
+  //Apply the cached point-cloud collections to their respective
+  //sources. Called by the irradiance compute pass after it has
+  //mutated each feature's `color` property in place. Cheaper than
+  //rebuilding the GeoJSON from the LiDAR cells every time.
+  _flushPointCloudSources() {
+    if (!this.map) return;
+    const stickSrc = this.map.getSource("helios-lidar-points-src");
+    const capSrc = this.map.getSource("helios-lidar-points-caps-src");
+    stickSrc?.setData(this._pointCloudSticks);
+    capSrc?.setData(this._pointCloudCaps);
+  }
+  //Re-colour the cached point-cloud features according to the
+  //irradiance they receive at the currently-selected time. Runs in
+  //chunks via requestAnimationFrame so a dense raster doesn't
+  //freeze the main thread; reports start / end through the card
+  //callbacks above so a small spinner can ride along on the
+  //scanner button.
+  //
+  //Algorithm per point (lon, lat, h):
+  //   shadow  = inside any shadow polygon whose casting region is
+  //             taller than h (preserved on the polygon as
+  //             render_height by helios-shadows.ts)
+  //   ghi     = computeIrradianceWm2 at home, current time, live cloud
+  //   ratio   = shadow ? 0 : ghi / 1000   (clamped to [0, 1])
+  //   color   = lerpHex('#ffffff', sunColorHex, ratio)
+  //
+  //White ↔ saturated sun colour is the design language: high
+  //irradiance pulls the dots toward the configured warm tone, deep
+  //shadow leaves them as bare white points. Night collapses every
+  //point to white. The user can read the lit / shadow geometry at
+  //a glance from the colour distribution alone.
+  _recomputePointCloudIrradiance() {
+    if (!this.map) return;
+    if (!this._pointCloudVisible) return;
+    const totalSticks = this._pointCloudSticks.features.length;
+    const totalCaps = this._pointCloudCaps.features.length;
+    if (totalSticks === 0 && totalCaps === 0) return;
+    const jobId = ++this._irradianceJobId;
+    this.onPointCloudComputeStart?.();
+    const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
+    const sun = getSunPosition(t2, this.homeLat, this.homeLon);
+    const cloud = this._homeHourlyData ? this._getWeatherAtTime(t2)?.cloudCover ?? 0 : 0;
+    const ghi = sun.altitude > 0 ? computeIrradianceWm2(t2, this.homeLat, this.homeLon, cloud) : 0;
+    const ghiNorm = Math.min(1, ghi / 1e3);
+    const sunHex = toColor(this.cfg["sun-color"], DEFAULT_SUN_COLOR_HEX);
+    const litColor = this._lerpHex("#ffffff", sunHex, ghiNorm);
+    const shadowInput = this._lidarActive() && this._lidarData ? this._lidarData.regions : this._buildingsData && this._maptilerShadowsEnabled() ? {
+      features: [
+        ...this._buildingsData.home.features,
+        ...this._buildingsData.surroundings.features
+      ]
+    } : { features: [] };
+    const shadows = projectExtrusionShadows(shadowInput, {
+      sunAzimuthDeg: sun.azimuth,
+      sunAltitudeDeg: sun.altitude,
+      homeLat: this.homeLat
+    });
+    const shadowEntries = [];
+    for (const f2 of shadows.features) {
+      if (!f2.geometry || f2.geometry.type !== "Polygon") continue;
+      const ring = f2.geometry.coordinates[0];
+      if (!ring || ring.length < 3) continue;
+      let minLon = Infinity, minLat = Infinity;
+      let maxLon = -Infinity, maxLat = -Infinity;
+      for (const p2 of ring) {
+        if (p2[0] < minLon) minLon = p2[0];
+        if (p2[0] > maxLon) maxLon = p2[0];
+        if (p2[1] < minLat) minLat = p2[1];
+        if (p2[1] > maxLat) maxLat = p2[1];
+      }
+      const height = Number(f2.properties?.render_height ?? 0);
+      shadowEntries.push({ ring, minLon, minLat, maxLon, maxLat, height });
+    }
+    const BATCH = 1500;
+    let phase = 0;
+    let cursor = 0;
+    const step = () => {
+      if (jobId !== this._irradianceJobId) return;
+      if (!this.map) return;
+      const coll = phase === 0 ? this._pointCloudSticks : this._pointCloudCaps;
+      const total = coll.features.length;
+      const end = Math.min(total, cursor + BATCH);
+      for (; cursor < end; cursor++) {
+        const feat = coll.features[cursor];
+        const props = feat.properties;
+        const top = Number(props?.top ?? 0);
+        const ring = feat.geometry.coordinates[0];
+        let cLon = 0, cLat = 0;
+        for (let k2 = 0; k2 < 4; k2++) {
+          cLon += ring[k2][0];
+          cLat += ring[k2][1];
+        }
+        cLon *= 0.25;
+        cLat *= 0.25;
+        let inShadow = false;
+        if (sun.altitude > 0) {
+          for (const s2 of shadowEntries) {
+            if (cLon < s2.minLon || cLon > s2.maxLon || cLat < s2.minLat || cLat > s2.maxLat) continue;
+            if (s2.height <= top + 0.5) continue;
+            if (pointInRing(cLon, cLat, s2.ring)) {
+              inShadow = true;
+              break;
+            }
+          }
+        }
+        props.color = sun.altitude <= 0 ? "#ffffff" : inShadow ? "#ffffff" : litColor;
+      }
+      if (cursor < total) {
+        requestAnimationFrame(step);
+      } else if (phase === 0) {
+        phase = 1;
+        cursor = 0;
+        requestAnimationFrame(step);
+      } else {
+        this._flushPointCloudSources();
+        this.onPointCloudComputeEnd?.();
+      }
+    };
+    requestAnimationFrame(step);
   }
   //Toggle visibility of the LiDAR point-cloud "scanner" overlay.
   //Visibility is layer-level rather than data-level so flipping the
   //toggle is instantaneous (no GeoJSON re-parse) once the cells are
   //in. When no LiDAR data is available yet, the layers stay empty
   //and the toggle simply primes the visibility state for when data
-  //arrives.
+  //arrives. Switching the toggle ON kicks off an irradiance compute
+  //pass so the user sees the colour mapping right away; switching
+  //OFF cancels any in-flight pass via the bumped job id.
   setPointCloudVisible(visible) {
+    const prev = this._pointCloudVisible;
     this._pointCloudVisible = visible;
     if (!this.map) return;
     const vis = visible ? "visible" : "none";
@@ -27959,6 +28181,12 @@ const _HeliosEngine = class _HeliosEngine {
         } catch (_2) {
         }
       }
+    }
+    if (visible && !prev) {
+      this._recomputePointCloudIrradiance();
+    } else if (!visible && prev) {
+      this._irradianceJobId++;
+      this.onPointCloudComputeEnd?.();
     }
   }
   //True when the LiDAR pipeline has yielded cells the point-cloud
@@ -28151,6 +28379,9 @@ const _HeliosEngine = class _HeliosEngine {
       }
     } catch (_2) {
     }
+    if (this._pointCloudVisible) {
+      this._recomputePointCloudIrradiance();
+    }
   }
   //Precision is fixed to 'high' (multi-model median). The function
   //is kept so the rest of the engine stays precision-aware if a
@@ -28330,7 +28561,7 @@ const _HeliosEngine = class _HeliosEngine {
   //based on how far they are from the viewer, bigger when close,
   //smaller when far, to give the otherwise flat top-down-ish view
   //a sense of perspective beyond what pitch alone provides.
-  _projectScenePoint(lon, lat, altitudeM) {
+  _projectScenePoint(lon, lat, altitudeM, opts) {
     if (!this.map) {
       return null;
     }
@@ -28339,7 +28570,9 @@ const _HeliosEngine = class _HeliosEngine {
       return null;
     }
     const m2 = this.map;
-    const terrainM = typeof m2.queryTerrainElevation === "function" ? m2.queryTerrainElevation([lon, lat]) ?? 0 : 0;
+    const queryLon = opts?.anchorAtHome ? this.homeLon : lon;
+    const queryLat = opts?.anchorAtHome ? this.homeLat : lat;
+    const terrainM = typeof m2.queryTerrainElevation === "function" ? m2.queryTerrainElevation([queryLon, queryLat]) ?? 0 : 0;
     const totalAlt = altitudeM + terrainM;
     const modelM = t2.getMatrixForModel([lon, lat], totalAlt);
     const projM = t2.getProjectionDataForCustomLayer().mainMatrix;
@@ -28412,7 +28645,12 @@ const _HeliosEngine = class _HeliosEngine {
       if (!sun3D) {
         continue;
       }
-      const px = this._projectScenePoint(sun3D.lon, sun3D.lat, sun3D.altitudeM);
+      const px = this._projectScenePoint(
+        sun3D.lon,
+        sun3D.lat,
+        sun3D.altitudeM,
+        { anchorAtHome: true }
+      );
       if (!px) {
         continue;
       }
@@ -28430,7 +28668,12 @@ const _HeliosEngine = class _HeliosEngine {
     const sunNowWm2 = computeIrradianceWm2(now, this.homeLat, this.homeLon, liveCloud);
     let sunScreen = null;
     if (sunNow3D) {
-      sunScreen = this._projectScenePoint(sunNow3D.lon, sunNow3D.lat, sunNow3D.altitudeM);
+      sunScreen = this._projectScenePoint(
+        sunNow3D.lon,
+        sunNow3D.lat,
+        sunNow3D.altitudeM,
+        { anchorAtHome: true }
+      );
     }
     if (!sunScreen) {
       sunScreen = { ...homeScreen, depth: homeScreen.depth };
@@ -30104,6 +30347,37 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
+    /*  Busy spinner shown inside the map button while a chunked
+        compute job is running (e.g. the LiDAR irradiance pass). Pure
+        CSS, no extra DOM: same disc as the .spinner used at the
+        centre of the card but sized to fit the button. The active
+        (on) skin uses a white ring against the blue plate; the
+        idle skin uses a grey-on-white ring matching the chip border. */
+    .map-btn-spinner
+    {
+        width:  16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 2px solid rgba(0, 0, 0, 0.18);
+        border-top-color: #000000;
+        animation: helios-spin 0.9s linear infinite;
+    }
+    .map-btn.map-btn-on .map-btn-spinner
+    {
+        border-color:     rgba(255, 255, 255, 0.40);
+        border-top-color: #ffffff;
+    }
+    ha-card.theme-dark .map-btn:not(.map-btn-on) .map-btn-spinner
+    {
+        border-color:     rgba(255, 255, 255, 0.20);
+        border-top-color: #e6e6e6;
+    }
+    @keyframes helios-spin
+    {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+    }
+
     /*  Cloud-cover percentage chip, floating above the cloud disc
         on the ground with a leader line down to its feature. */
     .cloud-pct-label
@@ -31636,7 +31910,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.13"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.14"}`,
       labelStyle,
       versionStyle
     );
@@ -31675,6 +31949,7 @@ let HeliosCard = class extends i {
     this._selectedTime = null;
     this._isLiveMode = true;
     this._pointCloudOn = false;
+    this._pointCloudBusy = false;
     this._lastApiKey = "";
     this._lastHomeKey = "";
     this._lastConfigSig = "";
@@ -32232,6 +32507,12 @@ let HeliosCard = class extends i {
         this._lastApiKey = "";
         this._lastHomeKey = "";
         if (!this._initInflight) this._initEngine();
+      };
+      this._engine.onPointCloudComputeStart = () => {
+        this._pointCloudBusy = true;
+      };
+      this._engine.onPointCloudComputeEnd = () => {
+        this._pointCloudBusy = false;
       };
       this._initInflight = false;
     });
@@ -33352,12 +33633,12 @@ let HeliosCard = class extends i {
                 ${hasApiKey && this._engine?.hasLidarPointCloud() ? b`
                     <div class="overlay-top-right">
                         <button
-                            class="map-btn ${this._pointCloudOn ? "map-btn-on" : ""}"
+                            class="map-btn ${this._pointCloudOn ? "map-btn-on" : ""} ${this._pointCloudBusy ? "map-btn-busy" : ""}"
                             title="${t2.editor.lidarPointCloud}"
                             aria-label="${t2.editor.lidarPointCloud}"
                             @click="${this._togglePointCloud}"
                         >
-                            <ha-icon icon="mdi:dots-grid"></ha-icon>
+                            ${this._pointCloudBusy ? b`<div class="map-btn-spinner"></div>` : b`<ha-icon icon="mdi:dots-grid"></ha-icon>`}
                         </button>
                     </div>
                 ` : A}
@@ -33817,6 +34098,9 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_pointCloudOn", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_pointCloudBusy", 2);
 HeliosCard = __decorateClass([
   t("helios-card")
 ], HeliosCard);

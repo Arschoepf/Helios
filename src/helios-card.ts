@@ -198,6 +198,10 @@ export class HeliosCard extends LitElement
     //user via a small button overlay on the map. Not persisted in the
     //config: this is a one-off inspection mode, not a permanent style.
     @state() private _pointCloudOn  = false;
+    //True while the engine is recolouring the scanner cells against
+    //the current sun position. Mirrors engine.on*ComputeStart/End and
+    //drives the spinner overlay on the scanner button.
+    @state() private _pointCloudBusy = false;
 
     private _timer?:           number;
     private _lastApiKey        = '';
@@ -1133,6 +1137,19 @@ export class HeliosCard extends LitElement
                 this._lastApiKey  = '';
                 this._lastHomeKey = '';
                 if (!this._initInflight) this._initEngine();
+            };
+
+            //Scanner irradiance compute: the engine fires these around
+            //every chunked pass it runs (toggle-on, scrub, sun-move
+            //tick). The card flips a state flag the render path reads
+            //to swap the scanner button's icon for a spinner.
+            this._engine.onPointCloudComputeStart = () =>
+            {
+                this._pointCloudBusy = true;
+            };
+            this._engine.onPointCloudComputeEnd = () =>
+            {
+                this._pointCloudBusy = false;
             };
 
             this._initInflight = false;
@@ -2936,12 +2953,14 @@ export class HeliosCard extends LitElement
                 ${hasApiKey && this._engine?.hasLidarPointCloud() ? html`
                     <div class="overlay-top-right">
                         <button
-                            class="map-btn ${this._pointCloudOn ? 'map-btn-on' : ''}"
+                            class="map-btn ${this._pointCloudOn ? 'map-btn-on' : ''} ${this._pointCloudBusy ? 'map-btn-busy' : ''}"
                             title="${t.editor.lidarPointCloud}"
                             aria-label="${t.editor.lidarPointCloud}"
                             @click="${this._togglePointCloud}"
                         >
-                            <ha-icon icon="mdi:dots-grid"></ha-icon>
+                            ${this._pointCloudBusy
+                                ? html`<div class="map-btn-spinner"></div>`
+                                : html`<ha-icon icon="mdi:dots-grid"></ha-icon>`}
                         </button>
                     </div>
                 ` : nothing}

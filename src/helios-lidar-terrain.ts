@@ -20,12 +20,13 @@ import type { LidarTerrainData } from './helios-lidar';
 
 export const LIDAR_TERRAIN_PROTOCOL = 'helios-lidar-dem';
 
-//Web-Mercator zoom at which we serve the LiDAR DEM tiles. At z=15 one
-//tile spans ~1.2 km at the equator; one or two tiles cover the whole
-//visible card area around the home, keeping the per-tile encoding
-//work bounded. MapLibre overzooms to z=18 (the card's locked zoom)
-//transparently.
-export const LIDAR_TERRAIN_MIN_ZOOM = 15;
+//Web-Mercator zoom at which we serve the LiDAR DEM tiles. We expose
+//z=12..15: the LiDAR-covered area is encoded at every level, and
+//tiles outside the bbox are proxied verbatim from MapTiler at the
+//requested level so the camera always sees a continuous DEM (no
+//cliff at the LiDAR boundary as it rotates). z=15 is fine enough for
+//the card's locked z=18 (3 levels of overzoom).
+export const LIDAR_TERRAIN_MIN_ZOOM = 12;
 export const LIDAR_TERRAIN_MAX_ZOOM = 15;
 
 //Tile resolution served by the protocol. 512 matches MapTiler's
@@ -37,8 +38,14 @@ const TILE_SIZE = 512;
 
 interface TerrainEntry
 {
-    data:  LidarTerrainData;
-    cache: Map<string, ArrayBuffer>;
+    data:        LidarTerrainData;
+    //MapTiler API key, used to fetch the global terrain-rgb tiles for
+    //pixels that fall outside the LiDAR coverage. When the engine
+    //hasn't provided one (legacy entry, missing key) we silently
+    //encode height = 0 for those pixels and let the camera see flat
+    //ground around the home, which is what beta.13 did.
+    maptilerKey: string | null;
+    cache:       Map<string, ArrayBuffer>;
 }
 
 const _entries = new Map<string, TerrainEntry>();
@@ -81,7 +88,7 @@ function ensureProtocolRegistered(): void
         const cached = entry.cache.get(key);
         if (cached) return { data: cached.slice(0) };
 
-        const bytes = await encodeTile(entry.data, z, x, y);
+        const bytes = await encodeTile(entry, z, x, y);
         entry.cache.set(key, bytes);
         return { data: bytes.slice(0) };
     });
@@ -90,10 +97,20 @@ function ensureProtocolRegistered(): void
 //Registers (or replaces) the MNT raster for a given engine. The
 //engine then references the source via its tile URL template:
 //   `${LIDAR_TERRAIN_PROTOCOL}://${engineId}/{z}/{x}/{y}`
-export function registerLidarTerrain(engineId: string, data: LidarTerrainData): void
+//
+//`maptilerKey` is used as the fallback DEM source for pixels that
+//fall outside the LiDAR coverage. When set, the protocol handler
+//composes per-pixel: LiDAR inside the bbox, MapTiler terrain-rgb
+//outside, so the camera sees a continuous terrain at distance and
+//doesn't trip on a cliff at the LiDAR boundary as it rotates.
+export function registerLidarTerrain(
+    engineId:    string,
+    data:        LidarTerrainData,
+    maptilerKey: string | null
+): void
 {
     ensureProtocolRegistered();
-    _entries.set(engineId, { data, cache: new Map() });
+    _entries.set(engineId, { data, maptilerKey, cache: new Map() });
 }
 
 //Unregister an engine's MNT raster. Called from engine cleanup so
@@ -174,15 +191,28 @@ function tileBounds(z: number, x: number, y: number): {
     return { n: toLat(n), s: toLat(s), w, e };
 }
 
-async function encodeTile(d: LidarTerrainData, z: number, x: number, y: number): Promise<ArrayBuffer>
+async function encodeTile(entry: TerrainEntry, z: number, x: number, y: number): Promise<ArrayBuffer>
 {
+    const d = entry.data;
     const { n, s, w, e } = tileBounds(z, x, y);
 
-    //Tile and source bbox don't intersect → empty terrain.
-    if (e <= d.bounds.minLon || w >= d.bounds.maxLon
-     || n <= d.bounds.minLat || s >= d.bounds.maxLat)
+    const tileFullyInsideLidar  =
+           w >= d.bounds.minLon && e <= d.bounds.maxLon
+        && s >= d.bounds.minLat && n <= d.bounds.maxLat;
+    const tileFullyOutsideLidar =
+           e <= d.bounds.minLon || w >= d.bounds.maxLon
+        || n <= d.bounds.minLat || s >= d.bounds.maxLat;
+
+    //Tile is fully outside the LiDAR bbox, the LiDAR contributes
+    //nothing. Forward the request to MapTiler so the camera still
+    //sees real elevation at distance, instead of a flat sea-level
+    //cliff at the LiDAR boundary as it rotates. When no key is
+    //available, fall back to the encoded-zero "empty" tile (this
+    //matches beta.13 behaviour).
+    if (tileFullyOutsideLidar)
     {
-        return emptyTile();
+        const proxied = await fetchMaptilerTile(entry.maptilerKey, z, x, y);
+        return proxied ?? emptyTile();
     }
 
     const canvas = document.createElement('canvas');
@@ -190,6 +220,16 @@ async function encodeTile(d: LidarTerrainData, z: number, x: number, y: number):
     canvas.height = TILE_SIZE;
     const ctx = canvas.getContext('2d');
     if (!ctx) return emptyTile();
+
+    //When the tile straddles the LiDAR boundary, fetch the matching
+    //MapTiler tile in parallel and use it as the per-pixel fallback
+    //wherever the LiDAR raster doesn't have data. Decode it into a
+    //float array so the inner loop stays branch-free.
+    let maptilerHeights: Float32Array | null = null;
+    if (!tileFullyInsideLidar)
+    {
+        maptilerHeights = await fetchMaptilerTileHeights(entry.maptilerKey, z, x, y);
+    }
 
     const img = ctx.createImageData(TILE_SIZE, TILE_SIZE);
     const buf = img.data;
@@ -216,11 +256,14 @@ async function encodeTile(d: LidarTerrainData, z: number, x: number, y: number):
             const lon = w + (e - w) * ((px + 0.5) / TILE_SIZE);
             const h   = sampleHeight(d, lon, lat);
             const off = (py * TILE_SIZE + px) * 4;
-            //Encode out-of-source pixels as height = 0 so the terrain
-            //smoothly drops to sea level outside coverage; MapLibre
-            //blends this with the rest of the mesh which is also flat
-            //there (we don't combine our DEM with MapTiler's).
-            encodeHeight(isFinite(h) ? h : 0, buf, off);
+            //LiDAR wins where it has data, otherwise fall back to the
+            //pre-decoded MapTiler pixel. When the tile is fully inside
+            //the bbox we never read the fallback so the maptilerHeights
+            //allocation is skipped above.
+            const final = isFinite(h)
+                ? h
+                : (maptilerHeights ? maptilerHeights[py * TILE_SIZE + px] : 0);
+            encodeHeight(final, buf, off);
         }
     }
     ctx.putImageData(img, 0, 0);
@@ -228,6 +271,80 @@ async function encodeTile(d: LidarTerrainData, z: number, x: number, y: number):
     const blob: Blob | null = await new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/png'));
     if (!blob) return emptyTile();
     return await blob.arrayBuffer();
+}
+
+//Verbatim proxy: fetch the MapTiler terrain-rgb PNG and return its
+//bytes unchanged. The PNG is already in Mapbox encoding, which is
+//what our raster-dem source declares, so the browser can decode it
+//directly with no re-encoding pass on our side.
+async function fetchMaptilerTile(
+    key: string | null,
+    z:   number,
+    x:   number,
+    y:   number
+): Promise<ArrayBuffer | null>
+{
+    if (!key) return null;
+    try
+    {
+        const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.png?key=${key}`;
+        const resp = await fetch(url);
+        if (!resp.ok) return null;
+        return await resp.arrayBuffer();
+    }
+    catch (_)
+    {
+        return null;
+    }
+}
+
+//Same MapTiler fetch, but decodes the PNG into a float array of
+//metres-above-sea-level heights so the compositing inner loop can
+//read it as raw values rather than as an RGBA pixel. Returns null
+//on any failure (network, decode, missing key); callers treat null
+//as "no fallback, encode 0 here".
+async function fetchMaptilerTileHeights(
+    key: string | null,
+    z:   number,
+    x:   number,
+    y:   number
+): Promise<Float32Array | null>
+{
+    if (!key) return null;
+    const blob = await fetchMaptilerTile(key, z, x, y);
+    if (!blob) return null;
+
+    return new Promise<Float32Array | null>(resolve =>
+    {
+        const url = URL.createObjectURL(new Blob([blob], { type: 'image/png' }));
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () =>
+        {
+            URL.revokeObjectURL(url);
+            try
+            {
+                const canvas = document.createElement('canvas');
+                canvas.width  = TILE_SIZE;
+                canvas.height = TILE_SIZE;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) { resolve(null); return; }
+                //MapTiler tiles can be 256 or 512 native; drawing into a
+                //fixed-size canvas resamples them to our composite grid.
+                ctx.drawImage(img, 0, 0, TILE_SIZE, TILE_SIZE);
+                const data = ctx.getImageData(0, 0, TILE_SIZE, TILE_SIZE).data;
+                const out  = new Float32Array(TILE_SIZE * TILE_SIZE);
+                for (let i = 0, j = 0; i < data.length; i += 4, j++)
+                {
+                    out[j] = -10000 + (data[i] * 65536 + data[i + 1] * 256 + data[i + 2]) * 0.1;
+                }
+                resolve(out);
+            }
+            catch (_) { resolve(null); }
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+        img.src = url;
+    });
 }
 
 //A pre-encoded all-zero terrain-RGB PNG returned when the requested

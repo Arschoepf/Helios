@@ -276,11 +276,23 @@ export const franceLidarHd: LidarSource =
         }
 
         //Pass 4, emit per-cell Points for the optional point-cloud
-        //overlay. We only emit cells that belong to a kept region so
-        //the scanner view stays consistent with the shadow shape (a
-        //single-pixel artefact is filtered out of both views in lock-
-        //step). KIND_NAMES maps the numeric class to the string the
-        //engine's circle-color expression keys on.
+        //overlay. Three kinds of cells are emitted:
+        //
+        //  - 'home' / 'building' / 'vegetation': cells that passed
+        //    the MNH height threshold AND belong to a kept region
+        //    (i.e. cells that are part of an actual building or
+        //    vegetation cluster cast as a shadow).
+        //
+        //  - 'terrain': bare-earth cells (cells whose MNH did NOT
+        //    pass the threshold), subsampled so the irradiance
+        //    scanner can cover the whole bbox with a reasonable
+        //    point count. Density is tuned so the on-card view stays
+        //    readable: ~10 k cells regardless of the raster size.
+        //
+        //Each Point carries (height, kind). The engine reads height
+        //as "metres above the local terrain" so the scanner planes
+        //all sit on the LiDAR-derived ground surface; for terrain
+        //cells height is 0 (a dot on the ground).
         const KIND_NAMES = ['', 'home', 'building', 'vegetation'];
         const cellsOut: GeoJSON.Feature[] = [];
         for (let idx = 0; idx < N; idx++)
@@ -300,11 +312,45 @@ export const franceLidarHd: LidarSource =
             });
         }
 
+        //Terrain subsample. We aim for ~96 cells per side regardless
+        //of the raster size so the count of emitted terrain points
+        //stays around 10 k whatever the precision setting. Cells that
+        //already produced a non-terrain point (passed the threshold)
+        //are skipped to avoid double-counting.
+        const TARGET_PER_SIDE = 96;
+        const stride = Math.max(1, Math.floor(rasterSize / TARGET_PER_SIDE));
+        let nTerrain = 0;
+        for (let j = (stride >> 1); j < rasterSize; j += stride)
+        {
+            for (let i = (stride >> 1); i < rasterSize; i += stride)
+            {
+                const idx = j * rasterSize + i;
+                if (kindArr[idx]) continue;
+                const cLon = minLon + (i + 0.5) * pxLon;
+                const cLat = maxLat - (j + 0.5) * pxLat;
+                //Inherit the circular crop the per-cell pass enforced,
+                //the bbox is square-padded so the corner cells live
+                //outside the visible disc and would just smear into
+                //the basemap.
+                if (cropM !== null
+                    && haversineMeters(opts.homeLat, opts.homeLon, cLat, cLon) > cropM)
+                {
+                    continue;
+                }
+                cellsOut.push({
+                    type:       'Feature',
+                    geometry:   { type: 'Point', coordinates: [cLon, cLat] },
+                    properties: { height: 0, kind: 'terrain' }
+                });
+                nTerrain++;
+            }
+        }
+
         const totalKept = nHome + nBldg + nVeg;
         if (totalKept > 0)
         {
             console.info(
-                `[HELIOS] LiDAR: ${nHome} home + ${nBldg} building + ${nVeg} vegetation cells -> ` +
+                `[HELIOS] LiDAR: ${nHome} home + ${nBldg} building + ${nVeg} vegetation cells + ${nTerrain} terrain -> ` +
                 `${regionsOut.length} regions (${dropped} dropped < ${MIN_REGION_CELLS} cells), ` +
                 `${cellsOut.length} points, ` +
                 `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m` +
@@ -313,7 +359,7 @@ export const franceLidarHd: LidarSource =
         }
         else
         {
-            console.info('[HELIOS] LiDAR: no cells passed the threshold');
+            console.info(`[HELIOS] LiDAR: no MNH cells passed the threshold (${nTerrain} terrain points)`);
         }
 
         return {
