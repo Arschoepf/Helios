@@ -1,11 +1,12 @@
-//Ground-projected shadow polygons for the buildings layer.
+//Ground-projected shadow polygons for any layer of extruded
+//footprints (buildings, vegetation cells from a LiDAR raster, ...).
 //
 //MapLibre 5 has no built-in cast-shadow pipeline for fill-extrusion
 //layers (that feature lives only in Mapbox GL JS v3+, which we don't
 //ship). To still get ShadowMap-style ombres portees on the ground we
 //compute them ourselves in JS once per timeline tick:
 //
-//  1. For each building footprint, take its top extrusion height
+//  1. For each footprint, take its top extrusion height
 //     (render_height minus render_min_height).
 //  2. Compute the shadow length on the ground from the sun altitude:
 //     L = h / tan(alt). The shadow direction is the unit vector
@@ -17,11 +18,11 @@
 //
 //The convex hull is geometrically exact for convex footprints and
 //slightly over-approximates for non-convex (L-shaped, courtyards)
-//ones, but the building polygon itself sits on top of the shadow at
+//ones, but the original polygon usually sits on top of the shadow at
 //render time so the visible over-coverage is masked. The cost is
-//O(n log n) per building for the sort + hull, which is negligible
-//compared to a single MapLibre frame at the building counts we deal
-//with (a few hundred features in dense urban areas).
+//O(n log n) per feature for the sort + hull, negligible compared to
+//a single MapLibre frame at the feature counts we deal with (a few
+//hundred buildings or a few thousand vegetation cells).
 //
 //We skip the whole pass when the sun is below the horizon or very
 //low: at altitude under ~1.5 deg shadows become hundreds of metres
@@ -45,7 +46,7 @@ export interface ProjectShadowsOptions
     //conversion. Use the home latitude, the radius around it is
     //small enough that cos(lat) is effectively constant.
     homeLat:          number;
-    //Buildings whose effective height (top minus base) is below this
+    //Features whose effective height (top minus base) is below this
     //do not contribute a shadow. Avoids hairline polygons for tile
     //features that come back with render_height = 0 or near zero.
     minHeightM?:      number;
@@ -53,9 +54,9 @@ export interface ProjectShadowsOptions
     minAltitudeDeg?:  number;
 }
 
-export function projectBuildingShadows(
-    buildings: GeoJSON.FeatureCollection,
-    opts:      ProjectShadowsOptions
+export function projectExtrusionShadows(
+    extrusions: GeoJSON.FeatureCollection,
+    opts:       ProjectShadowsOptions
 ): GeoJSON.FeatureCollection
 {
     const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
@@ -84,7 +85,7 @@ export function projectBuildingShadows(
 
     const out: GeoJSON.Feature[] = [];
 
-    for (const feat of buildings.features)
+    for (const feat of extrusions.features)
     {
         const geom = feat.geometry;
         if (!geom) continue;
@@ -100,8 +101,9 @@ export function projectBuildingShadows(
         const dLonDeg = shadowDx * lenM / mPerDegLon;
 
         //Helios-buildings emits only Polygon features (MultiPolygons
-        //are split upstream), but we still defend against either
-        //shape so the helper stays usable outside that pipeline.
+        //are split upstream); LiDAR vegetation cells are also single
+        //Polygon features. We still defend against MultiPolygon so
+        //the helper stays usable for any caller.
         let polygons: number[][][][] | null = null;
         if (geom.type === 'Polygon')
         {
@@ -148,6 +150,8 @@ export function projectBuildingShadows(
 //the original polygon. Convex hull of (original , projected) is the
 //tightest enclosing polygon that includes both the footprint and its
 //translated copy, exactly the shadow silhouette for a convex base.
+//Vegetation cells from a LiDAR raster are 4-vertex squares, so the
+//hull degenerates to a 6-vertex hexagon, ideal cheap shadow shape.
 function convexHull(pts: Array<[number, number]>): Array<[number, number]>
 {
     if (pts.length < 3) return pts.slice();

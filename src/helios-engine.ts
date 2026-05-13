@@ -3,7 +3,8 @@ import type { Map } from 'maplibre-gl';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './helios-sun';
 import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './helios-weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildings';
-import { projectBuildingShadows } from './helios-shadows';
+import { projectExtrusionShadows } from './helios-shadows';
+import { findLidarSource } from './helios-lidar';
 
 //Public types
 
@@ -600,6 +601,15 @@ export class HeliosEngine
     private _buildingsData:     BuildingsResult | null = null;
     private _buildingsFetchKey: string = '';
     private _buildingsAbort?:   AbortController;
+
+    //Cached result of the LiDAR vegetation fetch around the home,
+    //same lifecycle as buildings: fetch once per (lat, lon, radius,
+    //provider) tuple, reuse across style reloads. Null until either
+    //the fetch completes or no provider covers the home (e.g. outside
+    //France, see helios-lidar.ts).
+    private _vegetationData:     GeoJSON.FeatureCollection | null = null;
+    private _vegetationFetchKey: string = '';
+    private _vegetationAbort?:   AbortController;
 
     constructor(
         container:    HTMLElement,
@@ -1787,6 +1797,37 @@ export class HeliosEngine
             });
         }
 
+        //Vegetation shadows. Same shape as building shadows but a
+        //separate source/layer so a LiDAR fetch failure (no coverage,
+        //IGN downtime, CORS, ...) leaves the building shadows
+        //untouched. Opacity is a touch lower than buildings, MNH
+        //cells are noisier and tend to overlap each other; a hard
+        //black would compound into very dark patches under dense
+        //canopy.
+        if (!this.map.getSource('helios-vegetation-shadows-src'))
+        {
+            this.map.addSource('helios-vegetation-shadows-src',
+            {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
+            });
+        }
+        if (!this.map.getLayer('helios-vegetation-shadows'))
+        {
+            this.map.addLayer(
+            {
+                id:     'helios-vegetation-shadows',
+                source: 'helios-vegetation-shadows-src',
+                type:   'fill',
+                paint:
+                {
+                    'fill-color':     '#000000',
+                    'fill-opacity':   0.22,
+                    'fill-antialias': false
+                }
+            });
+        }
+
         //Surroundings first, then home, so the home draws on top in
         //the rare case the polygons overlap (the home footprint
         //should also be absent from the surroundings collection, but
@@ -1912,11 +1953,81 @@ export class HeliosEngine
             //a full atmosphere pass and populates the shadow polygons.
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
+            //Footprints are now available for the LiDAR vegetation
+            //mask, kick off the vegetation fetch (no-op when no
+            //provider covers the home).
+            this._ensureVegetationFetched();
         })
         .catch(err =>
         {
             if ((err as { name?: string })?.name === 'AbortError') return;
             console.warn('[HELIOS] Buildings fetch failed:', err);
+        });
+    }
+
+    //LiDAR vegetation fetch, same idempotent caching pattern as
+    //_ensureBuildingsFetched. Picks the registered country provider
+    //that covers the home (currently France only via
+    //helios-lidar-fr.ts) and stores the resulting cells in
+    //_vegetationData. No-op when no provider matches: the cell
+    //source stays empty and the vegetation shadow layer renders
+    //nothing.
+    //
+    //Fetch is gated on _buildingsData so the LiDAR cells can be
+    //masked against the actual building footprints around the home,
+    //sparing us hundreds of "vegetation pillar" duplicates on top
+    //of every roof.
+    private _ensureVegetationFetched(): void
+    {
+        if (!this.map) return;
+        if (!this._buildingsData) return;
+
+        const source = findLidarSource(this.homeLat, this.homeLon);
+        if (!source) return;
+
+        const radius = this._buildingRadiusMeters();
+        const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}`;
+        if (this._vegetationData && this._vegetationFetchKey === key) return;
+
+        this._vegetationAbort?.abort();
+        const ac = new AbortController();
+        this._vegetationAbort   = ac;
+        this._vegetationFetchKey = key;
+
+        //Combine home + surroundings into a single FeatureCollection
+        //for the building mask. The provider only reads bbox + ring
+        //coordinates from this, no need to deep-copy.
+        const bldgFc: GeoJSON.FeatureCollection =
+        {
+            type:     'FeatureCollection',
+            features: [
+                ...(this._buildingsData.home.features ?? []),
+                ...(this._buildingsData.surroundings.features ?? [])
+            ]
+        };
+
+        source.fetch(
+        {
+            homeLat:            this.homeLat,
+            homeLon:            this.homeLon,
+            radiusMeters:       radius,
+            buildingFootprints: bldgFc,
+            signal:             ac.signal
+        })
+        .then(result =>
+        {
+            if (ac.signal.aborted || !this.map) return;
+            this._vegetationData = result;
+            //Bypass the "sun hardly moved" guard so the vegetation
+            //shadows render on the next atmosphere call rather than
+            //waiting for the sun to drift 0.5 deg.
+            this._lastAtmosphereAlt = -999;
+            this._refreshShadowsAndAtmosphere();
+        })
+        .catch(err =>
+        {
+            if ((err as { name?: string })?.name === 'AbortError') return;
+            console.warn('[HELIOS] Vegetation LiDAR fetch failed:', err);
         });
     }
 
@@ -2203,13 +2314,39 @@ export class HeliosEngine
                     all.push(...this._buildingsData.surroundings.features);
                 }
                 const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: all };
-                const shadowFc = projectBuildingShadows(fc,
+                const shadowFc = projectExtrusionShadows(fc,
                 {
                     sunAzimuthDeg:  azimuth,
                     sunAltitudeDeg: altitude,
                     homeLat:        this.homeLat
                 });
                 shadowsSrc.setData(shadowFc);
+            }
+        }
+        catch (_) {}
+
+        //Vegetation shadows. Same projection as buildings, separate
+        //source/layer so the LiDAR pipeline can fail (no coverage,
+        //rate limit, ...) without taking the building shadows down
+        //with it. Threshold is bumped slightly compared to buildings
+        //(2 m vs default) to drop the noisiest cells from the MNH
+        //raster (small bushes that read as 3 m sometimes).
+        try
+        {
+            const vegSrc = this.map.getSource('helios-vegetation-shadows-src') as
+                           maplibregl.GeoJSONSource | undefined;
+            if (vegSrc)
+            {
+                const fc = this._vegetationData
+                        ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection;
+                const shadowFc = projectExtrusionShadows(fc,
+                {
+                    sunAzimuthDeg:  azimuth,
+                    sunAltitudeDeg: altitude,
+                    homeLat:        this.homeLat,
+                    minHeightM:     3
+                });
+                vegSrc.setData(shadowFc);
             }
         }
         catch (_) {}

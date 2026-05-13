@@ -25980,7 +25980,7 @@ function metersToDegLat(m2) {
 function metersToDegLon(m2, atLat) {
   return m2 / (111320 * Math.cos(atLat * Math.PI / 180));
 }
-function pointInRing(lon, lat, ring) {
+function pointInRing$1(lon, lat, ring) {
   let inside = false;
   for (let i2 = 0, j = ring.length - 1; i2 < ring.length; j = i2++) {
     const xi = ring[i2][0], yi = ring[i2][1];
@@ -25994,10 +25994,10 @@ function pointInRing(lon, lat, ring) {
 }
 function polygonContains(geom, lon, lat) {
   if (geom.type === "Polygon") {
-    return geom.coordinates.length > 0 && pointInRing(lon, lat, geom.coordinates[0]);
+    return geom.coordinates.length > 0 && pointInRing$1(lon, lat, geom.coordinates[0]);
   }
   if (geom.type === "MultiPolygon") {
-    return geom.coordinates.some((poly) => poly.length > 0 && pointInRing(lon, lat, poly[0]));
+    return geom.coordinates.some((poly) => poly.length > 0 && pointInRing$1(lon, lat, poly[0]));
   }
   return false;
 }
@@ -26124,8 +26124,8 @@ async function fetchBuildingsAroundHome(opts) {
     surroundings: { type: "FeatureCollection", features: surroundings }
   };
 }
-const M_PER_DEG_LAT = 111320;
-function projectBuildingShadows(buildings, opts) {
+const M_PER_DEG_LAT$1 = 111320;
+function projectExtrusionShadows(extrusions, opts) {
   const empty = { type: "FeatureCollection", features: [] };
   const minAlt = opts.minAltitudeDeg ?? 1.5;
   if (opts.sunAltitudeDeg <= minAlt) {
@@ -26139,10 +26139,10 @@ function projectBuildingShadows(buildings, opts) {
   const shadowDx = -sunDx;
   const shadowDy = -sunDy;
   const tanAlt = Math.tan(altR);
-  const mPerDegLon = M_PER_DEG_LAT * Math.cos(opts.homeLat * D2);
+  const mPerDegLon = M_PER_DEG_LAT$1 * Math.cos(opts.homeLat * D2);
   const minH = opts.minHeightM ?? 2;
   const out = [];
-  for (const feat of buildings.features) {
+  for (const feat of extrusions.features) {
     const geom = feat.geometry;
     if (!geom) continue;
     const props = feat.properties ?? {};
@@ -26151,7 +26151,7 @@ function projectBuildingShadows(buildings, opts) {
     const h2 = Math.max(0, top - base);
     if (h2 < minH) continue;
     const lenM = h2 / tanAlt;
-    const dLatDeg = shadowDy * lenM / M_PER_DEG_LAT;
+    const dLatDeg = shadowDy * lenM / M_PER_DEG_LAT$1;
     const dLonDeg = shadowDx * lenM / mPerDegLon;
     let polygons = null;
     if (geom.type === "Polygon") {
@@ -26204,6 +26204,165 @@ function convexHull(pts) {
   lower.pop();
   upper.pop();
   return lower.concat(upper);
+}
+const WMS_URL = "https://data.geopf.fr/wms-r";
+const LAYER_MNH = "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
+const FR_BBOX = { minLat: 41, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
+const M_PER_DEG_LAT = 111320;
+const RASTER_SIZE = 128;
+const HEIGHT_THRESH_M = 3;
+const BBOX_PAD_FACTOR = 1.15;
+const franceLidarHd = {
+  id: "fr-ign-lidarhd",
+  name: "IGN LiDAR HD (France)",
+  covers(lat, lon) {
+    return lat >= FR_BBOX.minLat && lat <= FR_BBOX.maxLat && lon >= FR_BBOX.minLon && lon <= FR_BBOX.maxLon;
+  },
+  async fetch(opts) {
+    const empty = { type: "FeatureCollection", features: [] };
+    const r2 = Math.max(1, opts.radiusMeters);
+    const dLat = r2 * BBOX_PAD_FACTOR / M_PER_DEG_LAT;
+    const dLon = r2 * BBOX_PAD_FACTOR / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
+    const minLat = opts.homeLat - dLat;
+    const maxLat = opts.homeLat + dLat;
+    const minLon = opts.homeLon - dLon;
+    const maxLon = opts.homeLon + dLon;
+    const params = new URLSearchParams({
+      SERVICE: "WMS",
+      VERSION: "1.3.0",
+      REQUEST: "GetMap",
+      LAYERS: LAYER_MNH,
+      STYLES: "",
+      CRS: "EPSG:4326",
+      BBOX: `${minLat},${minLon},${maxLat},${maxLon}`,
+      WIDTH: String(RASTER_SIZE),
+      HEIGHT: String(RASTER_SIZE),
+      FORMAT: "image/x-bil;bits=32"
+    });
+    let resp;
+    try {
+      resp = await fetch(`${WMS_URL}?${params.toString()}`, { signal: opts.signal });
+    } catch (e2) {
+      return empty;
+    }
+    if (!resp.ok) {
+      return empty;
+    }
+    let buf;
+    try {
+      buf = await resp.arrayBuffer();
+    } catch (_2) {
+      return empty;
+    }
+    const expectedBytes = RASTER_SIZE * RASTER_SIZE * 4;
+    if (buf.byteLength < expectedBytes) {
+      return empty;
+    }
+    const heights = new Float32Array(buf, 0, RASTER_SIZE * RASTER_SIZE);
+    const buildings = opts.buildingFootprints?.features ?? [];
+    const bboxes = [];
+    for (const b2 of buildings) {
+      if (!b2.geometry) continue;
+      const bb = polygonBBox(b2.geometry);
+      if (bb) bboxes.push({ ...bb, geom: b2.geometry });
+    }
+    const pxLon = (maxLon - minLon) / RASTER_SIZE;
+    const pxLat = (maxLat - minLat) / RASTER_SIZE;
+    const halfLon = pxLon / 2;
+    const halfLat = pxLat / 2;
+    const out = [];
+    for (let j = 0; j < RASTER_SIZE; j++) {
+      const cLat = maxLat - (j + 0.5) * pxLat;
+      for (let i2 = 0; i2 < RASTER_SIZE; i2++) {
+        const h2 = heights[j * RASTER_SIZE + i2];
+        if (!isFinite(h2) || h2 < HEIGHT_THRESH_M) continue;
+        const cLon = minLon + (i2 + 0.5) * pxLon;
+        if (cellInsideAnyBuilding(cLon, cLat, bboxes)) continue;
+        const x0 = cLon - halfLon, x1 = cLon + halfLon;
+        const y0 = cLat - halfLat, y1 = cLat + halfLat;
+        out.push({
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: [[
+              [x0, y0],
+              [x1, y0],
+              [x1, y1],
+              [x0, y1],
+              [x0, y0]
+            ]]
+          },
+          properties: {
+            render_height: h2,
+            render_min_height: 0
+          }
+        });
+      }
+    }
+    return { type: "FeatureCollection", features: out };
+  }
+};
+function polygonBBox(geom) {
+  let rings = null;
+  if (geom.type === "Polygon") {
+    rings = geom.coordinates;
+  } else if (geom.type === "MultiPolygon") {
+    const all = [];
+    for (const poly of geom.coordinates) {
+      if (poly.length) all.push(poly[0]);
+    }
+    rings = all;
+  }
+  if (!rings || rings.length === 0) return null;
+  let minLon = Infinity, minLat = Infinity;
+  let maxLon = -Infinity, maxLat = -Infinity;
+  for (const ring of rings) {
+    for (const [lon, lat] of ring) {
+      if (lon < minLon) minLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lon > maxLon) maxLon = lon;
+      if (lat > maxLat) maxLat = lat;
+    }
+  }
+  return { minLon, minLat, maxLon, maxLat };
+}
+function cellInsideAnyBuilding(lon, lat, bboxes) {
+  for (const b2 of bboxes) {
+    if (lon < b2.minLon || lon > b2.maxLon || lat < b2.minLat || lat > b2.maxLat) continue;
+    if (pointInGeometry(lon, lat, b2.geom)) return true;
+  }
+  return false;
+}
+function pointInGeometry(lon, lat, geom) {
+  if (geom.type === "Polygon") {
+    const rings = geom.coordinates;
+    return rings.length > 0 && pointInRing(lon, lat, rings[0]);
+  }
+  if (geom.type === "MultiPolygon") {
+    for (const poly of geom.coordinates) {
+      if (poly.length > 0 && pointInRing(lon, lat, poly[0])) return true;
+    }
+  }
+  return false;
+}
+function pointInRing(lon, lat, ring) {
+  let inside = false;
+  for (let i2 = 0, j = ring.length - 1; i2 < ring.length; j = i2++) {
+    const xi = ring[i2][0], yi = ring[i2][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi + 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+const LIDAR_SOURCES = [
+  franceLidarHd
+];
+function findLidarSource(lat, lon) {
+  for (const src of LIDAR_SOURCES) {
+    if (src.covers(lat, lon)) return src;
+  }
+  return null;
 }
 const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
@@ -26351,6 +26510,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._autoRotateLastUserAction = 0;
     this._buildingsData = null;
     this._buildingsFetchKey = "";
+    this._vegetationData = null;
+    this._vegetationFetchKey = "";
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -27159,6 +27320,29 @@ const _HeliosEngine = class _HeliosEngine {
         }
       );
     }
+    if (!this.map.getSource("helios-vegetation-shadows-src")) {
+      this.map.addSource(
+        "helios-vegetation-shadows-src",
+        {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] }
+        }
+      );
+    }
+    if (!this.map.getLayer("helios-vegetation-shadows")) {
+      this.map.addLayer(
+        {
+          id: "helios-vegetation-shadows",
+          source: "helios-vegetation-shadows-src",
+          type: "fill",
+          paint: {
+            "fill-color": "#000000",
+            "fill-opacity": 0.22,
+            "fill-antialias": false
+          }
+        }
+      );
+    }
     this.map.addLayer(
       {
         id: "helios-buildings-surroundings",
@@ -27251,9 +27435,59 @@ const _HeliosEngine = class _HeliosEngine {
       surrSrc?.setData(result.surroundings);
       this._lastAtmosphereAlt = -999;
       this._refreshShadowsAndAtmosphere();
+      this._ensureVegetationFetched();
     }).catch((err) => {
       if (err?.name === "AbortError") return;
       console.warn("[HELIOS] Buildings fetch failed:", err);
+    });
+  }
+  //LiDAR vegetation fetch, same idempotent caching pattern as
+  //_ensureBuildingsFetched. Picks the registered country provider
+  //that covers the home (currently France only via
+  //helios-lidar-fr.ts) and stores the resulting cells in
+  //_vegetationData. No-op when no provider matches: the cell
+  //source stays empty and the vegetation shadow layer renders
+  //nothing.
+  //
+  //Fetch is gated on _buildingsData so the LiDAR cells can be
+  //masked against the actual building footprints around the home,
+  //sparing us hundreds of "vegetation pillar" duplicates on top
+  //of every roof.
+  _ensureVegetationFetched() {
+    if (!this.map) return;
+    if (!this._buildingsData) return;
+    const source = findLidarSource(this.homeLat, this.homeLon);
+    if (!source) return;
+    const radius = this._buildingRadiusMeters();
+    const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}`;
+    if (this._vegetationData && this._vegetationFetchKey === key) return;
+    this._vegetationAbort?.abort();
+    const ac = new AbortController();
+    this._vegetationAbort = ac;
+    this._vegetationFetchKey = key;
+    const bldgFc = {
+      type: "FeatureCollection",
+      features: [
+        ...this._buildingsData.home.features ?? [],
+        ...this._buildingsData.surroundings.features ?? []
+      ]
+    };
+    source.fetch(
+      {
+        homeLat: this.homeLat,
+        homeLon: this.homeLon,
+        radiusMeters: radius,
+        buildingFootprints: bldgFc,
+        signal: ac.signal
+      }
+    ).then((result) => {
+      if (ac.signal.aborted || !this.map) return;
+      this._vegetationData = result;
+      this._lastAtmosphereAlt = -999;
+      this._refreshShadowsAndAtmosphere();
+    }).catch((err) => {
+      if (err?.name === "AbortError") return;
+      console.warn("[HELIOS] Vegetation LiDAR fetch failed:", err);
     });
   }
   //Linear interpolation between two RGB hex strings.
@@ -27421,7 +27655,7 @@ const _HeliosEngine = class _HeliosEngine {
           all.push(...this._buildingsData.surroundings.features);
         }
         const fc = { type: "FeatureCollection", features: all };
-        const shadowFc = projectBuildingShadows(
+        const shadowFc = projectExtrusionShadows(
           fc,
           {
             sunAzimuthDeg: azimuth,
@@ -27430,6 +27664,23 @@ const _HeliosEngine = class _HeliosEngine {
           }
         );
         shadowsSrc.setData(shadowFc);
+      }
+    } catch (_2) {
+    }
+    try {
+      const vegSrc = this.map.getSource("helios-vegetation-shadows-src");
+      if (vegSrc) {
+        const fc = this._vegetationData ?? { type: "FeatureCollection", features: [] };
+        const shadowFc = projectExtrusionShadows(
+          fc,
+          {
+            sunAzimuthDeg: azimuth,
+            sunAltitudeDeg: altitude,
+            homeLat: this.homeLat,
+            minHeightM: 3
+          }
+        );
+        vegSrc.setData(shadowFc);
       }
     } catch (_2) {
     }
