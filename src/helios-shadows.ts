@@ -79,31 +79,55 @@ export function projectExtrusionShadows(
             const outer = poly[0] as number[][];
             if (outer.length < 3) continue;
 
-            const cloud: Array<[number, number]> = [];
-            for (const p of outer)
+            //Three nested shadow polygons per region, each extending
+            //to a different fraction of the full length. Stacked on
+            //three filtered map layers, each at fill-opacity = α/3,
+            //the alpha-composited result fades smoothly from full α
+            //near the footprint (where all 3 overlap) to α/3 at the
+            //tip (where only the longest polygon reaches). Shadow
+            //realism is dominated by this gradient, the "wall of
+            //solid grey" of beta.14 is gone.
+            for (let step = 0; step < SHADOW_FADE_STEPS; step++)
             {
-                const lon = p[0], lat = p[1];
-                cloud.push([lon,           lat]);
-                cloud.push([lon + dLonDeg, lat + dLatDeg]);
-            }
-            const hull = convexHull(cloud);
-            if (hull.length < 3) continue;
-            hull.push([hull[0][0], hull[0][1]]);
+                const frac    = (SHADOW_FADE_STEPS - step) / SHADOW_FADE_STEPS;
+                const dLonStep = dLonDeg * frac;
+                const dLatStep = dLatDeg * frac;
 
-            out.push({
-                type:       'Feature',
-                geometry:   { type: 'Polygon', coordinates: [hull] },
-                //Preserve the casting region's render_height so a
-                //downstream irradiance pass can compare it to a
-                //candidate point's height (a tall point isn't in the
-                //shadow of a short region beneath it).
-                properties: { render_height: h }
-            });
+                const cloud: Array<[number, number]> = [];
+                for (const p of outer)
+                {
+                    const lon = p[0], lat = p[1];
+                    cloud.push([lon,            lat]);
+                    cloud.push([lon + dLonStep, lat + dLatStep]);
+                }
+                const hull = convexHull(cloud);
+                if (hull.length < 3) continue;
+                hull.push([hull[0][0], hull[0][1]]);
+
+                out.push({
+                    type:       'Feature',
+                    geometry:   { type: 'Polygon', coordinates: [hull] },
+                    //Preserve the casting region's render_height so a
+                    //downstream irradiance pass can compare it to a
+                    //candidate point's height (a tall point isn't in
+                    //the shadow of a short region beneath it).
+                    //`shadow_step` identifies which of the N nested
+                    //polygons this is: layer filters key on it.
+                    properties: { render_height: h, shadow_step: step }
+                });
+            }
         }
     }
 
     return { type: 'FeatureCollection', features: out };
 }
+
+//Number of nested shadow polygons emitted per casting region. Each
+//step extends to (N - step) / N of the full length; the engine sets
+//up one filtered fill layer per step at fill-opacity = base / N, so
+//alpha compositing across the layers gives a linear fade from
+//opaque at the root to one Nth of opaque at the tip.
+export const SHADOW_FADE_STEPS = 3;
 
 //Andrew's monotone chain. Returns vertices CCW, NOT closed. Exported
 //for the LiDAR pipeline which uses it to wrap each consolidated region.

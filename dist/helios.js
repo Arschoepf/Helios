@@ -26157,28 +26157,36 @@ function projectExtrusionShadows(extrusions, opts) {
       if (!poly.length) continue;
       const outer = poly[0];
       if (outer.length < 3) continue;
-      const cloud = [];
-      for (const p2 of outer) {
-        const lon = p2[0], lat = p2[1];
-        cloud.push([lon, lat]);
-        cloud.push([lon + dLonDeg, lat + dLatDeg]);
+      for (let step = 0; step < SHADOW_FADE_STEPS; step++) {
+        const frac = (SHADOW_FADE_STEPS - step) / SHADOW_FADE_STEPS;
+        const dLonStep = dLonDeg * frac;
+        const dLatStep = dLatDeg * frac;
+        const cloud = [];
+        for (const p2 of outer) {
+          const lon = p2[0], lat = p2[1];
+          cloud.push([lon, lat]);
+          cloud.push([lon + dLonStep, lat + dLatStep]);
+        }
+        const hull = convexHull(cloud);
+        if (hull.length < 3) continue;
+        hull.push([hull[0][0], hull[0][1]]);
+        out.push({
+          type: "Feature",
+          geometry: { type: "Polygon", coordinates: [hull] },
+          //Preserve the casting region's render_height so a
+          //downstream irradiance pass can compare it to a
+          //candidate point's height (a tall point isn't in
+          //the shadow of a short region beneath it).
+          //`shadow_step` identifies which of the N nested
+          //polygons this is: layer filters key on it.
+          properties: { render_height: h2, shadow_step: step }
+        });
       }
-      const hull = convexHull(cloud);
-      if (hull.length < 3) continue;
-      hull.push([hull[0][0], hull[0][1]]);
-      out.push({
-        type: "Feature",
-        geometry: { type: "Polygon", coordinates: [hull] },
-        //Preserve the casting region's render_height so a
-        //downstream irradiance pass can compare it to a
-        //candidate point's height (a tall point isn't in the
-        //shadow of a short region beneath it).
-        properties: { render_height: h2 }
-      });
     }
   }
   return { type: "FeatureCollection", features: out };
 }
+const SHADOW_FADE_STEPS = 3;
 function convexHull(pts) {
   if (pts.length < 3) return pts.slice();
   const arr = pts.slice().sort((a2, b2) => a2[0] - b2[0] || a2[1] - b2[1]);
@@ -26222,7 +26230,8 @@ const franceLidarHd = {
     const empty = {
       regions: { type: "FeatureCollection", features: [] },
       cells: { type: "FeatureCollection", features: [] },
-      terrain: null
+      terrain: null,
+      terrainCellHalfM: 1
     };
     const rasterSize = Math.min(2048, Math.max(64, Math.round(opts.rasterSize)));
     const r2 = Math.max(1, opts.radiusMeters);
@@ -26409,10 +26418,16 @@ const franceLidarHd = {
     } else {
       console.info(`[HELIOS] LiDAR: no MNH cells passed the threshold (${nTerrain} terrain points)`);
     }
+    const M_PER_DEG_LON_LOCAL = M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180);
+    const halfM = 0.5 * Math.min(
+      pxLat * stride * M_PER_DEG_LAT,
+      pxLon * stride * M_PER_DEG_LON_LOCAL
+    );
     return {
       regions: { type: "FeatureCollection", features: regionsOut },
       cells: { type: "FeatureCollection", features: cellsOut },
-      terrain
+      terrain,
+      terrainCellHalfM: halfM
     };
   }
 };
@@ -26498,7 +26513,7 @@ function findLidarSource(lat, lon) {
 const LIDAR_TERRAIN_PROTOCOL = "helios-lidar-dem";
 const LIDAR_TERRAIN_MIN_ZOOM = 12;
 const LIDAR_TERRAIN_MAX_ZOOM = 15;
-const TILE_SIZE = 512;
+const TILE_SIZE = 256;
 const _entries = /* @__PURE__ */ new Map();
 let _protocolRegistered = false;
 function ensureProtocolRegistered() {
@@ -26694,6 +26709,11 @@ const SHADOW_PRECISION_RASTER = {
   ultra: 1024
 };
 const DEFAULT_SHADOW_OPACITY = 0.32;
+const SHADOW_LAYER_IDS = [
+  "helios-building-shadows",
+  "helios-building-shadows-mid",
+  "helios-building-shadows-far"
+];
 function bumpStat(key) {
   if (typeof window === "undefined") return;
   const w2 = window;
@@ -26712,6 +26732,7 @@ function bumpStat(key) {
 }
 const MAX_LIVE_ENGINES = 2;
 const _liveEngines = /* @__PURE__ */ new Set();
+const _lidarFetchCache = /* @__PURE__ */ new Map();
 const IS_MOBILE = (() => {
   if (typeof navigator === "undefined") {
     return false;
@@ -26852,9 +26873,9 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarFetchKey = "";
     this._engineId = "";
     this._pointCloudVisible = false;
-    this._pointCloudSticks = { type: "FeatureCollection", features: [] };
-    this._pointCloudCaps = { type: "FeatureCollection", features: [] };
+    this._pointCloudCells = { type: "FeatureCollection", features: [] };
     this._irradianceJobId = 0;
+    this._terrainCellHalfM = 1;
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -27682,16 +27703,21 @@ const _HeliosEngine = class _HeliosEngine {
         }
       );
     }
-    if (!this.map.getLayer("helios-building-shadows")) {
+    const shadowOpa = this._shadowOpacity();
+    for (let step = 0; step < SHADOW_FADE_STEPS; step++) {
+      const lid = SHADOW_LAYER_IDS[step];
+      if (this.map.getLayer(lid)) continue;
       this.map.addLayer(
         {
-          id: "helios-building-shadows",
+          id: lid,
           source: "helios-building-shadows-src",
           type: "fill",
+          filter: ["==", ["get", "shadow_step"], step],
           paint: {
             "fill-color": "#000000",
-            "fill-opacity": this._shadowOpacity(),
-            "fill-antialias": true
+            "fill-opacity": shadowOpa / SHADOW_FADE_STEPS,
+            "fill-antialias": step === 0
+            // only the root layer pays for anti-aliasing
           }
         }
       );
@@ -27755,44 +27781,19 @@ const _HeliosEngine = class _HeliosEngine {
         }
       );
     }
-    if (!this.map.getSource("helios-lidar-points-caps-src")) {
-      this.map.addSource(
-        "helios-lidar-points-caps-src",
-        {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: [] }
-        }
-      );
-    }
     const cellColorExpr = ["get", "color"];
-    if (!this.map.getLayer("helios-lidar-points-stick")) {
+    if (!this.map.getLayer("helios-lidar-points")) {
       this.map.addLayer(
         {
-          id: "helios-lidar-points-stick",
+          id: "helios-lidar-points",
           source: "helios-lidar-points-src",
           type: "fill-extrusion",
           layout: { visibility: this._pointCloudVisible ? "visible" : "none" },
           paint: {
             "fill-extrusion-color": cellColorExpr,
             "fill-extrusion-height": ["get", "top"],
-            "fill-extrusion-base": 0,
-            "fill-extrusion-opacity": 0.55
-          }
-        }
-      );
-    }
-    if (!this.map.getLayer("helios-lidar-points-cap")) {
-      this.map.addLayer(
-        {
-          id: "helios-lidar-points-cap",
-          source: "helios-lidar-points-caps-src",
-          type: "fill-extrusion",
-          layout: { visibility: this._pointCloudVisible ? "visible" : "none" },
-          paint: {
-            "fill-extrusion-color": cellColorExpr,
-            "fill-extrusion-height": ["get", "top"],
-            "fill-extrusion-base": ["get", "capBase"],
-            "fill-extrusion-opacity": 0.95
+            "fill-extrusion-base": ["get", "base"],
+            "fill-extrusion-opacity": 0.9
           }
         }
       );
@@ -27869,6 +27870,22 @@ const _HeliosEngine = class _HeliosEngine {
     const rasterSize = SHADOW_PRECISION_RASTER[level];
     const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
     if (this._lidarData && this._lidarFetchKey === key) return;
+    const cached = _lidarFetchCache.get(key);
+    if (cached) {
+      this._lidarAbort?.abort();
+      this._lidarFetchKey = key;
+      this._lidarData = cached;
+      this._terrainCellHalfM = Math.max(0.25, cached.terrainCellHalfM);
+      if (cached.terrain) {
+        registerLidarTerrain(this._engineId, cached.terrain, this.apiKey || null);
+      }
+      this._applyLidarTerrain();
+      this._pushPointCloudData();
+      this._pushRenderableSources();
+      this._lastAtmosphereAlt = -999;
+      this._refreshShadowsAndAtmosphere();
+      return;
+    }
     this._lidarAbort?.abort();
     const ac = new AbortController();
     this._lidarAbort = ac;
@@ -27886,7 +27903,9 @@ const _HeliosEngine = class _HeliosEngine {
       }
     ).then((result) => {
       if (ac.signal.aborted || !this.map) return;
+      _lidarFetchCache.set(key, result);
       this._lidarData = result;
+      this._terrainCellHalfM = Math.max(0.25, result.terrainCellHalfM);
       if (result.terrain) {
         registerLidarTerrain(this._engineId, result.terrain, this.apiKey || null);
       } else {
@@ -27922,7 +27941,7 @@ const _HeliosEngine = class _HeliosEngine {
           {
             type: "raster-dem",
             tiles: [`${LIDAR_TERRAIN_PROTOCOL}://${this._engineId}/{z}/{x}/{y}`],
-            tileSize: 512,
+            tileSize: 256,
             minzoom: LIDAR_TERRAIN_MIN_ZOOM,
             maxzoom: LIDAR_TERRAIN_MAX_ZOOM,
             encoding: "mapbox"
@@ -27961,39 +27980,38 @@ const _HeliosEngine = class _HeliosEngine {
     homeSrc?.setData(this._buildingsData?.home ?? empty);
     surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
   }
-  //Builds the GeoJSON for the point-cloud sticks + caps from the
-  //cached LiDAR cells. Three cell kinds are folded into the same
-  //two collections:
-  //   - terrain cells (height == 0): only emit a thin flat cap at
-  //     ground level (the stick would be invisible at h=0 and would
-  //     just waste a feature slot).
-  //   - building / vegetation / home cells (height > 0): emit a
-  //     0.4 m × 0.4 m stick from 0 to top, capped by a 1.2 m × 1.2 m
-  //     square between (top − 0.8 m) and top, the lollipop the user
-  //     reads as a 3D point cloud dot.
+  //Builds the GeoJSON for the point-cloud cells from the cached
+  //LiDAR data. Two visual shapes are emitted in the same collection:
   //
-  //Every feature defaults to a white `color`; the irradiance pass
-  //overwrites it once it lands. We keep both collections cached in
-  //_pointCloudSticks / _pointCloudCaps so the recolour step doesn't
-  //need to rebuild any geometry, just mutate properties and push.
+  //  - kind = 'terrain': flat ground tiles, ~2 m wide, 0 → 0.2 m
+  //    tall. They pave the LiDAR-deformed ground with a mosaic of
+  //    irradiance colours and let the user read the relief through
+  //    the dot pattern.
+  //
+  //  - other kinds: small cubes (~0.6 m wide, 0.5 m tall) anchored
+  //    AT the cell's measured top above local ground. No stick down
+  //    to the ground, the camera-eye reads the cube as a 3D point
+  //    fine on its own and we save half the geometry.
+  //
+  //Every feature gets a default `color = '#000000'`; the irradiance
+  //pass mutates it in place and calls _flushPointCloudSource. We
+  //cache the collection in _pointCloudCells so the recolour step
+  //never rebuilds any geometry.
   _pushPointCloudData() {
     if (!this.map) return;
-    const stickSrc = this.map.getSource("helios-lidar-points-src");
-    const capSrc = this.map.getSource("helios-lidar-points-caps-src");
-    if (!stickSrc || !capSrc) return;
-    this._pointCloudSticks = { type: "FeatureCollection", features: [] };
-    this._pointCloudCaps = { type: "FeatureCollection", features: [] };
+    const src = this.map.getSource("helios-lidar-points-src");
+    if (!src) return;
+    this._pointCloudCells = { type: "FeatureCollection", features: [] };
     const cells = this._lidarData?.cells;
     if (!cells || cells.features.length === 0) {
-      stickSrc.setData(this._pointCloudSticks);
-      capSrc.setData(this._pointCloudCaps);
+      src.setData(this._pointCloudCells);
       return;
     }
-    const STICK_HALF_M = 0.2;
-    const CAP_HALF_M = 0.6;
-    const CAP_HEIGHT_M = 0.8;
-    const TERRAIN_HALF = 0.5;
-    const TERRAIN_TOP_M = 0.3;
+    const CUBE_HALF_M = 0.3;
+    const CUBE_HEIGHT_M = 0.5;
+    const TERRAIN_HALF = this._terrainCellHalfM;
+    const TERRAIN_BASE_M = 0;
+    const TERRAIN_TOP_M = 0.05;
     const mPerDegLat = 111320;
     const mPerDegLon = mPerDegLat * Math.cos(this.homeLat * Math.PI / 180);
     const makeSquare = (lon, lat, halfM) => {
@@ -28010,6 +28028,7 @@ const _HeliosEngine = class _HeliosEngine {
         ]]
       };
     };
+    const features = this._pointCloudCells.features;
     for (const f2 of cells.features) {
       if (!f2.geometry || f2.geometry.type !== "Point") continue;
       const [lon, lat] = f2.geometry.coordinates;
@@ -28017,40 +28036,37 @@ const _HeliosEngine = class _HeliosEngine {
       const kind = String(f2.properties?.kind ?? "");
       if (!isFinite(top)) continue;
       if (kind === "terrain" || top <= 0) {
-        this._pointCloudCaps.features.push({
+        features.push({
           type: "Feature",
           geometry: makeSquare(lon, lat, TERRAIN_HALF),
-          properties: { top: TERRAIN_TOP_M, capBase: 0, kind, color: "#ffffff" }
+          properties: { top: TERRAIN_TOP_M, base: TERRAIN_BASE_M, kind, color: "#000000" }
         });
         continue;
       }
-      this._pointCloudSticks.features.push({
+      features.push({
         type: "Feature",
-        geometry: makeSquare(lon, lat, STICK_HALF_M),
-        properties: { top, kind, color: "#ffffff" }
-      });
-      this._pointCloudCaps.features.push({
-        type: "Feature",
-        geometry: makeSquare(lon, lat, CAP_HALF_M),
-        properties: { top, capBase: Math.max(0, top - CAP_HEIGHT_M), kind, color: "#ffffff" }
+        geometry: makeSquare(lon, lat, CUBE_HALF_M),
+        properties: {
+          top,
+          base: Math.max(0, top - CUBE_HEIGHT_M),
+          kind,
+          color: "#000000"
+        }
       });
     }
-    stickSrc.setData(this._pointCloudSticks);
-    capSrc.setData(this._pointCloudCaps);
+    src.setData(this._pointCloudCells);
     if (this._pointCloudVisible) {
       this._recomputePointCloudIrradiance();
     }
   }
-  //Apply the cached point-cloud collections to their respective
-  //sources. Called by the irradiance compute pass after it has
-  //mutated each feature's `color` property in place. Cheaper than
-  //rebuilding the GeoJSON from the LiDAR cells every time.
+  //Apply the cached point-cloud collection to its source. Called by
+  //the irradiance compute pass after it has mutated each feature's
+  //`color` property in place. Cheaper than rebuilding the GeoJSON
+  //from the LiDAR cells every time.
   _flushPointCloudSources() {
     if (!this.map) return;
-    const stickSrc = this.map.getSource("helios-lidar-points-src");
-    const capSrc = this.map.getSource("helios-lidar-points-caps-src");
-    stickSrc?.setData(this._pointCloudSticks);
-    capSrc?.setData(this._pointCloudCaps);
+    const src = this.map.getSource("helios-lidar-points-src");
+    src?.setData(this._pointCloudCells);
   }
   //Re-colour the cached point-cloud features according to the
   //irradiance they receive at the currently-selected time. Runs in
@@ -28075,18 +28091,26 @@ const _HeliosEngine = class _HeliosEngine {
   _recomputePointCloudIrradiance() {
     if (!this.map) return;
     if (!this._pointCloudVisible) return;
-    const totalSticks = this._pointCloudSticks.features.length;
-    const totalCaps = this._pointCloudCaps.features.length;
-    if (totalSticks === 0 && totalCaps === 0) return;
+    const total = this._pointCloudCells.features.length;
+    if (total === 0) return;
     const jobId = ++this._irradianceJobId;
     this.onPointCloudComputeStart?.();
     const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
     const sun = getSunPosition(t2, this.homeLat, this.homeLon);
+    if (sun.altitude <= 0) {
+      const feats2 = this._pointCloudCells.features;
+      for (let i2 = 0; i2 < feats2.length; i2++) {
+        feats2[i2].properties.color = "#000000";
+      }
+      this._flushPointCloudSources();
+      this.onPointCloudComputeEnd?.();
+      return;
+    }
     const cloud = this._homeHourlyData ? this._getWeatherAtTime(t2)?.cloudCover ?? 0 : 0;
-    const ghi = sun.altitude > 0 ? computeIrradianceWm2(t2, this.homeLat, this.homeLon, cloud) : 0;
+    const ghi = computeIrradianceWm2(t2, this.homeLat, this.homeLon, cloud);
     const ghiNorm = Math.min(1, ghi / 1e3);
     const sunHex = toColor(this.cfg["sun-color"], DEFAULT_SUN_COLOR_HEX);
-    const litColor = this._lerpHex("#ffffff", sunHex, ghiNorm);
+    const litColor = this._lerpHex("#000000", sunHex, ghiNorm);
     const shadowInput = this._lidarActive() && this._lidarData ? this._lidarData.regions : this._buildingsData && this._maptilerShadowsEnabled() ? {
       features: [
         ...this._buildingsData.home.features,
@@ -28114,17 +28138,15 @@ const _HeliosEngine = class _HeliosEngine {
       const height = Number(f2.properties?.render_height ?? 0);
       shadowEntries.push({ ring, minLon, minLat, maxLon, maxLat, height });
     }
-    const BATCH = 1500;
-    let phase = 0;
+    const feats = this._pointCloudCells.features;
+    const BATCH = 2e3;
     let cursor = 0;
     const step = () => {
       if (jobId !== this._irradianceJobId) return;
       if (!this.map) return;
-      const coll = phase === 0 ? this._pointCloudSticks : this._pointCloudCaps;
-      const total = coll.features.length;
       const end = Math.min(total, cursor + BATCH);
       for (; cursor < end; cursor++) {
-        const feat = coll.features[cursor];
+        const feat = feats[cursor];
         const props = feat.properties;
         const top = Number(props?.top ?? 0);
         const ring = feat.geometry.coordinates[0];
@@ -28136,23 +28158,17 @@ const _HeliosEngine = class _HeliosEngine {
         cLon *= 0.25;
         cLat *= 0.25;
         let inShadow = false;
-        if (sun.altitude > 0) {
-          for (const s2 of shadowEntries) {
-            if (cLon < s2.minLon || cLon > s2.maxLon || cLat < s2.minLat || cLat > s2.maxLat) continue;
-            if (s2.height <= top + 0.5) continue;
-            if (pointInRing(cLon, cLat, s2.ring)) {
-              inShadow = true;
-              break;
-            }
+        for (const s2 of shadowEntries) {
+          if (cLon < s2.minLon || cLon > s2.maxLon || cLat < s2.minLat || cLat > s2.maxLat) continue;
+          if (s2.height <= top + 0.5) continue;
+          if (pointInRing(cLon, cLat, s2.ring)) {
+            inShadow = true;
+            break;
           }
         }
-        props.color = sun.altitude <= 0 ? "#ffffff" : inShadow ? "#ffffff" : litColor;
+        props.color = inShadow ? "#000000" : litColor;
       }
       if (cursor < total) {
-        requestAnimationFrame(step);
-      } else if (phase === 0) {
-        phase = 1;
-        cursor = 0;
         requestAnimationFrame(step);
       } else {
         this._flushPointCloudSources();
@@ -28174,12 +28190,10 @@ const _HeliosEngine = class _HeliosEngine {
     this._pointCloudVisible = visible;
     if (!this.map) return;
     const vis = visible ? "visible" : "none";
-    for (const lid of ["helios-lidar-points-stick", "helios-lidar-points-cap"]) {
-      if (this.map.getLayer(lid)) {
-        try {
-          this.map.setLayoutProperty(lid, "visibility", vis);
-        } catch (_2) {
-        }
+    if (this.map.getLayer("helios-lidar-points")) {
+      try {
+        this.map.setLayoutProperty("helios-lidar-points", "visibility", vis);
+      } catch (_2) {
       }
     }
     if (visible && !prev) {
@@ -28894,10 +28908,15 @@ const _HeliosEngine = class _HeliosEngine {
       this._ensureLidarFetched();
     }
     const nextShadowOpa = this._shadowOpacity();
-    if (nextShadowOpa !== prevShadowOpa && this.map.getLayer("helios-building-shadows")) {
-      try {
-        this.map.setPaintProperty("helios-building-shadows", "fill-opacity", nextShadowOpa);
-      } catch (_2) {
+    if (nextShadowOpa !== prevShadowOpa) {
+      const per = nextShadowOpa / SHADOW_FADE_STEPS;
+      for (const lid of SHADOW_LAYER_IDS) {
+        if (this.map.getLayer(lid)) {
+          try {
+            this.map.setPaintProperty(lid, "fill-opacity", per);
+          } catch (_2) {
+          }
+        }
       }
     }
     const nextMaptilerSh = this._maptilerShadowsEnabled();
@@ -28997,8 +29016,9 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-buildings-surroundings-outline",
         "helios-buildings-home-outline",
         "helios-building-shadows",
-        "helios-lidar-points-stick",
-        "helios-lidar-points-cap"
+        "helios-building-shadows-mid",
+        "helios-building-shadows-far",
+        "helios-lidar-points"
       ]) {
         try {
           if (this.map.getLayer(lid)) this.map.removeLayer(lid);
@@ -29017,8 +29037,7 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-buildings-surroundings-src",
         "helios-buildings-home-src",
         "helios-building-shadows-src",
-        "helios-lidar-points-src",
-        "helios-lidar-points-caps-src"
+        "helios-lidar-points-src"
       ]) {
         try {
           if (this.map.getSource(sid)) this.map.removeSource(sid);
@@ -31910,7 +31929,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.14"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.15"}`,
       labelStyle,
       versionStyle
     );

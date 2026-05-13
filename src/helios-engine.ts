@@ -1,9 +1,9 @@
 import maplibregl from 'maplibre-gl';
-import type { Map } from 'maplibre-gl';
+import type { Map as MapLibreMap } from 'maplibre-gl';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './helios-sun';
 import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './helios-weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildings';
-import { projectExtrusionShadows } from './helios-shadows';
+import { projectExtrusionShadows, SHADOW_FADE_STEPS } from './helios-shadows';
 import { findLidarSource, type LidarFetchResult } from './helios-lidar';
 import {
     LIDAR_TERRAIN_PROTOCOL,
@@ -168,6 +168,17 @@ export const SHADOW_PRECISION_RASTER: Record<Exclude<ShadowPrecisionLevel, 'off'
 //the `shadow-opacity` config option.
 export const DEFAULT_SHADOW_OPACITY = 0.32;
 
+//Layer ids for the N nested shadow steps emitted by helios-shadows.ts.
+//Hard-coded for SHADOW_FADE_STEPS = 3; if the constant grows the
+//build will fail loudly because TS will complain about an
+//out-of-bounds index. Filter-on-`shadow_step` per layer means a
+//single shared source feeds all three.
+export const SHADOW_LAYER_IDS: readonly string[] = [
+    'helios-building-shadows',
+    'helios-building-shadows-mid',
+    'helios-building-shadows-far'
+];
+
 
 //Lifecycle instrumentation. Counters live on window.__heliosStats
 //so a user can inspect them at any point ("did this engine actually
@@ -225,6 +236,15 @@ function bumpStat(key: keyof HeliosStats): void
 //can't see.
 const MAX_LIVE_ENGINES = 2;
 const _liveEngines = new Set<HeliosEngine>();
+
+//Module-level LiDAR fetch cache, indexed by
+//`${provider-id}|${lat6}|${lon6}|${radius}|${raster}`. Survives
+//engine reinit (HACS hot-reload, theme change, dashboard editor
+//re-spawn, WebGL-context-loss recovery), so a user who toggles a
+//config option doesn't sit through a full IGN round-trip every
+//time. Sized to one entry per home; one Helios card per HA install
+//is the dominant usage, so an unbounded LRU would be overkill.
+const _lidarFetchCache = new Map<string, LidarFetchResult>();
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
 
@@ -551,7 +571,7 @@ function weatherCodeToIntensity(code: number, pct: number): CloudIntensity
 
 export class HeliosEngine
 {
-    private map?:     Map;
+    private map?:     MapLibreMap;
     private homeLat:  number;
     private homeLon:  number;
     //Home altitude (metres above sea level), forwarded to Open-Meteo
@@ -795,7 +815,7 @@ export class HeliosEngine
         //most useful thing when investigating layer / style issues.
         //Cheap to leave on; anyone with dev-tools open already has
         //full access to the page.
-        try { (window as unknown as { __heliosMap?: Map }).__heliosMap = this.map; }
+        try { (window as unknown as { __heliosMap?: MapLibreMap }).__heliosMap = this.map; }
         catch (_) {}
 
         //Lock the pinch-rotate pivot to the canvas centre. By default,
@@ -1894,11 +1914,18 @@ export class HeliosEngine
                 .setData(homeData);
         }
 
-        //Ground-projected shadows. Single fill layer fed either by
-        //the LiDAR consolidated regions (when available) or by the
-        //MapTiler footprints. Drawn BEFORE the building extrusions so
-        //buildings hide the under-building part of their own shadow,
-        //the visible shadow is the spillover on the ground.
+        //Ground-projected shadows. One geojson source feeding N
+        //filtered fill layers, where N = SHADOW_FADE_STEPS. Each
+        //casting region emits N nested polygons (decreasing length)
+        //with a `shadow_step` property; one layer per step renders
+        //the matching features at fill-opacity = total / N. Alpha
+        //compositing across the layers gives a linear fade from
+        //opaque at the footprint to 1/N of opaque at the shadow tip,
+        //which reads as a realistic gradient instead of a flat slab.
+        //
+        //All shadow layers are drawn BEFORE the building extrusions
+        //so buildings hide the under-building part of their own
+        //shadow, the visible shadow is the spillover on the ground.
         if (!this.map.getSource('helios-building-shadows-src'))
         {
             this.map.addSource('helios-building-shadows-src',
@@ -1907,18 +1934,22 @@ export class HeliosEngine
                 data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
             });
         }
-        if (!this.map.getLayer('helios-building-shadows'))
+        const shadowOpa = this._shadowOpacity();
+        for (let step = 0; step < SHADOW_FADE_STEPS; step++)
         {
+            const lid = SHADOW_LAYER_IDS[step];
+            if (this.map.getLayer(lid)) continue;
             this.map.addLayer(
             {
-                id:     'helios-building-shadows',
+                id:     lid,
                 source: 'helios-building-shadows-src',
                 type:   'fill',
+                filter: ['==', ['get', 'shadow_step'], step],
                 paint:
                 {
                     'fill-color':     '#000000',
-                    'fill-opacity':   this._shadowOpacity(),
-                    'fill-antialias': true
+                    'fill-opacity':   shadowOpa / SHADOW_FADE_STEPS,
+                    'fill-antialias': step === 0  // only the root layer pays for anti-aliasing
                 }
             });
         }
@@ -1985,12 +2016,24 @@ export class HeliosEngine
             }
         });
 
-        //LiDAR point-cloud "scanner" overlay. One source feeding two
-        //layers: thin stick from the ground up to the cell height,
-        //capped by a slightly wider dot at the top so the user reads
-        //it as a lollipop, the natural visual idiom for a point cloud.
-        //Both layers default to invisible; the card toggles them on
-        //via setPointCloudVisible().
+        //LiDAR point-cloud "scanner" overlay. Single source + single
+        //fill-extrusion layer. Two cell shapes live in the same
+        //collection:
+        //
+        //  - ground tiles (kind = 'terrain'): wide, flat squares hugging
+        //    the LiDAR-driven ground (~2 m wide, 0 → 0.2 m tall) so the
+        //    terrain relief reads as a mosaic of coloured cells. They
+        //    paint the irradiance of the ground itself.
+        //
+        //  - object cubes (kind = home/building/vegetation): small
+        //    cubes (~0.6 m wide, 0.5 m tall) sat at the top of the
+        //    cell's measured height. No stick down to the ground:
+        //    fewer triangles per cell, identical visual at zoom 18.
+        //
+        //Every feature carries its own `color` property, computed by
+        //the irradiance pass (black at zero irradiance, sun colour at
+        //full GHI). Until the first compute lands they default to
+        //black so the scanner doesn't flash white on toggle-on.
         if (!this.map.getSource('helios-lidar-points-src'))
         {
             this.map.addSource('helios-lidar-points-src',
@@ -1999,27 +2042,14 @@ export class HeliosEngine
                 data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
             });
         }
-        if (!this.map.getSource('helios-lidar-points-caps-src'))
-        {
-            this.map.addSource('helios-lidar-points-caps-src',
-            {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
-            });
-        }
 
-        //Each cell carries its own `color` property, computed by the
-        //irradiance pass (white at zero irradiance, sun-colour at full
-        //GHI). Until the first compute lands, every feature defaults
-        //to white so the scanner reads as a clean dot grid on toggle-
-        //on, no flash of green/grey/orange.
         const cellColorExpr = ['get', 'color'] as unknown as string;
 
-        if (!this.map.getLayer('helios-lidar-points-stick'))
+        if (!this.map.getLayer('helios-lidar-points'))
         {
             this.map.addLayer(
             {
-                id:     'helios-lidar-points-stick',
+                id:     'helios-lidar-points',
                 source: 'helios-lidar-points-src',
                 type:   'fill-extrusion',
                 layout: { visibility: this._pointCloudVisible ? 'visible' : 'none' },
@@ -2027,25 +2057,8 @@ export class HeliosEngine
                 {
                     'fill-extrusion-color':   cellColorExpr,
                     'fill-extrusion-height':  ['get', 'top'],
-                    'fill-extrusion-base':    0,
-                    'fill-extrusion-opacity': 0.55
-                }
-            });
-        }
-        if (!this.map.getLayer('helios-lidar-points-cap'))
-        {
-            this.map.addLayer(
-            {
-                id:     'helios-lidar-points-cap',
-                source: 'helios-lidar-points-caps-src',
-                type:   'fill-extrusion',
-                layout: { visibility: this._pointCloudVisible ? 'visible' : 'none' },
-                paint:
-                {
-                    'fill-extrusion-color':   cellColorExpr,
-                    'fill-extrusion-height':  ['get', 'top'],
-                    'fill-extrusion-base':    ['get', 'capBase'],
-                    'fill-extrusion-opacity': 0.95
+                    'fill-extrusion-base':    ['get', 'base'],
+                    'fill-extrusion-opacity': 0.9
                 }
             });
         }
@@ -2162,6 +2175,29 @@ export class HeliosEngine
         const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
         if (this._lidarData && this._lidarFetchKey === key) return;
 
+        //Module-level cache hit: a previous engine on this same home
+        //already paid the network + decode cost. Skip the WMS round-
+        //trip and adopt the result directly. Saves 2-8 seconds on a
+        //typical re-init (HACS hot-reload, dashboard edit, lifecycle).
+        const cached = _lidarFetchCache.get(key);
+        if (cached)
+        {
+            this._lidarAbort?.abort();
+            this._lidarFetchKey = key;
+            this._lidarData     = cached;
+            this._terrainCellHalfM = Math.max(0.25, cached.terrainCellHalfM);
+            if (cached.terrain)
+            {
+                registerLidarTerrain(this._engineId, cached.terrain, this.apiKey || null);
+            }
+            this._applyLidarTerrain();
+            this._pushPointCloudData();
+            this._pushRenderableSources();
+            this._lastAtmosphereAlt = -999;
+            this._refreshShadowsAndAtmosphere();
+            return;
+        }
+
         this._lidarAbort?.abort();
         const ac = new AbortController();
         this._lidarAbort    = ac;
@@ -2181,7 +2217,9 @@ export class HeliosEngine
         .then(result =>
         {
             if (ac.signal.aborted || !this.map) return;
+            _lidarFetchCache.set(key, result);
             this._lidarData = result;
+            this._terrainCellHalfM = Math.max(0.25, result.terrainCellHalfM);
             //Custom DEM swap: when MNT data came in we register it
             //with the maplibregl protocol and re-point setTerrain to
             //the LiDAR source. Falls back gracefully when MNT is
@@ -2242,7 +2280,7 @@ export class HeliosEngine
                 {
                     type:     'raster-dem',
                     tiles:    [`${LIDAR_TERRAIN_PROTOCOL}://${this._engineId}/{z}/{x}/{y}`],
-                    tileSize: 512,
+                    tileSize: 256,
                     minzoom:  LIDAR_TERRAIN_MIN_ZOOM,
                     maxzoom:  LIDAR_TERRAIN_MAX_ZOOM,
                     encoding: 'mapbox'
@@ -2289,59 +2327,71 @@ export class HeliosEngine
     }
 
     //Cached geometric representation of the point-cloud. We keep the
-    //sticks + caps collections live in memory rather than reading them
-    //back from the MapLibre source each time the irradiance pass
-    //recolours them, so a colour update is a constant-time mutation
-    //over a typed array of properties rather than a re-parse of the
-    //GeoJSON we just pushed in.
-    private _pointCloudSticks: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-    private _pointCloudCaps:   GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+    //collection live in memory rather than reading it back from the
+    //MapLibre source each time the irradiance pass recolours it, so
+    //a colour update is a constant-time mutation over the properties
+    //array rather than a re-parse of the GeoJSON we just pushed in.
+    private _pointCloudCells: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
     //Monotonic id of the in-flight irradiance compute job. Any new
     //job increments it; a chunk that observes a different value
     //than the one it started with bails out, so a fast scrub
     //doesn't accumulate stale work.
     private _irradianceJobId: number = 0;
 
-    //Builds the GeoJSON for the point-cloud sticks + caps from the
-    //cached LiDAR cells. Three cell kinds are folded into the same
-    //two collections:
-    //   - terrain cells (height == 0): only emit a thin flat cap at
-    //     ground level (the stick would be invisible at h=0 and would
-    //     just waste a feature slot).
-    //   - building / vegetation / home cells (height > 0): emit a
-    //     0.4 m × 0.4 m stick from 0 to top, capped by a 1.2 m × 1.2 m
-    //     square between (top − 0.8 m) and top, the lollipop the user
-    //     reads as a 3D point cloud dot.
+    //Per-side count of terrain-cell sampling, set by the LiDAR fetch
+    //pipeline (see helios-lidar-fr.ts). Used here to size the ground
+    //tiles so they tile the bbox cleanly with a small overlap rather
+    //than leaving gaps the eye reads as "missing data".
+    private _terrainCellHalfM: number = 1.0;
+
+    //Builds the GeoJSON for the point-cloud cells from the cached
+    //LiDAR data. Two visual shapes are emitted in the same collection:
     //
-    //Every feature defaults to a white `color`; the irradiance pass
-    //overwrites it once it lands. We keep both collections cached in
-    //_pointCloudSticks / _pointCloudCaps so the recolour step doesn't
-    //need to rebuild any geometry, just mutate properties and push.
+    //  - kind = 'terrain': flat ground tiles, ~2 m wide, 0 → 0.2 m
+    //    tall. They pave the LiDAR-deformed ground with a mosaic of
+    //    irradiance colours and let the user read the relief through
+    //    the dot pattern.
+    //
+    //  - other kinds: small cubes (~0.6 m wide, 0.5 m tall) anchored
+    //    AT the cell's measured top above local ground. No stick down
+    //    to the ground, the camera-eye reads the cube as a 3D point
+    //    fine on its own and we save half the geometry.
+    //
+    //Every feature gets a default `color = '#000000'`; the irradiance
+    //pass mutates it in place and calls _flushPointCloudSource. We
+    //cache the collection in _pointCloudCells so the recolour step
+    //never rebuilds any geometry.
     private _pushPointCloudData(): void
     {
         if (!this.map) return;
-        const stickSrc = this.map.getSource('helios-lidar-points-src')      as maplibregl.GeoJSONSource | undefined;
-        const capSrc   = this.map.getSource('helios-lidar-points-caps-src') as maplibregl.GeoJSONSource | undefined;
-        if (!stickSrc || !capSrc) return;
+        const src = this.map.getSource('helios-lidar-points-src') as maplibregl.GeoJSONSource | undefined;
+        if (!src) return;
 
-        this._pointCloudSticks = { type: 'FeatureCollection', features: [] };
-        this._pointCloudCaps   = { type: 'FeatureCollection', features: [] };
+        this._pointCloudCells = { type: 'FeatureCollection', features: [] };
 
         const cells = this._lidarData?.cells;
         if (!cells || cells.features.length === 0)
         {
-            stickSrc.setData(this._pointCloudSticks);
-            capSrc.setData(this._pointCloudCaps);
+            src.setData(this._pointCloudCells);
             return;
         }
 
-        const STICK_HALF_M  = 0.2;
-        const CAP_HALF_M    = 0.6;
-        const CAP_HEIGHT_M  = 0.8;
-        const TERRAIN_HALF  = 0.5;   // wider flat tile so ground points read
-        const TERRAIN_TOP_M = 0.3;   // sub-metre lift, just enough to clear z-fighting
-        const mPerDegLat    = 111_320;
-        const mPerDegLon    = mPerDegLat * Math.cos(this.homeLat * Math.PI / 180);
+        //Cube parameters: 0.6 m footprint, 0.5 m tall, sat at the
+        //cell's top above local ground. Visually reads as a 3D point
+        //at the camera's zoom 18 pitch 55° viewing geometry.
+        const CUBE_HALF_M   = 0.3;
+        const CUBE_HEIGHT_M = 0.5;
+        //Ground tile parameters. The half-size is driven by the
+        //terrain subsampling pitch so neighbouring tiles share an
+        //edge (slight overlap is fine, alpha makes it imperceptible).
+        //Cubes float ON top of the tile, so we lift the tile only
+        //fractionally above the terrain (0.05 m) to avoid z-fighting
+        //and the tile reads as the ground itself.
+        const TERRAIN_HALF   = this._terrainCellHalfM;
+        const TERRAIN_BASE_M = 0.0;
+        const TERRAIN_TOP_M  = 0.05;
+        const mPerDegLat     = 111_320;
+        const mPerDegLon     = mPerDegLat * Math.cos(this.homeLat * Math.PI / 180);
 
         const makeSquare = (lon: number, lat: number, halfM: number): GeoJSON.Polygon =>
         {
@@ -2359,6 +2409,7 @@ export class HeliosEngine
             };
         };
 
+        const features = this._pointCloudCells.features as GeoJSON.Feature[];
         for (const f of cells.features)
         {
             if (!f.geometry || f.geometry.type !== 'Point') continue;
@@ -2369,34 +2420,31 @@ export class HeliosEngine
 
             if (kind === 'terrain' || top <= 0)
             {
-                //Ground dot. One feature in the caps collection,
-                //extruded from 0 to ~0.3 m so the dot reads against
-                //the terrain without floating above it.
-                this._pointCloudCaps.features.push({
+                features.push({
                     type:       'Feature',
                     geometry:   makeSquare(lon, lat, TERRAIN_HALF),
-                    properties: { top: TERRAIN_TOP_M, capBase: 0, kind, color: '#ffffff' }
+                    properties: { top: TERRAIN_TOP_M, base: TERRAIN_BASE_M, kind, color: '#000000' }
                 });
                 continue;
             }
 
-            this._pointCloudSticks.features.push({
+            features.push({
                 type:       'Feature',
-                geometry:   makeSquare(lon, lat, STICK_HALF_M),
-                properties: { top, kind, color: '#ffffff' }
-            });
-            this._pointCloudCaps.features.push({
-                type:       'Feature',
-                geometry:   makeSquare(lon, lat, CAP_HALF_M),
-                properties: { top, capBase: Math.max(0, top - CAP_HEIGHT_M), kind, color: '#ffffff' }
+                geometry:   makeSquare(lon, lat, CUBE_HALF_M),
+                properties:
+                {
+                    top,
+                    base:  Math.max(0, top - CUBE_HEIGHT_M),
+                    kind,
+                    color: '#000000'
+                }
             });
         }
 
-        stickSrc.setData(this._pointCloudSticks);
-        capSrc.setData(this._pointCloudCaps);
+        src.setData(this._pointCloudCells);
 
         //If the scanner is already toggled on, the cells just arrived
-        //in the white default state and the user is staring at them.
+        //in the default-black state and the user is staring at them.
         //Run the irradiance compute right away so they don't sit
         //blank for a sun-tick (up to a minute).
         if (this._pointCloudVisible)
@@ -2405,17 +2453,15 @@ export class HeliosEngine
         }
     }
 
-    //Apply the cached point-cloud collections to their respective
-    //sources. Called by the irradiance compute pass after it has
-    //mutated each feature's `color` property in place. Cheaper than
-    //rebuilding the GeoJSON from the LiDAR cells every time.
+    //Apply the cached point-cloud collection to its source. Called by
+    //the irradiance compute pass after it has mutated each feature's
+    //`color` property in place. Cheaper than rebuilding the GeoJSON
+    //from the LiDAR cells every time.
     private _flushPointCloudSources(): void
     {
         if (!this.map) return;
-        const stickSrc = this.map.getSource('helios-lidar-points-src')      as maplibregl.GeoJSONSource | undefined;
-        const capSrc   = this.map.getSource('helios-lidar-points-caps-src') as maplibregl.GeoJSONSource | undefined;
-        stickSrc?.setData(this._pointCloudSticks);
-        capSrc?.setData(this._pointCloudCaps);
+        const src = this.map.getSource('helios-lidar-points-src') as maplibregl.GeoJSONSource | undefined;
+        src?.setData(this._pointCloudCells);
     }
 
     //Card-side hooks for the irradiance compute job so the card can
@@ -2448,21 +2494,35 @@ export class HeliosEngine
     {
         if (!this.map) return;
         if (!this._pointCloudVisible) return;
-        const totalSticks = this._pointCloudSticks.features.length;
-        const totalCaps   = this._pointCloudCaps.features.length;
-        if (totalSticks === 0 && totalCaps === 0) return;
+        const total = this._pointCloudCells.features.length;
+        if (total === 0) return;
 
         const jobId = ++this._irradianceJobId;
         this.onPointCloudComputeStart?.();
 
         const t      = this._selectedTime ?? new Date();
         const sun    = getSunPosition(t, this.homeLat, this.homeLon);
+
+        //Night fast-path: every cell goes to black, no shadow polygon
+        //work needed. Synchronous (a single mutate-pass over the
+        //features is cheap enough not to need RAF chunking) and we
+        //bypass the heavier compute below entirely.
+        if (sun.altitude <= 0)
+        {
+            const feats = this._pointCloudCells.features;
+            for (let i = 0; i < feats.length; i++)
+            {
+                (feats[i].properties as { color?: string }).color = '#000000';
+            }
+            this._flushPointCloudSources();
+            this.onPointCloudComputeEnd?.();
+            return;
+        }
+
         const cloud  = this._homeHourlyData
             ? (this._getWeatherAtTime(t)?.cloudCover ?? 0)
             : 0;
-        const ghi    = sun.altitude > 0
-            ? computeIrradianceWm2(t, this.homeLat, this.homeLon, cloud)
-            : 0;
+        const ghi    = computeIrradianceWm2(t, this.homeLat, this.homeLon, cloud);
         //1 kW/m² is the STC reference; we cap the lerp at GHI / STC so
         //real-world readings (peaking around 800-1000 W/m²) push the
         //colour close to saturation without hitting the cap on a
@@ -2470,7 +2530,11 @@ export class HeliosEngine
         const ghiNorm = Math.min(1, ghi / 1000);
 
         const sunHex   = toColor(this.cfg['sun-color'], DEFAULT_SUN_COLOR_HEX);
-        const litColor = this._lerpHex('#ffffff', sunHex, ghiNorm);
+        //Black at zero irradiance, configured sun colour at full GHI.
+        //Black gives shadows a hard "this area gets no light" signal
+        //that the eye can read at a glance against the LiDAR-deformed
+        //terrain.
+        const litColor = this._lerpHex('#000000', sunHex, ghiNorm);
 
         //Compute shadow polygons in the same way _refreshShadowsAndAtmosphere
         //feeds the on-ground shadow source, but we re-run here on the
@@ -2523,11 +2587,8 @@ export class HeliosEngine
             shadowEntries.push({ ring, minLon, minLat, maxLon, maxLat, height });
         }
 
-        //One job iterates BOTH collections back to back, sticks first,
-        //caps second. Each chunk processes BATCH features and yields
-        //to the browser via requestAnimationFrame.
-        const BATCH = 1500;
-        let phase  = 0;          // 0 = sticks, 1 = caps
+        const feats = this._pointCloudCells.features;
+        const BATCH = 2000;
         let cursor = 0;
 
         const step = () =>
@@ -2535,48 +2596,34 @@ export class HeliosEngine
             if (jobId !== this._irradianceJobId) return;       // superseded
             if (!this.map)                       return;        // engine torn down
 
-            const coll = phase === 0 ? this._pointCloudSticks : this._pointCloudCaps;
-            const total = coll.features.length;
-            const end   = Math.min(total, cursor + BATCH);
+            const end = Math.min(total, cursor + BATCH);
             for (; cursor < end; cursor++)
             {
-                const feat = coll.features[cursor];
-                const props = feat.properties as { top?: number; capBase?: number; color?: string };
+                const feat  = feats[cursor];
+                const props = feat.properties as { top?: number; base?: number; color?: string };
                 const top   = Number(props?.top ?? 0);
                 const ring  = ((feat.geometry as GeoJSON.Polygon).coordinates[0]) as number[][];
-                //All four ring corners cluster around the cell, so we
-                //use the polygon centre for the shadow test (cheaper
-                //than ray-casting from a corner and identical visually
-                //since the polygons are sub-metre).
+                //Polygons are sub-metre to a few metres wide; using the
+                //centre for the shadow test is identical to using a
+                //corner at this scale and dodges 4 ray casts per cell.
                 let cLon = 0, cLat = 0;
                 for (let k = 0; k < 4; k++) { cLon += ring[k][0]; cLat += ring[k][1]; }
                 cLon *= 0.25; cLat *= 0.25;
 
                 let inShadow = false;
-                if (sun.altitude > 0)
+                for (const s of shadowEntries)
                 {
-                    for (const s of shadowEntries)
-                    {
-                        if (cLon < s.minLon || cLon > s.maxLon
-                         || cLat < s.minLat || cLat > s.maxLat) continue;
-                        if (s.height <= top + 0.5) continue;  // not tall enough to shade this point
-                        if (pointInRing(cLon, cLat, s.ring)) { inShadow = true; break; }
-                    }
+                    if (cLon < s.minLon || cLon > s.maxLon
+                     || cLat < s.minLat || cLat > s.maxLat) continue;
+                    if (s.height <= top + 0.5) continue;  // not tall enough to shade this point
+                    if (pointInRing(cLon, cLat, s.ring)) { inShadow = true; break; }
                 }
 
-                props.color = (sun.altitude <= 0)
-                    ? '#ffffff'
-                    : (inShadow ? '#ffffff' : litColor);
+                props.color = inShadow ? '#000000' : litColor;
             }
 
             if (cursor < total)
             {
-                requestAnimationFrame(step);
-            }
-            else if (phase === 0)
-            {
-                phase  = 1;
-                cursor = 0;
                 requestAnimationFrame(step);
             }
             else
@@ -2602,13 +2649,10 @@ export class HeliosEngine
         this._pointCloudVisible = visible;
         if (!this.map) return;
         const vis = visible ? 'visible' : 'none';
-        for (const lid of ['helios-lidar-points-stick', 'helios-lidar-points-cap'])
+        if (this.map.getLayer('helios-lidar-points'))
         {
-            if (this.map.getLayer(lid))
-            {
-                try { this.map.setLayoutProperty(lid, 'visibility', vis); }
-                catch (_) {}
-            }
+            try { this.map.setLayoutProperty('helios-lidar-points', 'visibility', vis); }
+            catch (_) {}
         }
         if (visible && !prev)
         {
@@ -3734,14 +3778,21 @@ export class HeliosEngine
             this._ensureLidarFetched();
         }
 
-        //Shadow opacity is a paint-level update, no source/layer
-        //rebuild needed.
+        //Shadow opacity is a paint-level update spread over the N
+        //fade-step layers: each carries opacity = total / N so the
+        //alpha compositing gives the desired root opacity.
         const nextShadowOpa = this._shadowOpacity();
-        if (nextShadowOpa !== prevShadowOpa
-            && this.map.getLayer('helios-building-shadows'))
+        if (nextShadowOpa !== prevShadowOpa)
         {
-            try { this.map.setPaintProperty('helios-building-shadows', 'fill-opacity', nextShadowOpa); }
-            catch (_) {}
+            const per = nextShadowOpa / SHADOW_FADE_STEPS;
+            for (const lid of SHADOW_LAYER_IDS)
+            {
+                if (this.map.getLayer(lid))
+                {
+                    try { this.map.setPaintProperty(lid, 'fill-opacity', per); }
+                    catch (_) {}
+                }
+            }
         }
 
         //MapTiler-shadows toggle: rerun the shadow pass so the
@@ -3933,8 +3984,9 @@ export class HeliosEngine
                 'helios-buildings-surroundings-outline',
                 'helios-buildings-home-outline',
                 'helios-building-shadows',
-                'helios-lidar-points-stick',
-                'helios-lidar-points-cap'
+                'helios-building-shadows-mid',
+                'helios-building-shadows-far',
+                'helios-lidar-points'
             ])
             {
                 try { if (this.map.getLayer(lid)) this.map.removeLayer(lid); }
@@ -3953,8 +4005,7 @@ export class HeliosEngine
                 'helios-buildings-surroundings-src',
                 'helios-buildings-home-src',
                 'helios-building-shadows-src',
-                'helios-lidar-points-src',
-                'helios-lidar-points-caps-src'
+                'helios-lidar-points-src'
             ])
             {
                 try { if (this.map.getSource(sid)) this.map.removeSource(sid); }

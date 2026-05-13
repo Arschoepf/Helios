@@ -47,6 +47,10 @@ export interface LidarFetchResult
     regions: GeoJSON.FeatureCollection;
     cells:   GeoJSON.FeatureCollection;
     terrain: LidarTerrainData | null;
+    //Half-spacing of the terrain-cell grid in metres. The engine uses
+    //this to size the ground tiles so they tile cleanly with a small
+    //overlap, rather than leaving readable gaps between cells.
+    terrainCellHalfM: number;
 }
 
 export interface LidarTerrainData
