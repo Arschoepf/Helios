@@ -114,11 +114,15 @@ export interface HeliosConfig
     //the source maxzoom to 14, ~5 m per vertex, more detail in
     //the relief but ~16× more mesh vertices to project per frame.
     'terrain-detail'?:         unknown;
-    //Vegetation pulled from IGN LiDAR HD (France only). The value
-    //is one of 'off' | '4.5m' | '3m' | '2.3m', controlling the cell
-    //size of the per-pixel extrusion grid. 'off' skips the whole
-    //pipeline. Default '4.5m' (256x256 raster on a ~600 m bbox).
-    'lidar-vegetation'?:       unknown;
+    //LiDAR-driven shadow precision (France only). One of:
+    //  'off'    pipeline disabled, no IGN call
+    //  'low'    384x384 raster on a ~600 m bbox
+    //  'medium' 512x512
+    //  'high'   768x768
+    //  'ultra'  1024x1024, IGN native sampling
+    'shadow-precision'?:       unknown;
+    //Opacity of the cast ground shadow layer, 0..1. Default 0.32.
+    'shadow-opacity'?:         unknown;
 }
 
 //Default values for the building config, exposed so the visual
@@ -127,30 +131,27 @@ export const DEFAULT_BUILDING_RADIUS_M         = 100;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
-//LiDAR vegetation toggle / resolution selector. Values are the
-//approximate ground-sample distance of one cell, mapping to the
-//WMS raster size requested upstream:
-//  'off'   - pipeline disabled, no IGN call, no vegetation rendered
-//  '4.5m'  - 256 x 256 raster (~256 KB float32)
-//  '3m'    - 384 x 384 raster (~590 KB)
-//  '2.3m'  - 512 x 512 raster (~1 MB)
-//  '1.5m'  - 768 x 768 raster (~2.3 MB), close to IGN's native 50 cm,
-//            desktop-grade only (~180k extrusion features rendered).
-//  '1m'    - 1024 x 1024 raster (~4 MB). Experimental, ~300k features,
-//            stresses both bandwidth and MapLibre on anything but a
-//            capable desktop. Pixel size matches the IGN MNH native
-//            sampling, so we stop here.
-export type LidarVegetationLevel = 'off' | '4.5m' | '3m' | '2.3m' | '1.5m' | '1m';
-export const DEFAULT_LIDAR_VEGETATION: LidarVegetationLevel = '4.5m';
-//Pixel count per side for each level. Kept here next to the type so
-//adding a new level later means one line per file rather than a hunt.
-export const LIDAR_VEGETATION_RASTER: Record<Exclude<LidarVegetationLevel, 'off'>, number> = {
-    '4.5m': 256,
-    '3m':   384,
-    '2.3m': 512,
-    '1.5m': 768,
-    '1m':   1024
+//Shadow precision levels. Each level maps to a WMS raster size which
+//drives how finely the IGN LiDAR HD heightmap is sampled around the
+//home. Higher precision means finer shadow contours but a larger
+//payload and more work for the consolidation step.
+//
+//  'off'    pipeline disabled, no IGN call
+//  'low'    384 x 384 raster, ~590 KB
+//  'medium' 512 x 512,        ~1 MB
+//  'high'   768 x 768,        ~2.3 MB
+//  'ultra'  1024 x 1024,      ~4 MB, matches IGN native ~50 cm sampling
+export type ShadowPrecisionLevel = 'off' | 'low' | 'medium' | 'high' | 'ultra';
+export const DEFAULT_SHADOW_PRECISION: ShadowPrecisionLevel = 'low';
+export const SHADOW_PRECISION_RASTER: Record<Exclude<ShadowPrecisionLevel, 'off'>, number> = {
+    low:    384,
+    medium: 512,
+    high:   768,
+    ultra:  1024
 };
+//Default opacity of the ground shadow layer when the user has not set
+//the `shadow-opacity` config option.
+export const DEFAULT_SHADOW_OPACITY = 0.32;
 
 
 //Lifecycle instrumentation. Counters live on window.__heliosStats
@@ -631,16 +632,10 @@ export class HeliosEngine
     private _buildingsFetchKey: string = '';
     private _buildingsAbort?:   AbortController;
 
-    //Cached result of the LiDAR fetch around the home, same lifecycle
-    //as buildings: fetch once per (lat, lon, radius, raster, provider)
-    //tuple, reuse across style reloads. Null until the fetch completes
-    //or no provider covers the home (outside France, see helios-lidar.ts).
-    //
-    //The collection holds every classified cell (home + building +
-    //vegetation), each with a `kind` property; the engine partitions
-    //the features into the three rendering sources whenever the data
-    //needs to be pushed (LiDAR fetch resolve, level toggle, MapTiler
-    //resolve when LiDAR is off).
+    //Cached LiDAR consolidated regions, fetched once per
+    //(lat, lon, radius, raster, provider) tuple and reused across
+    //style reloads. Null until the fetch completes or the home is
+    //outside any provider's coverage (see helios-lidar.ts).
     private _lidarData:     GeoJSON.FeatureCollection | null = null;
     private _lidarFetchKey: string = '';
     private _lidarAbort?:   AbortController;
@@ -935,7 +930,12 @@ export class HeliosEngine
     //the basemap matches the dark chrome.
     private _resolveMapStyle(): { id: string }
     {
-        const raw    = String(this.cfg['map-style'] ?? 'streets').toLowerCase();
+        const raw = String(this.cfg['map-style'] ?? 'streets').toLowerCase();
+        //Satellite is a one-off: real imagery, no light/dark variants
+        //(it always reads as itself), useful for visually checking
+        //that the LiDAR shadows line up with reality.
+        if (raw === 'satellite') return { id: 'hybrid' };
+
         const base   = raw === 'topo' ? 'topo-v4' : 'streets-v4';
         const isDark = String(this.cfg['card-theme'] ?? 'light').toLowerCase() === 'dark';
         return { id: isDark ? `${base}-dark` : base };
@@ -1005,26 +1005,31 @@ export class HeliosEngine
             : 12;
     }
 
-    //Reads the user-configured LiDAR vegetation level, normalises
-    //anything off-spec to the default, and returns one of the four
-    //canonical values from LidarVegetationLevel.
-    private _lidarVegetationLevel(): LidarVegetationLevel
+    //Reads the user-configured shadow precision, normalises any
+    //off-spec value to the default and returns one of the canonical
+    //ShadowPrecisionLevel members.
+    private _shadowPrecisionLevel(): ShadowPrecisionLevel
     {
-        const v = String(this.cfg['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION).toLowerCase();
-        if (v === 'off' || v === '4.5m' || v === '3m' || v === '2.3m' || v === '1.5m' || v === '1m')
+        const v = String(this.cfg['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION).toLowerCase();
+        if (v === 'off' || v === 'low' || v === 'medium' || v === 'high' || v === 'ultra')
         {
-            return v as LidarVegetationLevel;
+            return v as ShadowPrecisionLevel;
         }
-        return DEFAULT_LIDAR_VEGETATION;
+        return DEFAULT_SHADOW_PRECISION;
     }
 
-    //True when the LiDAR pipeline is currently driving the building
-    //+ vegetation extrusions, false when MapTiler footprints are
-    //rendered as before. Used by the source-population path and the
-    //shadow projector to pick the right input feature collection.
+    //True when the LiDAR pipeline is enabled by config AND has actual
+    //region data ready to feed the shadow projector.
     private _lidarActive(): boolean
     {
-        return this._lidarVegetationLevel() !== 'off' && this._lidarData !== null;
+        return this._shadowPrecisionLevel() !== 'off' && this._lidarData !== null;
+    }
+
+    private _shadowOpacity(): number
+    {
+        const raw = Number(this.cfg['shadow-opacity']);
+        if (!Number.isFinite(raw)) return DEFAULT_SHADOW_OPACITY;
+        return Math.max(0, Math.min(1, raw));
     }
 
     private _findHourIndex(t: Date): number
@@ -1823,12 +1828,11 @@ export class HeliosEngine
                 .setData(homeData);
         }
 
-        //Ground-projected shadows. Source starts empty and is
-        //repopulated on every atmosphere tick from helios-shadows.ts.
-        //The fill layer is drawn BEFORE the building extrusions so
-        //buildings render on top of their own shadow, the visible
-        //shadow surface is the part that falls on the ground around
-        //and behind the building.
+        //Ground-projected shadows. Single fill layer fed either by
+        //the LiDAR consolidated regions (when available) or by the
+        //MapTiler footprints. Drawn BEFORE the building extrusions so
+        //buildings hide the under-building part of their own shadow,
+        //the visible shadow is the spillover on the ground.
         if (!this.map.getSource('helios-building-shadows-src'))
         {
             this.map.addSource('helios-building-shadows-src',
@@ -1847,73 +1851,8 @@ export class HeliosEngine
                 paint:
                 {
                     'fill-color':     '#000000',
-                    'fill-opacity':   0.32,
+                    'fill-opacity':   this._shadowOpacity(),
                     'fill-antialias': true
-                }
-            });
-        }
-
-        //Vegetation shadows. Same shape as building shadows but a
-        //separate source/layer so a LiDAR fetch failure (no coverage,
-        //IGN downtime, CORS, ...) leaves the building shadows
-        //untouched.
-        if (!this.map.getSource('helios-vegetation-shadows-src'))
-        {
-            this.map.addSource('helios-vegetation-shadows-src',
-            {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
-            });
-        }
-        if (!this.map.getLayer('helios-vegetation-shadows'))
-        {
-            this.map.addLayer(
-            {
-                id:     'helios-vegetation-shadows',
-                source: 'helios-vegetation-shadows-src',
-                type:   'fill',
-                paint:
-                {
-                    'fill-color':     '#000000',
-                    'fill-opacity':   0.32,
-                    'fill-antialias': true
-                }
-            });
-        }
-
-        //Vegetation as low 3D extrusions. The shadow projection above
-        //emits a polygon equal to the convex hull of (canopy footprint
-        //union projected footprint). Without a 3D occluder over the
-        //canopy itself, the whole bounded shape reads as a shadow,
-        //including the part that visually represents the trees rather
-        //than the ground beneath. That doubled the apparent shadow
-        //coverage in beta.5: the actual ground "ombres portees" is
-        //just the offset trail, the rest is canopy that should look
-        //like canopy. Rendering each region as a 3D extrusion at
-        //avg_height lets MapLibre's depth buffer hide the canopy part
-        //of the shadow, exactly the same trick the building pipeline
-        //relies on. Colour stays muted so the trees do not dominate.
-        if (!this.map.getSource('helios-vegetation-src'))
-        {
-            this.map.addSource('helios-vegetation-src',
-            {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
-            });
-        }
-        if (!this.map.getLayer('helios-vegetation'))
-        {
-            this.map.addLayer(
-            {
-                id:     'helios-vegetation',
-                source: 'helios-vegetation-src',
-                type:   'fill-extrusion',
-                paint:
-                {
-                    'fill-extrusion-color':   '#4a6741',
-                    'fill-extrusion-height':  ['get', 'render_height'],
-                    'fill-extrusion-base':    0,
-                    'fill-extrusion-opacity': 0.78
                 }
             });
         }
@@ -2053,28 +1992,17 @@ export class HeliosEngine
         });
     }
 
-    //LiDAR fetch, idempotent and cache-aware. Picks the registered
-    //country provider that covers the home (currently France only
-    //via helios-lidar-fr.ts) and stores the resulting classified
-    //cells in _lidarData. Each cell carries a `kind` property which
-    //the engine uses to route it to one of the three rendering
-    //sources (home, surroundings, vegetation), so a single fetch
-    //provides BOTH the LiDAR-precision building heights AND the
-    //vegetation around them.
-    //
-    //Fetch is gated on _buildingsData because we need the MapTiler
-    //footprints to classify each cell. No-op when no provider
-    //matches: the three sources keep whatever MapTiler-derived data
-    //they had.
+    //Idempotent LiDAR fetch. Picks the country provider that covers
+    //the home (France only for now, see helios-lidar.ts) and stores
+    //the consolidated regions in _lidarData for the shadow projector
+    //to consume. Gated on _buildingsData because the provider needs
+    //the MapTiler footprints to classify cells.
     private _ensureLidarFetched(): void
     {
         if (!this.map) return;
         if (!this._buildingsData) return;
 
-        //User opted out of LiDAR. Drop the cached cells, abort any
-        //in-flight fetch, then push the MapTiler-derived data back
-        //into the sources so the rendering reverts cleanly.
-        const level = this._lidarVegetationLevel();
+        const level = this._shadowPrecisionLevel();
         if (level === 'off')
         {
             this._lidarAbort?.abort();
@@ -2088,15 +2016,15 @@ export class HeliosEngine
         if (!source) return;
 
         const radius     = this._buildingRadiusMeters();
-        const rasterSize = LIDAR_VEGETATION_RASTER[level];
-        //Key includes the raster size so flipping levels invalidates
-        //the cache and refetches at the new resolution.
+        const rasterSize = SHADOW_PRECISION_RASTER[level];
+        //Key includes the raster size so changing levels invalidates
+        //the cache.
         const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
         if (this._lidarData && this._lidarFetchKey === key) return;
 
         this._lidarAbort?.abort();
         const ac = new AbortController();
-        this._lidarAbort   = ac;
+        this._lidarAbort    = ac;
         this._lidarFetchKey = key;
 
         source.fetch(
@@ -2105,10 +2033,6 @@ export class HeliosEngine
             homeLon:               this.homeLon,
             radiusMeters:          radius,
             rasterSize,
-            //Visible disc cells are allowed to extend to. The source
-            //still fetches a slightly padded bbox so shadows of trees
-            //on the edge can extend inward, only the rendered cells
-            //are clipped.
             cropRadiusMeters:      radius,
             homeFootprints:        this._buildingsData.home,
             surroundingFootprints: this._buildingsData.surroundings,
@@ -2120,7 +2044,7 @@ export class HeliosEngine
             this._lidarData = result;
             this._pushRenderableSources();
             //Bypass the "sun hardly moved" guard so the shadow pass
-            //runs immediately rather than waiting for sun drift.
+            //runs immediately on the new data.
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
         })
@@ -2131,44 +2055,17 @@ export class HeliosEngine
         });
     }
 
-    //Pushes the MapTiler footprints into the three rendering sources.
-    //Buildings are ALWAYS rendered from MapTiler now, the LiDAR data
-    //is used exclusively for shadow projection (see _refreshShadowsAndAtmosphere).
-    //The vegetation extrusion source stays empty and its layer is
-    //kept at visibility:none so the heavy per-cell rendering that
-    //beta.7-10 carried is gone for good.
+    //Pushes the MapTiler footprints into the building rendering
+    //sources. Buildings are always MapTiler-driven; LiDAR data is
+    //used exclusively for shadow projection (see _refreshShadowsAndAtmosphere).
     private _pushRenderableSources(): void
     {
         if (!this.map) return;
         const homeSrc = this.map.getSource('helios-buildings-home-src')         as maplibregl.GeoJSONSource | undefined;
         const surrSrc = this.map.getSource('helios-buildings-surroundings-src') as maplibregl.GeoJSONSource | undefined;
-        const vegSrc  = this.map.getSource('helios-vegetation-src')             as maplibregl.GeoJSONSource | undefined;
-
         const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-
         homeSrc?.setData(this._buildingsData?.home         ?? empty);
         surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
-        vegSrc?.setData(empty);
-
-        //The LiDAR vegetation extrusion was the "Minecraft trees"
-        //look from beta.6-10. It is no longer used, the LiDAR points
-        //feed the shadow projector only. Hide the layer once on
-        //every source push so a future style reload that re-adds it
-        //starts hidden.
-        if (this.map.getLayer('helios-vegetation'))
-        {
-            try { this.map.setLayoutProperty('helios-vegetation', 'visibility', 'none'); }
-            catch (_) {}
-        }
-        //Outlines around the MapTiler footprints, always visible now.
-        for (const lid of ['helios-buildings-surroundings-outline', 'helios-buildings-home-outline'])
-        {
-            if (this.map.getLayer(lid))
-            {
-                try { this.map.setLayoutProperty(lid, 'visibility', 'visible'); }
-                catch (_) {}
-            }
-        }
     }
 
     //Linear interpolation between two RGB hex strings.
@@ -2436,18 +2333,10 @@ export class HeliosEngine
         }
         catch (_) {}
 
-        //Unified shadow projection. When LiDAR is active the input
-        //is the consolidated LiDAR regions (buildings + vegetation
-        //collapsed to a handful of polygons per "density zone");
-        //otherwise we fall back to the MapTiler home + surroundings
-        //footprints exactly as in 1.3.x. Either way the projection
-        //is fed into `helios-building-shadows-src`, which is the
-        //single rendered shadow layer. The legacy
-        //`helios-vegetation-shadows-src` is kept empty: it stays in
-        //the style as a no-op so any cached config or saved style
-        //referencing it does not error out, but it never holds data
-        //in 1.4.0.
-        const lidarActive = this._lidarActive();
+        //Unified shadow projection. Input is the consolidated LiDAR
+        //regions when active, otherwise the MapTiler home + surroundings
+        //footprints (1.3.x behaviour). The result fills the single
+        //helios-building-shadows-src.
         try
         {
             const shadowsSrc = this.map.getSource('helios-building-shadows-src') as
@@ -2455,7 +2344,7 @@ export class HeliosEngine
             if (shadowsSrc)
             {
                 let input: GeoJSON.FeatureCollection;
-                if (lidarActive && this._lidarData)
+                if (this._lidarActive() && this._lidarData)
                 {
                     input = this._lidarData;
                 }
@@ -2473,24 +2362,13 @@ export class HeliosEngine
                 {
                     input = { type: 'FeatureCollection', features: [] };
                 }
-                const shadowFc = projectExtrusionShadows(input,
+                shadowsSrc.setData(projectExtrusionShadows(input,
                 {
                     sunAzimuthDeg:  azimuth,
                     sunAltitudeDeg: altitude,
                     homeLat:        this.homeLat
-                });
-                shadowsSrc.setData(shadowFc);
+                }));
             }
-        }
-        catch (_) {}
-
-        //Drain the legacy vegetation-shadows source on every tick so
-        //it never holds stale data after a toggle change.
-        try
-        {
-            const vegSrc = this.map.getSource('helios-vegetation-shadows-src') as
-                           maplibregl.GeoJSONSource | undefined;
-            vegSrc?.setData({ type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection);
         }
         catch (_) {}
     }
@@ -3146,7 +3024,8 @@ export class HeliosEngine
         const prevCluster     = this._buildingClusterRadiusMeters();
         const prevOpacity     = this._buildingOpacity();
         const prevColor       = this._buildingColor();
-        const prevLidarVeg    = this._lidarVegetationLevel();
+        const prevPrecision   = this._shadowPrecisionLevel();
+        const prevShadowOpa   = this._shadowOpacity();
         this.cfg = { ...cfg };
 
         if (!this.map)
@@ -3252,15 +3131,24 @@ export class HeliosEngine
             }
         }
 
-        //LiDAR level toggle: switching 'off' clears the LiDAR cells
-        //and re-pushes MapTiler data into the renderable sources,
-        //switching between resolutions invalidates the cache (the
-        //fetch-key includes the raster size) and refetches at the
-        //new sampling. _ensureLidarFetched handles both paths.
-        const nextLidarVeg = this._lidarVegetationLevel();
-        if (nextLidarVeg !== prevLidarVeg)
+        //Shadow precision toggle: 'off' clears the LiDAR cache and
+        //re-pushes MapTiler data; switching levels invalidates the
+        //cache (fetch-key includes raster size) and refetches at the
+        //new sampling. _ensureLidarFetched covers both paths.
+        const nextPrecision = this._shadowPrecisionLevel();
+        if (nextPrecision !== prevPrecision)
         {
             this._ensureLidarFetched();
+        }
+
+        //Shadow opacity is a paint-level update, no source/layer
+        //rebuild needed.
+        const nextShadowOpa = this._shadowOpacity();
+        if (nextShadowOpa !== prevShadowOpa
+            && this.map.getLayer('helios-building-shadows'))
+        {
+            try { this.map.setPaintProperty('helios-building-shadows', 'fill-opacity', nextShadowOpa); }
+            catch (_) {}
         }
 
         if (this._homeHourlyData && this._mapReady)

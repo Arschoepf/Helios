@@ -113,14 +113,22 @@ export interface Translations
         terrainDetailSmooth:      string;
         terrainDetailFine:        string;
         terrainDetailHint:        string;
-        //IGN LiDAR HD vegetation, 4 levels: Off, 4.5m, 3m, 2.3m.
-        //The label set is shared across locales because the values
-        //are numeric units; only the section title and hint are
-        //translated. The hint must mention that this is France-only
-        //while IGN's LiDAR HD survey is the only data source wired in.
-        lidarVegetation:          string;
-        lidarVegetationOff:       string;
-        lidarVegetationHint:      string;
+        //Fourth map-style segment: real satellite imagery, useful for
+        //verifying the LiDAR shadows against ground truth.
+        mapStyleSatellite:        string;
+        //LiDAR-driven shadow precision. Off + four named levels
+        //(low / medium / high / ultra), each mapped to a raster size
+        //in helios-engine. France-only for now.
+        shadowPrecision:          string;
+        shadowPrecisionOff:       string;
+        shadowPrecisionLow:       string;
+        shadowPrecisionMedium:    string;
+        shadowPrecisionHigh:      string;
+        shadowPrecisionUltra:     string;
+        shadowPrecisionHint:      string;
+        //Opacity of the cast ground shadows, 0..1 slider in the editor.
+        shadowOpacity:            string;
+        shadowOpacityHint:        string;
     };
 }
 

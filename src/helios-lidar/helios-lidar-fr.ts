@@ -1,61 +1,54 @@
-//IGN LiDAR HD vegetation source for metropolitan France + Corsica.
+//IGN LiDAR HD shadow source for metropolitan France + Corsica.
 //
-//IGN's Geoplateforme exposes the LiDAR HD survey through a standard
-//OGC WMS-Raster endpoint at https://data.geopf.fr/wms-r. Three
-//height products are available; we want MNH ("Modele Numerique de
-//Hauteur"): heights of objects ABOVE the bare terrain. A pixel of
-//8.5 means "something 8.5 m tall sits at this location", which
-//lumps trees, hedges and buildings together. We then subtract the
-//building footprints we already have (helios-buildings.ts) to keep
-//only the vegetation.
+//Pipeline:
+//  1. WMS GetMap on the IGN MNH layer (heights above terrain) in raw
+//     little-endian float32 (image/x-bil;bits=32). One request per
+//     (home, radius, raster) tuple, the engine caches the result.
+//  2. Each pixel is classified against the MapTiler home + surrounding
+//     footprints into one of three kinds (home / building / vegetation).
+//  3. 8-connected flood fill within each kind groups adjacent cells
+//     into regions; each region collapses to one Polygon (convex hull
+//     of its cell corners) with average height. The polygon is NEVER
+//     rendered; only its projected ground shadow is.
 //
-//The endpoint accepts FORMAT=image/x-bil;bits=32, which streams the
-//raster as raw little-endian float32 height values, no header. With
-//WIDTH=HEIGHT=128 a typical 600 m bbox costs 64 KB on the wire and
-//gives a 4-5 m ground sample, comfortably tree-scale.
-//
-//Coverage: France metropolitaine + Corse, no DOM-TOM (the LiDAR HD
-//programme is still in roll-out for those territories as of 2026).
-//We stay outside the API entirely when home is outside that bbox,
-//rather than waiting for a 404.
+//Coverage stops at metropolitan France + Corsica (the LiDAR HD survey
+//is still rolling out for DOM-TOM as of 2026); we bail before the API
+//call when the home falls outside that bbox.
 //
 //Reference: https://geoservices.ign.fr/lidarhd
 
-import type { LidarVegetationSource, LidarFetchOptions } from '../helios-lidar';
+import type { LidarSource, LidarFetchOptions } from '../helios-lidar';
 import { convexHull } from '../helios-shadows';
 
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
+//IGN reprojects the native LAMB-93 product to WGS84G server-side so
+//we can stay in lon/lat and avoid a coordinate transform.
 const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
-//Native LiDAR HD product is in Lambert-93 (EPSG:2154) but the WGS84G
-//variant of the layer is reprojected on the IGN side, which saves us
-//a coordinate transform here. Resolution stays the same at our
-//working bbox sizes.
 
 //Bounding box of metropolitan France + Corsica, padded by ~0.3 deg
-//so home points right on the coast still trigger a fetch.
+//so coastal homes still trigger a fetch.
 const FR_BBOX = { minLat: 41.0, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 
 const M_PER_DEG_LAT = 111_320;
 
-//Fetch parameters. Tune here if we want sharper trees vs lighter
-//network footprint. The raster size is now caller-driven (passed via
-//LidarFetchOptions.rasterSize) so the editor can expose it; the
-//remaining constants stay here.
-//  HEIGHT_THRESH_M - keep cells at or above this height (skip grass)
-//  HEIGHT_MAX_M    - sanity clamp; anything above (giant sequoias top
-//                    out at 95 m) is treated as a garbage value
-//  BBOX_PAD_FACTOR - over-fetch slightly so trees on the edge of the
-//                    visible radius still cast their shadow inward
-const HEIGHT_THRESH_M     = 5;
-const HEIGHT_MAX_M        = 100;
-const BBOX_PAD_FACTOR     = 1.15;
-//Outward inflation of each MapTiler building footprint when masking
-//cells. MapTiler's vector geometry is often a few metres smaller than
-//the actual structure; the padding catches the wall-cells and
-//attached sheds that would otherwise leak through as "vegetation".
-const BUILDING_MASK_PAD_M = 5;
+//Fetch parameters. raster size is caller-driven (LidarFetchOptions);
+//the rest stays here.
+const HEIGHT_THRESH_M     = 5;     // skip grass / waist-height noise
+const HEIGHT_MAX_M        = 100;   // anything taller is treated as garbage
+const BBOX_PAD_FACTOR     = 1.15;  // over-fetch so edge cells still cast inward
+const BUILDING_MASK_PAD_M = 5;     // outward inflation of MapTiler footprints
+//Connected components below this cell count are dropped: a single 5 m
+//pixel is more often LiDAR noise (a parked car, a survey artefact)
+//than a real shadow caster.
+const MIN_REGION_CELLS    = 3;
 
-export const franceLidarHd: LidarVegetationSource =
+interface InflatedBBox
+{
+    minLon: number; minLat: number;
+    maxLon: number; maxLat: number;
+}
+
+export const franceLidarHd: LidarSource =
 {
     id:   'fr-ign-lidarhd',
     name: 'IGN LiDAR HD (France)',
@@ -70,13 +63,10 @@ export const franceLidarHd: LidarVegetationSource =
     {
         const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-        //Pixel count per side, caller-driven (the engine maps the
-        //user-configured vegetation level to a specific value). We
-        //clamp defensively so a bad config value cannot send a 50000-
-        //pixel request to IGN.
+        //Defensive clamp on the caller-supplied raster size.
         const rasterSize = Math.min(2048, Math.max(64, Math.round(opts.rasterSize)));
 
-        const r = Math.max(1, opts.radiusMeters);
+        const r    = Math.max(1, opts.radiusMeters);
         const dLat = (r * BBOX_PAD_FACTOR) / M_PER_DEG_LAT;
         const dLon = (r * BBOX_PAD_FACTOR)
                    / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
@@ -86,9 +76,7 @@ export const franceLidarHd: LidarVegetationSource =
         const minLon = opts.homeLon - dLon;
         const maxLon = opts.homeLon + dLon;
 
-        //WMS 1.3.0 with EPSG:4326 wants axis order (lat, lon) for the
-        //bbox; 1.1.1 would want (lon, lat). We pin to 1.3.0 so the
-        //axis convention is unambiguous.
+        //WMS 1.3.0 with EPSG:4326 wants axis order (lat, lon).
         const params = new URLSearchParams({
             SERVICE: 'WMS',
             VERSION: '1.3.0',
@@ -107,52 +95,32 @@ export const franceLidarHd: LidarVegetationSource =
         {
             resp = await fetch(`${WMS_URL}?${params.toString()}`, { signal: opts.signal });
         }
-        catch (e)
-        {
-            //Network error or aborted, surface as empty result. The
-            //caller already logs at the engine level if it cares.
-            return empty;
-        }
-        if (!resp.ok)
+        catch (_)
         {
             return empty;
         }
+        if (!resp.ok) return empty;
 
         let buf: ArrayBuffer;
-        try
-        {
-            buf = await resp.arrayBuffer();
-        }
+        try { buf = await resp.arrayBuffer(); }
         catch (_) { return empty; }
 
-        //Sanity check: 4 bytes per pixel, no header. A short response
-        //means the server returned an exception XML instead of binary
-        //(common when the layer name drifts), bail rather than read
-        //garbage as floats.
+        //A short response means the server returned a ServiceException
+        //XML rather than the binary raster (typical when the layer name
+        //drifts); bail rather than read garbage as floats.
         const expectedBytes = rasterSize * rasterSize * 4;
-        if (buf.byteLength < expectedBytes)
-        {
-            return empty;
-        }
+        if (buf.byteLength < expectedBytes) return empty;
 
         const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
 
-        //Pre-compute EXPANDED bboxes for the home AND surrounding
-        //footprints separately so each LiDAR cell can be CLASSIFIED:
-        //inside a home polygon -> kind='home', inside a surrounding
-        //polygon -> kind='building', outside both -> kind='vegetation'.
-        //Each MapTiler footprint is inflated by BUILDING_MASK_PAD_M on
-        //all four sides; the vector-tile geometry is often a few metres
-        //smaller than the actual building (walls, eaves, attached
-        //sheds), and we want the wall-cells to be claimed by the
-        //building rather than leak through as "vegetation". Bbox-only
-        //test, no polygon-interior step: in L-shaped corners this
-        //slightly over-classifies a few cells as building, which is
-        //the right trade-off for a clean home / vegetation boundary.
+        //MapTiler footprints inflated by BUILDING_MASK_PAD_M on every
+        //side. Bbox-only test downstream (no polygon-interior step):
+        //slightly over-classifies in concave corners but yields a
+        //cleaner home / building / vegetation boundary in practice.
         const padDegLat = BUILDING_MASK_PAD_M / M_PER_DEG_LAT;
         const padDegLon = BUILDING_MASK_PAD_M
                         / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
-        const inflate = (geom: GeoJSON.Geometry) =>
+        const inflate = (geom: GeoJSON.Geometry): InflatedBBox | null =>
         {
             const bb = polygonBBox(geom);
             if (!bb) return null;
@@ -163,14 +131,14 @@ export const franceLidarHd: LidarVegetationSource =
                 maxLat: bb.maxLat + padDegLat
             };
         };
-        const homeBboxes: Array<{ minLon: number; minLat: number; maxLon: number; maxLat: number }> = [];
+        const homeBboxes: InflatedBBox[] = [];
         for (const f of opts.homeFootprints?.features ?? [])
         {
             if (!f.geometry) continue;
             const bb = inflate(f.geometry);
             if (bb) homeBboxes.push(bb);
         }
-        const surrBboxes: Array<{ minLon: number; minLat: number; maxLon: number; maxLat: number }> = [];
+        const surrBboxes: InflatedBBox[] = [];
         for (const f of opts.surroundingFootprints?.features ?? [])
         {
             if (!f.geometry) continue;
@@ -178,30 +146,23 @@ export const franceLidarHd: LidarVegetationSource =
             if (bb) surrBboxes.push(bb);
         }
 
-        const pxLon = (maxLon - minLon) / rasterSize;
-        const pxLat = (maxLat - minLat) / rasterSize;
+        const pxLon   = (maxLon - minLon) / rasterSize;
+        const pxLat   = (maxLat - minLat) / rasterSize;
         const halfLon = pxLon / 2;
         const halfLat = pxLat / 2;
 
-        //Optional circular crop. Cells beyond cropRadiusMeters from
-        //the home are dropped so the shadow zones stay inside the
-        //visible disc.
+        //Optional circular crop around the home, in metres.
         const cropM = opts.cropRadiusMeters && opts.cropRadiusMeters > 0
             ? opts.cropRadiusMeters
             : null;
 
-        //Pass 1: classify every passing cell into one of three kinds
-        //(home / building / vegetation) and stash its height. We need
-        //two parallel grids (kindArr + hOk) because the flood fill in
-        //pass 2 reads kind for connectivity and avg height per region.
-        //
-        //Row j = 0 is the NORTH edge of the bbox in WMS image
-        //convention (top-down). Latitude decreases as j grows.
-        const N        = rasterSize * rasterSize;
-        const kindArr  = new Uint8Array(N);     // 0 = none, 1 = home, 2 = building, 3 = vegetation
-        const hOk      = new Float32Array(N);
+        //Pass 1, classify. Row j = 0 is the NORTH edge of the bbox in
+        //WMS image convention (top-down).
+        const N       = rasterSize * rasterSize;
+        const kindArr = new Uint8Array(N);   // 0 none | 1 home | 2 building | 3 vegetation
+        const hOk     = new Float32Array(N);
         let hMin = Infinity, hMax = -Infinity;
-        let keptHome = 0, keptBldg = 0, keptVeg = 0;
+        let nHome = 0, nBldg = 0, nVeg = 0;
 
         for (let j = 0; j < rasterSize; j++)
         {
@@ -219,26 +180,23 @@ export const franceLidarHd: LidarVegetationSource =
                     continue;
                 }
 
-                //Home wins over surrounding when the inflated bboxes
-                //happen to overlap (rare but defensive).
-                let k = 3;                                            // vegetation
-                if (cellInsideAnyBBox(cLon, cLat, homeBboxes))      k = 1;  // home
-                else if (cellInsideAnyBBox(cLon, cLat, surrBboxes)) k = 2;  // building
+                //Home wins over surrounding when bboxes overlap.
+                let k = 3;
+                if      (cellInsideAnyBBox(cLon, cLat, homeBboxes)) k = 1;
+                else if (cellInsideAnyBBox(cLon, cLat, surrBboxes)) k = 2;
 
                 kindArr[idx] = k;
                 hOk[idx]     = h;
-                if (k === 1)      keptHome++;
-                else if (k === 2) keptBldg++;
-                else              keptVeg++;
+                if      (k === 1) nHome++;
+                else if (k === 2) nBldg++;
+                else              nVeg++;
                 if (h < hMin) hMin = h;
                 if (h > hMax) hMax = h;
             }
         }
 
-        //Pass 2: 8-connected flood fill, components stay within their
-        //kind. A tree right next to a building stays in its own region
-        //so the shadow it casts has the tree's geometry, not a blended
-        //building+tree blob.
+        //Pass 2, 8-connected flood fill within each kind, so a tree
+        //next to a building stays a separate region.
         const labels = new Int32Array(N);
         const stack: number[] = [];
         const components: Array<{ cells: number[]; heightSum: number }> = [];
@@ -280,17 +238,15 @@ export const franceLidarHd: LidarVegetationSource =
             components.push({ cells, heightSum });
         }
 
-        //Pass 3: one Polygon per region. We collect the 4 corners of
-        //every cell in the region and take the convex hull; that
-        //slightly over-approximates non-convex shapes (an L or a
-        //horseshoe gets convexified) but the polygon is NEVER
-        //rendered visibly, only its projected shadow shows up, and a
-        //slight extra coverage at the shadow edge is invisible under
-        //the home or behind the tree line. Height fed to the shadow
-        //projector is the region average.
+        //Pass 3, one Polygon per region. Convex hull of cell corners
+        //(slight over-approximation for L-shapes is invisible since
+        //the polygon itself is never rendered, only its shadow).
         const out: GeoJSON.Feature[] = [];
+        let dropped = 0;
         for (const comp of components)
         {
+            if (comp.cells.length < MIN_REGION_CELLS) { dropped++; continue; }
+
             const corners: Array<[number, number]> = [];
             for (const idx of comp.cells)
             {
@@ -307,29 +263,29 @@ export const franceLidarHd: LidarVegetationSource =
             if (hull.length < 3) continue;
             hull.push([hull[0][0], hull[0][1]]);
 
-            const avg = comp.heightSum / comp.cells.length;
             out.push({
                 type:       'Feature',
                 geometry:   { type: 'Polygon', coordinates: [hull] },
                 properties:
                 {
-                    render_height:     avg,
+                    render_height:     comp.heightSum / comp.cells.length,
                     render_min_height: 0
                 }
             });
         }
 
-        const totalKept = keptHome + keptBldg + keptVeg;
+        const totalKept = nHome + nBldg + nVeg;
         if (totalKept > 0)
         {
             console.info(
-                `[HELIOS] LiDAR shadows: ${keptHome} home + ${keptBldg} building + ${keptVeg} vegetation cells -> ` +
-                `${components.length} regions, height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
+                `[HELIOS] LiDAR shadows: ${nHome} home + ${nBldg} building + ${nVeg} vegetation cells -> ` +
+                `${out.length} regions (${dropped} dropped < ${MIN_REGION_CELLS} cells), ` +
+                `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
             );
         }
         else
         {
-            console.info('[HELIOS] LiDAR cells: no cells passed the threshold');
+            console.info('[HELIOS] LiDAR shadows: no cells passed the threshold');
         }
 
         return { type: 'FeatureCollection', features: out };
@@ -340,10 +296,9 @@ export const franceLidarHd: LidarVegetationSource =
 
 const EARTH_RADIUS_M = 6_371_008.8;
 
-//Great-circle distance in metres, used for the circular vegetation
-//crop. The cells we test are at most a couple of hundred metres from
-//the home so a flat-earth approximation would also work, but the
-//classic haversine is cheap and unambiguous.
+//Great-circle distance in metres. Cells are at most a few hundred
+//metres from the home so a flat-earth approximation would also do,
+//but the classic haversine is cheap and unambiguous.
 function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number
 {
     const toRad = Math.PI / 180;
@@ -355,7 +310,7 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
     return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a));
 }
 
-function polygonBBox(geom: GeoJSON.Geometry): { minLon: number; minLat: number; maxLon: number; maxLat: number } | null
+function polygonBBox(geom: GeoJSON.Geometry): InflatedBBox | null
 {
     let rings: number[][][] | null = null;
     if (geom.type === 'Polygon')
@@ -364,8 +319,8 @@ function polygonBBox(geom: GeoJSON.Geometry): { minLon: number; minLat: number; 
     }
     else if (geom.type === 'MultiPolygon')
     {
-        //Flatten to the outer rings only; multi-polygon parts are
-        //adjacent in our pipeline so the union bbox is tight enough.
+        //Flatten to outer rings only; multi-polygon parts are adjacent
+        //in our pipeline so the union bbox is tight enough.
         const all: number[][][] = [];
         for (const poly of geom.coordinates as number[][][][])
         {
@@ -390,17 +345,8 @@ function polygonBBox(geom: GeoJSON.Geometry): { minLon: number; minLat: number; 
     return { minLon, minLat, maxLon, maxLat };
 }
 
-//Bbox-only mask test. The bboxes passed in are already inflated by
-//BUILDING_MASK_PAD_M on every side, so any cell whose centre lands
-//inside an inflated bbox is treated as a building cell and dropped.
-//Slightly over-filters in concave corners of L-shaped footprints,
-//which is the right trade-off here: we'd rather miss a few real
-//vegetation cells than render a phantom green block next to the
-//home because MapTiler's footprint stopped a metre before the wall.
-function cellInsideAnyBBox(
-    lon: number, lat: number,
-    bboxes: Array<{ minLon: number; minLat: number; maxLon: number; maxLat: number }>
-): boolean
+//Bbox-only mask test against a list of pre-inflated rectangles.
+function cellInsideAnyBBox(lon: number, lat: number, bboxes: InflatedBBox[]): boolean
 {
     for (const b of bboxes)
     {

@@ -82,8 +82,15 @@ export const nl: Translations = {
         terrainDetailSmooth:   'Vloeiend',
         terrainDetailFine:     'Fijn',
         terrainDetailHint:     'Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe, alleen zinvol op krachtige desktops.',
-        lidarVegetation:       'LiDAR-schaduwprecisie *',
-        lidarVegetationOff:    'Uit',
-        lidarVegetationHint:   'Voorlopig alleen Frankrijk. Haalt IGN LiDAR HD-hoogtes rond het huis op, groepeert ze per dichtheid tot schaduwzones en projecteert die zones op de grond. De LiDAR-polygonen zelf worden NIET getoond, alleen hun schaduwen; gebouwen behouden de gewone MapTiler-3D-weergave. De waarde is de samplingstap: kleiner, scherpere schaduwcontouren, meer netwerklast. 4.5m werkt overal, 1m sluit aan op de IGN-natieve sampling en alleen op krachtige desktops.'
+        mapStyleSatellite:     'Satelliet',
+        shadowPrecision:       'Schaduwprecisie *',
+        shadowPrecisionOff:    'Uit',
+        shadowPrecisionLow:    'Laag',
+        shadowPrecisionMedium: 'Middel',
+        shadowPrecisionHigh:   'Hoog',
+        shadowPrecisionUltra:  'Ultra',
+        shadowPrecisionHint:   'Voorlopig alleen beschikbaar in Frankrijk.',
+        shadowOpacity:         'Schaduwdekking *',
+        shadowOpacityHint:     'Dekking van de op de grond geprojecteerde schaduwen.'
     }
 };

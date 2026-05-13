@@ -1,27 +1,16 @@
-//Common interface and registry for country-specific LiDAR vegetation
-//sources. Each source can answer two questions:
+//Common interface and registry for country-specific LiDAR providers.
 //
-//  - covers(lat, lon): does this provider have data for the home
-//    location? Cheap bbox check, no network call.
-//  - fetch(opts):      one-shot pull of a vegetation height field
-//    over a square area around the home. Returned as a GeoJSON
-//    FeatureCollection of small Polygon "cells" with `render_height`
-//    and `render_min_height` properties so the same shadow projection
-//    code path used for buildings (helios-shadows.ts) handles them
-//    transparently.
-//
-//Adding a new country = adding a new file (helios-lidar-us.ts,
-//helios-lidar-de.ts, ...) that exports a LidarVegetationSource and
-//registering it in LIDAR_SOURCES below. No engine-side changes
-//needed past that.
+//Adding a country = drop a new file under ./helios-lidar/ that exports
+//a LidarSource and register it in LIDAR_SOURCES below. No engine-side
+//changes needed.
 
-export interface LidarVegetationSource
+export interface LidarSource
 {
-    //Stable identifier, used in logs and as a cache key prefix. Keep
-    //it lowercase, country-prefixed, hyphen-separated.
+    //Stable identifier, lowercased and country-prefixed. Goes into
+    //logs and the engine's fetch-cache key.
     id:    string;
-    //Human-readable label, currently used only in console logging
-    //but may surface in future config UI.
+    //Human-readable label, currently logs-only, may surface in a
+    //future config UI.
     name:  string;
 
     //Cheap synchronous coverage probe. Implementations should bail
@@ -29,19 +18,15 @@ export interface LidarVegetationSource
     //on every home-position change without measurable cost.
     covers(lat: number, lon: number): boolean;
 
-    //Fetch vegetation cells around the home. Implementations are
-    //responsible for:
-    //  - choosing an appropriate raster resolution / bbox padding,
-    //  - decoding whatever wire format the upstream API exposes
-    //    (BIL float32 for IGN, GeoTIFF for some US sources, ...),
-    //  - thresholding by height (typically >= 3 m to skip grass /
-    //    bushes),
-    //  - removing cells overlapping the supplied building footprints
-    //    (those already cast their own shadow via helios-buildings).
+    //Fetch + consolidate height data around the home. Implementations
+    //decode whatever wire format the upstream API exposes, threshold
+    //by height, classify cells against the supplied building
+    //footprints, and return ONE Polygon per connected region (NOT
+    //per cell): the engine consumes these as shadow-projector input,
+    //the polygons themselves are never rendered.
     //
-    //Returned features must be Polygons with `render_height` and
-    //`render_min_height` numeric properties; helios-shadows.ts
-    //consumes them identically to MapTiler building features.
+    //Each emitted feature must carry numeric `render_height` and
+    //`render_min_height` properties (helios-shadows.ts contract).
     fetch(opts: LidarFetchOptions): Promise<GeoJSON.FeatureCollection>;
 }
 
@@ -51,43 +36,32 @@ export interface LidarFetchOptions
     homeLon:      number;
     radiusMeters: number;
     //Pixel count per side requested from the upstream raster. Higher
-    //means finer ground sampling, larger payload, more features
-    //downstream. The engine derives this from the user-configured
-    //vegetation level (helios-engine.ts:LIDAR_VEGETATION_RASTER).
+    //means finer ground sampling, larger payload and more work in the
+    //consolidation pass. The engine derives this from the user-set
+    //shadow-precision level (helios-engine.ts:SHADOW_PRECISION_RASTER).
     rasterSize:   number;
     //Hard limit on the haversine distance from the home, in metres.
-    //Cells beyond this are dropped so the rendered vegetation disc
-    //matches the buildings disc. Provider implementations still fetch
-    //a padded bbox so shadows of trees on the edge can extend inward.
+    //Cells beyond this are dropped so the rendered shadow zones stay
+    //inside the visible disc. Providers still fetch a padded bbox so
+    //edge features can still cast their shadow inward.
     cropRadiusMeters?: number;
-    //Home polygons from MapTiler. Cells whose centre falls inside any
-    //of these (after BUILDING_MASK_PAD_M inflation) are CLASSIFIED as
-    //'home' rather than filtered. The engine uses the per-cell LiDAR
-    //height for the rendered home extrusion, with the MapTiler
-    //footprint kept only for the ground-level outline.
-    homeFootprints?:         GeoJSON.FeatureCollection;
-    //Surrounding-building polygons from MapTiler. Cells inside any of
-    //these are classified as 'building'.
-    surroundingFootprints?:  GeoJSON.FeatureCollection;
-    signal?:      AbortSignal;
+    //MapTiler home polygons. Cells inside (after BUILDING_MASK_PAD_M
+    //inflation) are classified as 'home', else cells inside a
+    //surroundingFootprints polygon become 'building', else 'vegetation'.
+    homeFootprints?:        GeoJSON.FeatureCollection;
+    surroundingFootprints?: GeoJSON.FeatureCollection;
+    signal?:                AbortSignal;
 }
 
-//A LiDAR feature is one Polygon cell with a height and a kind that
-//tells the renderer how to colour / layer it. Providers must set
-//`kind` on every emitted feature.
-export type LidarCellKind = 'home' | 'building' | 'vegetation';
-
-//Registered providers, ordered by preference. The first one that
-//covers the home wins. Currently France (IGN LiDAR HD) only; future
-//providers (US 3DEP, German DGM, ...) live alongside in the
-//./helios-lidar/ subfolder and are registered the same way.
 import { franceLidarHd } from './helios-lidar/helios-lidar-fr';
 
-export const LIDAR_SOURCES: LidarVegetationSource[] = [
+//Registered providers, ordered by preference. The first one that
+//covers the home wins. Currently France only.
+export const LIDAR_SOURCES: LidarSource[] = [
     franceLidarHd
 ];
 
-export function findLidarSource(lat: number, lon: number): LidarVegetationSource | null
+export function findLidarSource(lat: number, lon: number): LidarSource | null
 {
     for (const src of LIDAR_SOURCES)
     {

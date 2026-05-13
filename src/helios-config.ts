@@ -11,7 +11,8 @@ import
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_BUILDING_COLOR_HEX,
-    DEFAULT_LIDAR_VEGETATION
+    DEFAULT_SHADOW_PRECISION,
+    DEFAULT_SHADOW_OPACITY
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -542,7 +543,7 @@ export class HeliosCardEditor extends LitElement
                 <div class="section-title">${t.editor.mapSection}</div>
                 <div class="field">
                     <span class="label">${t.editor.mapStyle}</span>
-                    <div class="segmented-toggle segmented-toggle-3">
+                    <div class="segmented-toggle segmented-toggle-wide">
                         <button
                             type="button"
                             class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'streets' ? 'active' : ''}"
@@ -558,6 +559,11 @@ export class HeliosCardEditor extends LitElement
                             class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'minimal' ? 'active' : ''}"
                             @click="${() => this._update('map-style', 'minimal')}"
                         >${t.editor.mapStyleMinimal}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'satellite' ? 'active' : ''}"
+                            @click="${() => this._update('map-style', 'satellite')}"
+                        >${t.editor.mapStyleSatellite}</button>
                     </div>
                 </div>
                 <div class="hint">${t.editor.mapStyleHint}</div>
@@ -687,41 +693,49 @@ export class HeliosCardEditor extends LitElement
                 <div class="hint">${t.editor.buildingsHint}</div>
 
                 <div class="field">
-                    <span class="label">${t.editor.lidarVegetation}</span>
-                    <div class="segmented-toggle segmented-toggle-5">
+                    <span class="label">${t.editor.shadowPrecision}</span>
+                    <div class="segmented-toggle segmented-toggle-wide">
                         <button
                             type="button"
-                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === 'off' ? 'active' : ''}"
-                            @click="${() => this._update('lidar-vegetation', 'off')}"
-                        >${t.editor.lidarVegetationOff}</button>
+                            class="seg-option ${(String(c['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION)) === 'off' ? 'active' : ''}"
+                            @click="${() => this._update('shadow-precision', 'off')}"
+                        >${t.editor.shadowPrecisionOff}</button>
                         <button
                             type="button"
-                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '4.5m' ? 'active' : ''}"
-                            @click="${() => this._update('lidar-vegetation', '4.5m')}"
-                        >4.5m</button>
+                            class="seg-option ${(String(c['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION)) === 'low' ? 'active' : ''}"
+                            @click="${() => this._update('shadow-precision', 'low')}"
+                        >${t.editor.shadowPrecisionLow}</button>
                         <button
                             type="button"
-                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '3m' ? 'active' : ''}"
-                            @click="${() => this._update('lidar-vegetation', '3m')}"
-                        >3m</button>
+                            class="seg-option ${(String(c['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION)) === 'medium' ? 'active' : ''}"
+                            @click="${() => this._update('shadow-precision', 'medium')}"
+                        >${t.editor.shadowPrecisionMedium}</button>
                         <button
                             type="button"
-                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '2.3m' ? 'active' : ''}"
-                            @click="${() => this._update('lidar-vegetation', '2.3m')}"
-                        >2.3m</button>
+                            class="seg-option ${(String(c['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION)) === 'high' ? 'active' : ''}"
+                            @click="${() => this._update('shadow-precision', 'high')}"
+                        >${t.editor.shadowPrecisionHigh}</button>
                         <button
                             type="button"
-                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '1.5m' ? 'active' : ''}"
-                            @click="${() => this._update('lidar-vegetation', '1.5m')}"
-                        >1.5m</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['lidar-vegetation'] ?? DEFAULT_LIDAR_VEGETATION)) === '1m' ? 'active' : ''}"
-                            @click="${() => this._update('lidar-vegetation', '1m')}"
-                        >1m</button>
+                            class="seg-option ${(String(c['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION)) === 'ultra' ? 'active' : ''}"
+                            @click="${() => this._update('shadow-precision', 'ultra')}"
+                        >${t.editor.shadowPrecisionUltra}</button>
                     </div>
                 </div>
-                <div class="hint">${t.editor.lidarVegetationHint}</div>
+                <div class="hint">${t.editor.shadowPrecisionHint}</div>
+
+                <label class="field">
+                    <span class="label">${t.editor.shadowOpacity}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            .value="${String(c['shadow-opacity'] ?? DEFAULT_SHADOW_OPACITY)}"
+                            @input="${(e: Event) => this._numSlider('shadow-opacity', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['shadow-opacity'] ?? DEFAULT_SHADOW_OPACITY), 0.05)}</span>
+                    </div>
+                </label>
+                <div class="hint">${t.editor.shadowOpacityHint}</div>
 
                 <div class="section-title">${t.editor.colors}</div>
                 <label class="field">
@@ -952,11 +966,11 @@ export class HeliosCardEditor extends LitElement
             background: var(--card-background-color, #fff);
         }
 
-        /*  Five-option variant for the LiDAR vegetation toggle. Wider
-            base width plus flex-wrap so cramped editor widths break
-            the buttons onto a second row instead of cropping the
-            last label. */
-        .segmented-toggle-5
+        /*  Wider variant for toggles with 4+ options (map-style with
+            satellite, shadow-precision). Full width plus flex-wrap so
+            cramped editor widths break the buttons onto a second row
+            instead of cropping the last label. */
+        .segmented-toggle-wide
         {
             width: 100%;
             min-width: 240px;
@@ -964,7 +978,7 @@ export class HeliosCardEditor extends LitElement
             border-radius: 6px;
             row-gap: 0;
         }
-        .segmented-toggle-5 .seg-option
+        .segmented-toggle-wide .seg-option
         {
             min-width: 48px;
         }

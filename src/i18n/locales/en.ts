@@ -91,9 +91,16 @@ export const en: Translations = {
         terrainDetail:         'Terrain detail *',
         terrainDetailSmooth:   'Smooth',
         terrainDetailFine:     'Fine',
-        terrainDetailHint:     'Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame — only worth it on capable desktops.',
-        lidarVegetation:       'LiDAR shadow precision *',
-        lidarVegetationOff:    'Off',
-        lidarVegetationHint:   'France only for now. Streams IGN LiDAR HD heights around the home, groups them into shadow zones by density and casts those zones as ground shadows. The LiDAR polygons themselves are NOT rendered, only their shadows; buildings keep the regular MapTiler 3D look. The value is the sampling step: smaller = sharper shadow shapes, larger payload. 4.5m is comfortable on any device, 1m matches IGN native sampling and is for capable desktops only.'
+        terrainDetailHint:     'Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame, only worth it on capable desktops.',
+        mapStyleSatellite:     'Satellite',
+        shadowPrecision:       'Shadow precision *',
+        shadowPrecisionOff:    'Off',
+        shadowPrecisionLow:    'Low',
+        shadowPrecisionMedium: 'Medium',
+        shadowPrecisionHigh:   'High',
+        shadowPrecisionUltra:  'Ultra',
+        shadowPrecisionHint:   'Only available in France for now.',
+        shadowOpacity:         'Shadow opacity *',
+        shadowOpacityHint:     'Opacity of the cast ground shadows.'
     }
 };

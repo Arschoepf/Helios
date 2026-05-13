@@ -82,8 +82,15 @@ export const de: Translations = {
         terrainDetailSmooth:   'Geglättet',
         terrainDetailFine:     'Fein',
         terrainDetailHint:     'Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe, nur auf leistungsfähigen Desktops sinnvoll.',
-        lidarVegetation:       'LiDAR-Schattenpräzision *',
-        lidarVegetationOff:    'Aus',
-        lidarVegetationHint:   'Derzeit nur in Frankreich verfügbar. Lädt IGN-LiDAR-HD-Höhen rund um das Zuhause, gruppiert sie nach Dichte zu Schattenzonen und projiziert diese Zonen auf den Boden. Die LiDAR-Polygone selbst werden NICHT dargestellt, nur ihre Schatten; Gebäude behalten die übliche MapTiler-3D-Ansicht. Der Wert ist die Abtastung: kleiner heißt schärfere Schattenkonturen, größere Netzwerklast. 4.5m läuft überall, 1m entspricht der nativen IGN-Abtastung und nur auf leistungsfähigen Desktops.'
+        mapStyleSatellite:     'Satellit',
+        shadowPrecision:       'Schattenpräzision *',
+        shadowPrecisionOff:    'Aus',
+        shadowPrecisionLow:    'Niedrig',
+        shadowPrecisionMedium: 'Mittel',
+        shadowPrecisionHigh:   'Hoch',
+        shadowPrecisionUltra:  'Ultra',
+        shadowPrecisionHint:   'Derzeit nur in Frankreich verfügbar.',
+        shadowOpacity:         'Schatten-Deckkraft *',
+        shadowOpacityHint:     'Deckkraft der am Boden geworfenen Schatten.'
     }
 };

@@ -26128,16 +26128,12 @@ const M_PER_DEG_LAT$1 = 111320;
 function projectExtrusionShadows(extrusions, opts) {
   const empty = { type: "FeatureCollection", features: [] };
   const minAlt = opts.minAltitudeDeg ?? 1.5;
-  if (opts.sunAltitudeDeg <= minAlt) {
-    return empty;
-  }
+  if (opts.sunAltitudeDeg <= minAlt) return empty;
   const D2 = Math.PI / 180;
   const azR = opts.sunAzimuthDeg * D2;
   const altR = opts.sunAltitudeDeg * D2;
-  const sunDx = Math.sin(azR);
-  const sunDy = Math.cos(azR);
-  const shadowDx = -sunDx;
-  const shadowDy = -sunDy;
+  const shadowDx = -Math.sin(azR);
+  const shadowDy = -Math.cos(azR);
   const tanAlt = Math.tan(altR);
   const mPerDegLon = M_PER_DEG_LAT$1 * Math.cos(opts.homeLat * D2);
   const minH = opts.minHeightM ?? 2;
@@ -26154,11 +26150,8 @@ function projectExtrusionShadows(extrusions, opts) {
     const dLatDeg = shadowDy * lenM / M_PER_DEG_LAT$1;
     const dLonDeg = shadowDx * lenM / mPerDegLon;
     let polygons = null;
-    if (geom.type === "Polygon") {
-      polygons = [geom.coordinates];
-    } else if (geom.type === "MultiPolygon") {
-      polygons = geom.coordinates;
-    }
+    if (geom.type === "Polygon") polygons = [geom.coordinates];
+    else if (geom.type === "MultiPolygon") polygons = geom.coordinates;
     if (!polygons) continue;
     for (const poly of polygons) {
       if (!poly.length) continue;
@@ -26213,6 +26206,7 @@ const HEIGHT_THRESH_M = 5;
 const HEIGHT_MAX_M = 100;
 const BBOX_PAD_FACTOR = 1.15;
 const BUILDING_MASK_PAD_M = 5;
+const MIN_REGION_CELLS = 3;
 const franceLidarHd = {
   id: "fr-ign-lidarhd",
   name: "IGN LiDAR HD (France)",
@@ -26244,12 +26238,10 @@ const franceLidarHd = {
     let resp;
     try {
       resp = await fetch(`${WMS_URL}?${params.toString()}`, { signal: opts.signal });
-    } catch (e2) {
+    } catch (_2) {
       return empty;
     }
-    if (!resp.ok) {
-      return empty;
-    }
+    if (!resp.ok) return empty;
     let buf;
     try {
       buf = await resp.arrayBuffer();
@@ -26257,9 +26249,7 @@ const franceLidarHd = {
       return empty;
     }
     const expectedBytes = rasterSize * rasterSize * 4;
-    if (buf.byteLength < expectedBytes) {
-      return empty;
-    }
+    if (buf.byteLength < expectedBytes) return empty;
     const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
     const padDegLat = BUILDING_MASK_PAD_M / M_PER_DEG_LAT;
     const padDegLon = BUILDING_MASK_PAD_M / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
@@ -26294,7 +26284,7 @@ const franceLidarHd = {
     const kindArr = new Uint8Array(N2);
     const hOk = new Float32Array(N2);
     let hMin = Infinity, hMax = -Infinity;
-    let keptHome = 0, keptBldg = 0, keptVeg = 0;
+    let nHome = 0, nBldg = 0, nVeg = 0;
     for (let j = 0; j < rasterSize; j++) {
       const cLat = maxLat - (j + 0.5) * pxLat;
       for (let i2 = 0; i2 < rasterSize; i2++) {
@@ -26310,9 +26300,9 @@ const franceLidarHd = {
         else if (cellInsideAnyBBox(cLon, cLat, surrBboxes)) k2 = 2;
         kindArr[idx] = k2;
         hOk[idx] = h2;
-        if (k2 === 1) keptHome++;
-        else if (k2 === 2) keptBldg++;
-        else keptVeg++;
+        if (k2 === 1) nHome++;
+        else if (k2 === 2) nBldg++;
+        else nVeg++;
         if (h2 < hMin) hMin = h2;
         if (h2 > hMax) hMax = h2;
       }
@@ -26350,7 +26340,12 @@ const franceLidarHd = {
       components.push({ cells, heightSum });
     }
     const out = [];
+    let dropped = 0;
     for (const comp of components) {
+      if (comp.cells.length < MIN_REGION_CELLS) {
+        dropped++;
+        continue;
+      }
       const corners = [];
       for (const idx of comp.cells) {
         const x2 = idx % rasterSize;
@@ -26365,23 +26360,22 @@ const franceLidarHd = {
       const hull = convexHull(corners);
       if (hull.length < 3) continue;
       hull.push([hull[0][0], hull[0][1]]);
-      const avg = comp.heightSum / comp.cells.length;
       out.push({
         type: "Feature",
         geometry: { type: "Polygon", coordinates: [hull] },
         properties: {
-          render_height: avg,
+          render_height: comp.heightSum / comp.cells.length,
           render_min_height: 0
         }
       });
     }
-    const totalKept = keptHome + keptBldg + keptVeg;
+    const totalKept = nHome + nBldg + nVeg;
     if (totalKept > 0) {
       console.info(
-        `[HELIOS] LiDAR shadows: ${keptHome} home + ${keptBldg} building + ${keptVeg} vegetation cells -> ${components.length} regions, height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
+        `[HELIOS] LiDAR shadows: ${nHome} home + ${nBldg} building + ${nVeg} vegetation cells -> ${out.length} regions (${dropped} dropped < ${MIN_REGION_CELLS} cells), height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
       );
     } else {
-      console.info("[HELIOS] LiDAR cells: no cells passed the threshold");
+      console.info("[HELIOS] LiDAR shadows: no cells passed the threshold");
     }
     return { type: "FeatureCollection", features: out };
   }
@@ -26439,14 +26433,14 @@ const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
 const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 const DEFAULT_BUILDING_COLOR_HEX = "#d2d2d7";
-const DEFAULT_LIDAR_VEGETATION = "4.5m";
-const LIDAR_VEGETATION_RASTER = {
-  "4.5m": 256,
-  "3m": 384,
-  "2.3m": 512,
-  "1.5m": 768,
-  "1m": 1024
+const DEFAULT_SHADOW_PRECISION = "low";
+const SHADOW_PRECISION_RASTER = {
+  low: 384,
+  medium: 512,
+  high: 768,
+  ultra: 1024
 };
+const DEFAULT_SHADOW_OPACITY = 0.32;
 function bumpStat(key) {
   if (typeof window === "undefined") return;
   const w2 = window;
@@ -26764,6 +26758,7 @@ const _HeliosEngine = class _HeliosEngine {
   //the basemap matches the dark chrome.
   _resolveMapStyle() {
     const raw = String(this.cfg["map-style"] ?? "streets").toLowerCase();
+    if (raw === "satellite") return { id: "hybrid" };
     const base = raw === "topo" ? "topo-v4" : "streets-v4";
     const isDark = String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
     return { id: isDark ? `${base}-dark` : base };
@@ -26802,22 +26797,25 @@ const _HeliosEngine = class _HeliosEngine {
   _terrainMaxzoom() {
     return String(this.cfg["terrain-detail"] ?? "smooth").toLowerCase() === "fine" ? 14 : 12;
   }
-  //Reads the user-configured LiDAR vegetation level, normalises
-  //anything off-spec to the default, and returns one of the four
-  //canonical values from LidarVegetationLevel.
-  _lidarVegetationLevel() {
-    const v2 = String(this.cfg["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION).toLowerCase();
-    if (v2 === "off" || v2 === "4.5m" || v2 === "3m" || v2 === "2.3m" || v2 === "1.5m" || v2 === "1m") {
+  //Reads the user-configured shadow precision, normalises any
+  //off-spec value to the default and returns one of the canonical
+  //ShadowPrecisionLevel members.
+  _shadowPrecisionLevel() {
+    const v2 = String(this.cfg["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION).toLowerCase();
+    if (v2 === "off" || v2 === "low" || v2 === "medium" || v2 === "high" || v2 === "ultra") {
       return v2;
     }
-    return DEFAULT_LIDAR_VEGETATION;
+    return DEFAULT_SHADOW_PRECISION;
   }
-  //True when the LiDAR pipeline is currently driving the building
-  //+ vegetation extrusions, false when MapTiler footprints are
-  //rendered as before. Used by the source-population path and the
-  //shadow projector to pick the right input feature collection.
+  //True when the LiDAR pipeline is enabled by config AND has actual
+  //region data ready to feed the shadow projector.
   _lidarActive() {
-    return this._lidarVegetationLevel() !== "off" && this._lidarData !== null;
+    return this._shadowPrecisionLevel() !== "off" && this._lidarData !== null;
+  }
+  _shadowOpacity() {
+    const raw = Number(this.cfg["shadow-opacity"]);
+    if (!Number.isFinite(raw)) return DEFAULT_SHADOW_OPACITY;
+    return Math.max(0, Math.min(1, raw));
   }
   _findHourIndex(t2) {
     const home = this._homeHourlyData;
@@ -27410,55 +27408,8 @@ const _HeliosEngine = class _HeliosEngine {
           type: "fill",
           paint: {
             "fill-color": "#000000",
-            "fill-opacity": 0.32,
+            "fill-opacity": this._shadowOpacity(),
             "fill-antialias": true
-          }
-        }
-      );
-    }
-    if (!this.map.getSource("helios-vegetation-shadows-src")) {
-      this.map.addSource(
-        "helios-vegetation-shadows-src",
-        {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: [] }
-        }
-      );
-    }
-    if (!this.map.getLayer("helios-vegetation-shadows")) {
-      this.map.addLayer(
-        {
-          id: "helios-vegetation-shadows",
-          source: "helios-vegetation-shadows-src",
-          type: "fill",
-          paint: {
-            "fill-color": "#000000",
-            "fill-opacity": 0.32,
-            "fill-antialias": true
-          }
-        }
-      );
-    }
-    if (!this.map.getSource("helios-vegetation-src")) {
-      this.map.addSource(
-        "helios-vegetation-src",
-        {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: [] }
-        }
-      );
-    }
-    if (!this.map.getLayer("helios-vegetation")) {
-      this.map.addLayer(
-        {
-          id: "helios-vegetation",
-          source: "helios-vegetation-src",
-          type: "fill-extrusion",
-          paint: {
-            "fill-extrusion-color": "#4a6741",
-            "fill-extrusion-height": ["get", "render_height"],
-            "fill-extrusion-base": 0,
-            "fill-extrusion-opacity": 0.78
           }
         }
       );
@@ -27558,23 +27509,15 @@ const _HeliosEngine = class _HeliosEngine {
       console.warn("[HELIOS] Buildings fetch failed:", err);
     });
   }
-  //LiDAR fetch, idempotent and cache-aware. Picks the registered
-  //country provider that covers the home (currently France only
-  //via helios-lidar-fr.ts) and stores the resulting classified
-  //cells in _lidarData. Each cell carries a `kind` property which
-  //the engine uses to route it to one of the three rendering
-  //sources (home, surroundings, vegetation), so a single fetch
-  //provides BOTH the LiDAR-precision building heights AND the
-  //vegetation around them.
-  //
-  //Fetch is gated on _buildingsData because we need the MapTiler
-  //footprints to classify each cell. No-op when no provider
-  //matches: the three sources keep whatever MapTiler-derived data
-  //they had.
+  //Idempotent LiDAR fetch. Picks the country provider that covers
+  //the home (France only for now, see helios-lidar.ts) and stores
+  //the consolidated regions in _lidarData for the shadow projector
+  //to consume. Gated on _buildingsData because the provider needs
+  //the MapTiler footprints to classify cells.
   _ensureLidarFetched() {
     if (!this.map) return;
     if (!this._buildingsData) return;
-    const level = this._lidarVegetationLevel();
+    const level = this._shadowPrecisionLevel();
     if (level === "off") {
       this._lidarAbort?.abort();
       this._lidarData = null;
@@ -27585,7 +27528,7 @@ const _HeliosEngine = class _HeliosEngine {
     const source = findLidarSource(this.homeLat, this.homeLon);
     if (!source) return;
     const radius = this._buildingRadiusMeters();
-    const rasterSize = LIDAR_VEGETATION_RASTER[level];
+    const rasterSize = SHADOW_PRECISION_RASTER[level];
     const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
     if (this._lidarData && this._lidarFetchKey === key) return;
     this._lidarAbort?.abort();
@@ -27598,10 +27541,6 @@ const _HeliosEngine = class _HeliosEngine {
         homeLon: this.homeLon,
         radiusMeters: radius,
         rasterSize,
-        //Visible disc cells are allowed to extend to. The source
-        //still fetches a slightly padded bbox so shadows of trees
-        //on the edge can extend inward, only the rendered cells
-        //are clipped.
         cropRadiusMeters: radius,
         homeFootprints: this._buildingsData.home,
         surroundingFootprints: this._buildingsData.surroundings,
@@ -27618,35 +27557,16 @@ const _HeliosEngine = class _HeliosEngine {
       console.warn("[HELIOS] LiDAR fetch failed:", err);
     });
   }
-  //Pushes the MapTiler footprints into the three rendering sources.
-  //Buildings are ALWAYS rendered from MapTiler now, the LiDAR data
-  //is used exclusively for shadow projection (see _refreshShadowsAndAtmosphere).
-  //The vegetation extrusion source stays empty and its layer is
-  //kept at visibility:none so the heavy per-cell rendering that
-  //beta.7-10 carried is gone for good.
+  //Pushes the MapTiler footprints into the building rendering
+  //sources. Buildings are always MapTiler-driven; LiDAR data is
+  //used exclusively for shadow projection (see _refreshShadowsAndAtmosphere).
   _pushRenderableSources() {
     if (!this.map) return;
     const homeSrc = this.map.getSource("helios-buildings-home-src");
     const surrSrc = this.map.getSource("helios-buildings-surroundings-src");
-    const vegSrc = this.map.getSource("helios-vegetation-src");
     const empty = { type: "FeatureCollection", features: [] };
     homeSrc?.setData(this._buildingsData?.home ?? empty);
     surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
-    vegSrc?.setData(empty);
-    if (this.map.getLayer("helios-vegetation")) {
-      try {
-        this.map.setLayoutProperty("helios-vegetation", "visibility", "none");
-      } catch (_2) {
-      }
-    }
-    for (const lid of ["helios-buildings-surroundings-outline", "helios-buildings-home-outline"]) {
-      if (this.map.getLayer(lid)) {
-        try {
-          this.map.setLayoutProperty(lid, "visibility", "visible");
-        } catch (_2) {
-        }
-      }
-    }
   }
   //Linear interpolation between two RGB hex strings.
   _lerpHex(a2, b2, t2) {
@@ -27804,12 +27724,11 @@ const _HeliosEngine = class _HeliosEngine {
       );
     } catch (_2) {
     }
-    const lidarActive = this._lidarActive();
     try {
       const shadowsSrc = this.map.getSource("helios-building-shadows-src");
       if (shadowsSrc) {
         let input;
-        if (lidarActive && this._lidarData) {
+        if (this._lidarActive() && this._lidarData) {
           input = this._lidarData;
         } else if (this._buildingsData) {
           input = {
@@ -27822,21 +27741,15 @@ const _HeliosEngine = class _HeliosEngine {
         } else {
           input = { type: "FeatureCollection", features: [] };
         }
-        const shadowFc = projectExtrusionShadows(
+        shadowsSrc.setData(projectExtrusionShadows(
           input,
           {
             sunAzimuthDeg: azimuth,
             sunAltitudeDeg: altitude,
             homeLat: this.homeLat
           }
-        );
-        shadowsSrc.setData(shadowFc);
+        ));
       }
-    } catch (_2) {
-    }
-    try {
-      const vegSrc = this.map.getSource("helios-vegetation-shadows-src");
-      vegSrc?.setData({ type: "FeatureCollection", features: [] });
     } catch (_2) {
     }
   }
@@ -28261,7 +28174,8 @@ const _HeliosEngine = class _HeliosEngine {
     const prevCluster = this._buildingClusterRadiusMeters();
     const prevOpacity = this._buildingOpacity();
     const prevColor = this._buildingColor();
-    const prevLidarVeg = this._lidarVegetationLevel();
+    const prevPrecision = this._shadowPrecisionLevel();
+    const prevShadowOpa = this._shadowOpacity();
     this.cfg = { ...cfg };
     if (!this.map) {
       return;
@@ -28331,9 +28245,16 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     }
-    const nextLidarVeg = this._lidarVegetationLevel();
-    if (nextLidarVeg !== prevLidarVeg) {
+    const nextPrecision = this._shadowPrecisionLevel();
+    if (nextPrecision !== prevPrecision) {
       this._ensureLidarFetched();
+    }
+    const nextShadowOpa = this._shadowOpacity();
+    if (nextShadowOpa !== prevShadowOpa && this.map.getLayer("helios-building-shadows")) {
+      try {
+        this.map.setPaintProperty("helios-building-shadows", "fill-opacity", nextShadowOpa);
+      } catch (_2) {
+      }
     }
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
@@ -28581,10 +28502,17 @@ const en = {
     terrainDetail: "Terrain detail *",
     terrainDetailSmooth: "Smooth",
     terrainDetailFine: "Fine",
-    terrainDetailHint: "Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame — only worth it on capable desktops.",
-    lidarVegetation: "LiDAR shadow precision *",
-    lidarVegetationOff: "Off",
-    lidarVegetationHint: "France only for now. Streams IGN LiDAR HD heights around the home, groups them into shadow zones by density and casts those zones as ground shadows. The LiDAR polygons themselves are NOT rendered, only their shadows; buildings keep the regular MapTiler 3D look. The value is the sampling step: smaller = sharper shadow shapes, larger payload. 4.5m is comfortable on any device, 1m matches IGN native sampling and is for capable desktops only."
+    terrainDetailHint: "Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame, only worth it on capable desktops.",
+    mapStyleSatellite: "Satellite",
+    shadowPrecision: "Shadow precision *",
+    shadowPrecisionOff: "Off",
+    shadowPrecisionLow: "Low",
+    shadowPrecisionMedium: "Medium",
+    shadowPrecisionHigh: "High",
+    shadowPrecisionUltra: "Ultra",
+    shadowPrecisionHint: "Only available in France for now.",
+    shadowOpacity: "Shadow opacity *",
+    shadowOpacityHint: "Opacity of the cast ground shadows."
   }
 };
 const fr = {
@@ -28663,9 +28591,16 @@ const fr = {
     terrainDetailSmooth: "Lissé",
     terrainDetailFine: "Précis",
     terrainDetailHint: "Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation, réservé aux PC desktops puissants.",
-    lidarVegetation: "Précision des ombres LiDAR *",
-    lidarVegetationOff: "Off",
-    lidarVegetationHint: "France uniquement pour l'instant. Récupère les hauteurs IGN LiDAR HD autour de la maison, les regroupe en zones d'ombre par densité et projette ces zones au sol. Les polygones LiDAR eux-mêmes ne sont PAS affichés, seules leurs ombres apparaissent ; les bâtiments conservent leur rendu 3D MapTiler classique. La valeur est le pas d'échantillonnage : plus petit, contours d'ombres plus nets, charge réseau accrue. 4.5m passe partout, 1m colle au pas natif IGN et exige un desktop costaud."
+    mapStyleSatellite: "Satellite",
+    shadowPrecision: "Précision des ombres *",
+    shadowPrecisionOff: "Off",
+    shadowPrecisionLow: "Basse",
+    shadowPrecisionMedium: "Moyenne",
+    shadowPrecisionHigh: "Haute",
+    shadowPrecisionUltra: "Ultra",
+    shadowPrecisionHint: "Uniquement disponible en France pour l'instant.",
+    shadowOpacity: "Opacité des ombres *",
+    shadowOpacityHint: "Opacité des ombres projetées au sol."
   }
 };
 const de = {
@@ -28744,9 +28679,16 @@ const de = {
     terrainDetailSmooth: "Geglättet",
     terrainDetailFine: "Fein",
     terrainDetailHint: "Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe, nur auf leistungsfähigen Desktops sinnvoll.",
-    lidarVegetation: "LiDAR-Schattenpräzision *",
-    lidarVegetationOff: "Aus",
-    lidarVegetationHint: "Derzeit nur in Frankreich verfügbar. Lädt IGN-LiDAR-HD-Höhen rund um das Zuhause, gruppiert sie nach Dichte zu Schattenzonen und projiziert diese Zonen auf den Boden. Die LiDAR-Polygone selbst werden NICHT dargestellt, nur ihre Schatten; Gebäude behalten die übliche MapTiler-3D-Ansicht. Der Wert ist die Abtastung: kleiner heißt schärfere Schattenkonturen, größere Netzwerklast. 4.5m läuft überall, 1m entspricht der nativen IGN-Abtastung und nur auf leistungsfähigen Desktops."
+    mapStyleSatellite: "Satellit",
+    shadowPrecision: "Schattenpräzision *",
+    shadowPrecisionOff: "Aus",
+    shadowPrecisionLow: "Niedrig",
+    shadowPrecisionMedium: "Mittel",
+    shadowPrecisionHigh: "Hoch",
+    shadowPrecisionUltra: "Ultra",
+    shadowPrecisionHint: "Derzeit nur in Frankreich verfügbar.",
+    shadowOpacity: "Schatten-Deckkraft *",
+    shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten."
   }
 };
 const es = {
@@ -28825,9 +28767,16 @@ const es = {
     terrainDetailSmooth: "Suave",
     terrainDetailFine: "Preciso",
     terrainDetailHint: "Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación, útil solo en PCs potentes.",
-    lidarVegetation: "Precisión de sombras LiDAR *",
-    lidarVegetationOff: "Off",
-    lidarVegetationHint: "Solo Francia por ahora. Descarga las alturas IGN LiDAR HD alrededor de la casa, las agrupa en zonas de sombra por densidad y proyecta esas zonas en el suelo. Los polígonos LiDAR en sí NO se dibujan, solo sus sombras; los edificios mantienen el render 3D MapTiler habitual. El valor es el paso de muestreo: menor, contornos de sombra más nítidos, mayor carga de red. 4.5m va bien en cualquier dispositivo, 1m coincide con el muestreo nativo IGN y solo para escritorios potentes."
+    mapStyleSatellite: "Satélite",
+    shadowPrecision: "Precisión de las sombras *",
+    shadowPrecisionOff: "Off",
+    shadowPrecisionLow: "Baja",
+    shadowPrecisionMedium: "Media",
+    shadowPrecisionHigh: "Alta",
+    shadowPrecisionUltra: "Ultra",
+    shadowPrecisionHint: "Solo disponible en Francia por ahora.",
+    shadowOpacity: "Opacidad de las sombras *",
+    shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo."
   }
 };
 const it = {
@@ -28906,9 +28855,16 @@ const it = {
     terrainDetailSmooth: "Levigato",
     terrainDetailFine: "Fine",
     terrainDetailHint: "Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione, utile solo su PC desktop potenti.",
-    lidarVegetation: "Precisione delle ombre LiDAR *",
-    lidarVegetationOff: "Off",
-    lidarVegetationHint: "Solo Francia per ora. Scarica le altezze IGN LiDAR HD intorno alla casa, le raggruppa in zone d'ombra per densità e proietta tali zone a terra. I poligoni LiDAR stessi NON vengono disegnati, solo le loro ombre; gli edifici mantengono il consueto rendering 3D MapTiler. Il valore è il passo di campionamento: più piccolo, contorni d'ombra più nitidi, più traffico di rete. 4.5m va bene ovunque, 1m equivale al campionamento nativo IGN e solo su desktop potenti."
+    mapStyleSatellite: "Satellite",
+    shadowPrecision: "Precisione delle ombre *",
+    shadowPrecisionOff: "Off",
+    shadowPrecisionLow: "Bassa",
+    shadowPrecisionMedium: "Media",
+    shadowPrecisionHigh: "Alta",
+    shadowPrecisionUltra: "Ultra",
+    shadowPrecisionHint: "Solo disponibile in Francia per ora.",
+    shadowOpacity: "Opacità delle ombre *",
+    shadowOpacityHint: "Opacità delle ombre proiettate a terra."
   }
 };
 const nl = {
@@ -28987,9 +28943,16 @@ const nl = {
     terrainDetailSmooth: "Vloeiend",
     terrainDetailFine: "Fijn",
     terrainDetailHint: "Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe, alleen zinvol op krachtige desktops.",
-    lidarVegetation: "LiDAR-schaduwprecisie *",
-    lidarVegetationOff: "Uit",
-    lidarVegetationHint: "Voorlopig alleen Frankrijk. Haalt IGN LiDAR HD-hoogtes rond het huis op, groepeert ze per dichtheid tot schaduwzones en projecteert die zones op de grond. De LiDAR-polygonen zelf worden NIET getoond, alleen hun schaduwen; gebouwen behouden de gewone MapTiler-3D-weergave. De waarde is de samplingstap: kleiner, scherpere schaduwcontouren, meer netwerklast. 4.5m werkt overal, 1m sluit aan op de IGN-natieve sampling en alleen op krachtige desktops."
+    mapStyleSatellite: "Satelliet",
+    shadowPrecision: "Schaduwprecisie *",
+    shadowPrecisionOff: "Uit",
+    shadowPrecisionLow: "Laag",
+    shadowPrecisionMedium: "Middel",
+    shadowPrecisionHigh: "Hoog",
+    shadowPrecisionUltra: "Ultra",
+    shadowPrecisionHint: "Voorlopig alleen beschikbaar in Frankrijk.",
+    shadowOpacity: "Schaduwdekking *",
+    shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen."
   }
 };
 const pt = {
@@ -29068,9 +29031,16 @@ const pt = {
     terrainDetailSmooth: "Suave",
     terrainDetailFine: "Preciso",
     terrainDetailHint: "Suave (predefinição) amostra o relevo a cada ~20 m e mantém-se fluido em qualquer dispositivo. Preciso amostra a cada ~5 m para um relevo mais detalhado mas ~16× mais vértices a projetar por frame de rotação, útil apenas em PCs potentes.",
-    lidarVegetation: "Precisão das sombras LiDAR *",
-    lidarVegetationOff: "Off",
-    lidarVegetationHint: "Apenas França por agora. Recupera as alturas IGN LiDAR HD à volta de casa, agrupa-as em zonas de sombra por densidade e projeta essas zonas no chão. Os polígonos LiDAR em si NÃO são desenhados, apenas as suas sombras; os edifícios mantêm o render 3D MapTiler habitual. O valor é o passo de amostragem: menor, contornos de sombra mais nítidos, mais tráfego de rede. 4.5m funciona em qualquer dispositivo, 1m corresponde à amostragem nativa IGN e só em desktops potentes."
+    mapStyleSatellite: "Satélite",
+    shadowPrecision: "Precisão das sombras *",
+    shadowPrecisionOff: "Off",
+    shadowPrecisionLow: "Baixa",
+    shadowPrecisionMedium: "Média",
+    shadowPrecisionHigh: "Alta",
+    shadowPrecisionUltra: "Ultra",
+    shadowPrecisionHint: "Apenas disponível em França por agora.",
+    shadowOpacity: "Opacidade das sombras *",
+    shadowOpacityHint: "Opacidade das sombras projetadas no chão."
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -30589,7 +30559,7 @@ let HeliosCardEditor = class extends i {
                 <div class="section-title">${t2.editor.mapSection}</div>
                 <div class="field">
                     <span class="label">${t2.editor.mapStyle}</span>
-                    <div class="segmented-toggle segmented-toggle-3">
+                    <div class="segmented-toggle segmented-toggle-wide">
                         <button
                             type="button"
                             class="seg-option ${String(c2["map-style"] ?? "streets") === "streets" ? "active" : ""}"
@@ -30605,6 +30575,11 @@ let HeliosCardEditor = class extends i {
                             class="seg-option ${String(c2["map-style"] ?? "streets") === "minimal" ? "active" : ""}"
                             @click="${() => this._update("map-style", "minimal")}"
                         >${t2.editor.mapStyleMinimal}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["map-style"] ?? "streets") === "satellite" ? "active" : ""}"
+                            @click="${() => this._update("map-style", "satellite")}"
+                        >${t2.editor.mapStyleSatellite}</button>
                     </div>
                 </div>
                 <div class="hint">${t2.editor.mapStyleHint}</div>
@@ -30734,41 +30709,49 @@ let HeliosCardEditor = class extends i {
                 <div class="hint">${t2.editor.buildingsHint}</div>
 
                 <div class="field">
-                    <span class="label">${t2.editor.lidarVegetation}</span>
-                    <div class="segmented-toggle segmented-toggle-5">
+                    <span class="label">${t2.editor.shadowPrecision}</span>
+                    <div class="segmented-toggle segmented-toggle-wide">
                         <button
                             type="button"
-                            class="seg-option ${String(c2["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION) === "off" ? "active" : ""}"
-                            @click="${() => this._update("lidar-vegetation", "off")}"
-                        >${t2.editor.lidarVegetationOff}</button>
+                            class="seg-option ${String(c2["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION) === "off" ? "active" : ""}"
+                            @click="${() => this._update("shadow-precision", "off")}"
+                        >${t2.editor.shadowPrecisionOff}</button>
                         <button
                             type="button"
-                            class="seg-option ${String(c2["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION) === "4.5m" ? "active" : ""}"
-                            @click="${() => this._update("lidar-vegetation", "4.5m")}"
-                        >4.5m</button>
+                            class="seg-option ${String(c2["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION) === "low" ? "active" : ""}"
+                            @click="${() => this._update("shadow-precision", "low")}"
+                        >${t2.editor.shadowPrecisionLow}</button>
                         <button
                             type="button"
-                            class="seg-option ${String(c2["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION) === "3m" ? "active" : ""}"
-                            @click="${() => this._update("lidar-vegetation", "3m")}"
-                        >3m</button>
+                            class="seg-option ${String(c2["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION) === "medium" ? "active" : ""}"
+                            @click="${() => this._update("shadow-precision", "medium")}"
+                        >${t2.editor.shadowPrecisionMedium}</button>
                         <button
                             type="button"
-                            class="seg-option ${String(c2["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION) === "2.3m" ? "active" : ""}"
-                            @click="${() => this._update("lidar-vegetation", "2.3m")}"
-                        >2.3m</button>
+                            class="seg-option ${String(c2["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION) === "high" ? "active" : ""}"
+                            @click="${() => this._update("shadow-precision", "high")}"
+                        >${t2.editor.shadowPrecisionHigh}</button>
                         <button
                             type="button"
-                            class="seg-option ${String(c2["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION) === "1.5m" ? "active" : ""}"
-                            @click="${() => this._update("lidar-vegetation", "1.5m")}"
-                        >1.5m</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["lidar-vegetation"] ?? DEFAULT_LIDAR_VEGETATION) === "1m" ? "active" : ""}"
-                            @click="${() => this._update("lidar-vegetation", "1m")}"
-                        >1m</button>
+                            class="seg-option ${String(c2["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION) === "ultra" ? "active" : ""}"
+                            @click="${() => this._update("shadow-precision", "ultra")}"
+                        >${t2.editor.shadowPrecisionUltra}</button>
                     </div>
                 </div>
-                <div class="hint">${t2.editor.lidarVegetationHint}</div>
+                <div class="hint">${t2.editor.shadowPrecisionHint}</div>
+
+                <label class="field">
+                    <span class="label">${t2.editor.shadowOpacity}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            .value="${String(c2["shadow-opacity"] ?? DEFAULT_SHADOW_OPACITY)}"
+                            @input="${(e2) => this._numSlider("shadow-opacity", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["shadow-opacity"] ?? DEFAULT_SHADOW_OPACITY), 0.05)}</span>
+                    </div>
+                </label>
+                <div class="hint">${t2.editor.shadowOpacityHint}</div>
 
                 <div class="section-title">${t2.editor.colors}</div>
                 <label class="field">
@@ -31000,11 +30983,11 @@ HeliosCardEditor.styles = i$3`
             background: var(--card-background-color, #fff);
         }
 
-        /*  Five-option variant for the LiDAR vegetation toggle. Wider
-            base width plus flex-wrap so cramped editor widths break
-            the buttons onto a second row instead of cropping the
-            last label. */
-        .segmented-toggle-5
+        /*  Wider variant for toggles with 4+ options (map-style with
+            satellite, shadow-precision). Full width plus flex-wrap so
+            cramped editor widths break the buttons onto a second row
+            instead of cropping the last label. */
+        .segmented-toggle-wide
         {
             width: 100%;
             min-width: 240px;
@@ -31012,7 +30995,7 @@ HeliosCardEditor.styles = i$3`
             border-radius: 6px;
             row-gap: 0;
         }
-        .segmented-toggle-5 .seg-option
+        .segmented-toggle-wide .seg-option
         {
             min-width: 48px;
         }
@@ -31123,7 +31106,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.11"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.12"}`,
       labelStyle,
       versionStyle
     );

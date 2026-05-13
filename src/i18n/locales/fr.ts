@@ -90,8 +90,15 @@ export const fr: Translations = {
         terrainDetailSmooth:   'Lissé',
         terrainDetailFine:     'Précis',
         terrainDetailHint:     'Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation, réservé aux PC desktops puissants.',
-        lidarVegetation:       'Précision des ombres LiDAR *',
-        lidarVegetationOff:    'Off',
-        lidarVegetationHint:   'France uniquement pour l\'instant. Récupère les hauteurs IGN LiDAR HD autour de la maison, les regroupe en zones d\'ombre par densité et projette ces zones au sol. Les polygones LiDAR eux-mêmes ne sont PAS affichés, seules leurs ombres apparaissent ; les bâtiments conservent leur rendu 3D MapTiler classique. La valeur est le pas d\'échantillonnage : plus petit, contours d\'ombres plus nets, charge réseau accrue. 4.5m passe partout, 1m colle au pas natif IGN et exige un desktop costaud.'
+        mapStyleSatellite:     'Satellite',
+        shadowPrecision:       'Précision des ombres *',
+        shadowPrecisionOff:    'Off',
+        shadowPrecisionLow:    'Basse',
+        shadowPrecisionMedium: 'Moyenne',
+        shadowPrecisionHigh:   'Haute',
+        shadowPrecisionUltra:  'Ultra',
+        shadowPrecisionHint:   'Uniquement disponible en France pour l\'instant.',
+        shadowOpacity:         'Opacité des ombres *',
+        shadowOpacityHint:     'Opacité des ombres projetées au sol.'
     }
 };

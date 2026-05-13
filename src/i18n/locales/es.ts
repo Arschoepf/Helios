@@ -82,8 +82,15 @@ export const es: Translations = {
         terrainDetailSmooth:   'Suave',
         terrainDetailFine:     'Preciso',
         terrainDetailHint:     'Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación, útil solo en PCs potentes.',
-        lidarVegetation:       'Precisión de sombras LiDAR *',
-        lidarVegetationOff:    'Off',
-        lidarVegetationHint:   'Solo Francia por ahora. Descarga las alturas IGN LiDAR HD alrededor de la casa, las agrupa en zonas de sombra por densidad y proyecta esas zonas en el suelo. Los polígonos LiDAR en sí NO se dibujan, solo sus sombras; los edificios mantienen el render 3D MapTiler habitual. El valor es el paso de muestreo: menor, contornos de sombra más nítidos, mayor carga de red. 4.5m va bien en cualquier dispositivo, 1m coincide con el muestreo nativo IGN y solo para escritorios potentes.'
+        mapStyleSatellite:     'Satélite',
+        shadowPrecision:       'Precisión de las sombras *',
+        shadowPrecisionOff:    'Off',
+        shadowPrecisionLow:    'Baja',
+        shadowPrecisionMedium: 'Media',
+        shadowPrecisionHigh:   'Alta',
+        shadowPrecisionUltra:  'Ultra',
+        shadowPrecisionHint:   'Solo disponible en Francia por ahora.',
+        shadowOpacity:         'Opacidad de las sombras *',
+        shadowOpacityHint:     'Opacidad de las sombras proyectadas en el suelo.'
     }
 };
