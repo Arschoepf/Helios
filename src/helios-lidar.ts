@@ -47,10 +47,6 @@ export interface LidarFetchResult
     regions: GeoJSON.FeatureCollection;
     cells:   GeoJSON.FeatureCollection;
     terrain: LidarTerrainData | null;
-    //Half-spacing of the terrain-cell grid in metres. The engine uses
-    //this to size the ground tiles so they tile cleanly with a small
-    //overlap, rather than leaving readable gaps between cells.
-    terrainCellHalfM: number;
 }
 
 export interface LidarTerrainData
@@ -72,7 +68,7 @@ export interface LidarFetchOptions
     //Pixel count per side requested from the upstream raster. Higher
     //means finer ground sampling, larger payload and more work in the
     //consolidation pass. The engine derives this from the user-set
-    //shadow-precision level (helios-engine.ts:SHADOW_PRECISION_RASTER).
+    //lidar-precision level (helios-engine.ts:LIDAR_PRECISION_RASTER).
     rasterSize:   number;
     //Hard limit on the haversine distance from the home, in metres.
     //Cells beyond this are dropped so the rendered shadow zones stay

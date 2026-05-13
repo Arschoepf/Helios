@@ -83,13 +83,13 @@ export const nl: Translations = {
         terrainDetailFine:     'Fijn',
         terrainDetailHint:     'Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe, alleen zinvol op krachtige desktops.',
         mapStyleSatellite:     'Satelliet',
-        shadowPrecision:       'Schaduwprecisie *',
-        shadowPrecisionOff:    'Uit',
-        shadowPrecisionLow:    'Laag',
-        shadowPrecisionMedium: 'Middel',
-        shadowPrecisionHigh:   'Hoog',
-        shadowPrecisionUltra:  'Ultra',
-        shadowPrecisionHint:   'Voorlopig alleen beschikbaar in Frankrijk.',
+        lidarPrecision:       'LiDAR-precisie *',
+        lidarPrecisionOff:    'Uit',
+        lidarPrecisionLow:    'Laag',
+        lidarPrecisionMedium: 'Middel',
+        lidarPrecisionHigh:   'Hoog',
+        lidarPrecisionUltra:  'Ultra',
+        lidarPrecisionHint:   'Stuurt de LiDAR-gedreven topografie, de schaduwgeometrie EN de dichtheid van de instralingsscanner aan. Voorlopig alleen beschikbaar in Frankrijk.',
         shadowOpacity:         'Schaduwdekking *',
         shadowOpacityHint:     'Dekking van de op de grond geprojecteerde schaduwen.',
         buildingShadows:       'MapTiler-gebouwschaduwen *',
@@ -97,8 +97,9 @@ export const nl: Translations = {
         buildingShadowsOff:    'Verborgen',
         buildingShadowsHint:   'Wanneer LiDAR niet beschikbaar is (precisie uit, of huis buiten Frankrijk) worden schaduwen benaderd op basis van de platte MapTiler-omtreklijnen. Verbergen in vlakke of dichte stedelijke gebieden waar de benadering meer ruis dan informatie oplevert. LiDAR-schaduwen blijven ongewijzigd.',
         lidarPointCloud:       'LiDAR-scannerweergave',
-        scannerLowColor:       'Scanner laag (geen instraling) *',
-        scannerHighColor:      'Scanner hoog (volle instraling) *',
-        scannerColorsHint:     'Tweekleuren-verloop dat de LiDAR-scanner gebruikt om elke cel te kleuren: lage tint voor nacht / schaduw, hoge tint voor volle zon bij 1 kW/m². Standaard een thermisch rood → groen verloop dat zowel op lichte als op donkere kaarten goed leesbaar blijft.'
+        scannerSection:        'Instralingsscanner',
+        scannerSectionHint:    'Knop op de kaart die elke LiDAR-cel met een tweekleuren-verloop kleurt op basis van de op het gekozen moment ontvangen instraling. Lage tint voor nacht / schaduw, hoge tint voor volle zon bij 1 kW/m². Standaard een thermisch rood → groen verloop dat zowel op lichte als op donkere kaarten goed leesbaar blijft.',
+        scannerLowColor:       'Laag (geen instraling) *',
+        scannerHighColor:      'Hoog (volle instraling) *'
     }
 };

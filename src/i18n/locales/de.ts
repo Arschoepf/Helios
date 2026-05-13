@@ -83,13 +83,13 @@ export const de: Translations = {
         terrainDetailFine:     'Fein',
         terrainDetailHint:     'Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe, nur auf leistungsfähigen Desktops sinnvoll.',
         mapStyleSatellite:     'Satellit',
-        shadowPrecision:       'Schattenpräzision *',
-        shadowPrecisionOff:    'Aus',
-        shadowPrecisionLow:    'Niedrig',
-        shadowPrecisionMedium: 'Mittel',
-        shadowPrecisionHigh:   'Hoch',
-        shadowPrecisionUltra:  'Ultra',
-        shadowPrecisionHint:   'Derzeit nur in Frankreich verfügbar.',
+        lidarPrecision:       'LiDAR-Präzision *',
+        lidarPrecisionOff:    'Aus',
+        lidarPrecisionLow:    'Niedrig',
+        lidarPrecisionMedium: 'Mittel',
+        lidarPrecisionHigh:   'Hoch',
+        lidarPrecisionUltra:  'Ultra',
+        lidarPrecisionHint:   'Steuert die LiDAR-basierte Topografie, die Schattengeometrie UND die Dichte des Bestrahlungsscanners. Derzeit nur in Frankreich verfügbar.',
         shadowOpacity:         'Schatten-Deckkraft *',
         shadowOpacityHint:     'Deckkraft der am Boden geworfenen Schatten.',
         buildingShadows:       'MapTiler-Gebäudeschatten *',
@@ -97,8 +97,9 @@ export const de: Translations = {
         buildingShadowsOff:    'Ausgeblendet',
         buildingShadowsHint:   'Wenn LiDAR nicht verfügbar ist (Präzision aus oder Wohnsitz außerhalb Frankreich), werden Schatten aus den flachen MapTiler-Grundrissen abgeschätzt. In flachem oder dichtem städtischem Gebiet ausblenden, wo die Näherung wie Rauschen wirkt. LiDAR-Schatten bleiben unberührt.',
         lidarPointCloud:       'LiDAR-Scanner-Ansicht',
-        scannerLowColor:       'Scanner unten (keine Einstrahlung) *',
-        scannerHighColor:      'Scanner oben (volle Einstrahlung) *',
-        scannerColorsHint:     'Zwei-Farben-Rampe, mit der der LiDAR-Scanner jede Zelle einfärbt: untere Farbe für Nacht / Schatten, obere für volle Sonne bei 1 kW/m². Standardmäßig ein thermischer Rot-Grün-Verlauf, der auf hellen wie auf dunklen Basemaps klar lesbar bleibt.'
+        scannerSection:        'Bestrahlungs-Scanner',
+        scannerSectionHint:    'Karten-Schaltfläche, die jede LiDAR-Zelle anhand der zum gewählten Zeitpunkt empfangenen Einstrahlung mit einer Zwei-Farben-Rampe einfärbt. Untere Farbe für Nacht / Schatten, obere für volle Sonne bei 1 kW/m². Standardmäßig ein thermischer Rot-Grün-Verlauf, der sowohl auf hellen wie auf dunklen Basemaps klar lesbar bleibt.',
+        scannerLowColor:       'Unten (keine Einstrahlung) *',
+        scannerHighColor:      'Oben (volle Einstrahlung) *'
     }
 };

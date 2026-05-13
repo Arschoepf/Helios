@@ -91,13 +91,13 @@ export const fr: Translations = {
         terrainDetailFine:     'Précis',
         terrainDetailHint:     'Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation, réservé aux PC desktops puissants.',
         mapStyleSatellite:     'Satellite',
-        shadowPrecision:       'Précision des ombres *',
-        shadowPrecisionOff:    'Off',
-        shadowPrecisionLow:    'Basse',
-        shadowPrecisionMedium: 'Moyenne',
-        shadowPrecisionHigh:   'Haute',
-        shadowPrecisionUltra:  'Ultra',
-        shadowPrecisionHint:   'Uniquement disponible en France pour l\'instant.',
+        lidarPrecision:       'Précision LiDAR *',
+        lidarPrecisionOff:    'Off',
+        lidarPrecisionLow:    'Basse',
+        lidarPrecisionMedium: 'Moyenne',
+        lidarPrecisionHigh:   'Haute',
+        lidarPrecisionUltra:  'Ultra',
+        lidarPrecisionHint:   'Pilote la topographie LiDAR, la géométrie des ombres ET la densité du scanner d\'irradiance. Uniquement disponible en France pour l\'instant.',
         shadowOpacity:         'Opacité des ombres *',
         shadowOpacityHint:     'Opacité des ombres projetées au sol.',
         buildingShadows:       'Ombres MapTiler *',
@@ -105,8 +105,9 @@ export const fr: Translations = {
         buildingShadowsOff:    'Masquées',
         buildingShadowsHint:   'Quand le LiDAR n\'est pas disponible (précision off, ou hors France), les ombres sont approximées à partir des empreintes plates MapTiler. À masquer en zone plate ou très urbaine où l\'approximation ressemble plus à du bruit qu\'à de la donnée. Sans effet sur les ombres LiDAR.',
         lidarPointCloud:       'Vue scanner LiDAR',
-        scannerLowColor:       'Scanner bas (irradiance nulle) *',
-        scannerHighColor:      'Scanner haut (irradiance max) *',
-        scannerColorsHint:     'Rampe à deux teintes utilisée par le scanner LiDAR pour colorer chaque cellule : la teinte basse correspond à la nuit ou à l\'ombre, la teinte haute au plein soleil à 1 kW/m². Par défaut, un dégradé thermique rouge → vert qui lit bien sur fond clair comme sur fond sombre.'
+        scannerSection:        'Scanner d\'irradiance',
+        scannerSectionHint:    'Bouton sur la carte qui colore chaque cellule LiDAR avec une rampe à deux teintes selon l\'irradiance reçue à l\'instant sélectionné. Teinte basse pour la nuit ou l\'ombre, teinte haute pour le plein soleil à 1 kW/m². Par défaut un dégradé thermique rouge → vert qui lit bien sur fond clair comme sur fond sombre.',
+        scannerLowColor:       'Bas (irradiance nulle) *',
+        scannerHighColor:      'Haut (irradiance max) *'
     }
 };

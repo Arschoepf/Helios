@@ -25980,7 +25980,7 @@ function metersToDegLat(m2) {
 function metersToDegLon(m2, atLat) {
   return m2 / (111320 * Math.cos(atLat * Math.PI / 180));
 }
-function pointInRing$1(lon, lat, ring) {
+function pointInRing(lon, lat, ring) {
   let inside = false;
   for (let i2 = 0, j = ring.length - 1; i2 < ring.length; j = i2++) {
     const xi = ring[i2][0], yi = ring[i2][1];
@@ -25994,10 +25994,10 @@ function pointInRing$1(lon, lat, ring) {
 }
 function polygonContains(geom, lon, lat) {
   if (geom.type === "Polygon") {
-    return geom.coordinates.length > 0 && pointInRing$1(lon, lat, geom.coordinates[0]);
+    return geom.coordinates.length > 0 && pointInRing(lon, lat, geom.coordinates[0]);
   }
   if (geom.type === "MultiPolygon") {
-    return geom.coordinates.some((poly) => poly.length > 0 && pointInRing$1(lon, lat, poly[0]));
+    return geom.coordinates.some((poly) => poly.length > 0 && pointInRing(lon, lat, poly[0]));
   }
   return false;
 }
@@ -26230,8 +26230,7 @@ const franceLidarHd = {
     const empty = {
       regions: { type: "FeatureCollection", features: [] },
       cells: { type: "FeatureCollection", features: [] },
-      terrain: null,
-      terrainCellHalfM: 1
+      terrain: null
     };
     const rasterSize = Math.min(2048, Math.max(64, Math.round(opts.rasterSize)));
     const r2 = Math.max(1, opts.radiusMeters);
@@ -26417,16 +26416,10 @@ const franceLidarHd = {
     } else {
       console.info(`[HELIOS] LiDAR: no MNH cells passed the threshold (${nTerrain} terrain points)`);
     }
-    const M_PER_DEG_LON_LOCAL = M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180);
-    const halfM = 0.5 * Math.min(
-      pxLat * stride * M_PER_DEG_LAT,
-      pxLon * stride * M_PER_DEG_LON_LOCAL
-    );
     return {
       regions: { type: "FeatureCollection", features: regionsOut },
       cells: { type: "FeatureCollection", features: cellsOut },
-      terrain,
-      terrainCellHalfM: halfM
+      terrain
     };
   }
 };
@@ -26628,14 +26621,16 @@ async function encodeTile(entry, z2, x2, y3) {
 }
 async function fetchMaptilerTile(key, z2, x2, y3) {
   if (!key) return null;
-  try {
-    const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z2}/${x2}/${y3}.png?key=${key}`;
-    const resp = await fetch(url);
-    if (!resp.ok) return null;
-    return await resp.arrayBuffer();
-  } catch (_2) {
-    return null;
+  for (const ext of ["webp", "png"]) {
+    try {
+      const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z2}/${x2}/${y3}.${ext}?key=${key}`;
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      return await resp.arrayBuffer();
+    } catch (_2) {
+    }
   }
+  return null;
 }
 async function fetchMaptilerTileHeights(key, z2, x2, y3) {
   if (!key) return null;
@@ -26700,8 +26695,8 @@ const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
 const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 const DEFAULT_BUILDING_COLOR_HEX = "#d2d2d7";
-const DEFAULT_SHADOW_PRECISION = "low";
-const SHADOW_PRECISION_RASTER = {
+const DEFAULT_LIDAR_PRECISION = "low";
+const LIDAR_PRECISION_RASTER = {
   low: 384,
   medium: 512,
   high: 768,
@@ -26813,18 +26808,6 @@ function buildCirclePolygon(centerLon, centerLat, radiusMetres, segments = 64) {
   }
   ring.push(ring[0]);
   return ring;
-}
-function pointInRing(lon, lat, ring) {
-  let inside = false;
-  const n3 = ring.length;
-  for (let i2 = 0, j = n3 - 1; i2 < n3; j = i2++) {
-    const xi = ring[i2][0], yi = ring[i2][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    if (yi > lat !== yj > lat && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
 }
 const CLOUD_DISC_RADIUS_M = 30;
 const CLOUD_CIRCLE_SEGMENTS = 128;
@@ -27089,18 +27072,18 @@ const _HeliosEngine = class _HeliosEngine {
   }
   //Reads the user-configured shadow precision, normalises any
   //off-spec value to the default and returns one of the canonical
-  //ShadowPrecisionLevel members.
-  _shadowPrecisionLevel() {
-    const v2 = String(this.cfg["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION).toLowerCase();
+  //LidarPrecisionLevel members.
+  _lidarPrecisionLevel() {
+    const v2 = String(this.cfg["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION).toLowerCase();
     if (v2 === "off" || v2 === "low" || v2 === "medium" || v2 === "high" || v2 === "ultra") {
       return v2;
     }
-    return DEFAULT_SHADOW_PRECISION;
+    return DEFAULT_LIDAR_PRECISION;
   }
   //True when the LiDAR pipeline is enabled by config AND has actual
   //region data ready to feed the shadow projector.
   _lidarActive() {
-    return this._shadowPrecisionLevel() !== "off" && this._lidarData !== null;
+    return this._lidarPrecisionLevel() !== "off" && this._lidarData !== null;
   }
   //True when the LiDAR pipeline returned an MNT raster the engine
   //can register as a custom DEM source. Implies _lidarActive.
@@ -27792,7 +27775,7 @@ const _HeliosEngine = class _HeliosEngine {
   _ensureLidarFetched() {
     if (!this.map) return;
     if (!this._buildingsData) return;
-    const level = this._shadowPrecisionLevel();
+    const level = this._lidarPrecisionLevel();
     if (level === "off") {
       this._lidarAbort?.abort();
       this._lidarData = null;
@@ -27806,7 +27789,7 @@ const _HeliosEngine = class _HeliosEngine {
     const source = findLidarSource(this.homeLat, this.homeLon);
     if (!source) return;
     const radius = this._buildingRadiusMeters();
-    const rasterSize = SHADOW_PRECISION_RASTER[level];
+    const rasterSize = LIDAR_PRECISION_RASTER[level];
     const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
     if (this._lidarData && this._lidarFetchKey === key) return;
     const cached = _lidarFetchCache.get(key);
@@ -27953,7 +27936,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     const CUBE_HALF_M = 0.2;
     const CUBE_HEIGHT_M = 0.2;
-    const LIFT_M = 0.2;
+    const LIFT_M = 0.1;
     const mPerDegLat = 111320;
     const cosLat = Math.cos(this.homeLat * Math.PI / 180);
     const mPerDegLon = mPerDegLat * cosLat;
@@ -28052,35 +28035,42 @@ const _HeliosEngine = class _HeliosEngine {
     const ghi = computeIrradianceWm2(t2, this.homeLat, this.homeLon, cloud);
     const ghiNorm = Math.min(1, ghi / 1e3);
     const litColor = this._lerpHex(lowHex, highHex, ghiNorm);
-    const shadowInput = this._lidarActive() && this._lidarData ? this._lidarData.regions : this._buildingsData && this._maptilerShadowsEnabled() ? {
-      features: [
-        ...this._buildingsData.home.features,
-        ...this._buildingsData.surroundings.features
-      ]
-    } : { features: [] };
-    const shadows = projectExtrusionShadows(shadowInput, {
-      sunAzimuthDeg: sun.azimuth,
-      sunAltitudeDeg: sun.altitude,
-      homeLat: this.homeLat
-    });
-    const shadowEntries = [];
-    for (const f2 of shadows.features) {
-      if (!f2.geometry || f2.geometry.type !== "Polygon") continue;
-      const ring = f2.geometry.coordinates[0];
-      if (!ring || ring.length < 3) continue;
-      let minLon = Infinity, minLat = Infinity;
-      let maxLon = -Infinity, maxLat = -Infinity;
-      for (const p2 of ring) {
-        if (p2[0] < minLon) minLon = p2[0];
-        if (p2[0] > maxLon) maxLon = p2[0];
-        if (p2[1] < minLat) minLat = p2[1];
-        if (p2[1] > maxLat) maxLat = p2[1];
+    const D2 = Math.PI / 180;
+    const sunAzR = sun.azimuth * D2;
+    const sunAltR = sun.altitude * D2;
+    const sunDirX = Math.sin(sunAzR);
+    const sunDirY = Math.cos(sunAzR);
+    const tanAlt = Math.tan(sunAltR);
+    const mPerDegLat = 111320;
+    const cosHomeLat = Math.cos(this.homeLat * D2);
+    const mPerDegLon = mPerDegLat * cosHomeLat;
+    const homeLon = this.homeLon;
+    const homeLat = this.homeLat;
+    const GRID_M = 2;
+    const RAY_STEP_M = 2;
+    const RAY_MAX_M = 400;
+    const grid = /* @__PURE__ */ new Map();
+    const binKey = (bx, by) => bx << 16 ^ by & 65535;
+    const lidarCells = this._lidarData?.cells.features ?? [];
+    for (const f2 of lidarCells) {
+      if (!f2.geometry || f2.geometry.type !== "Point") continue;
+      const h2 = Number(f2.properties?.height ?? 0);
+      if (!isFinite(h2) || h2 <= 0) continue;
+      const [lon, lat] = f2.geometry.coordinates;
+      const lonM = (lon - homeLon) * mPerDegLon;
+      const latM = (lat - homeLat) * mPerDegLat;
+      const bx = Math.floor(lonM / GRID_M);
+      const by = Math.floor(latM / GRID_M);
+      const k2 = binKey(bx, by);
+      let bin = grid.get(k2);
+      if (!bin) {
+        bin = [];
+        grid.set(k2, bin);
       }
-      const height = Number(f2.properties?.render_height ?? 0);
-      shadowEntries.push({ ring, minLon, minLat, maxLon, maxLat, height });
+      bin.push({ lonM, latM, h: h2 });
     }
     const feats = this._pointCloudCells.features;
-    const BATCH = 2e3;
+    const BATCH = 4e3;
     let cursor = 0;
     const step = () => {
       if (jobId !== this._irradianceJobId) return;
@@ -28089,7 +28079,7 @@ const _HeliosEngine = class _HeliosEngine {
       for (; cursor < end; cursor++) {
         const feat = feats[cursor];
         const props = feat.properties;
-        const top = Number(props?.top ?? 0);
+        const baseH = Number(props?.base ?? 0);
         const ring = feat.geometry.coordinates[0];
         let cLon = 0, cLat = 0;
         for (let k2 = 0; k2 < 4; k2++) {
@@ -28098,14 +28088,25 @@ const _HeliosEngine = class _HeliosEngine {
         }
         cLon *= 0.25;
         cLat *= 0.25;
+        const cLonM = (cLon - homeLon) * mPerDegLon;
+        const cLatM = (cLat - homeLat) * mPerDegLat;
         let inShadow = false;
-        for (const s2 of shadowEntries) {
-          if (cLon < s2.minLon || cLon > s2.maxLon || cLat < s2.minLat || cLat > s2.maxLat) continue;
-          if (s2.height <= top + 0.5) continue;
-          if (pointInRing(cLon, cLat, s2.ring)) {
-            inShadow = true;
-            break;
+        for (let d2 = RAY_STEP_M; d2 <= RAY_MAX_M; d2 += RAY_STEP_M) {
+          const px = cLonM + sunDirX * d2;
+          const py = cLatM + sunDirY * d2;
+          const bx = Math.floor(px / GRID_M);
+          const by = Math.floor(py / GRID_M);
+          const bin = grid.get(binKey(bx, by));
+          if (!bin) continue;
+          const sunLineH = baseH + d2 * tanAlt;
+          for (let b2 = 0; b2 < bin.length; b2++) {
+            if (bin[b2].h > sunLineH + 0.5) {
+              inShadow = true;
+              break;
+            }
           }
+          if (inShadow) break;
+          if (sunLineH > 100) break;
         }
         props.color = inShadow ? lowHex : litColor;
       }
@@ -28373,20 +28374,13 @@ const _HeliosEngine = class _HeliosEngine {
     try {
       const shadowsSrc = this.map.getSource("helios-building-shadows-src");
       if (shadowsSrc) {
-        let input;
-        if (this._lidarActive() && this._lidarData) {
-          input = this._lidarData.regions;
-        } else if (this._buildingsData && this._maptilerShadowsEnabled()) {
-          input = {
-            type: "FeatureCollection",
-            features: [
-              ...this._buildingsData.home.features,
-              ...this._buildingsData.surroundings.features
-            ]
-          };
-        } else {
-          input = { type: "FeatureCollection", features: [] };
-        }
+        const input = this._buildingsData && this._maptilerShadowsEnabled() ? {
+          type: "FeatureCollection",
+          features: [
+            ...this._buildingsData.home.features,
+            ...this._buildingsData.surroundings.features
+          ]
+        } : { type: "FeatureCollection", features: [] };
         shadowsSrc.setData(projectExtrusionShadows(
           input,
           {
@@ -28835,7 +28829,7 @@ const _HeliosEngine = class _HeliosEngine {
     const prevCluster = this._buildingClusterRadiusMeters();
     const prevOpacity = this._buildingOpacity();
     const prevColor = this._buildingColor();
-    const prevPrecision = this._shadowPrecisionLevel();
+    const prevPrecision = this._lidarPrecisionLevel();
     const prevShadowOpa = this._shadowOpacity();
     const prevMaptilerSh = this._maptilerShadowsEnabled();
     const prevScanLow = toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX);
@@ -28910,7 +28904,7 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     }
-    const nextPrecision = this._shadowPrecisionLevel();
+    const nextPrecision = this._lidarPrecisionLevel();
     if (nextPrecision !== prevPrecision) {
       this._ensureLidarFetched();
     }
@@ -29199,13 +29193,13 @@ const en = {
     terrainDetailFine: "Fine",
     terrainDetailHint: "Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame, only worth it on capable desktops.",
     mapStyleSatellite: "Satellite",
-    shadowPrecision: "Shadow precision *",
-    shadowPrecisionOff: "Off",
-    shadowPrecisionLow: "Low",
-    shadowPrecisionMedium: "Medium",
-    shadowPrecisionHigh: "High",
-    shadowPrecisionUltra: "Ultra",
-    shadowPrecisionHint: "Only available in France for now.",
+    lidarPrecision: "LiDAR precision *",
+    lidarPrecisionOff: "Off",
+    lidarPrecisionLow: "Low",
+    lidarPrecisionMedium: "Medium",
+    lidarPrecisionHigh: "High",
+    lidarPrecisionUltra: "Ultra",
+    lidarPrecisionHint: "Drives the LiDAR-based topography, the cast-shadow geometry AND the irradiance scanner density. Only available in France for now.",
     shadowOpacity: "Shadow opacity *",
     shadowOpacityHint: "Opacity of the cast ground shadows.",
     buildingShadows: "MapTiler building shadows *",
@@ -29213,9 +29207,10 @@ const en = {
     buildingShadowsOff: "Hidden",
     buildingShadowsHint: "When LiDAR is unavailable (precision off, or home outside France), shadows are approximated from the flat MapTiler footprints. Hide them in flat or dense urban areas where the approximation reads as noise. LiDAR-driven shadows are unaffected.",
     lidarPointCloud: "LiDAR scanner view",
-    scannerLowColor: "Scanner low (zero irradiance) *",
-    scannerHighColor: "Scanner high (full irradiance) *",
-    scannerColorsHint: "Two-stop ramp the LiDAR scanner uses to colour each cell: low for night / shadow, high for full sun at STC (1 kW/m²). Defaults to a thermal red → green ramp that reads cleanly on both light and dark basemaps."
+    scannerSection: "Irradiance scanner",
+    scannerSectionHint: "On-card toggle that paints every LiDAR cell with a two-stop colour ramp based on the irradiance it receives at the selected time. Low for night / shadow, high for full sun at STC (1 kW/m²). The default thermal red → green ramp reads cleanly on both light and dark basemaps.",
+    scannerLowColor: "Low (zero irradiance) *",
+    scannerHighColor: "High (full irradiance) *"
   }
 };
 const fr = {
@@ -29295,13 +29290,13 @@ const fr = {
     terrainDetailFine: "Précis",
     terrainDetailHint: "Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation, réservé aux PC desktops puissants.",
     mapStyleSatellite: "Satellite",
-    shadowPrecision: "Précision des ombres *",
-    shadowPrecisionOff: "Off",
-    shadowPrecisionLow: "Basse",
-    shadowPrecisionMedium: "Moyenne",
-    shadowPrecisionHigh: "Haute",
-    shadowPrecisionUltra: "Ultra",
-    shadowPrecisionHint: "Uniquement disponible en France pour l'instant.",
+    lidarPrecision: "Précision LiDAR *",
+    lidarPrecisionOff: "Off",
+    lidarPrecisionLow: "Basse",
+    lidarPrecisionMedium: "Moyenne",
+    lidarPrecisionHigh: "Haute",
+    lidarPrecisionUltra: "Ultra",
+    lidarPrecisionHint: "Pilote la topographie LiDAR, la géométrie des ombres ET la densité du scanner d'irradiance. Uniquement disponible en France pour l'instant.",
     shadowOpacity: "Opacité des ombres *",
     shadowOpacityHint: "Opacité des ombres projetées au sol.",
     buildingShadows: "Ombres MapTiler *",
@@ -29309,9 +29304,10 @@ const fr = {
     buildingShadowsOff: "Masquées",
     buildingShadowsHint: "Quand le LiDAR n'est pas disponible (précision off, ou hors France), les ombres sont approximées à partir des empreintes plates MapTiler. À masquer en zone plate ou très urbaine où l'approximation ressemble plus à du bruit qu'à de la donnée. Sans effet sur les ombres LiDAR.",
     lidarPointCloud: "Vue scanner LiDAR",
-    scannerLowColor: "Scanner bas (irradiance nulle) *",
-    scannerHighColor: "Scanner haut (irradiance max) *",
-    scannerColorsHint: "Rampe à deux teintes utilisée par le scanner LiDAR pour colorer chaque cellule : la teinte basse correspond à la nuit ou à l'ombre, la teinte haute au plein soleil à 1 kW/m². Par défaut, un dégradé thermique rouge → vert qui lit bien sur fond clair comme sur fond sombre."
+    scannerSection: "Scanner d'irradiance",
+    scannerSectionHint: "Bouton sur la carte qui colore chaque cellule LiDAR avec une rampe à deux teintes selon l'irradiance reçue à l'instant sélectionné. Teinte basse pour la nuit ou l'ombre, teinte haute pour le plein soleil à 1 kW/m². Par défaut un dégradé thermique rouge → vert qui lit bien sur fond clair comme sur fond sombre.",
+    scannerLowColor: "Bas (irradiance nulle) *",
+    scannerHighColor: "Haut (irradiance max) *"
   }
 };
 const de = {
@@ -29391,13 +29387,13 @@ const de = {
     terrainDetailFine: "Fein",
     terrainDetailHint: "Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe, nur auf leistungsfähigen Desktops sinnvoll.",
     mapStyleSatellite: "Satellit",
-    shadowPrecision: "Schattenpräzision *",
-    shadowPrecisionOff: "Aus",
-    shadowPrecisionLow: "Niedrig",
-    shadowPrecisionMedium: "Mittel",
-    shadowPrecisionHigh: "Hoch",
-    shadowPrecisionUltra: "Ultra",
-    shadowPrecisionHint: "Derzeit nur in Frankreich verfügbar.",
+    lidarPrecision: "LiDAR-Präzision *",
+    lidarPrecisionOff: "Aus",
+    lidarPrecisionLow: "Niedrig",
+    lidarPrecisionMedium: "Mittel",
+    lidarPrecisionHigh: "Hoch",
+    lidarPrecisionUltra: "Ultra",
+    lidarPrecisionHint: "Steuert die LiDAR-basierte Topografie, die Schattengeometrie UND die Dichte des Bestrahlungsscanners. Derzeit nur in Frankreich verfügbar.",
     shadowOpacity: "Schatten-Deckkraft *",
     shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
     buildingShadows: "MapTiler-Gebäudeschatten *",
@@ -29405,9 +29401,10 @@ const de = {
     buildingShadowsOff: "Ausgeblendet",
     buildingShadowsHint: "Wenn LiDAR nicht verfügbar ist (Präzision aus oder Wohnsitz außerhalb Frankreich), werden Schatten aus den flachen MapTiler-Grundrissen abgeschätzt. In flachem oder dichtem städtischem Gebiet ausblenden, wo die Näherung wie Rauschen wirkt. LiDAR-Schatten bleiben unberührt.",
     lidarPointCloud: "LiDAR-Scanner-Ansicht",
-    scannerLowColor: "Scanner unten (keine Einstrahlung) *",
-    scannerHighColor: "Scanner oben (volle Einstrahlung) *",
-    scannerColorsHint: "Zwei-Farben-Rampe, mit der der LiDAR-Scanner jede Zelle einfärbt: untere Farbe für Nacht / Schatten, obere für volle Sonne bei 1 kW/m². Standardmäßig ein thermischer Rot-Grün-Verlauf, der auf hellen wie auf dunklen Basemaps klar lesbar bleibt."
+    scannerSection: "Bestrahlungs-Scanner",
+    scannerSectionHint: "Karten-Schaltfläche, die jede LiDAR-Zelle anhand der zum gewählten Zeitpunkt empfangenen Einstrahlung mit einer Zwei-Farben-Rampe einfärbt. Untere Farbe für Nacht / Schatten, obere für volle Sonne bei 1 kW/m². Standardmäßig ein thermischer Rot-Grün-Verlauf, der sowohl auf hellen wie auf dunklen Basemaps klar lesbar bleibt.",
+    scannerLowColor: "Unten (keine Einstrahlung) *",
+    scannerHighColor: "Oben (volle Einstrahlung) *"
   }
 };
 const es = {
@@ -29487,13 +29484,13 @@ const es = {
     terrainDetailFine: "Preciso",
     terrainDetailHint: "Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación, útil solo en PCs potentes.",
     mapStyleSatellite: "Satélite",
-    shadowPrecision: "Precisión de las sombras *",
-    shadowPrecisionOff: "Off",
-    shadowPrecisionLow: "Baja",
-    shadowPrecisionMedium: "Media",
-    shadowPrecisionHigh: "Alta",
-    shadowPrecisionUltra: "Ultra",
-    shadowPrecisionHint: "Solo disponible en Francia por ahora.",
+    lidarPrecision: "Precisión LiDAR *",
+    lidarPrecisionOff: "Off",
+    lidarPrecisionLow: "Baja",
+    lidarPrecisionMedium: "Media",
+    lidarPrecisionHigh: "Alta",
+    lidarPrecisionUltra: "Ultra",
+    lidarPrecisionHint: "Controla la topografía LiDAR, la geometría de las sombras Y la densidad del escáner de irradiancia. Solo disponible en Francia por ahora.",
     shadowOpacity: "Opacidad de las sombras *",
     shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
     buildingShadows: "Sombras MapTiler *",
@@ -29501,9 +29498,10 @@ const es = {
     buildingShadowsOff: "Ocultas",
     buildingShadowsHint: "Cuando LiDAR no está disponible (precisión apagada, o casa fuera de Francia), las sombras se aproximan a partir de las huellas planas de MapTiler. Oculta en zonas planas o urbanas densas donde la aproximación se lee como ruido. Las sombras LiDAR no se ven afectadas.",
     lidarPointCloud: "Vista escáner LiDAR",
-    scannerLowColor: "Escáner bajo (irradiancia nula) *",
-    scannerHighColor: "Escáner alto (irradiancia máxima) *",
-    scannerColorsHint: "Rampa de dos colores que el escáner LiDAR usa para teñir cada celda: tono bajo para noche / sombra, tono alto para pleno sol a 1 kW/m². Por defecto, un degradado térmico rojo → verde que se lee bien tanto en mapas claros como oscuros."
+    scannerSection: "Escáner de irradiancia",
+    scannerSectionHint: "Botón sobre el mapa que tiñe cada celda LiDAR con una rampa de dos colores según la irradiancia recibida en el instante seleccionado. Tono bajo para noche / sombra, tono alto para pleno sol a 1 kW/m². Por defecto un degradado térmico rojo → verde que se lee bien tanto en mapas claros como oscuros.",
+    scannerLowColor: "Bajo (irradiancia nula) *",
+    scannerHighColor: "Alto (irradiancia máxima) *"
   }
 };
 const it = {
@@ -29583,13 +29581,13 @@ const it = {
     terrainDetailFine: "Fine",
     terrainDetailHint: "Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione, utile solo su PC desktop potenti.",
     mapStyleSatellite: "Satellite",
-    shadowPrecision: "Precisione delle ombre *",
-    shadowPrecisionOff: "Off",
-    shadowPrecisionLow: "Bassa",
-    shadowPrecisionMedium: "Media",
-    shadowPrecisionHigh: "Alta",
-    shadowPrecisionUltra: "Ultra",
-    shadowPrecisionHint: "Solo disponibile in Francia per ora.",
+    lidarPrecision: "Precisione LiDAR *",
+    lidarPrecisionOff: "Off",
+    lidarPrecisionLow: "Bassa",
+    lidarPrecisionMedium: "Media",
+    lidarPrecisionHigh: "Alta",
+    lidarPrecisionUltra: "Ultra",
+    lidarPrecisionHint: "Pilota la topografia LiDAR, la geometria delle ombre E la densità dello scanner di irradianza. Solo disponibile in Francia per ora.",
     shadowOpacity: "Opacità delle ombre *",
     shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
     buildingShadows: "Ombre MapTiler *",
@@ -29597,9 +29595,10 @@ const it = {
     buildingShadowsOff: "Nascoste",
     buildingShadowsHint: "Quando LiDAR non è disponibile (precisione disattivata o casa fuori dalla Francia), le ombre vengono approssimate dalle impronte piatte MapTiler. Nascondi in zone piatte o urbane dense dove l'approssimazione si legge come rumore. Le ombre LiDAR non sono interessate.",
     lidarPointCloud: "Vista scanner LiDAR",
-    scannerLowColor: "Scanner basso (irradianza nulla) *",
-    scannerHighColor: "Scanner alto (irradianza massima) *",
-    scannerColorsHint: "Rampa a due colori usata dallo scanner LiDAR per colorare ogni cella: tonalità bassa per notte / ombra, alta per pieno sole a 1 kW/m². Di default, un gradiente termico rosso → verde leggibile sia su mappe chiare che scure."
+    scannerSection: "Scanner di irradianza",
+    scannerSectionHint: "Pulsante sulla mappa che colora ogni cella LiDAR con una rampa a due tonalità in base all'irradianza ricevuta all'istante selezionato. Tonalità bassa per notte / ombra, alta per pieno sole a 1 kW/m². Di default, un gradiente termico rosso → verde leggibile sia su mappe chiare che scure.",
+    scannerLowColor: "Basso (irradianza nulla) *",
+    scannerHighColor: "Alto (irradianza massima) *"
   }
 };
 const nl = {
@@ -29679,13 +29678,13 @@ const nl = {
     terrainDetailFine: "Fijn",
     terrainDetailHint: "Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe, alleen zinvol op krachtige desktops.",
     mapStyleSatellite: "Satelliet",
-    shadowPrecision: "Schaduwprecisie *",
-    shadowPrecisionOff: "Uit",
-    shadowPrecisionLow: "Laag",
-    shadowPrecisionMedium: "Middel",
-    shadowPrecisionHigh: "Hoog",
-    shadowPrecisionUltra: "Ultra",
-    shadowPrecisionHint: "Voorlopig alleen beschikbaar in Frankrijk.",
+    lidarPrecision: "LiDAR-precisie *",
+    lidarPrecisionOff: "Uit",
+    lidarPrecisionLow: "Laag",
+    lidarPrecisionMedium: "Middel",
+    lidarPrecisionHigh: "Hoog",
+    lidarPrecisionUltra: "Ultra",
+    lidarPrecisionHint: "Stuurt de LiDAR-gedreven topografie, de schaduwgeometrie EN de dichtheid van de instralingsscanner aan. Voorlopig alleen beschikbaar in Frankrijk.",
     shadowOpacity: "Schaduwdekking *",
     shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
     buildingShadows: "MapTiler-gebouwschaduwen *",
@@ -29693,9 +29692,10 @@ const nl = {
     buildingShadowsOff: "Verborgen",
     buildingShadowsHint: "Wanneer LiDAR niet beschikbaar is (precisie uit, of huis buiten Frankrijk) worden schaduwen benaderd op basis van de platte MapTiler-omtreklijnen. Verbergen in vlakke of dichte stedelijke gebieden waar de benadering meer ruis dan informatie oplevert. LiDAR-schaduwen blijven ongewijzigd.",
     lidarPointCloud: "LiDAR-scannerweergave",
-    scannerLowColor: "Scanner laag (geen instraling) *",
-    scannerHighColor: "Scanner hoog (volle instraling) *",
-    scannerColorsHint: "Tweekleuren-verloop dat de LiDAR-scanner gebruikt om elke cel te kleuren: lage tint voor nacht / schaduw, hoge tint voor volle zon bij 1 kW/m². Standaard een thermisch rood → groen verloop dat zowel op lichte als op donkere kaarten goed leesbaar blijft."
+    scannerSection: "Instralingsscanner",
+    scannerSectionHint: "Knop op de kaart die elke LiDAR-cel met een tweekleuren-verloop kleurt op basis van de op het gekozen moment ontvangen instraling. Lage tint voor nacht / schaduw, hoge tint voor volle zon bij 1 kW/m². Standaard een thermisch rood → groen verloop dat zowel op lichte als op donkere kaarten goed leesbaar blijft.",
+    scannerLowColor: "Laag (geen instraling) *",
+    scannerHighColor: "Hoog (volle instraling) *"
   }
 };
 const pt = {
@@ -29775,13 +29775,13 @@ const pt = {
     terrainDetailFine: "Preciso",
     terrainDetailHint: "Suave (predefinição) amostra o relevo a cada ~20 m e mantém-se fluido em qualquer dispositivo. Preciso amostra a cada ~5 m para um relevo mais detalhado mas ~16× mais vértices a projetar por frame de rotação, útil apenas em PCs potentes.",
     mapStyleSatellite: "Satélite",
-    shadowPrecision: "Precisão das sombras *",
-    shadowPrecisionOff: "Off",
-    shadowPrecisionLow: "Baixa",
-    shadowPrecisionMedium: "Média",
-    shadowPrecisionHigh: "Alta",
-    shadowPrecisionUltra: "Ultra",
-    shadowPrecisionHint: "Apenas disponível em França por agora.",
+    lidarPrecision: "Precisão LiDAR *",
+    lidarPrecisionOff: "Off",
+    lidarPrecisionLow: "Baixa",
+    lidarPrecisionMedium: "Média",
+    lidarPrecisionHigh: "Alta",
+    lidarPrecisionUltra: "Ultra",
+    lidarPrecisionHint: "Controla a topografia LiDAR, a geometria das sombras E a densidade do scanner de irradiância. Apenas disponível em França por agora.",
     shadowOpacity: "Opacidade das sombras *",
     shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
     buildingShadows: "Sombras MapTiler *",
@@ -29789,9 +29789,10 @@ const pt = {
     buildingShadowsOff: "Ocultas",
     buildingShadowsHint: "Quando o LiDAR não está disponível (precisão desligada, ou casa fora de França), as sombras são aproximadas a partir das impressões planas MapTiler. Oculte em zonas planas ou urbanas densas onde a aproximação parece mais ruído do que dado. As sombras LiDAR não são afetadas.",
     lidarPointCloud: "Vista scanner LiDAR",
-    scannerLowColor: "Scanner baixo (irradiância nula) *",
-    scannerHighColor: "Scanner alto (irradiância máxima) *",
-    scannerColorsHint: "Rampa de duas cores usada pelo scanner LiDAR para colorir cada célula: tom baixo para noite / sombra, alto para sol pleno a 1 kW/m². Por padrão, um gradiente térmico vermelho → verde legível tanto em mapas claros como escuros."
+    scannerSection: "Scanner de irradiância",
+    scannerSectionHint: "Botão no mapa que colore cada célula LiDAR com uma rampa de duas cores em função da irradiância recebida no instante selecionado. Tom baixo para noite / sombra, alto para sol pleno a 1 kW/m². Por padrão, um gradiente térmico vermelho → verde legível tanto em mapas claros como escuros.",
+    scannerLowColor: "Baixo (irradiância nula) *",
+    scannerHighColor: "Alto (irradiância máxima) *"
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -31435,31 +31436,19 @@ let HeliosCardEditor = class extends i {
                 <div class="hint">${t2.editor.terrainReliefHint}</div>
 
                 <div class="section-title">${t2.editor.mapSection}</div>
-                <div class="field">
+                <label class="field">
                     <span class="label">${t2.editor.mapStyle}</span>
-                    <div class="segmented-toggle segmented-toggle-wide">
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["map-style"] ?? "streets") === "streets" ? "active" : ""}"
-                            @click="${() => this._update("map-style", "streets")}"
-                        >${t2.editor.mapStyleStreet}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["map-style"] ?? "streets") === "topo" ? "active" : ""}"
-                            @click="${() => this._update("map-style", "topo")}"
-                        >${t2.editor.mapStyleTopo}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["map-style"] ?? "streets") === "minimal" ? "active" : ""}"
-                            @click="${() => this._update("map-style", "minimal")}"
-                        >${t2.editor.mapStyleMinimal}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["map-style"] ?? "streets") === "satellite" ? "active" : ""}"
-                            @click="${() => this._update("map-style", "satellite")}"
-                        >${t2.editor.mapStyleSatellite}</button>
-                    </div>
-                </div>
+                    <select
+                        class="he-select"
+                        .value="${String(c2["map-style"] ?? "streets")}"
+                        @change="${(e2) => this._update("map-style", e2.target.value)}"
+                    >
+                        <option value="streets"   ?selected="${String(c2["map-style"] ?? "streets") === "streets"}">${t2.editor.mapStyleStreet}</option>
+                        <option value="topo"      ?selected="${String(c2["map-style"] ?? "streets") === "topo"}">${t2.editor.mapStyleTopo}</option>
+                        <option value="minimal"   ?selected="${String(c2["map-style"] ?? "streets") === "minimal"}">${t2.editor.mapStyleMinimal}</option>
+                        <option value="satellite" ?selected="${String(c2["map-style"] ?? "streets") === "satellite"}">${t2.editor.mapStyleSatellite}</option>
+                    </select>
+                </label>
                 <div class="hint">${t2.editor.mapStyleHint}</div>
                 <div class="field">
                     <span class="label">${t2.editor.terrainDetail}</span>
@@ -31586,37 +31575,21 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="hint">${t2.editor.buildingsHint}</div>
 
-                <div class="field">
-                    <span class="label">${t2.editor.shadowPrecision}</span>
-                    <div class="segmented-toggle segmented-toggle-wide">
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION) === "off" ? "active" : ""}"
-                            @click="${() => this._update("shadow-precision", "off")}"
-                        >${t2.editor.shadowPrecisionOff}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION) === "low" ? "active" : ""}"
-                            @click="${() => this._update("shadow-precision", "low")}"
-                        >${t2.editor.shadowPrecisionLow}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION) === "medium" ? "active" : ""}"
-                            @click="${() => this._update("shadow-precision", "medium")}"
-                        >${t2.editor.shadowPrecisionMedium}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION) === "high" ? "active" : ""}"
-                            @click="${() => this._update("shadow-precision", "high")}"
-                        >${t2.editor.shadowPrecisionHigh}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["shadow-precision"] ?? DEFAULT_SHADOW_PRECISION) === "ultra" ? "active" : ""}"
-                            @click="${() => this._update("shadow-precision", "ultra")}"
-                        >${t2.editor.shadowPrecisionUltra}</button>
-                    </div>
-                </div>
-                <div class="hint">${t2.editor.shadowPrecisionHint}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.lidarPrecision}</span>
+                    <select
+                        class="he-select"
+                        .value="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION)}"
+                        @change="${(e2) => this._update("lidar-precision", e2.target.value)}"
+                    >
+                        <option value="off"    ?selected="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION) === "off"}">${t2.editor.lidarPrecisionOff}</option>
+                        <option value="low"    ?selected="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION) === "low"}">${t2.editor.lidarPrecisionLow}</option>
+                        <option value="medium" ?selected="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION) === "medium"}">${t2.editor.lidarPrecisionMedium}</option>
+                        <option value="high"   ?selected="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION) === "high"}">${t2.editor.lidarPrecisionHigh}</option>
+                        <option value="ultra"  ?selected="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION) === "ultra"}">${t2.editor.lidarPrecisionUltra}</option>
+                    </select>
+                </label>
+                <div class="hint">${t2.editor.lidarPrecisionHint}</div>
 
                 <label class="field">
                     <span class="label">${t2.editor.shadowOpacity}</span>
@@ -31648,6 +31621,7 @@ let HeliosCardEditor = class extends i {
                 </div>
                 <div class="hint">${t2.editor.buildingShadowsHint}</div>
 
+                <div class="section-title">${t2.editor.scannerSection}</div>
                 <label class="field">
                     <span class="label">${t2.editor.scannerLowColor}</span>
                     <helios-color-picker
@@ -31664,7 +31638,7 @@ let HeliosCardEditor = class extends i {
                         @value-changed="${(e2) => this._color("scanner-color-high", e2)}"
                     ></helios-color-picker>
                 </label>
-                <div class="hint">${t2.editor.scannerColorsHint}</div>
+                <div class="hint">${t2.editor.scannerSectionHint}</div>
 
                 <div class="section-title">${t2.editor.colors}</div>
                 <label class="field">
@@ -31884,6 +31858,24 @@ HeliosCardEditor.styles = i$3`
             font-size: 13px;
         }
 
+        /*  Native dropdown reused for any setting with 3+ options whose
+            labels can't fit a horizontal segmented toggle without
+            cropping across languages. Same width budget as the text
+            inputs so right-edge alignment matches the rest of the
+            editor. The browser's native chevron + dropdown menu is
+            kept on purpose: it's the most familiar control on every
+            HA frontend (desktop, mobile, iframe). */
+        .he-select
+        {
+            width: 180px;
+            padding: 6px 8px;
+            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+            border-radius: 4px;
+            background: var(--card-background-color, #fff);
+            color: var(--primary-text-color, #212121);
+            font-size: 13px;
+        }
+
         /*  Two-button toggle, sized to match the other inputs so
             the right-edge alignment stays consistent across fields. */
         .segmented-toggle
@@ -31894,23 +31886,6 @@ HeliosCardEditor.styles = i$3`
             overflow: hidden;
             border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
             background: var(--card-background-color, #fff);
-        }
-
-        /*  Wider variant for toggles with 4+ options (map-style with
-            satellite, shadow-precision). Full width plus flex-wrap so
-            cramped editor widths break the buttons onto a second row
-            instead of cropping the last label. */
-        .segmented-toggle-wide
-        {
-            width: 100%;
-            min-width: 240px;
-            flex-wrap: wrap;
-            border-radius: 6px;
-            row-gap: 0;
-        }
-        .segmented-toggle-wide .seg-option
-        {
-            min-width: 48px;
         }
 
         .seg-option
@@ -32019,7 +31994,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.16"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.17"}`,
       labelStyle,
       versionStyle
     );

@@ -1,4 +1,4 @@
-# HELIOS, v1.3.0
+# HELIOS, v1.4.0
 
 HELIOS is a Home Assistant Lovelace custom card that visualises solar
 conditions at a home in real time: sun arc, irradiance, cloud cover,
@@ -11,6 +11,64 @@ scrubbable 5-day timeline.
 ## Changelog
 
 Each entry consolidates everything between two stable releases.
+
+### v1.4.0 (in beta), LiDAR topography, irradiance scanner, SVG cloud overlay
+
+Headline iteration on top of v1.3.0. Integrates the French national
+LiDAR HD dataset (IGN, metropolitan France + Corsica) as both a
+high-resolution DEM driving the terrain mesh around the home AND a
+per-cell height grid driving an on-card "irradiance scanner" that
+paints every point with a two-stop colour ramp depending on the
+solar exposure it receives at the selected time. The cloud-cover
+disc + 100 % ring move from MapLibre fill layers to an SVG overlay
+so they stay a true circle on top of the bumpy LiDAR terrain.
+
+**LiDAR pipeline.** A new `lidar-precision` config option (`off /
+low / medium / high / ultra`) controls a WMS round-trip to IGN's
+`IGNF_LIDAR-HD_*` services and decodes the BIL raster client-side.
+The result is consumed three ways:
+
+- **Topography.** A custom maplibregl protocol
+  (`helios-lidar-dem://`) encodes the bare-earth MNT raster into
+  Mapbox terrain-RGB tiles and composites them per-pixel with the
+  MapTiler global terrain outside the LiDAR bbox, so the camera
+  sees real elevation inside the home area without a cliff at the
+  boundary as it rotates.
+- **Irradiance scanner.** Every classified MNH cell (home / building
+  / vegetation) plus the full bare-earth raster (subsampled stride-2
+  past ~512²) becomes a small 0.4 m × 0.2 m extruded cube lifted
+  10 cm above the local ground. A chunked RAF compute pass colours
+  each cube via a per-cell sun-direction ray cast through a 2 m
+  spatial grid of the same cells, then a radial reveal animation
+  sweeps the result outward from the home over 700 ms.
+- **Cast shadows.** Unchanged from v1.3.0: the MapTiler footprint
+  pass still feeds the 3-step fade-gradient shadow layers when
+  `building-shadows-enabled` is true.
+
+**Cloud disc + ring → SVG.** The translucent on-ground cloud-cover
+disc and its fixed 100 % reference ring no longer live as MapLibre
+fill / line layers; the LiDAR DEM was bending them out of shape.
+They're now SVG polygons in a dedicated `.cloud-svg` overlay,
+projected through `_projectScenePoint(..., anchorAtHome: true)`
+(same trick used by the sun arc since the same release) so every
+vertex shares the home's terrain elevation reference. The hover
+breakdown tooltip is wired directly on the SVG polygon.
+
+**Cast shadow gradient.** `projectExtrusionShadows` emits three
+nested polygons per casting region (decreasing length), rendered
+by three filtered fill layers at `fill-opacity = total / 3` each.
+Alpha compositing gives a linear fade from opaque at the footprint
+to one-third opaque at the shadow tip.
+
+**Editor polish.** `map-style` and `lidar-precision` are dropdowns
+(native `<select>`) instead of segmented toggles, the labels
+weren't fitting horizontally across languages. The irradiance
+scanner colours live in their own section.
+
+**i18n.** New keys: `lidarPrecision*`, `buildingShadows*`,
+`lidarPointCloud`, `scannerSection`, `scannerSectionHint`,
+`scannerLowColor`, `scannerHighColor`, `mapStyleMinimal`,
+`mapStyleSatellite`, `terrainDetail*`. All 7 locales updated.
 
 ### v1.3.0, Auto-calibrating PV, terrain detail, mobile rotation, stability
 
@@ -321,6 +379,11 @@ Helios/
 │   ├── helios-config.ts            Visual editor + color picker + config helpers
 │   ├── helios-engine.ts            Map orchestration + projection + layers
 │   ├── helios-buildings.ts         Self-sourced building tile fetch + radius/cluster filter
+│   ├── helios-shadows.ts           Ground-projected shadow polygons (fade-step gradient)
+│   ├── helios-lidar.ts             LidarSource interface + provider registry
+│   ├── helios-lidar/               Country-specific LiDAR providers
+│   │   └── helios-lidar-fr.ts      IGN HD (metropolitan France + Corsica) WMS pipeline
+│   ├── helios-lidar-terrain.ts     Custom DEM protocol (LiDAR MNT + MapTiler composite)
 │   ├── helios-sun.ts               Solar position + Haurwitz / Kasten-Czeplak math
 │   ├── helios-weather.ts           Open-Meteo fetch + multi-model fusion + cache
 │   └── i18n/
@@ -357,6 +420,27 @@ Each `src/helios-*.ts` file has a clearly bounded responsibility:
   `@mapbox/vector-tile`, splits MultiPolygons, filters features
   by haversine distance, identifies the home cluster. Returns
   two GeoJSON `FeatureCollection`s consumed by the engine.
+* **helios-shadows.ts**, `projectExtrusionShadows` takes a building
+  / region FeatureCollection plus the current sun position and
+  returns a FeatureCollection of fade-step ground shadow polygons.
+  Each input region emits N nested polygons (`shadow_step`
+  property 0..N-1) the engine paints with stacked filtered layers
+  for an alpha-composited gradient.
+* **helios-lidar.ts**, `LidarSource` interface + `LIDAR_SOURCES`
+  provider registry + `findLidarSource(lat, lon)` resolver. Adding
+  a country means dropping a new file under `./helios-lidar/`.
+* **helios-lidar/helios-lidar-fr.ts**, IGN LiDAR HD pipeline for
+  metropolitan France + Corsica: parallel WMS fetch of MNH +
+  MNT layers (`image/x-bil;bits=32`), per-cell classification
+  against the MapTiler home / surroundings footprints, 8-connected
+  flood fill into regions, convex hull per region for the cast
+  shadows, plus per-cell Points (kind + height) for the scanner.
+* **helios-lidar-terrain.ts**, custom `maplibregl.addProtocol`
+  handler. Slices the MNT raster onto Web-Mercator tiles, encodes
+  each pixel as Mapbox terrain-RGB, and composites with proxied
+  MapTiler terrain-rgb-v2 tiles for pixels outside the LiDAR bbox.
+  Single source-of-truth for the DEM source MapLibre's `setTerrain`
+  binds to when LiDAR is active.
 * **helios-sun.ts**, `getSunPosition`, `computePvPower`,
   `computeIrradianceWm2`. Pure functions; no DOM, no map.
 * **helios-weather.ts**, `fetchHomePointData` and friends:
@@ -434,6 +518,55 @@ The home cluster is emitted as one `FeatureCollection`, painted at
 full opacity. Surroundings are another `FeatureCollection`, painted
 at the configured opacity. Both share the same `fill-extrusion-color`
 modulated by sun altitude.
+
+### LiDAR DEM compose
+
+When `lidar-precision` is on, the LiDAR provider's MNT raster is
+registered with a `maplibregl.addProtocol('helios-lidar-dem', ...)`
+handler. MapLibre asks for tiles in Web-Mercator at zoom 12-15; the
+handler returns:
+
+- For tiles fully outside the LiDAR bbox: a verbatim proxy of the
+  matching MapTiler `terrain-rgb-v2` tile (so the camera always
+  sees real elevation, no cliff at the bbox edge).
+- For tiles fully inside: a freshly-encoded terrain-RGB PNG built
+  by bilinear-sampling the MNT raster at each output pixel.
+- For tiles that straddle the boundary: a per-pixel composite where
+  the LiDAR sample wins inside the bbox and the MapTiler sample
+  fills the outside (single pass, no seam visible because both
+  sources are sea-level-referenced).
+
+`map.setTerrain({ source: 'helios-lidar-terrain', exaggeration: 1.4 })`
+binds the source. Exaggeration is a touch higher than the MapTiler
+default (1.2) to compensate for the smoother native sampling.
+
+### Irradiance scanner
+
+Every LiDAR cell becomes a uniform 0.4 m × 0.4 m × 0.2 m extruded
+cube floating 10 cm above the local LiDAR ground, regardless of its
+classification. Cell density matches the raster sampling (stride 1
+under 512², stride 2 above so 'ultra' stays under ~250 k cells).
+
+Each cube's colour is computed by a sun-direction ray cast through
+a 2 m spatial grid built from the MNH cells (`height > 0` only):
+
+- Walk in 2 m steps along the sun azimuth, in metres.
+- At each step at distance `d`, the sun line clears `baseH + d ·
+  tan(altitude)` above the home ground. Any cell binned at that
+  step whose height exceeds the sun line shades the candidate.
+- Early exits on the first blocker, on the sun line passing
+  `HEIGHT_MAX_M`, and at 400 m max ray length.
+
+Lit cells get a colour lerped between `scanner-color-low` (zero
+irradiance, default red `#dc2626`) and `scanner-color-high` (STC,
+default green `#16a34a`) weighted by `min(1, GHI / 1000)`. Shadowed
+cells land on the low stop. Below the horizon, every cell goes to
+the low stop in a synchronous fast pass.
+
+Compute runs in `requestAnimationFrame` chunks of 4 k cells; the
+layer stays hidden until the last chunk lands, then a radial reveal
+animation (`['<=', ['get', 'dist'], R]` filter swept ease-out cubic
+over 700 ms) unveils the result from the home outward.
 
 ---
 

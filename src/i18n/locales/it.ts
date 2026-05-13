@@ -83,13 +83,13 @@ export const it: Translations = {
         terrainDetailFine:     'Fine',
         terrainDetailHint:     'Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione, utile solo su PC desktop potenti.',
         mapStyleSatellite:     'Satellite',
-        shadowPrecision:       'Precisione delle ombre *',
-        shadowPrecisionOff:    'Off',
-        shadowPrecisionLow:    'Bassa',
-        shadowPrecisionMedium: 'Media',
-        shadowPrecisionHigh:   'Alta',
-        shadowPrecisionUltra:  'Ultra',
-        shadowPrecisionHint:   'Solo disponibile in Francia per ora.',
+        lidarPrecision:       'Precisione LiDAR *',
+        lidarPrecisionOff:    'Off',
+        lidarPrecisionLow:    'Bassa',
+        lidarPrecisionMedium: 'Media',
+        lidarPrecisionHigh:   'Alta',
+        lidarPrecisionUltra:  'Ultra',
+        lidarPrecisionHint:   'Pilota la topografia LiDAR, la geometria delle ombre E la densità dello scanner di irradianza. Solo disponibile in Francia per ora.',
         shadowOpacity:         'Opacità delle ombre *',
         shadowOpacityHint:     'Opacità delle ombre proiettate a terra.',
         buildingShadows:       'Ombre MapTiler *',
@@ -97,8 +97,9 @@ export const it: Translations = {
         buildingShadowsOff:    'Nascoste',
         buildingShadowsHint:   'Quando LiDAR non è disponibile (precisione disattivata o casa fuori dalla Francia), le ombre vengono approssimate dalle impronte piatte MapTiler. Nascondi in zone piatte o urbane dense dove l\'approssimazione si legge come rumore. Le ombre LiDAR non sono interessate.',
         lidarPointCloud:       'Vista scanner LiDAR',
-        scannerLowColor:       'Scanner basso (irradianza nulla) *',
-        scannerHighColor:      'Scanner alto (irradianza massima) *',
-        scannerColorsHint:     'Rampa a due colori usata dallo scanner LiDAR per colorare ogni cella: tonalità bassa per notte / ombra, alta per pieno sole a 1 kW/m². Di default, un gradiente termico rosso → verde leggibile sia su mappe chiare che scure.'
+        scannerSection:        'Scanner di irradianza',
+        scannerSectionHint:    'Pulsante sulla mappa che colora ogni cella LiDAR con una rampa a due tonalità in base all\'irradianza ricevuta all\'istante selezionato. Tonalità bassa per notte / ombra, alta per pieno sole a 1 kW/m². Di default, un gradiente termico rosso → verde leggibile sia su mappe chiare che scure.',
+        scannerLowColor:       'Basso (irradianza nulla) *',
+        scannerHighColor:      'Alto (irradianza massima) *'
     }
 };

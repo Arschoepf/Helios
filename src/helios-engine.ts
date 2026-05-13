@@ -127,16 +127,13 @@ export interface HeliosConfig
     //  'medium' 512x512
     //  'high'   768x768
     //  'ultra'  1024x1024, IGN native sampling
-    'shadow-precision'?:       unknown;
+    'lidar-precision'?:       unknown;
     //Opacity of the cast ground shadow layer, 0..1. Default 0.32.
     'shadow-opacity'?:         unknown;
-    //Whether the MapTiler-derived shadow projection runs when the
-    //LiDAR pipeline is inactive (precision = off, or the home falls
-    //outside any provider's coverage). LiDAR-driven shadows are
-    //unaffected, they always render when LiDAR data is present.
-    //Default true (legacy 1.4.0 behaviour). Useful in flat or dense
-    //urban areas where the MapTiler shadow approximation reads as
-    //noise rather than data.
+    //Whether the MapTiler-derived shadow projection runs at all.
+    //Default true. Useful in flat or dense urban areas where the
+    //MapTiler shadow approximation reads as noise rather than data.
+    //Scanner-cast shadows (per-cell ray cast) are unaffected.
     'building-shadows-enabled'?: unknown;
     //LiDAR scanner colour ramp. Each point gets a colour lerped
     //between `scanner-color-low` (irradiance = 0, default red) and
@@ -164,9 +161,9 @@ export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
 //  'medium' 512 x 512,        ~1 MB
 //  'high'   768 x 768,        ~2.3 MB
 //  'ultra'  1024 x 1024,      ~4 MB, matches IGN native ~50 cm sampling
-export type ShadowPrecisionLevel = 'off' | 'low' | 'medium' | 'high' | 'ultra';
-export const DEFAULT_SHADOW_PRECISION: ShadowPrecisionLevel = 'low';
-export const SHADOW_PRECISION_RASTER: Record<Exclude<ShadowPrecisionLevel, 'off'>, number> = {
+export type LidarPrecisionLevel = 'off' | 'low' | 'medium' | 'high' | 'ultra';
+export const DEFAULT_LIDAR_PRECISION: LidarPrecisionLevel = 'low';
+export const LIDAR_PRECISION_RASTER: Record<Exclude<LidarPrecisionLevel, 'off'>, number> = {
     low:    384,
     medium: 512,
     high:   768,
@@ -461,29 +458,6 @@ function buildCirclePolygon(
     return ring;
 }
 
-//Standard ray-casting point-in-polygon test. The ring is a simple
-//outer ring (no holes); convex hulls produced by helios-shadows.ts
-//satisfy that contract. Vertices may or may not include a duplicate
-//closing point, the algorithm doesn't care because each segment is
-//tested independently.
-function pointInRing(lon: number, lat: number, ring: number[][]): boolean
-{
-    let inside = false;
-    const n = ring.length;
-    for (let i = 0, j = n - 1; i < n; j = i++)
-    {
-        const xi = ring[i][0], yi = ring[i][1];
-        const xj = ring[j][0], yj = ring[j][1];
-        if ((yi > lat) !== (yj > lat)
-            && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)
-        {
-            inside = !inside;
-        }
-    }
-    return inside;
-}
-
-
 //Cloud-cover disc parameters.
 //
 //The card now expresses the current cloud coverage as a flat disc on
@@ -499,11 +473,10 @@ function pointInRing(lon: number, lat: number, ring: number[][]): boolean
 //a ~75 px disc, focal on the home itself, neither dwarfing it nor
 //swallowing too much of the surrounding context.
 const CLOUD_DISC_RADIUS_M       = 30;
-//Disc opacity and reference-ring paint properties used to live as
-//MapLibre layer constants. Since beta.16 the disc + ring render as
-//SVG inside helios-card-css, with the styling baked into the .cloud-svg
-//selectors there. The radius constant above is still consumed by
-//projectCloudScene to size the geographic circle vertices.
+//The disc + ring opacity / stroke styling lives in the .cloud-svg
+//selectors over in helios-card-css. The radius constant above is
+//still consumed by projectCloudScene to size the geographic circle
+//vertices.
 //Number of polygon vertices used to approximate the disc and ring.
 //128 is overkill for the visual smoothness alone but the cost is
 //still negligible (~128 trig ops per data update) and it future-
@@ -1089,22 +1062,22 @@ export class HeliosEngine
 
     //Reads the user-configured shadow precision, normalises any
     //off-spec value to the default and returns one of the canonical
-    //ShadowPrecisionLevel members.
-    private _shadowPrecisionLevel(): ShadowPrecisionLevel
+    //LidarPrecisionLevel members.
+    private _lidarPrecisionLevel(): LidarPrecisionLevel
     {
-        const v = String(this.cfg['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION).toLowerCase();
+        const v = String(this.cfg['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION).toLowerCase();
         if (v === 'off' || v === 'low' || v === 'medium' || v === 'high' || v === 'ultra')
         {
-            return v as ShadowPrecisionLevel;
+            return v as LidarPrecisionLevel;
         }
-        return DEFAULT_SHADOW_PRECISION;
+        return DEFAULT_LIDAR_PRECISION;
     }
 
     //True when the LiDAR pipeline is enabled by config AND has actual
     //region data ready to feed the shadow projector.
     private _lidarActive(): boolean
     {
-        return this._shadowPrecisionLevel() !== 'off' && this._lidarData !== null;
+        return this._lidarPrecisionLevel() !== 'off' && this._lidarData !== null;
     }
 
     //True when the LiDAR pipeline returned an MNT raster the engine
@@ -2090,7 +2063,7 @@ export class HeliosEngine
         if (!this.map) return;
         if (!this._buildingsData) return;
 
-        const level = this._shadowPrecisionLevel();
+        const level = this._lidarPrecisionLevel();
         if (level === 'off')
         {
             this._lidarAbort?.abort();
@@ -2107,7 +2080,7 @@ export class HeliosEngine
         if (!source) return;
 
         const radius     = this._buildingRadiusMeters();
-        const rasterSize = SHADOW_PRECISION_RASTER[level];
+        const rasterSize = LIDAR_PRECISION_RASTER[level];
         //Key includes the raster size so changing levels invalidates
         //the cache.
         const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
@@ -2324,10 +2297,12 @@ export class HeliosEngine
 
         //Uniform cube parameters. 0.4 m footprint reads as a tight
         //point at zoom 18, 0.2 m tall is visible without dominating
-        //the geometry below it.
+        //the geometry below it. The +10 cm lift is just enough to
+        //clear z-fighting between terrain cubes and the LiDAR mesh
+        //without making the cubes float visibly.
         const CUBE_HALF_M   = 0.2;
         const CUBE_HEIGHT_M = 0.2;
-        const LIFT_M        = 0.2;     //+20 cm raise so terrain cells clear the LiDAR mesh
+        const LIFT_M        = 0.1;
         const mPerDegLat    = 111_320;
         const cosLat        = Math.cos(this.homeLat * Math.PI / 180);
         const mPerDegLon    = mPerDegLat * cosLat;
@@ -2480,60 +2455,54 @@ export class HeliosEngine
         //weighted by GHI. Shadowed cells fall back to the low stop.
         const litColor = this._lerpHex(lowHex, highHex, ghiNorm);
 
-        //Compute shadow polygons in the same way _refreshShadowsAndAtmosphere
-        //feeds the on-ground shadow source, but we re-run here on the
-        //selected time even when the atmosphere short-circuit decided
-        //"sun didn't move enough", so a scrub event recolours points
-        //before the next minute tick.
-        const shadowInput: GeoJSON.FeatureCollection =
-            (this._lidarActive() && this._lidarData)
-                ? this._lidarData.regions
-                : (this._buildingsData && this._maptilerShadowsEnabled())
-                    ? {
-                        type: 'FeatureCollection',
-                        features: [
-                            ...this._buildingsData.home.features,
-                            ...this._buildingsData.surroundings.features
-                        ]
-                    }
-                    : { type: 'FeatureCollection', features: [] };
+        //Per-cell shadow test by sun-direction ray cast. We bin the
+        //LiDAR cells (height > 0) into a 2 m grid keyed by (binX,
+        //binY) around the home; for each scanner cell we walk along
+        //the sun direction, sampling bins, and check whether any
+        //binned cell rises high enough to block the sun line at that
+        //distance. Avoids the per-region projectExtrusionShadows
+        //path, which over-approximates connected-component hulls
+        //into giant fake shadows on forested ground.
+        const D          = Math.PI / 180;
+        const sunAzR     = sun.azimuth  * D;
+        const sunAltR    = sun.altitude * D;
+        const sunDirX    = Math.sin(sunAzR);   // east component, unit vector
+        const sunDirY    = Math.cos(sunAzR);   // north component
+        const tanAlt     = Math.tan(sunAltR);
+        const mPerDegLat = 111_320;
+        const cosHomeLat = Math.cos(this.homeLat * D);
+        const mPerDegLon = mPerDegLat * cosHomeLat;
+        const homeLon    = this.homeLon;
+        const homeLat    = this.homeLat;
 
-        const shadows = projectExtrusionShadows(shadowInput, {
-            sunAzimuthDeg:  sun.azimuth,
-            sunAltitudeDeg: sun.altitude,
-            homeLat:        this.homeLat
-        });
+        const GRID_M     = 2.0;
+        const RAY_STEP_M = 2.0;
+        const RAY_MAX_M  = 400;
 
-        //Per-polygon bbox + ring cache, so the inner loop only does a
-        //cheap range check before paying for the ray-cast.
-        type ShadowEntry = {
-            ring:    Array<[number, number]>;
-            minLon:  number; minLat: number;
-            maxLon:  number; maxLat: number;
-            height:  number;
-        };
-        const shadowEntries: ShadowEntry[] = [];
-        for (const f of shadows.features)
+        type Blocker = { lonM: number; latM: number; h: number };
+        const grid = new Map<number, Blocker[]>();
+        const binKey = (bx: number, by: number) => (bx << 16) ^ (by & 0xffff);
+
+        const lidarCells = this._lidarData?.cells.features ?? [];
+        for (const f of lidarCells)
         {
-            if (!f.geometry || f.geometry.type !== 'Polygon') continue;
-            const ring = (f.geometry.coordinates as number[][][])[0] as Array<[number, number]>;
-            if (!ring || ring.length < 3) continue;
-            let minLon = Infinity, minLat = Infinity;
-            let maxLon = -Infinity, maxLat = -Infinity;
-            for (const p of ring)
-            {
-                if (p[0] < minLon) minLon = p[0];
-                if (p[0] > maxLon) maxLon = p[0];
-                if (p[1] < minLat) minLat = p[1];
-                if (p[1] > maxLat) maxLat = p[1];
-            }
-            const height = Number((f.properties as { render_height?: unknown } | null)?.render_height ?? 0);
-            shadowEntries.push({ ring, minLon, minLat, maxLon, maxLat, height });
+            if (!f.geometry || f.geometry.type !== 'Point') continue;
+            const h = Number((f.properties as { height?: unknown } | null)?.height ?? 0);
+            if (!isFinite(h) || h <= 0) continue;  // terrain cells don't block sun
+            const [lon, lat] = f.geometry.coordinates as [number, number];
+            const lonM = (lon - homeLon) * mPerDegLon;
+            const latM = (lat - homeLat) * mPerDegLat;
+            const bx   = Math.floor(lonM / GRID_M);
+            const by   = Math.floor(latM / GRID_M);
+            const k    = binKey(bx, by);
+            let bin    = grid.get(k);
+            if (!bin) { bin = []; grid.set(k, bin); }
+            bin.push({ lonM, latM, h });
         }
 
         const feats = this._pointCloudCells.features;
-        const BATCH = 2000;
-        let cursor = 0;
+        const BATCH = 4000;
+        let cursor  = 0;
 
         const step = () =>
         {
@@ -2545,22 +2514,44 @@ export class HeliosEngine
             {
                 const feat  = feats[cursor];
                 const props = feat.properties as { top?: number; base?: number; color?: string };
-                const top   = Number(props?.top ?? 0);
+                const baseH = Number(props?.base ?? 0);  // metres above local ground
+
                 const ring  = ((feat.geometry as GeoJSON.Polygon).coordinates[0]) as number[][];
-                //Polygons are sub-metre to a few metres wide; using the
-                //centre for the shadow test is identical to using a
-                //corner at this scale and dodges 4 ray casts per cell.
+                //Polygons are sub-metre wide; centre is a fine probe.
                 let cLon = 0, cLat = 0;
                 for (let k = 0; k < 4; k++) { cLon += ring[k][0]; cLat += ring[k][1]; }
                 cLon *= 0.25; cLat *= 0.25;
+                const cLonM = (cLon - homeLon) * mPerDegLon;
+                const cLatM = (cLat - homeLat) * mPerDegLat;
 
                 let inShadow = false;
-                for (const s of shadowEntries)
+                //Walk along the sun direction one grid bin at a time.
+                //At distance d the sun line is at height baseH + d *
+                //tan(alt); a blocker at that bin shades this cell
+                //when its height clears that line by a small margin.
+                for (let d = RAY_STEP_M; d <= RAY_MAX_M; d += RAY_STEP_M)
                 {
-                    if (cLon < s.minLon || cLon > s.maxLon
-                     || cLat < s.minLat || cLat > s.maxLat) continue;
-                    if (s.height <= top + 0.5) continue;  // not tall enough to shade this point
-                    if (pointInRing(cLon, cLat, s.ring)) { inShadow = true; break; }
+                    const px = cLonM + sunDirX * d;
+                    const py = cLatM + sunDirY * d;
+                    const bx = Math.floor(px / GRID_M);
+                    const by = Math.floor(py / GRID_M);
+                    const bin = grid.get(binKey(bx, by));
+                    if (!bin) continue;
+                    const sunLineH = baseH + d * tanAlt;
+                    for (let b = 0; b < bin.length; b++)
+                    {
+                        if (bin[b].h > sunLineH + 0.5)
+                        {
+                            inShadow = true;
+                            break;
+                        }
+                    }
+                    if (inShadow) break;
+                    //Tall-enough blockers can only exist at distances
+                    //where (HEIGHT_MAX_M - baseH) >= d * tan(alt). We
+                    //stop early once the sun line passes the global
+                    //height cap so high-altitude rays don't fly far.
+                    if (sunLineH > 100) break;
                 }
 
                 props.color = inShadow ? lowHex : litColor;
@@ -2985,37 +2976,29 @@ export class HeliosEngine
         }
         catch (_) {}
 
-        //Unified shadow projection. Input is the consolidated LiDAR
-        //regions when active, otherwise the MapTiler home + surroundings
-        //footprints (1.3.x behaviour). The MapTiler path is gated on
-        //`building-shadows-enabled` so users in flat / dense urban
-        //areas can suppress the approximate cast-shadows while LiDAR
-        //shadows (always physically grounded) remain visible.
+        //Map cast-shadow polygons. Fed exclusively by the MapTiler
+        //building footprints, gated on `building-shadows-enabled`.
+        //The LiDAR pipeline used to feed its consolidated regions
+        //here too, but a forest's connected-component convex hull
+        //projects into a giant fake shadow that overruns the visible
+        //area; LiDAR shadow info lives in the scanner overlay, which
+        //tests per cell with a sun-direction ray cast.
         try
         {
             const shadowsSrc = this.map.getSource('helios-building-shadows-src') as
                                maplibregl.GeoJSONSource | undefined;
             if (shadowsSrc)
             {
-                let input: GeoJSON.FeatureCollection;
-                if (this._lidarActive() && this._lidarData)
-                {
-                    input = this._lidarData.regions;
-                }
-                else if (this._buildingsData && this._maptilerShadowsEnabled())
-                {
-                    input = {
-                        type:     'FeatureCollection',
-                        features: [
-                            ...this._buildingsData.home.features,
-                            ...this._buildingsData.surroundings.features
-                        ]
-                    };
-                }
-                else
-                {
-                    input = { type: 'FeatureCollection', features: [] };
-                }
+                const input: GeoJSON.FeatureCollection =
+                    (this._buildingsData && this._maptilerShadowsEnabled())
+                        ? {
+                            type:     'FeatureCollection',
+                            features: [
+                                ...this._buildingsData.home.features,
+                                ...this._buildingsData.surroundings.features
+                            ]
+                        }
+                        : { type: 'FeatureCollection', features: [] };
                 shadowsSrc.setData(projectExtrusionShadows(input,
                 {
                     sunAzimuthDeg:  azimuth,
@@ -3702,7 +3685,7 @@ export class HeliosEngine
         const prevCluster     = this._buildingClusterRadiusMeters();
         const prevOpacity     = this._buildingOpacity();
         const prevColor       = this._buildingColor();
-        const prevPrecision   = this._shadowPrecisionLevel();
+        const prevPrecision   = this._lidarPrecisionLevel();
         const prevShadowOpa   = this._shadowOpacity();
         const prevMaptilerSh  = this._maptilerShadowsEnabled();
         const prevScanLow     = toColor(this.cfg['scanner-color-low'],  DEFAULT_SCANNER_LOW_HEX);
@@ -3819,7 +3802,7 @@ export class HeliosEngine
         //re-pushes MapTiler data; switching levels invalidates the
         //cache (fetch-key includes raster size) and refetches at the
         //new sampling. _ensureLidarFetched covers both paths.
-        const nextPrecision = this._shadowPrecisionLevel();
+        const nextPrecision = this._lidarPrecisionLevel();
         if (nextPrecision !== prevPrecision)
         {
             this._ensureLidarFetched();

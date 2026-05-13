@@ -76,8 +76,7 @@ export const franceLidarHd: LidarSource =
         const empty: LidarFetchResult = {
             regions: { type: 'FeatureCollection', features: [] },
             cells:   { type: 'FeatureCollection', features: [] },
-            terrain: null,
-            terrainCellHalfM: 1.0
+            terrain: null
         };
 
         //Defensive clamp on the caller-supplied raster size.
@@ -363,21 +362,10 @@ export const franceLidarHd: LidarSource =
             console.info(`[HELIOS] LiDAR: no MNH cells passed the threshold (${nTerrain} terrain points)`);
         }
 
-        //Half-pitch of the terrain grid, in metres. Spacing in degrees
-        //is `pxLon * stride` (for longitude) / `pxLat * stride` (for
-        //latitude); we convert via the local metres-per-degree factor
-        //so the engine can size flat ground tiles to the LiDAR grid.
-        const M_PER_DEG_LON_LOCAL = M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180);
-        const halfM = 0.5 * Math.min(
-            pxLat * stride * M_PER_DEG_LAT,
-            pxLon * stride * M_PER_DEG_LON_LOCAL
-        );
-
         return {
             regions: { type: 'FeatureCollection', features: regionsOut },
             cells:   { type: 'FeatureCollection', features: cellsOut },
-            terrain,
-            terrainCellHalfM: halfM
+            terrain
         };
     }
 };

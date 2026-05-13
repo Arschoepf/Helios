@@ -83,13 +83,13 @@ export const es: Translations = {
         terrainDetailFine:     'Preciso',
         terrainDetailHint:     'Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación, útil solo en PCs potentes.',
         mapStyleSatellite:     'Satélite',
-        shadowPrecision:       'Precisión de las sombras *',
-        shadowPrecisionOff:    'Off',
-        shadowPrecisionLow:    'Baja',
-        shadowPrecisionMedium: 'Media',
-        shadowPrecisionHigh:   'Alta',
-        shadowPrecisionUltra:  'Ultra',
-        shadowPrecisionHint:   'Solo disponible en Francia por ahora.',
+        lidarPrecision:       'Precisión LiDAR *',
+        lidarPrecisionOff:    'Off',
+        lidarPrecisionLow:    'Baja',
+        lidarPrecisionMedium: 'Media',
+        lidarPrecisionHigh:   'Alta',
+        lidarPrecisionUltra:  'Ultra',
+        lidarPrecisionHint:   'Controla la topografía LiDAR, la geometría de las sombras Y la densidad del escáner de irradiancia. Solo disponible en Francia por ahora.',
         shadowOpacity:         'Opacidad de las sombras *',
         shadowOpacityHint:     'Opacidad de las sombras proyectadas en el suelo.',
         buildingShadows:       'Sombras MapTiler *',
@@ -97,8 +97,9 @@ export const es: Translations = {
         buildingShadowsOff:    'Ocultas',
         buildingShadowsHint:   'Cuando LiDAR no está disponible (precisión apagada, o casa fuera de Francia), las sombras se aproximan a partir de las huellas planas de MapTiler. Oculta en zonas planas o urbanas densas donde la aproximación se lee como ruido. Las sombras LiDAR no se ven afectadas.',
         lidarPointCloud:       'Vista escáner LiDAR',
-        scannerLowColor:       'Escáner bajo (irradiancia nula) *',
-        scannerHighColor:      'Escáner alto (irradiancia máxima) *',
-        scannerColorsHint:     'Rampa de dos colores que el escáner LiDAR usa para teñir cada celda: tono bajo para noche / sombra, tono alto para pleno sol a 1 kW/m². Por defecto, un degradado térmico rojo → verde que se lee bien tanto en mapas claros como oscuros.'
+        scannerSection:        'Escáner de irradiancia',
+        scannerSectionHint:    'Botón sobre el mapa que tiñe cada celda LiDAR con una rampa de dos colores según la irradiancia recibida en el instante seleccionado. Tono bajo para noche / sombra, tono alto para pleno sol a 1 kW/m². Por defecto un degradado térmico rojo → verde que se lee bien tanto en mapas claros como oscuros.',
+        scannerLowColor:       'Bajo (irradiancia nula) *',
+        scannerHighColor:      'Alto (irradiancia máxima) *'
     }
 };

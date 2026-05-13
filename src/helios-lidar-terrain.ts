@@ -39,10 +39,9 @@ interface TerrainEntry
 {
     data:        LidarTerrainData;
     //MapTiler API key, used to fetch the global terrain-rgb tiles for
-    //pixels that fall outside the LiDAR coverage. When the engine
-    //hasn't provided one (legacy entry, missing key) we silently
-    //encode height = 0 for those pixels and let the camera see flat
-    //ground around the home, which is what beta.13 did.
+    //pixels that fall outside the LiDAR coverage. When no key is
+    //available we silently encode height = 0 there and let the
+    //camera see flat ground outside the LiDAR bbox.
     maptilerKey: string | null;
     cache:       Map<string, ArrayBuffer>;
 }
@@ -206,8 +205,7 @@ async function encodeTile(entry: TerrainEntry, z: number, x: number, y: number):
     //nothing. Forward the request to MapTiler so the camera still
     //sees real elevation at distance, instead of a flat sea-level
     //cliff at the LiDAR boundary as it rotates. When no key is
-    //available, fall back to the encoded-zero "empty" tile (this
-    //matches beta.13 behaviour).
+    //available, fall back to the encoded-zero "empty" tile.
     if (tileFullyOutsideLidar)
     {
         const proxied = await fetchMaptilerTile(entry.maptilerKey, z, x, y);
@@ -284,17 +282,22 @@ async function fetchMaptilerTile(
 ): Promise<ArrayBuffer | null>
 {
     if (!key) return null;
-    try
+    //terrain-rgb-v2 is served as WebP by MapTiler; the .png variant
+    //404s for many tiles and turns into a flat sea-level cliff at the
+    //LiDAR bbox edge. WebP first, with a PNG fallback for the rare
+    //tiles where the server hands back an older PNG-only response.
+    for (const ext of ['webp', 'png'])
     {
-        const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.png?key=${key}`;
-        const resp = await fetch(url);
-        if (!resp.ok) return null;
-        return await resp.arrayBuffer();
+        try
+        {
+            const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.${ext}?key=${key}`;
+            const resp = await fetch(url);
+            if (!resp.ok) continue;
+            return await resp.arrayBuffer();
+        }
+        catch (_) { /* try the next extension */ }
     }
-    catch (_)
-    {
-        return null;
-    }
+    return null;
 }
 
 //Same MapTiler fetch, but decodes the PNG into a float array of

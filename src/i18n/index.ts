@@ -119,13 +119,13 @@ export interface Translations
         //LiDAR-driven shadow precision. Off + four named levels
         //(low / medium / high / ultra), each mapped to a raster size
         //in helios-engine. France-only for now.
-        shadowPrecision:          string;
-        shadowPrecisionOff:       string;
-        shadowPrecisionLow:       string;
-        shadowPrecisionMedium:    string;
-        shadowPrecisionHigh:      string;
-        shadowPrecisionUltra:     string;
-        shadowPrecisionHint:      string;
+        lidarPrecision:          string;
+        lidarPrecisionOff:       string;
+        lidarPrecisionLow:       string;
+        lidarPrecisionMedium:    string;
+        lidarPrecisionHigh:      string;
+        lidarPrecisionUltra:     string;
+        lidarPrecisionHint:      string;
         //Opacity of the cast ground shadows, 0..1 slider in the editor.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
@@ -139,12 +139,13 @@ export interface Translations
         //Label/tooltip of the on-card toggle button that shows or hides
         //the LiDAR point cloud "scanner" view.
         lidarPointCloud:          string;
-        //Two-stop colour ramp used by the LiDAR irradiance scanner.
-        //Each cell's colour is lerped between `low` (zero W/m²) and
-        //`high` (STC reference) based on the irradiance it receives.
+        //Irradiance-scanner section: the on-card toggle that paints
+        //every LiDAR cell with a two-stop colour ramp (low = shadow /
+        //night, high = full sun at STC).
+        scannerSection:           string;
+        scannerSectionHint:       string;
         scannerLowColor:          string;
         scannerHighColor:         string;
-        scannerColorsHint:        string;
     };
 }
 

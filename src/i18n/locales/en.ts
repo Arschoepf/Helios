@@ -93,13 +93,13 @@ export const en: Translations = {
         terrainDetailFine:     'Fine',
         terrainDetailHint:     'Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame, only worth it on capable desktops.',
         mapStyleSatellite:     'Satellite',
-        shadowPrecision:       'Shadow precision *',
-        shadowPrecisionOff:    'Off',
-        shadowPrecisionLow:    'Low',
-        shadowPrecisionMedium: 'Medium',
-        shadowPrecisionHigh:   'High',
-        shadowPrecisionUltra:  'Ultra',
-        shadowPrecisionHint:   'Only available in France for now.',
+        lidarPrecision:       'LiDAR precision *',
+        lidarPrecisionOff:    'Off',
+        lidarPrecisionLow:    'Low',
+        lidarPrecisionMedium: 'Medium',
+        lidarPrecisionHigh:   'High',
+        lidarPrecisionUltra:  'Ultra',
+        lidarPrecisionHint:   'Drives the LiDAR-based topography, the cast-shadow geometry AND the irradiance scanner density. Only available in France for now.',
         shadowOpacity:         'Shadow opacity *',
         shadowOpacityHint:     'Opacity of the cast ground shadows.',
         buildingShadows:       'MapTiler building shadows *',
@@ -107,8 +107,9 @@ export const en: Translations = {
         buildingShadowsOff:    'Hidden',
         buildingShadowsHint:   'When LiDAR is unavailable (precision off, or home outside France), shadows are approximated from the flat MapTiler footprints. Hide them in flat or dense urban areas where the approximation reads as noise. LiDAR-driven shadows are unaffected.',
         lidarPointCloud:       'LiDAR scanner view',
-        scannerLowColor:       'Scanner low (zero irradiance) *',
-        scannerHighColor:      'Scanner high (full irradiance) *',
-        scannerColorsHint:     'Two-stop ramp the LiDAR scanner uses to colour each cell: low for night / shadow, high for full sun at STC (1 kW/m²). Defaults to a thermal red → green ramp that reads cleanly on both light and dark basemaps.'
+        scannerSection:        'Irradiance scanner',
+        scannerSectionHint:    'On-card toggle that paints every LiDAR cell with a two-stop colour ramp based on the irradiance it receives at the selected time. Low for night / shadow, high for full sun at STC (1 kW/m²). The default thermal red → green ramp reads cleanly on both light and dark basemaps.',
+        scannerLowColor:       'Low (zero irradiance) *',
+        scannerHighColor:      'High (full irradiance) *'
     }
 };

@@ -11,7 +11,7 @@ import
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_BUILDING_COLOR_HEX,
-    DEFAULT_SHADOW_PRECISION,
+    DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_SCANNER_LOW_HEX,
     DEFAULT_SCANNER_HIGH_HEX
@@ -543,31 +543,19 @@ export class HeliosCardEditor extends LitElement
                 <div class="hint">${t.editor.terrainReliefHint}</div>
 
                 <div class="section-title">${t.editor.mapSection}</div>
-                <div class="field">
+                <label class="field">
                     <span class="label">${t.editor.mapStyle}</span>
-                    <div class="segmented-toggle segmented-toggle-wide">
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'streets' ? 'active' : ''}"
-                            @click="${() => this._update('map-style', 'streets')}"
-                        >${t.editor.mapStyleStreet}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'topo' ? 'active' : ''}"
-                            @click="${() => this._update('map-style', 'topo')}"
-                        >${t.editor.mapStyleTopo}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'minimal' ? 'active' : ''}"
-                            @click="${() => this._update('map-style', 'minimal')}"
-                        >${t.editor.mapStyleMinimal}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['map-style'] ?? 'streets')) === 'satellite' ? 'active' : ''}"
-                            @click="${() => this._update('map-style', 'satellite')}"
-                        >${t.editor.mapStyleSatellite}</button>
-                    </div>
-                </div>
+                    <select
+                        class="he-select"
+                        .value="${String(c['map-style'] ?? 'streets')}"
+                        @change="${(e: Event) => this._update('map-style', (e.target as HTMLSelectElement).value)}"
+                    >
+                        <option value="streets"   ?selected="${(String(c['map-style'] ?? 'streets')) === 'streets'}">${t.editor.mapStyleStreet}</option>
+                        <option value="topo"      ?selected="${(String(c['map-style'] ?? 'streets')) === 'topo'}">${t.editor.mapStyleTopo}</option>
+                        <option value="minimal"   ?selected="${(String(c['map-style'] ?? 'streets')) === 'minimal'}">${t.editor.mapStyleMinimal}</option>
+                        <option value="satellite" ?selected="${(String(c['map-style'] ?? 'streets')) === 'satellite'}">${t.editor.mapStyleSatellite}</option>
+                    </select>
+                </label>
                 <div class="hint">${t.editor.mapStyleHint}</div>
                 <div class="field">
                     <span class="label">${t.editor.terrainDetail}</span>
@@ -694,37 +682,21 @@ export class HeliosCardEditor extends LitElement
                 </label>
                 <div class="hint">${t.editor.buildingsHint}</div>
 
-                <div class="field">
-                    <span class="label">${t.editor.shadowPrecision}</span>
-                    <div class="segmented-toggle segmented-toggle-wide">
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION)) === 'off' ? 'active' : ''}"
-                            @click="${() => this._update('shadow-precision', 'off')}"
-                        >${t.editor.shadowPrecisionOff}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION)) === 'low' ? 'active' : ''}"
-                            @click="${() => this._update('shadow-precision', 'low')}"
-                        >${t.editor.shadowPrecisionLow}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION)) === 'medium' ? 'active' : ''}"
-                            @click="${() => this._update('shadow-precision', 'medium')}"
-                        >${t.editor.shadowPrecisionMedium}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION)) === 'high' ? 'active' : ''}"
-                            @click="${() => this._update('shadow-precision', 'high')}"
-                        >${t.editor.shadowPrecisionHigh}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['shadow-precision'] ?? DEFAULT_SHADOW_PRECISION)) === 'ultra' ? 'active' : ''}"
-                            @click="${() => this._update('shadow-precision', 'ultra')}"
-                        >${t.editor.shadowPrecisionUltra}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.shadowPrecisionHint}</div>
+                <label class="field">
+                    <span class="label">${t.editor.lidarPrecision}</span>
+                    <select
+                        class="he-select"
+                        .value="${String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)}"
+                        @change="${(e: Event) => this._update('lidar-precision', (e.target as HTMLSelectElement).value)}"
+                    >
+                        <option value="off"    ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'off'}">${t.editor.lidarPrecisionOff}</option>
+                        <option value="low"    ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'low'}">${t.editor.lidarPrecisionLow}</option>
+                        <option value="medium" ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'medium'}">${t.editor.lidarPrecisionMedium}</option>
+                        <option value="high"   ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'high'}">${t.editor.lidarPrecisionHigh}</option>
+                        <option value="ultra"  ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'ultra'}">${t.editor.lidarPrecisionUltra}</option>
+                    </select>
+                </label>
+                <div class="hint">${t.editor.lidarPrecisionHint}</div>
 
                 <label class="field">
                     <span class="label">${t.editor.shadowOpacity}</span>
@@ -756,6 +728,7 @@ export class HeliosCardEditor extends LitElement
                 </div>
                 <div class="hint">${t.editor.buildingShadowsHint}</div>
 
+                <div class="section-title">${t.editor.scannerSection}</div>
                 <label class="field">
                     <span class="label">${t.editor.scannerLowColor}</span>
                     <helios-color-picker
@@ -772,7 +745,7 @@ export class HeliosCardEditor extends LitElement
                         @value-changed="${(e: CustomEvent) => this._color('scanner-color-high', e)}"
                     ></helios-color-picker>
                 </label>
-                <div class="hint">${t.editor.scannerColorsHint}</div>
+                <div class="hint">${t.editor.scannerSectionHint}</div>
 
                 <div class="section-title">${t.editor.colors}</div>
                 <label class="field">
@@ -991,6 +964,24 @@ export class HeliosCardEditor extends LitElement
             font-size: 13px;
         }
 
+        /*  Native dropdown reused for any setting with 3+ options whose
+            labels can't fit a horizontal segmented toggle without
+            cropping across languages. Same width budget as the text
+            inputs so right-edge alignment matches the rest of the
+            editor. The browser's native chevron + dropdown menu is
+            kept on purpose: it's the most familiar control on every
+            HA frontend (desktop, mobile, iframe). */
+        .he-select
+        {
+            width: 180px;
+            padding: 6px 8px;
+            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+            border-radius: 4px;
+            background: var(--card-background-color, #fff);
+            color: var(--primary-text-color, #212121);
+            font-size: 13px;
+        }
+
         /*  Two-button toggle, sized to match the other inputs so
             the right-edge alignment stays consistent across fields. */
         .segmented-toggle
@@ -1001,23 +992,6 @@ export class HeliosCardEditor extends LitElement
             overflow: hidden;
             border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
             background: var(--card-background-color, #fff);
-        }
-
-        /*  Wider variant for toggles with 4+ options (map-style with
-            satellite, shadow-precision). Full width plus flex-wrap so
-            cramped editor widths break the buttons onto a second row
-            instead of cropping the last label. */
-        .segmented-toggle-wide
-        {
-            width: 100%;
-            min-width: 240px;
-            flex-wrap: wrap;
-            border-radius: 6px;
-            row-gap: 0;
-        }
-        .segmented-toggle-wide .seg-option
-        {
-            min-width: 48px;
         }
 
         .seg-option

@@ -84,9 +84,8 @@ export function projectExtrusionShadows(
             //three filtered map layers, each at fill-opacity = α/3,
             //the alpha-composited result fades smoothly from full α
             //near the footprint (where all 3 overlap) to α/3 at the
-            //tip (where only the longest polygon reaches). Shadow
-            //realism is dominated by this gradient, the "wall of
-            //solid grey" of beta.14 is gone.
+            //tip (where only the longest polygon reaches). The
+            //gradient reads as a soft falloff instead of a flat slab.
             for (let step = 0; step < SHADOW_FADE_STEPS; step++)
             {
                 const frac    = (SHADOW_FADE_STEPS - step) / SHADOW_FADE_STEPS;

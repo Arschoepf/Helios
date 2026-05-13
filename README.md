@@ -90,9 +90,11 @@ Every option below is editable visually:
 | `building-cluster-radius` | meters | `0` | Distance around the home within which every building joins the home group at full opacity. Use this to attach verandas, garages and sheds to the main house. Range: 0–100 m. |
 | `building-opacity` | 0–1 | `0.25` | Opacity of the surrounding buildings. The home (and its cluster) always stays at full opacity so it reads as the focal point. |
 | `building-color` | hex | `#d2d2d7` | Base colour for every rendered building, modulated by sun altitude across the day. |
-| `shadow-precision` | `'off' \| 'low' \| 'medium' \| 'high' \| 'ultra'` | `'low'` | LiDAR-driven shadow precision. When on (and your home is covered by a supported LiDAR source, currently IGN HD in metropolitan France + Corsica), the card fetches a height raster around the home and casts physically-grounded shadows from buildings AND vegetation, instead of approximating them from flat MapTiler footprints. Each level maps to a denser sampling grid (`low` ~384², `ultra` 1024²). The same data also drives the LiDAR-based topography mesh and the optional point-cloud overlay. |
+| `lidar-precision` | `'off' \| 'low' \| 'medium' \| 'high' \| 'ultra'` | `'low'` | LiDAR data resolution. When on (and the home is covered by a supported provider, currently IGN HD over metropolitan France + Corsica), the card fetches MNH (surface height) + MNT (bare-earth) rasters around the home. The MNT replaces the MapTiler DEM inside the bbox (real topography); the MNH drives the irradiance-scanner cell grid and the on-card cast-shadow geometry. Each level maps to a denser sampling grid (`low` ~384², `ultra` 1024²). |
 | `shadow-opacity` | 0–1 | `0.32` | Opacity of the cast ground shadows. |
-| `building-shadows-enabled` | boolean | `true` | When `false`, suppresses the MapTiler-derived shadow approximation that falls back when LiDAR is off / out of coverage. LiDAR-driven shadows are unaffected. Useful in flat or dense urban areas where the approximation reads as noise. |
+| `building-shadows-enabled` | boolean | `true` | When `false`, suppresses the MapTiler-derived shadow approximation. Useful in flat or dense urban areas where the approximation reads as noise. The irradiance scanner's per-cell shadow ray cast is unaffected. |
+| `scanner-color-low` | hex | `#dc2626` | Irradiance-scanner low stop (zero irradiance / shadow / night). |
+| `scanner-color-high` | hex | `#16a34a` | Irradiance-scanner high stop (full sun at STC, 1 kW/m²). |
 | `sun-color` | hex | `#EF9F27` | Sun disc + arc + timeline irradiance area. |
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
 | `pv-power-entity` | entity_id | - | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |
