@@ -29,14 +29,11 @@ export const LIDAR_TERRAIN_PROTOCOL = 'helios-lidar-dem';
 export const LIDAR_TERRAIN_MIN_ZOOM = 12;
 export const LIDAR_TERRAIN_MAX_ZOOM = 15;
 
-//Tile resolution served by the protocol. 256 keeps the per-tile
-//encode pass cheap (~65 k pixels each) while still over-sampling
-//the LiDAR raster on the visible area, the terrain mesh MapLibre
-//builds from the resulting DEM is already smoother than the
-//camera can resolve at zoom 18. Earlier betas served 512 px tiles
-//for parity with MapTiler's terrain-rgb pipeline, but the visible
-//detail at zoom 18 didn't justify the extra 4× per-tile work.
-const TILE_SIZE = 256;
+//Tile resolution served by the protocol. 512 matches MapTiler's
+//terrain-rgb tileSize so our DEM source can drop in with no extra
+//pipeline work, and gives the terrain mesh fine enough vertices
+//that the LiDAR relief reads cleanly at zoom 18 over the home.
+const TILE_SIZE = 512;
 
 interface TerrainEntry
 {

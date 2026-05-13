@@ -96,6 +96,9 @@ export const pt: Translations = {
         buildingShadowsOn:     'Visíveis',
         buildingShadowsOff:    'Ocultas',
         buildingShadowsHint:   'Quando o LiDAR não está disponível (precisão desligada, ou casa fora de França), as sombras são aproximadas a partir das impressões planas MapTiler. Oculte em zonas planas ou urbanas densas onde a aproximação parece mais ruído do que dado. As sombras LiDAR não são afetadas.',
-        lidarPointCloud:       'Vista scanner LiDAR'
+        lidarPointCloud:       'Vista scanner LiDAR',
+        scannerLowColor:       'Scanner baixo (irradiância nula) *',
+        scannerHighColor:      'Scanner alto (irradiância máxima) *',
+        scannerColorsHint:     'Rampa de duas cores usada pelo scanner LiDAR para colorir cada célula: tom baixo para noite / sombra, alto para sol pleno a 1 kW/m². Por padrão, um gradiente térmico vermelho → verde legível tanto em mapas claros como escuros.'
     }
 };

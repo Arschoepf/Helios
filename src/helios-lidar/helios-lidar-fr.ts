@@ -313,13 +313,13 @@ export const franceLidarHd: LidarSource =
             });
         }
 
-        //Terrain subsample. We aim for ~96 cells per side regardless
-        //of the raster size so the count of emitted terrain points
-        //stays around 10 k whatever the precision setting. Cells that
-        //already produced a non-terrain point (passed the threshold)
-        //are skipped to avoid double-counting.
-        const TARGET_PER_SIDE = 96;
-        const stride = Math.max(1, Math.floor(rasterSize / TARGET_PER_SIDE));
+        //Terrain cells emitted at near full raster density so the
+        //ground reads as a dense mosaic of irradiance points, the
+        //same packing the user sees on vegetation. Only the highest
+        //precision (1024+ raster) gets a stride-2 subsample so the
+        //feature count stays under ~250 k even at 'ultra'; everything
+        //below 1024 emits every non-threshold pixel directly.
+        const stride = rasterSize > 512 ? 2 : 1;
         let nTerrain = 0;
         for (let j = (stride >> 1); j < rasterSize; j += stride)
         {

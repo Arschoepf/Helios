@@ -96,6 +96,9 @@ export const nl: Translations = {
         buildingShadowsOn:     'Zichtbaar',
         buildingShadowsOff:    'Verborgen',
         buildingShadowsHint:   'Wanneer LiDAR niet beschikbaar is (precisie uit, of huis buiten Frankrijk) worden schaduwen benaderd op basis van de platte MapTiler-omtreklijnen. Verbergen in vlakke of dichte stedelijke gebieden waar de benadering meer ruis dan informatie oplevert. LiDAR-schaduwen blijven ongewijzigd.',
-        lidarPointCloud:       'LiDAR-scannerweergave'
+        lidarPointCloud:       'LiDAR-scannerweergave',
+        scannerLowColor:       'Scanner laag (geen instraling) *',
+        scannerHighColor:      'Scanner hoog (volle instraling) *',
+        scannerColorsHint:     'Tweekleuren-verloop dat de LiDAR-scanner gebruikt om elke cel te kleuren: lage tint voor nacht / schaduw, hoge tint voor volle zon bij 1 kW/m². Standaard een thermisch rood → groen verloop dat zowel op lichte als op donkere kaarten goed leesbaar blijft.'
     }
 };

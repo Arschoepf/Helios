@@ -26390,8 +26390,7 @@ const franceLidarHd = {
         properties: { height: hOk[idx], kind: KIND_NAMES[k2] }
       });
     }
-    const TARGET_PER_SIDE = 96;
-    const stride = Math.max(1, Math.floor(rasterSize / TARGET_PER_SIDE));
+    const stride = rasterSize > 512 ? 2 : 1;
     let nTerrain = 0;
     for (let j = stride >> 1; j < rasterSize; j += stride) {
       for (let i2 = stride >> 1; i2 < rasterSize; i2 += stride) {
@@ -26513,7 +26512,7 @@ function findLidarSource(lat, lon) {
 const LIDAR_TERRAIN_PROTOCOL = "helios-lidar-dem";
 const LIDAR_TERRAIN_MIN_ZOOM = 12;
 const LIDAR_TERRAIN_MAX_ZOOM = 15;
-const TILE_SIZE = 256;
+const TILE_SIZE = 512;
 const _entries = /* @__PURE__ */ new Map();
 let _protocolRegistered = false;
 function ensureProtocolRegistered() {
@@ -26709,6 +26708,8 @@ const SHADOW_PRECISION_RASTER = {
   ultra: 1024
 };
 const DEFAULT_SHADOW_OPACITY = 0.32;
+const DEFAULT_SCANNER_LOW_HEX = "#dc2626";
+const DEFAULT_SCANNER_HIGH_HEX = "#16a34a";
 const SHADOW_LAYER_IDS = [
   "helios-building-shadows",
   "helios-building-shadows-mid",
@@ -26826,10 +26827,6 @@ function pointInRing(lon, lat, ring) {
   return inside;
 }
 const CLOUD_DISC_RADIUS_M = 30;
-const CLOUD_DISC_OPACITY = 0.25;
-const CLOUD_RING_COLOR = "#000000";
-const CLOUD_RING_WIDTH_PX = 2;
-const CLOUD_RING_OPACITY = 0.4;
 const CLOUD_CIRCLE_SEGMENTS = 128;
 const PV_CHIP_OFFSET_PX = 105;
 const SUN_ARC_RADIUS_M = 40;
@@ -26869,13 +26866,14 @@ const _HeliosEngine = class _HeliosEngine {
     this._autoRotateLastUserAction = 0;
     this._buildingsData = null;
     this._buildingsFetchKey = "";
+    this._currentCloudPct = 0;
     this._lidarData = null;
     this._lidarFetchKey = "";
     this._engineId = "";
     this._pointCloudVisible = false;
     this._pointCloudCells = { type: "FeatureCollection", features: [] };
     this._irradianceJobId = 0;
-    this._terrainCellHalfM = 1;
+    this._pointCloudMaxDist = 0;
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -27390,73 +27388,12 @@ const _HeliosEngine = class _HeliosEngine {
     if (!this.map) {
       return;
     }
-    if (this.map.getLayer("helios-cloud-disc")) {
-      this.map.removeLayer("helios-cloud-disc");
-    }
-    if (this.map.getLayer("helios-cloud-disc-ring")) {
-      this.map.removeLayer("helios-cloud-disc-ring");
-    }
-    if (this.map.getLayer("helios-cloud-ring")) {
-      this.map.removeLayer("helios-cloud-ring");
+    for (const lid of ["helios-cloud-disc", "helios-cloud-disc-ring", "helios-cloud-ring"]) {
+      if (this.map.getLayer(lid)) this.map.removeLayer(lid);
     }
     if (this.map.getSource("helios-cloud-rings")) {
       this.map.removeSource("helios-cloud-rings");
     }
-    this.map.addSource(
-      "helios-cloud-rings",
-      {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] }
-      }
-    );
-    this.map.addLayer(
-      {
-        id: "helios-cloud-disc",
-        type: "fill",
-        source: "helios-cloud-rings",
-        filter: ["==", ["get", "kind"], "disc"],
-        paint: {
-          "fill-color": ["get", "color"],
-          "fill-opacity": CLOUD_DISC_OPACITY
-        }
-      }
-    );
-    this.map.addLayer(
-      {
-        id: "helios-cloud-disc-ring",
-        type: "line",
-        source: "helios-cloud-rings",
-        filter: ["==", ["get", "kind"], "disc"],
-        paint: {
-          "line-color": ["get", "color"],
-          "line-width": CLOUD_RING_WIDTH_PX,
-          "line-opacity": 1
-        }
-      }
-    );
-    this.map.addLayer(
-      {
-        id: "helios-cloud-ring",
-        type: "line",
-        source: "helios-cloud-rings",
-        filter: ["==", ["get", "kind"], "ring"],
-        paint: {
-          "line-color": CLOUD_RING_COLOR,
-          "line-width": CLOUD_RING_WIDTH_PX,
-          "line-opacity": CLOUD_RING_OPACITY
-        }
-      }
-    );
-    const CLOUD_CURSOR_URL = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32'><g transform='translate(4 4)'><path fill='%231f2933' d='M6 19a5 5 0 0 1-5-5a5 5 0 0 1 5-5c1-2.35 3.3-4 6-4c3.43 0 6.24 2.66 6.5 6.03L19 11a4 4 0 0 1 4 4a4 4 0 0 1-4 4zm13-6h-2v-1a5 5 0 0 0-5-5c-2.5 0-4.55 1.82-4.94 4.19C6.73 11.07 6.37 11 6 11a3 3 0 0 0-3 3a3 3 0 0 0 3 3h13a2 2 0 0 0 2-2a2 2 0 0 0-2-2'/></g></svg>") 16 16, help`;
-    const map = this.map;
-    map.on("mousemove", "helios-cloud-disc", (e2) => {
-      map.getCanvas().style.cursor = CLOUD_CURSOR_URL;
-      this.onCloudHover?.({ x: e2.point.x, y: e2.point.y, hover: true });
-    });
-    map.on("mouseleave", "helios-cloud-disc", () => {
-      map.getCanvas().style.cursor = "";
-      this.onCloudHover?.({ x: 0, y: 0, hover: false });
-    });
   }
   //Update the disc + ring geometry to reflect the given cloud cover
   //percentage. Called from _renderForCurrentSelection so it ticks
@@ -27476,44 +27413,46 @@ const _HeliosEngine = class _HeliosEngine {
   //layer's fill-opacity) handles the translucency against the
   //basemap so the disc never fully hides what's underneath.
   _updateCloudCoverDisc(cloudPct) {
-    const src = this.map?.getSource("helios-cloud-rings");
-    if (!src) {
-      return;
-    }
-    const pct = Math.max(0, Math.min(100, cloudPct));
+    this._currentCloudPct = Math.max(0, Math.min(100, cloudPct));
+  }
+  //Project the cloud-cover disc + 100 % reference ring into screen
+  //space. Returns null when the engine isn't ready yet (the card
+  //then skips rendering this frame). Vertices are computed at sea-
+  //level offsets around the home and projected with anchor at the
+  //home's terrain elevation, so the resulting polygons stay true
+  //circles regardless of how aggressively the LiDAR DEM deforms
+  //the ground beneath them.
+  projectCloudScene() {
+    if (!this.map || !this._mapReady) return null;
+    const pct = this._currentCloudPct;
     const discR = CLOUD_DISC_RADIUS_M * pct / 100;
     const ringR = CLOUD_DISC_RADIUS_M;
-    const discPoly = buildCirclePolygon(
+    const discGeo = buildCirclePolygon(
       this.homeLon,
       this.homeLat,
       discR,
       CLOUD_CIRCLE_SEGMENTS
     );
-    const ringPoly = buildCirclePolygon(
+    const ringGeo = buildCirclePolygon(
       this.homeLon,
       this.homeLat,
       ringR,
       CLOUD_CIRCLE_SEGMENTS
     );
-    const cloudRgb = this._resolvedCloudRgb();
-    const discColor = `rgb(${cloudRgb[0]},${cloudRgb[1]},${cloudRgb[2]})`;
-    src.setData(
-      {
-        type: "FeatureCollection",
-        features: [
-          {
-            type: "Feature",
-            geometry: { type: "Polygon", coordinates: [discPoly] },
-            properties: { kind: "disc", color: discColor }
-          },
-          {
-            type: "Feature",
-            geometry: { type: "Polygon", coordinates: [ringPoly] },
-            properties: { kind: "ring" }
-          }
-        ]
-      }
-    );
+    const disc = [];
+    const ring = [];
+    for (const [lon, lat] of discGeo) {
+      const p2 = this._projectScenePoint(lon, lat, 0, { anchorAtHome: true });
+      if (p2) disc.push({ x: p2.x, y: p2.y });
+    }
+    for (const [lon, lat] of ringGeo) {
+      const p2 = this._projectScenePoint(lon, lat, 0, { anchorAtHome: true });
+      if (p2) ring.push({ x: p2.x, y: p2.y });
+    }
+    if (disc.length < 3 && ring.length < 3) return null;
+    const rgb = this._resolvedCloudRgb();
+    const cloudHex = "#" + rgb[0].toString(16).padStart(2, "0") + rgb[1].toString(16).padStart(2, "0") + rgb[2].toString(16).padStart(2, "0");
+    return { disc, ring, cloudHex, cloudPct: pct };
   }
   //Toggle MapTiler's symbol layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
@@ -27875,7 +27814,6 @@ const _HeliosEngine = class _HeliosEngine {
       this._lidarAbort?.abort();
       this._lidarFetchKey = key;
       this._lidarData = cached;
-      this._terrainCellHalfM = Math.max(0.25, cached.terrainCellHalfM);
       if (cached.terrain) {
         registerLidarTerrain(this._engineId, cached.terrain, this.apiKey || null);
       }
@@ -27905,7 +27843,6 @@ const _HeliosEngine = class _HeliosEngine {
       if (ac.signal.aborted || !this.map) return;
       _lidarFetchCache.set(key, result);
       this._lidarData = result;
-      this._terrainCellHalfM = Math.max(0.25, result.terrainCellHalfM);
       if (result.terrain) {
         registerLidarTerrain(this._engineId, result.terrain, this.apiKey || null);
       } else {
@@ -27941,7 +27878,7 @@ const _HeliosEngine = class _HeliosEngine {
           {
             type: "raster-dem",
             tiles: [`${LIDAR_TERRAIN_PROTOCOL}://${this._engineId}/{z}/{x}/{y}`],
-            tileSize: 256,
+            tileSize: 512,
             minzoom: LIDAR_TERRAIN_MIN_ZOOM,
             maxzoom: LIDAR_TERRAIN_MAX_ZOOM,
             encoding: "mapbox"
@@ -27981,79 +27918,79 @@ const _HeliosEngine = class _HeliosEngine {
     surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
   }
   //Builds the GeoJSON for the point-cloud cells from the cached
-  //LiDAR data. Two visual shapes are emitted in the same collection:
+  //LiDAR data. Every cell (ground OR vegetation OR building)
+  //renders as the same small 0.4 m × 0.4 m × 0.2 m cube, lifted
+  //20 cm above its measured height above local ground:
   //
-  //  - kind = 'terrain': flat ground tiles, ~2 m wide, 0 → 0.2 m
-  //    tall. They pave the LiDAR-deformed ground with a mosaic of
-  //    irradiance colours and let the user read the relief through
-  //    the dot pattern.
+  //  - terrain cells (h = 0): cube from 0.2 m to 0.4 m above
+  //    ground, ensures ground points clear z-fighting with the
+  //    LiDAR-deformed terrain.
+  //  - vegetation / building / home cells (h > 0): same cube
+  //    floating at h + 0.2 m above ground, marker hovers just
+  //    above the canopy or roof top.
   //
-  //  - other kinds: small cubes (~0.6 m wide, 0.5 m tall) anchored
-  //    AT the cell's measured top above local ground. No stick down
-  //    to the ground, the camera-eye reads the cube as a 3D point
-  //    fine on its own and we save half the geometry.
+  //Uniform geometry across the whole scanner: one footprint shape,
+  //one cube height, same scaling. The eye reads it as a dense 3D
+  //point cloud regardless of the cell kind, irradiance is the only
+  //signal carried by colour.
   //
-  //Every feature gets a default `color = '#000000'`; the irradiance
-  //pass mutates it in place and calls _flushPointCloudSource. We
-  //cache the collection in _pointCloudCells so the recolour step
-  //never rebuilds any geometry.
+  //Each feature carries:
+  //  - top, base: extrusion bounds (metres above terrain)
+  //  - dist: planar distance from the home centre (metres), used
+  //          by the radial reveal animation in setPointCloudVisible
+  //  - color: default low-ramp colour, overwritten by the
+  //          irradiance pass before the layer is revealed.
   _pushPointCloudData() {
     if (!this.map) return;
     const src = this.map.getSource("helios-lidar-points-src");
     if (!src) return;
     this._pointCloudCells = { type: "FeatureCollection", features: [] };
+    this._pointCloudMaxDist = 0;
     const cells = this._lidarData?.cells;
     if (!cells || cells.features.length === 0) {
       src.setData(this._pointCloudCells);
       return;
     }
-    const CUBE_HALF_M = 0.3;
-    const CUBE_HEIGHT_M = 0.5;
-    const TERRAIN_HALF = this._terrainCellHalfM;
-    const TERRAIN_BASE_M = 0;
-    const TERRAIN_TOP_M = 0.05;
+    const CUBE_HALF_M = 0.2;
+    const CUBE_HEIGHT_M = 0.2;
+    const LIFT_M = 0.2;
     const mPerDegLat = 111320;
-    const mPerDegLon = mPerDegLat * Math.cos(this.homeLat * Math.PI / 180);
-    const makeSquare = (lon, lat, halfM) => {
-      const dLat = halfM / mPerDegLat;
-      const dLon = halfM / mPerDegLon;
-      return {
-        type: "Polygon",
-        coordinates: [[
-          [lon - dLon, lat - dLat],
-          [lon + dLon, lat - dLat],
-          [lon + dLon, lat + dLat],
-          [lon - dLon, lat + dLat],
-          [lon - dLon, lat - dLat]
-        ]]
-      };
-    };
+    const cosLat = Math.cos(this.homeLat * Math.PI / 180);
+    const mPerDegLon = mPerDegLat * cosLat;
+    const dLat = CUBE_HALF_M / mPerDegLat;
+    const dLon = CUBE_HALF_M / mPerDegLon;
+    const homeLon = this.homeLon;
+    const homeLat = this.homeLat;
+    const defaultColor = toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX);
     const features = this._pointCloudCells.features;
+    let maxDist = 0;
     for (const f2 of cells.features) {
       if (!f2.geometry || f2.geometry.type !== "Point") continue;
       const [lon, lat] = f2.geometry.coordinates;
-      const top = Number(f2.properties?.height ?? 0);
-      const kind = String(f2.properties?.kind ?? "");
-      if (!isFinite(top)) continue;
-      if (kind === "terrain" || top <= 0) {
-        features.push({
-          type: "Feature",
-          geometry: makeSquare(lon, lat, TERRAIN_HALF),
-          properties: { top: TERRAIN_TOP_M, base: TERRAIN_BASE_M, kind, color: "#000000" }
-        });
-        continue;
-      }
+      const h2 = Number(f2.properties?.height ?? 0);
+      if (!isFinite(h2)) continue;
+      const base = h2 + LIFT_M;
+      const top = base + CUBE_HEIGHT_M;
+      const dLatM = (lat - homeLat) * mPerDegLat;
+      const dLonM = (lon - homeLon) * mPerDegLon;
+      const dist = Math.sqrt(dLatM * dLatM + dLonM * dLonM);
+      if (dist > maxDist) maxDist = dist;
       features.push({
         type: "Feature",
-        geometry: makeSquare(lon, lat, CUBE_HALF_M),
-        properties: {
-          top,
-          base: Math.max(0, top - CUBE_HEIGHT_M),
-          kind,
-          color: "#000000"
-        }
+        geometry: {
+          type: "Polygon",
+          coordinates: [[
+            [lon - dLon, lat - dLat],
+            [lon + dLon, lat - dLat],
+            [lon + dLon, lat + dLat],
+            [lon - dLon, lat + dLat],
+            [lon - dLon, lat - dLat]
+          ]]
+        },
+        properties: { top, base, dist, color: defaultColor }
       });
     }
+    this._pointCloudMaxDist = maxDist;
     src.setData(this._pointCloudCells);
     if (this._pointCloudVisible) {
       this._recomputePointCloudIrradiance();
@@ -28095,22 +28032,26 @@ const _HeliosEngine = class _HeliosEngine {
     if (total === 0) return;
     const jobId = ++this._irradianceJobId;
     this.onPointCloudComputeStart?.();
+    this._setPointCloudLayerVisible(false);
+    this._cancelPointCloudReveal();
+    const lowHex = toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX);
+    const highHex = toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX);
     const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
     const sun = getSunPosition(t2, this.homeLat, this.homeLon);
     if (sun.altitude <= 0) {
       const feats2 = this._pointCloudCells.features;
       for (let i2 = 0; i2 < feats2.length; i2++) {
-        feats2[i2].properties.color = "#000000";
+        feats2[i2].properties.color = lowHex;
       }
       this._flushPointCloudSources();
+      this._startPointCloudReveal();
       this.onPointCloudComputeEnd?.();
       return;
     }
     const cloud = this._homeHourlyData ? this._getWeatherAtTime(t2)?.cloudCover ?? 0 : 0;
     const ghi = computeIrradianceWm2(t2, this.homeLat, this.homeLon, cloud);
     const ghiNorm = Math.min(1, ghi / 1e3);
-    const sunHex = toColor(this.cfg["sun-color"], DEFAULT_SUN_COLOR_HEX);
-    const litColor = this._lerpHex("#000000", sunHex, ghiNorm);
+    const litColor = this._lerpHex(lowHex, highHex, ghiNorm);
     const shadowInput = this._lidarActive() && this._lidarData ? this._lidarData.regions : this._buildingsData && this._maptilerShadowsEnabled() ? {
       features: [
         ...this._buildingsData.home.features,
@@ -28166,16 +28107,85 @@ const _HeliosEngine = class _HeliosEngine {
             break;
           }
         }
-        props.color = inShadow ? "#000000" : litColor;
+        props.color = inShadow ? lowHex : litColor;
       }
       if (cursor < total) {
         requestAnimationFrame(step);
       } else {
         this._flushPointCloudSources();
+        this._startPointCloudReveal();
         this.onPointCloudComputeEnd?.();
       }
     };
     requestAnimationFrame(step);
+  }
+  //Set the scanner layer's visibility without touching the higher-
+  //level `_pointCloudVisible` flag, which represents the user's
+  //intent (toggled on or off). Used internally during the compute
+  //→ reveal lifecycle: the user-intent stays ON throughout, but
+  //the layer is hidden mid-compute and revealed at the end.
+  _setPointCloudLayerVisible(visible) {
+    if (!this.map) return;
+    if (!this.map.getLayer("helios-lidar-points")) return;
+    try {
+      this.map.setLayoutProperty("helios-lidar-points", "visibility", visible ? "visible" : "none");
+    } catch (_2) {
+    }
+  }
+  //Radial reveal animation. The compute pass leaves the scanner
+  //layer invisible; this routine sweeps a circular reveal mask out
+  //from the home, frame by frame, by updating the layer's filter
+  //to admit cells with `dist <= currentRadius`. Cells already in
+  //the layer just turn visible as the radius passes them, which
+  //gives the "spotlight unveils the result" effect the user asked
+  //for, with negligible per-frame cost (setFilter is O(N) but on
+  //a simple `<=` predicate over a flat property).
+  _startPointCloudReveal() {
+    if (!this.map) return;
+    if (!this.map.getLayer("helios-lidar-points")) return;
+    if (!this._pointCloudVisible) return;
+    this._cancelPointCloudReveal();
+    try {
+      this.map.setLayoutProperty("helios-lidar-points", "visibility", "visible");
+      this.map.setFilter("helios-lidar-points", ["<=", ["get", "dist"], 0]);
+    } catch (_2) {
+    }
+    const maxDist = this._pointCloudMaxDist > 0 ? this._pointCloudMaxDist : 200;
+    const duration = 700;
+    const startT = performance.now();
+    const map = this.map;
+    const step = (now) => {
+      if (!map || !this.map || this.map !== map) return;
+      const t2 = Math.min(1, (now - startT) / duration);
+      const eased = 1 - Math.pow(1 - t2, 3);
+      const r2 = eased * (maxDist * 1.02);
+      try {
+        this.map.setFilter("helios-lidar-points", ["<=", ["get", "dist"], r2]);
+      } catch (_2) {
+      }
+      if (t2 < 1) {
+        this._pointCloudRevealRaf = requestAnimationFrame(step);
+      } else {
+        try {
+          this.map.setFilter("helios-lidar-points", null);
+        } catch (_2) {
+        }
+        this._pointCloudRevealRaf = void 0;
+      }
+    };
+    this._pointCloudRevealRaf = requestAnimationFrame(step);
+  }
+  _cancelPointCloudReveal() {
+    if (this._pointCloudRevealRaf !== void 0) {
+      cancelAnimationFrame(this._pointCloudRevealRaf);
+      this._pointCloudRevealRaf = void 0;
+    }
+    if (this.map && this.map.getLayer("helios-lidar-points")) {
+      try {
+        this.map.setFilter("helios-lidar-points", null);
+      } catch (_2) {
+      }
+    }
   }
   //Toggle visibility of the LiDAR point-cloud "scanner" overlay.
   //Visibility is layer-level rather than data-level so flipping the
@@ -28189,17 +28199,12 @@ const _HeliosEngine = class _HeliosEngine {
     const prev = this._pointCloudVisible;
     this._pointCloudVisible = visible;
     if (!this.map) return;
-    const vis = visible ? "visible" : "none";
-    if (this.map.getLayer("helios-lidar-points")) {
-      try {
-        this.map.setLayoutProperty("helios-lidar-points", "visibility", vis);
-      } catch (_2) {
-      }
-    }
     if (visible && !prev) {
       this._recomputePointCloudIrradiance();
     } else if (!visible && prev) {
       this._irradianceJobId++;
+      this._cancelPointCloudReveal();
+      this._setPointCloudLayerVisible(false);
       this.onPointCloudComputeEnd?.();
     }
   }
@@ -28833,6 +28838,8 @@ const _HeliosEngine = class _HeliosEngine {
     const prevPrecision = this._shadowPrecisionLevel();
     const prevShadowOpa = this._shadowOpacity();
     const prevMaptilerSh = this._maptilerShadowsEnabled();
+    const prevScanLow = toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX);
+    const prevScanHigh = toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX);
     this.cfg = { ...cfg };
     if (!this.map) {
       return;
@@ -28924,6 +28931,11 @@ const _HeliosEngine = class _HeliosEngine {
       this._lastAtmosphereAlt = -999;
       this._refreshShadowsAndAtmosphere();
     }
+    const nextScanLow = toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX);
+    const nextScanHigh = toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX);
+    if ((nextScanLow !== prevScanLow || nextScanHigh !== prevScanHigh) && this._pointCloudVisible) {
+      this._recomputePointCloudIrradiance();
+    }
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
     }
@@ -28961,6 +28973,10 @@ const _HeliosEngine = class _HeliosEngine {
     this._buildingsAbort?.abort();
     this._lidarAbort?.abort();
     unregisterLidarTerrain(this._engineId);
+    if (this._pointCloudRevealRaf !== void 0) {
+      cancelAnimationFrame(this._pointCloudRevealRaf);
+      this._pointCloudRevealRaf = void 0;
+    }
     this._resizeObserver?.disconnect();
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
@@ -29196,7 +29212,10 @@ const en = {
     buildingShadowsOn: "Shown",
     buildingShadowsOff: "Hidden",
     buildingShadowsHint: "When LiDAR is unavailable (precision off, or home outside France), shadows are approximated from the flat MapTiler footprints. Hide them in flat or dense urban areas where the approximation reads as noise. LiDAR-driven shadows are unaffected.",
-    lidarPointCloud: "LiDAR scanner view"
+    lidarPointCloud: "LiDAR scanner view",
+    scannerLowColor: "Scanner low (zero irradiance) *",
+    scannerHighColor: "Scanner high (full irradiance) *",
+    scannerColorsHint: "Two-stop ramp the LiDAR scanner uses to colour each cell: low for night / shadow, high for full sun at STC (1 kW/m²). Defaults to a thermal red → green ramp that reads cleanly on both light and dark basemaps."
   }
 };
 const fr = {
@@ -29289,7 +29308,10 @@ const fr = {
     buildingShadowsOn: "Affichées",
     buildingShadowsOff: "Masquées",
     buildingShadowsHint: "Quand le LiDAR n'est pas disponible (précision off, ou hors France), les ombres sont approximées à partir des empreintes plates MapTiler. À masquer en zone plate ou très urbaine où l'approximation ressemble plus à du bruit qu'à de la donnée. Sans effet sur les ombres LiDAR.",
-    lidarPointCloud: "Vue scanner LiDAR"
+    lidarPointCloud: "Vue scanner LiDAR",
+    scannerLowColor: "Scanner bas (irradiance nulle) *",
+    scannerHighColor: "Scanner haut (irradiance max) *",
+    scannerColorsHint: "Rampe à deux teintes utilisée par le scanner LiDAR pour colorer chaque cellule : la teinte basse correspond à la nuit ou à l'ombre, la teinte haute au plein soleil à 1 kW/m². Par défaut, un dégradé thermique rouge → vert qui lit bien sur fond clair comme sur fond sombre."
   }
 };
 const de = {
@@ -29382,7 +29404,10 @@ const de = {
     buildingShadowsOn: "Sichtbar",
     buildingShadowsOff: "Ausgeblendet",
     buildingShadowsHint: "Wenn LiDAR nicht verfügbar ist (Präzision aus oder Wohnsitz außerhalb Frankreich), werden Schatten aus den flachen MapTiler-Grundrissen abgeschätzt. In flachem oder dichtem städtischem Gebiet ausblenden, wo die Näherung wie Rauschen wirkt. LiDAR-Schatten bleiben unberührt.",
-    lidarPointCloud: "LiDAR-Scanner-Ansicht"
+    lidarPointCloud: "LiDAR-Scanner-Ansicht",
+    scannerLowColor: "Scanner unten (keine Einstrahlung) *",
+    scannerHighColor: "Scanner oben (volle Einstrahlung) *",
+    scannerColorsHint: "Zwei-Farben-Rampe, mit der der LiDAR-Scanner jede Zelle einfärbt: untere Farbe für Nacht / Schatten, obere für volle Sonne bei 1 kW/m². Standardmäßig ein thermischer Rot-Grün-Verlauf, der auf hellen wie auf dunklen Basemaps klar lesbar bleibt."
   }
 };
 const es = {
@@ -29475,7 +29500,10 @@ const es = {
     buildingShadowsOn: "Mostradas",
     buildingShadowsOff: "Ocultas",
     buildingShadowsHint: "Cuando LiDAR no está disponible (precisión apagada, o casa fuera de Francia), las sombras se aproximan a partir de las huellas planas de MapTiler. Oculta en zonas planas o urbanas densas donde la aproximación se lee como ruido. Las sombras LiDAR no se ven afectadas.",
-    lidarPointCloud: "Vista escáner LiDAR"
+    lidarPointCloud: "Vista escáner LiDAR",
+    scannerLowColor: "Escáner bajo (irradiancia nula) *",
+    scannerHighColor: "Escáner alto (irradiancia máxima) *",
+    scannerColorsHint: "Rampa de dos colores que el escáner LiDAR usa para teñir cada celda: tono bajo para noche / sombra, tono alto para pleno sol a 1 kW/m². Por defecto, un degradado térmico rojo → verde que se lee bien tanto en mapas claros como oscuros."
   }
 };
 const it = {
@@ -29568,7 +29596,10 @@ const it = {
     buildingShadowsOn: "Visibili",
     buildingShadowsOff: "Nascoste",
     buildingShadowsHint: "Quando LiDAR non è disponibile (precisione disattivata o casa fuori dalla Francia), le ombre vengono approssimate dalle impronte piatte MapTiler. Nascondi in zone piatte o urbane dense dove l'approssimazione si legge come rumore. Le ombre LiDAR non sono interessate.",
-    lidarPointCloud: "Vista scanner LiDAR"
+    lidarPointCloud: "Vista scanner LiDAR",
+    scannerLowColor: "Scanner basso (irradianza nulla) *",
+    scannerHighColor: "Scanner alto (irradianza massima) *",
+    scannerColorsHint: "Rampa a due colori usata dallo scanner LiDAR per colorare ogni cella: tonalità bassa per notte / ombra, alta per pieno sole a 1 kW/m². Di default, un gradiente termico rosso → verde leggibile sia su mappe chiare che scure."
   }
 };
 const nl = {
@@ -29661,7 +29692,10 @@ const nl = {
     buildingShadowsOn: "Zichtbaar",
     buildingShadowsOff: "Verborgen",
     buildingShadowsHint: "Wanneer LiDAR niet beschikbaar is (precisie uit, of huis buiten Frankrijk) worden schaduwen benaderd op basis van de platte MapTiler-omtreklijnen. Verbergen in vlakke of dichte stedelijke gebieden waar de benadering meer ruis dan informatie oplevert. LiDAR-schaduwen blijven ongewijzigd.",
-    lidarPointCloud: "LiDAR-scannerweergave"
+    lidarPointCloud: "LiDAR-scannerweergave",
+    scannerLowColor: "Scanner laag (geen instraling) *",
+    scannerHighColor: "Scanner hoog (volle instraling) *",
+    scannerColorsHint: "Tweekleuren-verloop dat de LiDAR-scanner gebruikt om elke cel te kleuren: lage tint voor nacht / schaduw, hoge tint voor volle zon bij 1 kW/m². Standaard een thermisch rood → groen verloop dat zowel op lichte als op donkere kaarten goed leesbaar blijft."
   }
 };
 const pt = {
@@ -29754,7 +29788,10 @@ const pt = {
     buildingShadowsOn: "Visíveis",
     buildingShadowsOff: "Ocultas",
     buildingShadowsHint: "Quando o LiDAR não está disponível (precisão desligada, ou casa fora de França), as sombras são aproximadas a partir das impressões planas MapTiler. Oculte em zonas planas ou urbanas densas onde a aproximação parece mais ruído do que dado. As sombras LiDAR não são afetadas.",
-    lidarPointCloud: "Vista scanner LiDAR"
+    lidarPointCloud: "Vista scanner LiDAR",
+    scannerLowColor: "Scanner baixo (irradiância nula) *",
+    scannerHighColor: "Scanner alto (irradiância máxima) *",
+    scannerColorsHint: "Rampa de duas cores usada pelo scanner LiDAR para colorir cada célula: tom baixo para noite / sombra, alto para sol pleno a 1 kW/m². Por padrão, um gradiente térmico vermelho → verde legível tanto em mapas claros como escuros."
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -30601,6 +30638,41 @@ const heliosCardStyles = i$3`
         pointer-events: none;
         z-index: 4;
         transition: opacity 600ms ease-out;
+    }
+
+    /*  Cloud-cover overlay. Two polygons (the filled disc sized by
+        the live cloud %, the fixed 100 % reference ring outline)
+        projected from a geographic circle around the home through
+        the engine's anchor-at-home pipeline, so they stay a true
+        circle whatever the LiDAR-deformed terrain does underneath.
+        Sits below the solar overlay in stacking order (z-index 3 vs
+        4) so the sun arc + sun disc draw on top, like they did
+        when the cloud was a MapLibre layer below the sun overlay. */
+    .cloud-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 3;
+    }
+    .cloud-svg .cloud-disc
+    {
+        pointer-events: auto;
+        cursor: help;
+    }
+    .cloud-svg .cloud-disc-ring
+    {
+        fill: none;
+        pointer-events: none;
+    }
+    .cloud-svg .cloud-ring
+    {
+        fill: none;
+        stroke: rgba(0, 0, 0, 0.4);
+        stroke-width: 2;
+        pointer-events: none;
     }
 
     /*  Arc, first pass paints a dark outline for legibility on
@@ -31576,6 +31648,24 @@ let HeliosCardEditor = class extends i {
                 </div>
                 <div class="hint">${t2.editor.buildingShadowsHint}</div>
 
+                <label class="field">
+                    <span class="label">${t2.editor.scannerLowColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX)}"
+                        .ariaLabel="${t2.editor.scannerLowColor}"
+                        @value-changed="${(e2) => this._color("scanner-color-low", e2)}"
+                    ></helios-color-picker>
+                </label>
+                <label class="field">
+                    <span class="label">${t2.editor.scannerHighColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX)}"
+                        .ariaLabel="${t2.editor.scannerHighColor}"
+                        @value-changed="${(e2) => this._color("scanner-color-high", e2)}"
+                    ></helios-color-picker>
+                </label>
+                <div class="hint">${t2.editor.scannerColorsHint}</div>
+
                 <div class="section-title">${t2.editor.colors}</div>
                 <label class="field">
                     <span class="label">${t2.editor.sunColor}</span>
@@ -31929,7 +32019,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.15"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.16"}`,
       labelStyle,
       versionStyle
     );
@@ -31962,6 +32052,7 @@ let HeliosCard = class extends i {
     this._batteryFetchKey = "";
     this._batteryFetching = false;
     this._sunScene = null;
+    this._cloudScene = null;
     this._chartSeries = null;
     this._fetching = false;
     this._timeRange = null;
@@ -32511,14 +32602,6 @@ let HeliosCard = class extends i {
         this._updatePvCalibration();
         this._refreshOverlays();
       };
-      this._engine.onCloudHover = (e2) => {
-        this._cloudHover = e2.hover;
-        this._cloudHoverX = e2.x;
-        this._cloudHoverY = e2.y;
-        const mc = this.renderRoot.querySelector("#map-container");
-        const w2 = mc?.clientWidth ?? 0;
-        this._cloudHoverFlip = w2 > 0 && e2.x > w2 / 2;
-      };
       this._engine.onMapTransform = () => {
         this._refreshOverlays();
       };
@@ -32547,6 +32630,7 @@ let HeliosCard = class extends i {
     this._labelLayout = layout;
     const t2 = this._selectedTime ?? this._now;
     this._sunScene = this._engine ? this._engine.projectSunScene(t2) : null;
+    this._cloudScene = this._engine ? this._engine.projectCloudScene() : null;
   }
   //Segments now share one fixed colour (the configured sun
   //colour). Depth perception comes entirely from the per-segment
@@ -32647,6 +32731,24 @@ let HeliosCard = class extends i {
   _togglePointCloud() {
     this._pointCloudOn = !this._pointCloudOn;
     this._engine?.setPointCloudVisible(this._pointCloudOn);
+  }
+  //Cloud-disc hover: drive the breakdown tooltip directly off the
+  //SVG polygon's pointer events now that the disc is no longer a
+  //MapLibre layer. Offsets are converted to card-relative pixels
+  //so the tooltip's absolute positioning matches.
+  _onCloudDiscMove(e2) {
+    const card = this.renderRoot.querySelector("ha-card");
+    const rect = card?.getBoundingClientRect();
+    const x2 = rect ? e2.clientX - rect.left : e2.offsetX;
+    const y3 = rect ? e2.clientY - rect.top : e2.offsetY;
+    this._cloudHover = true;
+    this._cloudHoverX = x2;
+    this._cloudHoverY = y3;
+    const w2 = rect?.width ?? 0;
+    this._cloudHoverFlip = w2 > 0 && x2 > w2 / 2;
+  }
+  _onCloudDiscLeave() {
+    this._cloudHover = false;
   }
   //Timeline rendering
   //Build the SVG chart of the chart card: irradiance W/m² as a
@@ -33662,6 +33764,31 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
+                ${hasApiKey && this._cloudScene ? (() => {
+      const cs = this._cloudScene;
+      const discPts = cs.disc.length >= 3 ? cs.disc.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
+      const ringPts = cs.ring.length >= 3 ? cs.ring.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
+      return b`
+                        <svg class="cloud-svg">
+                            ${ringPts ? w`
+                                <polygon class="cloud-ring" points="${ringPts}" />
+                            ` : A}
+                            ${discPts ? w`
+                                <polygon
+                                    class="cloud-disc"
+                                    points="${discPts}"
+                                    fill="${cs.cloudHex}"
+                                    fill-opacity="0.25"
+                                    stroke="${cs.cloudHex}"
+                                    stroke-width="2"
+                                    @mousemove="${this._onCloudDiscMove}"
+                                    @mouseleave="${this._onCloudDiscLeave}"
+                                />
+                            ` : A}
+                        </svg>
+                    `;
+    })() : A}
+
 ${showSun ? b`
                     <svg
                         class="solar-svg"
@@ -34099,6 +34226,9 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_sunScene", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_cloudScene", 2);
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_chartSeries", 2);

@@ -845,6 +845,41 @@ export const heliosCardStyles = css`
         transition: opacity 600ms ease-out;
     }
 
+    /*  Cloud-cover overlay. Two polygons (the filled disc sized by
+        the live cloud %, the fixed 100 % reference ring outline)
+        projected from a geographic circle around the home through
+        the engine's anchor-at-home pipeline, so they stay a true
+        circle whatever the LiDAR-deformed terrain does underneath.
+        Sits below the solar overlay in stacking order (z-index 3 vs
+        4) so the sun arc + sun disc draw on top, like they did
+        when the cloud was a MapLibre layer below the sun overlay. */
+    .cloud-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 3;
+    }
+    .cloud-svg .cloud-disc
+    {
+        pointer-events: auto;
+        cursor: help;
+    }
+    .cloud-svg .cloud-disc-ring
+    {
+        fill: none;
+        pointer-events: none;
+    }
+    .cloud-svg .cloud-ring
+    {
+        fill: none;
+        stroke: rgba(0, 0, 0, 0.4);
+        stroke-width: 2;
+        pointer-events: none;
+    }
+
     /*  Arc, first pass paints a dark outline for legibility on
         light basemaps; second pass paints the configured sun
         colour on top. Stroke widths are set inline per segment. */

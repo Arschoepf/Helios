@@ -139,6 +139,12 @@ export interface Translations
         //Label/tooltip of the on-card toggle button that shows or hides
         //the LiDAR point cloud "scanner" view.
         lidarPointCloud:          string;
+        //Two-stop colour ramp used by the LiDAR irradiance scanner.
+        //Each cell's colour is lerped between `low` (zero W/m²) and
+        //`high` (STC reference) based on the irradiance it receives.
+        scannerLowColor:          string;
+        scannerHighColor:         string;
+        scannerColorsHint:        string;
     };
 }
 

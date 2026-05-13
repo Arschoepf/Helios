@@ -106,6 +106,9 @@ export const en: Translations = {
         buildingShadowsOn:     'Shown',
         buildingShadowsOff:    'Hidden',
         buildingShadowsHint:   'When LiDAR is unavailable (precision off, or home outside France), shadows are approximated from the flat MapTiler footprints. Hide them in flat or dense urban areas where the approximation reads as noise. LiDAR-driven shadows are unaffected.',
-        lidarPointCloud:       'LiDAR scanner view'
+        lidarPointCloud:       'LiDAR scanner view',
+        scannerLowColor:       'Scanner low (zero irradiance) *',
+        scannerHighColor:      'Scanner high (full irradiance) *',
+        scannerColorsHint:     'Two-stop ramp the LiDAR scanner uses to colour each cell: low for night / shadow, high for full sun at STC (1 kW/m²). Defaults to a thermal red → green ramp that reads cleanly on both light and dark basemaps.'
     }
 };

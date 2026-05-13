@@ -12,7 +12,9 @@ import
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_BUILDING_COLOR_HEX,
     DEFAULT_SHADOW_PRECISION,
-    DEFAULT_SHADOW_OPACITY
+    DEFAULT_SHADOW_OPACITY,
+    DEFAULT_SCANNER_LOW_HEX,
+    DEFAULT_SCANNER_HIGH_HEX
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -753,6 +755,24 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.buildingShadowsHint}</div>
+
+                <label class="field">
+                    <span class="label">${t.editor.scannerLowColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c['scanner-color-low'], DEFAULT_SCANNER_LOW_HEX)}"
+                        .ariaLabel="${t.editor.scannerLowColor}"
+                        @value-changed="${(e: CustomEvent) => this._color('scanner-color-low', e)}"
+                    ></helios-color-picker>
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.scannerHighColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c['scanner-color-high'], DEFAULT_SCANNER_HIGH_HEX)}"
+                        .ariaLabel="${t.editor.scannerHighColor}"
+                        @value-changed="${(e: CustomEvent) => this._color('scanner-color-high', e)}"
+                    ></helios-color-picker>
+                </label>
+                <div class="hint">${t.editor.scannerColorsHint}</div>
 
                 <div class="section-title">${t.editor.colors}</div>
                 <label class="field">

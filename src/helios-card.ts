@@ -184,7 +184,20 @@ export class HeliosCard extends LitElement
         sun:      { x: number; y: number; irradiance: number; altitude: number; nearness: number };
         home:     { x: number; y: number };
         daylight: number;
-    } | null = null;    
+    } | null = null;
+    //Screen-space layout of the cloud-cover disc + 100 % reference
+    //ring, projected through engine.projectCloudScene() on every map
+    //transform and clock tick. The disc no longer lives as a
+    //MapLibre fill layer (terrain bent it out of shape with LiDAR
+    //precision on); it's now a pair of SVG polygons drawn alongside
+    //the sun arc, anchored at the home's terrain elevation so it
+    //stays a true circle whatever the ground does beneath it.
+    @state() private _cloudScene: {
+        disc:     Array<{ x: number; y: number }>;
+        ring:     Array<{ x: number; y: number }>;
+        cloudHex: string;
+        cloudPct: number;
+    } | null = null;
     @state() private _chartSeries: {
         times:      Date[];
         irradiance: number[];
@@ -1107,19 +1120,11 @@ export class HeliosCard extends LitElement
                 //via onMapTransform.
                 this._refreshOverlays();
             };
-            this._engine.onCloudHover = e =>
-            {
-                this._cloudHover  = e.hover;
-                this._cloudHoverX = e.x;
-                this._cloudHoverY = e.y;
-                //If the cursor sits in the right half of the card,
-                //pin the tooltip to the LEFT of the cursor instead
-                //of the right, so it never overflows past the card
-                //edge.
-                const mc = this.renderRoot.querySelector('#map-container');
-                const w  = (mc as HTMLElement | null)?.clientWidth ?? 0;
-                this._cloudHoverFlip = w > 0 && e.x > w / 2;
-            };
+            //Cloud-disc hover is now wired directly on the SVG
+            //element via @mousemove / @mouseleave (see the render
+            //path's solar-svg). The engine no longer surfaces a
+            //hover callback for the disc since it's no longer a
+            //MapLibre layer.
             this._engine.onMapTransform = () =>
             {
                 this._refreshOverlays();
@@ -1168,7 +1173,8 @@ export class HeliosCard extends LitElement
         this._labelLayout = layout;
 
         const t = this._selectedTime ?? this._now;
-        this._sunScene = this._engine ? this._engine.projectSunScene(t) : null;
+        this._sunScene   = this._engine ? this._engine.projectSunScene(t) : null;
+        this._cloudScene = this._engine ? this._engine.projectCloudScene() : null;
     }
 
     //Segments now share one fixed colour (the configured sun
@@ -1321,6 +1327,31 @@ export class HeliosCard extends LitElement
     {
         this._pointCloudOn = !this._pointCloudOn;
         this._engine?.setPointCloudVisible(this._pointCloudOn);
+    }
+
+    //Cloud-disc hover: drive the breakdown tooltip directly off the
+    //SVG polygon's pointer events now that the disc is no longer a
+    //MapLibre layer. Offsets are converted to card-relative pixels
+    //so the tooltip's absolute positioning matches.
+    private _onCloudDiscMove(e: MouseEvent): void
+    {
+        const card = this.renderRoot.querySelector('ha-card') as HTMLElement | null;
+        const rect = card?.getBoundingClientRect();
+        const x = rect ? e.clientX - rect.left : e.offsetX;
+        const y = rect ? e.clientY - rect.top  : e.offsetY;
+        this._cloudHover    = true;
+        this._cloudHoverX   = x;
+        this._cloudHoverY   = y;
+        //Pin the tooltip to the LEFT of the cursor when the cursor
+        //sits in the right half of the card, so the floating
+        //breakdown never overflows past the card edge.
+        const w = rect?.width ?? 0;
+        this._cloudHoverFlip = w > 0 && x > w / 2;
+    }
+
+    private _onCloudDiscLeave(): void
+    {
+        this._cloudHover = false;
     }
 
 
@@ -2964,6 +2995,42 @@ export class HeliosCard extends LitElement
                         </button>
                     </div>
                 ` : nothing}
+
+                ${hasApiKey && this._cloudScene ? (() => {
+                    //SVG-projected cloud disc + 100 % ring. The
+                    //screen-space points come from the engine via
+                    //projectCloudScene() (anchor-at-home), so the
+                    //rendered shape stays a true circle whatever the
+                    //LiDAR DEM does underneath. The disc is the only
+                    //interactive piece: hover opens the low/mid/high
+                    //breakdown tooltip handled below.
+                    const cs       = this._cloudScene!;
+                    const discPts  = cs.disc.length >= 3
+                        ? cs.disc.map(p => `${p.x},${p.y}`).join(' ')
+                        : '';
+                    const ringPts  = cs.ring.length >= 3
+                        ? cs.ring.map(p => `${p.x},${p.y}`).join(' ')
+                        : '';
+                    return html`
+                        <svg class="cloud-svg">
+                            ${ringPts ? svg`
+                                <polygon class="cloud-ring" points="${ringPts}" />
+                            ` : nothing}
+                            ${discPts ? svg`
+                                <polygon
+                                    class="cloud-disc"
+                                    points="${discPts}"
+                                    fill="${cs.cloudHex}"
+                                    fill-opacity="0.25"
+                                    stroke="${cs.cloudHex}"
+                                    stroke-width="2"
+                                    @mousemove="${this._onCloudDiscMove}"
+                                    @mouseleave="${this._onCloudDiscLeave}"
+                                />
+                            ` : nothing}
+                        </svg>
+                    `;
+                })() : nothing}
 
 ${showSun ? html`
                     <svg

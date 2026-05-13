@@ -96,6 +96,9 @@ export const de: Translations = {
         buildingShadowsOn:     'Sichtbar',
         buildingShadowsOff:    'Ausgeblendet',
         buildingShadowsHint:   'Wenn LiDAR nicht verfügbar ist (Präzision aus oder Wohnsitz außerhalb Frankreich), werden Schatten aus den flachen MapTiler-Grundrissen abgeschätzt. In flachem oder dichtem städtischem Gebiet ausblenden, wo die Näherung wie Rauschen wirkt. LiDAR-Schatten bleiben unberührt.',
-        lidarPointCloud:       'LiDAR-Scanner-Ansicht'
+        lidarPointCloud:       'LiDAR-Scanner-Ansicht',
+        scannerLowColor:       'Scanner unten (keine Einstrahlung) *',
+        scannerHighColor:      'Scanner oben (volle Einstrahlung) *',
+        scannerColorsHint:     'Zwei-Farben-Rampe, mit der der LiDAR-Scanner jede Zelle einfärbt: untere Farbe für Nacht / Schatten, obere für volle Sonne bei 1 kW/m². Standardmäßig ein thermischer Rot-Grün-Verlauf, der auf hellen wie auf dunklen Basemaps klar lesbar bleibt.'
     }
 };

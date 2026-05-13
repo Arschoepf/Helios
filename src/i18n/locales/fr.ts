@@ -104,6 +104,9 @@ export const fr: Translations = {
         buildingShadowsOn:     'Affichées',
         buildingShadowsOff:    'Masquées',
         buildingShadowsHint:   'Quand le LiDAR n\'est pas disponible (précision off, ou hors France), les ombres sont approximées à partir des empreintes plates MapTiler. À masquer en zone plate ou très urbaine où l\'approximation ressemble plus à du bruit qu\'à de la donnée. Sans effet sur les ombres LiDAR.',
-        lidarPointCloud:       'Vue scanner LiDAR'
+        lidarPointCloud:       'Vue scanner LiDAR',
+        scannerLowColor:       'Scanner bas (irradiance nulle) *',
+        scannerHighColor:      'Scanner haut (irradiance max) *',
+        scannerColorsHint:     'Rampe à deux teintes utilisée par le scanner LiDAR pour colorer chaque cellule : la teinte basse correspond à la nuit ou à l\'ombre, la teinte haute au plein soleil à 1 kW/m². Par défaut, un dégradé thermique rouge → vert qui lit bien sur fond clair comme sur fond sombre.'
     }
 };
