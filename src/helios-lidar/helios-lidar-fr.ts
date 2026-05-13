@@ -22,6 +22,7 @@
 //Reference: https://geoservices.ign.fr/lidarhd
 
 import type { LidarVegetationSource, LidarFetchOptions } from '../helios-lidar';
+import { convexHull } from '../helios-shadows';
 
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
 const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
@@ -179,49 +180,26 @@ export const franceLidarHd: LidarVegetationSource =
 
         const pxLon = (maxLon - minLon) / rasterSize;
         const pxLat = (maxLat - minLat) / rasterSize;
-        //Hexagonal cells instead of square ones. Each pixel becomes a
-        //6-vertex regular hexagon scaled to ~85 % of the pixel size,
-        //which leaves a small gap between neighbours and breaks the
-        //"flat slab" impression of adjacent equal-height cells. The
-        //radius is computed independently in lon and lat degrees so
-        //the hex is regular in metres, not in degree space.
-        const hexFactor = 0.85;
-        const rLon = (pxLon / 2) * hexFactor;
-        const rLat = (pxLat / 2) * hexFactor;
-        //Precompute the 6 unit-vector offsets for the hexagon vertices.
-        //Pointy-top orientation: starts at the top, rotates CCW.
-        const HEX_OFFSETS: Array<[number, number]> = [
-            [ 0.0,   1.0  ],
-            [-0.866, 0.5  ],
-            [-0.866, -0.5 ],
-            [ 0.0,   -1.0 ],
-            [ 0.866, -0.5 ],
-            [ 0.866, 0.5  ]
-        ];
+        const halfLon = pxLon / 2;
+        const halfLat = pxLat / 2;
 
-        //Optional circular crop. When set, cells whose centre is more
-        //than `cropRadiusMeters` from the home are dropped, so the
-        //rendered vegetation disc matches the buildings disc.
+        //Optional circular crop. Cells beyond cropRadiusMeters from
+        //the home are dropped so the shadow zones stay inside the
+        //visible disc.
         const cropM = opts.cropRadiusMeters && opts.cropRadiusMeters > 0
             ? opts.cropRadiusMeters
             : null;
 
-        //One Polygon Feature per LiDAR cell at the cell's actual
-        //height, with a deterministic per-cell jitter (85-115 %) so
-        //adjacent cells break their plateau and look more like
-        //individual crowns / roof shingles than a single block. Each
-        //cell is classified as 'home' / 'building' / 'vegetation'
-        //via the inflated MapTiler bboxes (see above); the engine
-        //routes the three classes to their own renderable source.
-        //
-        //Hash is i * 73856093 XOR j * 19349663, classic spatial-hash
-        //primes, fold to [0, 1). Vegetation gets the full jitter
-        //range, buildings get a tighter one (95-105 %) so their tops
-        //stay readable as flat-ish surfaces.
+        //Pass 1: classify every passing cell into one of three kinds
+        //(home / building / vegetation) and stash its height. We need
+        //two parallel grids (kindArr + hOk) because the flood fill in
+        //pass 2 reads kind for connectivity and avg height per region.
         //
         //Row j = 0 is the NORTH edge of the bbox in WMS image
         //convention (top-down). Latitude decreases as j grows.
-        const out: GeoJSON.Feature[] = [];
+        const N        = rasterSize * rasterSize;
+        const kindArr  = new Uint8Array(N);     // 0 = none, 1 = home, 2 = building, 3 = vegetation
+        const hOk      = new Float32Array(N);
         let hMin = Infinity, hMax = -Infinity;
         let keptHome = 0, keptBldg = 0, keptVeg = 0;
 
@@ -230,67 +208,123 @@ export const franceLidarHd: LidarVegetationSource =
             const cLat = maxLat - (j + 0.5) * pxLat;
             for (let i = 0; i < rasterSize; i++)
             {
-                const h = heights[j * rasterSize + i];
+                const idx = j * rasterSize + i;
+                const h   = heights[idx];
                 if (!isFinite(h) || h < HEIGHT_THRESH_M || h > HEIGHT_MAX_M) continue;
 
                 const cLon = minLon + (i + 0.5) * pxLon;
-
                 if (cropM !== null
                     && haversineMeters(opts.homeLat, opts.homeLon, cLat, cLon) > cropM)
                 {
                     continue;
                 }
 
-                //Classify. Home wins over surrounding when the bboxes
+                //Home wins over surrounding when the inflated bboxes
                 //happen to overlap (rare but defensive).
-                let kind: 'home' | 'building' | 'vegetation' = 'vegetation';
-                if (cellInsideAnyBBox(cLon, cLat, homeBboxes))      kind = 'home';
-                else if (cellInsideAnyBBox(cLon, cLat, surrBboxes)) kind = 'building';
+                let k = 3;                                            // vegetation
+                if (cellInsideAnyBBox(cLon, cLat, homeBboxes))      k = 1;  // home
+                else if (cellInsideAnyBBox(cLon, cLat, surrBboxes)) k = 2;  // building
 
-                //Per-cell height jitter, deterministic from (i, j),
-                //tighter for buildings so roofs stay recognisable.
-                let hash = ((i * 73856093) ^ (j * 19349663)) >>> 0;
-                hash = (hash * 668265263) >>> 0;
-                const u = hash / 4294967296;
-                const jitter = kind === 'vegetation'
-                    ? (0.85 + u * 0.30)
-                    : (0.97 + u * 0.06);
-                const adjHeight = h * jitter;
-
-                //Build the hex ring around (cLon, cLat).
-                const ring: number[][] = new Array(7);
-                for (let k = 0; k < 6; k++)
-                {
-                    const o = HEX_OFFSETS[k];
-                    ring[k] = [cLon + o[0] * rLon, cLat + o[1] * rLat];
-                }
-                ring[6] = ring[0];
-
-                out.push({
-                    type:     'Feature',
-                    geometry: { type: 'Polygon', coordinates: [ring] },
-                    properties:
-                    {
-                        render_height:     adjHeight,
-                        render_min_height: 0,
-                        kind
-                    }
-                });
-
-                if (kind === 'home')          keptHome++;
-                else if (kind === 'building') keptBldg++;
-                else                          keptVeg++;
+                kindArr[idx] = k;
+                hOk[idx]     = h;
+                if (k === 1)      keptHome++;
+                else if (k === 2) keptBldg++;
+                else              keptVeg++;
                 if (h < hMin) hMin = h;
                 if (h > hMax) hMax = h;
             }
+        }
+
+        //Pass 2: 8-connected flood fill, components stay within their
+        //kind. A tree right next to a building stays in its own region
+        //so the shadow it casts has the tree's geometry, not a blended
+        //building+tree blob.
+        const labels = new Int32Array(N);
+        const stack: number[] = [];
+        const components: Array<{ cells: number[]; heightSum: number }> = [];
+        let nextLabel = 0;
+
+        for (let seed = 0; seed < N; seed++)
+        {
+            const ks = kindArr[seed];
+            if (ks === 0 || labels[seed]) continue;
+
+            nextLabel++;
+            const cells: number[] = [];
+            let heightSum = 0;
+            stack.length = 0;
+            stack.push(seed);
+
+            while (stack.length)
+            {
+                const idx = stack.pop()!;
+                if (labels[idx] || kindArr[idx] !== ks) continue;
+                labels[idx] = nextLabel;
+                cells.push(idx);
+                heightSum += hOk[idx];
+
+                const x = idx % rasterSize;
+                const y = (idx / rasterSize) | 0;
+                for (let dy = -1; dy <= 1; dy++)
+                {
+                    for (let dx = -1; dx <= 1; dx++)
+                    {
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx < 0 || nx >= rasterSize || ny < 0 || ny >= rasterSize) continue;
+                        const nIdx = ny * rasterSize + nx;
+                        if (!labels[nIdx] && kindArr[nIdx] === ks) stack.push(nIdx);
+                    }
+                }
+            }
+            components.push({ cells, heightSum });
+        }
+
+        //Pass 3: one Polygon per region. We collect the 4 corners of
+        //every cell in the region and take the convex hull; that
+        //slightly over-approximates non-convex shapes (an L or a
+        //horseshoe gets convexified) but the polygon is NEVER
+        //rendered visibly, only its projected shadow shows up, and a
+        //slight extra coverage at the shadow edge is invisible under
+        //the home or behind the tree line. Height fed to the shadow
+        //projector is the region average.
+        const out: GeoJSON.Feature[] = [];
+        for (const comp of components)
+        {
+            const corners: Array<[number, number]> = [];
+            for (const idx of comp.cells)
+            {
+                const x = idx % rasterSize;
+                const y = (idx / rasterSize) | 0;
+                const cLon = minLon + (x + 0.5) * pxLon;
+                const cLat = maxLat - (y + 0.5) * pxLat;
+                corners.push([cLon - halfLon, cLat - halfLat]);
+                corners.push([cLon + halfLon, cLat - halfLat]);
+                corners.push([cLon + halfLon, cLat + halfLat]);
+                corners.push([cLon - halfLon, cLat + halfLat]);
+            }
+            const hull = convexHull(corners);
+            if (hull.length < 3) continue;
+            hull.push([hull[0][0], hull[0][1]]);
+
+            const avg = comp.heightSum / comp.cells.length;
+            out.push({
+                type:       'Feature',
+                geometry:   { type: 'Polygon', coordinates: [hull] },
+                properties:
+                {
+                    render_height:     avg,
+                    render_min_height: 0
+                }
+            });
         }
 
         const totalKept = keptHome + keptBldg + keptVeg;
         if (totalKept > 0)
         {
             console.info(
-                `[HELIOS] LiDAR cells: ${keptHome} home + ${keptBldg} building + ${keptVeg} vegetation, ` +
-                `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
+                `[HELIOS] LiDAR shadows: ${keptHome} home + ${keptBldg} building + ${keptVeg} vegetation cells -> ` +
+                `${components.length} regions, height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
             );
         }
         else

@@ -82,8 +82,8 @@ export const it: Translations = {
         terrainDetailSmooth:   'Levigato',
         terrainDetailFine:     'Fine',
         terrainDetailHint:     'Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione, utile solo su PC desktop potenti.',
-        lidarVegetation:       'Vegetazione LiDAR *',
+        lidarVegetation:       'Precisione delle ombre LiDAR *',
         lidarVegetationOff:    'Off',
-        lidarVegetationHint:   'Solo Francia per ora. Scarica le altezze IGN LiDAR HD intorno alla casa e disegna SIA gli edifici SIA gli alberi come blocchi 3D per cella con vere ombre portate, in sostituzione delle estrusioni MapTiler. Il valore è la dimensione della cella: più piccolo, dettaglio più fine, più traffico di rete. 4.5m va bene ovunque, 1m equivale al campionamento nativo IGN (~300k feature) e solo su desktop potenti.'
+        lidarVegetationHint:   'Solo Francia per ora. Scarica le altezze IGN LiDAR HD intorno alla casa, le raggruppa in zone d\'ombra per densità e proietta tali zone a terra. I poligoni LiDAR stessi NON vengono disegnati, solo le loro ombre; gli edifici mantengono il consueto rendering 3D MapTiler. Il valore è il passo di campionamento: più piccolo, contorni d\'ombra più nitidi, più traffico di rete. 4.5m va bene ovunque, 1m equivale al campionamento nativo IGN e solo su desktop potenti.'
     }
 };

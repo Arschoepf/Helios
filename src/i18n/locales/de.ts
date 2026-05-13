@@ -82,8 +82,8 @@ export const de: Translations = {
         terrainDetailSmooth:   'Geglättet',
         terrainDetailFine:     'Fein',
         terrainDetailHint:     'Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe, nur auf leistungsfähigen Desktops sinnvoll.',
-        lidarVegetation:       'LiDAR-Vegetation *',
+        lidarVegetation:       'LiDAR-Schattenpräzision *',
         lidarVegetationOff:    'Aus',
-        lidarVegetationHint:   'Derzeit nur in Frankreich verfügbar. Lädt IGN-LiDAR-HD-Höhen rund um das Zuhause und stellt SOWOHL Gebäude ALS AUCH Bäume als 3D-Blöcke pro Zelle mit echten Schlagschatten dar, statt der MapTiler-Extrusionen. Der Wert ist die Zellgröße: kleiner heißt schärfere Details, größere Netzwerklast. 4.5m läuft überall, 1m entspricht der nativen IGN-Abtastung (~300k Features) und nur für leistungsfähige Desktops.'
+        lidarVegetationHint:   'Derzeit nur in Frankreich verfügbar. Lädt IGN-LiDAR-HD-Höhen rund um das Zuhause, gruppiert sie nach Dichte zu Schattenzonen und projiziert diese Zonen auf den Boden. Die LiDAR-Polygone selbst werden NICHT dargestellt, nur ihre Schatten; Gebäude behalten die übliche MapTiler-3D-Ansicht. Der Wert ist die Abtastung: kleiner heißt schärfere Schattenkonturen, größere Netzwerklast. 4.5m läuft überall, 1m entspricht der nativen IGN-Abtastung und nur auf leistungsfähigen Desktops.'
     }
 };

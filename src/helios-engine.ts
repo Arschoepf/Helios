@@ -2131,15 +2131,12 @@ export class HeliosEngine
         });
     }
 
-    //Decides which data feeds the three renderable sources (home,
-    //surroundings, vegetation) and pushes it. When LiDAR is active
-    //and we have cells, the LiDAR FeatureCollection is partitioned
-    //by `kind` and the per-cell hexagons replace the MapTiler-derived
-    //extrusions. Otherwise MapTiler home + surroundings polygons go
-    //into their respective sources and the vegetation source stays
-    //empty. Single source of truth for "what is rendered" so the
-    //MapTiler resolve, LiDAR resolve and toggle-change paths all
-    //call this same method.
+    //Pushes the MapTiler footprints into the three rendering sources.
+    //Buildings are ALWAYS rendered from MapTiler now, the LiDAR data
+    //is used exclusively for shadow projection (see _refreshShadowsAndAtmosphere).
+    //The vegetation extrusion source stays empty and its layer is
+    //kept at visibility:none so the heavy per-cell rendering that
+    //beta.7-10 carried is gone for good.
     private _pushRenderableSources(): void
     {
         if (!this.map) return;
@@ -2149,39 +2146,26 @@ export class HeliosEngine
 
         const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
-        if (this._lidarActive())
-        {
-            const cells = this._lidarData?.features ?? [];
-            const homeCells: GeoJSON.Feature[] = [];
-            const bldgCells: GeoJSON.Feature[] = [];
-            const vegCells:  GeoJSON.Feature[] = [];
-            for (const f of cells)
-            {
-                const k = (f.properties as { kind?: string } | null)?.kind;
-                if      (k === 'home')       homeCells.push(f);
-                else if (k === 'building')   bldgCells.push(f);
-                else                         vegCells.push(f);
-            }
-            homeSrc?.setData({ type: 'FeatureCollection', features: homeCells });
-            surrSrc?.setData({ type: 'FeatureCollection', features: bldgCells });
-            vegSrc?.setData({  type: 'FeatureCollection', features: vegCells  });
-        }
-        else
-        {
-            homeSrc?.setData(this._buildingsData?.home         ?? empty);
-            surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
-            vegSrc?.setData(empty);
-        }
+        homeSrc?.setData(this._buildingsData?.home         ?? empty);
+        surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
+        vegSrc?.setData(empty);
 
-        //Outlines are clean around a single MapTiler polygon but
-        //look like a busy mesh around hundreds of hexagonal cells.
-        //Toggle their visibility to match the mode.
-        const outlineVisibility = this._lidarActive() ? 'none' : 'visible';
+        //The LiDAR vegetation extrusion was the "Minecraft trees"
+        //look from beta.6-10. It is no longer used, the LiDAR points
+        //feed the shadow projector only. Hide the layer once on
+        //every source push so a future style reload that re-adds it
+        //starts hidden.
+        if (this.map.getLayer('helios-vegetation'))
+        {
+            try { this.map.setLayoutProperty('helios-vegetation', 'visibility', 'none'); }
+            catch (_) {}
+        }
+        //Outlines around the MapTiler footprints, always visible now.
         for (const lid of ['helios-buildings-surroundings-outline', 'helios-buildings-home-outline'])
         {
             if (this.map.getLayer(lid))
             {
-                try { this.map.setLayoutProperty(lid, 'visibility', outlineVisibility); }
+                try { this.map.setLayoutProperty(lid, 'visibility', 'visible'); }
                 catch (_) {}
             }
         }
@@ -2452,36 +2436,44 @@ export class HeliosEngine
         }
         catch (_) {}
 
-        //Ground shadow polygons. Building shadow input is the
-        //LiDAR home + building cells when active, the MapTiler
-        //home + surroundings polygons otherwise. Vegetation shadow
-        //input is the LiDAR vegetation cells (empty when inactive).
-        //When the sun is too low the projector returns an empty
-        //FeatureCollection and the layers clear cleanly.
+        //Unified shadow projection. When LiDAR is active the input
+        //is the consolidated LiDAR regions (buildings + vegetation
+        //collapsed to a handful of polygons per "density zone");
+        //otherwise we fall back to the MapTiler home + surroundings
+        //footprints exactly as in 1.3.x. Either way the projection
+        //is fed into `helios-building-shadows-src`, which is the
+        //single rendered shadow layer. The legacy
+        //`helios-vegetation-shadows-src` is kept empty: it stays in
+        //the style as a no-op so any cached config or saved style
+        //referencing it does not error out, but it never holds data
+        //in 1.4.0.
         const lidarActive = this._lidarActive();
-
         try
         {
             const shadowsSrc = this.map.getSource('helios-building-shadows-src') as
                                maplibregl.GeoJSONSource | undefined;
             if (shadowsSrc)
             {
-                const all: GeoJSON.Feature[] = [];
-                if (lidarActive)
+                let input: GeoJSON.FeatureCollection;
+                if (lidarActive && this._lidarData)
                 {
-                    for (const f of this._lidarData?.features ?? [])
-                    {
-                        const k = (f.properties as { kind?: string } | null)?.kind;
-                        if (k === 'home' || k === 'building') all.push(f);
-                    }
+                    input = this._lidarData;
                 }
                 else if (this._buildingsData)
                 {
-                    all.push(...this._buildingsData.home.features);
-                    all.push(...this._buildingsData.surroundings.features);
+                    input = {
+                        type:     'FeatureCollection',
+                        features: [
+                            ...this._buildingsData.home.features,
+                            ...this._buildingsData.surroundings.features
+                        ]
+                    };
                 }
-                const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: all };
-                const shadowFc = projectExtrusionShadows(fc,
+                else
+                {
+                    input = { type: 'FeatureCollection', features: [] };
+                }
+                const shadowFc = projectExtrusionShadows(input,
                 {
                     sunAzimuthDeg:  azimuth,
                     sunAltitudeDeg: altitude,
@@ -2492,35 +2484,13 @@ export class HeliosEngine
         }
         catch (_) {}
 
-        //Vegetation shadows. Separate source/layer so the LiDAR
-        //pipeline can fail (no coverage, rate limit, ...) without
-        //taking the building shadows down with it. Threshold matches
-        //the lidar-fr classification cutoff.
+        //Drain the legacy vegetation-shadows source on every tick so
+        //it never holds stale data after a toggle change.
         try
         {
             const vegSrc = this.map.getSource('helios-vegetation-shadows-src') as
                            maplibregl.GeoJSONSource | undefined;
-            if (vegSrc)
-            {
-                const vegFeatures: GeoJSON.Feature[] = [];
-                if (lidarActive)
-                {
-                    for (const f of this._lidarData?.features ?? [])
-                    {
-                        const k = (f.properties as { kind?: string } | null)?.kind;
-                        if (k === 'vegetation') vegFeatures.push(f);
-                    }
-                }
-                const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: vegFeatures };
-                const shadowFc = projectExtrusionShadows(fc,
-                {
-                    sunAzimuthDeg:  azimuth,
-                    sunAltitudeDeg: altitude,
-                    homeLat:        this.homeLat,
-                    minHeightM:     5
-                });
-                vegSrc.setData(shadowFc);
-            }
+            vegSrc?.setData({ type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection);
         }
         catch (_) {}
     }

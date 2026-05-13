@@ -82,8 +82,8 @@ export const pt: Translations = {
         terrainDetailSmooth:   'Suave',
         terrainDetailFine:     'Preciso',
         terrainDetailHint:     'Suave (predefinição) amostra o relevo a cada ~20 m e mantém-se fluido em qualquer dispositivo. Preciso amostra a cada ~5 m para um relevo mais detalhado mas ~16× mais vértices a projetar por frame de rotação, útil apenas em PCs potentes.',
-        lidarVegetation:       'Vegetação LiDAR *',
+        lidarVegetation:       'Precisão das sombras LiDAR *',
         lidarVegetationOff:    'Off',
-        lidarVegetationHint:   'Apenas França por agora. Recupera as alturas IGN LiDAR HD à volta de casa e desenha TANTO os edifícios COMO as árvores como blocos 3D por célula com sombras projetadas reais, substituindo as extrusões MapTiler. O valor é o tamanho da célula: menor, detalhe mais fino, mais tráfego de rede. 4.5m funciona em qualquer dispositivo, 1m corresponde à amostragem nativa IGN (~300k elementos) e só em desktops potentes.'
+        lidarVegetationHint:   'Apenas França por agora. Recupera as alturas IGN LiDAR HD à volta de casa, agrupa-as em zonas de sombra por densidade e projeta essas zonas no chão. Os polígonos LiDAR em si NÃO são desenhados, apenas as suas sombras; os edifícios mantêm o render 3D MapTiler habitual. O valor é o passo de amostragem: menor, contornos de sombra mais nítidos, mais tráfego de rede. 4.5m funciona em qualquer dispositivo, 1m corresponde à amostragem nativa IGN e só em desktops potentes.'
     }
 };

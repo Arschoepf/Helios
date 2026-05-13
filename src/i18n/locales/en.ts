@@ -92,8 +92,8 @@ export const en: Translations = {
         terrainDetailSmooth:   'Smooth',
         terrainDetailFine:     'Fine',
         terrainDetailHint:     'Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame — only worth it on capable desktops.',
-        lidarVegetation:       'LiDAR vegetation *',
+        lidarVegetation:       'LiDAR shadow precision *',
         lidarVegetationOff:    'Off',
-        lidarVegetationHint:   'France only for now. Streams IGN LiDAR HD heights around the home and renders BOTH buildings and trees as per-cell 3D blocks with real cast shadows, replacing the MapTiler building extrusions. The value is the cell size: smaller = sharper detail, larger payload. 4.5m is comfortable on any device, 1m matches IGN native sampling (~300k features) and is for capable desktops only.'
+        lidarVegetationHint:   'France only for now. Streams IGN LiDAR HD heights around the home, groups them into shadow zones by density and casts those zones as ground shadows. The LiDAR polygons themselves are NOT rendered, only their shadows; buildings keep the regular MapTiler 3D look. The value is the sampling step: smaller = sharper shadow shapes, larger payload. 4.5m is comfortable on any device, 1m matches IGN native sampling and is for capable desktops only.'
     }
 };
