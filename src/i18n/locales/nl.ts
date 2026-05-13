@@ -77,6 +77,10 @@ export const nl: Translations = {
         performanceModeOn:     'Aan',
         performanceModeOff:    'Uit',
         performanceModeHint:   'Schakelt 3D-terrein, reliëfschaduw uit en beperkt de pixeldichtheid. Handig op bescheiden apparaten of voor lange sessies. De camerakanteling en 3D-gebouwen blijven behouden.',
-        mapStyleMinimal:       'Minimaal'
+        mapStyleMinimal:       'Minimaal',
+        terrainDetail:         'Terrein-detail *',
+        terrainDetailSmooth:   'Vloeiend',
+        terrainDetailFine:     'Fijn',
+        terrainDetailHint:     'Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe — alleen zinvol op krachtige desktops.'
     }
 };

@@ -3,7 +3,7 @@
 //Rendering buildings through MapTiler's full vector basemap as a
 //single fill-extrusion layer forces MapLibre to draw every building
 //in the viewport at every frame. In dense urban areas that's
-//several thousand extrusions per frame — visible jank on mobile and
+//several thousand extrusions per frame, visible jank on mobile and
 //heavy battery drain. Filtering after-the-fact via MapLibre paint
 //expressions (distance, feature-state) produces flicker and
 //inconsistent opacities at tile boundaries because the geometry is
@@ -40,7 +40,7 @@ export interface FetchBuildingsOptions
     homeLat:              number;
     radiusMeters:         number;
     //Cluster radius (m). Every building whose centroid sits within
-    //this radius — OR which contains the home point — is grouped
+    //this radius, OR which contains the home point, is grouped
     //into the "home" feature collection at full opacity. Allows
     //attached verandas / outbuildings to read as one with the main
     //house. 0 = legacy single-polygon home behaviour.
@@ -119,7 +119,7 @@ function pointInRing(lon: number, lat: number, ring: number[][]): boolean
 
 //A GeoJSON Polygon is [outer, hole1, hole2, ...]; a MultiPolygon is
 //an array of those. We treat the home check as "point is in the
-//outer ring of any polygon". Holes are ignored — a building polygon
+//outer ring of any polygon". Holes are ignored, a building polygon
 //with a courtyard still counts as containing the home point if the
 //home sits anywhere within the outer footprint.
 function polygonContains(geom: GeoJSON.Geometry, lon: number, lat: number): boolean
@@ -136,7 +136,7 @@ function polygonContains(geom: GeoJSON.Geometry, lon: number, lat: number): bool
 }
 
 //Centroid approximation: average of outer-ring vertices. Used only
-//for the radius filter — exact centroids aren't necessary, we just
+//for the radius filter, exact centroids aren't necessary, we just
 //need a "representative" point per building. For MultiPolygon we
 //take the centroid of the first polygon's outer ring; close enough
 //for filter purposes (a building rendered as a MultiPolygon is rare
@@ -294,7 +294,7 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
                     });
                 }
             }
-            //Lines / points are skipped silently — not buildings.
+            //Lines / points are skipped silently, not buildings.
         }
     }));
 
@@ -306,7 +306,7 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
     //
     //If no feature contains the home point and no feature is within
     //the cluster radius, fall back to the closest building within
-    //HOME_FALLBACK_M — covers HA coordinates that land on a garden
+    //HOME_FALLBACK_M, covers HA coordinates that land on a garden
     //or driveway a few metres off the actual house footprint.
     const homeCluster: GeoJSON.Feature[] = [];
     const surroundings: GeoJSON.Feature[] = [];

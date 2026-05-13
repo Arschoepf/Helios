@@ -15,15 +15,12 @@ export interface HeliosConfig
     //(road names, building numbers, POI labels, place names) are
     //hidden for a cleaner, minimalist basemap. Default: true.
     'show-labels'?:           unknown;
-    //Fixed-colour design system. Each metric has one
-    //configurable colour reused everywhere it appears (timeline mirror
-    //chart + on-arc sun disc for sun, on-ground disc + timeline lower
-    //half for cloud). The previous start/end ramp keys
-    //(ramp-color-start / ramp-color-end) were retired because a hue
-    //ramp forces the viewer to invert the mental mapping for cloud
-    //cover (high reading = bad, but a high ramp value used to mean
-    //good). Intensity is now conveyed by area / position rather than
-    //by hue interpolation.
+    //Fixed-colour design system. Each metric has one configurable
+    //colour reused everywhere it appears (timeline mirror chart +
+    //on-arc sun disc for sun, on-ground disc + timeline lower half
+    //for cloud). Intensity is conveyed by area / position rather than
+    //by hue interpolation, so a high cloud reading reads consistently
+    //as "more" regardless of the chosen colour.
     'sun-color'?:             unknown;
     'cloud-color'?:           unknown;
     //Optional photovoltaic production overlay.
@@ -90,7 +87,7 @@ export interface HeliosConfig
     //rendered. Buildings outside are not drawn at all. Default 100 m.
     'building-radius'?:        unknown;
     //Opacity 0..1 of the surrounding buildings; home stays at 1.0.
-    //Default 0.25 — a "ghost" surround that conveys urban context
+    //Default 0.25, a "ghost" surround that conveys urban context
     //without competing with the data overlays.
     'building-opacity'?:       unknown;
     //Cluster radius (m) around the home: every building whose centroid
@@ -110,9 +107,14 @@ export interface HeliosConfig
     //preserved so the 3D buildings still read as 3D), hillshade
     //hidden, canvas pixel ratio forced to 1.0. Default false.
     'performance-mode'?:       unknown;
+    //Terrain mesh density. 'smooth' (default) samples the DEM at
+    //z=12, ~20 m per vertex, fluid on every device. 'fine' bumps
+    //the source maxzoom to 14, ~5 m per vertex, more detail in
+    //the relief but ~16× more mesh vertices to project per frame.
+    'terrain-detail'?:         unknown;
 }
 
-//Default values for the building config — exposed so the visual
+//Default values for the building config, exposed so the visual
 //editor can render the matching placeholder / slider defaults.
 export const DEFAULT_BUILDING_RADIUS_M         = 100;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
@@ -129,13 +131,14 @@ export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
 //under heavy editor activity.
 interface HeliosStats
 {
-    enginesCreated:      number;
-    enginesCleanedUp:    number;
-    updateConfigCalls:   number;
-    styleReloads:        number;
-    addBuildingsCalls:   number;
-    buildingFetchStarts: number;
-    contextLostEvents:   number;
+    enginesCreated:           number;
+    enginesCleanedUp:         number;
+    enginesSkippedAsPreview?: number;
+    updateConfigCalls:        number;
+    styleReloads:             number;
+    addBuildingsCalls:        number;
+    buildingFetchStarts:      number;
+    contextLostEvents:        number;
 }
 function bumpStat(key: keyof HeliosStats): void
 {
@@ -161,16 +164,15 @@ function bumpStat(key: keyof HeliosStats): void
 //the same time.
 //
 //Home Assistant's dashboard editor creates a fresh preview card on
-//every config edit and does not always fire `disconnectedCallback`
-//on the previous preview — instrumented telemetry showed up to 14
-//orphaned engines after only a handful of edits, each still holding
-//a WebGL context. Safari mobile caps active contexts at ~8 and
-//starts recycling aggressively once the cap is hit, which is the
-//root cause of both the FPS drift and the iOS black-screen lockup.
+//every config edit and does not reliably fire `disconnectedCallback`
+//on the previous preview, orphaned engines accumulate, each still
+//holding a WebGL context. Safari mobile caps active contexts at ~8
+//and starts recycling once the cap is hit, which causes FPS drift
+//and the iOS black-screen lockup.
 //
-//We solve this from our side by tracking every live engine in a
-//module-level Set and force-cleaning the oldest one whenever a new
-//engine is about to push the count over the limit. The user's
+//We track every live engine in a module-level Set and force-clean
+//the oldest one whenever a new engine is about to push the count
+//over the limit. The user's
 //currently-visible card is always the most recent engine, so the
 //victim of force-cleanup is always an orphan preview the user
 //can't see.
@@ -181,12 +183,12 @@ export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' 
 
 //Sources of the irradiance value displayed in the PV legend.
 //
-//  haurwitz   — local computation using Haurwitz (1945) clear-sky GHI
+//  haurwitz  , local computation using Haurwitz (1945) clear-sky GHI
 //               and Kasten-Czeplak (1980) cloud attenuation. Always
 //               available since it only needs the solar position and
 //               cloud_cover. Used as the fallback past the forecast
 //               horizon or when the model omits shortwave_radiation.
-//  shortwave  — direct read of `shortwave_radiation_instant` from the
+//  shortwave , direct read of `shortwave_radiation_instant` from the
 //               weather model (median across the active models in
 //               'high' precision mode). Considered more accurate
 //               because the model integrates aerosols, humidity
@@ -197,16 +199,10 @@ export type IrradianceSource = 'haurwitz' | 'shortwave';
 export interface WeatherData
 {
     cloudCover:     number;
-    cloudLow:       number;        //% — low-level clouds (≤ 3 km)
-    cloudMid:       number;        //% — mid-level clouds (3–8 km)
-    cloudHigh:      number;        //% — high-level clouds (≥ 8 km)
+    cloudLow:       number;        //%, low-level clouds (≤ 3 km)
+    cloudMid:       number;        //%, mid-level clouds (3–8 km)
+    cloudHigh:      number;        //%, high-level clouds (≥ 8 km)
     cloudIntensity: CloudIntensity;
-    //Gradients retired. The card no longer paints a ramp band
-    //under the timeline; the new mirror chart carries both metrics
-    //natively. Fields kept on WeatherData for ABI stability and now
-    //always emit the empty string.
-    cloudGradient:    string;
-    irradianceGradient: string;
     timeRange:      { start: Date; end: Date } | null;
     isLiveTime:     boolean;
     pvPower:        number;        //primary value, normalised 0..100 (≈ GHI/10 W/m²)
@@ -217,7 +213,7 @@ export interface WeatherData
 
 type RGB = [number, number, number];
 
-//Mobile detection — used to scale grid density and pixel ratio so older
+//Mobile detection, used to scale grid density and pixel ratio so older
 //phones keep usable framerates. Computed once at module load.
 const IS_MOBILE = (() =>
 {
@@ -230,7 +226,7 @@ const IS_MOBILE = (() =>
     {
         return true;
     }
-    //Treat narrow viewports as mobile too — covers desktop in mobile mode
+    //Treat narrow viewports as mobile too, covers desktop in mobile mode
     if (typeof window !== 'undefined' && window.innerWidth <= 768)
     {
         return true;
@@ -296,7 +292,7 @@ function parseHex(v: unknown, fallback: RGB): RGB
 //Fixed-colour design system.
 //
 //Each metric has its own colour, fixed and configurable. We don't
-//interpolate hues to convey intensity any more — instead we vary the
+//interpolate hues to convey intensity any more, instead we vary the
 //area or the position of a single colour so a quick glance at the
 //card tells the user "more cloud" or "more sun" without first
 //decoding a rainbow ramp. The fixed colour also propagates unchanged
@@ -305,10 +301,10 @@ function parseHex(v: unknown, fallback: RGB): RGB
 //
 //Defaults were chosen for maximum perceptual contrast against each
 //other and against typical satellite imagery:
-//  - Sun: a warm amber (#EF9F27) — clearly warm, high luminance,
+//  - Sun: a warm amber (#EF9F27), clearly warm, high luminance,
 //    doesn't compete with the green/blue of vegetation or water in
 //    the basemap.
-//  - Cloud: a cool desaturated blue (#5A8DC4) — clearly cool, mid
+//  - Cloud: a cool desaturated blue (#5A8DC4), clearly cool, mid
 //    luminance, doesn't compete with the typical road/river blues
 //    rendered by MapTiler streets.
 //These two hues sit roughly opposite on the colour wheel so the eye
@@ -319,7 +315,7 @@ export const DEFAULT_CLOUD_COLOR_HEX: string = '#5A8DC4';
 //and reads as "solar production" without competing with the orange sun
 //or the blue cloud colours.
 export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
-//Saturated red — distinct from sun (orange), cloud (blue), PV
+//Saturated red, distinct from sun (orange), cloud (blue), PV
 //(green), and easy to associate visually with battery
 //discharge / "energy on draw" semantics. Reads cleanly on the
 //80 % white chip background.
@@ -329,7 +325,7 @@ const DEFAULT_CLOUD_RGB: RGB = [0x5A, 0x8D, 0xC4];
 
 
 
-//Haversine distance — used to compare two lat/lon pairs in metres.
+//Haversine distance, used to compare two lat/lon pairs in metres.
 
 function geoDistM(lat1: number, lon1: number, lat2: number, lon2: number): number
 {
@@ -344,7 +340,7 @@ function geoDistM(lat1: number, lon1: number, lat2: number, lon2: number): numbe
 
 //Build a closed-ring polygon approximating a geographic circle.
 //
-//MapLibre has no native "geographic circle" geometry — its `circle`
+//MapLibre has no native "geographic circle" geometry, its `circle`
 //layer type renders pixel-sized markers, not metre-sized discs. So
 //for any "x metres around the home" overlay we generate a polygon
 //of N segments around the centre. 64 segments are visually
@@ -357,7 +353,7 @@ function geoDistM(lat1: number, lon1: number, lat2: number, lon2: number): numbe
 //  - 1° longitude ≈ 111 320 × cos(lat) m
 //
 //Returns a coordinate ring with the first point repeated at the end
-//so the polygon closes — required by GeoJSON's Polygon spec.
+//so the polygon closes, required by GeoJSON's Polygon spec.
 function buildCirclePolygon(
     centerLon:     number,
     centerLat:     number,
@@ -395,17 +391,17 @@ function buildCirclePolygon(
 //
 //Radius is in real-world metres. At our locked neighbourhood zoom
 //(18) one metre is ~2.5 px on screen, so a 30 m radius reads as
-//a ~75 px disc — focal on the home itself, neither dwarfing it nor
+//a ~75 px disc, focal on the home itself, neither dwarfing it nor
 //swallowing too much of the surrounding context.
 const CLOUD_DISC_RADIUS_M       = 30;
 //Disc opacity is intentionally low (0.25): the disc is a quiet
 //backdrop, not the focal point. The percentage label and its leader
 //line carry the precise reading; the disc only tells the eye, at a
 //glance, how much of the ring is filled. The disc is now painted
-//in the configured cloud-color (fixed colour design system) — the
+//in the configured cloud-color (fixed colour design system), the
 //radius alone encodes the percentage.
 const CLOUD_DISC_OPACITY        = 0.25;
-//100% reference ring — thin and translucent so it never competes
+//100% reference ring, thin and translucent so it never competes
 //with the percentage label for attention. Pure black so it reads
 //consistently regardless of the chosen cloud-color.
 const CLOUD_RING_COLOR          = '#000000';
@@ -431,7 +427,7 @@ const PV_CHIP_OFFSET_PX         = 105;
 //trajectory across the local sky, projected onto the screen via
 //the same camera matrices MapLibre uses for its own 3D content.
 //
-//Radius is in real-world metres — i.e. the radius of the imaginary
+//Radius is in real-world metres, i.e. the radius of the imaginary
 //hemisphere on which we paint the sun's path, centred on the home.
 //40 m at zoom 18 keeps the entire arc inside a typical card-sized
 //canvas (≈440×500 CSS px) even at low solar altitudes where the
@@ -506,7 +502,7 @@ export class HeliosEngine
     private _selectedTime:  Date | null       = null;
 
     //Skip atmosphere repaint when the sun moved less than 0.5° since
-    //last call (≈ 2 min) — setPaintProperty isn't free on mobile.
+    //last call (≈ 2 min), setPaintProperty isn't free on mobile.
     private _lastAtmosphereAlt = -999;
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets
@@ -535,10 +531,10 @@ export class HeliosEngine
     public onFetchStart?:    () => void;
     public onFetchEnd?:      () => void;
     public onWeatherUpdate?: (data: WeatherData) => void;
-    //Hover events on the cloud-cover disc — drive the floating
+    //Hover events on the cloud-cover disc, drive the floating
     //low/mid/high breakdown tooltip in the card.
     public onCloudHover?:    (e: { x: number; y: number; hover: boolean }) => void;
-    //Map transform changed — the card recomputes screen-space
+    //Map transform changed, the card recomputes screen-space
     //projections (sun arc, chip positions, leaders) from this hook.
     public onMapTransform?:  () => void;
 
@@ -551,17 +547,30 @@ export class HeliosEngine
     private _autoRotateRaf?:           number;
     private _autoRotateLastFrame:      number = 0;
     private _autoRotateLastUserAction: number = 0;
-    //Inactivity-bumper bookkeeping — we hold both the canvas and the
+    //Inactivity-bumper bookkeeping, we hold both the canvas and the
     //listener reference so cleanup() can fully detach them. Without
     //this, every engine re-init (API key change, home-coords change,
     //map-style change) accumulates the four listeners + their closure
     //(which captures `this`, hence the entire dead engine + its old
     //MapLibre context) until the browser starts recycling WebGL
-    //contexts under pressure — visible as random dashboard reloads
+    //contexts under pressure, visible as random dashboard reloads
     //during editing and creeping FPS degradation after several
     //re-inits within the same session.
     private _bumpInactivityCanvas?: HTMLCanvasElement;
     private _bumpInactivityHandler?: () => void;
+
+    //Single-pointer drag-rotate state. We disable MapLibre's default
+    //right-click dragRotate and replace it with a pointer-driven
+    //rotation that responds to left-click on desktop and to a single
+    //finger drag on touch, what users intuitively expect on a 3D
+    //card. The two-finger pinch-rotate path (touchZoomRotate) is
+    //preserved so two-finger rotation still works on touch.
+    private _dragRotateHandlers?: {
+        canvas:  HTMLCanvasElement;
+        onDown:  (e: PointerEvent) => void;
+        onMove:  (e: PointerEvent) => void;
+        onEnd:   (e: PointerEvent) => void;
+    };
 
     //Stored references for every map.on() / canvas.addEventListener
     //we register on the MapLibre map and its canvas. cleanup() uses
@@ -610,7 +619,7 @@ export class HeliosEngine
 
         //Evict the oldest live engine if we're at the cap. Set
         //iteration follows insertion order so the first value is the
-        //longest-lived — typically an orphaned editor-preview engine
+        //longest-lived, typically an orphaned editor-preview engine
         //the user can no longer see.
         while (_liveEngines.size >= MAX_LIVE_ENGINES)
         {
@@ -643,7 +652,7 @@ export class HeliosEngine
 
         const styleInfo = this._resolveMapStyle();
 
-        //Camera is locked on the home for zoom/pan/pitch — the data
+        //Camera is locked on the home for zoom/pan/pitch, the data
         //only makes sense from this exact viewpoint. Rotation is the
         //only direct user input: spinning around the home lets them
         //read the sun trajectory from any compass angle. Bearing
@@ -662,7 +671,11 @@ export class HeliosEngine
             dragPan:         false,
             scrollZoom:      false,
             doubleClickZoom: false,
-            dragRotate:      true,
+            //MapLibre's default dragRotate binds to right-click drag,
+            //which is not what users expect on a 3D card. We disable
+            //it and wire our own pointer handlers below so a left-click
+            //drag (mouse) or single-finger drag (touch) rotates.
+            dragRotate:      false,
             touchZoomRotate: true,
             touchPitch:      false,
             boxZoom:         false,
@@ -696,7 +709,7 @@ export class HeliosEngine
 
         //Lock the pinch-rotate pivot to the canvas centre. By default,
         //TwoFingersTouchZoomRotateHandler rotates around the centroid
-        //of the two fingers — visually, the home orbits around the
+        //of the two fingers, visually, the home orbits around the
         //pinch point during the gesture, very obvious on small cards.
         //`around: 'center'` forces the pivot to be the screen centre,
         //which is exactly where the home projects, so the home stays
@@ -732,7 +745,7 @@ export class HeliosEngine
         };
         this.map.on('load', this._mapLoadHandler);
 
-        //Map transform broadcaster — relays move events to the card so
+        //Map transform broadcaster, relays move events to the card so
         //it can keep HTML overlays aligned with the underlying canvas.
         //We listen on `move` rather than `moveend` so the overlays
         //track the camera frame-by-frame during programmatic
@@ -740,7 +753,7 @@ export class HeliosEngine
         this._mapMoveHandler = () => this.onMapTransform?.();
         this.map.on('move', this._mapMoveHandler);
 
-        //Auto-rotation pause — any DOM-level interaction on the canvas
+        //Auto-rotation pause, any DOM-level interaction on the canvas
         //(mouse, touch, wheel) bumps the inactivity timer so the
         //rotation loop yields immediately and only resumes after a
         //few seconds of stillness. We hook DOM events rather than
@@ -759,13 +772,70 @@ export class HeliosEngine
         canvas.addEventListener('touchstart', bumpInactivity, { passive: true });
         canvas.addEventListener('touchmove',  bumpInactivity, { passive: true });
 
+        //Custom drag-rotate. Left-click drag on desktop, single-finger
+        //drag on touch. Two-finger pinch-rotate still works via
+        //MapLibre's touchZoomRotate handler (left enabled in init).
+        //
+        //MapLibre's canvas ships with touch-action: pan-x pan-y, which
+        //reserves single-finger drags for native browser scrolling ,
+        //pointer events for those gestures never reach our handler.
+        //Overriding to touch-action: none means every gesture on the
+        //canvas surface becomes a card interaction (the user scrolls
+        //the dashboard by touching outside the card, the same way
+        //Google Maps and other map widgets behave on mobile).
+        canvas.style.touchAction = 'none';
+
+        const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
+        let dragRotating  = false;
+        let lastPointerX  = 0;
+        let activeId: number | null = null;
+
+        const onDown = (e: PointerEvent) =>
+        {
+            //Mouse: left button only. Touch / pen: always start.
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            //Single-pointer rotation; ignore additional touches so the
+            //two-finger pinch-rotate gesture stays with MapLibre.
+            if (activeId !== null) return;
+            dragRotating = true;
+            activeId     = e.pointerId;
+            lastPointerX = e.clientX;
+            try { canvas.setPointerCapture(e.pointerId); }
+            catch (_) {}
+        };
+        const onMove = (e: PointerEvent) =>
+        {
+            if (!dragRotating || !this.map || e.pointerId !== activeId) return;
+            const dx = e.clientX - lastPointerX;
+            lastPointerX = e.clientX;
+            //Positive dx (drag right) bumps bearing up so the map
+            //content under the finger / cursor follows the gesture
+            //direction, what you'd intuitively expect on a touchable
+            //3D widget. The negated form (subtract) read inverted on
+            //both desktop and mobile.
+            this.map.setBearing(this.map.getBearing() + dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+        };
+        const onEnd = (e: PointerEvent) =>
+        {
+            if (e.pointerId !== activeId) return;
+            dragRotating = false;
+            activeId     = null;
+            try { canvas.releasePointerCapture(e.pointerId); }
+            catch (_) {}
+        };
+        canvas.addEventListener('pointerdown',   onDown);
+        canvas.addEventListener('pointermove',   onMove);
+        canvas.addEventListener('pointerup',     onEnd);
+        canvas.addEventListener('pointercancel', onEnd);
+        this._dragRotateHandlers = { canvas, onDown, onMove, onEnd };
+
         //WebGL context-loss recovery. iOS Safari recycles WebGL
         //contexts aggressively under memory pressure; without a
         //handler the canvas freezes on a black frame and the user
         //thinks the dashboard is broken. We preventDefault on the
         //lost event (which lets the browser try to restore), flip
         //_mapReady to false so dependent code path bails, and emit
-        //onContextLost — the card uses that to fully tear down and
+        //onContextLost, the card uses that to fully tear down and
         //re-init the engine on the next animation frame.
         this._webglLostHandler = (e: Event) =>
         {
@@ -789,6 +859,12 @@ export class HeliosEngine
         this._mapErrorHandler = (e: { error?: { message?: string } }) =>
         {
             const msg = e?.error?.message ?? 'unknown error';
+            //Suppress noisy errors triggered by our own building-layer
+            //suppression: we attempt setLayoutProperty / setPaintProperty
+            //on layers that may already be removed during the suppression
+            //sweep; MapLibre reports each as "Cannot style non-existing
+            //layer X" but the outcome is the harmless intended one.
+            if (msg.includes('non-existing layer')) return;
             console.warn('[HELIOS] MapLibre error:', msg);
         };
         this.map.on('error', this._mapErrorHandler);
@@ -798,14 +874,14 @@ export class HeliosEngine
 
     //Resolves the active MapTiler style id from `map-style` config.
     //Three values are accepted:
-    //  'streets' (default) → 'streets-v4' — sober urban basemap.
-    //  'topo'              → 'topo-v4'    — topographic basemap with
+    //  'streets' (default) → 'streets-v4', sober urban basemap.
+    //  'topo'              → 'topo-v4'   , topographic basemap with
     //                                       contour lines and softer
     //                                       earth tones, better in
     //                                       hilly / outdoor settings.
     //  'minimal'           → 'streets-v4' loaded then pruned in
     //                                       _onStyleLoad to a curated
-    //                                       whitelist of layers — fewer
+    //                                       whitelist of layers, fewer
     //                                       per-frame draw calls, best
     //                                       for low-end devices.
     //
@@ -829,7 +905,7 @@ export class HeliosEngine
     }
 
     //Layers we keep when `map-style: minimal` is active. Everything
-    //else is removed outright in _pruneMinimalStyle — removeLayer is
+    //else is removed outright in _pruneMinimalStyle, removeLayer is
     //immune to MapLibre 5 style-import scoping (the bare removeLayer
     //call was confirmed effective on the streets-v4 layer set).
     private static readonly MINIMAL_KEEP_LAYER_IDS: ReadonlySet<string> = new Set([
@@ -865,12 +941,23 @@ export class HeliosEngine
         }
     }
 
-    //Performance mode — disables the per-frame heavyweights (terrain
+    //Performance mode, disables the per-frame heavyweights (terrain
     //mesh + hillshade) and caps pixelRatio at 1.0. The 3D pitch and
     //extruded buildings are preserved, so the card still reads as 3D.
     private _performanceMode(): boolean
     {
         return this.cfg['performance-mode'] === true;
+    }
+
+    //Terrain DEM maxzoom, 'smooth' (default) at z=12, 'fine' at z=14.
+    //z=14 ~16× more mesh vertices than z=12 per frame, which moves
+    //rotation cost considerably; only useful when the user values
+    //the finer relief over fluidity.
+    private _terrainMaxzoom(): number
+    {
+        return String(this.cfg['terrain-detail'] ?? 'smooth').toLowerCase() === 'fine'
+            ? 14
+            : 12;
     }
 
     private _findHourIndex(t: Date): number
@@ -1002,9 +1089,8 @@ export class HeliosEngine
         if (w.shortwave >= 0)
         {
             //shortwave is in W/m². Normalise against STC (1000 W/m²)
-            //and clamp to [0, 100] to match the legacy pvPower scale,
-            //so downstream ramp/legend code doesn't need to know
-            //which source produced the value.
+            //and clamp to [0, 100] so downstream code doesn't need
+            //to know which source produced the value.
             pvPowerShortwave = Math.max(0, Math.min(100, w.shortwave / 1000 * 100));
         }
 
@@ -1015,10 +1101,6 @@ export class HeliosEngine
         const pvPower         = useShortwave ? pvPowerShortwave : pvPowerHaurwitz;
         const irradianceSource: IrradianceSource = useShortwave ? 'shortwave' : 'haurwitz';
 
-        //The cloudGradient and irradianceGradient fields are
-        //retained on WeatherData for ABI stability, but the card no
-        //longer paints a ramp band underneath the timeline; the new
-        //mirror chart carries both metrics natively.
         this.onWeatherUpdate?.(
         {
             cloudCover:       w.cloudCover,
@@ -1026,8 +1108,6 @@ export class HeliosEngine
             cloudMid:         w.cloudMid,
             cloudHigh:        w.cloudHigh,
             cloudIntensity:   w.cloudIntensity,
-            cloudGradient:      '',
-            irradianceGradient: '',
             timeRange:        this._getTimeRange(),
             isLiveTime:       this._selectedTime === null,
             pvPower,
@@ -1059,16 +1139,18 @@ export class HeliosEngine
 
         if (!this.map.getSource('helios-terrain'))
         {
-            //DEM sampled every ~20 m at z=12 — sufficient relief at
-            //pitch 55° / zoom 18; ~16× fewer mesh vertices per
-            //rotation frame than z=14, which dominates the per-frame
-            //cost on Safari fullscreen.
+            //DEM sampling step depends on the `terrain-detail` config:
+            //z=12 (~20 m / vertex) for the smooth default, z=14
+            //(~5 m / vertex) when the user opts into fine detail.
+            //z=14 has ~16× more mesh vertices to project per rotation
+            //frame than z=12, the difference is mostly visible at
+            //pitch 55° on hilly home locations.
             this.map.addSource('helios-terrain',
             {
                 type:     'raster-dem',
                 url:      `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${this.apiKey}`,
                 tileSize: 512,
-                maxzoom:  12
+                maxzoom:  this._terrainMaxzoom()
             });
         }
         //Performance mode drops the terrain mesh entirely (flat
@@ -1101,7 +1183,7 @@ export class HeliosEngine
         //ground), then the cloud-cover disc (under the buildings so
         //they emerge through it as islands), then buildings on top.
         //The 3D solar overlays (arc, sun, incidence ray) live as
-        //HTML/SVG above the canvas — a Three.js custom layer was
+        //HTML/SVG above the canvas, a Three.js custom layer was
         //tried and rejected because MapLibre's compositor would
         //overpaint it unpredictably; HTML overlays sidestep the GL
         //pipeline entirely.
@@ -1114,7 +1196,7 @@ export class HeliosEngine
         window.clearInterval(this._skyTimer);
         this._lastAtmosphereAlt = -999;
         this._refreshShadowsAndAtmosphere();
-        //Sky/atmosphere refresh — every 60s. _refreshShadowsAndAtmosphere
+        //Sky/atmosphere refresh, every 60s. _refreshShadowsAndAtmosphere
         //internally short-circuits when the sun has not moved enough to
         //cause a visible change, so the cost on mobile is negligible.
         this._skyTimer = window.setInterval(() => this._refreshShadowsAndAtmosphere(), 60_000);
@@ -1272,7 +1354,7 @@ export class HeliosEngine
             this.map.removeSource('helios-cloud-rings');
         }
 
-        //Initial empty FeatureCollection — _updateCloudCoverDisc will
+        //Initial empty FeatureCollection, _updateCloudCoverDisc will
         //populate it on the next render cycle once we have a cloud
         //cover value.
         this.map.addSource('helios-cloud-rings',
@@ -1317,7 +1399,7 @@ export class HeliosEngine
         });
 
         //Ring layer: thin black outline of the 100 % reference. Pure
-        //line layer with a fixed paint — nothing data-driven here.
+        //line layer with a fixed paint, nothing data-driven here.
         this.map.addLayer(
         {
             id:     'helios-cloud-ring',
@@ -1332,7 +1414,7 @@ export class HeliosEngine
             }
         });
 
-        //Pointer events on the disc — emitted to the card so it can
+        //Pointer events on the disc, emitted to the card so it can
         //position a floating breakdown tooltip (low/mid/high bands).
         //We listen on the disc layer only; the ring is too thin to
         //hover reliably and the disc is the meaningful target anyway.
@@ -1348,7 +1430,7 @@ export class HeliosEngine
         //Encoded as a 32×32 viewBox with 4 px padding around a 24 px
         //glyph drawn at #1f2933 (dark slate, readable on both the
         //bright basemap and the cloud-color tinted disc). Hotspot is
-        //centred at (16, 16) — the visual middle of the cloud — so
+        //centred at (16, 16), the visual middle of the cloud, so
         //the click point is exactly under the cursor centre.
         const CLOUD_CURSOR_URL =
             "url(\"data:image/svg+xml;utf8," +
@@ -1378,12 +1460,12 @@ export class HeliosEngine
     //percentage. Called from _renderForCurrentSelection so it ticks
     //both with live time progression and with manual scrubbing.
     //
-    //  cloudPct ∈ [0, 100]    — coverage at the home location now
+    //  cloudPct ∈ [0, 100]   , coverage at the home location now
     //
     //The ring (100 % reference) has fixed radius CLOUD_DISC_RADIUS_M.
     //The disc scales linearly: radius = CLOUD_DISC_RADIUS_M * pct/100.
-    //At 0 % cloud cover the disc has zero radius — effectively
-    //invisible — while the ring stays visible to anchor the gauge.
+    //At 0 % cloud cover the disc has zero radius, effectively
+    //invisible, while the ring stays visible to anchor the gauge.
     //
     //Fixed cloud colour. The disc's *radius* already encodes
     //the cloud-cover percentage (0% = invisible, 100% = full ring);
@@ -1487,7 +1569,7 @@ export class HeliosEngine
         return Math.min(1, Math.max(0, v));
     }
 
-    //Resolves the cluster radius (metres) — every building whose
+    //Resolves the cluster radius (metres), every building whose
     //centroid is within this radius (or which contains the home
     //point) becomes part of the home group at full opacity. Allows
     //attached verandas / outbuildings to read as one with the main
@@ -1514,25 +1596,14 @@ export class HeliosEngine
     //
     //  - helios-buildings-surroundings : every building within the
     //    configured radius of the home, painted at the configured
-    //    opacity (default ~25%). Conveys urban context without
-    //    competing visually with the data overlays.
-    //  - helios-buildings-home : the home itself (whichever polygon
-    //    contains the home coordinates), painted at full opacity in
-    //    the same neutral grey. Reads as the focal point.
-    //
-    //Compared to the previous single layer fed from MapTiler's
-    //"helios-planet" source-layer, this design (a) renders only the
-    //handful of buildings the user actually cares about, eliminating
-    //the per-frame cost of thousands of fill-extrusions in dense
-    //urban areas, and (b) cleanly isolates the home so future
-    //iterations can give it special treatment (PV-on-roof rendering,
-    //per-room data overlays, etc.) without per-feature MapLibre
-    //expression gymnastics.
+    //    opacity. Urban context without competing with the data overlays.
+    //  - helios-buildings-home : the polygon containing the home
+    //    coordinates, painted at full opacity in the same neutral grey.
+    //    Reads as the focal point.
     //
     //The building GeoJSON is fetched once per (home, radius) combo
-    //in helios-buildings.ts; subsequent calls to _addBuildings()
-    //(e.g. on theme switch, which rebuilds the whole style) reuse
-    //the cached data without re-hitting the API.
+    //in helios-buildings.ts; subsequent calls (e.g. on theme switch,
+    //which rebuilds the whole style) reuse the cached data.
     private _addBuildings(): void
     {
         bumpStat('addBuildingsCalls');
@@ -1544,7 +1615,13 @@ export class HeliosEngine
         //Drop any stale helios-buildings* layer so re-runs of
         //_addBuildings (on style reload, theme switch, etc.) are
         //idempotent.
-        for (const lid of ['helios-buildings', 'helios-buildings-surroundings', 'helios-buildings-home'])
+        for (const lid of [
+            'helios-buildings',
+            'helios-buildings-surroundings',
+            'helios-buildings-home',
+            'helios-buildings-surroundings-outline',
+            'helios-buildings-home-outline'
+        ])
         {
             if (this.map.getLayer(lid)) this.map.removeLayer(lid);
         }
@@ -1560,7 +1637,7 @@ export class HeliosEngine
         //paint-zeroing under the scoped id `${importId}\\${layerId}`.
         //Paint pipelines and layout pipelines have independent guards
         //inside MapLibre, so opacity:0 may land even when visibility:
-        //none didn't — we use both belt and suspenders.
+        //none didn't, we use both belt and suspenders.
         const styleObj = this.map.getStyle() as {
             layers?:  Array<{ id: string; type: string; 'source-layer'?: string }>;
             imports?: Array<{ id: string }>;
@@ -1585,7 +1662,7 @@ export class HeliosEngine
             }
         }
 
-        //Strategy A — toggle the MapTiler v4 schema flags off, on
+        //Strategy A, toggle the MapTiler v4 schema flags off, on
         //every import. Each flag is best-effort: the wrong key just
         //throws and is ignored.
         const buildingConfigKeys = [
@@ -1604,7 +1681,7 @@ export class HeliosEngine
             }
         }
 
-        //Strategy B — for each building layer, attempt removal AND
+        //Strategy B, for each building layer, attempt removal AND
         //paint-zeroing, using both the bare id and every scoped
         //variant `${importId}\\${layerId}`.
         const idCandidates = (layerId: string): string[] =>
@@ -1618,8 +1695,21 @@ export class HeliosEngine
         {
             for (const cand of idCandidates(layerId))
             {
-                try { if (this.map.getLayer(cand)) this.map.removeLayer(cand); }
+                //Skip candidates that don't correspond to a real layer
+                //in the merged style. Calling set* on a missing layer
+                //makes MapLibre fire an "error" event the engine then
+                //echoes, gating at the source removes both the noise
+                //and the wasted dispatch.
+                if (!this.map.getLayer(cand)) continue;
+
+                try { this.map.removeLayer(cand); }
                 catch (_) {}
+
+                //If removeLayer worked, the layer is gone, done. The
+                //paint / layout fallbacks below are for the rare case
+                //of imported layers where removeLayer is a silent no-op.
+                if (!this.map.getLayer(cand)) continue;
+
                 try { this.map.setLayoutProperty(cand, 'visibility', 'none'); }
                 catch (_) {}
                 try { this.map.setPaintProperty(cand, 'fill-extrusion-opacity', 0); }
@@ -1695,6 +1785,36 @@ export class HeliosEngine
                 'fill-extrusion-height':  ['get', 'render_height'],
                 'fill-extrusion-base':    ['get', 'render_min_height'],
                 'fill-extrusion-opacity': 1
+            }
+        });
+
+        //Cell-shaded outlines: a thin black line on the surroundings'
+        //ground footprint, a thicker / darker line on the home so the
+        //focal building reads even when its colour matches the
+        //surroundings. Drawn ON TOP of the extrusions so the outlines
+        //sit over the building edges at ground level.
+        this.map.addLayer(
+        {
+            id:     'helios-buildings-surroundings-outline',
+            source: 'helios-buildings-surroundings-src',
+            type:   'line',
+            paint:
+            {
+                'line-color':   '#000000',
+                'line-width':   1,
+                'line-opacity': 0.35
+            }
+        });
+        this.map.addLayer(
+        {
+            id:     'helios-buildings-home-outline',
+            source: 'helios-buildings-home-src',
+            type:   'line',
+            paint:
+            {
+                'line-color':   '#000000',
+                'line-width':   2,
+                'line-opacity': 0.85
             }
         });
 
@@ -1808,7 +1928,7 @@ export class HeliosEngine
     //
     //Short-circuits when the sun has moved less than 0.5° since the
     //last call (≈ 2 min of motion). setPaintProperty isn't free on
-    //mobile — repeating the full pass once a minute would burn frames
+    //mobile, repeating the full pass once a minute would burn frames
     //for no perceptible visual change.
     private _refreshShadowsAndAtmosphere(): void
     {
@@ -1855,7 +1975,7 @@ export class HeliosEngine
             shadowCol = this._lerpHex('#3a4870', '#5064a0', u);
         }
 
-        //Hillshade — direction from sun azimuth; exaggeration scales with
+        //Hillshade, direction from sun azimuth; exaggeration scales with
         //a "drama" factor that peaks at low sun (long shadows at dusk/dawn).
         if (this.map.getLayer('helios-hillshade'))
         {
@@ -1879,7 +1999,7 @@ export class HeliosEngine
                 }
                 //hillshade-exaggeration is clamped to [0, 1] by MapLibre's
                 //paint-property validator. With userExg=0.65 the dramaScale
-                //peak of ~1.6 (around altitude 6°) lands at 1.04 — over the
+                //peak of ~1.6 (around altitude 6°) lands at 1.04, over the
                 //ceiling. Clamp here so we get the maximum allowed effect
                 //rather than a paint-validation warning every frame.
                 const finalExg = Math.min(1, userExg * dramaScale);
@@ -1889,7 +2009,7 @@ export class HeliosEngine
             catch (_) {}
         }
 
-        //Night-shade overlay — the primary day/night cue.
+        //Night-shade overlay, the primary day/night cue.
         //Opacity ramps from 0 (day) up to ~0.65 at deep night, with a tinted
         //warm pass through the sunrise/sunset window so the satellite stays
         //readable but visibly amber-shifted near the horizon.
@@ -1915,14 +2035,14 @@ export class HeliosEngine
                 }
                 else if (altitude < 0)
                 {
-                    //Civil twilight — deep blue
+                    //Civil twilight, deep blue
                     const u = (altitude + 6) / 6;
                     nsColor   = '#0a1240';
                     nsOpacity = this._lerp(0.50, 0.30, u);
                 }
                 else if (altitude < 6)
                 {
-                    //Sunrise/sunset — warm amber wash, light opacity so the
+                    //Sunrise/sunset, warm amber wash, light opacity so the
                     //satellite imagery still reads but the time-of-day cue
                     //is unambiguous.
                     const u = altitude / 6;
@@ -1931,14 +2051,14 @@ export class HeliosEngine
                 }
                 else if (altitude < 20)
                 {
-                    //Low sun — fading wash
+                    //Low sun, fading wash
                     const u = (altitude - 6) / 14;
                     nsColor   = '#3a1408';
                     nsOpacity = this._lerp(0.10, 0.0, u);
                 }
                 else
                 {
-                    //Full daylight — overlay invisible
+                    //Full daylight, overlay invisible
                     nsColor   = '#000000';
                     nsOpacity = 0;
                 }
@@ -1949,7 +2069,7 @@ export class HeliosEngine
             catch (_) {}
         }
 
-        //Buildings — modulate their colour by sun altitude so they
+        //Buildings, modulate their colour by sun altitude so they
         //participate in the time-of-day mood. We blend the configured
         //daylight reference towards a cool dark ink at night and
         //towards a warm tint around sunrise/sunset.
@@ -1960,12 +2080,12 @@ export class HeliosEngine
             let buildingHex: string;
             if (altitude < -6)
             {
-                //Deep night — buildings as dark indigo silhouettes
+                //Deep night, buildings as dark indigo silhouettes
                 buildingHex = this._mixHex(baseHex, '#0a0e1a', 0.85);
             }
             else if (altitude < 0)
             {
-                //Civil twilight — fade in/out of night
+                //Civil twilight, fade in/out of night
                 const u = (altitude + 6) / 6;
                 const dark = this._mixHex(baseHex, '#0a0e1a', 0.85);
                 const dusk = this._mixHex(baseHex, '#2a2540', 0.55);
@@ -1973,7 +2093,7 @@ export class HeliosEngine
             }
             else if (altitude < 6)
             {
-                //Sunrise/sunset — warm wash
+                //Sunrise/sunset, warm wash
                 const u = altitude / 6;
                 const dusk = this._mixHex(baseHex, '#2a2540', 0.55);
                 const warm = this._mixHex(baseHex, '#5a3220', 0.35);
@@ -1981,14 +2101,14 @@ export class HeliosEngine
             }
             else if (altitude < 20)
             {
-                //Low sun — fade warm tint back to base
+                //Low sun, fade warm tint back to base
                 const u = (altitude - 6) / 14;
                 const warm = this._mixHex(baseHex, '#5a3220', 0.35);
                 buildingHex = this._lerpHex(warm, baseHex, u);
             }
             else
             {
-                //Full daylight — exact user-defined colour
+                //Full daylight, exact user-defined colour
                 buildingHex = baseHex;
             }
 
@@ -2003,14 +2123,9 @@ export class HeliosEngine
         catch (_) {}
     }
 
-    //The 'standard' precision tier was retired: a single
-    //best-match model produced visibly noisier readings (low-cloud
-    //layer stuck at 100 % from altitude bugs, mostly), and the
-    //multi-model median fix sat one click away in the editor for
-    //users who often missed it. We now always run in the multi-
-    //model 'high' mode. The function is kept so the rest of the
-    //engine can stay precision-aware in case a future tier is
-    //added.
+    //Precision is fixed to 'high' (multi-model median). The function
+    //is kept so the rest of the engine stays precision-aware if a
+    //tier is added later.
     private _resolvedPrecision(): 'standard' | 'high'
     {
         return 'high';
@@ -2031,9 +2146,9 @@ export class HeliosEngine
 
         try
         {
-            //Single home-point fetch with elevation. The 49-point grid
-            //fetch was removed in v1.2 along with the radial cloud
-            //nappe — the home point is now the only source of truth.
+            //Single home-point fetch with elevation. The home point is
+            //the only weather source, surrounding context is rendered
+            //from the same hourly series.
             const precision = this._resolvedPrecision();
             this._homeHourlyData = await fetchHomePointData(
                 fLat, fLon, this.homeElevation, precision, signal
@@ -2098,13 +2213,11 @@ export class HeliosEngine
         }
     }
 
-    //"Reset view" — re-anchor the camera on the home and restore the
-    //default pitch/bearing. With v1.2's fully locked camera the user
-    //can't drift it away through interaction, so this is now an
-    //animation-only entry point: it serves as the resting target for
-    //future scripted camera motions (intro orbit, narrative tilt,
-    //sun-vs-shadow comparison flyovers...) and as a one-tap reset if
-    //any of those animations leaves the camera in an unexpected pose.
+    //"Reset view", re-anchor the camera on the home and restore the
+    //default pitch/bearing. The interactive camera is locked, so this
+    //is an animation-only entry point: resting target for scripted
+    //motions (intro orbit, narrative tilt, sun-vs-shadow flyovers...)
+    //and one-tap reset if any of those leaves the camera off-pose.
     public recenter(): void
     {
         if (!this.map)
@@ -2122,7 +2235,7 @@ export class HeliosEngine
             zoom:     18,
             pitch:    55,
             //Same hemisphere-aware bearing as the initial setup
-            //above — recentering must restore the resting pose,
+            //above, recentering must restore the resting pose,
             //not flip the orientation.
             bearing:  this.homeLat >= 0 ? 180 : 0,
             duration: dur
@@ -2132,40 +2245,46 @@ export class HeliosEngine
     //Compute the screen-space layout of the on-map readout chips and
     //the leader lines that tie them to the home / on-ground ring.
     //
-    //  cloudLabel — where the cloud-cover chip should be drawn (in
+    //  cloudLabel, where the cloud-cover chip should be drawn (in
     //               CSS pixels, relative to the map canvas). Sits to
     //               the screen-LEFT of the cloud disc, just outside
     //               the 100 % reference ring.
-    //  pvLabel    — where the optional PV production chip should be
+    //  pvLabel   , where the optional PV production chip should be
     //               drawn. Sits just below the home so the chip is
     //               read as the home's "production" badge. The SoC
     //               and Power chips sit on a shared shelf above it,
     //               so the cluster has the PV chip at the bottom,
     //               the home in the middle of the L-leaders, and
     //               the battery chips at the top.
-    //  batterySocLabel   — battery State-of-Charge chip (icon + %).
+    //  batterySocLabel  , battery State-of-Charge chip (icon + %).
     //               Sits on the shelf, to the LEFT of the home's
     //               vertical axis, connected to PV by an L polyline
     //               (PV top-left → up → left → SoC right edge).
     //               Static (no flow direction to encode).
-    //  batteryPowerLabel — battery Power chip (icon + signed W/kW).
+    //  batteryPowerLabel, battery Power chip (icon + signed W/kW).
     //               Sits on the shelf, to the RIGHT of the home's
     //               vertical axis, connected to PV by an L polyline
     //               (PV top-right → up → right → Power left edge).
     //               Animated dashes + arrow tracking the sign of
     //               the live power.
-    //  home       — the projected home point, used both as the visual
-    //               centre of the cloud disc (the cloud leader ends
-    //               here) and as the anchor for the PV / battery
-    //               chip leader lines.
+    //  ringEdge  , projected position of the cloud disc's 100 %
+    //               reference ring edge, in the hemisphere-aware
+    //               anchor direction (east of home in NH, west in
+    //               SH). The card uses (home, ringEdge) plus the
+    //               live cloud-cover percentage to interpolate the
+    //               actual fill-disc edge along the same direction.
+    //  home      , the projected home point, used as the anchor for
+    //               the PV / battery chip leader lines and as the
+    //               centre of the cloud fill disc.
     //
-    //Returns null when the map isn't ready yet — the card treats
+    //Returns null when the map isn't ready yet, the card treats
     //null as "don't render the overlay this frame".
     public projectHomeLabelLayout(): {
         cloudLabel:        { x: number; y: number };
         pvLabel:           { x: number; y: number };
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
+        ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
     } | null
     {
@@ -2229,6 +2348,7 @@ export class HeliosEngine
             pvLabel:           { x: pvX,                            y: pvY         },
             batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
             batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
+            ringEdge:          { x: ringEdgeX,                      y: ringEdgeY   },
             home:              { x: home.x,                         y: home.y      }
         };
     }
@@ -2237,14 +2357,14 @@ export class HeliosEngine
     //screen-space pixels using MapLibre's current camera matrices.
     //
     //Procedure (per the MapLibre v5 official 3D-model example):
-    //  1. modelMatrix = transform.getMatrixForModel(LngLat, alt) —
+    //  1. modelMatrix = transform.getMatrixForModel(LngLat, alt) ,
     //     translates / rotates a model from its local frame into
     //     Mercator world coordinates at the requested location and
     //     altitude.
     //  2. projMatrix = transform.getProjectionDataForCustomLayer()
-    //     .mainMatrix — Mercator world to gl clip space.
+    //     .mainMatrix, Mercator world to gl clip space.
     //  3. Multiply both matrices to get the full MVP.
-    //  4. Apply MVP to (0, 0, 0, 1) — the local-frame origin, which
+    //  4. Apply MVP to (0, 0, 0, 1), the local-frame origin, which
     //     becomes our 3D point after step 1.
     //  5. Perspective-divide by w to get clip-space coordinates in
     //     [-1, +1].
@@ -2257,8 +2377,8 @@ export class HeliosEngine
     //Returns x/y in CSS pixels relative to the map canvas, plus depth
     //(the post-projection w component, which is monotonic in distance
     //from the camera). Callers can use depth to scale visual elements
-    //based on how far they are from the viewer — bigger when close,
-    //smaller when far — to give the otherwise flat top-down-ish view
+    //based on how far they are from the viewer, bigger when close,
+    //smaller when far, to give the otherwise flat top-down-ish view
     //a sense of perspective beyond what pitch alone provides.
     private _projectScenePoint(
         lon: number, lat: number, altitudeM: number
@@ -2315,7 +2435,7 @@ export class HeliosEngine
             }
         }
 
-        //Apply mvp to the origin (0, 0, 0, 1) — i.e. extract the
+        //Apply mvp to the origin (0, 0, 0, 1), i.e. extract the
         //last column, which IS the projection of the origin.
         const cx = mvp[12];
         const cy = mvp[13];
@@ -2339,7 +2459,7 @@ export class HeliosEngine
 
         const canvas: HTMLCanvasElement = (this.map as any).getCanvas();
         //Convert canvas pixel size (which is devicePixelRatio'd) to
-        //CSS pixels — the units the card overlay uses to position
+        //CSS pixels, the units the card overlay uses to position
         //its DOM elements. canvas.clientWidth is the CSS size.
         const W = canvas.clientWidth  || canvas.width;
         const H = canvas.clientHeight || canvas.height;
@@ -2361,13 +2481,13 @@ export class HeliosEngine
     //
     //Each arc point also carries the irradiance (W/m²) at that
     //instant, computed with the current cloud cover applied
-    //uniformly across the day — that's a simplification (real cloud
+    //uniformly across the day, that's a simplification (real cloud
     //cover varies hour-to-hour) but keeps the visualisation reactive
     //to the live weather without needing the per-hour forecast for
     //the arc itself. The sun position carries the same.
     //
     //Each arc point and the sun also carry a `nearness` value in
-    //[0..1] — 1 means closest to the camera (nearest depth in the
+    //[0..1], 1 means closest to the camera (nearest depth in the
     //batch), 0 means furthest. The card uses this to scale segment
     //thickness and the sun disc radius so the trajectory reads with
     //a real sense of perspective rather than as a flat ribbon.
@@ -2386,7 +2506,7 @@ export class HeliosEngine
             return null;
         }
 
-        //Ground-level home projection — the SVG anchor for the
+        //Ground-level home projection, the SVG anchor for the
         //incidence ray and a reference for any future ground shadow.
         const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
         if (!homeScreen)
@@ -2406,7 +2526,7 @@ export class HeliosEngine
 
         //Use the live cloud cover for irradiance colouring along
         //the whole arc. If we have no live reading yet, treat as
-        //clear (0%) — the arc still gets coloured at its proper
+        //clear (0%), the arc still gets coloured at its proper
         //clear-sky intensity so the user sees something meaningful
         //before the first weather fetch lands.
         const liveCloud = this._homeHourlyData
@@ -2439,7 +2559,7 @@ export class HeliosEngine
                 continue;
             }
             const wm2 = computeIrradianceWm2(t, this.homeLat, this.homeLon, liveCloud);
-            //altitudeM in _sunSpherePoint is R·sin(α) — same sign as α,
+            //altitudeM in _sunSpherePoint is R·sin(α), same sign as α,
             //so a negative altitudeM means the sun is below the horizon
             //at this sample. We surface that as a flag rather than the
             //raw value because the card only needs to switch render
@@ -2452,7 +2572,7 @@ export class HeliosEngine
             });
         }
 
-        //Sun at "now" — same spherical projection as the arc points.
+        //Sun at "now", same spherical projection as the arc points.
         const sunNow3D = this._sunSpherePoint(now);
         const sunNowAlt = getSunPosition(now, this.homeLat, this.homeLon).altitude;
         const sunNowWm2 = computeIrradianceWm2(now, this.homeLat, this.homeLon, liveCloud);
@@ -2466,7 +2586,7 @@ export class HeliosEngine
         {
             //Even at night we want a defined sun position so the
             //incidence ray has somewhere to anchor (offscreen below
-            //the home is fine — the ray just won't be drawn). Fall
+            //the home is fine, the ray just won't be drawn). Fall
             //back to the home location so downstream maths stays
             //finite. Depth is borrowed from home so the sun's
             //nearness factor degrades gracefully (it's not visible
@@ -2500,7 +2620,7 @@ export class HeliosEngine
             belowHorizon: p.belowHorizon
         }));
 
-        //daylight factor — a smooth 0..1 ramp keyed on solar
+        //daylight factor, a smooth 0..1 ramp keyed on solar
         //altitude. Below -6° (astronomical horizon) it bottoms out
         //at SUN_ARC_NIGHT_OPACITY; above +6° it's full intensity;
         //the band in between blends smoothly so dawn/dusk doesn't
@@ -2569,7 +2689,7 @@ export class HeliosEngine
         if (time === null)
         {
             this._clearWeatherTimer();
-            //Same 10-min cadence as the post-fetch interval above —
+            //Same 10-min cadence as the post-fetch interval above ,
             //returning to live mode resumes the standard refresh
             //rhythm rather than re-anchoring on the original
             //hourly pace.
@@ -2648,11 +2768,12 @@ export class HeliosEngine
         bumpStat('updateConfigCalls');
         const prevStyleId  = this._resolveMapStyle().id;
         const prevMinimal  = this._isMinimalStyle();
-        const prevPerfMode = this._performanceMode();
-        const prevRadius   = this._buildingRadiusMeters();
-        const prevCluster  = this._buildingClusterRadiusMeters();
-        const prevOpacity  = this._buildingOpacity();
-        const prevColor    = this._buildingColor();
+        const prevPerfMode    = this._performanceMode();
+        const prevTerrainMax  = this._terrainMaxzoom();
+        const prevRadius      = this._buildingRadiusMeters();
+        const prevCluster     = this._buildingClusterRadiusMeters();
+        const prevOpacity     = this._buildingOpacity();
+        const prevColor       = this._buildingColor();
         this.cfg = { ...cfg };
 
         if (!this.map)
@@ -2660,16 +2781,19 @@ export class HeliosEngine
             return;
         }
 
-        //Map-style or minimal-pruning toggle changed → reload the
-        //basemap. setStyle() replaces sources, layers, sprites and
-        //glyphs; our custom sources get wiped and re-added by the
-        //_onStyleLoad handler. Drop _mapReady while the new style
-        //is in flight so other code paths don't operate on a
-        //half-loaded style.
+        //Map-style, minimal-pruning toggle or terrain-detail change
+        //→ reload the basemap. setStyle() replaces sources, layers,
+        //sprites and glyphs; our custom sources (terrain included)
+        //get wiped and re-added by the _onStyleLoad handler with
+        //the current config values. Drop _mapReady while the new
+        //style is in flight so other code paths don't operate on
+        //a half-loaded style.
         const nextStyleInfo = this._resolveMapStyle();
+        const nextTerrainMax = this._terrainMaxzoom();
         const styleNeedsReload =
-               nextStyleInfo.id !== prevStyleId
-            || this._isMinimalStyle() !== prevMinimal;
+               nextStyleInfo.id   !== prevStyleId
+            || this._isMinimalStyle() !== prevMinimal
+            || nextTerrainMax     !== prevTerrainMax;
         if (styleNeedsReload)
         {
             bumpStat('styleReloads');
@@ -2706,7 +2830,7 @@ export class HeliosEngine
             }
         }
 
-        //Hillshade paint update — only when the layer still exists
+        //Hillshade paint update, only when the layer still exists
         //(performance-mode removes it).
         if (this.map.getLayer('helios-hillshade'))
         {
@@ -2765,12 +2889,12 @@ export class HeliosEngine
     //OPPOSITE direction to the sun's apparent motion (decreasing
     //bearing in NH, where the sun goes east → south → west, i.e.
     //clockwise from above) so the camera and the live sun visually
-    //counter-orbit each other — a quiet but constant motion that
+    //counter-orbit each other, a quiet but constant motion that
     //makes the card feel alive even with no user input. The
     //rotation pauses for `AUTO_ROTATE_INACTIVITY_MS` after every
     //user gesture (mouse down / wheel / touch) so the user has
     //full control during a manipulation, then resumes from
-    //wherever the user left the camera — no recalibration to a
+    //wherever the user left the camera, no recalibration to a
     //fixed bearing.
     //
     //We tween in seconds (delta-time integrated against the frame
@@ -2810,7 +2934,7 @@ export class HeliosEngine
                 //Negative delta: bearing decreases, camera rotates
                 //counter-clockwise around the up axis as seen
                 //from above, map content drifts clockwise on
-                //screen — opposite of the sun's apparent motion.
+                //screen, opposite of the sun's apparent motion.
                 const next = this.map.getBearing()
                     - HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
                 this.map.setBearing(next);
@@ -2840,7 +2964,7 @@ export class HeliosEngine
         //Tear-down strategy: explicit + defensive + force-lose.
         //
         //We can't trust MapLibre's map.remove() alone to release
-        //every listener / source / WebGL resource — on iOS Safari
+        //every listener / source / WebGL resource, on iOS Safari
         //in particular, a dirty remove() leaves closures pinning
         //the dead engine, GeoJSON sources lingering in the GPU,
         //and the WebGL context slot occupied (browsers cap at
@@ -2857,14 +2981,22 @@ export class HeliosEngine
 
         const canvas = this._bumpInactivityCanvas;
 
-        //Step 1 — DOM listeners on the canvas (inactivity bumper +
-        //WebGL context lost/restored).
+        //Step 1, DOM listeners on the canvas (inactivity bumper,
+        //single-pointer drag-rotate, WebGL context lost/restored).
         if (canvas && this._bumpInactivityHandler)
         {
             canvas.removeEventListener('mousedown',  this._bumpInactivityHandler);
             canvas.removeEventListener('wheel',      this._bumpInactivityHandler);
             canvas.removeEventListener('touchstart', this._bumpInactivityHandler);
             canvas.removeEventListener('touchmove',  this._bumpInactivityHandler);
+        }
+        if (this._dragRotateHandlers)
+        {
+            const h = this._dragRotateHandlers;
+            h.canvas.removeEventListener('pointerdown',   h.onDown);
+            h.canvas.removeEventListener('pointermove',   h.onMove);
+            h.canvas.removeEventListener('pointerup',     h.onEnd);
+            h.canvas.removeEventListener('pointercancel', h.onEnd);
         }
         if (canvas && this._webglLostHandler)
         {
@@ -2875,7 +3007,7 @@ export class HeliosEngine
             canvas.removeEventListener('webglcontextrestored', this._webglRestoredHandler);
         }
 
-        //Grab the WebGL context BEFORE map.remove() destroys it —
+        //Grab the WebGL context BEFORE map.remove() destroys it ,
         //we'll force-lose it at the end of cleanup to release the slot.
         let gl: WebGLRenderingContext | WebGL2RenderingContext | null = null;
         try
@@ -2886,7 +3018,7 @@ export class HeliosEngine
         }
         catch (_) {}
 
-        //Step 2 — every map.on() listener we hold an explicit
+        //Step 2, every map.on() listener we hold an explicit
         //reference for. map.remove() should clean these up but
         //doing it ourselves means any leftover closure that
         //captures `this` is severed BEFORE the engine is dropped.
@@ -2907,7 +3039,7 @@ export class HeliosEngine
             catch (_) {}
         }
 
-        //Step 3 — explicit removal of every helios-* layer and
+        //Step 3, explicit removal of every helios-* layer and
         //source so MapLibre doesn't have to walk them itself.
         //removeLayer must precede removeSource (MapLibre rejects
         //removing a source still backing live layers).
@@ -2920,7 +3052,9 @@ export class HeliosEngine
                 'helios-cloud-disc-ring',
                 'helios-cloud-ring',
                 'helios-buildings-surroundings',
-                'helios-buildings-home'
+                'helios-buildings-home',
+                'helios-buildings-surroundings-outline',
+                'helios-buildings-home-outline'
             ])
             {
                 try { if (this.map.getLayer(lid)) this.map.removeLayer(lid); }
@@ -2941,7 +3075,7 @@ export class HeliosEngine
             catch (_) {}
         }
 
-        //Step 4 — drop heavy instance state BEFORE map.remove() so
+        //Step 4, drop heavy instance state BEFORE map.remove() so
         //the dead engine, once unreachable, holds nothing but
         //handles that have already been released.
         this._buildingsData     = null;
@@ -2949,6 +3083,7 @@ export class HeliosEngine
         this._homeHourlyData    = null;
         this._bumpInactivityCanvas  = undefined;
         this._bumpInactivityHandler = undefined;
+        this._dragRotateHandlers    = undefined;
         this._mapPinHandler         = undefined;
         this._mapStyleLoadHandler   = undefined;
         this._mapLoadHandler        = undefined;
@@ -2958,12 +3093,12 @@ export class HeliosEngine
         this._webglRestoredHandler  = undefined;
         this.onContextLost          = undefined;
 
-        //Step 5 — MapLibre teardown.
+        //Step 5, MapLibre teardown.
         this.map?.remove();
         this.map       = undefined;
         this._mapReady = false;
 
-        //Step 6 — force the WebGL context slot to release. Browsers
+        //Step 6, force the WebGL context slot to release. Browsers
         //don't always reclaim it from canvas GC alone, and the cap
         //(8-16 active contexts) is the dominant cause of perf drift
         //+ random page refresh + iOS Safari black screen after
@@ -2971,7 +3106,7 @@ export class HeliosEngine
         try { gl?.getExtension('WEBGL_lose_context')?.loseContext(); }
         catch (_) {}
 
-        //Step 7 — clear the debug global so it doesn't pin the dead map.
+        //Step 7, clear the debug global so it doesn't pin the dead map.
         try
         {
             const w = window as unknown as { __heliosMap?: unknown };

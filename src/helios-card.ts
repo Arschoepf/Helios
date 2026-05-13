@@ -9,6 +9,7 @@ import
     DEFAULT_PV_COLOR_HEX,
     DEFAULT_BATTERY_COLOR_HEX
 } from './helios-engine';
+import { computePvPower } from './helios-sun';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './helios-card-css';
 //Side-effect import: registers <helios-color-picker> and
@@ -33,7 +34,7 @@ declare global
     }
 }
 
-//Card name and description in the HA card picker — shown before any
+//Card name and description in the HA card picker, shown before any
 //hass instance is available, so we read the language from navigator.
 const _bootI18n = pickTranslations(typeof navigator !== 'undefined' ? navigator.language : 'en');
 
@@ -58,43 +59,27 @@ if (!window.customCards.some(c => c.type === 'helios-card'))
 @customElement('helios-card')
 export class HeliosCard extends LitElement
 {
-    //Visual depth-modulation bounds for the solar overlay. Each pair
-    //is the FAR end (when the element is at the back of the day's
-    //loop, furthest from the camera) and the NEAR end (when it's at
-    //the front). Per-element values are linearly interpolated between
-    //the two using the engine's nearness factor in [0..1].
-    //
-    //The arc spans 24 h, so its near and far ends differ by a
-    //meaningful depth delta even with the camera fully locked. The
-    //sun rides the arc, so its disc breathes between SUN_R_FAR (just
-    //past the horizon) and SUN_R_NEAR (around the noon apex).
+    //Depth-modulation bounds for the solar overlay. Each pair is the
+    //FAR end (back of the day's loop) and the NEAR end (front), with
+    //per-element values linearly interpolated using the engine's
+    //nearness factor in [0..1].
     private static readonly OUTLINE_FAR  = 1.5;
     private static readonly OUTLINE_NEAR = 5.0;
     private static readonly SEGMENT_FAR  = 1.0;
     private static readonly SEGMENT_NEAR = 4.0;
-    //Sun disc enlarged so the irradiance fill is readable
-    //without zooming in. The old radii (6 → 13 px) made the inner
-    //fill smaller than ~9 px in diameter at apex, which is the
-    //legibility floor for an annulus. The new range (10 → 20 px)
-    //gives the fill 8 px of breathing room inside the outer rim
-    //even at the back of the day's loop.
+    //Sun-disc radii in px. The inner irradiance fill needs ~9 px of
+    //diameter at apex to read as an annulus rather than a dot.
     private static readonly SUN_R_FAR    = 10.0;
     private static readonly SUN_R_NEAR   = 20.0;
-    //Outer rim stroke width. Small enough to read as an outline,
-    //wide enough to remain visible against the basemap without a
-    //dark drop shadow.
     private static readonly SUN_RIM_WIDTH = 1.5;
-    //Background fill opacity inside the rim. Low enough that the
-    //"empty sun" at sunrise/sunset reads as faintly tinted glass
-    //rather than a coloured spot, but high enough that the disc
-    //is unmistakably present even at low altitudes.
+    //Faint tint inside the rim so the "empty sun" at sunrise/sunset
+    //still reads as a disc, not a coloured spot.
     private static readonly SUN_FILL_OPACITY_BG = 0.20;
 
-    //Below-horizon segments are rendered as dots whose diameter
-    //IS the segment's stroke-width. We scale that down vs the
-    //daytime stroke so the night portion of the loop reads as
-    //a quieter, more discreet trace — its job is to indicate
-    //where the sun goes, not to compete with the lit half.
+    //Below-horizon segments are dots whose diameter IS the stroke
+    //width. Scaled down vs daytime so the night portion of the loop
+    //reads as a quieter trace, it indicates where the sun goes
+    //without competing with the lit half.
     private static readonly NIGHT_STROKE_FACTOR = 0.5;
 
     @property({ attribute: false }) public hass!: any;
@@ -102,10 +87,7 @@ export class HeliosCard extends LitElement
 
     @state() private _engine?:        HeliosEngine;
     @state() private _now             = new Date();
-    //Cloud-cover values shown in the on-ground disc tooltip. Recreated
-    //after the v1.2 cleanup removed them — now they feed the
-    //hover popup that appears above the disc rather than the (also
-    //removed) sidebar pills.
+    //Cloud-cover values shown in the on-ground disc hover popup.
     @state() private _cloudCover      = -1;
     @state() private _cloudLow        = -1;
     @state() private _cloudMid        = -1;
@@ -121,22 +103,20 @@ export class HeliosCard extends LitElement
     //the default right offset, so it can't overflow past the
     //card edge.
     @state() private _cloudHoverFlip  = false;
-    //Screen-space layout of the always-visible cloud-cover percentage
-    //label and its leader line, recomputed via engine.projectHome-
-    //LabelLayout() whenever the map transform changes (engine fires
-    //onMapTransform). null = layout not yet available (map still
-    //loading) — the overlay is hidden in that case.
+    //Screen-space layout of the always-visible labels and leader lines,
+    //recomputed via engine.projectHomeLabelLayout() on every map
+    //transform. null while the map is still loading.
     @state() private _labelLayout:    {
         cloudLabel:        { x: number; y: number };
         pvLabel:           { x: number; y: number };
         batterySocLabel:   { x: number; y: number };
         batteryPowerLabel: { x: number; y: number };
+        ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
     } | null = null;
-    //Photovoltaic production state — populated when the user has set
-    //a `pv-power-entity` config key. _pvCurrent holds the live value
-    //read from hass.states; _pvHistory holds the time series fetched
-    //from HA's history API for plotting on the dedicated graph.
+    //Photovoltaic production state, populated when `pv-power-entity`
+    //is configured. Live value from hass.states + historical series
+    //from HA's history API for the dedicated chart.
     @state() private _pvCurrent: number | null = null;
     @state() private _pvUnit:    string        = '';
     @state() private _pvHistory: {
@@ -145,26 +125,21 @@ export class HeliosCard extends LitElement
     } | null = null;
     private _pvFetchKey  = '';
     private _pvFetching  = false;
-    //Rolling buffer of state samples — populated each time hass
-    //emits a fresh state for the configured PV entity. Used to
-    //compute a "last minute" instantaneous rate for cumulative
-    //energy sensors, much fresher than the historical fetch which
-    //only refreshes when the timeline range changes.
+    //Rolling buffer of state samples. For cumulative-energy sensors
+    //this gives a "last minute" instantaneous rate, fresher than the
+    //historical fetch which only refreshes per timeline range.
     private _pvSampleBuffer: Array<{ t: number; v: number }> = [];
-    //Home-battery state — populated when the user has set at least
-    //one of `battery-soc-entity` / `battery-power-entity`. The two
-    //readings (live and historical) are kept on separate fields so
-    //the chip can render either depending on the timeline mode (live
-    //or scrub). Units are kept alongside the values so the chip can
+    //Home-battery state, populated when at least one of
+    //`battery-soc-entity` / `battery-power-entity` is configured.
+    //Live readings; historical series lives in the *History fields
+    //below. Units are kept alongside the values so the chip can
     //format kW vs W without re-reading the state.
     @state() private _batterySoc:        number | null = null;
     @state() private _batteryPower:      number | null = null;
     @state() private _batteryPowerUnit:  string        = '';
-    //Historical series for the active timeline range. Same shape as
-    //_pvHistory, fetched via a single `history/history_during_period`
-    //WS call that batches both battery entities (when both are set).
-    //Cleared when the configured entity changes or when the time
-    //range changes; null = not yet fetched / no entity configured.
+    //Historical series for the active timeline range. Both battery
+    //entities are fetched in a single `history/history_during_period`
+    //WebSocket call when both are set.
     @state() private _batterySocHistory: {
         times:  Date[];
         values: number[];
@@ -177,10 +152,8 @@ export class HeliosCard extends LitElement
     private _batteryFetching  = false;
     //Screen-space layout of the solar arc, sun, and incidence ray.
     //Recomputed via engine.projectSunScene() on every map transform
-    //(camera animation) and every clock tick (the sun position
-    //moves with time, so we refresh at the same 1 Hz cadence as
-    //the date/time display in live mode). null = engine not ready
-    //yet, the overlay is hidden.
+    //and every clock tick (sun position moves with time, refreshed
+    //at 1 Hz in live mode).
     @state() private _sunScene: {
         arc:      Array<{
             x: number; y: number;
@@ -207,54 +180,39 @@ export class HeliosCard extends LitElement
     private _initInflight      = false;
 
     //Visual config keys that the engine reacts to via updateConfig().
-    //Anything outside this list (notably maptiler-api-key, which is an
-    //identity input handled separately) is irrelevant for live updates.
-    //Significantly trimmed: most visual styling is now hard-
-    //coded to keep the new design coherent (uniform building colour
-    //and opacity, no radial dot grid).
+    //Anything outside this list (notably maptiler-api-key, which is
+    //an identity input) is irrelevant for live updates.
     private static readonly _VISUAL_CONFIG_KEYS = [
         'topography-color',
         'topography-alpha',
         'show-labels',
         'sun-color',
         'cloud-color',
-        //pv-color is purely a card-level visual (the chart fill /
-        //stroke) but we still include it so the config sig changes
-        //and Lit re-renders the chart. pv-power-entity is included
-        //too so changing it triggers a fresh history fetch.
+        //pv-color is card-level; included so the sig changes and Lit
+        //re-renders the chart. pv-power-entity triggers a fresh fetch.
         'pv-color',
         'pv-power-entity',
-        //map-style triggers a MapLibre setStyle() inside updateConfig,
-        //so the engine reloads the basemap (terrain, hillshade, cloud
-        //disc, buildings and label visibility are all re-applied via
-        //the resulting `style.load`).
+        //map-style triggers a MapLibre setStyle(), the engine reloads
+        //terrain, hillshade, cloud disc, buildings and labels on the
+        //resulting `style.load`.
         'map-style',
-        //Battery overlay — soc and power entities feed the live chip
-        //below the home; battery-color tints the chip border, text
-        //and animated leader. Including them in the visual sig means
-        //changing the entity in the editor triggers a re-render that
-        //picks up the new readings on the next hass property update.
         'battery-soc-entity',
         'battery-power-entity',
         'battery-color',
-        //card-theme is purely a card-level visual (it switches the
-        //ha-card's class to flip CSS variables / chip colours
-        //between the light and dark skins), but it must be in the
-        //sig so Lit re-renders the card when the user toggles it
-        //in the editor.
+        //card-theme is card-level (light/dark skin) but must be in the
+        //sig so Lit re-renders when the user toggles it.
         'card-theme',
-        //building-* drive the helios-buildings-* custom layers.
-        //  radius / cluster-radius → invalidate cache and refetch
-        //  opacity / color → cheap paint-property updates
+        //building-radius / cluster-radius invalidate cache and refetch;
+        //opacity / color are cheap paint-property updates.
         'building-radius',
         'building-cluster-radius',
         'building-opacity',
         'building-color',
-        //performance-mode toggles terrain, hillshade and pixelRatio.
-        'performance-mode'
+        'performance-mode',
+        'terrain-detail'
     ] as const;
 
-    //Cheap stable signature of the visual config — used to skip
+    //Cheap stable signature of the visual config, used to skip
     //updateConfig() when nothing the engine cares about has changed.
     private _computeConfigSig(): string
     {
@@ -289,8 +247,7 @@ export class HeliosCard extends LitElement
         return { 'maptiler-api-key': '' };
     }
 
-    //Sizing for masonry view (legacy). 1 unit = 50 px so 12 ≈ 600 px,
-    //matching the historical default height of the card.
+    //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
     public getCardSize(): number
     {
         return 12;
@@ -331,6 +288,51 @@ export class HeliosCard extends LitElement
         this._tick();
         this._timer = window.setInterval(() => this._tick(), 1000);
         this._initVisibilityObserver();
+        //Detect early whether we're rendered inside HA's dashboard
+        //editor preview. The editor instantiates a fresh helios-card
+        //on every config change and each engine takes a WebGL
+        //context, Safari mobile caps at ~8 and starts recycling
+        //past that, which is the root cause of the FPS drift and
+        //iOS black-screen lockup. We skip the engine entirely for
+        //preview cards (the dashboard card on the actual page keeps
+        //its full rendering).
+        this._isInEditorPreview = this._detectEditorPreview();
+    }
+
+    //Cached at connectedCallback time; does not change for the
+    //lifetime of the card instance.
+    private _isInEditorPreview = false;
+
+    private _detectEditorPreview(): boolean
+    {
+        //Tag list collected from inspecting HA's dashboard editor
+        //DOM: the modal dialog wrapping each preview, the element
+        //editor, plus a couple of generic fallbacks. We walk every
+        //ancestor (including across shadow-root boundaries via
+        //node.host) until we hit one matching, or run out of hops.
+        const EDITOR_TAGS = new Set([
+            'hui-dialog-edit-card',
+            'hui-card-element-editor',
+            'hui-edit-card',
+            'hui-card-editor'
+        ]);
+        let node: Node | null = this;
+        let hops = 0;
+        while (node && hops++ < 40)
+        {
+            if (node instanceof ShadowRoot)
+            {
+                node = node.host;
+                continue;
+            }
+            if (node instanceof Element)
+            {
+                const tag = node.tagName?.toLowerCase();
+                if (tag && EDITOR_TAGS.has(tag)) return true;
+            }
+            node = (node as Node).parentNode;
+        }
+        return false;
     }
 
     public disconnectedCallback(): void
@@ -339,16 +341,33 @@ export class HeliosCard extends LitElement
         window.clearInterval(this._timer);
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
+        //If the card dies before the debounce fires, drop the pending
+        //init, short-lived editor preview cards never get an engine.
+        if (this._initDebounceTimer !== undefined)
+        {
+            window.clearTimeout(this._initDebounceTimer);
+            this._initDebounceTimer = undefined;
+            this._initInflight      = false;
+        }
+        //Flush any pending PV-calibration HA write synchronously
+        //(best-effort) so we don't lose the most recent samples to
+        //a stale timer that will never fire after disconnect.
+        if (this._pvCalibHAWriteTimer !== undefined)
+        {
+            window.clearTimeout(this._pvCalibHAWriteTimer);
+            this._pvCalibHAWriteTimer = undefined;
+            void this._flushPvCalibToHA();
+        }
         this._engine?.cleanup();
         this._engine = undefined;
     }
 
-    //IntersectionObserver — pause every CSS animation and every SVG
+    //IntersectionObserver, pause every CSS animation and every SVG
     //SMIL animation when the card scrolls out of the viewport. The
     //rotation loop (a requestAnimationFrame in the engine) is left
     //running because (a) the browser auto-throttles rAF on hidden
     //tabs and (b) the card looks alive when the user scrolls back.
-    //Only the SVG overlay animations are paused — they're the ones
+    //Only the SVG overlay animations are paused, they're the ones
     //that run continuously regardless of map state.
     private _visibilityObserver?: IntersectionObserver;
 
@@ -395,7 +414,7 @@ export class HeliosCard extends LitElement
 
     //Engine init policy: re-init only when one of the *identity inputs*
     //changes (API key, home coordinates, map style). We resize the
-    //existing engine when the container reflows — we never tear down
+    //existing engine when the container reflows, we never tear down
     //the MapLibre stack just because a sibling fragment re-rendered.
     //Doing so would trash the user's in-progress edits in the
     //dashboard editor.
@@ -413,6 +432,15 @@ export class HeliosCard extends LitElement
         if (lat === undefined || lon === undefined || !apiKey)
         {
             return;
+        }
+
+        //First time hass is available, reconcile the local PV
+        //calibration cache with HA's frontend/user_data storage so
+        //we pull in any samples accumulated on another device
+        //(or recover from a localStorage wipe).
+        if (!this._pvCalibHARead)
+        {
+            void this._reconcilePvCalibWithHA();
         }
 
         const homeKey  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
@@ -434,7 +462,7 @@ export class HeliosCard extends LitElement
             return;
         }
 
-        //Identity stable — only push config tweaks down if the visual
+        //Identity stable, only push config tweaks down if the visual
         //config has actually changed. Without this guard we'd call
         //updateConfig() on every Lit re-render (e.g. every second from
         //the clock tick, or every time a @state changes), which would
@@ -446,15 +474,7 @@ export class HeliosCard extends LitElement
             this._engine.updateConfig(this.config);
         }
 
-        //Photovoltaic production refresh — driven by changes in the
-        //configured entity, the time range, or the hass states. The
-        //refresh is cheap when nothing relevant changed (string-equal
-        //fetch key short-circuits the WebSocket roundtrip).
         this._refreshPv();
-
-        //Battery overlay refresh — pure live-state read, runs every
-        //cycle. Cheap (no WS round-trip, no fetch) so we don't bother
-        //gating on an entity-id signature like _refreshPv does.
         this._refreshBattery();
     }
 
@@ -469,7 +489,7 @@ export class HeliosCard extends LitElement
     //  - the entity's historical state changes over the active time
     //    range (fetched asynchronously via the history WebSocket
     //    command), plotted on the dedicated graph above the main
-    //    timeline. Only past + current data is fetched — the future
+    //    timeline. Only past + current data is fetched, the future
     //    half of the timeline range is intentionally left blank
     //    because production data simply doesn't exist yet.
 
@@ -492,7 +512,7 @@ export class HeliosCard extends LitElement
             return;
         }
 
-        //Live state read — always cheap, runs on every Lit cycle.
+        //Live state read, always cheap, runs on every Lit cycle.
         const stateObj = this.hass.states?.[entity];
         if (stateObj)
         {
@@ -545,7 +565,7 @@ export class HeliosCard extends LitElement
             }
         }
 
-        //History fetch — only when the (entity, range) tuple changes.
+        //History fetch, only when the (entity, range) tuple changes.
         //Without this guard we'd reissue the WebSocket command on
         //every Lit cycle (e.g. every clock tick) and the dashboard
         //would queue thousands of identical requests.
@@ -563,8 +583,8 @@ export class HeliosCard extends LitElement
         this._fetchPvHistory(entity, this._timeRange.start, this._timeRange.end);
     }
 
-    //Battery overlay — pulls live state from hass.states on every Lit
-    //cycle (no rolling buffer like PV — battery entities are typically
+    //Battery overlay, pulls live state from hass.states on every Lit
+    //cycle (no rolling buffer like PV, battery entities are typically
     //power sensors that already expose an instantaneous reading) and,
     //when at least one entity is configured AND the timeline range is
     //set, fetches a historical series so the chip can show what the
@@ -580,7 +600,7 @@ export class HeliosCard extends LitElement
         const socEntity   = String(this.config?.['battery-soc-entity']   ?? '').trim();
         const powerEntity = String(this.config?.['battery-power-entity'] ?? '').trim();
 
-        //SoC — clamp to [0, 100] because some BMS entities momentarily
+        //SoC, clamp to [0, 100] because some BMS entities momentarily
         //report 100.5 % during the absorption phase or briefly drop
         //negative around the calibration cycle, neither of which is
         //meaningful to the user.
@@ -599,7 +619,7 @@ export class HeliosCard extends LitElement
             this._batterySoc = nextSoc;
         }
 
-        //Power — keep the sign (positive = charging, negative =
+        //Power, keep the sign (positive = charging, negative =
         //discharging) verbatim from the entity. Unit is captured so
         //the chip renderer can format kW vs W; we don't normalise
         //here because the entity's own unit IS the source of truth
@@ -636,7 +656,7 @@ export class HeliosCard extends LitElement
             return;
         }
 
-        //History fetch — only when the (entities, range) tuple changed.
+        //History fetch, only when the (entities, range) tuple changed.
         //Without this guard we'd reissue the WS command on every Lit
         //cycle (e.g. every clock tick).
         if (!this._timeRange || this._batteryFetching)
@@ -657,7 +677,7 @@ export class HeliosCard extends LitElement
     //(when configured) are bundled into one `entity_ids` array so we
     //pay one WS roundtrip instead of two. Either side of the result
     //may end up empty (entity not yet existing, no state changes in
-    //range, etc.) and that's fine — the chip will show only the side
+    //range, etc.) and that's fine, the chip will show only the side
     //that did return data.
     private async _fetchBatteryHistory(
         socEntity: string, powerEntity: string, start: Date, end: Date
@@ -670,7 +690,7 @@ export class HeliosCard extends LitElement
         this._batteryFetching = true;
         try
         {
-            //History only exists up to "now" — the future half of the
+            //History only exists up to "now", the future half of the
             //timeline has no battery data. Clamp the fetch end so we
             //don't waste a roundtrip on empty future buckets.
             const now = new Date();
@@ -743,7 +763,7 @@ export class HeliosCard extends LitElement
             if (socEntity)
             {
                 const series = parseSeries(result?.[socEntity] ?? []);
-                //Clamp SoC samples to [0, 100] in the history too — same
+                //Clamp SoC samples to [0, 100] in the history too, same
                 //out-of-range tolerance as the live read.
                 series.values = series.values.map(v => Math.max(0, Math.min(100, v)));
                 this._batterySocHistory = series;
@@ -826,7 +846,7 @@ export class HeliosCard extends LitElement
         {
             return `${sign}${abs.toFixed(2)} kW`;
         }
-        //Unknown unit — pass through verbatim so the user still
+        //Unknown unit, pass through verbatim so the user still
         //sees the configured entity's value with its own unit.
         return `${sign}${abs}${unit ? ' ' + unit : ''}`;
     }
@@ -840,7 +860,7 @@ export class HeliosCard extends LitElement
         this._pvFetching = true;
         try
         {
-            //History only exists up to "now" — anything past that is
+            //History only exists up to "now", anything past that is
             //the forecast half of the timeline and has no production
             //data. Clamp the fetch end so we don't waste a roundtrip
             //asking HA for empty future buckets.
@@ -911,6 +931,10 @@ export class HeliosCard extends LitElement
             }
 
             this._pvHistory = { times, values };
+            //Refresh the calibration buffer with the new history slice.
+            //Safe to call when _homeHourlyData isn't ready yet, the
+            //helper bails out and tries again next time.
+            this._updatePvCalibration();
         }
         catch (e)
         {
@@ -926,10 +950,64 @@ export class HeliosCard extends LitElement
 
     //Engine setup
 
+    //Debounce window before an engine is actually constructed. The
+    //Home Assistant dashboard editor creates a fresh helios-card
+    //preview instance on every config edit, often spawning many
+    //short-lived instances per editing session. Each one would
+    //instantiate a MapLibre engine and claim a WebGL context;
+    //Safari mobile caps active contexts at ~8 and starts recycling
+    //past that, causing FPS drift and the iOS black-screen lockup.
+    //
+    //The fix: defer the actual engine construction by 500 ms.
+    //  - A card that's destroyed inside that window never spawns
+    //    an engine and never holds a WebGL context.
+    //  - A card that survives the window (the user's actual
+    //    dashboard card, or the stable editor preview the user is
+    //    looking at) gets its engine after a barely-perceptible
+    //    half-second delay.
+    private static readonly INIT_DEBOUNCE_MS = 500;
+    private _initDebounceTimer?: number;
+
     private _initEngine(): void
     {
+        //Hard skip: cards rendered inside HA's dashboard editor
+        //preview never spawn an engine, each one would claim a
+        //WebGL context Safari mobile can't release fast enough.
+        //The live dashboard card keeps its full rendering.
+        if (this._isInEditorPreview)
+        {
+            //Bump a counter so we can see in __heliosStats how many
+            //preview cards the detection actually caught.
+            try
+            {
+                const w = window as unknown as { __heliosStats?: { enginesSkippedAsPreview?: number } };
+                if (w.__heliosStats)
+                {
+                    w.__heliosStats.enginesSkippedAsPreview =
+                        (w.__heliosStats.enginesSkippedAsPreview ?? 0) + 1;
+                }
+            }
+            catch (_) {}
+            return;
+        }
         this._initInflight = true;
 
+        //Cancel any pending debounce, a fresh _initEngine() call
+        //means the identity / config has just changed and we want
+        //the timer to restart its 500 ms clock.
+        if (this._initDebounceTimer !== undefined)
+        {
+            window.clearTimeout(this._initDebounceTimer);
+        }
+        this._initDebounceTimer = window.setTimeout(() =>
+        {
+            this._initDebounceTimer = undefined;
+            this._initEngineNow();
+        }, HeliosCard.INIT_DEBOUNCE_MS);
+    }
+
+    private _initEngineNow(): void
+    {
         requestAnimationFrame(() =>
         {
             const container = this.shadowRoot?.getElementById('map-container') as HTMLElement | null;
@@ -989,8 +1067,11 @@ export class HeliosCard extends LitElement
                 //cadence as the gradients above, since both consume
                 //the engine's hourly data refresh.
                 this._chartSeries        = this._engine?.getTimelineSeries() ?? null;
+                //Fresh hourly cloud data, refresh the PV calibration
+                //fit so the prediction line follows the latest weather.
+                this._updatePvCalibration();
                 //First weather update is also our cue to ask the
-                //engine for the initial label layout — by this point
+                //engine for the initial label layout, by this point
                 //the map has loaded its style and the projection
                 //matrix is available. Subsequent transforms refresh
                 //via onMapTransform.
@@ -1013,7 +1094,7 @@ export class HeliosCard extends LitElement
             {
                 this._refreshOverlays();
             };
-            //WebGL context loss recovery — iOS Safari recycles
+            //WebGL context loss recovery, iOS Safari recycles
             //contexts under memory pressure. The engine emits this
             //hook from its webglcontextlost listener; we tear down
             //the dead engine and re-init from scratch on the next
@@ -1051,7 +1132,7 @@ export class HeliosCard extends LitElement
     //colour). Depth perception comes entirely from the per-segment
     //stroke width modulated by `nearness`, kept untouched: it is the
     //2D-on-3D cue we explicitly chose not to overload with another
-    //dimension. Irradiance is still kept on the segment shape — the
+    //dimension. Irradiance is still kept on the segment shape, the
     //caller doesn't use it any more, but removing it would broaden
     //the change surface unnecessarily; we just stop *colouring* with
     //it.
@@ -1232,7 +1313,7 @@ export class HeliosCard extends LitElement
         const W      = 1000;
         const H      = 100;
         //Midline sits exactly halfway. The two halves get H/2 = 50
-        //pixels of vertical resolution each — enough to read the
+        //pixels of vertical resolution each, enough to read the
         //shape of a typical day at a glance.
         const MID    = H / 2;
         const HALF   = H / 2;
@@ -1281,7 +1362,7 @@ export class HeliosCard extends LitElement
 
         //Day-boundary X positions in viewBox units (midnight of each
         //local day inside the time range). Drawn as faint dotted
-        //vertical lines spanning the full chart height — same role
+        //vertical lines spanning the full chart height, same role
         //as the day chips on the midline, just visual separators.
         const startMsAbs = range.start.getTime();
         const endMsAbs   = range.end.getTime();
@@ -1301,7 +1382,7 @@ export class HeliosCard extends LitElement
 
         //Hour-boundary X positions, used to draw small vertical
         //ticks centred on the midline (one per hour). Midnights are
-        //skipped — those already get a full-height day separator.
+        //skipped, those already get a full-height day separator.
         const hourXs: number[] = [];
         const hCursor = new Date(range.start);
         hCursor.setMinutes(0, 0, 0);
@@ -1371,7 +1452,7 @@ export class HeliosCard extends LitElement
     //the scrub cursor line up vertically across both blocks. The
     //curve is plotted from this._pvHistory (fetched via the HA
     //history WebSocket command); future data is intentionally left
-    //blank — the curve naturally stops at the last recorded sample
+    //blank, the curve naturally stops at the last recorded sample
     //since there's no production data after "now".
     private _renderPvChart(): TemplateResult
     {
@@ -1474,19 +1555,102 @@ export class HeliosCard extends LitElement
         const xOf = (t: Date): number =>
             ((t.getTime() - startMs) / rangeMs) * W;
 
+        //Predicted PV for hours from "now" forward, uses the live
+        //calibration scalar (W per percent of STC) learned from past
+        //samples. Skipped silently when there aren't enough samples
+        //yet to trust the fit (see _calibrateK / PV_CALIB_MIN_SAMPLES).
+        const k = this._pvCalibK;
+        const lat = this.hass?.config?.latitude;
+        const lon = this.hass?.config?.longitude;
+        const series = this._chartSeries;
+        const predictedSamples: Array<{ t: Date; v: number }> = [];
+        if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
+        {
+            const nowMs = Date.now();
+            for (let i = 0; i < series.times.length; i++)
+            {
+                const tMs = series.times[i].getTime();
+                if (tMs <  nowMs)   continue;             //future only
+                if (tMs <  startMs) continue;
+                if (tMs >  endMsAbs) continue;
+                const pct = computePvPower(series.times[i], lat, lon, series.cloud[i] ?? 0);
+                if (pct <= 0) continue;
+                predictedSamples.push({ t: series.times[i], v: pct * k });
+            }
+        }
+
+        //Per-day peak-production highlight columns.
+        //
+        //For every natural day touched by the timeline, find the
+        //hourly bucket with the highest production and render a
+        //thin vertical band at that hour in the PV colour at low
+        //opacity. Observed PV beats prediction when both exist
+        //(real measurement is more trustworthy than the
+        //extrapolated curve), so today's column tracks the actual
+        //peak as the day unfolds; future days fall back to
+        //predicted-only since no observation exists yet.
+        const HOUR_MS = 3_600_000;
+        const peakByHour = new Map<number, number>();
+        const observedHourly = this._aggregatePvWattsPerHour();
+        for (const [hourTs, watts] of observedHourly)
+        {
+            if (hourTs < startMs || hourTs >= endMsAbs) continue;
+            peakByHour.set(hourTs, watts);
+        }
+        if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
+        {
+            for (let i = 0; i < series.times.length; i++)
+            {
+                const tMs    = series.times[i].getTime();
+                const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+                if (hourTs < startMs || hourTs >= endMsAbs) continue;
+                if (peakByHour.has(hourTs))                 continue;
+                const pct = computePvPower(series.times[i], lat, lon, series.cloud[i] ?? 0);
+                if (pct <= 0) continue;
+                peakByHour.set(hourTs, pct * k);
+            }
+        }
+        const peakColumns: Array<{ x1: number; x2: number }> = [];
+        const dayWalker = new Date(range.start);
+        dayWalker.setHours(0, 0, 0, 0);
+        while (dayWalker.getTime() < endMsAbs)
+        {
+            const dayStart = dayWalker.getTime();
+            const dayEnd   = dayStart + 24 * HOUR_MS;
+            let peakHourTs = -1;
+            let peakWatts  = 0;
+            for (const [hourTs, watts] of peakByHour)
+            {
+                if (hourTs < dayStart || hourTs >= dayEnd) continue;
+                if (watts > peakWatts)
+                {
+                    peakHourTs = hourTs;
+                    peakWatts  = watts;
+                }
+            }
+            //Skip days with no meaningful production (~ all-dark or
+            //panels offline), a zero-height column would still be
+            //rendered but it's just visual noise.
+            if (peakHourTs >= 0 && peakWatts > 10)
+            {
+                const x1 = ((peakHourTs - startMs)            / rangeMs) * W;
+                const x2 = ((peakHourTs + HOUR_MS - startMs)  / rangeMs) * W;
+                peakColumns.push({ x1, x2 });
+            }
+            dayWalker.setDate(dayWalker.getDate() + 1);
+        }
+
         //Auto-scale: the Y axis maps 0 to the bottom edge and the
         //series' running max to the top edge. With a min of 1 we
         //avoid division-by-zero when the series is all-zero (early
         //morning, prolonged outage) and keep the curve visibly
         //pinned to the baseline rather than silently disappearing.
+        //Predicted samples also feed into yMax so the forecast line
+        //doesn't clip when expected production exceeds anything
+        //the user has produced lately.
         let yMax = 1;
-        for (const s of samples)
-        {
-            if (s.v > yMax)
-            {
-                yMax = s.v;
-            }
-        }
+        for (const s of samples)          { if (s.v > yMax) yMax = s.v; }
+        for (const s of predictedSamples) { if (s.v > yMax) yMax = s.v; }
         const yOf = (v: number): number =>
             H - Math.max(0, Math.min(1, v / yMax)) * H;
 
@@ -1503,12 +1667,28 @@ export class HeliosCard extends LitElement
             line = `M ${points.join(' L ')}`;
         }
 
+        let predictedLine = '';
+        if (predictedSamples.length >= 2)
+        {
+            const pPoints = predictedSamples.map(s =>
+                `${xOf(s.t).toFixed(2)},${yOf(s.v).toFixed(2)}`);
+            predictedLine = `M ${pPoints.join(' L ')}`;
+        }
+
         return html`
             <svg
                 class="hc-chart-svg"
                 viewBox="0 0 ${W} ${H}"
                 preserveAspectRatio="none"
             >
+                ${peakColumns.map(c => svg`
+                    <rect
+                        class="hc-pv-peak"
+                        x="${c.x1.toFixed(2)}" y="0"
+                        width="${(c.x2 - c.x1).toFixed(2)}" height="${H}"
+                        fill="${pvColor}"
+                    ></rect>
+                `)}
                 ${dayXs.map(x => svg`
                     <line
                         class="hc-day-sep"
@@ -1525,6 +1705,13 @@ export class HeliosCard extends LitElement
                     <path
                         class="hc-chart-line"
                         d="${line}"
+                        stroke="${pvColor}"
+                    ></path>
+                ` : nothing}
+                ${predictedLine ? svg`
+                    <path
+                        class="hc-chart-line hc-chart-predicted"
+                        d="${predictedLine}"
                         stroke="${pvColor}"
                     ></path>
                 ` : nothing}
@@ -1624,7 +1811,7 @@ export class HeliosCard extends LitElement
     {
         const dateLabel = formatDate(t, this.config?.['date-format']);
         const is12h = String(this.config?.['time-format'] ?? '24h').toLowerCase() === '12h';
-        //hourCycle is more authoritative than hour12 — some browser /
+        //hourCycle is more authoritative than hour12, some browser /
         //locale combinations silently ignore hour12: true and keep the
         //locale's preferred format (typically 24h for fr-FR), which
         //is the bug the user was hitting on the scrub chip.
@@ -1642,7 +1829,7 @@ export class HeliosCard extends LitElement
     //bracketing the requested instant; for a power entity we just
     //return the value of the closest historical sample. Returns
     //null when the requested time falls outside the fetched
-    //history window — the chip is then hidden by the caller, which
+    //history window, the chip is then hidden by the caller, which
     //is the right behaviour for the future half of the timeline
     //(no production data exists there yet).
     private _pvRateAtTime(time: Date): { value: number; unit: string } | null
@@ -1663,7 +1850,7 @@ export class HeliosCard extends LitElement
             return null;
         }
 
-        //Classification — same logic as _currentPvRate. Repeated
+        //Classification, same logic as _currentPvRate. Repeated
         //inline so each helper is self-contained.
         const entity   = String(this.config?.['pv-power-entity'] ?? '').trim();
         const stateObj = this.hass?.states?.[entity];
@@ -1685,7 +1872,7 @@ export class HeliosCard extends LitElement
         else if (lu === 'mwh') rateUnit = 'MW';
         else                   rateUnit = u ? `${u}/h` : '';
 
-        //Locate the index of the sample at or before `time` — linear
+        //Locate the index of the sample at or before `time`, linear
         //scan is fine for the ~96 samples a typical 4-day window
         //carries.
         let idx = hist.times.length - 1;
@@ -1713,13 +1900,13 @@ export class HeliosCard extends LitElement
         let hi = idx + 1 < hist.times.length ? idx + 1 : idx;
         if (lo === hi)
         {
-            //At the boundary — fall back to the previous pair.
+            //At the boundary, fall back to the previous pair.
             lo = Math.max(0, idx - 1);
             hi = idx;
         }
         if (lo === hi)
         {
-            //Single-sample history — no rate possible.
+            //Single-sample history, no rate possible.
             return { value: 0, unit: rateUnit };
         }
         const dtH = (hist.times[hi].getTime() - hist.times[lo].getTime()) / 3_600_000;
@@ -1792,7 +1979,7 @@ export class HeliosCard extends LitElement
 
         if (!isCumulative)
         {
-            //Instantaneous sensor — the live state IS the rate.
+            //Instantaneous sensor, the live state IS the rate.
             return { value: this._pvCurrent, unit: u };
         }
 
@@ -1807,16 +1994,16 @@ export class HeliosCard extends LitElement
         else                   rateUnit = u ? `${u}/h` : '';
 
         //Cumulative path: from this point on we MUST return a rate
-        //object — never null. Showing the raw cumulative state on
+        //object, never null. Showing the raw cumulative state on
         //the chip would be flat-out wrong for an "energy total"
         //sensor (e.g. lifetime kWh). When no rate can be derived
         //(entity static all night, no recent samples, no history),
-        //we default to 0 — that's the truthful answer for a sensor
+        //we default to 0, that's the truthful answer for a sensor
         //that hasn't moved.
 
         //Preferred path: use the rolling buffer of live samples. We
         //walk back from the newest to find the sample closest to
-        //~60 s ago — that anchors the rate to a "last minute"
+        //~60 s ago, that anchors the rate to a "last minute"
         //window the user explicitly asked for. If the buffer
         //doesn't cover a full minute (entity updates rarely), we
         //fall back to the oldest available sample.
@@ -1844,7 +2031,7 @@ export class HeliosCard extends LitElement
                 if (dv < 0)
                 {
                     //Counter reset (e.g. "energy today" flipping to
-                    //0 at midnight) — no meaningful rate. Drop the
+                    //0 at midnight), no meaningful rate. Drop the
                     //pre-reset samples so the next call works on a
                     //clean window.
                     this._pvSampleBuffer = [last];
@@ -1856,7 +2043,7 @@ export class HeliosCard extends LitElement
 
         //Static-entity heuristic: if the entity hasn't moved for
         //a minute or more, the live state is the same as it was
-        //60 s ago by definition — production rate is zero. This
+        //60 s ago by definition, production rate is zero. This
         //resolves the "lifetime kWh sensor at night" case: the
         //cumulative value sits unchanged for hours, so any rate
         //we'd compute against the buffer's single sample would be
@@ -1894,7 +2081,7 @@ export class HeliosCard extends LitElement
         }
 
         //Default for a cumulative entity with no derivable rate
-        //yet — better than misleading the user with the lifetime
+        //yet, better than misleading the user with the lifetime
         //total. Will quickly transition to a real rate as soon as
         //the buffer accumulates two samples (typically < 1 min on
         //a healthy production sensor).
@@ -1902,7 +2089,7 @@ export class HeliosCard extends LitElement
     }
 
     //Convert a PV rate into watts. Used to drive animation speeds on
-    //a unit-agnostic scale — the leader-line dash flow saturates at a
+    //a unit-agnostic scale, the leader-line dash flow saturates at a
     //fixed wattage no matter what unit the user's sensor is in.
     private _pvNormalizeToWatts(value: number, unit: string): number
     {
@@ -1911,20 +2098,310 @@ export class HeliosCard extends LitElement
         if (lu === 'mw') return value * 1_000_000;
         if (lu === 'w')  return value;
         //Other units (e.g. raw cumulative kWh that we couldn't
-        //differentiate) — treat as 0 so the animation pauses
+        //differentiate), treat as 0 so the animation pauses
         //instead of mis-scaling.
         return 0;
     }
 
+
+    //PV auto-calibration, maintains a rolling 14-day buffer of
+    //(observedWatts, predictedNormalized) pairs aggregated per hour,
+    //then fits a single scalar k via least squares so that
+    //  observed ≈ k · predictedNormalized
+    //
+    //Storage layout:
+    //  - SOURCE OF TRUTH: HA `frontend/set_user_data` (server-side,
+    //    survives cache wipes / device switches / restarts, included
+    //    in HA backups, per-user). Written debounced every 60 s so we
+    //    don't hammer the WebSocket.
+    //  - LOCAL CACHE: `window.localStorage`, read synchronously at
+    //    boot for an instant first render, then reconciled with HA
+    //    as soon as the WS connection is up.
+    //
+    //Once enough samples have accumulated (PV_CALIB_MIN_SAMPLES),
+    //k is multiplied by future predicted-normalised values to draw
+    //a forecast line on the PV chart. The user never has to enter
+    //a "peak power", the card learns the mapping from their own
+    //history and adapts to seasonal drift via the rolling window.
+    private static readonly PV_CALIB_TTL_MS         = 14 * 24 * 3_600_000;
+    private static readonly PV_CALIB_MIN_SAMPLES    = 20;
+    private static readonly PV_CALIB_HA_WRITE_MS    = 60_000;
+
+    private _pvCalibK: number | null = null;
+    private _pvCalibHARead = false;
+    private _pvCalibHAWriteTimer?: number;
+    private _pvCalibPendingSave: Array<{ t: number; o: number; p: number }> | null = null;
+
+    private _pvCalibStorageKey(): string | null
+    {
+        const lat = this.hass?.config?.latitude;
+        const lon = this.hass?.config?.longitude;
+        if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+        return `helios-pv-calib:${lat.toFixed(3)}_${lon.toFixed(3)}`;
+    }
+
+    //Synchronous read from localStorage cache. Used at boot so the
+    //first chart render already has whatever data we have locally;
+    //HA reconciliation lands a few hundred ms later.
+    private _loadPvCalibSamples(): Array<{ t: number; o: number; p: number }>
+    {
+        const key = this._pvCalibStorageKey();
+        if (!key) return [];
+        try
+        {
+            const raw = window.localStorage?.getItem(key);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw) as Array<{ t: number; o: number; p: number }>;
+            if (!Array.isArray(parsed)) return [];
+            const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+            return parsed.filter(e => typeof e.t === 'number' && e.t >= cutoff
+                                     && typeof e.o === 'number' && isFinite(e.o)
+                                     && typeof e.p === 'number' && isFinite(e.p));
+        }
+        catch (_) { return []; }
+    }
+
+    //Save to localStorage immediately + schedule a debounced HA
+    //write. Two destinations because they each cover a different
+    //failure mode: localStorage gives us instant boot, HA gives us
+    //device-portability + backup safety.
+    private _savePvCalibSamples(samples: Array<{ t: number; o: number; p: number }>): void
+    {
+        const key = this._pvCalibStorageKey();
+        if (!key) return;
+        try { window.localStorage?.setItem(key, JSON.stringify(samples)); }
+        catch (_) {}
+
+        //Debounced HA write.
+        this._pvCalibPendingSave = samples;
+        if (this._pvCalibHAWriteTimer === undefined)
+        {
+            this._pvCalibHAWriteTimer = window.setTimeout(
+                () => this._flushPvCalibToHA(),
+                HeliosCard.PV_CALIB_HA_WRITE_MS
+            );
+        }
+    }
+
+    //Push the latest buffer to HA via frontend/set_user_data.
+    //frontend/get_user_data + frontend/set_user_data accept arbitrary
+    //string keys and store on the server under the current HA user's
+    //profile (.storage/frontend.user_data_{user_id}). Per-user means
+    //multi-account HA installs keep their calibrations separate,
+    //which is the right default when different people may have
+    //different PV setups.
+    private async _flushPvCalibToHA(): Promise<void>
+    {
+        this._pvCalibHAWriteTimer = undefined;
+        const samples = this._pvCalibPendingSave;
+        const key     = this._pvCalibStorageKey();
+        this._pvCalibPendingSave = null;
+        if (!samples || !key) return;
+        if (!this.hass?.callWS) return;
+        try
+        {
+            await this.hass.callWS({
+                type:  'frontend/set_user_data',
+                key,
+                value: samples
+            });
+        }
+        catch (_) {}
+    }
+
+    //Pull the buffer from HA, merge with the local cache (HA wins
+    //on conflict, it's the source of truth), recompute k. Called
+    //once when hass becomes available; subsequent updates flow
+    //through _updatePvCalibration / _savePvCalibSamples.
+    private async _reconcilePvCalibWithHA(): Promise<void>
+    {
+        if (this._pvCalibHARead)            return;
+        if (!this.hass?.callWS)             return;
+        const key = this._pvCalibStorageKey();
+        if (!key)                           return;
+        this._pvCalibHARead = true;
+
+        try
+        {
+            const result = await this.hass.callWS({
+                type: 'frontend/get_user_data',
+                key
+            }) as { value?: unknown };
+
+            const remote = Array.isArray(result?.value)
+                ? (result.value as Array<{ t: number; o: number; p: number }>)
+                    .filter(e => typeof e?.t === 'number'
+                              && typeof e?.o === 'number' && isFinite(e.o)
+                              && typeof e?.p === 'number' && isFinite(e.p))
+                : [];
+
+            const local  = this._loadPvCalibSamples();
+            const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+            //Merge by hour-bucket timestamp; HA wins on conflict.
+            const byTs = new Map<number, { t: number; o: number; p: number }>();
+            for (const e of local)  { if (e.t >= cutoff) byTs.set(e.t, e); }
+            for (const e of remote) { if (e.t >= cutoff) byTs.set(e.t, e); }
+            const merged = Array.from(byTs.values()).sort((a, b) => a.t - b.t);
+
+            //Persist the merged view back to localStorage (instant
+            //read next boot) but DON'T trigger a fresh HA write ,
+            //HA already has these samples.
+            try
+            {
+                const sKey = this._pvCalibStorageKey();
+                if (sKey) window.localStorage?.setItem(sKey, JSON.stringify(merged));
+            }
+            catch (_) {}
+
+            this._pvCalibK = this._calibrateK(merged);
+            //Force a re-render so the PV chart picks up the newly
+            //available prediction line if the threshold is crossed.
+            this.requestUpdate();
+        }
+        catch (_)
+        {
+            //HA unreachable or schema error, keep using the local
+            //cache. The next reconcile attempt happens at the next
+            //card init.
+        }
+    }
+
+    //Bucket the raw PV history into one (avg-watts) value per local
+    //hour, handling cumulative-energy sensors via the same
+    //differentiation logic the chart renderer uses.
+    private _aggregatePvWattsPerHour(): Map<number, number>
+    {
+        const out  = new Map<number, number>();
+        const hist = this._pvHistory;
+        if (!hist || hist.times.length === 0) return out;
+
+        const lu = (this._pvUnit || '').toLowerCase();
+        const isCumulativeEnergy = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
+
+        let times:  Date[]   = hist.times;
+        let values: number[] = hist.values;
+        if (isCumulativeEnergy && times.length >= 2)
+        {
+            const dTimes:  Date[]   = [];
+            const dValues: number[] = [];
+            for (let i = 1; i < times.length; i++)
+            {
+                const dtH = (times[i].getTime() - times[i - 1].getTime()) / 3_600_000;
+                if (dtH <= 0 || dtH > 6) continue;
+                const dv = values[i] - values[i - 1];
+                if (dv < 0) continue;
+                dTimes.push(times[i]);
+                dValues.push(dv / dtH);
+            }
+            times  = dTimes;
+            values = dValues;
+        }
+
+        //Sum + count per hour bucket, then divide.
+        const sums   = new Map<number, number>();
+        const counts = new Map<number, number>();
+        for (let i = 0; i < times.length; i++)
+        {
+            const ts = times[i].getTime();
+            const v  = values[i];
+            if (!isFinite(v)) continue;
+            const w = this._pvNormalizeToWatts(v, this._pvUnit ?? '');
+            //Floor to the hour boundary.
+            const hourTs = Math.floor(ts / 3_600_000) * 3_600_000;
+            sums.set  (hourTs, (sums.get(hourTs)   ?? 0) + w);
+            counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
+        }
+        for (const [hourTs, sum] of sums)
+        {
+            const c = counts.get(hourTs) ?? 1;
+            out.set(hourTs, sum / c);
+        }
+        return out;
+    }
+
+    //Refresh the per-hour calibration buffer from the current
+    //_pvHistory and _chartSeries, merge with the persisted buffer,
+    //prune old entries, save, and recompute k. Called whenever either
+    //input changes.
+    private _updatePvCalibration(): void
+    {
+        const lat = this.hass?.config?.latitude;
+        const lon = this.hass?.config?.longitude;
+        if (typeof lat !== 'number' || typeof lon !== 'number') return;
+        const series = this._chartSeries;
+        if (!series || series.times.length === 0) return;
+
+        const buckets = this._aggregatePvWattsPerHour();
+        if (buckets.size === 0)
+        {
+            //Nothing to learn from this pass, recompute k from
+            //whatever's still in localStorage so we don't lose it.
+            this._pvCalibK = this._calibrateK(this._loadPvCalibSamples());
+            return;
+        }
+
+        //Index hourly weather by hour-floor timestamp for O(1) lookup.
+        const cloudByHour = new Map<number, number>();
+        for (let i = 0; i < series.times.length; i++)
+        {
+            const hourTs = Math.floor(series.times[i].getTime() / 3_600_000) * 3_600_000;
+            cloudByHour.set(hourTs, series.cloud[i] ?? 0);
+        }
+
+        const existing = this._loadPvCalibSamples();
+        const byTs     = new Map<number, { t: number; o: number; p: number }>();
+        for (const s of existing) byTs.set(s.t, s);
+
+        for (const [hourTs, observedW] of buckets)
+        {
+            const cloud = cloudByHour.get(hourTs);
+            if (cloud === undefined) continue;
+            const tCentered = new Date(hourTs + 30 * 60_000);   //hour midpoint
+            const predictedPct = computePvPower(tCentered, lat, lon, cloud);
+            //Skip entries where there's no signal to learn from.
+            if (predictedPct < 1)   continue;      //nighttime or near
+            if (observedW    < 5)   continue;      //panels offline / pre-dawn noise
+            byTs.set(hourTs, { t: hourTs, o: observedW, p: predictedPct });
+        }
+
+        //Prune old entries again before saving.
+        const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+        const merged = Array.from(byTs.values())
+            .filter(e => e.t >= cutoff)
+            .sort((a, b) => a.t - b.t);
+
+        this._savePvCalibSamples(merged);
+        this._pvCalibK = this._calibrateK(merged);
+    }
+
+    private _calibrateK(samples: Array<{ t: number; o: number; p: number }>): number | null
+    {
+        if (samples.length < HeliosCard.PV_CALIB_MIN_SAMPLES) return null;
+        let sumXY = 0, sumXX = 0;
+        for (const s of samples)
+        {
+            sumXY += s.o * s.p;
+            sumXX += s.p * s.p;
+        }
+        if (sumXX <= 0) return null;
+        const k = sumXY / sumXX;
+        //Sanity: a residential install peaks around 1 kW per kWp at
+        //full sun. computePvPower saturates at 100, so a typical k
+        //sits in [5, 250] (W per percent of STC). Reject anything
+        //wildly outside, bad data or a misconfigured entity.
+        if (!isFinite(k) || k <= 0 || k > 1000) return null;
+        return k;
+    }
+
     //Map a "rate" magnitude to an animation duration in seconds.
-    //  rate <= 0           → 30 s        (paused — night / no production)
-    //  rate  = saturation  → minDuration (fastest — full power)
+    //  rate <= 0           → 30 s        (paused, night / no production)
+    //  rate  = saturation  → minDuration (fastest, full power)
     //
     //Ease-out cubic ramp: half-saturation already feels meaningfully
     //faster than the night baseline, which gives the user the
     //feeling of raw power pushing through the line. The minDuration
     //is exposed so callers can tune the saturated-end pace per
-    //channel — the sun ray spans the full map and benefits from a
+    //channel, the sun ray spans the full map and benefits from a
     //slightly slower flow than the PV leader, which is short and
     //local.
     private static _flowDuration(rate: number, saturation: number, minDuration: number = 0.4): number
@@ -1942,7 +2419,7 @@ export class HeliosCard extends LitElement
     //auto-rescales W → kW when the magnitude crosses a threshold so
     //a 4500 W reading prints as "4.5 kW" rather than the noisier
     //"4500 W". Energy units (kWh / Wh) keep their native unit and
-    //get a single decimal — daily totals usually sit in the 0–50 kWh
+    //get a single decimal, daily totals usually sit in the 0–50 kWh
     //band where one decimal is the right amount of precision.
     private _formatPvValue(value: number, unit: string): string
     {
@@ -1973,7 +2450,7 @@ export class HeliosCard extends LitElement
         {
             return `${value.toFixed(1)} ${u}`;
         }
-        //Fallback for arbitrary units — keep one decimal of precision
+        //Fallback for arbitrary units, keep one decimal of precision
         //and let the entity's own unit string carry through.
         const formatted = Math.abs(value) >= 100 ? Math.round(value).toString() : value.toFixed(1);
         return u ? `${formatted} ${u}` : formatted;
@@ -2010,7 +2487,7 @@ export class HeliosCard extends LitElement
             hourCycle: is12h ? 'h12' : 'h23'
         } as Intl.DateTimeFormatOptions);
 
-        //Cloud-cover hover tooltip — shown above the on-ground disc
+        //Cloud-cover hover tooltip, shown above the on-ground disc
         //when the cursor enters its layer (engine emits onCloudHover).
         //Two-line content: total coverage on top, low/mid/high bands
         //below. The tooltip is positioned at (cloudHoverX, cloudHoverY)
@@ -2025,13 +2502,13 @@ export class HeliosCard extends LitElement
         //Always-visible cloud-cover percentage label, overlaid in HTML
         //above the home marker, with an SVG leader line tying it to
         //the on-ground 100 % ring. Both anchors come pre-projected
-        //from the engine — see HeliosEngine.projectHomeLabelLayout().
+        //from the engine, see HeliosEngine.projectHomeLabelLayout().
         //The label is suppressed until both the layout (map ready)
         //and a cloud-cover value (data ready) are available.
         const layout         = this._labelLayout;
         const showLabel      = hasApiKey && layout !== null && this._cloudCover >= 0;
 
-        //Photovoltaic production chip — sits where the cloud chip
+        //Photovoltaic production chip, sits where the cloud chip
         //used to live (above the home), tinted in the configured
         //production colour and tied to the home with an animated
         //leader line whose dashes flow from the house up to the
@@ -2042,7 +2519,7 @@ export class HeliosCard extends LitElement
         const pvColor      = cfgHex(this.config?.['pv-color'], DEFAULT_PV_COLOR_HEX);
         //When the user scrubs the timeline into the past, the chip
         //should reflect what the PV system actually produced at
-        //that instant — same behaviour as the cloud / irradiance
+        //that instant, same behaviour as the cloud / irradiance
         //chips. For future scrubs there's no PV data (production
         //hasn't happened yet); we hide the chip rather than
         //showing a stale or fake number.
@@ -2051,13 +2528,13 @@ export class HeliosCard extends LitElement
             && this._selectedTime!.getTime() > Date.now() + 60_000;
 
         //The chip displays the *instantaneous* production at the
-        //active timeline instant — live "now" by default, or the
+        //active timeline instant, live "now" by default, or the
         //scrub target when the user is exploring the past. For a
         //power sensor (W/kW) we plot the entity's own state /
         //historical sample; for a cumulative-energy sensor
         //(Wh/kWh) we differentiate over the rolling buffer (live)
         //or the bracketing pair of history samples (scrub). Either
-        //way the chip never shows the lifetime cumulative total —
+        //way the chip never shows the lifetime cumulative total ,
         //that figure is meaningless on a "current production"
         //readout.
         const pvRate = (pvEntityId !== '' && layout !== null)
@@ -2075,18 +2552,18 @@ export class HeliosCard extends LitElement
         const pvDisplayValue = showPvLabel
             ? this._formatPvValue(pvRate!.value, pvRate!.unit)
             : '';
-        //Animation duration of the leader-line dash flow — fast when
+        //Animation duration of the leader-line dash flow, fast when
         //production is high, slow when production is low. Mapped on
         //the same scale as the sun ray below so the two streams feel
         //like one coherent visual language: 0 → 30 s/cycle (almost
         //still), saturated → 3 s/cycle (visible motion without being
         //annoying). For PV we saturate at ~5 kW which is a typical
         //residential peak.
-        //Battery overlay — two independent chips flanking the PV
+        //Battery overlay, two independent chips flanking the PV
         //chip in screen-space: SoC % on the LEFT, signed Power on
         //the RIGHT, mirroring each other around the PV chip's
         //vertical axis. Each chip is wired back to the PV chip via
-        //a static dotted hairline (no animation, no arrow) — the
+        //a static dotted hairline (no animation, no arrow), the
         //sign of the power value is the only encoding for charging
         //vs discharging.
         //
@@ -2101,7 +2578,7 @@ export class HeliosCard extends LitElement
         const batteryScrubFuture = batteryScrubbing
             && this._selectedTime!.getTime() > Date.now() + 60_000;
 
-        //Active SoC / power values for this render — historical
+        //Active SoC / power values for this render, historical
         //samples in scrub mode, live state otherwise.
         const activeBatterySoc: number | null = batteryScrubbing
             ? this._batterySampleAtTime(this._batterySocHistory, this._selectedTime!)
@@ -2142,9 +2619,15 @@ export class HeliosCard extends LitElement
         const batteryWattsForFlow = showPowerChip
             ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
             : 0;
+        //"Idle", measured power within sensor-noise margin of zero
+        //(±5 W). The leader is still drawn so the user keeps the
+        //spatial relationship, but the dash flow is frozen and the
+        //arrow head is hidden, nothing is moving in either
+        //direction, so any motion would be misleading.
+        const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
         const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5000);
 
-        //Battery leader L-shape geometry — computed once and reused
+        //Battery leader L-shape geometry, computed once and reused
         //for the visible <path> elements (SoC and Power) and for
         //the animated arrow's <animateMotion> path. Only meaningful
         //when a layout is available; gated by the same flag as the
@@ -2153,11 +2636,11 @@ export class HeliosCard extends LitElement
         //  PV_LEG_OFFSET_PX (12) is the horizontal distance from
         //  the PV chip's centre to each L-leg's vertical drop.
         //  The SoC L hangs to the LEFT of centre by this amount,
-        //  the Power L to the RIGHT — bringing both legs slightly
+        //  the Power L to the RIGHT, bringing both legs slightly
         //  inboard of the chip's quarter-width so the bends sit
         //  closer to the chip's middle. Constant rather than
         //  measured because the chips are min-width-clamped to
-        //  76 px in the common case — see helios-card-css.ts.
+        //  76 px in the common case, see helios-card-css.ts.
         //  PV_HALF_HEIGHT_PX (11) places the top of the vertical
         //  leg flush against PV's bottom edge so the line emerges
         //  from the chip rather than from inside it.
@@ -2175,7 +2658,7 @@ export class HeliosCard extends LitElement
         //  fillet shrinks proportionally with `flowDuration`.
         const PV_LEG_OFFSET_PX     = 7;
         const PV_HALF_HEIGHT_PX    = 11;
-        //Half-width of the PV chip — min-width:76 in .pv-pct-label,
+        //Half-width of the PV chip, min-width:76 in .pv-pct-label,
         //so 38 px from centre to either side. Used for the solar-ray
         //target snap (left/right side of the chip) when the sun sits
         //roughly horizontal to the chip.
@@ -2192,16 +2675,15 @@ export class HeliosCard extends LitElement
         const lSocEndX      = layout ? layout.batterySocLabel.x   + BAT_CHIP_NUDGE_PX : 0;
         const lPowerEndX    = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
         //Forward L: PV edge → vertical leg → fillet → horizontal leg
-        //→ end. Direction-agnostic — the vertical leg can travel
-        //either up (PV below the shelf, current layout) or down
-        //(legacy PV-above-shelf layout) because the fillet approach
-        //point follows the sign of (shelfY - pvEdgeY).
+        //→ end. Direction-agnostic, the vertical leg can travel up
+        //or down because the fillet approach point follows the sign
+        //of (shelfY - pvEdgeY).
         const buildLPath = (verticalX: number, pvEdgeY: number, shelfY: number, endX: number): string =>
         {
             const dirH  = endX  > verticalX ? 1 : -1;
             const dirV  = shelfY > pvEdgeY  ? 1 : -1;
             //Clamp the radius so the fillet never overshoots a short
-            //leg — the rounded corner has to fit inside both legs.
+            //leg, the rounded corner has to fit inside both legs.
             const r     = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
             const preY  = shelfY - dirV * r;
             const postX = verticalX + dirH * r;
@@ -2224,7 +2706,7 @@ export class HeliosCard extends LitElement
             ? buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX)
             : buildLPathReverse(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
 
-        //Solar-arc overlay — sun trajectory across the sky, sun's
+        //Solar-arc overlay, sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
         //pre-projected to screen space by the engine via
         //projectSunScene(). Hidden until the engine is ready.
@@ -2242,7 +2724,7 @@ export class HeliosCard extends LitElement
         const arcSegments   = showSun ? this._buildArcSegments(sunScene!.arc, sunColor) : [];
 
         //The incidence ray only renders when the sun is actually
-        //above the horizon — drawing a ray from below the ground
+        //above the horizon, drawing a ray from below the ground
         //towards the home would be visually nonsensical.
         const showRay = showSun && sunScene!.sun.altitude > 0;
 
@@ -2261,13 +2743,13 @@ export class HeliosCard extends LitElement
         //the PV leader (see _flowDuration / _pvNormalizeToWatts) so
         //both streams pulse at coherent rates: the sun ray saturates
         //at 1000 W/m² (clear-sky noon).
-        //Sun ray spans the whole card — keep the saturated-end pace
+        //Sun ray spans the whole card, keep the saturated-end pace
         //a touch slower than the PV leader (0.8 s vs the default
         //0.4 s) so peak-irradiance flow stays readable rather than
         //feeling frantic at the top of the day.
         const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1000, 0.8);
 
-        //Solar-ray target — snaps to one of the 4 sides of the PV
+        //Solar-ray target, snaps to one of the 4 sides of the PV
         //chip based on which side faces the sun. The compass angle
         //is measured from the PV chip's centre to the sun, with 0°
         //pointing up; ±45° windows around each cardinal direction
@@ -2316,12 +2798,20 @@ export class HeliosCard extends LitElement
         const cardTheme = String(this.config?.['card-theme'] ?? 'light').toLowerCase();
         const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';
 
+        //showPlaceholder collapses two cases that share the same
+        //render: (a) the user hasn't provided a MapTiler API key
+        //yet, (b) the card is rendered inside HA's dashboard editor
+        //preview, where we deliberately skip the WebGL engine to
+        //avoid context exhaustion. Both fall back to the same
+        //illustrated placeholder.
+        const showPlaceholder = !hasApiKey || this._isInEditorPreview;
+
         return html`
-            <ha-card class="${cardThemeClass} ${!hasApiKey ? 'placeholder-mode' : ''}">
+            <ha-card class="${cardThemeClass} ${showPlaceholder ? 'placeholder-mode' : ''}">
 
-                ${!hasApiKey ? this._renderPlaceholder() : nothing}
+                ${showPlaceholder ? this._renderPlaceholder() : nothing}
 
-                <div id="map-container" class="${!hasApiKey ? 'hidden' : ''}"></div>
+                <div id="map-container" class="${showPlaceholder ? 'hidden' : ''}"></div>
 
                 ${hasApiKey && this._timeRange ? html`
                     <div
@@ -2359,7 +2849,7 @@ export class HeliosCard extends LitElement
                             })() : nothing}
                         </div>
 
-                        <!--  Optional PV production graph — only
+                        <!--  Optional PV production graph, only
                               rendered when the user has set the
                               pv-power-entity config. Same chip
                               styling as the main chart card; sits
@@ -2416,7 +2906,7 @@ ${showSun ? html`
                         class="solar-svg"
                         style="opacity:${sunScene!.daylight}"
                     >
-                        <!--  Arc — single colour pass, depth conveyed
+                        <!--  Arc, single colour pass, depth conveyed
                               by per-segment stroke-width modulation.
                               First pass paints a faint dark outline
                               for legibility against bright basemap
@@ -2465,7 +2955,7 @@ ${showSun ? html`
                             </polygon>
                         ` : nothing}
                         ${(() => {
-                            //Sun disc — three concentric layers:
+                            //Sun disc, three concentric layers:
                             //  1. Background fill (configured colour at
                             //     SUN_FILL_OPACITY_BG) so the empty disc
                             //     reads as faintly tinted glass.
@@ -2515,7 +3005,7 @@ ${showSun ? html`
                 <!--  Always-visible W/m² label, pinned above the sun
                       disc. Same visual language as the cloud-cover
                       label above the home: black border, white card,
-                      tabular numerals — they read as a matched pair
+                      tabular numerals, they read as a matched pair
                       of cartographic readouts.  -->
                 ${showSunLabel ? html`
                     <div
@@ -2527,15 +3017,32 @@ ${showSun ? html`
                     </div>
                 ` : nothing}
 
+                ${showLabel ? (() =>
+                {
+                    //Endpoint = fill-disc edge in the chip-to-home
+                    //direction. The fill disc shares the ring's
+                    //centre (= home) and scales linearly with cloud
+                    //cover %; at 0 % the radius is zero and the line
+                    //terminates at home, at 100 % it reaches the
+                    //full ring edge. Pinning the endpoint to the
+                    //live fill, rather than to a static ring or
+                    //the home centre, keeps the leader "hugging"
+                    //the disc as it grows and shrinks.
+                    const pct  = Math.max(0, Math.min(100, this._cloudCover));
+                    const tFill = pct / 100;
+                    const endX  = layout!.home.x + (layout!.ringEdge.x - layout!.home.x) * tFill;
+                    const endY  = layout!.home.y + (layout!.ringEdge.y - layout!.home.y) * tFill;
+                    return html`
+                        <svg class="cloud-leader-svg">
+                            <line
+                                x1="${layout!.cloudLabel.x + 10}"
+                                y1="${layout!.cloudLabel.y}"
+                                x2="${endX}"
+                                y2="${endY}"
+                            ></line>
+                        </svg>`;
+                })() : nothing}
                 ${showLabel ? html`
-                    <svg class="cloud-leader-svg">
-                        <line
-                            x1="${layout!.cloudLabel.x + 10}"
-                            y1="${layout!.cloudLabel.y}"
-                            x2="${layout!.home.x}"
-                            y2="${layout!.home.y}"
-                        ></line>
-                    </svg>
                     <div
                         class="cloud-pct-label"
                         style="left:${layout!.cloudLabel.x}px; top:${layout!.cloudLabel.y}px"
@@ -2570,7 +3077,7 @@ ${showSun ? html`
                 ${(showSocChip || showPowerChip) ? html`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV — static, dashed, inverted-L
+                            SoC ↔ PV, static, dashed, inverted-L
                             path with a rounded corner (matching
                             the PV ↔ Power leader's vocabulary
                             exactly minus the flow animation).
@@ -2587,7 +3094,7 @@ ${showSun ? html`
                             ></path>
                         ` : nothing}
                         <!--
-                            PV ↔ Power — animated, dashed L with
+                            PV ↔ Power, animated, dashed L with
                             an arrow tracking the sign of the live
                             power. Vertical leg drops from PV's
                             bottom edge slightly right of centre,
@@ -2600,31 +3107,33 @@ ${showSun ? html`
                         -->
                         ${showPowerChip ? svg`
                             <path
-                                class="battery-leader-line battery-leader-line-animated ${batteryCharging ? '' : 'battery-leader-discharging'}"
+                                class="battery-leader-line ${batteryIdle ? '' : 'battery-leader-line-animated'} ${batteryCharging ? '' : 'battery-leader-discharging'}"
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
                                 d="${powerLeaderPath}"
                             ></path>
-                            <!--
-                                Polygon is centroid-centred at (0,0):
-                                the centroid of (-2,-4), (4,0), (-2,4)
-                                is (0,0), so animateMotion pivots the
-                                arrow about its visual mass rather than
-                                its tip. Through the L's fillet the
-                                arrow stays balanced on the path
-                                instead of swinging off it.
-                            -->
-                            <polygon
-                                class="battery-leader-arrow"
-                                points="-2,-4 4,0 -2,4"
-                                fill="${batteryColor}"
-                            >
-                                <animateMotion
-                                    dur="${batteryFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="${powerArrowPath}"
-                                ></animateMotion>
-                            </polygon>
+                            ${!batteryIdle ? svg`
+                                <!--
+                                    Polygon is centroid-centred at (0,0):
+                                    the centroid of (-2,-4), (4,0), (-2,4)
+                                    is (0,0), so animateMotion pivots the
+                                    arrow about its visual mass rather
+                                    than its tip. Through the L's fillet
+                                    the arrow stays balanced on the path
+                                    instead of swinging off it.
+                                -->
+                                <polygon
+                                    class="battery-leader-arrow"
+                                    points="-2,-4 4,0 -2,4"
+                                    fill="${batteryColor}"
+                                >
+                                    <animateMotion
+                                        dur="${batteryFlowDuration}s"
+                                        repeatCount="indefinite"
+                                        rotate="auto"
+                                        path="${powerArrowPath}"
+                                    ></animateMotion>
+                                </polygon>
+                            ` : nothing}
                         ` : nothing}
                     </svg>
                     ${showSocChip ? html`
@@ -2652,7 +3161,7 @@ ${showSun ? html`
     }
 
     //Darken a #rrggbb hex by a factor in [0, 1] (0 = unchanged,
-    //1 = pure black). Multiplicative on each channel — keeps the
+    //1 = pure black). Multiplicative on each channel, keeps the
     //hue intact, just lowers the value. Used to derive the slightly
     //darker rim colour around the sun disc from the configured sun
     //colour, so the rim stays visible against the disc fill without
@@ -2673,12 +3182,12 @@ ${showSun ? html`
     {
         //Minimal catalogue thumbnail: only the stylised iso scene
         //(low-poly buildings + ground cloud disc) and the solar arc
-        //+ sun overhead — no chips, no leaders, no subtitle. The
+        //+ sun overhead, no chips, no leaders, no subtitle. The
         //"HELIOS" wordmark sits centred on top via .ph-content. The
         //sun is positioned at t = 0.75 along the arc Bezier
         //(M 50,230 Q 215,60 360,230 → (286, 166)) so it visually
         //rides ON the curve rather than floating above it. The
-        //MapTiler key prompt is documented in the README — it does
+        //MapTiler key prompt is documented in the README, it does
         //not belong on the thumbnail.
         return html`
             <div class="placeholder">
@@ -2733,7 +3242,7 @@ ${showSun ? html`
                         <polygon points="177,198 215,218 215,260 177,240" fill="#ccccd0" />
                     </g>
 
-                    <!-- Solar arc — drawn over the buildings so it
+                    <!-- Solar arc, drawn over the buildings so it
                          visually inhabits the sky. -->
                     <path
                         d="M 50 230 Q 215 60 360 230"

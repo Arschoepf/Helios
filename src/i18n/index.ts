@@ -1,5 +1,5 @@
 /*
- * Lightweight i18n for HELIOS — synchronous, zero-dep.
+ * Lightweight i18n for HELIOS, synchronous, zero-dep.
  *
  * Locales are inlined at build time so the user never has to host them
  * separately. The active language is picked from Home Assistant's
@@ -107,6 +107,12 @@ export interface Translations
         //Third map-style segment: a curated minimal basemap (no POIs,
         //no place labels, no road shields) for low-end devices.
         mapStyleMinimal:          string;
+        //Terrain mesh density, 'smooth' (default, fluid) vs 'fine'
+        //(more relief detail, heavier rotation cost).
+        terrainDetail:            string;
+        terrainDetailSmooth:      string;
+        terrainDetailFine:        string;
+        terrainDetailHint:        string;
     };
 }
 
@@ -125,7 +131,7 @@ const FALLBACK: Translations = en;
 //Adding a new locale is a 3-step operation:
 //  1. Create ./locales/xx.ts exporting `xx: Translations`
 //  2. Import here and add the key to LOCALES
-//  3. Done — pickTranslations will resolve `xx-YY` → `xx-yy` → `xx` → `en`
+//  3. Done, pickTranslations will resolve `xx-YY` → `xx-yy` → `xx` → `en`
 export function pickTranslations(haLanguage: string | undefined): Translations
 {
     if (!haLanguage)

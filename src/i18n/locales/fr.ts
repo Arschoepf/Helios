@@ -76,7 +76,7 @@ export const fr: Translations = {
         batteryPowerEntityHelp: 'Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l\'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).',
         batteryColor:       'Couleur batterie *',
         buildingsSection:   'Bâtiments alentour',
-        buildingsHint:      'Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d\'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».',
+        buildingsHint:      'Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d\'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».',
         buildingRadius:        'Rayon de visibilité *',
         buildingClusterRadius: 'Rayon de regroupement maison *',
         buildingOpacity:       'Opacité des bâtiments voisins *',
@@ -85,6 +85,10 @@ export const fr: Translations = {
         performanceModeOn:     'Activé',
         performanceModeOff:    'Désactivé',
         performanceModeHint:   'Désactive le relief 3D, l\'ombrage du relief et limite la densité de pixels. Utile sur appareils bas/moyen de gamme ou pour les longues sessions. Conserve l\'inclinaison de caméra et les bâtiments en 3D.',
-        mapStyleMinimal:       'Minimal'
+        mapStyleMinimal:       'Minimal',
+        terrainDetail:         'Détail du terrain *',
+        terrainDetailSmooth:   'Lissé',
+        terrainDetailFine:     'Précis',
+        terrainDetailHint:     'Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation — réservé aux PC desktops puissants.'
     }
 };

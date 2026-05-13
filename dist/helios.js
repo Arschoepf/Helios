@@ -24569,7 +24569,7 @@ function computeIrradianceWm2(date, lat, lon, cloudCoverPct) {
   return Math.max(0, ghiClear * kCloud);
 }
 const PAST_DAYS = 2;
-const FORECAST_DAYS = 2;
+const FORECAST_DAYS = 3;
 const RATE_LIMIT_BACKOFF_MS = [
   5 * 6e4,
   15 * 6e4,
@@ -26305,7 +26305,11 @@ const _HeliosEngine = class _HeliosEngine {
         dragPan: false,
         scrollZoom: false,
         doubleClickZoom: false,
-        dragRotate: true,
+        //MapLibre's default dragRotate binds to right-click drag,
+        //which is not what users expect on a 3D card. We disable
+        //it and wire our own pointer handlers below so a left-click
+        //drag (mouse) or single-finger drag (touch) rotates.
+        dragRotate: false,
         touchZoomRotate: true,
         touchPitch: false,
         boxZoom: false,
@@ -26355,6 +26359,42 @@ const _HeliosEngine = class _HeliosEngine {
     canvas.addEventListener("wheel", bumpInactivity, { passive: true });
     canvas.addEventListener("touchstart", bumpInactivity, { passive: true });
     canvas.addEventListener("touchmove", bumpInactivity, { passive: true });
+    canvas.style.touchAction = "none";
+    const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
+    let dragRotating = false;
+    let lastPointerX = 0;
+    let activeId = null;
+    const onDown = (e2) => {
+      if (e2.pointerType === "mouse" && e2.button !== 0) return;
+      if (activeId !== null) return;
+      dragRotating = true;
+      activeId = e2.pointerId;
+      lastPointerX = e2.clientX;
+      try {
+        canvas.setPointerCapture(e2.pointerId);
+      } catch (_2) {
+      }
+    };
+    const onMove = (e2) => {
+      if (!dragRotating || !this.map || e2.pointerId !== activeId) return;
+      const dx = e2.clientX - lastPointerX;
+      lastPointerX = e2.clientX;
+      this.map.setBearing(this.map.getBearing() + dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+    };
+    const onEnd = (e2) => {
+      if (e2.pointerId !== activeId) return;
+      dragRotating = false;
+      activeId = null;
+      try {
+        canvas.releasePointerCapture(e2.pointerId);
+      } catch (_2) {
+      }
+    };
+    canvas.addEventListener("pointerdown", onDown);
+    canvas.addEventListener("pointermove", onMove);
+    canvas.addEventListener("pointerup", onEnd);
+    canvas.addEventListener("pointercancel", onEnd);
+    this._dragRotateHandlers = { canvas, onDown, onMove, onEnd };
     this._webglLostHandler = (e2) => {
       e2.preventDefault();
       bumpStat("contextLostEvents");
@@ -26369,6 +26409,7 @@ const _HeliosEngine = class _HeliosEngine {
     canvas.addEventListener("webglcontextrestored", this._webglRestoredHandler, false);
     this._mapErrorHandler = (e2) => {
       const msg = e2?.error?.message ?? "unknown error";
+      if (msg.includes("non-existing layer")) return;
       console.warn("[HELIOS] MapLibre error:", msg);
     };
     this.map.on("error", this._mapErrorHandler);
@@ -26386,14 +26427,14 @@ const _HeliosEngine = class _HeliosEngine {
   }
   //Resolves the active MapTiler style id from `map-style` config.
   //Three values are accepted:
-  //  'streets' (default) → 'streets-v4' — sober urban basemap.
-  //  'topo'              → 'topo-v4'    — topographic basemap with
+  //  'streets' (default) → 'streets-v4', sober urban basemap.
+  //  'topo'              → 'topo-v4'   , topographic basemap with
   //                                       contour lines and softer
   //                                       earth tones, better in
   //                                       hilly / outdoor settings.
   //  'minimal'           → 'streets-v4' loaded then pruned in
   //                                       _onStyleLoad to a curated
-  //                                       whitelist of layers — fewer
+  //                                       whitelist of layers, fewer
   //                                       per-frame draw calls, best
   //                                       for low-end devices.
   //
@@ -26427,11 +26468,18 @@ const _HeliosEngine = class _HeliosEngine {
       }
     }
   }
-  //Performance mode — disables the per-frame heavyweights (terrain
+  //Performance mode, disables the per-frame heavyweights (terrain
   //mesh + hillshade) and caps pixelRatio at 1.0. The 3D pitch and
   //extruded buildings are preserved, so the card still reads as 3D.
   _performanceMode() {
     return this.cfg["performance-mode"] === true;
+  }
+  //Terrain DEM maxzoom, 'smooth' (default) at z=12, 'fine' at z=14.
+  //z=14 ~16× more mesh vertices than z=12 per frame, which moves
+  //rotation cost considerably; only useful when the user values
+  //the finer relief over fluidity.
+  _terrainMaxzoom() {
+    return String(this.cfg["terrain-detail"] ?? "smooth").toLowerCase() === "fine" ? 14 : 12;
   }
   _findHourIndex(t2) {
     const home = this._homeHourlyData;
@@ -26531,8 +26579,6 @@ const _HeliosEngine = class _HeliosEngine {
         cloudMid: w2.cloudMid,
         cloudHigh: w2.cloudHigh,
         cloudIntensity: w2.cloudIntensity,
-        cloudGradient: "",
-        irradianceGradient: "",
         timeRange: this._getTimeRange(),
         isLiveTime: this._selectedTime === null,
         pvPower,
@@ -26557,7 +26603,7 @@ const _HeliosEngine = class _HeliosEngine {
           type: "raster-dem",
           url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${this.apiKey}`,
           tileSize: 512,
-          maxzoom: 12
+          maxzoom: this._terrainMaxzoom()
         }
       );
     }
@@ -26777,12 +26823,12 @@ const _HeliosEngine = class _HeliosEngine {
   //percentage. Called from _renderForCurrentSelection so it ticks
   //both with live time progression and with manual scrubbing.
   //
-  //  cloudPct ∈ [0, 100]    — coverage at the home location now
+  //  cloudPct ∈ [0, 100]   , coverage at the home location now
   //
   //The ring (100 % reference) has fixed radius CLOUD_DISC_RADIUS_M.
   //The disc scales linearly: radius = CLOUD_DISC_RADIUS_M * pct/100.
-  //At 0 % cloud cover the disc has zero radius — effectively
-  //invisible — while the ring stays visible to anchor the gauge.
+  //At 0 % cloud cover the disc has zero radius, effectively
+  //invisible, while the ring stays visible to anchor the gauge.
   //
   //Fixed cloud colour. The disc's *radius* already encodes
   //the cloud-cover percentage (0% = invisible, 100% = full ring);
@@ -26874,7 +26920,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return Math.min(1, Math.max(0, v2));
   }
-  //Resolves the cluster radius (metres) — every building whose
+  //Resolves the cluster radius (metres), every building whose
   //centroid is within this radius (or which contains the home
   //point) becomes part of the home group at full opacity. Allows
   //attached verandas / outbuildings to read as one with the main
@@ -26896,31 +26942,26 @@ const _HeliosEngine = class _HeliosEngine {
   //
   //  - helios-buildings-surroundings : every building within the
   //    configured radius of the home, painted at the configured
-  //    opacity (default ~25%). Conveys urban context without
-  //    competing visually with the data overlays.
-  //  - helios-buildings-home : the home itself (whichever polygon
-  //    contains the home coordinates), painted at full opacity in
-  //    the same neutral grey. Reads as the focal point.
-  //
-  //Compared to the previous single layer fed from MapTiler's
-  //"helios-planet" source-layer, this design (a) renders only the
-  //handful of buildings the user actually cares about, eliminating
-  //the per-frame cost of thousands of fill-extrusions in dense
-  //urban areas, and (b) cleanly isolates the home so future
-  //iterations can give it special treatment (PV-on-roof rendering,
-  //per-room data overlays, etc.) without per-feature MapLibre
-  //expression gymnastics.
+  //    opacity. Urban context without competing with the data overlays.
+  //  - helios-buildings-home : the polygon containing the home
+  //    coordinates, painted at full opacity in the same neutral grey.
+  //    Reads as the focal point.
   //
   //The building GeoJSON is fetched once per (home, radius) combo
-  //in helios-buildings.ts; subsequent calls to _addBuildings()
-  //(e.g. on theme switch, which rebuilds the whole style) reuse
-  //the cached data without re-hitting the API.
+  //in helios-buildings.ts; subsequent calls (e.g. on theme switch,
+  //which rebuilds the whole style) reuse the cached data.
   _addBuildings() {
     bumpStat("addBuildingsCalls");
     if (!this.map) {
       return;
     }
-    for (const lid of ["helios-buildings", "helios-buildings-surroundings", "helios-buildings-home"]) {
+    for (const lid of [
+      "helios-buildings",
+      "helios-buildings-surroundings",
+      "helios-buildings-home",
+      "helios-buildings-surroundings-outline",
+      "helios-buildings-home-outline"
+    ]) {
       if (this.map.getLayer(lid)) this.map.removeLayer(lid);
     }
     const styleObj = this.map.getStyle();
@@ -26964,10 +27005,12 @@ const _HeliosEngine = class _HeliosEngine {
     };
     for (const layerId of buildingLayerIds) {
       for (const cand of idCandidates(layerId)) {
+        if (!this.map.getLayer(cand)) continue;
         try {
-          if (this.map.getLayer(cand)) this.map.removeLayer(cand);
+          this.map.removeLayer(cand);
         } catch (_2) {
         }
+        if (!this.map.getLayer(cand)) continue;
         try {
           this.map.setLayoutProperty(cand, "visibility", "none");
         } catch (_2) {
@@ -27035,6 +27078,30 @@ const _HeliosEngine = class _HeliosEngine {
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
           "fill-extrusion-opacity": 1
+        }
+      }
+    );
+    this.map.addLayer(
+      {
+        id: "helios-buildings-surroundings-outline",
+        source: "helios-buildings-surroundings-src",
+        type: "line",
+        paint: {
+          "line-color": "#000000",
+          "line-width": 1,
+          "line-opacity": 0.35
+        }
+      }
+    );
+    this.map.addLayer(
+      {
+        id: "helios-buildings-home-outline",
+        source: "helios-buildings-home-src",
+        type: "line",
+        paint: {
+          "line-color": "#000000",
+          "line-width": 2,
+          "line-opacity": 0.85
         }
       }
     );
@@ -27119,7 +27186,7 @@ const _HeliosEngine = class _HeliosEngine {
   //
   //Short-circuits when the sun has moved less than 0.5° since the
   //last call (≈ 2 min of motion). setPaintProperty isn't free on
-  //mobile — repeating the full pass once a minute would burn frames
+  //mobile, repeating the full pass once a minute would burn frames
   //for no perceptible visual change.
   _refreshShadowsAndAtmosphere() {
     if (!this.map) {
@@ -27228,14 +27295,9 @@ const _HeliosEngine = class _HeliosEngine {
     } catch (_2) {
     }
   }
-  //The 'standard' precision tier was retired: a single
-  //best-match model produced visibly noisier readings (low-cloud
-  //layer stuck at 100 % from altitude bugs, mostly), and the
-  //multi-model median fix sat one click away in the editor for
-  //users who often missed it. We now always run in the multi-
-  //model 'high' mode. The function is kept so the rest of the
-  //engine can stay precision-aware in case a future tier is
-  //added.
+  //Precision is fixed to 'high' (multi-model median). The function
+  //is kept so the rest of the engine stays precision-aware if a
+  //tier is added later.
   _resolvedPrecision() {
     return "high";
   }
@@ -27288,13 +27350,11 @@ const _HeliosEngine = class _HeliosEngine {
       this.onFetchEnd?.();
     }
   }
-  //"Reset view" — re-anchor the camera on the home and restore the
-  //default pitch/bearing. With v1.2's fully locked camera the user
-  //can't drift it away through interaction, so this is now an
-  //animation-only entry point: it serves as the resting target for
-  //future scripted camera motions (intro orbit, narrative tilt,
-  //sun-vs-shadow comparison flyovers...) and as a one-tap reset if
-  //any of those animations leaves the camera in an unexpected pose.
+  //"Reset view", re-anchor the camera on the home and restore the
+  //default pitch/bearing. The interactive camera is locked, so this
+  //is an animation-only entry point: resting target for scripted
+  //motions (intro orbit, narrative tilt, sun-vs-shadow flyovers...)
+  //and one-tap reset if any of those leaves the camera off-pose.
   recenter() {
     if (!this.map) {
       return;
@@ -27309,7 +27369,7 @@ const _HeliosEngine = class _HeliosEngine {
         zoom: 18,
         pitch: 55,
         //Same hemisphere-aware bearing as the initial setup
-        //above — recentering must restore the resting pose,
+        //above, recentering must restore the resting pose,
         //not flip the orientation.
         bearing: this.homeLat >= 0 ? 180 : 0,
         duration: dur
@@ -27319,34 +27379,39 @@ const _HeliosEngine = class _HeliosEngine {
   //Compute the screen-space layout of the on-map readout chips and
   //the leader lines that tie them to the home / on-ground ring.
   //
-  //  cloudLabel — where the cloud-cover chip should be drawn (in
+  //  cloudLabel, where the cloud-cover chip should be drawn (in
   //               CSS pixels, relative to the map canvas). Sits to
   //               the screen-LEFT of the cloud disc, just outside
   //               the 100 % reference ring.
-  //  pvLabel    — where the optional PV production chip should be
+  //  pvLabel   , where the optional PV production chip should be
   //               drawn. Sits just below the home so the chip is
   //               read as the home's "production" badge. The SoC
   //               and Power chips sit on a shared shelf above it,
   //               so the cluster has the PV chip at the bottom,
   //               the home in the middle of the L-leaders, and
   //               the battery chips at the top.
-  //  batterySocLabel   — battery State-of-Charge chip (icon + %).
+  //  batterySocLabel  , battery State-of-Charge chip (icon + %).
   //               Sits on the shelf, to the LEFT of the home's
   //               vertical axis, connected to PV by an L polyline
   //               (PV top-left → up → left → SoC right edge).
   //               Static (no flow direction to encode).
-  //  batteryPowerLabel — battery Power chip (icon + signed W/kW).
+  //  batteryPowerLabel, battery Power chip (icon + signed W/kW).
   //               Sits on the shelf, to the RIGHT of the home's
   //               vertical axis, connected to PV by an L polyline
   //               (PV top-right → up → right → Power left edge).
   //               Animated dashes + arrow tracking the sign of
   //               the live power.
-  //  home       — the projected home point, used both as the visual
-  //               centre of the cloud disc (the cloud leader ends
-  //               here) and as the anchor for the PV / battery
-  //               chip leader lines.
+  //  ringEdge  , projected position of the cloud disc's 100 %
+  //               reference ring edge, in the hemisphere-aware
+  //               anchor direction (east of home in NH, west in
+  //               SH). The card uses (home, ringEdge) plus the
+  //               live cloud-cover percentage to interpolate the
+  //               actual fill-disc edge along the same direction.
+  //  home      , the projected home point, used as the anchor for
+  //               the PV / battery chip leader lines and as the
+  //               centre of the cloud fill disc.
   //
-  //Returns null when the map isn't ready yet — the card treats
+  //Returns null when the map isn't ready yet, the card treats
   //null as "don't render the overlay this frame".
   projectHomeLabelLayout() {
     if (!this.map) {
@@ -27377,6 +27442,7 @@ const _HeliosEngine = class _HeliosEngine {
       pvLabel: { x: pvX, y: pvY },
       batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
+      ringEdge: { x: ringEdgeX, y: ringEdgeY },
       home: { x: home.x, y: home.y }
     };
   }
@@ -27384,14 +27450,14 @@ const _HeliosEngine = class _HeliosEngine {
   //screen-space pixels using MapLibre's current camera matrices.
   //
   //Procedure (per the MapLibre v5 official 3D-model example):
-  //  1. modelMatrix = transform.getMatrixForModel(LngLat, alt) —
+  //  1. modelMatrix = transform.getMatrixForModel(LngLat, alt) ,
   //     translates / rotates a model from its local frame into
   //     Mercator world coordinates at the requested location and
   //     altitude.
   //  2. projMatrix = transform.getProjectionDataForCustomLayer()
-  //     .mainMatrix — Mercator world to gl clip space.
+  //     .mainMatrix, Mercator world to gl clip space.
   //  3. Multiply both matrices to get the full MVP.
-  //  4. Apply MVP to (0, 0, 0, 1) — the local-frame origin, which
+  //  4. Apply MVP to (0, 0, 0, 1), the local-frame origin, which
   //     becomes our 3D point after step 1.
   //  5. Perspective-divide by w to get clip-space coordinates in
   //     [-1, +1].
@@ -27404,8 +27470,8 @@ const _HeliosEngine = class _HeliosEngine {
   //Returns x/y in CSS pixels relative to the map canvas, plus depth
   //(the post-projection w component, which is monotonic in distance
   //from the camera). Callers can use depth to scale visual elements
-  //based on how far they are from the viewer — bigger when close,
-  //smaller when far — to give the otherwise flat top-down-ish view
+  //based on how far they are from the viewer, bigger when close,
+  //smaller when far, to give the otherwise flat top-down-ish view
   //a sense of perspective beyond what pitch alone provides.
   _projectScenePoint(lon, lat, altitudeM) {
     if (!this.map) {
@@ -27456,13 +27522,13 @@ const _HeliosEngine = class _HeliosEngine {
   //
   //Each arc point also carries the irradiance (W/m²) at that
   //instant, computed with the current cloud cover applied
-  //uniformly across the day — that's a simplification (real cloud
+  //uniformly across the day, that's a simplification (real cloud
   //cover varies hour-to-hour) but keeps the visualisation reactive
   //to the live weather without needing the per-hour forecast for
   //the arc itself. The sun position carries the same.
   //
   //Each arc point and the sun also carry a `nearness` value in
-  //[0..1] — 1 means closest to the camera (nearest depth in the
+  //[0..1], 1 means closest to the camera (nearest depth in the
   //batch), 0 means furthest. The card uses this to scale segment
   //thickness and the sun disc radius so the trajectory reads with
   //a real sense of perspective rather than as a flat ribbon.
@@ -27645,6 +27711,7 @@ const _HeliosEngine = class _HeliosEngine {
     const prevStyleId = this._resolveMapStyle().id;
     const prevMinimal = this._isMinimalStyle();
     const prevPerfMode = this._performanceMode();
+    const prevTerrainMax = this._terrainMaxzoom();
     const prevRadius = this._buildingRadiusMeters();
     const prevCluster = this._buildingClusterRadiusMeters();
     const prevOpacity = this._buildingOpacity();
@@ -27654,7 +27721,8 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     const nextStyleInfo = this._resolveMapStyle();
-    const styleNeedsReload = nextStyleInfo.id !== prevStyleId || this._isMinimalStyle() !== prevMinimal;
+    const nextTerrainMax = this._terrainMaxzoom();
+    const styleNeedsReload = nextStyleInfo.id !== prevStyleId || this._isMinimalStyle() !== prevMinimal || nextTerrainMax !== prevTerrainMax;
     if (styleNeedsReload) {
       bumpStat("styleReloads");
       this._mapReady = false;
@@ -27764,6 +27832,13 @@ const _HeliosEngine = class _HeliosEngine {
       canvas.removeEventListener("touchstart", this._bumpInactivityHandler);
       canvas.removeEventListener("touchmove", this._bumpInactivityHandler);
     }
+    if (this._dragRotateHandlers) {
+      const h2 = this._dragRotateHandlers;
+      h2.canvas.removeEventListener("pointerdown", h2.onDown);
+      h2.canvas.removeEventListener("pointermove", h2.onMove);
+      h2.canvas.removeEventListener("pointerup", h2.onEnd);
+      h2.canvas.removeEventListener("pointercancel", h2.onEnd);
+    }
     if (canvas && this._webglLostHandler) {
       canvas.removeEventListener("webglcontextlost", this._webglLostHandler);
     }
@@ -27796,7 +27871,9 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-cloud-disc-ring",
         "helios-cloud-ring",
         "helios-buildings-surroundings",
-        "helios-buildings-home"
+        "helios-buildings-home",
+        "helios-buildings-surroundings-outline",
+        "helios-buildings-home-outline"
       ]) {
         try {
           if (this.map.getLayer(lid)) this.map.removeLayer(lid);
@@ -27825,6 +27902,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._homeHourlyData = null;
     this._bumpInactivityCanvas = void 0;
     this._bumpInactivityHandler = void 0;
+    this._dragRotateHandlers = void 0;
     this._mapPinHandler = void 0;
     this._mapStyleLoadHandler = void 0;
     this._mapLoadHandler = void 0;
@@ -27949,7 +28027,11 @@ const en = {
     performanceModeOn: "On",
     performanceModeOff: "Off",
     performanceModeHint: "Disables 3D terrain, hillshade and caps pixel density. Useful on low-end devices or for long sessions. Camera pitch and 3D buildings are preserved.",
-    mapStyleMinimal: "Minimal"
+    mapStyleMinimal: "Minimal",
+    terrainDetail: "Terrain detail *",
+    terrainDetailSmooth: "Smooth",
+    terrainDetailFine: "Fine",
+    terrainDetailHint: "Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame — only worth it on capable desktops."
   }
 };
 const fr = {
@@ -28014,7 +28096,7 @@ const fr = {
     batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
     batteryColor: "Couleur batterie *",
     buildingsSection: "Bâtiments alentour",
-    buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité ; les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
+    buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
     buildingRadius: "Rayon de visibilité *",
     buildingClusterRadius: "Rayon de regroupement maison *",
     buildingOpacity: "Opacité des bâtiments voisins *",
@@ -28023,7 +28105,11 @@ const fr = {
     performanceModeOn: "Activé",
     performanceModeOff: "Désactivé",
     performanceModeHint: "Désactive le relief 3D, l'ombrage du relief et limite la densité de pixels. Utile sur appareils bas/moyen de gamme ou pour les longues sessions. Conserve l'inclinaison de caméra et les bâtiments en 3D.",
-    mapStyleMinimal: "Minimal"
+    mapStyleMinimal: "Minimal",
+    terrainDetail: "Détail du terrain *",
+    terrainDetailSmooth: "Lissé",
+    terrainDetailFine: "Précis",
+    terrainDetailHint: "Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation — réservé aux PC desktops puissants."
   }
 };
 const de = {
@@ -28097,7 +28183,11 @@ const de = {
     performanceModeOn: "Ein",
     performanceModeOff: "Aus",
     performanceModeHint: "Deaktiviert 3D-Terrain, Hillshade und begrenzt die Pixeldichte. Sinnvoll bei leistungsschwachen Geräten oder langen Sitzungen. Kameraneigung und 3D-Gebäude bleiben erhalten.",
-    mapStyleMinimal: "Minimal"
+    mapStyleMinimal: "Minimal",
+    terrainDetail: "Geländedetail *",
+    terrainDetailSmooth: "Geglättet",
+    terrainDetailFine: "Fein",
+    terrainDetailHint: "Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe — nur auf leistungsfähigen Desktops sinnvoll."
   }
 };
 const es = {
@@ -28171,7 +28261,11 @@ const es = {
     performanceModeOn: "Activado",
     performanceModeOff: "Desactivado",
     performanceModeHint: "Desactiva el terreno 3D, el relieve y limita la densidad de píxeles. Útil en dispositivos modestos o para sesiones largas. La inclinación y los edificios 3D se mantienen.",
-    mapStyleMinimal: "Mínimo"
+    mapStyleMinimal: "Mínimo",
+    terrainDetail: "Detalle del terreno *",
+    terrainDetailSmooth: "Suave",
+    terrainDetailFine: "Preciso",
+    terrainDetailHint: "Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación — útil solo en PCs potentes."
   }
 };
 const it = {
@@ -28245,7 +28339,11 @@ const it = {
     performanceModeOn: "Attivata",
     performanceModeOff: "Disattivata",
     performanceModeHint: "Disattiva il terreno 3D, l'ombreggiatura del rilievo e limita la densità dei pixel. Utile su dispositivi modesti o per sessioni lunghe. L'inclinazione e gli edifici 3D rimangono.",
-    mapStyleMinimal: "Minimale"
+    mapStyleMinimal: "Minimale",
+    terrainDetail: "Dettaglio del terreno *",
+    terrainDetailSmooth: "Levigato",
+    terrainDetailFine: "Fine",
+    terrainDetailHint: "Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione — utile solo su PC desktop potenti."
   }
 };
 const nl = {
@@ -28319,7 +28417,11 @@ const nl = {
     performanceModeOn: "Aan",
     performanceModeOff: "Uit",
     performanceModeHint: "Schakelt 3D-terrein, reliëfschaduw uit en beperkt de pixeldichtheid. Handig op bescheiden apparaten of voor lange sessies. De camerakanteling en 3D-gebouwen blijven behouden.",
-    mapStyleMinimal: "Minimaal"
+    mapStyleMinimal: "Minimaal",
+    terrainDetail: "Terrein-detail *",
+    terrainDetailSmooth: "Vloeiend",
+    terrainDetailFine: "Fijn",
+    terrainDetailHint: "Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe — alleen zinvol op krachtige desktops."
   }
 };
 const pt = {
@@ -28393,7 +28495,11 @@ const pt = {
     performanceModeOn: "Ativado",
     performanceModeOff: "Desativado",
     performanceModeHint: "Desativa o terreno 3D, o relevo e limita a densidade de píxeis. Útil em dispositivos modestos ou em sessões longas. A inclinação e os edifícios 3D mantêm-se.",
-    mapStyleMinimal: "Mínimo"
+    mapStyleMinimal: "Mínimo",
+    terrainDetail: "Detalhe do terreno *",
+    terrainDetailSmooth: "Suave",
+    terrainDetailFine: "Preciso",
+    terrainDetailHint: "Suave (predefinição) amostra o relevo a cada ~20 m e mantém-se fluido em qualquer dispositivo. Preciso amostra a cada ~5 m para um relevo mais detalhado mas ~16× mais vértices a projetar por frame de rotação — útil apenas em PCs potentes."
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -28462,7 +28568,7 @@ const heliosCardStyles = i$3`
         card's vocabulary (sun arc, sun + halo, low-poly buildings
         with a brighter central home, ground cloud disc, leader
         chips) over a light day-mode sky gradient. The brand chrome
-        (title + subtitle) sits at the bottom — the MapTiler key
+        (title + subtitle) sits at the bottom, the MapTiler key
         prompt lives in the README, not on the catalogue thumbnail. */
 
     .placeholder
@@ -28492,7 +28598,7 @@ const heliosCardStyles = i$3`
         z-index: 1;
     }
 
-    /*  Sun halo pulses gently — same visual language as the live
+    /*  Sun halo pulses gently, same visual language as the live
         card's breathing sun. Only the glow circle scales; the
         inner orange disc stays fixed so the brand colour reads
         cleanly at the centre. */
@@ -28515,7 +28621,7 @@ const heliosCardStyles = i$3`
         /*  Title centred horizontally, vertically anchored at 65 %
             from the BOTTOM of the placeholder (so 35 % from the
             top). Sits just above the iso buildings and visually
-            below the solar arc apex — feels less "crammed in the
+            below the solar arc apex, feels less "crammed in the
             middle" than a strict 50 % vertical centre. */
         top: 35%;
         left: 50%;
@@ -28536,7 +28642,7 @@ const heliosCardStyles = i$3`
         text-shadow: 0 1px 1px rgba(255,255,255,0.6);
         line-height: 1;
         white-space: nowrap;
-        /*  Optical centre — letter-spacing piles up on the right of
+        /*  Optical centre, letter-spacing piles up on the right of
             the last glyph so the visual centre of the wordmark
             sits a few pixels left of the geometric centre. The
             padding-left compensates so HELIOS reads centred. */
@@ -28544,7 +28650,7 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Timeline — pinned to the bottom of the card with uniform
+    /*  Timeline, pinned to the bottom of the card with uniform
         breathing space. The whole bar accepts pointer events for
         scrub. */
 
@@ -28578,7 +28684,7 @@ const heliosCardStyles = i$3`
         height: 18px;
     }
 
-    /*  Chart card — bordered white panel hosting the area chart,
+    /*  Chart card, bordered white panel hosting the area chart,
         day-label chips on the midline, dotted day separators and
         the live + scrub HTML cursor overlays. */
     .tb-chart-card
@@ -28612,6 +28718,28 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
+    /*  PV prediction line, overlays the observed PV chart for hours
+        past "now" using the auto-calibrated scalar fit from history.
+        Dashed + half opacity makes it visually distinct from the
+        recorded curve while staying in the configured PV colour so
+        it reads as "the same quantity, projected". */
+    .hc-chart-predicted
+    {
+        stroke-dasharray: 4 3;
+        opacity: 0.55;
+    }
+
+    /*  Daily peak-production highlight, for each natural day in the
+        timeline, a 1-hour-wide vertical band painted in the configured
+        PV colour at low opacity marks the hour where production is
+        (or is predicted to be) highest. Drawn behind the chart area
+        so the curves remain legible on top. */
+    .hc-pv-peak
+    {
+        opacity: 0.18;
+        pointer-events: none;
+    }
+
     /*  Faint dotted day separators inside the chart card. */
     .hc-day-sep
     {
@@ -28642,7 +28770,7 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
-    /*  Live cursor — solid black vertical line spanning the chart,
+    /*  Live cursor, solid black vertical line spanning the chart,
         with a triangle marker pointing down from the top edge. */
     .tb-cursor-now
     {
@@ -28670,7 +28798,7 @@ const heliosCardStyles = i$3`
         border-top:    5px solid #000000;
     }
 
-    /*  Scrub cursor — same anatomy, dashed and tinted blue so live
+    /*  Scrub cursor, same anatomy, dashed and tinted blue so live
         and scrubbed positions are unmistakable side by side. */
     .tb-cursor-sel
     {
@@ -28705,14 +28833,14 @@ const heliosCardStyles = i$3`
         border-top:    5px solid #1f6feb;
     }
 
-    /*  Scrub-time pill — sits in the top row above the chart card
+    /*  Scrub-time pill, sits in the top row above the chart card
         when the user has scrubbed away from "now". Tinted in the
         scrub-cursor blue so the displayed instant is visibly not
         "now". Anchored at the cursor's X via an inline left
         percentage, with edge-clamping handled by the inline
         transform so the pill never bleeds past the card edges.
         Pointer-transparent so dragging the timeline through it
-        still scrubs — the "back to live" affordance lives in the
+        still scrubs, the "back to live" affordance lives in the
         clock tab above the card, not next to the pill, to keep the
         timeline's hit area uncontested on mobile. */
     .tb-sel-label
@@ -28733,7 +28861,7 @@ const heliosCardStyles = i$3`
         z-index: 3;
     }
 
-    /*  Scrub tether — a 6 px vertical hair that drops from the
+    /*  Scrub tether, a 6 px vertical hair that drops from the
         bottom edge of the scrub cluster to the top edge of the
         chart card, anchored at the cursor's X. Carries the
         scrub-cursor blue so it reads as continuous with the cursor's
@@ -28754,7 +28882,7 @@ const heliosCardStyles = i$3`
         z-index: 3;
     }
 
-    /*  Day labels — small white chips overlaying the chart midline.
+    /*  Day labels, small white chips overlaying the chart midline.
         Same chip language as the on-map cloud and W/m² readouts. */
     .tb-day-labels
     {
@@ -28798,7 +28926,7 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Spinner — centred on the map while a fetch is in flight. */
+    /*  Spinner, centred on the map while a fetch is in flight. */
 
     .spinner-center
     {
@@ -28839,7 +28967,7 @@ const heliosCardStyles = i$3`
     /*  Top corner overlays. Date/time chip on the right; "back to
         live" chip on the left when scrubbed. */
 
-    /*  Top-row overlay — the clock centres horizontally above the
+    /*  Top-row overlay, the clock centres horizontally above the
         card, with an optional "back to live" tab hanging from its
         bottom-centre when the user has scrubbed away from now. The
         wrapper is a vertical flex column so the tab stacks under
@@ -28859,7 +28987,7 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Date/time chip — same chip language as the on-map readouts. */
+    /*  Date/time chip, same chip language as the on-map readouts. */
     .clock
     {
         display: inline-flex;
@@ -28884,7 +29012,7 @@ const heliosCardStyles = i$3`
     .clock-date { opacity: 0.75; }
     .clock-time { opacity: 1;    }
 
-    /*  "Back to live" tab — hangs from the bottom-centre of the
+    /*  "Back to live" tab, hangs from the bottom-centre of the
         clock as a small folder-style tab when the user has scrubbed
         away from now. Same blue plate as the on-chart scrub cursor
         and the scrub-time pill, white restore icon centred. The
@@ -28926,7 +29054,7 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Cloud-cover percentage chip — floating above the cloud disc
+    /*  Cloud-cover percentage chip, floating above the cloud disc
         on the ground with a leader line down to its feature. */
     .cloud-pct-label
     {
@@ -28957,7 +29085,7 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Photovoltaic production chip — same frame as cloud/W/m² but
+    /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
         text + icon) for instant identification.
         --pv-leader-color is set inline by the renderer. The
@@ -28999,7 +29127,7 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Battery chips (SoC on the left of PV, Power on the right) —
+    /*  Battery chips (SoC on the left of PV, Power on the right) ,
         same frame as the PV chip, tinted in the user-configured
         battery colour. Shares min-width and centred text with the
         PV chip so the visible dotted-leader gap on each side of PV
@@ -29045,7 +29173,7 @@ const heliosCardStyles = i$3`
         through the corner instead of snapping).
         - .battery-leader-line carries the static styling (stroke
           colour, width, opacity, dash pattern). Used on its own
-          for SoC ↔ PV — the SoC value has no sign so there's no
+          for SoC ↔ PV, the SoC value has no sign so there's no
           flow direction to animate.
         - .battery-leader-line-animated layers the flow animation
           on top: the dashes drift at a speed proportional to |P|
@@ -29099,7 +29227,7 @@ const heliosCardStyles = i$3`
         opacity: 0.9;
     }
 
-    /*  Cloud-cover leader line — black hairline from chip to disc. */
+    /*  Cloud-cover leader line, black hairline from chip to disc. */
     .cloud-leader-svg
     {
         position: absolute;
@@ -29118,7 +29246,7 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Solar overlay — sun arc, current sun disc, incidence ray.
+    /*  Solar overlay, sun arc, current sun disc, incidence ray.
         Single SVG layer spanning the card; opacity fades to 0 at
         night via inline style from the engine. */
     .solar-svg
@@ -29132,13 +29260,13 @@ const heliosCardStyles = i$3`
         transition: opacity 600ms ease-out;
     }
 
-    /*  Arc — first pass paints a dark outline for legibility on
+    /*  Arc, first pass paints a dark outline for legibility on
         light basemaps; second pass paints the configured sun
         colour on top. Stroke widths are set inline per segment. */
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
-    /*  Below-horizon segments — round dots at fixed spacing so the
+    /*  Below-horizon segments, round dots at fixed spacing so the
         eye reads "this is happening underground" without colour or
         depth scaling having to carry the signal. dasharray "0 N"
         with linecap round renders true circles on every browser. */
@@ -29148,7 +29276,7 @@ const heliosCardStyles = i$3`
         stroke-dasharray: 0 8;
     }
 
-    /*  Incidence ray — dashes flow from the sun toward the home at
+    /*  Incidence ray, dashes flow from the sun toward the home at
         a speed proportional to live irradiance. */
     .solar-svg .solar-ray
     {
@@ -29165,7 +29293,7 @@ const heliosCardStyles = i$3`
         to   { stroke-dashoffset: -10; }
     }
 
-    /*  Solar ray arrow — tiny triangle riding the incidence ray
+    /*  Solar ray arrow, tiny triangle riding the incidence ray
         toward the home, animated via SVG <animateMotion> at the
         same duration as the dash flow so the arrow advances in
         lockstep with the pointillé. rotate="auto" keeps the tip
@@ -29176,7 +29304,7 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Cloud-cover disc tooltip — floats above the on-ground disc
+    /*  Cloud-cover disc tooltip, floats above the on-ground disc
         on hover. Position set inline from the engine's onCloudHover
         event in canvas pixel coordinates. */
     .cloud-tooltip
@@ -29199,7 +29327,7 @@ const heliosCardStyles = i$3`
         white-space: nowrap;
     }
 
-    /*  Flipped variant — applied when the cursor is in the right
+    /*  Flipped variant, applied when the cursor is in the right
         half of the card so the tooltip stays inside the bounds. */
     .cloud-tooltip-flip
     {
@@ -29219,7 +29347,7 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Solar irradiance label — chip pinned above the live sun
+    /*  Solar irradiance label, chip pinned above the live sun
         position, same chip language as the cloud and PV chips. */
     .solar-pct-label
     {
@@ -29253,11 +29381,11 @@ const heliosCardStyles = i$3`
 
 
     /*  ============================================================
-        Dark theme — opt-in via the \`card-theme: dark\` config.
+        Dark theme, opt-in via the \`card-theme: dark\` config.
 
         The whole card is already painted on top of a 3D map, so
         "dark mode" here is really about the chrome (chips, charts,
-        cursors, day labels, leader lines, tooltips) — the basemap
+        cursors, day labels, leader lines, tooltips), the basemap
         keeps its own colours. Strategy:
 
           - chip surfaces flip from a solid white plate to a solid
@@ -29265,14 +29393,14 @@ const heliosCardStyles = i$3`
             darkened tile over the map instead of a
             bright sticker.
           - chip text / borders / icons go from black to a soft
-            light-grey (#e6e6e6 text, #cccccc borders) — pure white
+            light-grey (#e6e6e6 text, #cccccc borders), pure white
             would clip detail against bright basemap patches.
           - chart hairlines (midline, day separators, hour ticks,
             live cursor) flip from black-on-white to white-on-near-
             black with the same opacity envelopes as the light skin
             so the visual weight stays balanced.
           - chart fills (PV / cloud / irradiance) are user-coloured
-            and unchanged — they read fine on both surfaces.
+            and unchanged, they read fine on both surfaces.
           - the scrub blue (#1f6feb) and the live tooltip dark
             plate already read on dark backgrounds, so they're left
             alone.
@@ -29326,7 +29454,7 @@ const heliosCardStyles = i$3`
     {
         background: #191a1b;
         color:       #e6e6e6;
-        /*  Light-mode borders are pure black on a white plate —
+        /*  Light-mode borders are pure black on a white plate ,
             high contrast but visually contained because the plate
             and the basemap below it are both bright. In dark mode
             the same 1 px ring at #cccccc reads as the brightest
@@ -29352,7 +29480,7 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
     ha-card.theme-dark .tl-live-btn:active { background: #353637; }
 
-    /*  PV and battery chips — they keep the user-configured tint
+    /*  PV and battery chips, they keep the user-configured tint
         on the border / text / icon (so a green PV chip reads as
         green on either skin), but the surface flips to the dark
         plate so the tint stays readable. The border drops to 50 %
@@ -29381,7 +29509,7 @@ const heliosCardStyles = i$3`
         stroke-opacity: 0.55;
     }
 
-    /*  Solar arc outline — the light skin paints a black halo
+    /*  Solar arc outline, the light skin paints a black halo
         behind the configured sun colour for legibility on bright
         basemaps; in dark mode that halo would disappear into the
         map, so we paint a faint white halo instead. The arc and
@@ -29396,14 +29524,14 @@ const heliosCardStyles = i$3`
         Animation perf hooks
         ---------------------------------------------------------
 
-        1. .helios-paused — set on the host element by the card's
+        1. .helios-paused, set on the host element by the card's
            IntersectionObserver when the card scrolls out of the
            viewport. Pauses every CSS animation (SVG dash-flow,
            offset-path arrow flow, placeholder spin / pulse) until
            the card returns. SMIL <animateMotion> is paused in
            parallel via svg.pauseAnimations() in the card script.
 
-        2. prefers-reduced-motion — respects the user's system
+        2. prefers-reduced-motion, respects the user's system
            setting. When the user has asked for reduced motion at
            the OS level, every helios animation and transition is
            disabled. The card still functions; it just doesn't move.
@@ -29765,7 +29893,7 @@ let HeliosCardEditor = class extends i {
   //In a fresh tab, or in HA versions that don't pre-load it for
   //custom cards, the tag is unknown until something on the page
   //pulls it in. We force the load by creating a transient
-  //"entities" card and asking for its config element — the side
+  //"entities" card and asking for its config element, the side
   //effect registers ha-entity-picker. While the load is pending we
   //fall back to a plain text input so the field is never broken.
   async _ensureEntityPicker() {
@@ -29909,6 +30037,22 @@ let HeliosCardEditor = class extends i {
                     </div>
                 </div>
                 <div class="hint">${t2.editor.mapStyleHint}</div>
+                <div class="field">
+                    <span class="label">${t2.editor.terrainDetail}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["terrain-detail"] ?? "smooth") === "smooth" ? "active" : ""}"
+                            @click="${() => this._update("terrain-detail", "smooth")}"
+                        >${t2.editor.terrainDetailSmooth}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${String(c2["terrain-detail"] ?? "smooth") === "fine" ? "active" : ""}"
+                            @click="${() => this._update("terrain-detail", "fine")}"
+                        >${t2.editor.terrainDetailFine}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.terrainDetailHint}</div>
                 <div class="field">
                     <span class="label">${t2.editor.cardTheme}</span>
                     <div class="segmented-toggle">
@@ -30277,7 +30421,7 @@ HeliosCardEditor.styles = i$3`
             color: var(--text-primary-color, #fff);
         }
 
-        /*  Slider variant — replaces type="number" inputs so the
+        /*  Slider variant, replaces type="number" inputs so the
             user can never enter a value outside the supported range.
             The matching value is shown to the right of the track. */
         .slider-row
@@ -30382,12 +30526,16 @@ let HeliosCard = class extends i {
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
+    this._isInEditorPreview = false;
     this._trackElement = null;
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
     this._boundPointerUp = (e2) => this._onTimelinePointerUp(e2);
+    this._pvCalibK = null;
+    this._pvCalibHARead = false;
+    this._pvCalibPendingSave = null;
   }
-  //Cheap stable signature of the visual config — used to skip
+  //Cheap stable signature of the visual config, used to skip
   //updateConfig() when nothing the engine cares about has changed.
   _computeConfigSig() {
     if (!this.config) {
@@ -30408,8 +30556,7 @@ let HeliosCard = class extends i {
   static getStubConfig() {
     return { "maptiler-api-key": "" };
   }
-  //Sizing for masonry view (legacy). 1 unit = 50 px so 12 ≈ 600 px,
-  //matching the historical default height of the card.
+  //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
   getCardSize() {
     return 12;
   }
@@ -30438,12 +30585,45 @@ let HeliosCard = class extends i {
     this._tick();
     this._timer = window.setInterval(() => this._tick(), 1e3);
     this._initVisibilityObserver();
+    this._isInEditorPreview = this._detectEditorPreview();
+  }
+  _detectEditorPreview() {
+    const EDITOR_TAGS = /* @__PURE__ */ new Set([
+      "hui-dialog-edit-card",
+      "hui-card-element-editor",
+      "hui-edit-card",
+      "hui-card-editor"
+    ]);
+    let node = this;
+    let hops = 0;
+    while (node && hops++ < 40) {
+      if (node instanceof ShadowRoot) {
+        node = node.host;
+        continue;
+      }
+      if (node instanceof Element) {
+        const tag = node.tagName?.toLowerCase();
+        if (tag && EDITOR_TAGS.has(tag)) return true;
+      }
+      node = node.parentNode;
+    }
+    return false;
   }
   disconnectedCallback() {
     super.disconnectedCallback();
     window.clearInterval(this._timer);
     this._visibilityObserver?.disconnect();
     this._visibilityObserver = void 0;
+    if (this._initDebounceTimer !== void 0) {
+      window.clearTimeout(this._initDebounceTimer);
+      this._initDebounceTimer = void 0;
+      this._initInflight = false;
+    }
+    if (this._pvCalibHAWriteTimer !== void 0) {
+      window.clearTimeout(this._pvCalibHAWriteTimer);
+      this._pvCalibHAWriteTimer = void 0;
+      void this._flushPvCalibToHA();
+    }
     this._engine?.cleanup();
     this._engine = void 0;
   }
@@ -30474,7 +30654,7 @@ let HeliosCard = class extends i {
   }
   //Engine init policy: re-init only when one of the *identity inputs*
   //changes (API key, home coordinates, map style). We resize the
-  //existing engine when the container reflows — we never tear down
+  //existing engine when the container reflows, we never tear down
   //the MapLibre stack just because a sibling fragment re-rendered.
   //Doing so would trash the user's in-progress edits in the
   //dashboard editor.
@@ -30487,6 +30667,9 @@ let HeliosCard = class extends i {
     const lon = this.hass.config.longitude;
     if (lat === void 0 || lon === void 0 || !apiKey) {
       return;
+    }
+    if (!this._pvCalibHARead) {
+      void this._reconcilePvCalibWithHA();
     }
     const homeKey = `${lat.toFixed(5)},${lon.toFixed(5)}`;
     const identityChanged = apiKey !== this._lastApiKey || homeKey !== this._lastHomeKey;
@@ -30518,7 +30701,7 @@ let HeliosCard = class extends i {
   //  - the entity's historical state changes over the active time
   //    range (fetched asynchronously via the history WebSocket
   //    command), plotted on the dedicated graph above the main
-  //    timeline. Only past + current data is fetched — the future
+  //    timeline. Only past + current data is fetched, the future
   //    half of the timeline range is intentionally left blank
   //    because production data simply doesn't exist yet.
   _refreshPv() {
@@ -30574,8 +30757,8 @@ let HeliosCard = class extends i {
     this._pvFetchKey = fetchKey;
     this._fetchPvHistory(entity, this._timeRange.start, this._timeRange.end);
   }
-  //Battery overlay — pulls live state from hass.states on every Lit
-  //cycle (no rolling buffer like PV — battery entities are typically
+  //Battery overlay, pulls live state from hass.states on every Lit
+  //cycle (no rolling buffer like PV, battery entities are typically
   //power sensors that already expose an instantaneous reading) and,
   //when at least one entity is configured AND the timeline range is
   //set, fetches a historical series so the chip can show what the
@@ -30640,7 +30823,7 @@ let HeliosCard = class extends i {
   //(when configured) are bundled into one `entity_ids` array so we
   //pay one WS roundtrip instead of two. Either side of the result
   //may end up empty (entity not yet existing, no state changes in
-  //range, etc.) and that's fine — the chip will show only the side
+  //range, etc.) and that's fine, the chip will show only the side
   //that did return data.
   async _fetchBatteryHistory(socEntity, powerEntity, start, end) {
     if (!this.hass?.callWS) {
@@ -30813,6 +30996,7 @@ let HeliosCard = class extends i {
         values.push(v2);
       }
       this._pvHistory = { times, values };
+      this._updatePvCalibration();
     } catch (e2) {
       console.warn("[HELIOS] PV history fetch failed:", e2);
       this._pvHistory = { times: [], values: [] };
@@ -30820,9 +31004,27 @@ let HeliosCard = class extends i {
       this._pvFetching = false;
     }
   }
-  //Engine setup
   _initEngine() {
+    if (this._isInEditorPreview) {
+      try {
+        const w2 = window;
+        if (w2.__heliosStats) {
+          w2.__heliosStats.enginesSkippedAsPreview = (w2.__heliosStats.enginesSkippedAsPreview ?? 0) + 1;
+        }
+      } catch (_2) {
+      }
+      return;
+    }
     this._initInflight = true;
+    if (this._initDebounceTimer !== void 0) {
+      window.clearTimeout(this._initDebounceTimer);
+    }
+    this._initDebounceTimer = window.setTimeout(() => {
+      this._initDebounceTimer = void 0;
+      this._initEngineNow();
+    }, HeliosCard.INIT_DEBOUNCE_MS);
+  }
+  _initEngineNow() {
     requestAnimationFrame(() => {
       const container = this.shadowRoot?.getElementById("map-container");
       if (!container || !this.config || !this.hass?.config) {
@@ -30859,6 +31061,7 @@ let HeliosCard = class extends i {
         this._timeRange = data.timeRange;
         this._isLiveMode = data.isLiveTime;
         this._chartSeries = this._engine?.getTimelineSeries() ?? null;
+        this._updatePvCalibration();
         this._refreshOverlays();
       };
       this._engine.onCloudHover = (e2) => {
@@ -30896,7 +31099,7 @@ let HeliosCard = class extends i {
   //colour). Depth perception comes entirely from the per-segment
   //stroke width modulated by `nearness`, kept untouched: it is the
   //2D-on-3D cue we explicitly chose not to overload with another
-  //dimension. Irradiance is still kept on the segment shape — the
+  //dimension. Irradiance is still kept on the segment shape, the
   //caller doesn't use it any more, but removing it would broaden
   //the change surface unnecessarily; we just stop *colouring* with
   //it.
@@ -31119,7 +31322,7 @@ let HeliosCard = class extends i {
   //the scrub cursor line up vertically across both blocks. The
   //curve is plotted from this._pvHistory (fetched via the HA
   //history WebSocket command); future data is intentionally left
-  //blank — the curve naturally stops at the last recorded sample
+  //blank, the curve naturally stops at the last recorded sample
   //since there's no production data after "now".
   _renderPvChart() {
     const range = this._timeRange;
@@ -31182,11 +31385,69 @@ let HeliosCard = class extends i {
       samples.push({ t: t2, v: v2 });
     }
     const xOf = (t2) => (t2.getTime() - startMs) / rangeMs * W;
+    const k2 = this._pvCalibK;
+    const lat = this.hass?.config?.latitude;
+    const lon = this.hass?.config?.longitude;
+    const series = this._chartSeries;
+    const predictedSamples = [];
+    if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
+      const nowMs = Date.now();
+      for (let i2 = 0; i2 < series.times.length; i2++) {
+        const tMs = series.times[i2].getTime();
+        if (tMs < nowMs) continue;
+        if (tMs < startMs) continue;
+        if (tMs > endMsAbs) continue;
+        const pct = computePvPower(series.times[i2], lat, lon, series.cloud[i2] ?? 0);
+        if (pct <= 0) continue;
+        predictedSamples.push({ t: series.times[i2], v: pct * k2 });
+      }
+    }
+    const HOUR_MS = 36e5;
+    const peakByHour = /* @__PURE__ */ new Map();
+    const observedHourly = this._aggregatePvWattsPerHour();
+    for (const [hourTs, watts] of observedHourly) {
+      if (hourTs < startMs || hourTs >= endMsAbs) continue;
+      peakByHour.set(hourTs, watts);
+    }
+    if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
+      for (let i2 = 0; i2 < series.times.length; i2++) {
+        const tMs = series.times[i2].getTime();
+        const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+        if (hourTs < startMs || hourTs >= endMsAbs) continue;
+        if (peakByHour.has(hourTs)) continue;
+        const pct = computePvPower(series.times[i2], lat, lon, series.cloud[i2] ?? 0);
+        if (pct <= 0) continue;
+        peakByHour.set(hourTs, pct * k2);
+      }
+    }
+    const peakColumns = [];
+    const dayWalker = new Date(range.start);
+    dayWalker.setHours(0, 0, 0, 0);
+    while (dayWalker.getTime() < endMsAbs) {
+      const dayStart = dayWalker.getTime();
+      const dayEnd = dayStart + 24 * HOUR_MS;
+      let peakHourTs = -1;
+      let peakWatts = 0;
+      for (const [hourTs, watts] of peakByHour) {
+        if (hourTs < dayStart || hourTs >= dayEnd) continue;
+        if (watts > peakWatts) {
+          peakHourTs = hourTs;
+          peakWatts = watts;
+        }
+      }
+      if (peakHourTs >= 0 && peakWatts > 10) {
+        const x1 = (peakHourTs - startMs) / rangeMs * W;
+        const x2 = (peakHourTs + HOUR_MS - startMs) / rangeMs * W;
+        peakColumns.push({ x1, x2 });
+      }
+      dayWalker.setDate(dayWalker.getDate() + 1);
+    }
     let yMax = 1;
     for (const s2 of samples) {
-      if (s2.v > yMax) {
-        yMax = s2.v;
-      }
+      if (s2.v > yMax) yMax = s2.v;
+    }
+    for (const s2 of predictedSamples) {
+      if (s2.v > yMax) yMax = s2.v;
     }
     const yOf = (v2) => H2 - Math.max(0, Math.min(1, v2 / yMax)) * H2;
     const points = samples.map((s2) => `${xOf(s2.t).toFixed(2)},${yOf(s2.v).toFixed(2)}`);
@@ -31198,12 +31459,25 @@ let HeliosCard = class extends i {
       area = `M ${x0},${H2} L ${points.join(" L ")} L ${xN},${H2} Z`;
       line = `M ${points.join(" L ")}`;
     }
+    let predictedLine = "";
+    if (predictedSamples.length >= 2) {
+      const pPoints = predictedSamples.map((s2) => `${xOf(s2.t).toFixed(2)},${yOf(s2.v).toFixed(2)}`);
+      predictedLine = `M ${pPoints.join(" L ")}`;
+    }
     return b`
             <svg
                 class="hc-chart-svg"
                 viewBox="0 0 ${W} ${H2}"
                 preserveAspectRatio="none"
             >
+                ${peakColumns.map((c2) => w`
+                    <rect
+                        class="hc-pv-peak"
+                        x="${c2.x1.toFixed(2)}" y="0"
+                        width="${(c2.x2 - c2.x1).toFixed(2)}" height="${H2}"
+                        fill="${pvColor}"
+                    ></rect>
+                `)}
                 ${dayXs.map((x2) => w`
                     <line
                         class="hc-day-sep"
@@ -31220,6 +31494,13 @@ let HeliosCard = class extends i {
                     <path
                         class="hc-chart-line"
                         d="${line}"
+                        stroke="${pvColor}"
+                    ></path>
+                ` : A}
+                ${predictedLine ? w`
+                    <path
+                        class="hc-chart-line hc-chart-predicted"
+                        d="${predictedLine}"
                         stroke="${pvColor}"
                     ></path>
                 ` : A}
@@ -31307,7 +31588,7 @@ let HeliosCard = class extends i {
   //bracketing the requested instant; for a power entity we just
   //return the value of the closest historical sample. Returns
   //null when the requested time falls outside the fetched
-  //history window — the chip is then hidden by the caller, which
+  //history window, the chip is then hidden by the caller, which
   //is the right behaviour for the future half of the timeline
   //(no production data exists there yet).
   _pvRateAtTime(time) {
@@ -31455,7 +31736,7 @@ let HeliosCard = class extends i {
     return { value: 0, unit: rateUnit };
   }
   //Convert a PV rate into watts. Used to drive animation speeds on
-  //a unit-agnostic scale — the leader-line dash flow saturates at a
+  //a unit-agnostic scale, the leader-line dash flow saturates at a
   //fixed wattage no matter what unit the user's sensor is in.
   _pvNormalizeToWatts(value, unit) {
     const lu = (unit || "").toLowerCase();
@@ -31464,15 +31745,207 @@ let HeliosCard = class extends i {
     if (lu === "w") return value;
     return 0;
   }
+  _pvCalibStorageKey() {
+    const lat = this.hass?.config?.latitude;
+    const lon = this.hass?.config?.longitude;
+    if (typeof lat !== "number" || typeof lon !== "number") return null;
+    return `helios-pv-calib:${lat.toFixed(3)}_${lon.toFixed(3)}`;
+  }
+  //Synchronous read from localStorage cache. Used at boot so the
+  //first chart render already has whatever data we have locally;
+  //HA reconciliation lands a few hundred ms later.
+  _loadPvCalibSamples() {
+    const key = this._pvCalibStorageKey();
+    if (!key) return [];
+    try {
+      const raw = window.localStorage?.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+      return parsed.filter((e2) => typeof e2.t === "number" && e2.t >= cutoff && typeof e2.o === "number" && isFinite(e2.o) && typeof e2.p === "number" && isFinite(e2.p));
+    } catch (_2) {
+      return [];
+    }
+  }
+  //Save to localStorage immediately + schedule a debounced HA
+  //write. Two destinations because they each cover a different
+  //failure mode: localStorage gives us instant boot, HA gives us
+  //device-portability + backup safety.
+  _savePvCalibSamples(samples) {
+    const key = this._pvCalibStorageKey();
+    if (!key) return;
+    try {
+      window.localStorage?.setItem(key, JSON.stringify(samples));
+    } catch (_2) {
+    }
+    this._pvCalibPendingSave = samples;
+    if (this._pvCalibHAWriteTimer === void 0) {
+      this._pvCalibHAWriteTimer = window.setTimeout(
+        () => this._flushPvCalibToHA(),
+        HeliosCard.PV_CALIB_HA_WRITE_MS
+      );
+    }
+  }
+  //Push the latest buffer to HA via frontend/set_user_data.
+  //frontend/get_user_data + frontend/set_user_data accept arbitrary
+  //string keys and store on the server under the current HA user's
+  //profile (.storage/frontend.user_data_{user_id}). Per-user means
+  //multi-account HA installs keep their calibrations separate,
+  //which is the right default when different people may have
+  //different PV setups.
+  async _flushPvCalibToHA() {
+    this._pvCalibHAWriteTimer = void 0;
+    const samples = this._pvCalibPendingSave;
+    const key = this._pvCalibStorageKey();
+    this._pvCalibPendingSave = null;
+    if (!samples || !key) return;
+    if (!this.hass?.callWS) return;
+    try {
+      await this.hass.callWS({
+        type: "frontend/set_user_data",
+        key,
+        value: samples
+      });
+    } catch (_2) {
+    }
+  }
+  //Pull the buffer from HA, merge with the local cache (HA wins
+  //on conflict, it's the source of truth), recompute k. Called
+  //once when hass becomes available; subsequent updates flow
+  //through _updatePvCalibration / _savePvCalibSamples.
+  async _reconcilePvCalibWithHA() {
+    if (this._pvCalibHARead) return;
+    if (!this.hass?.callWS) return;
+    const key = this._pvCalibStorageKey();
+    if (!key) return;
+    this._pvCalibHARead = true;
+    try {
+      const result = await this.hass.callWS({
+        type: "frontend/get_user_data",
+        key
+      });
+      const remote = Array.isArray(result?.value) ? result.value.filter((e2) => typeof e2?.t === "number" && typeof e2?.o === "number" && isFinite(e2.o) && typeof e2?.p === "number" && isFinite(e2.p)) : [];
+      const local = this._loadPvCalibSamples();
+      const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+      const byTs = /* @__PURE__ */ new Map();
+      for (const e2 of local) {
+        if (e2.t >= cutoff) byTs.set(e2.t, e2);
+      }
+      for (const e2 of remote) {
+        if (e2.t >= cutoff) byTs.set(e2.t, e2);
+      }
+      const merged = Array.from(byTs.values()).sort((a2, b2) => a2.t - b2.t);
+      try {
+        const sKey = this._pvCalibStorageKey();
+        if (sKey) window.localStorage?.setItem(sKey, JSON.stringify(merged));
+      } catch (_2) {
+      }
+      this._pvCalibK = this._calibrateK(merged);
+      this.requestUpdate();
+    } catch (_2) {
+    }
+  }
+  //Bucket the raw PV history into one (avg-watts) value per local
+  //hour, handling cumulative-energy sensors via the same
+  //differentiation logic the chart renderer uses.
+  _aggregatePvWattsPerHour() {
+    const out = /* @__PURE__ */ new Map();
+    const hist = this._pvHistory;
+    if (!hist || hist.times.length === 0) return out;
+    const lu = (this._pvUnit || "").toLowerCase();
+    const isCumulativeEnergy = lu === "wh" || lu === "kwh" || lu === "mwh";
+    let times = hist.times;
+    let values = hist.values;
+    if (isCumulativeEnergy && times.length >= 2) {
+      const dTimes = [];
+      const dValues = [];
+      for (let i2 = 1; i2 < times.length; i2++) {
+        const dtH = (times[i2].getTime() - times[i2 - 1].getTime()) / 36e5;
+        if (dtH <= 0 || dtH > 6) continue;
+        const dv = values[i2] - values[i2 - 1];
+        if (dv < 0) continue;
+        dTimes.push(times[i2]);
+        dValues.push(dv / dtH);
+      }
+      times = dTimes;
+      values = dValues;
+    }
+    const sums = /* @__PURE__ */ new Map();
+    const counts = /* @__PURE__ */ new Map();
+    for (let i2 = 0; i2 < times.length; i2++) {
+      const ts = times[i2].getTime();
+      const v2 = values[i2];
+      if (!isFinite(v2)) continue;
+      const w2 = this._pvNormalizeToWatts(v2, this._pvUnit ?? "");
+      const hourTs = Math.floor(ts / 36e5) * 36e5;
+      sums.set(hourTs, (sums.get(hourTs) ?? 0) + w2);
+      counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
+    }
+    for (const [hourTs, sum] of sums) {
+      const c2 = counts.get(hourTs) ?? 1;
+      out.set(hourTs, sum / c2);
+    }
+    return out;
+  }
+  //Refresh the per-hour calibration buffer from the current
+  //_pvHistory and _chartSeries, merge with the persisted buffer,
+  //prune old entries, save, and recompute k. Called whenever either
+  //input changes.
+  _updatePvCalibration() {
+    const lat = this.hass?.config?.latitude;
+    const lon = this.hass?.config?.longitude;
+    if (typeof lat !== "number" || typeof lon !== "number") return;
+    const series = this._chartSeries;
+    if (!series || series.times.length === 0) return;
+    const buckets = this._aggregatePvWattsPerHour();
+    if (buckets.size === 0) {
+      this._pvCalibK = this._calibrateK(this._loadPvCalibSamples());
+      return;
+    }
+    const cloudByHour = /* @__PURE__ */ new Map();
+    for (let i2 = 0; i2 < series.times.length; i2++) {
+      const hourTs = Math.floor(series.times[i2].getTime() / 36e5) * 36e5;
+      cloudByHour.set(hourTs, series.cloud[i2] ?? 0);
+    }
+    const existing = this._loadPvCalibSamples();
+    const byTs = /* @__PURE__ */ new Map();
+    for (const s2 of existing) byTs.set(s2.t, s2);
+    for (const [hourTs, observedW] of buckets) {
+      const cloud = cloudByHour.get(hourTs);
+      if (cloud === void 0) continue;
+      const tCentered = new Date(hourTs + 30 * 6e4);
+      const predictedPct = computePvPower(tCentered, lat, lon, cloud);
+      if (predictedPct < 1) continue;
+      if (observedW < 5) continue;
+      byTs.set(hourTs, { t: hourTs, o: observedW, p: predictedPct });
+    }
+    const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
+    const merged = Array.from(byTs.values()).filter((e2) => e2.t >= cutoff).sort((a2, b2) => a2.t - b2.t);
+    this._savePvCalibSamples(merged);
+    this._pvCalibK = this._calibrateK(merged);
+  }
+  _calibrateK(samples) {
+    if (samples.length < HeliosCard.PV_CALIB_MIN_SAMPLES) return null;
+    let sumXY = 0, sumXX = 0;
+    for (const s2 of samples) {
+      sumXY += s2.o * s2.p;
+      sumXX += s2.p * s2.p;
+    }
+    if (sumXX <= 0) return null;
+    const k2 = sumXY / sumXX;
+    if (!isFinite(k2) || k2 <= 0 || k2 > 1e3) return null;
+    return k2;
+  }
   //Map a "rate" magnitude to an animation duration in seconds.
-  //  rate <= 0           → 30 s        (paused — night / no production)
-  //  rate  = saturation  → minDuration (fastest — full power)
+  //  rate <= 0           → 30 s        (paused, night / no production)
+  //  rate  = saturation  → minDuration (fastest, full power)
   //
   //Ease-out cubic ramp: half-saturation already feels meaningfully
   //faster than the night baseline, which gives the user the
   //feeling of raw power pushing through the line. The minDuration
   //is exposed so callers can tune the saturated-end pace per
-  //channel — the sun ray spans the full map and benefits from a
+  //channel, the sun ray spans the full map and benefits from a
   //slightly slower flow than the PV leader, which is short and
   //local.
   static _flowDuration(rate, saturation, minDuration = 0.4) {
@@ -31487,7 +31960,7 @@ let HeliosCard = class extends i {
   //auto-rescales W → kW when the magnitude crosses a threshold so
   //a 4500 W reading prints as "4.5 kW" rather than the noisier
   //"4500 W". Energy units (kWh / Wh) keep their native unit and
-  //get a single decimal — daily totals usually sit in the 0–50 kWh
+  //get a single decimal, daily totals usually sit in the 0–50 kWh
   //band where one decimal is the right amount of precision.
   _formatPvValue(value, unit) {
     const u2 = (unit || "").trim();
@@ -31556,6 +32029,7 @@ let HeliosCard = class extends i {
     const batteryPowerText = showPowerChip ? this._formatBatteryPower(activeBatteryPower, activeBatteryUnit) : "";
     const batteryCharging = showPowerChip && activeBatteryPower > 0;
     const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
+    const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
     const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
     const PV_LEG_OFFSET_PX = 7;
     const PV_HALF_HEIGHT_PX = 11;
@@ -31622,12 +32096,13 @@ let HeliosCard = class extends i {
     }
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
+    const showPlaceholder = !hasApiKey || this._isInEditorPreview;
     return b`
-            <ha-card class="${cardThemeClass} ${!hasApiKey ? "placeholder-mode" : ""}">
+            <ha-card class="${cardThemeClass} ${showPlaceholder ? "placeholder-mode" : ""}">
 
-                ${!hasApiKey ? this._renderPlaceholder() : A}
+                ${showPlaceholder ? this._renderPlaceholder() : A}
 
-                <div id="map-container" class="${!hasApiKey ? "hidden" : ""}"></div>
+                <div id="map-container" class="${showPlaceholder ? "hidden" : ""}"></div>
 
                 ${hasApiKey && this._timeRange ? b`
                     <div
@@ -31665,7 +32140,7 @@ let HeliosCard = class extends i {
     })() : A}
                         </div>
 
-                        <!--  Optional PV production graph — only
+                        <!--  Optional PV production graph, only
                               rendered when the user has set the
                               pv-power-entity config. Same chip
                               styling as the main chart card; sits
@@ -31722,7 +32197,7 @@ ${showSun ? b`
                         class="solar-svg"
                         style="opacity:${sunScene.daylight}"
                     >
-                        <!--  Arc — single colour pass, depth conveyed
+                        <!--  Arc, single colour pass, depth conveyed
                               by per-segment stroke-width modulation.
                               First pass paints a faint dark outline
                               for legibility against bright basemap
@@ -31801,7 +32276,7 @@ ${showSun ? b`
                 <!--  Always-visible W/m² label, pinned above the sun
                       disc. Same visual language as the cloud-cover
                       label above the home: black border, white card,
-                      tabular numerals — they read as a matched pair
+                      tabular numerals, they read as a matched pair
                       of cartographic readouts.  -->
                 ${showSunLabel ? b`
                     <div
@@ -31813,15 +32288,22 @@ ${showSun ? b`
                     </div>
                 ` : A}
 
+                ${showLabel ? (() => {
+      const pct = Math.max(0, Math.min(100, this._cloudCover));
+      const tFill = pct / 100;
+      const endX = layout.home.x + (layout.ringEdge.x - layout.home.x) * tFill;
+      const endY = layout.home.y + (layout.ringEdge.y - layout.home.y) * tFill;
+      return b`
+                        <svg class="cloud-leader-svg">
+                            <line
+                                x1="${layout.cloudLabel.x + 10}"
+                                y1="${layout.cloudLabel.y}"
+                                x2="${endX}"
+                                y2="${endY}"
+                            ></line>
+                        </svg>`;
+    })() : A}
                 ${showLabel ? b`
-                    <svg class="cloud-leader-svg">
-                        <line
-                            x1="${layout.cloudLabel.x + 10}"
-                            y1="${layout.cloudLabel.y}"
-                            x2="${layout.home.x}"
-                            y2="${layout.home.y}"
-                        ></line>
-                    </svg>
                     <div
                         class="cloud-pct-label"
                         style="left:${layout.cloudLabel.x}px; top:${layout.cloudLabel.y}px"
@@ -31856,7 +32338,7 @@ ${showSun ? b`
                 ${showSocChip || showPowerChip ? b`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV — static, dashed, inverted-L
+                            SoC ↔ PV, static, dashed, inverted-L
                             path with a rounded corner (matching
                             the PV ↔ Power leader's vocabulary
                             exactly minus the flow animation).
@@ -31873,7 +32355,7 @@ ${showSun ? b`
                             ></path>
                         ` : A}
                         <!--
-                            PV ↔ Power — animated, dashed L with
+                            PV ↔ Power, animated, dashed L with
                             an arrow tracking the sign of the live
                             power. Vertical leg drops from PV's
                             bottom edge slightly right of centre,
@@ -31886,31 +32368,33 @@ ${showSun ? b`
                         -->
                         ${showPowerChip ? w`
                             <path
-                                class="battery-leader-line battery-leader-line-animated ${batteryCharging ? "" : "battery-leader-discharging"}"
+                                class="battery-leader-line ${batteryIdle ? "" : "battery-leader-line-animated"} ${batteryCharging ? "" : "battery-leader-discharging"}"
                                 style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
                                 d="${powerLeaderPath}"
                             ></path>
-                            <!--
-                                Polygon is centroid-centred at (0,0):
-                                the centroid of (-2,-4), (4,0), (-2,4)
-                                is (0,0), so animateMotion pivots the
-                                arrow about its visual mass rather than
-                                its tip. Through the L's fillet the
-                                arrow stays balanced on the path
-                                instead of swinging off it.
-                            -->
-                            <polygon
-                                class="battery-leader-arrow"
-                                points="-2,-4 4,0 -2,4"
-                                fill="${batteryColor}"
-                            >
-                                <animateMotion
-                                    dur="${batteryFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="${powerArrowPath}"
-                                ></animateMotion>
-                            </polygon>
+                            ${!batteryIdle ? w`
+                                <!--
+                                    Polygon is centroid-centred at (0,0):
+                                    the centroid of (-2,-4), (4,0), (-2,4)
+                                    is (0,0), so animateMotion pivots the
+                                    arrow about its visual mass rather
+                                    than its tip. Through the L's fillet
+                                    the arrow stays balanced on the path
+                                    instead of swinging off it.
+                                -->
+                                <polygon
+                                    class="battery-leader-arrow"
+                                    points="-2,-4 4,0 -2,4"
+                                    fill="${batteryColor}"
+                                >
+                                    <animateMotion
+                                        dur="${batteryFlowDuration}s"
+                                        repeatCount="indefinite"
+                                        rotate="auto"
+                                        path="${powerArrowPath}"
+                                    ></animateMotion>
+                                </polygon>
+                            ` : A}
                         ` : A}
                     </svg>
                     ${showSocChip ? b`
@@ -31937,7 +32421,7 @@ ${showSun ? b`
         `;
   }
   //Darken a #rrggbb hex by a factor in [0, 1] (0 = unchanged,
-  //1 = pure black). Multiplicative on each channel — keeps the
+  //1 = pure black). Multiplicative on each channel, keeps the
   //hue intact, just lowers the value. Used to derive the slightly
   //darker rim colour around the sun disc from the configured sun
   //colour, so the rim stays visible against the disc fill without
@@ -32005,7 +32489,7 @@ ${showSun ? b`
                         <polygon points="177,198 215,218 215,260 177,240" fill="#ccccd0" />
                     </g>
 
-                    <!-- Solar arc — drawn over the buildings so it
+                    <!-- Solar arc, drawn over the buildings so it
                          visually inhabits the sky. -->
                     <path
                         d="M 50 230 Q 215 60 360 230"
@@ -32051,41 +32535,33 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   "show-labels",
   "sun-color",
   "cloud-color",
-  //pv-color is purely a card-level visual (the chart fill /
-  //stroke) but we still include it so the config sig changes
-  //and Lit re-renders the chart. pv-power-entity is included
-  //too so changing it triggers a fresh history fetch.
+  //pv-color is card-level; included so the sig changes and Lit
+  //re-renders the chart. pv-power-entity triggers a fresh fetch.
   "pv-color",
   "pv-power-entity",
-  //map-style triggers a MapLibre setStyle() inside updateConfig,
-  //so the engine reloads the basemap (terrain, hillshade, cloud
-  //disc, buildings and label visibility are all re-applied via
-  //the resulting `style.load`).
+  //map-style triggers a MapLibre setStyle(), the engine reloads
+  //terrain, hillshade, cloud disc, buildings and labels on the
+  //resulting `style.load`.
   "map-style",
-  //Battery overlay — soc and power entities feed the live chip
-  //below the home; battery-color tints the chip border, text
-  //and animated leader. Including them in the visual sig means
-  //changing the entity in the editor triggers a re-render that
-  //picks up the new readings on the next hass property update.
   "battery-soc-entity",
   "battery-power-entity",
   "battery-color",
-  //card-theme is purely a card-level visual (it switches the
-  //ha-card's class to flip CSS variables / chip colours
-  //between the light and dark skins), but it must be in the
-  //sig so Lit re-renders the card when the user toggles it
-  //in the editor.
+  //card-theme is card-level (light/dark skin) but must be in the
+  //sig so Lit re-renders when the user toggles it.
   "card-theme",
-  //building-* drive the helios-buildings-* custom layers.
-  //  radius / cluster-radius → invalidate cache and refetch
-  //  opacity / color → cheap paint-property updates
+  //building-radius / cluster-radius invalidate cache and refetch;
+  //opacity / color are cheap paint-property updates.
   "building-radius",
   "building-cluster-radius",
   "building-opacity",
   "building-color",
-  //performance-mode toggles terrain, hillshade and pixelRatio.
-  "performance-mode"
+  "performance-mode",
+  "terrain-detail"
 ];
+HeliosCard.INIT_DEBOUNCE_MS = 500;
+HeliosCard.PV_CALIB_TTL_MS = 14 * 24 * 36e5;
+HeliosCard.PV_CALIB_MIN_SAMPLES = 20;
+HeliosCard.PV_CALIB_HA_WRITE_MS = 6e4;
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([
   n2({ attribute: false })

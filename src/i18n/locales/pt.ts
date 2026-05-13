@@ -77,6 +77,10 @@ export const pt: Translations = {
         performanceModeOn:     'Ativado',
         performanceModeOff:    'Desativado',
         performanceModeHint:   'Desativa o terreno 3D, o relevo e limita a densidade de píxeis. Útil em dispositivos modestos ou em sessões longas. A inclinação e os edifícios 3D mantêm-se.',
-        mapStyleMinimal:       'Mínimo'
+        mapStyleMinimal:       'Mínimo',
+        terrainDetail:         'Detalhe do terreno *',
+        terrainDetailSmooth:   'Suave',
+        terrainDetailFine:     'Preciso',
+        terrainDetailHint:     'Suave (predefinição) amostra o relevo a cada ~20 m e mantém-se fluido em qualquer dispositivo. Preciso amostra a cada ~5 m para um relevo mais detalhado mas ~16× mais vértices a projetar por frame de rotação — útil apenas em PCs potentes.'
     }
 };

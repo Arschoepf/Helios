@@ -1,4 +1,4 @@
-//Open-Meteo weather data layer — multi-model fetch, in-browser
+//Open-Meteo weather data layer, multi-model fetch, in-browser
 //cache, and pure-function helpers around the weather signal.
 //
 //No DOM, no map, no engine state. Everything that talks to the
@@ -6,7 +6,7 @@
 //rendering.
 
 //Hourly forecast at the home location. Numeric arrays are aligned
-//on `times`. `shortwave` uses -1 as a "no data" sentinel — 0 is a
+//on `times`. `shortwave` uses -1 as a "no data" sentinel, 0 is a
 //legitimate night value, so we can't conflate them.
 export interface SampleHourly
 {
@@ -24,15 +24,20 @@ export interface SampleHourly
 
 //Forecast window: 2 days back + 2 days forward (today included on
 //the forecast side) = a 5-day timeline. Wider windows are technic-
-//ally possible but kill the UX in practice — forecasts past 48 h
+//ally possible but kill the UX in practice, forecasts past 48 h
 //get noisy, and the timeline becomes too dense to scrub precisely.
 const PAST_DAYS     = 2;
-const FORECAST_DAYS = 2;
+//Open-Meteo counts today inside `forecast_days`, so FORECAST_DAYS=3
+//yields today + 2 future days. Combined with PAST_DAYS=2, the
+//timeline spans 5 days total, 2 past, today, 2 forecast, which is
+//the practical window: beyond +2 days the cloud-cover forecast loses
+//predictive value.
+const FORECAST_DAYS = 3;
 
 //Exponential back-off on consecutive HTTP 429 (rate-limited)
 //responses, indexed by streak count. After exhausting the table we
 //stay on the last value (60 min) so a single successful fetch
-//resets the counter — the user is never permanently locked out.
+//resets the counter, the user is never permanently locked out.
 export const RATE_LIMIT_BACKOFF_MS = [
     5  * 60_000,
     15 * 60_000,
@@ -45,7 +50,7 @@ export const RATE_LIMIT_BACKOFF_MS = [
 //single robust value per timestep. Median over mean: individual
 //models occasionally emit gross outliers (typical: cloud_cover_low
 //pegged at 100 % from the Sundqvist parametrisation hitting an
-//underground pressure level — open-meteo issue #416).
+//underground pressure level, open-meteo issue #416).
 export function medianOfNumbers(values: ReadonlyArray<number | null | undefined>): number | null
 {
     const clean: number[] = [];
@@ -90,7 +95,7 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
     {
         return ['ukmo_seamless', GLOBAL];
     }
-    //Central Europe — DE/AT/CH/CZ/PL/Benelux. ICON-D2 at 2 km.
+    //Central Europe, DE/AT/CH/CZ/PL/Benelux. ICON-D2 at 2 km.
     if (lat >= 46.0 && lat <= 56.0 && lon >= 5.0 && lon <= 22.0)
     {
         return ['dwd_icon_seamless', GLOBAL];
@@ -100,7 +105,7 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
     {
         return ['italia_meteo_arpae_icon_2i', GLOBAL];
     }
-    //Nordics — Norway/Sweden/Finland/Denmark. MET Nordic at 1 km.
+    //Nordics, Norway/Sweden/Finland/Denmark. MET Nordic at 1 km.
     if (lat >= 54.5 && lat <= 71.5 && lon >= 4.0 && lon <= 32.0)
     {
         return ['metno_seamless', GLOBAL];
@@ -110,7 +115,7 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
     {
         return ['gfs_seamless', GLOBAL];
     }
-    //Korea — must be tested before Japan (the JMA box encloses Korea).
+    //Korea, must be tested before Japan (the JMA box encloses Korea).
     if (lat >= 33.0 && lat <= 39.0 && lon >= 124.5 && lon <= 132.0)
     {
         return ['kma_seamless', GLOBAL];
@@ -131,9 +136,9 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
 }
 
 
-//In-browser cache. The key includes a precision tag for v1.3
-//compatibility (when the user could toggle precision); v1.4 always
-//runs in 'high' mode so the tag is effectively a constant today.
+//In-browser cache. Precision is currently fixed to 'high'; the tag
+//stays in the key so that re-introducing a precision toggle later
+//won't collide with existing cached payloads.
 const CACHE_KEY_PREFIX = 'helios-weather-cache:';
 const CACHE_TTL_MS     = 30 * 60_000;
 
@@ -218,7 +223,7 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
     }
     catch
     {
-        //Storage quota / permission errors are silently ignored —
+        //Storage quota / permission errors are silently ignored ,
         //the user just gets a fresh fetch next time.
     }
 }
@@ -242,7 +247,7 @@ const HOURLY_VARS = [
 
 //Multi-model responses suffix the variable key with the model name
 //(e.g. shortwave_radiation_instant_meteofrance_seamless). The
-//"best_match" mode is the exception — bare keys. We try the bare
+//"best_match" mode is the exception, bare keys. We try the bare
 //key first then the suffixed ones, so the same code handles both.
 function readSeries(row: any, varName: string, models: string[]): Array<number | null>
 {
@@ -268,7 +273,7 @@ function readSeries(row: any, varName: string, models: string[]): Array<number |
     return out;
 }
 
-//weather_code is categorical (WMO 0..99) — averaging is meaningless.
+//weather_code is categorical (WMO 0..99), averaging is meaningless.
 //Pick the value from the first model that has it, which is by
 //construction the most appropriate for the user's location.
 function readWeatherCode(row: any, models: string[]): number[]
@@ -373,7 +378,7 @@ export async function fetchHomePointData(
     }
     catch
     {
-        //AbortError on cancellation, network errors, JSON parse errors —
+        //AbortError on cancellation, network errors, JSON parse errors ,
         //all swallowed silently. The caller treats null as "no data
         //available" and renders the timeline ramps as empty.
         return null;
