@@ -4,14 +4,17 @@ import { getSunPosition, computePvPower, computeIrradianceWm2 } from './helios-s
 import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './helios-weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildings';
 import { projectExtrusionShadows, SHADOW_FADE_STEPS } from './helios-shadows';
-import { findLidarSource, type LidarFetchResult, type LidarRasters } from './helios-lidar';
+import { findLidarSource } from './helios-lidar';
+import type { LidarTileData, LidarSource } from './helios-lidar';
 import {
     LIDAR_TERRAIN_PROTOCOL,
     LIDAR_TERRAIN_MIN_ZOOM,
     LIDAR_TERRAIN_MAX_ZOOM,
+    PRECISION_TILE_RASTER,
     registerLidarTerrain,
     unregisterLidarTerrain
 } from './helios-lidar-terrain';
+import { ScannerMeshLayer } from './helios-scanner-mesh';
 
 //Public types
 
@@ -190,12 +193,6 @@ export const DEFAULT_SCANNER_HIGH_HEX: string = '#16a34a';
 //camera. User can adjust via `scanner-opacity`.
 export const DEFAULT_SCANNER_OPACITY = 0.25;
 
-//Fixed geographic radius (metres) of the LiDAR fetch bbox. The
-//camera at zoom 18 + pitch 55° sees roughly out to here, so the
-//LiDAR mesh + scanner cover the visible scene without depending
-//on the user's `building-radius` (which is a MapTiler-buildings
-//cluster knob, unrelated to the LiDAR coverage).
-export const LIDAR_FETCH_RADIUS_M = 500;
 
 //Layer ids for the N nested shadow steps emitted by helios-shadows.ts.
 //Hard-coded for SHADOW_FADE_STEPS = 3; if the constant grows the
@@ -266,27 +263,6 @@ function bumpStat(key: keyof HeliosStats): void
 const MAX_LIVE_ENGINES = 2;
 const _liveEngines = new Set<HeliosEngine>();
 
-//Module-level LiDAR fetch cache, indexed by
-//`${provider-id}|${lat6}|${lon6}|${radius}|${raster}`. Survives
-//engine reinit (HACS hot-reload, theme change, dashboard editor
-//re-spawn, WebGL-context-loss recovery), so a user who toggles a
-//config option doesn't sit through a full IGN round-trip every
-//time. Sized to one entry per home; one Helios card per HA install
-//is the dominant usage, so an unbounded LRU would be overkill.
-const _lidarFetchCache = new Map<string, LidarFetchResult>();
-
-//Project the MNT slice out of a full LiDAR rasters bundle into the
-//slim struct the terrain protocol consumes. Trivial today, kept as
-//a helper so the call sites stay tidy.
-function lidarTerrainFromRasters(r: LidarRasters): { heights: Float32Array; width: number; height: number; bounds: typeof r.bounds }
-{
-    return { heights: r.mnt, width: r.width, height: r.height, bounds: r.bounds };
-}
-
-//1×1 transparent PNG used as the initial image-source payload before
-//the first scanner compute lands. MapLibre 5 refuses to add an image
-//source without a URL, so this fills the slot with zero visual cost.
-const _SCANNER_TRANSPARENT_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=';
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
 
@@ -702,21 +678,23 @@ export class HeliosEngine
     //through _renderForCurrentSelection.
     private _currentCloudPct: number = 0;
 
-    //Cached LiDAR fetch result (regions + per-cell points + optional
-    //MNT raster), fetched once per (lat, lon, radius, raster,
-    //provider) tuple and reused across style reloads. Null until the
-    //fetch completes or the home is outside any provider's coverage
-    //(see helios-lidar.ts).
-    private _lidarData:     LidarFetchResult | null = null;
-    private _lidarFetchKey: string = '';
-    private _lidarAbort?:   AbortController;
     //Stable id used as the per-engine key when registering the LiDAR
-    //terrain raster with the maplibregl custom protocol. Built from
-    //the home coordinates so two cards on the same dashboard can
-    //register their own MNT data without colliding.
+    //custom protocol. Built from the home coordinates so two cards
+    //on the same dashboard never share a protocol slot.
     private _engineId:      string = '';
-    //Visibility of the optional LiDAR point-cloud "scanner" overlay.
-    //Card-side runtime state, not persisted in the config.
+    //LiDAR provider resolved at engine init (provider that covers
+    //the home, null when the home is outside any registered country).
+    private _lidarProvider: LidarSource | null = null;
+    //True once at least one tile has come back from the provider,
+    //gates the scanner button on the card.
+    private _lidarHasTiles: boolean = false;
+    //Cached scanner mesh layer instance; created on engine init,
+    //added to the map on style.load, kept around through style
+    //reloads (we re-add it after each setStyle).
+    private _scannerLayer:  ScannerMeshLayer | null = null;
+    //User-intent visibility of the scanner overlay. The render-side
+    //flag lives on the layer itself; this mirrors it so config and
+    //tile-load callbacks can decide whether to compute textures.
     private _scannerVisible: boolean = false;
 
     constructor(
@@ -1102,19 +1080,12 @@ export class HeliosEngine
         return DEFAULT_LIDAR_PRECISION;
     }
 
-    //True when the LiDAR pipeline is enabled by config AND has
-    //fetched rasters ready to feed the scanner + terrain.
+    //True when the LiDAR pipeline is enabled by config AND a
+    //provider covers the home. The custom protocol may or may not
+    //have fetched any tiles yet (MapLibre drives that).
     private _lidarActive(): boolean
     {
-        return this._lidarPrecisionLevel() !== 'off' && this._lidarData?.rasters != null;
-    }
-
-    //Same condition by construction (the fr source returns a single
-    //bundle with both rasters or none), kept as a separate name for
-    //the terrain code path to read clearly.
-    private _lidarTerrainAvailable(): boolean
-    {
-        return this._lidarActive();
+        return this._lidarPrecisionLevel() !== 'off' && this._lidarProvider !== null;
     }
 
     //MapTiler-derived shadows are gated on the user's config toggle.
@@ -1968,56 +1939,36 @@ export class HeliosEngine
         //opacity once the compute lands (radial reveal is replaced
         //by a clean per-frame opacity ramp, simpler and just as
         //"pro" as the polygon sweep on a raster).
-        if (!this.map.getSource('helios-lidar-scanner-src'))
+        //Scanner mesh: a custom WebGL layer that draws a 3D textured
+        //surface over the LiDAR mesh. Instance is created lazily so a
+        //style reload (which wipes everything else) just re-adds the
+        //existing instance with its already-loaded tiles.
+        if (!this._scannerLayer)
         {
-            //Placeholder geometry; refreshLidarScanner sets it to
-            //match the actual LiDAR bounds the first time data lands.
-            const ph = (lon: number, lat: number, d: number): [number, number] => [lon + d, lat + d];
-            this.map.addSource('helios-lidar-scanner-src',
-            {
-                type:        'image',
-                url:         _SCANNER_TRANSPARENT_PNG,
-                coordinates: [
-                    ph(this.homeLon, this.homeLat,  0.001),
-                    ph(this.homeLon, this.homeLat,  0.001),
-                    ph(this.homeLon, this.homeLat, -0.001),
-                    ph(this.homeLon, this.homeLat, -0.001)
-                ]
+            this._scannerLayer = new ScannerMeshLayer('helios-lidar-scanner', {
+                homeLat:      this.homeLat,
+                homeLon:      this.homeLon,
+                sunColorLow:  toColor(this.cfg['scanner-color-low'],  DEFAULT_SCANNER_LOW_HEX),
+                sunColorHigh: toColor(this.cfg['scanner-color-high'], DEFAULT_SCANNER_HIGH_HEX),
+                cloudCover:   0,
+                opacity:      this._scannerOpacity(),
+                time:         this._selectedTime ?? new Date()
             });
+            this._scannerLayer.setVisible(this._scannerVisible);
         }
         if (!this.map.getLayer('helios-lidar-scanner'))
         {
-            this.map.addLayer(
-            {
-                id:     'helios-lidar-scanner',
-                source: 'helios-lidar-scanner-src',
-                type:   'raster',
-                layout: { visibility: this._scannerVisible ? 'visible' : 'none' },
-                paint:
-                {
-                    //Held at 0 until the compute lands, then animated
-                    //up by _startScannerReveal so the user never sees
-                    //a flash of stale colours from a previous pass.
-                    'raster-opacity':         0,
-                    'raster-fade-duration':   0,
-                    //Nearest sampling preserves the per-cell grid look
-                    //(the image IS the data, no need to smooth it).
-                    'raster-resampling':      'nearest'
-                }
-            });
+            this.map.addLayer(this._scannerLayer);
         }
 
-        //Kick off the fetch in the background. Layers are already
-        //wired and will start drawing as soon as the GeoJSON sources
-        //get populated. If cached data exists for this (home, radius)
-        //combo we skip the network call entirely.
+        //Kick off the MapTiler buildings fetch in the background.
+        //The shadow source is wired and will populate as soon as the
+        //buildings GeoJSON lands.
         this._ensureBuildingsFetched();
 
-        //Re-apply any LiDAR raster data that survived a style reload
-        //(setStyle wipes geojson sources; this restores them).
-        this._refreshLidarScanner();
-        //Same for the LiDAR DEM source on style reload.
-        this._applyLidarTerrain();
+        //Wire the LiDAR pipeline (registers the custom protocol when
+        //LiDAR mode is on, no-op otherwise).
+        this._ensureLidarFetched();
     }
 
     //Idempotent fetch helper. Reuses _buildingsData across style
@@ -2086,120 +2037,80 @@ export class HeliosEngine
         });
     }
 
-    //Idempotent LiDAR fetch. Picks the country provider that covers
-    //the home (France only for now, see helios-lidar.ts) and stores
-    //the consolidated regions in _lidarData for the shadow projector
-    //to consume. Gated on _buildingsData because the provider needs
-    //the MapTiler footprints to classify cells.
+    //Wire up the LiDAR pipeline for the current home + precision
+    //setting. Idempotent: safe to call after any config change.
+    //
+    //  - Resolves the country provider that covers the home (France
+    //    HD only for now, see helios-lidar.ts).
+    //  - When LiDAR is on AND a provider matches, registers the custom
+    //    DEM protocol with that provider. Every terrain-rgb tile
+    //    MapLibre requests then fires a per-tile WMS call against the
+    //    provider; the protocol caches the result and notifies us
+    //    through `onTileLoaded` so the scanner mesh layer can grow.
+    //  - When LiDAR is off or no provider matches, unregisters the
+    //    protocol and clears the scanner mesh.
     private _ensureLidarFetched(): void
     {
         if (!this.map) return;
-        if (!this._buildingsData) return;
 
         const level = this._lidarPrecisionLevel();
         if (level === 'off')
         {
-            this._lidarAbort?.abort();
-            this._lidarData     = null;
-            this._lidarFetchKey = '';
+            this._lidarProvider = null;
+            this._lidarHasTiles = false;
             unregisterLidarTerrain(this._engineId);
+            this._scannerLayer?.clear();
             this._applyLidarTerrain();
-            this._refreshLidarScanner();
             this._pushRenderableSources();
             return;
         }
 
-        const source = findLidarSource(this.homeLat, this.homeLon);
-        if (!source) return;
-
-        //LiDAR fetch radius is decoupled from `building-radius` (the
-        //user's MapTiler-buildings cluster size): the LiDAR terrain
-        //needs to cover the camera's full visible area at zoom 18 +
-        //pitch 55°, which is bounded by viewport geometry rather than
-        //a config. A fixed 500 m radius (= 1 km bbox) reliably covers
-        //everything the camera can see; lidar-precision still controls
-        //the raster's sampling pitch within that bbox.
-        const radius     = LIDAR_FETCH_RADIUS_M;
-        const rasterSize = LIDAR_PRECISION_RASTER[level];
-        //Key includes the raster size so changing levels invalidates
-        //the cache.
-        const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
-        if (this._lidarData && this._lidarFetchKey === key) return;
-
-        //Module-level cache hit: a previous engine on this same home
-        //already paid the network + decode cost. Skip the WMS round-
-        //trip and adopt the result directly. Saves 2-8 seconds on a
-        //typical re-init (HACS hot-reload, dashboard edit, lifecycle).
-        const cached = _lidarFetchCache.get(key);
-        if (cached)
+        const provider = findLidarSource(this.homeLat, this.homeLon);
+        if (!provider)
         {
-            this._lidarAbort?.abort();
-            this._lidarFetchKey = key;
-            this._lidarData     = cached;
-            if (cached.rasters)
-            {
-                registerLidarTerrain(this._engineId, lidarTerrainFromRasters(cached.rasters), this.apiKey || null);
-            }
+            this._lidarProvider = null;
+            this._lidarHasTiles = false;
+            unregisterLidarTerrain(this._engineId);
+            this._scannerLayer?.clear();
             this._applyLidarTerrain();
-            this._refreshLidarScanner();
-            this._pushRenderableSources();
-            this._lastAtmosphereAlt = -999;
-            this._refreshShadowsAndAtmosphere();
             return;
         }
+        this._lidarProvider = provider;
 
-        this._lidarAbort?.abort();
-        const ac = new AbortController();
-        this._lidarAbort    = ac;
-        this._lidarFetchKey = key;
-
-        source.fetch(
-        {
-            homeLat:               this.homeLat,
-            homeLon:               this.homeLon,
-            radiusMeters:          radius,
+        const rasterSize = PRECISION_TILE_RASTER[level] ?? 384;
+        registerLidarTerrain(
+            this._engineId,
+            provider,
             rasterSize,
-            cropRadiusMeters:      radius,
-            signal:                ac.signal
-        })
-        .then(result =>
-        {
-            if (ac.signal.aborted || !this.map) return;
-            _lidarFetchCache.set(key, result);
-            this._lidarData = result;
-            //Custom DEM swap: when rasters came in we register the
-            //MNT slice with the maplibregl protocol and re-point
-            //setTerrain to the LiDAR source. Falls back gracefully
-            //when the fetch failed (we keep MapTiler's global DEM).
-            if (result.rasters)
-            {
-                registerLidarTerrain(this._engineId, lidarTerrainFromRasters(result.rasters), this.apiKey || null);
-            }
-            else
-            {
-                unregisterLidarTerrain(this._engineId);
-            }
-            this._applyLidarTerrain();
-            this._refreshLidarScanner();
-            this._pushRenderableSources();
-            //Bypass the "sun hardly moved" guard so the shadow pass
-            //runs immediately on the new data.
-            this._lastAtmosphereAlt = -999;
-            this._refreshShadowsAndAtmosphere();
-        })
-        .catch(err =>
-        {
-            if ((err as { name?: string })?.name === 'AbortError') return;
-            console.warn('[HELIOS] LiDAR fetch failed:', err);
-        });
+            (key, data) => this._onLidarTileLoaded(key, data)
+        );
+
+        this._applyLidarTerrain();
     }
 
-    //Idempotent terrain source swap. When LiDAR MNT is available AND
-    //the engine isn't in performance mode (which disables terrain
-    //altogether), we add a `helios-lidar-terrain` raster-dem source
-    //pointing at the custom protocol and call setTerrain() with it.
-    //When MNT goes away (precision toggled off, home moved out of
-    //coverage, fetch failed), we revert to the global MapTiler DEM.
+    //Per-tile arrival hook. Called from the custom DEM protocol once
+    //per fresh fetch (cache hits don't re-fire). We push the tile
+    //into the scanner mesh layer (which builds its sub-mesh + texture
+    //right away), and flag the engine as "has LiDAR tiles" so the
+    //card surfaces the scanner toggle button.
+    private _onLidarTileLoaded(key: string, data: LidarTileData): void
+    {
+        if (!this._scannerLayer) return;
+        this._scannerLayer.addTile(key, data);
+        if (!this._lidarHasTiles)
+        {
+            this._lidarHasTiles = true;
+            //Notify the card that the scanner button can now appear.
+            try { this.onMapTransform?.(); }
+            catch (_) {}
+        }
+    }
+
+    //Idempotent terrain source swap. When LiDAR is active AND the
+    //engine isn't in performance mode, we add a `helios-lidar-terrain`
+    //raster-dem source pointing at the custom protocol and call
+    //setTerrain() with it. When LiDAR goes off, we revert to the
+    //global MapTiler DEM.
     private _applyLidarTerrain(): void
     {
         if (!this.map) return;
@@ -2209,20 +2120,20 @@ export class HeliosEngine
             return;
         }
 
-        const haveLidarDem = this._lidarTerrainAvailable();
+        const haveLidarDem = this._lidarActive();
         const haveSource   = !!this.map.getSource('helios-lidar-terrain');
 
         if (haveLidarDem && !haveSource)
         {
             try
             {
-                //No `bounds` constraint: the custom protocol composites
-                //LiDAR with a MapTiler fallback per pixel, so every
-                //tile MapLibre requests is satisfied with real
-                //elevation data (LiDAR-precise around the home, global
-                //terrain-rgb elsewhere). Without the fallback the
-                //LiDAR boundary creates a cliff that the camera trips
-                //over as it rotates.
+                //Pure LiDAR pipeline: every tile MapLibre asks for
+                //goes through the custom protocol, which fetches IGN
+                //per tile. No MapTiler composite, so the terrain mesh
+                //is uniformly LiDAR-derived. Tiles outside the
+                //provider's coverage come back as flat sea-level
+                //placeholders (camera's far view is the only place
+                //that ever sees that).
                 this.map.addSource('helios-lidar-terrain',
                 {
                     type:     'raster-dem',
@@ -2237,8 +2148,6 @@ export class HeliosEngine
         }
         else if (!haveLidarDem && haveSource)
         {
-            //Detach the layer's reference before removing, MapLibre
-            //refuses to drop a source still used by setTerrain.
             try { this.map.setTerrain({ source: 'helios-terrain', exaggeration: 1.2 }); }
             catch (_) {}
             try { this.map.removeSource('helios-lidar-terrain'); }
@@ -2273,15 +2182,6 @@ export class HeliosEngine
         surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
     }
 
-    //Monotonic id of the in-flight irradiance compute job. Any new
-    //job increments it; a chunk that observes a different value
-    //than the one it started with bails out, so a fast scrub
-    //doesn't accumulate stale work.
-    private _scannerJobId: number = 0;
-    //Handle of the in-flight raster-opacity reveal animation, if any.
-    //Cancellable so a fresh recompute (scrub, sun-tick) restarts the
-    //reveal cleanly.
-    private _scannerRevealRaf?: number;
     //Final raster opacity once the reveal lands. Pulled from the
     //user's `scanner-opacity` config; clamped to [0, 1].
     private _scannerOpacity(): number
@@ -2297,393 +2197,62 @@ export class HeliosEngine
     public onPointCloudComputeStart?: () => void;
     public onPointCloudComputeEnd?:   () => void;
 
-    //Build a fresh irradiance image from the LiDAR rasters and push
-    //it into the scanner source. Idempotent and cheap when the data
-    //isn't there yet: returns early without touching anything.
-    //
-    //The image source's `coordinates` are re-pegged to the current
-    //LiDAR bbox so a style reload or a precision change always lands
-    //the raster on the same geographic footprint as the underlying
-    //rasters, regardless of whatever placeholder corners the source
-    //was created with.
-    private _refreshLidarScanner(): void
-    {
-        if (!this.map) return;
-        const rasters = this._lidarData?.rasters;
-        const src = this.map.getSource('helios-lidar-scanner-src') as
-                    maplibregl.ImageSource | undefined;
-        if (!src) return;
-
-        if (!rasters)
-        {
-            //No rasters → wipe the image back to transparent so the
-            //layer doesn't paint a stale frame on the next render.
-            try
-            {
-                src.updateImage({
-                    url: _SCANNER_TRANSPARENT_PNG,
-                    coordinates: [
-                        [this.homeLon - 0.001, this.homeLat + 0.001],
-                        [this.homeLon + 0.001, this.homeLat + 0.001],
-                        [this.homeLon + 0.001, this.homeLat - 0.001],
-                        [this.homeLon - 0.001, this.homeLat - 0.001]
-                    ]
-                });
-            }
-            catch (_) {}
-            return;
-        }
-
-        //Re-peg the image-source corners to the actual LiDAR bbox.
-        //ImageSource accepts the corners as
-        //   [top-left, top-right, bottom-right, bottom-left]
-        //(MapLibre convention), so we project the bounds in that order.
-        const { minLon, minLat, maxLon, maxLat } = rasters.bounds;
-        try
-        {
-            src.setCoordinates([
-                [minLon, maxLat],
-                [maxLon, maxLat],
-                [maxLon, minLat],
-                [minLon, minLat]
-            ]);
-        }
-        catch (_) {}
-
-        if (this._scannerVisible)
-        {
-            this._computeLidarScanner();
-        }
-    }
-
-    //Per-pixel irradiance compute over the LiDAR rasters. Generates
-    //an RGBA image whose width × height match the raster, then bakes
-    //it into a PNG blob and feeds it to the scanner image source.
-    //
-    //Algorithm per output pixel (i, j):
-    //  1. Crop to a circular disc around the home so the square
-    //     raster doesn't leak past the user-visible coverage radius.
-    //  2. Surface normal from local MNT gradient (3×3 stencil).
-    //  3. cos(incidence) = dot(normal, sun-unit-vector).
-    //  4. Shadow test: walk the sun direction in raster space, step
-    //     one cell at a time; if any sample's surface elevation
-    //     (MNT + MNH) rises above the sun line, the pixel is shaded.
-    //  5. ratio = shadow ? 0 : max(0, cos(incidence)) * GHI / 1000.
-    //  6. RGBA = lerp(low, high, ratio).
-    //
-    //Runs as a single synchronous pass: the cost is dominated by the
-    //O(N · maxSteps) shadow walk and lands well under 250 ms even on
-    //'ultra' (1024²) rasters. The compute is fenced by `_scannerJobId`
-    //so a fresh scrub aborts an in-flight pass cleanly.
-    private _computeLidarScanner(): void
-    {
-        if (!this.map) return;
-        if (!this._scannerVisible) return;
-        const rasters = this._lidarData?.rasters;
-        if (!rasters) return;
-
-        const jobId = ++this._scannerJobId;
-        this.onPointCloudComputeStart?.();
-        this._cancelScannerReveal();
-        //Hold the layer at zero opacity during compute so the user
-        //never sees a stale frame leak through.
-        if (this.map.getLayer('helios-lidar-scanner'))
-        {
-            try { this.map.setPaintProperty('helios-lidar-scanner', 'raster-opacity', 0); }
-            catch (_) {}
-        }
-
-        const lowHex  = toColor(this.cfg['scanner-color-low'],  DEFAULT_SCANNER_LOW_HEX);
-        const highHex = toColor(this.cfg['scanner-color-high'], DEFAULT_SCANNER_HIGH_HEX);
-        const lowRgb  = parseHex(lowHex,  [0xdc, 0x26, 0x26]);
-        const highRgb = parseHex(highHex, [0x16, 0xa3, 0x4a]);
-
-        const t      = this._selectedTime ?? new Date();
-        const sun    = getSunPosition(t, this.homeLat, this.homeLon);
-
-        const W        = rasters.width;
-        const H        = rasters.height;
-        const mnt      = rasters.mnt;
-        const mns      = rasters.mns;
-        const pitchM   = rasters.cellPitchM;
-        const bounds   = rasters.bounds;
-        //Crop the scanner to the same disc as the LiDAR fetch so the
-        //texture stops at the LiDAR coverage edge instead of leaking
-        //into the bbox-padded corners with bogus data.
-        const radius   = LIDAR_FETCH_RADIUS_M;
-
-        //Output image. RGBA, row-major top-down, same orientation as
-        //the LiDAR raster. The MapLibre image source consumes it as a
-        //PNG blob below.
-        const buf = new Uint8ClampedArray(W * H * 4);
-
-        //Sun unit vector (east, north, up). Below-horizon → tilt the
-        //"unit vector" so cos(incidence) is non-positive everywhere
-        //and every pixel ends up on the low ramp.
-        const D       = Math.PI / 180;
-        const azR     = sun.azimuth  * D;
-        const altR    = Math.max(0, sun.altitude) * D;
-        const cosAlt  = Math.cos(altR);
-        const sinAlt  = Math.sin(altR);
-        const sx      = Math.sin(azR) * cosAlt;   // east
-        const sy      = Math.cos(azR) * cosAlt;   // north
-        const sz      = sinAlt;                   // up
-        const cloud   = this._homeHourlyData
-            ? (this._getWeatherAtTime(t)?.cloudCover ?? 0)
-            : 0;
-        const ghi     = sun.altitude > 0
-            ? computeIrradianceWm2(t, this.homeLat, this.homeLon, cloud)
-            : 0;
-        const ghiNorm = Math.min(1, ghi / 1000);
-
-        //Ray-walk step in raster space: one cell along the sun
-        //azimuth. dRow is negative when the sun is north of the
-        //pixel because row 0 is the northern edge of the raster.
-        const dCol      = Math.sin(azR);   // ~ 1 cell per cellPitchM east
-        const dRow      = -Math.cos(azR);  // ~ 1 cell per cellPitchM north
-        const stepRiseM = pitchM * Math.tan(altR);  // sun-line gain per cell along the ray
-        const RAY_MAX   = 400;  // cap at ~400 cells (~250 m); high sun ends much earlier
-
-        //Crop circle: a pixel is rendered when its centre is within
-        //the configured radius of the home. Pre-compute the squared
-        //radius in metres so the inner loop dodges the sqrt.
-        const cosHomeLat = Math.cos(this.homeLat * D);
-        const mPerDegLat = 111_320;
-        const mPerDegLon = mPerDegLat * cosHomeLat;
-        const pxLatM     = ((bounds.maxLat - bounds.minLat) / H) * mPerDegLat;
-        const pxLonM     = ((bounds.maxLon - bounds.minLon) / W) * mPerDegLon;
-        //Translate the home into raster (col, row) so the crop check
-        //stays in raster space.
-        const homeCol    = ((this.homeLon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * W;
-        const homeRow    = ((bounds.maxLat - this.homeLat) / (bounds.maxLat - bounds.minLat)) * H;
-        const cropR2     = radius * radius;
-
-        //Inner shadow-walk function pulled into a local closure so V8
-        //inlines it; the loop body otherwise blows past the 80-byte
-        //heuristic and falls back to a generic call.
-        const isInShadow = (col0: number, row0: number, h0: number): boolean =>
-        {
-            for (let k = 1; k <= RAY_MAX; k++)
-            {
-                const ci = (col0 + k * dCol) | 0;
-                const ri = (row0 + k * dRow) | 0;
-                if (ci < 0 || ci >= W || ri < 0 || ri >= H) return false;
-                const idx = ri * W + ci;
-                //MNS is the absolute surface elevation (ground + any
-                //above-ground feature). Comparing the sun line to it
-                //captures shadows from vegetation, buildings, walls,
-                //hedges, everything LiDAR picked up.
-                const blockerH = mns[idx];
-                const sunLineH = h0 + k * stepRiseM;
-                if (blockerH > sunLineH + 0.5) return true;
-                //Bail once the sun line clears the global LiDAR ceiling
-                //(no real-world structure rises that high above the
-                //starting cell), keeps low-sun walks bounded.
-                if (sunLineH > h0 + 100) return false;
-            }
-            return false;
-        };
-
-        //Main per-pixel loop. Each pixel reads a 3×3 MNT stencil for
-        //the surface normal so the inner edges of the raster (j = 0,
-        //j = H-1, i = 0, i = W-1) clamp to whatever neighbour exists.
-        for (let j = 0; j < H; j++)
-        {
-            const rowOff = j * W;
-            for (let i = 0; i < W; i++)
-            {
-                const off = (rowOff + i) * 4;
-
-                //Crop to the disc. Outside the user's radius the
-                //pixel is fully transparent.
-                const dCol2 = (i + 0.5 - homeCol) * pxLonM;
-                const dRow2 = (j + 0.5 - homeRow) * pxLatM;
-                if (dCol2 * dCol2 + dRow2 * dRow2 > cropR2)
-                {
-                    buf[off + 3] = 0;
-                    continue;
-                }
-
-                //3×3 stencil for the MNT gradient with edge clamp.
-                const jm = j > 0     ? j - 1 : j;
-                const jp = j < H - 1 ? j + 1 : j;
-                const im = i > 0     ? i - 1 : i;
-                const ip = i < W - 1 ? i + 1 : i;
-                const gradX = (mnt[rowOff + ip] - mnt[rowOff + im]) / (2 * pxLonM);
-                const gradY = (mnt[jm * W + i] - mnt[jp * W + i]) / (2 * pxLatM);
-
-                //Surface normal: (-gradX, -gradY, 1) normalized.
-                const nl   = Math.hypot(gradX, gradY, 1);
-                const nx   = -gradX / nl;
-                const ny   = -gradY / nl;
-                const nz   =      1 / nl;
-
-                const cosI = sun.altitude > 0
-                    ? Math.max(0, nx * sx + ny * sy + nz * sz)
-                    : 0;
-
-                let ratio = 0;
-                if (cosI > 0 && ghi > 0)
-                {
-                    if (!isInShadow(i + 0.5, j + 0.5, mnt[rowOff + i]))
-                    {
-                        ratio = cosI * ghiNorm;
-                        if (ratio > 1) ratio = 1;
-                    }
-                }
-
-                buf[off    ] = Math.round(lowRgb[0] + (highRgb[0] - lowRgb[0]) * ratio);
-                buf[off + 1] = Math.round(lowRgb[1] + (highRgb[1] - lowRgb[1]) * ratio);
-                buf[off + 2] = Math.round(lowRgb[2] + (highRgb[2] - lowRgb[2]) * ratio);
-                buf[off + 3] = 255;
-            }
-        }
-
-        if (jobId !== this._scannerJobId) return;  // superseded mid-compute
-
-        //Canvas → blob → object URL. ImageSource.updateImage takes a
-        //URL or an ImageBitmap; we go through a blob URL so we can
-        //revoke it once MapLibre has decoded the image (no leak).
-        const canvas = document.createElement('canvas');
-        canvas.width  = W;
-        canvas.height = H;
-        const ctx = canvas.getContext('2d');
-        if (!ctx)
-        {
-            this.onPointCloudComputeEnd?.();
-            return;
-        }
-        const img = ctx.createImageData(W, H);
-        img.data.set(buf);
-        ctx.putImageData(img, 0, 0);
-
-        canvas.toBlob(blob =>
-        {
-            if (jobId !== this._scannerJobId) return;
-            if (!this.map || !blob)
-            {
-                this.onPointCloudComputeEnd?.();
-                return;
-            }
-            const url = URL.createObjectURL(blob);
-            const src = this.map.getSource('helios-lidar-scanner-src') as
-                        maplibregl.ImageSource | undefined;
-            if (src)
-            {
-                try
-                {
-                    src.updateImage({
-                        url,
-                        coordinates: [
-                            [bounds.minLon, bounds.maxLat],
-                            [bounds.maxLon, bounds.maxLat],
-                            [bounds.maxLon, bounds.minLat],
-                            [bounds.minLon, bounds.minLat]
-                        ]
-                    });
-                }
-                catch (_) {}
-            }
-            //Revoke the blob URL after MapLibre has had a chance to
-            //decode it (one tick is enough; the image was already
-            //handed to the renderer before this callback fires).
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-            this._startScannerReveal();
-            this.onPointCloudComputeEnd?.();
-        }, 'image/png');
-    }
-
-    //Fade the scanner raster from 0 to its target opacity over 700
-    //ms (ease-out cubic). Replaces the geometric radial reveal we
-    //used to do on the point cloud, which doesn't apply to a single
-    //textured polygon.
-    private _startScannerReveal(): void
-    {
-        if (!this.map) return;
-        if (!this.map.getLayer('helios-lidar-scanner')) return;
-        if (!this._scannerVisible) return;
-
-        this._cancelScannerReveal();
-
-        const target   = this._scannerOpacity();
-        const duration = 700;
-        const startT   = performance.now();
-
-        const step = (now: number) =>
-        {
-            if (!this.map) return;
-            const tt   = Math.min(1, (now - startT) / duration);
-            const ease = 1 - Math.pow(1 - tt, 3);
-            try
-            {
-                this.map.setPaintProperty('helios-lidar-scanner', 'raster-opacity', target * ease);
-            }
-            catch (_) {}
-            if (tt < 1)
-            {
-                this._scannerRevealRaf = requestAnimationFrame(step);
-            }
-            else
-            {
-                this._scannerRevealRaf = undefined;
-            }
-        };
-        this._scannerRevealRaf = requestAnimationFrame(step);
-    }
-
-    private _cancelScannerReveal(): void
-    {
-        if (this._scannerRevealRaf !== undefined)
-        {
-            cancelAnimationFrame(this._scannerRevealRaf);
-            this._scannerRevealRaf = undefined;
-        }
-    }
-
-    //Toggle visibility of the LiDAR irradiance scanner overlay. The
-    //compute pass is gated on the visibility flag so flipping the
-    //toggle ON kicks off a compute, OFF cancels any in-flight one
-    //and hides the layer instantly (no fade out).
+    //Toggle visibility of the LiDAR scanner mesh. The custom WebGL
+    //layer stays on the map across toggles; we flip its internal
+    //visibility flag (cheap, no GL re-init) and recompute its
+    //per-tile textures from the current sun position on toggle ON.
     public setPointCloudVisible(visible: boolean): void
     {
-        const prev = this._scannerVisible;
         this._scannerVisible = visible;
-        if (!this.map) return;
-
-        if (visible && !prev)
+        if (!this._scannerLayer) return;
+        this._scannerLayer.setVisible(visible);
+        if (visible)
         {
-            if (this.map.getLayer('helios-lidar-scanner'))
-            {
-                try
-                {
-                    this.map.setLayoutProperty('helios-lidar-scanner', 'visibility', 'visible');
-                    this.map.setPaintProperty('helios-lidar-scanner', 'raster-opacity', 0);
-                }
-                catch (_) {}
-            }
-            this._computeLidarScanner();
-        }
-        else if (!visible && prev)
-        {
-            this._scannerJobId++;       // cancel any in-flight compute
-            this._cancelScannerReveal();
-            if (this.map.getLayer('helios-lidar-scanner'))
-            {
-                try { this.map.setLayoutProperty('helios-lidar-scanner', 'visibility', 'none'); }
-                catch (_) {}
-            }
+            this.onPointCloudComputeStart?.();
+            const t = this._selectedTime ?? new Date();
+            const cloud = this._homeHourlyData
+                ? (this._getWeatherAtTime(t)?.cloudCover ?? 0)
+                : 0;
+            this._scannerLayer.refreshTextures(
+                t,
+                cloud,
+                toColor(this.cfg['scanner-color-low'],  DEFAULT_SCANNER_LOW_HEX),
+                toColor(this.cfg['scanner-color-high'], DEFAULT_SCANNER_HIGH_HEX)
+            );
+            this._scannerLayer.updateOpacity(this._scannerOpacity());
             this.onPointCloudComputeEnd?.();
         }
     }
 
-    //True when the LiDAR pipeline has yielded rasters the scanner
-    //can paint. The card uses this to gate the toggle button so it
-    //only appears once there's something useful to show.
+    //True once the LiDAR pipeline has yielded at least one tile.
+    //The card uses this to gate the scanner toggle button: the
+    //user only sees the button after the first tile lands, which
+    //also signals the home is inside a provider's coverage.
     public hasLidarPointCloud(): boolean
     {
-        return !!this._lidarData?.rasters;
+        return this._lidarHasTiles;
     }
+
+    //Trigger a fresh per-tile texture compute from the current sun
+    //position. Called by _refreshShadowsAndAtmosphere on every sun
+    //movement past the 0.5° threshold, so the scanner colours track
+    //time-of-day without burning frames between meaningful changes.
+    private _recomputeScannerIfVisible(): void
+    {
+        if (!this._scannerVisible || !this._scannerLayer) return;
+        if (!this._scannerLayer.hasTiles())     return;
+        const t = this._selectedTime ?? new Date();
+        const cloud = this._homeHourlyData
+            ? (this._getWeatherAtTime(t)?.cloudCover ?? 0)
+            : 0;
+        this._scannerLayer.refreshTextures(
+            t,
+            cloud,
+            toColor(this.cfg['scanner-color-low'],  DEFAULT_SCANNER_LOW_HEX),
+            toColor(this.cfg['scanner-color-high'], DEFAULT_SCANNER_HIGH_HEX)
+        );
+    }
+
 
     //Linear interpolation between two RGB hex strings.
     private _lerpHex(a: string, b: string, t: number): string
@@ -2988,10 +2557,7 @@ export class HeliosEngine
         //(0.5 deg threshold, ~2 min of sun motion) already throttled
         //us to a reasonable cadence; running the compute here piggy-
         //backs on that throttle for free.
-        if (this._scannerVisible)
-        {
-            this._computeLidarScanner();
-        }
+        this._recomputeScannerIfVisible();
     }
 
     //Precision is fixed to 'high' (multi-model median). The function
@@ -3815,22 +3381,17 @@ export class HeliosEngine
         //if the scanner is off (no-op early return).
         const nextScanLow  = toColor(this.cfg['scanner-color-low'],  DEFAULT_SCANNER_LOW_HEX);
         const nextScanHigh = toColor(this.cfg['scanner-color-high'], DEFAULT_SCANNER_HIGH_HEX);
-        if ((nextScanLow !== prevScanLow || nextScanHigh !== prevScanHigh)
-            && this._scannerVisible)
+        if (nextScanLow !== prevScanLow || nextScanHigh !== prevScanHigh)
         {
-            this._computeLidarScanner();
+            this._recomputeScannerIfVisible();
         }
 
-        //Opacity is a paint-level update on a live scanner layer,
-        //no re-compute needed. The next reveal animation will already
-        //pull the new value via _scannerOpacity().
+        //Opacity is a paint-level update on the custom mesh layer's
+        //internal flag; no recompute needed.
         const nextScanOpa = this._scannerOpacity();
-        if (nextScanOpa !== prevScanOpa
-            && this.map.getLayer('helios-lidar-scanner')
-            && this._scannerVisible)
+        if (nextScanOpa !== prevScanOpa && this._scannerLayer)
         {
-            try { this.map.setPaintProperty('helios-lidar-scanner', 'raster-opacity', nextScanOpa); }
-            catch (_) {}
+            this._scannerLayer.updateOpacity(nextScanOpa);
         }
 
         if (this._homeHourlyData && this._mapReady)
@@ -3908,13 +3469,9 @@ export class HeliosEngine
         window.clearTimeout(this._resizeDebounceTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
-        this._lidarAbort?.abort();
         unregisterLidarTerrain(this._engineId);
-        if (this._scannerRevealRaf !== undefined)
-        {
-            cancelAnimationFrame(this._scannerRevealRaf);
-            this._scannerRevealRaf = undefined;
-        }
+        this._scannerLayer?.clear();
+        this._scannerLayer = null;
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
         {
@@ -4037,8 +3594,7 @@ export class HeliosEngine
                 'helios-cloud-rings',
                 'helios-buildings-surroundings-src',
                 'helios-buildings-home-src',
-                'helios-building-shadows-src',
-                'helios-lidar-scanner-src'
+                'helios-building-shadows-src'
             ])
             {
                 try { if (this.map.getSource(sid)) this.map.removeSource(sid); }
@@ -4051,8 +3607,8 @@ export class HeliosEngine
         //handles that have already been released.
         this._buildingsData     = null;
         this._buildingsFetchKey = '';
-        this._lidarData         = null;
-        this._lidarFetchKey     = '';
+        this._lidarProvider     = null;
+        this._lidarHasTiles     = false;
         this._homeHourlyData    = null;
         this._bumpInactivityCanvas  = undefined;
         this._bumpInactivityHandler = undefined;

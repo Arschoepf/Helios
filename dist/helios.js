@@ -26215,54 +26215,39 @@ const LAYER_MNT = "IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
 const LAYER_MNS = "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
 const FR_BBOX = { minLat: 41, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 const M_PER_DEG_LAT = 111320;
-const BBOX_PAD_FACTOR = 1.1;
 const franceLidarHd = {
   id: "fr-ign-lidarhd",
   name: "IGN LiDAR HD (France)",
   covers(lat, lon) {
     return lat >= FR_BBOX.minLat && lat <= FR_BBOX.maxLat && lon >= FR_BBOX.minLon && lon <= FR_BBOX.maxLon;
   },
-  async fetch(opts) {
-    const empty = { rasters: null };
+  async fetchTile(opts) {
     const rasterSize = Math.min(2048, Math.max(64, Math.round(opts.rasterSize)));
-    const r2 = Math.max(1, opts.radiusMeters);
-    const dLat = r2 * BBOX_PAD_FACTOR / M_PER_DEG_LAT;
-    const dLon = r2 * BBOX_PAD_FACTOR / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
-    const minLat = opts.homeLat - dLat;
-    const maxLat = opts.homeLat + dLat;
-    const minLon = opts.homeLon - dLon;
-    const maxLon = opts.homeLon + dLon;
-    const [mntRaw, mnsRaw] = await Promise.all([
-      fetchBilLayer(LAYER_MNT, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal),
-      fetchBilLayer(LAYER_MNS, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal)
-    ]);
-    if (!mntRaw || !mnsRaw) return empty;
-    const cosLat = Math.cos(opts.homeLat * Math.PI / 180);
-    const pxLatM = (maxLat - minLat) / rasterSize * M_PER_DEG_LAT;
-    const pxLonM = (maxLon - minLon) / rasterSize * (M_PER_DEG_LAT * cosLat);
-    const cellPitchM = 0.5 * (pxLatM + pxLonM);
-    const N2 = rasterSize * rasterSize;
-    let nLifted = 0;
-    let maxLift = 0;
-    for (let i2 = 0; i2 < N2; i2++) {
-      const lift = mnsRaw[i2] - mntRaw[i2];
-      if (isFinite(lift) && lift > 0.5) {
-        nLifted++;
-        if (lift > maxLift) maxLift = lift;
-      }
+    if (opts.maxLat < FR_BBOX.minLat || opts.minLat > FR_BBOX.maxLat || opts.maxLon < FR_BBOX.minLon || opts.minLon > FR_BBOX.maxLon) {
+      return null;
     }
-    console.info(
-      `[HELIOS] LiDAR: ${rasterSize}x${rasterSize} MNT + MNS rasters, ${nLifted} above-ground cells, max lift ${maxLift.toFixed(1)} m, cell pitch ${cellPitchM.toFixed(2)} m`
-    );
-    const rasters = {
+    const [mnt, mns] = await Promise.all([
+      fetchBilLayer(LAYER_MNT, opts.minLat, opts.minLon, opts.maxLat, opts.maxLon, rasterSize, opts.signal),
+      fetchBilLayer(LAYER_MNS, opts.minLat, opts.minLon, opts.maxLat, opts.maxLon, rasterSize, opts.signal)
+    ]);
+    if (!mnt || !mns) return null;
+    const cosLat = Math.cos((opts.minLat + opts.maxLat) * 0.5 * Math.PI / 180);
+    const pxLatM = (opts.maxLat - opts.minLat) / rasterSize * M_PER_DEG_LAT;
+    const pxLonM = (opts.maxLon - opts.minLon) / rasterSize * (M_PER_DEG_LAT * cosLat);
+    const cellPitchM = 0.5 * (pxLatM + pxLonM);
+    return {
       width: rasterSize,
       height: rasterSize,
-      bounds: { minLon, minLat, maxLon, maxLat },
+      bounds: {
+        minLon: opts.minLon,
+        minLat: opts.minLat,
+        maxLon: opts.maxLon,
+        maxLat: opts.maxLat
+      },
       cellPitchM,
-      mnt: mntRaw,
-      mns: mnsRaw
+      mnt,
+      mns
     };
-    return { rasters };
   }
 };
 async function fetchBilLayer(layer, minLat, minLon, maxLat, maxLon, rasterSize, signal) {
@@ -26307,7 +26292,12 @@ function findLidarSource(lat, lon) {
 const LIDAR_TERRAIN_PROTOCOL = "helios-lidar-dem";
 const LIDAR_TERRAIN_MIN_ZOOM = 12;
 const LIDAR_TERRAIN_MAX_ZOOM = 14;
-const TILE_SIZE = 512;
+const PRECISION_TILE_RASTER = {
+  low: 256,
+  medium: 384,
+  high: 512,
+  ultra: 768
+};
 const _entries = /* @__PURE__ */ new Map();
 let _protocolRegistered = false;
 function ensureProtocolRegistered() {
@@ -26328,16 +26318,35 @@ function ensureProtocolRegistered() {
       return { data: emptyTile() };
     }
     const key = `${z2}/${x2}/${y3}`;
-    const cached = entry.cache.get(key);
-    if (cached) return { data: cached.slice(0) };
-    const bytes = await encodeTile(entry, z2, x2, y3);
-    entry.cache.set(key, bytes);
-    return { data: bytes.slice(0) };
+    const cached = entry.tiles.get(key);
+    if (cached) return { data: cached.terrainPng.slice(0) };
+    const { n: n3, s: s2, w: w2, e: e2 } = tileBounds(z2, x2, y3);
+    const tile = await entry.source.fetchTile({
+      minLat: s2,
+      minLon: w2,
+      maxLat: n3,
+      maxLon: e2,
+      rasterSize: entry.rasterSize
+    });
+    if (!tile) return { data: emptyTile() };
+    const terrainPng = await encodeTerrainRgb(tile);
+    const stored = { data: tile, terrainPng };
+    entry.tiles.set(key, stored);
+    try {
+      entry.onTileLoaded?.(key, tile);
+    } catch (_2) {
+    }
+    return { data: terrainPng.slice(0) };
   });
 }
-function registerLidarTerrain(engineId, data, maptilerKey) {
+function registerLidarTerrain(engineId, source, rasterSize, onTileLoaded) {
   ensureProtocolRegistered();
-  _entries.set(engineId, { data, maptilerKey, cache: /* @__PURE__ */ new Map() });
+  _entries.set(engineId, {
+    source,
+    rasterSize: Math.max(64, Math.round(rasterSize)),
+    tiles: /* @__PURE__ */ new Map(),
+    onTileLoaded
+  });
 }
 function unregisterLidarTerrain(engineId) {
   _entries.delete(engineId);
@@ -26349,28 +26358,6 @@ function encodeHeight(h2, out, off) {
   out[off + 2] = v2 & 255;
   out[off + 3] = 255;
 }
-function sampleHeight(d2, lon, lat) {
-  const { minLon, minLat, maxLon, maxLat } = d2.bounds;
-  if (lon < minLon || lon > maxLon || lat < minLat || lat > maxLat) return NaN;
-  const fx = (lon - minLon) / (maxLon - minLon) * (d2.width - 1);
-  const fy = (maxLat - lat) / (maxLat - minLat) * (d2.height - 1);
-  const x0 = Math.max(0, Math.min(d2.width - 1, Math.floor(fx)));
-  const y0 = Math.max(0, Math.min(d2.height - 1, Math.floor(fy)));
-  const x1 = Math.min(d2.width - 1, x0 + 1);
-  const y1 = Math.min(d2.height - 1, y0 + 1);
-  const tx = fx - x0;
-  const ty = fy - y0;
-  const h00 = d2.heights[y0 * d2.width + x0];
-  const h10 = d2.heights[y0 * d2.width + x1];
-  const h01 = d2.heights[y1 * d2.width + x0];
-  const h11 = d2.heights[y1 * d2.width + x1];
-  if (!isFinite(h00) || !isFinite(h10) || !isFinite(h01) || !isFinite(h11)) {
-    return isFinite(h00) ? h00 : NaN;
-  }
-  const a2 = h00 * (1 - tx) + h10 * tx;
-  const b2 = h01 * (1 - tx) + h11 * tx;
-  return a2 * (1 - ty) + b2 * ty;
-}
 function tileBounds(z2, x2, y3) {
   const n3 = Math.PI - 2 * Math.PI * y3 / Math.pow(2, z2);
   const s2 = Math.PI - 2 * Math.PI * (y3 + 1) / Math.pow(2, z2);
@@ -26379,134 +26366,38 @@ function tileBounds(z2, x2, y3) {
   const toLat = (rad) => 180 / Math.PI * Math.atan(0.5 * (Math.exp(rad) - Math.exp(-rad)));
   return { n: toLat(n3), s: toLat(s2), w: w2, e: e2 };
 }
-async function encodeTile(entry, z2, x2, y3) {
-  const d2 = entry.data;
-  const { n: n3, s: s2, w: w2, e: e2 } = tileBounds(z2, x2, y3);
-  const tileFullyInsideLidar = w2 >= d2.bounds.minLon && e2 <= d2.bounds.maxLon && s2 >= d2.bounds.minLat && n3 <= d2.bounds.maxLat;
-  const tileFullyOutsideLidar = e2 <= d2.bounds.minLon || w2 >= d2.bounds.maxLon || n3 <= d2.bounds.minLat || s2 >= d2.bounds.maxLat;
-  if (tileFullyOutsideLidar) {
-    const proxied = await fetchMaptilerTile(entry.maptilerKey, z2, x2, y3);
-    return proxied ?? emptyTile();
-  }
+async function encodeTerrainRgb(tile) {
+  const W = tile.width;
+  const H2 = tile.height;
   const canvas = document.createElement("canvas");
-  canvas.width = TILE_SIZE;
-  canvas.height = TILE_SIZE;
+  canvas.width = W;
+  canvas.height = H2;
   const ctx = canvas.getContext("2d");
   if (!ctx) return emptyTile();
-  let maptilerHeights = null;
-  if (!tileFullyInsideLidar) {
-    maptilerHeights = await fetchMaptilerTileHeights(entry.maptilerKey, z2, x2, y3);
-  }
-  const img = ctx.createImageData(TILE_SIZE, TILE_SIZE);
+  const img = ctx.createImageData(W, H2);
   const buf = img.data;
-  const yToLat = (py) => {
-    const ny = py / TILE_SIZE;
-    const lat0 = Math.log(Math.tan(Math.PI / 4 + n3 * Math.PI / 180 / 2));
-    const lat1 = Math.log(Math.tan(Math.PI / 4 + s2 * Math.PI / 180 / 2));
-    const lat = lat0 + (lat1 - lat0) * ny;
-    return 180 / Math.PI * (2 * Math.atan(Math.exp(lat)) - Math.PI / 2);
-  };
-  for (let py = 0; py < TILE_SIZE; py++) {
-    const lat = yToLat(py + 0.5);
-    for (let px = 0; px < TILE_SIZE; px++) {
-      const lon = w2 + (e2 - w2) * ((px + 0.5) / TILE_SIZE);
-      const h2 = sampleHeight(d2, lon, lat);
-      const off = (py * TILE_SIZE + px) * 4;
-      const final = isFinite(h2) ? h2 : maptilerHeights ? maptilerHeights[py * TILE_SIZE + px] : 0;
-      encodeHeight(final, buf, off);
-    }
+  const mnt = tile.mnt;
+  for (let i2 = 0; i2 < W * H2; i2++) {
+    const h2 = mnt[i2];
+    encodeHeight(isFinite(h2) ? h2 : 0, buf, i2 * 4);
   }
   ctx.putImageData(img, 0, 0);
   const blob = await new Promise((resolve) => canvas.toBlob((b2) => resolve(b2), "image/png"));
   if (!blob) return emptyTile();
   return await blob.arrayBuffer();
 }
-const _maptilerInfoCache = /* @__PURE__ */ new Map();
-function fetchMaptilerInfo(key) {
-  const cached = _maptilerInfoCache.get(key);
-  if (cached) return cached;
-  const p2 = (async () => {
-    try {
-      const resp = await fetch(`https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${key}`);
-      if (!resp.ok) return null;
-      const json = await resp.json();
-      const template = json.tiles?.[0];
-      if (!template) return null;
-      return {
-        template,
-        maxzoom: typeof json.maxzoom === "number" ? json.maxzoom : 14
-      };
-    } catch (_2) {
-      return null;
-    }
-  })();
-  _maptilerInfoCache.set(key, p2);
-  return p2;
-}
-async function fetchMaptilerTile(key, z2, x2, y3) {
-  if (!key) return null;
-  const info = await fetchMaptilerInfo(key);
-  if (!info) return null;
-  if (z2 > info.maxzoom) return null;
-  const url = info.template.replace("{z}", String(z2)).replace("{x}", String(x2)).replace("{y}", String(y3));
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) return null;
-    return await resp.arrayBuffer();
-  } catch (_2) {
-    return null;
-  }
-}
-async function fetchMaptilerTileHeights(key, z2, x2, y3) {
-  if (!key) return null;
-  const blob = await fetchMaptilerTile(key, z2, x2, y3);
-  if (!blob) return null;
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(new Blob([blob], { type: "image/png" }));
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = TILE_SIZE;
-        canvas.height = TILE_SIZE;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          resolve(null);
-          return;
-        }
-        ctx.drawImage(img, 0, 0, TILE_SIZE, TILE_SIZE);
-        const data = ctx.getImageData(0, 0, TILE_SIZE, TILE_SIZE).data;
-        const out = new Float32Array(TILE_SIZE * TILE_SIZE);
-        for (let i2 = 0, j = 0; i2 < data.length; i2 += 4, j++) {
-          out[j] = -1e4 + (data[i2] * 65536 + data[i2 + 1] * 256 + data[i2 + 2]) * 0.1;
-        }
-        resolve(out);
-      } catch (_2) {
-        resolve(null);
-      }
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(null);
-    };
-    img.src = url;
-  });
-}
 let _emptyTileCache = null;
 function emptyTile() {
   if (_emptyTileCache) return _emptyTileCache.slice(0);
+  const SIZE = 256;
   const canvas = document.createElement("canvas");
-  canvas.width = TILE_SIZE;
-  canvas.height = TILE_SIZE;
+  canvas.width = SIZE;
+  canvas.height = SIZE;
   const ctx = canvas.getContext("2d");
   if (!ctx) return new ArrayBuffer(0);
-  const img = ctx.createImageData(TILE_SIZE, TILE_SIZE);
+  const img = ctx.createImageData(SIZE, SIZE);
   const buf = img.data;
-  for (let i2 = 0; i2 < TILE_SIZE * TILE_SIZE; i2++) {
-    encodeHeight(0, buf, i2 * 4);
-  }
+  for (let i2 = 0; i2 < SIZE * SIZE; i2++) encodeHeight(0, buf, i2 * 4);
   ctx.putImageData(img, 0, 0);
   const dataUrl = canvas.toDataURL("image/png");
   const base64 = dataUrl.split(",")[1] ?? "";
@@ -26516,22 +26407,385 @@ function emptyTile() {
   _emptyTileCache = out.buffer;
   return _emptyTileCache.slice(0);
 }
+const SCANNER_LIFT_M = 0.1;
+const VERT_SRC = `
+attribute vec3 a_pos;
+attribute vec2 a_uv;
+uniform mat4 u_matrix;
+varying vec2 v_uv;
+void main()
+{
+    gl_Position = u_matrix * vec4(a_pos, 1.0);
+    v_uv = a_uv;
+}
+`;
+const FRAG_SRC = `
+precision mediump float;
+varying vec2 v_uv;
+uniform sampler2D u_texture;
+uniform float u_opacity;
+void main()
+{
+    vec4 c = texture2D(u_texture, v_uv);
+    gl_FragColor = vec4(c.rgb, c.a * u_opacity);
+}
+`;
+function compileShader(gl, type, src) {
+  const sh = gl.createShader(type);
+  if (!sh) return null;
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    console.warn("[HELIOS] scanner shader compile failed:", gl.getShaderInfoLog(sh));
+    gl.deleteShader(sh);
+    return null;
+  }
+  return sh;
+}
+function linkProgram(gl, vs, fs) {
+  const p2 = gl.createProgram();
+  if (!p2) return null;
+  gl.attachShader(p2, vs);
+  gl.attachShader(p2, fs);
+  gl.linkProgram(p2);
+  if (!gl.getProgramParameter(p2, gl.LINK_STATUS)) {
+    console.warn("[HELIOS] scanner program link failed:", gl.getProgramInfoLog(p2));
+    gl.deleteProgram(p2);
+    return null;
+  }
+  return p2;
+}
+class ScannerMeshLayer {
+  constructor(id, opts) {
+    this.type = "custom";
+    this.renderingMode = "3d";
+    this._program = null;
+    this._aPos = 0;
+    this._aUv = 0;
+    this._uMatrix = null;
+    this._uTexture = null;
+    this._uOpacity = null;
+    this._uint32Indices = false;
+    this._subMeshes = /* @__PURE__ */ new Map();
+    this._tiles = /* @__PURE__ */ new Map();
+    this._visible = false;
+    this.id = id;
+    this._opts = opts;
+  }
+  //CustomLayerInterface ---------------------------------------------
+  onAdd(map, gl) {
+    this._map = map;
+    this._gl = gl;
+    const isGl2 = typeof gl.createVertexArray === "function";
+    this._uint32Indices = isGl2 || !!gl.getExtension("OES_element_index_uint");
+    const vs = compileShader(gl, gl.VERTEX_SHADER, VERT_SRC);
+    const fs = compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
+    if (!vs || !fs) return;
+    this._program = linkProgram(gl, vs, fs);
+    if (!this._program) return;
+    this._aPos = gl.getAttribLocation(this._program, "a_pos");
+    this._aUv = gl.getAttribLocation(this._program, "a_uv");
+    this._uMatrix = gl.getUniformLocation(this._program, "u_matrix");
+    this._uTexture = gl.getUniformLocation(this._program, "u_texture");
+    this._uOpacity = gl.getUniformLocation(this._program, "u_opacity");
+    const pending = Array.from(this._tiles.entries());
+    this._tiles.clear();
+    for (const [key, data] of pending) this.addTile(key, data);
+  }
+  render(gl, args) {
+    if (!this._visible) return;
+    if (!this._program) return;
+    if (this._subMeshes.size === 0) return;
+    const matrix = args.modelViewProjectionMatrix;
+    gl.useProgram(this._program);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    gl.enable(gl.DEPTH_TEST);
+    gl.uniformMatrix4fv(this._uMatrix, false, matrix);
+    gl.uniform1f(this._uOpacity, this._opts.opacity);
+    gl.uniform1i(this._uTexture, 0);
+    this._subMeshes.forEach((mesh) => {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, mesh.texture);
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ibo);
+      gl.vertexAttribPointer(this._aPos, 3, gl.FLOAT, false, 20, 0);
+      gl.vertexAttribPointer(this._aUv, 2, gl.FLOAT, false, 20, 12);
+      gl.enableVertexAttribArray(this._aPos);
+      gl.enableVertexAttribArray(this._aUv);
+      gl.drawElements(gl.TRIANGLES, mesh.indexCount, mesh.indexType, 0);
+    });
+  }
+  onRemove(_map, gl) {
+    this._subMeshes.forEach((mesh) => {
+      gl.deleteBuffer(mesh.vbo);
+      gl.deleteBuffer(mesh.ibo);
+      gl.deleteTexture(mesh.texture);
+    });
+    this._subMeshes.clear();
+    if (this._program) gl.deleteProgram(this._program);
+    this._program = null;
+    this._gl = void 0;
+    this._map = void 0;
+  }
+  //Public API -------------------------------------------------------
+  //Push a tile's data in: build the sub-mesh geometry (once) and
+  //paint its first irradiance texture.
+  addTile(key, data) {
+    this._tiles.set(key, data);
+    const gl = this._gl;
+    if (!gl || !this._program) return;
+    this._destroySubMesh(key);
+    const sub = this._buildSubMesh(gl, data);
+    if (!sub) return;
+    this._subMeshes.set(key, sub);
+    this._paintTexture(key, data);
+    this._map?.triggerRepaint();
+  }
+  //Refresh every loaded tile's texture from the current sun
+  //position + the cached colour-ramp config. Cheap enough to run
+  //synchronously on a scrub or a tick (~10-50 ms / tile).
+  refreshTextures(time, cloudCover, lowHex, highHex) {
+    this._opts.time = time;
+    this._opts.cloudCover = cloudCover;
+    this._opts.sunColorLow = lowHex;
+    this._opts.sunColorHigh = highHex;
+    this._tiles.forEach((data, key) => this._paintTexture(key, data));
+    this._map?.triggerRepaint();
+  }
+  updateOpacity(opacity) {
+    this._opts.opacity = Math.max(0, Math.min(1, opacity));
+    this._map?.triggerRepaint();
+  }
+  setVisible(v2) {
+    this._visible = v2;
+    this._map?.triggerRepaint();
+  }
+  isVisible() {
+    return this._visible;
+  }
+  clear() {
+    const gl = this._gl;
+    if (gl) {
+      this._subMeshes.forEach((mesh) => {
+        gl.deleteBuffer(mesh.vbo);
+        gl.deleteBuffer(mesh.ibo);
+        gl.deleteTexture(mesh.texture);
+      });
+    }
+    this._subMeshes.clear();
+    this._tiles.clear();
+    this._map?.triggerRepaint();
+  }
+  hasTiles() {
+    return this._tiles.size > 0;
+  }
+  //Internals --------------------------------------------------------
+  _destroySubMesh(key) {
+    const mesh = this._subMeshes.get(key);
+    const gl = this._gl;
+    if (!mesh || !gl) return;
+    gl.deleteBuffer(mesh.vbo);
+    gl.deleteBuffer(mesh.ibo);
+    gl.deleteTexture(mesh.texture);
+    this._subMeshes.delete(key);
+  }
+  //Generate a flat grid of vertices over the tile bbox, with Z =
+  //MNS height (full LiDAR surface) + a 10 cm lift. Two triangles
+  //per quad. UVs map each vertex to its raster cell.
+  _buildSubMesh(gl, data) {
+    const W = data.width;
+    const H2 = data.height;
+    const nVerts = W * H2;
+    const nQuads = (W - 1) * (H2 - 1);
+    const nTris = nQuads * 2;
+    const nIdx = nTris * 3;
+    const buf = new Float32Array(nVerts * 5);
+    const midLat = (data.bounds.minLat + data.bounds.maxLat) * 0.5;
+    const mcOrigin = maplibregl.MercatorCoordinate.fromLngLat([data.bounds.minLon, midLat], 0);
+    const meterScale = mcOrigin.meterInMercatorCoordinateUnits();
+    for (let j = 0; j < H2; j++) {
+      const v2 = (j + 0.5) / H2;
+      const lat = data.bounds.maxLat - (j + 0.5) * (data.bounds.maxLat - data.bounds.minLat) / H2;
+      for (let i2 = 0; i2 < W; i2++) {
+        const u2 = (i2 + 0.5) / W;
+        const lon = data.bounds.minLon + (i2 + 0.5) * (data.bounds.maxLon - data.bounds.minLon) / W;
+        const idx = j * W + i2;
+        const h2 = data.mns[idx];
+        const elev = (isFinite(h2) ? h2 : data.mnt[idx]) + SCANNER_LIFT_M;
+        const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0);
+        const off = idx * 5;
+        buf[off] = mc.x;
+        buf[off + 1] = mc.y;
+        buf[off + 2] = elev * meterScale;
+        buf[off + 3] = u2;
+        buf[off + 4] = v2;
+      }
+    }
+    const vbo = gl.createBuffer();
+    if (!vbo) return null;
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, buf, gl.STATIC_DRAW);
+    let indexArr;
+    let indexType;
+    if (this._uint32Indices && nVerts > 65535) {
+      indexArr = new Uint32Array(nIdx);
+      indexType = gl.UNSIGNED_INT;
+    } else {
+      indexArr = new Uint16Array(nIdx);
+      indexType = gl.UNSIGNED_SHORT;
+    }
+    let p2 = 0;
+    for (let j = 0; j < H2 - 1; j++) {
+      for (let i2 = 0; i2 < W - 1; i2++) {
+        const a2 = j * W + i2;
+        const b2 = a2 + 1;
+        const c2 = a2 + W;
+        const d2 = c2 + 1;
+        indexArr[p2++] = a2;
+        indexArr[p2++] = b2;
+        indexArr[p2++] = c2;
+        indexArr[p2++] = b2;
+        indexArr[p2++] = d2;
+        indexArr[p2++] = c2;
+      }
+    }
+    const ibo = gl.createBuffer();
+    if (!ibo) {
+      gl.deleteBuffer(vbo);
+      return null;
+    }
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indexArr, gl.STATIC_DRAW);
+    const texture = gl.createTexture();
+    if (!texture) {
+      gl.deleteBuffer(vbo);
+      gl.deleteBuffer(ibo);
+      return null;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    const empty = new Uint8Array(W * H2 * 4);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H2, 0, gl.RGBA, gl.UNSIGNED_BYTE, empty);
+    return {
+      vbo,
+      ibo,
+      indexCount: nIdx,
+      indexType,
+      texture,
+      width: W,
+      height: H2
+    };
+  }
+  _paintTexture(key, data) {
+    const gl = this._gl;
+    const mesh = this._subMeshes.get(key);
+    if (!gl || !mesh) return;
+    const buf = this._computeTextureBytes(data);
+    gl.bindTexture(gl.TEXTURE_2D, mesh.texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, data.width, data.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+  }
+  //Per-pixel irradiance compute, identical algorithm to the old
+  //raster scanner but scoped to one tile. Cross-tile shadow walks
+  //are intentionally skipped here: a tile's shadow ray cast only
+  //reads cells in its own raster, which means the very edge of a
+  //tile may underestimate shadows for trees that sit in the next
+  //tile over. The visual gap is sub-pixel at the camera's typical
+  //distance; the simplicity wins.
+  _computeTextureBytes(data) {
+    const W = data.width;
+    const H2 = data.height;
+    const mnt = data.mnt;
+    const mns = data.mns;
+    const pitchM = data.cellPitchM;
+    const bounds = data.bounds;
+    const out = new Uint8Array(W * H2 * 4);
+    const lowRgb = parseHex$1(this._opts.sunColorLow, [220, 38, 38]);
+    const highRgb = parseHex$1(this._opts.sunColorHigh, [22, 163, 74]);
+    const sun = getSunPosition(this._opts.time, this._opts.homeLat, this._opts.homeLon);
+    const D2 = Math.PI / 180;
+    const azR = sun.azimuth * D2;
+    const altR = Math.max(0, sun.altitude) * D2;
+    const cosAlt = Math.cos(altR);
+    const sinAlt = Math.sin(altR);
+    const sx = Math.sin(azR) * cosAlt;
+    const sy = Math.cos(azR) * cosAlt;
+    const sz = sinAlt;
+    const ghi = sun.altitude > 0 ? computeIrradianceWm2(this._opts.time, this._opts.homeLat, this._opts.homeLon, this._opts.cloudCover) : 0;
+    const ghiNorm = Math.min(1, ghi / 1e3);
+    const dCol = Math.sin(azR);
+    const dRow = -Math.cos(azR);
+    const stepRiseM = pitchM * Math.tan(altR);
+    const RAY_MAX = 200;
+    const cosLat = Math.cos((bounds.minLat + bounds.maxLat) * 0.5 * D2);
+    const pxLatM = (bounds.maxLat - bounds.minLat) / H2 * 111320;
+    const pxLonM = (bounds.maxLon - bounds.minLon) / W * (111320 * cosLat);
+    const isInShadow = (col0, row0, h0) => {
+      for (let k2 = 1; k2 <= RAY_MAX; k2++) {
+        const ci = col0 + k2 * dCol | 0;
+        const ri = row0 + k2 * dRow | 0;
+        if (ci < 0 || ci >= W || ri < 0 || ri >= H2) return false;
+        const idx = ri * W + ci;
+        const blockerH = mns[idx];
+        const sunLineH = h0 + k2 * stepRiseM;
+        if (blockerH > sunLineH + 0.5) return true;
+        if (sunLineH > h0 + 100) return false;
+      }
+      return false;
+    };
+    for (let j = 0; j < H2; j++) {
+      const rowOff = j * W;
+      const jm = j > 0 ? j - 1 : j;
+      const jp = j < H2 - 1 ? j + 1 : j;
+      for (let i2 = 0; i2 < W; i2++) {
+        const off = (rowOff + i2) * 4;
+        const im = i2 > 0 ? i2 - 1 : i2;
+        const ip = i2 < W - 1 ? i2 + 1 : i2;
+        const gradX = (mnt[rowOff + ip] - mnt[rowOff + im]) / (2 * pxLonM);
+        const gradY = (mnt[jm * W + i2] - mnt[jp * W + i2]) / (2 * pxLatM);
+        const nl2 = Math.hypot(gradX, gradY, 1);
+        const nx = -gradX / nl2;
+        const ny = -gradY / nl2;
+        const nz = 1 / nl2;
+        const cosI = sun.altitude > 0 ? Math.max(0, nx * sx + ny * sy + nz * sz) : 0;
+        let ratio = 0;
+        if (cosI > 0 && ghi > 0) {
+          if (!isInShadow(i2 + 0.5, j + 0.5, mnt[rowOff + i2])) {
+            ratio = cosI * ghiNorm;
+            if (ratio > 1) ratio = 1;
+          }
+        }
+        out[off] = Math.round(lowRgb[0] + (highRgb[0] - lowRgb[0]) * ratio);
+        out[off + 1] = Math.round(lowRgb[1] + (highRgb[1] - lowRgb[1]) * ratio);
+        out[off + 2] = Math.round(lowRgb[2] + (highRgb[2] - lowRgb[2]) * ratio);
+        out[off + 3] = 255;
+      }
+    }
+    return out;
+  }
+}
+function parseHex$1(v2, fallback) {
+  const s2 = v2.trim().replace("#", "");
+  if (s2.length !== 6) return fallback;
+  const r2 = parseInt(s2.slice(0, 2), 16);
+  const g2 = parseInt(s2.slice(2, 4), 16);
+  const b2 = parseInt(s2.slice(4, 6), 16);
+  if (isNaN(r2) || isNaN(g2) || isNaN(b2)) return fallback;
+  return [r2, g2, b2];
+}
 const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
 const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 const DEFAULT_BUILDING_COLOR_HEX = "#d2d2d7";
 const DEFAULT_LIDAR_PRECISION = "low";
-const LIDAR_PRECISION_RASTER = {
-  low: 384,
-  medium: 512,
-  high: 768,
-  ultra: 1024
-};
 const DEFAULT_SHADOW_OPACITY = 0.32;
 const DEFAULT_SCANNER_LOW_HEX = "#dc2626";
 const DEFAULT_SCANNER_HIGH_HEX = "#16a34a";
 const DEFAULT_SCANNER_OPACITY = 0.25;
-const LIDAR_FETCH_RADIUS_M = 500;
 const SHADOW_LAYER_IDS = [
   "helios-building-shadows",
   "helios-building-shadows-mid",
@@ -26555,11 +26809,6 @@ function bumpStat(key) {
 }
 const MAX_LIVE_ENGINES = 2;
 const _liveEngines = /* @__PURE__ */ new Set();
-const _lidarFetchCache = /* @__PURE__ */ new Map();
-function lidarTerrainFromRasters(r2) {
-  return { heights: r2.mnt, width: r2.width, height: r2.height, bounds: r2.bounds };
-}
-const _SCANNER_TRANSPARENT_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
 const IS_MOBILE = (() => {
   if (typeof navigator === "undefined") {
     return false;
@@ -26681,11 +26930,11 @@ const _HeliosEngine = class _HeliosEngine {
     this._buildingsData = null;
     this._buildingsFetchKey = "";
     this._currentCloudPct = 0;
-    this._lidarData = null;
-    this._lidarFetchKey = "";
     this._engineId = "";
+    this._lidarProvider = null;
+    this._lidarHasTiles = false;
+    this._scannerLayer = null;
     this._scannerVisible = false;
-    this._scannerJobId = 0;
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -26909,16 +27158,11 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return DEFAULT_LIDAR_PRECISION;
   }
-  //True when the LiDAR pipeline is enabled by config AND has
-  //fetched rasters ready to feed the scanner + terrain.
+  //True when the LiDAR pipeline is enabled by config AND a
+  //provider covers the home. The custom protocol may or may not
+  //have fetched any tiles yet (MapLibre drives that).
   _lidarActive() {
-    return this._lidarPrecisionLevel() !== "off" && this._lidarData?.rasters != null;
-  }
-  //Same condition by construction (the fr source returns a single
-  //bundle with both rasters or none), kept as a separate name for
-  //the terrain code path to read clearly.
-  _lidarTerrainAvailable() {
-    return this._lidarActive();
+    return this._lidarPrecisionLevel() !== "off" && this._lidarProvider !== null;
   }
   //MapTiler-derived shadows are gated on the user's config toggle.
   //LiDAR-driven shadows ignore this flag (they always render when
@@ -27524,45 +27768,23 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     );
-    if (!this.map.getSource("helios-lidar-scanner-src")) {
-      const ph = (lon, lat, d2) => [lon + d2, lat + d2];
-      this.map.addSource(
-        "helios-lidar-scanner-src",
-        {
-          type: "image",
-          url: _SCANNER_TRANSPARENT_PNG,
-          coordinates: [
-            ph(this.homeLon, this.homeLat, 1e-3),
-            ph(this.homeLon, this.homeLat, 1e-3),
-            ph(this.homeLon, this.homeLat, -1e-3),
-            ph(this.homeLon, this.homeLat, -1e-3)
-          ]
-        }
-      );
+    if (!this._scannerLayer) {
+      this._scannerLayer = new ScannerMeshLayer("helios-lidar-scanner", {
+        homeLat: this.homeLat,
+        homeLon: this.homeLon,
+        sunColorLow: toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX),
+        sunColorHigh: toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX),
+        cloudCover: 0,
+        opacity: this._scannerOpacity(),
+        time: this._selectedTime ?? /* @__PURE__ */ new Date()
+      });
+      this._scannerLayer.setVisible(this._scannerVisible);
     }
     if (!this.map.getLayer("helios-lidar-scanner")) {
-      this.map.addLayer(
-        {
-          id: "helios-lidar-scanner",
-          source: "helios-lidar-scanner-src",
-          type: "raster",
-          layout: { visibility: this._scannerVisible ? "visible" : "none" },
-          paint: {
-            //Held at 0 until the compute lands, then animated
-            //up by _startScannerReveal so the user never sees
-            //a flash of stale colours from a previous pass.
-            "raster-opacity": 0,
-            "raster-fade-duration": 0,
-            //Nearest sampling preserves the per-cell grid look
-            //(the image IS the data, no need to smooth it).
-            "raster-resampling": "nearest"
-          }
-        }
-      );
+      this.map.addLayer(this._scannerLayer);
     }
     this._ensureBuildingsFetched();
-    this._refreshLidarScanner();
-    this._applyLidarTerrain();
+    this._ensureLidarFetched();
   }
   //Idempotent fetch helper. Reuses _buildingsData across style
   //reloads; only re-hits the MapTiler API when the home position
@@ -27607,90 +27829,76 @@ const _HeliosEngine = class _HeliosEngine {
       console.warn("[HELIOS] Buildings fetch failed:", err);
     });
   }
-  //Idempotent LiDAR fetch. Picks the country provider that covers
-  //the home (France only for now, see helios-lidar.ts) and stores
-  //the consolidated regions in _lidarData for the shadow projector
-  //to consume. Gated on _buildingsData because the provider needs
-  //the MapTiler footprints to classify cells.
+  //Wire up the LiDAR pipeline for the current home + precision
+  //setting. Idempotent: safe to call after any config change.
+  //
+  //  - Resolves the country provider that covers the home (France
+  //    HD only for now, see helios-lidar.ts).
+  //  - When LiDAR is on AND a provider matches, registers the custom
+  //    DEM protocol with that provider. Every terrain-rgb tile
+  //    MapLibre requests then fires a per-tile WMS call against the
+  //    provider; the protocol caches the result and notifies us
+  //    through `onTileLoaded` so the scanner mesh layer can grow.
+  //  - When LiDAR is off or no provider matches, unregisters the
+  //    protocol and clears the scanner mesh.
   _ensureLidarFetched() {
     if (!this.map) return;
-    if (!this._buildingsData) return;
     const level = this._lidarPrecisionLevel();
     if (level === "off") {
-      this._lidarAbort?.abort();
-      this._lidarData = null;
-      this._lidarFetchKey = "";
+      this._lidarProvider = null;
+      this._lidarHasTiles = false;
       unregisterLidarTerrain(this._engineId);
+      this._scannerLayer?.clear();
       this._applyLidarTerrain();
-      this._refreshLidarScanner();
       this._pushRenderableSources();
       return;
     }
-    const source = findLidarSource(this.homeLat, this.homeLon);
-    if (!source) return;
-    const radius = LIDAR_FETCH_RADIUS_M;
-    const rasterSize = LIDAR_PRECISION_RASTER[level];
-    const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
-    if (this._lidarData && this._lidarFetchKey === key) return;
-    const cached = _lidarFetchCache.get(key);
-    if (cached) {
-      this._lidarAbort?.abort();
-      this._lidarFetchKey = key;
-      this._lidarData = cached;
-      if (cached.rasters) {
-        registerLidarTerrain(this._engineId, lidarTerrainFromRasters(cached.rasters), this.apiKey || null);
-      }
+    const provider = findLidarSource(this.homeLat, this.homeLon);
+    if (!provider) {
+      this._lidarProvider = null;
+      this._lidarHasTiles = false;
+      unregisterLidarTerrain(this._engineId);
+      this._scannerLayer?.clear();
       this._applyLidarTerrain();
-      this._refreshLidarScanner();
-      this._pushRenderableSources();
-      this._lastAtmosphereAlt = -999;
-      this._refreshShadowsAndAtmosphere();
       return;
     }
-    this._lidarAbort?.abort();
-    const ac = new AbortController();
-    this._lidarAbort = ac;
-    this._lidarFetchKey = key;
-    source.fetch(
-      {
-        homeLat: this.homeLat,
-        homeLon: this.homeLon,
-        radiusMeters: radius,
-        rasterSize,
-        cropRadiusMeters: radius,
-        signal: ac.signal
-      }
-    ).then((result) => {
-      if (ac.signal.aborted || !this.map) return;
-      _lidarFetchCache.set(key, result);
-      this._lidarData = result;
-      if (result.rasters) {
-        registerLidarTerrain(this._engineId, lidarTerrainFromRasters(result.rasters), this.apiKey || null);
-      } else {
-        unregisterLidarTerrain(this._engineId);
-      }
-      this._applyLidarTerrain();
-      this._refreshLidarScanner();
-      this._pushRenderableSources();
-      this._lastAtmosphereAlt = -999;
-      this._refreshShadowsAndAtmosphere();
-    }).catch((err) => {
-      if (err?.name === "AbortError") return;
-      console.warn("[HELIOS] LiDAR fetch failed:", err);
-    });
+    this._lidarProvider = provider;
+    const rasterSize = PRECISION_TILE_RASTER[level] ?? 384;
+    registerLidarTerrain(
+      this._engineId,
+      provider,
+      rasterSize,
+      (key, data) => this._onLidarTileLoaded(key, data)
+    );
+    this._applyLidarTerrain();
   }
-  //Idempotent terrain source swap. When LiDAR MNT is available AND
-  //the engine isn't in performance mode (which disables terrain
-  //altogether), we add a `helios-lidar-terrain` raster-dem source
-  //pointing at the custom protocol and call setTerrain() with it.
-  //When MNT goes away (precision toggled off, home moved out of
-  //coverage, fetch failed), we revert to the global MapTiler DEM.
+  //Per-tile arrival hook. Called from the custom DEM protocol once
+  //per fresh fetch (cache hits don't re-fire). We push the tile
+  //into the scanner mesh layer (which builds its sub-mesh + texture
+  //right away), and flag the engine as "has LiDAR tiles" so the
+  //card surfaces the scanner toggle button.
+  _onLidarTileLoaded(key, data) {
+    if (!this._scannerLayer) return;
+    this._scannerLayer.addTile(key, data);
+    if (!this._lidarHasTiles) {
+      this._lidarHasTiles = true;
+      try {
+        this.onMapTransform?.();
+      } catch (_2) {
+      }
+    }
+  }
+  //Idempotent terrain source swap. When LiDAR is active AND the
+  //engine isn't in performance mode, we add a `helios-lidar-terrain`
+  //raster-dem source pointing at the custom protocol and call
+  //setTerrain() with it. When LiDAR goes off, we revert to the
+  //global MapTiler DEM.
   _applyLidarTerrain() {
     if (!this.map) return;
     if (this._performanceMode()) {
       return;
     }
-    const haveLidarDem = this._lidarTerrainAvailable();
+    const haveLidarDem = this._lidarActive();
     const haveSource = !!this.map.getSource("helios-lidar-terrain");
     if (haveLidarDem && !haveSource) {
       try {
@@ -27745,273 +27953,50 @@ const _HeliosEngine = class _HeliosEngine {
     if (!Number.isFinite(raw)) return DEFAULT_SCANNER_OPACITY;
     return Math.max(0, Math.min(1, raw));
   }
-  //Build a fresh irradiance image from the LiDAR rasters and push
-  //it into the scanner source. Idempotent and cheap when the data
-  //isn't there yet: returns early without touching anything.
-  //
-  //The image source's `coordinates` are re-pegged to the current
-  //LiDAR bbox so a style reload or a precision change always lands
-  //the raster on the same geographic footprint as the underlying
-  //rasters, regardless of whatever placeholder corners the source
-  //was created with.
-  _refreshLidarScanner() {
-    if (!this.map) return;
-    const rasters = this._lidarData?.rasters;
-    const src = this.map.getSource("helios-lidar-scanner-src");
-    if (!src) return;
-    if (!rasters) {
-      try {
-        src.updateImage({
-          url: _SCANNER_TRANSPARENT_PNG,
-          coordinates: [
-            [this.homeLon - 1e-3, this.homeLat + 1e-3],
-            [this.homeLon + 1e-3, this.homeLat + 1e-3],
-            [this.homeLon + 1e-3, this.homeLat - 1e-3],
-            [this.homeLon - 1e-3, this.homeLat - 1e-3]
-          ]
-        });
-      } catch (_2) {
-      }
-      return;
-    }
-    const { minLon, minLat, maxLon, maxLat } = rasters.bounds;
-    try {
-      src.setCoordinates([
-        [minLon, maxLat],
-        [maxLon, maxLat],
-        [maxLon, minLat],
-        [minLon, minLat]
-      ]);
-    } catch (_2) {
-    }
-    if (this._scannerVisible) {
-      this._computeLidarScanner();
-    }
-  }
-  //Per-pixel irradiance compute over the LiDAR rasters. Generates
-  //an RGBA image whose width × height match the raster, then bakes
-  //it into a PNG blob and feeds it to the scanner image source.
-  //
-  //Algorithm per output pixel (i, j):
-  //  1. Crop to a circular disc around the home so the square
-  //     raster doesn't leak past the user-visible coverage radius.
-  //  2. Surface normal from local MNT gradient (3×3 stencil).
-  //  3. cos(incidence) = dot(normal, sun-unit-vector).
-  //  4. Shadow test: walk the sun direction in raster space, step
-  //     one cell at a time; if any sample's surface elevation
-  //     (MNT + MNH) rises above the sun line, the pixel is shaded.
-  //  5. ratio = shadow ? 0 : max(0, cos(incidence)) * GHI / 1000.
-  //  6. RGBA = lerp(low, high, ratio).
-  //
-  //Runs as a single synchronous pass: the cost is dominated by the
-  //O(N · maxSteps) shadow walk and lands well under 250 ms even on
-  //'ultra' (1024²) rasters. The compute is fenced by `_scannerJobId`
-  //so a fresh scrub aborts an in-flight pass cleanly.
-  _computeLidarScanner() {
-    if (!this.map) return;
-    if (!this._scannerVisible) return;
-    const rasters = this._lidarData?.rasters;
-    if (!rasters) return;
-    const jobId = ++this._scannerJobId;
-    this.onPointCloudComputeStart?.();
-    this._cancelScannerReveal();
-    if (this.map.getLayer("helios-lidar-scanner")) {
-      try {
-        this.map.setPaintProperty("helios-lidar-scanner", "raster-opacity", 0);
-      } catch (_2) {
-      }
-    }
-    const lowHex = toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX);
-    const highHex = toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX);
-    const lowRgb = parseHex(lowHex, [220, 38, 38]);
-    const highRgb = parseHex(highHex, [22, 163, 74]);
-    const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
-    const sun = getSunPosition(t2, this.homeLat, this.homeLon);
-    const W = rasters.width;
-    const H2 = rasters.height;
-    const mnt = rasters.mnt;
-    const mns = rasters.mns;
-    const pitchM = rasters.cellPitchM;
-    const bounds = rasters.bounds;
-    const radius = LIDAR_FETCH_RADIUS_M;
-    const buf = new Uint8ClampedArray(W * H2 * 4);
-    const D2 = Math.PI / 180;
-    const azR = sun.azimuth * D2;
-    const altR = Math.max(0, sun.altitude) * D2;
-    const cosAlt = Math.cos(altR);
-    const sinAlt = Math.sin(altR);
-    const sx = Math.sin(azR) * cosAlt;
-    const sy = Math.cos(azR) * cosAlt;
-    const sz = sinAlt;
-    const cloud = this._homeHourlyData ? this._getWeatherAtTime(t2)?.cloudCover ?? 0 : 0;
-    const ghi = sun.altitude > 0 ? computeIrradianceWm2(t2, this.homeLat, this.homeLon, cloud) : 0;
-    const ghiNorm = Math.min(1, ghi / 1e3);
-    const dCol = Math.sin(azR);
-    const dRow = -Math.cos(azR);
-    const stepRiseM = pitchM * Math.tan(altR);
-    const RAY_MAX = 400;
-    const cosHomeLat = Math.cos(this.homeLat * D2);
-    const mPerDegLat = 111320;
-    const mPerDegLon = mPerDegLat * cosHomeLat;
-    const pxLatM = (bounds.maxLat - bounds.minLat) / H2 * mPerDegLat;
-    const pxLonM = (bounds.maxLon - bounds.minLon) / W * mPerDegLon;
-    const homeCol = (this.homeLon - bounds.minLon) / (bounds.maxLon - bounds.minLon) * W;
-    const homeRow = (bounds.maxLat - this.homeLat) / (bounds.maxLat - bounds.minLat) * H2;
-    const cropR2 = radius * radius;
-    const isInShadow = (col0, row0, h0) => {
-      for (let k2 = 1; k2 <= RAY_MAX; k2++) {
-        const ci = col0 + k2 * dCol | 0;
-        const ri = row0 + k2 * dRow | 0;
-        if (ci < 0 || ci >= W || ri < 0 || ri >= H2) return false;
-        const idx = ri * W + ci;
-        const blockerH = mns[idx];
-        const sunLineH = h0 + k2 * stepRiseM;
-        if (blockerH > sunLineH + 0.5) return true;
-        if (sunLineH > h0 + 100) return false;
-      }
-      return false;
-    };
-    for (let j = 0; j < H2; j++) {
-      const rowOff = j * W;
-      for (let i2 = 0; i2 < W; i2++) {
-        const off = (rowOff + i2) * 4;
-        const dCol2 = (i2 + 0.5 - homeCol) * pxLonM;
-        const dRow2 = (j + 0.5 - homeRow) * pxLatM;
-        if (dCol2 * dCol2 + dRow2 * dRow2 > cropR2) {
-          buf[off + 3] = 0;
-          continue;
-        }
-        const jm = j > 0 ? j - 1 : j;
-        const jp = j < H2 - 1 ? j + 1 : j;
-        const im = i2 > 0 ? i2 - 1 : i2;
-        const ip = i2 < W - 1 ? i2 + 1 : i2;
-        const gradX = (mnt[rowOff + ip] - mnt[rowOff + im]) / (2 * pxLonM);
-        const gradY = (mnt[jm * W + i2] - mnt[jp * W + i2]) / (2 * pxLatM);
-        const nl2 = Math.hypot(gradX, gradY, 1);
-        const nx = -gradX / nl2;
-        const ny = -gradY / nl2;
-        const nz = 1 / nl2;
-        const cosI = sun.altitude > 0 ? Math.max(0, nx * sx + ny * sy + nz * sz) : 0;
-        let ratio = 0;
-        if (cosI > 0 && ghi > 0) {
-          if (!isInShadow(i2 + 0.5, j + 0.5, mnt[rowOff + i2])) {
-            ratio = cosI * ghiNorm;
-            if (ratio > 1) ratio = 1;
-          }
-        }
-        buf[off] = Math.round(lowRgb[0] + (highRgb[0] - lowRgb[0]) * ratio);
-        buf[off + 1] = Math.round(lowRgb[1] + (highRgb[1] - lowRgb[1]) * ratio);
-        buf[off + 2] = Math.round(lowRgb[2] + (highRgb[2] - lowRgb[2]) * ratio);
-        buf[off + 3] = 255;
-      }
-    }
-    if (jobId !== this._scannerJobId) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = H2;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      this.onPointCloudComputeEnd?.();
-      return;
-    }
-    const img = ctx.createImageData(W, H2);
-    img.data.set(buf);
-    ctx.putImageData(img, 0, 0);
-    canvas.toBlob((blob) => {
-      if (jobId !== this._scannerJobId) return;
-      if (!this.map || !blob) {
-        this.onPointCloudComputeEnd?.();
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const src = this.map.getSource("helios-lidar-scanner-src");
-      if (src) {
-        try {
-          src.updateImage({
-            url,
-            coordinates: [
-              [bounds.minLon, bounds.maxLat],
-              [bounds.maxLon, bounds.maxLat],
-              [bounds.maxLon, bounds.minLat],
-              [bounds.minLon, bounds.minLat]
-            ]
-          });
-        } catch (_2) {
-        }
-      }
-      setTimeout(() => URL.revokeObjectURL(url), 1e3);
-      this._startScannerReveal();
-      this.onPointCloudComputeEnd?.();
-    }, "image/png");
-  }
-  //Fade the scanner raster from 0 to its target opacity over 700
-  //ms (ease-out cubic). Replaces the geometric radial reveal we
-  //used to do on the point cloud, which doesn't apply to a single
-  //textured polygon.
-  _startScannerReveal() {
-    if (!this.map) return;
-    if (!this.map.getLayer("helios-lidar-scanner")) return;
-    if (!this._scannerVisible) return;
-    this._cancelScannerReveal();
-    const target = this._scannerOpacity();
-    const duration = 700;
-    const startT = performance.now();
-    const step = (now) => {
-      if (!this.map) return;
-      const tt = Math.min(1, (now - startT) / duration);
-      const ease = 1 - Math.pow(1 - tt, 3);
-      try {
-        this.map.setPaintProperty("helios-lidar-scanner", "raster-opacity", target * ease);
-      } catch (_2) {
-      }
-      if (tt < 1) {
-        this._scannerRevealRaf = requestAnimationFrame(step);
-      } else {
-        this._scannerRevealRaf = void 0;
-      }
-    };
-    this._scannerRevealRaf = requestAnimationFrame(step);
-  }
-  _cancelScannerReveal() {
-    if (this._scannerRevealRaf !== void 0) {
-      cancelAnimationFrame(this._scannerRevealRaf);
-      this._scannerRevealRaf = void 0;
-    }
-  }
-  //Toggle visibility of the LiDAR irradiance scanner overlay. The
-  //compute pass is gated on the visibility flag so flipping the
-  //toggle ON kicks off a compute, OFF cancels any in-flight one
-  //and hides the layer instantly (no fade out).
+  //Toggle visibility of the LiDAR scanner mesh. The custom WebGL
+  //layer stays on the map across toggles; we flip its internal
+  //visibility flag (cheap, no GL re-init) and recompute its
+  //per-tile textures from the current sun position on toggle ON.
   setPointCloudVisible(visible) {
-    const prev = this._scannerVisible;
     this._scannerVisible = visible;
-    if (!this.map) return;
-    if (visible && !prev) {
-      if (this.map.getLayer("helios-lidar-scanner")) {
-        try {
-          this.map.setLayoutProperty("helios-lidar-scanner", "visibility", "visible");
-          this.map.setPaintProperty("helios-lidar-scanner", "raster-opacity", 0);
-        } catch (_2) {
-        }
-      }
-      this._computeLidarScanner();
-    } else if (!visible && prev) {
-      this._scannerJobId++;
-      this._cancelScannerReveal();
-      if (this.map.getLayer("helios-lidar-scanner")) {
-        try {
-          this.map.setLayoutProperty("helios-lidar-scanner", "visibility", "none");
-        } catch (_2) {
-        }
-      }
+    if (!this._scannerLayer) return;
+    this._scannerLayer.setVisible(visible);
+    if (visible) {
+      this.onPointCloudComputeStart?.();
+      const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
+      const cloud = this._homeHourlyData ? this._getWeatherAtTime(t2)?.cloudCover ?? 0 : 0;
+      this._scannerLayer.refreshTextures(
+        t2,
+        cloud,
+        toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX),
+        toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX)
+      );
+      this._scannerLayer.updateOpacity(this._scannerOpacity());
       this.onPointCloudComputeEnd?.();
     }
   }
-  //True when the LiDAR pipeline has yielded rasters the scanner
-  //can paint. The card uses this to gate the toggle button so it
-  //only appears once there's something useful to show.
+  //True once the LiDAR pipeline has yielded at least one tile.
+  //The card uses this to gate the scanner toggle button: the
+  //user only sees the button after the first tile lands, which
+  //also signals the home is inside a provider's coverage.
   hasLidarPointCloud() {
-    return !!this._lidarData?.rasters;
+    return this._lidarHasTiles;
+  }
+  //Trigger a fresh per-tile texture compute from the current sun
+  //position. Called by _refreshShadowsAndAtmosphere on every sun
+  //movement past the 0.5° threshold, so the scanner colours track
+  //time-of-day without burning frames between meaningful changes.
+  _recomputeScannerIfVisible() {
+    if (!this._scannerVisible || !this._scannerLayer) return;
+    if (!this._scannerLayer.hasTiles()) return;
+    const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
+    const cloud = this._homeHourlyData ? this._getWeatherAtTime(t2)?.cloudCover ?? 0 : 0;
+    this._scannerLayer.refreshTextures(
+      t2,
+      cloud,
+      toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX),
+      toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX)
+    );
   }
   //Linear interpolation between two RGB hex strings.
   _lerpHex(a2, b2, t2) {
@@ -28190,9 +28175,7 @@ const _HeliosEngine = class _HeliosEngine {
       }
     } catch (_2) {
     }
-    if (this._scannerVisible) {
-      this._computeLidarScanner();
-    }
+    this._recomputeScannerIfVisible();
   }
   //Precision is fixed to 'high' (multi-model median). The function
   //is kept so the rest of the engine stays precision-aware if a
@@ -28726,15 +28709,12 @@ const _HeliosEngine = class _HeliosEngine {
     }
     const nextScanLow = toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX);
     const nextScanHigh = toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX);
-    if ((nextScanLow !== prevScanLow || nextScanHigh !== prevScanHigh) && this._scannerVisible) {
-      this._computeLidarScanner();
+    if (nextScanLow !== prevScanLow || nextScanHigh !== prevScanHigh) {
+      this._recomputeScannerIfVisible();
     }
     const nextScanOpa = this._scannerOpacity();
-    if (nextScanOpa !== prevScanOpa && this.map.getLayer("helios-lidar-scanner") && this._scannerVisible) {
-      try {
-        this.map.setPaintProperty("helios-lidar-scanner", "raster-opacity", nextScanOpa);
-      } catch (_2) {
-      }
+    if (nextScanOpa !== prevScanOpa && this._scannerLayer) {
+      this._scannerLayer.updateOpacity(nextScanOpa);
     }
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
@@ -28771,12 +28751,9 @@ const _HeliosEngine = class _HeliosEngine {
     window.clearTimeout(this._resizeDebounceTimer);
     this._fetchAbortController?.abort();
     this._buildingsAbort?.abort();
-    this._lidarAbort?.abort();
     unregisterLidarTerrain(this._engineId);
-    if (this._scannerRevealRaf !== void 0) {
-      cancelAnimationFrame(this._scannerRevealRaf);
-      this._scannerRevealRaf = void 0;
-    }
+    this._scannerLayer?.clear();
+    this._scannerLayer = null;
     this._resizeObserver?.disconnect();
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
@@ -28852,8 +28829,7 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-cloud-rings",
         "helios-buildings-surroundings-src",
         "helios-buildings-home-src",
-        "helios-building-shadows-src",
-        "helios-lidar-scanner-src"
+        "helios-building-shadows-src"
       ]) {
         try {
           if (this.map.getSource(sid)) this.map.removeSource(sid);
@@ -28863,8 +28839,8 @@ const _HeliosEngine = class _HeliosEngine {
     }
     this._buildingsData = null;
     this._buildingsFetchKey = "";
-    this._lidarData = null;
-    this._lidarFetchKey = "";
+    this._lidarProvider = null;
+    this._lidarHasTiles = false;
     this._homeHourlyData = null;
     this._bumpInactivityCanvas = void 0;
     this._bumpInactivityHandler = void 0;
@@ -31818,7 +31794,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.19"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.20"}`,
       labelStyle,
       versionStyle
     );

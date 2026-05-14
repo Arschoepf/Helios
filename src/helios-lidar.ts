@@ -3,14 +3,20 @@
 //Adding a country = drop a new file under ./helios-lidar/ that exports
 //a LidarSource and register it in LIDAR_SOURCES below. No engine-side
 //changes needed.
+//
+//The pipeline is tile-driven: MapLibre asks the custom DEM protocol
+//for terrain tiles, and each tile triggers one `fetchTile` call on
+//the matching provider. Providers return MNT (bare-earth) AND MNS
+//(full surface) rasters for the requested bbox, both decoded at the
+//same resolution; the protocol encodes MNT as terrain-RGB for the
+//mesh and the scanner layer reads MNS for its 3D mesh + texture.
 
 export interface LidarSource
 {
     //Stable identifier, lowercased and country-prefixed. Goes into
-    //logs and the engine's fetch-cache key.
+    //logs and the tile-cache key.
     id:    string;
-    //Human-readable label, currently logs-only, may surface in a
-    //future config UI.
+    //Human-readable label, currently logs-only.
     name:  string;
 
     //Cheap synchronous coverage probe. Implementations should bail
@@ -18,65 +24,44 @@ export interface LidarSource
     //on every home-position change without measurable cost.
     covers(lat: number, lon: number): boolean;
 
-    //Fetch the raw LiDAR rasters around the home. Implementations
-    //decode whatever wire format the upstream API exposes and return
-    //a single LidarRasters bundle holding MNH (height above ground)
-    //and MNT (bare-earth elevation) rasters covering the same bbox,
-    //plus the metadata the engine needs to project them.
-    //
-    //Returns `rasters: null` when the fetch failed end-to-end (the
-    //LiDAR pipeline silently no-ops in that case). Partial failures
-    //surface as a null `rasters` too: we don't ship half a DEM.
-    fetch(opts: LidarFetchOptions): Promise<LidarFetchResult>;
+    //Fetch one tile's MNT + MNS rasters in parallel. Returns null on
+    //any network / decode failure, or when the requested bbox falls
+    //outside the provider's coverage. The protocol caches the result
+    //per (z, x, y) so MapLibre's repeated requests don't trigger
+    //repeat WMS calls.
+    fetchTile(opts: LidarTileFetchOptions): Promise<LidarTileData | null>;
 }
 
-export interface LidarFetchResult
+export interface LidarTileFetchOptions
 {
-    rasters: LidarRasters | null;
+    minLat:     number;
+    minLon:     number;
+    maxLat:     number;
+    maxLon:     number;
+    //Pixel count per side requested from the upstream raster. The
+    //protocol picks this based on the user's `lidar-precision`.
+    rasterSize: number;
+    signal?:    AbortSignal;
 }
 
-export interface LidarRasters
+export interface LidarTileData
 {
-    //Raster dimensions; same for MNT and MNS, both decode at the
-    //provider's requested resolution.
+    //Raster dimensions; same for MNT and MNS, both decode at
+    //`rasterSize` (square).
     width:  number;
     height: number;
-    //Geographic bounds, row 0 is the north edge of `maxLat`. The
-    //bbox is slightly padded outwards from the requested radius so
-    //the engine can shadow-test points up to the visible disc.
+    //Geographic bounds of the tile (matches the requested bbox).
+    //Row 0 is the north edge (`maxLat`).
     bounds: { minLon: number; minLat: number; maxLon: number; maxLat: number };
     //Average ground-cell size in metres (mean of lon / lat pitch).
-    //The engine uses it as the step size for the per-pixel shadow
-    //ray cast.
+    //Used by the scanner mesh to set its in-tile sun ray-walk step.
     cellPitchM: number;
-    //Bare-earth elevation (MNT, Modele Numerique de Terrain) in
-    //metres above mean sea level. Row-major, top-down. Drives the
-    //custom DEM source that replaces MapTiler terrain in the LiDAR
-    //area; also provides the ground-surface normal for the scanner's
-    //per-pixel incidence computation.
+    //Bare-earth elevation (MNT). Row-major, top-down.
     mnt: Float32Array;
-    //Full surface elevation (MNS, Modele Numerique de Surface):
-    //bare-earth + every above-ground feature (vegetation, buildings,
-    //masts, ...). Same orientation as `mnt`. Drives the scanner's
-    //shadow ray cast: any cell whose MNS rises above the sun line
-    //casts a shadow on neighbouring ground pixels.
+    //Full surface elevation (MNS): ground + every above-ground feature
+    //LiDAR picked up (vegetation, buildings, walls, hedges, ...).
+    //Same orientation as `mnt`.
     mns: Float32Array;
-}
-
-export interface LidarFetchOptions
-{
-    homeLat:      number;
-    homeLon:      number;
-    radiusMeters: number;
-    //Pixel count per side requested from the upstream raster. Higher
-    //means finer ground sampling and a larger payload. The engine
-    //derives this from the user-set `lidar-precision` level.
-    rasterSize:   number;
-    //Hard limit on the haversine distance from the home, in metres.
-    //Providers fetch a padded bbox but clamp output cells beyond
-    //this so the rendered scanner stays inside the visible disc.
-    cropRadiusMeters?: number;
-    signal?:           AbortSignal;
 }
 
 import { franceLidarHd } from './helios-lidar/helios-lidar-fr';
