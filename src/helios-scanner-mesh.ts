@@ -434,17 +434,21 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
                 const h   = data.mns[idx];
                 const elev = (isFinite(h) ? h : data.mnt[idx]) + SCANNER_LIFT_M;
 
-                //Metres east of anchor (positive east), north of
-                //anchor (positive north, so negative for southerly
-                //vertices since anchor is the NW corner), and up
-                //above sea level.
+                //MapLibre's Mercator convention has +Y going SOUTH
+                //(getMatrixForModel translates by mercatorYfromLat
+                //× worldSize, and mercatorYfromLat increases as
+                //latitude decreases), so the model-local Y axis is
+                //south-positive too. Vertices south of the NW
+                //anchor get a positive Y; that puts them where
+                //they belong on screen instead of mirroring the
+                //mesh north of the anchor.
                 const eastM  = (lon - anchorLon) * mPerLonDeg;
-                const northM = (lat - anchorLat) * mPerLatDeg;   // ≤ 0 for the southern half of the tile
+                const southM = (anchorLat - lat) * mPerLatDeg;
                 const upM    = elev;
 
                 const off = idx * 5;
                 buf[off    ] = eastM;
-                buf[off + 1] = northM;
+                buf[off + 1] = southM;
                 buf[off + 2] = upM;
                 buf[off + 3] = u;
                 buf[off + 4] = v;

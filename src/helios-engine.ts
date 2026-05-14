@@ -7,12 +7,8 @@ import { projectExtrusionShadows, SHADOW_FADE_STEPS } from './helios-shadows';
 import { findLidarSource } from './helios-lidar';
 import type { LidarTileData, LidarSource } from './helios-lidar';
 import {
-    LIDAR_TERRAIN_PROTOCOL,
-    LIDAR_TERRAIN_MIN_ZOOM,
     LIDAR_TERRAIN_MAX_ZOOM,
-    PRECISION_TILE_RASTER,
-    registerLidarTerrain,
-    unregisterLidarTerrain
+    PRECISION_TILE_RASTER
 } from './helios-lidar-terrain';
 import { ScannerMeshLayer } from './helios-scanner-mesh';
 
@@ -262,6 +258,19 @@ function bumpStat(key: keyof HeliosStats): void
 //can't see.
 const MAX_LIVE_ENGINES = 2;
 const _liveEngines = new Set<HeliosEngine>();
+
+//Web-Mercator tile (z, x, y) → WGS84 bbox in degrees. Used by the
+//LiDAR scanner pipeline to compute the bbox to hand to
+//`provider.fetchTile` for each tile in the home's grid.
+function tileToBounds(z: number, x: number, y: number): { n: number; s: number; w: number; e: number }
+{
+    const n = Math.PI - 2 * Math.PI * y       / Math.pow(2, z);
+    const s = Math.PI - 2 * Math.PI * (y + 1) / Math.pow(2, z);
+    const w = x       / Math.pow(2, z) * 360 - 180;
+    const e = (x + 1) / Math.pow(2, z) * 360 - 180;
+    const toLat = (rad: number) => 180 / Math.PI * Math.atan(0.5 * (Math.exp(rad) - Math.exp(-rad)));
+    return { n: toLat(n), s: toLat(s), w, e };
+}
 
 
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
@@ -678,16 +687,15 @@ export class HeliosEngine
     //through _renderForCurrentSelection.
     private _currentCloudPct: number = 0;
 
-    //Stable id used as the per-engine key when registering the LiDAR
-    //custom protocol. Built from the home coordinates so two cards
-    //on the same dashboard never share a protocol slot.
-    private _engineId:      string = '';
     //LiDAR provider resolved at engine init (provider that covers
     //the home, null when the home is outside any registered country).
     private _lidarProvider: LidarSource | null = null;
     //True once at least one tile has come back from the provider,
     //gates the scanner button on the card.
     private _lidarHasTiles: boolean = false;
+    //Set of (z/x/y) keys we've already fired a fetch for, prevents
+    //duplicate WMS calls on repeat _kickLidarTileFetches passes.
+    private _lidarTileKeys: Set<string> = new Set();
     //Cached scanner mesh layer instance; created on engine init,
     //added to the map on style.load, kept around through style
     //reloads (we re-add it after each setStyle).
@@ -733,11 +741,6 @@ export class HeliosEngine
 
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
-
-        //Engine id stable for the lifetime of this card instance.
-        //Lat/lon-derived so two cards on the same dashboard don't share
-        //a custom-protocol slot.
-        this._engineId = `e${Math.abs(Math.floor(this.homeLat * 1e4))}-${Math.abs(Math.floor(this.homeLon * 1e4))}-${Math.floor(Math.random() * 1e6)}`;
 
         //Pixel ratio caps. At pitch 55° + continuous auto-rotation,
         //each rendered pixel is sampled multiple times (terrain mesh,
@@ -2058,10 +2061,8 @@ export class HeliosEngine
         {
             this._lidarProvider = null;
             this._lidarHasTiles = false;
-            unregisterLidarTerrain(this._engineId);
+            this._lidarTileKeys.clear();
             this._scannerLayer?.clear();
-            this._applyLidarTerrain();
-            this._pushRenderableSources();
             return;
         }
 
@@ -2071,23 +2072,20 @@ export class HeliosEngine
             console.info(`[HELIOS-ENGINE] _ensureLidarFetched: no provider covers home`);
             this._lidarProvider = null;
             this._lidarHasTiles = false;
-            unregisterLidarTerrain(this._engineId);
+            this._lidarTileKeys.clear();
             this._scannerLayer?.clear();
-            this._applyLidarTerrain();
             return;
         }
         this._lidarProvider = provider;
 
         const rasterSize = PRECISION_TILE_RASTER[level] ?? 384;
-        console.info(`[HELIOS-ENGINE] _ensureLidarFetched: provider=${provider.id}, level=${level}, rasterSize=${rasterSize}, engineId=${this._engineId}`);
-        registerLidarTerrain(
-            this._engineId,
-            provider,
-            rasterSize,
-            (key, data) => this._onLidarTileLoaded(key, data)
-        );
+        console.info(`[HELIOS-ENGINE] _ensureLidarFetched: provider=${provider.id}, level=${level}, rasterSize=${rasterSize}`);
 
-        this._applyLidarTerrain();
+        //Drop the in-flight key set if the precision changed so the
+        //next fetch picks the new raster size, not the cached one.
+        this._lidarTileKeys.clear();
+        this._scannerLayer?.clear();
+        this._kickLidarTileFetches();
     }
 
     //Per-tile arrival hook. Called from the custom DEM protocol once
@@ -2109,57 +2107,72 @@ export class HeliosEngine
         }
     }
 
-    //Terrain stays on MapTiler's global DEM; LiDAR data only drives
-    //the irradiance scanner now (cleaner terrain mesh, no
-    //per-tile WMS load weighing on the camera response).
-    //
-    //We still want IGN tiles fetched whenever the scanner is on, so
-    //the custom protocol is wired as a regular `raster` source +
-    //layer with raster-opacity = 0. MapLibre asks for tiles to render
-    //the (invisible) layer; the protocol piggy-backs on those
-    //requests to load MNT + MNS for the scanner mesh.
+    //Terrain stays on MapTiler's global DEM; LiDAR data feeds the
+    //irradiance scanner only. We fetch the LiDAR tiles directly
+    //from the provider (no MapLibre tile pipeline involved), so
+    //there's no LiDAR-driven layer / source on the map at all.
+    //Kept as a stub for the existing call sites; everything happens
+    //in `_kickLidarTileFetches`.
     private _applyLidarTerrain(): void
     {
         if (!this.map) return;
-
-        const haveLidar = this._lidarActive();
-        const haveSrc   = !!this.map.getSource('helios-lidar-prefetch-src');
-
-        if (haveLidar && !haveSrc)
+        if (!this._lidarActive())
         {
-            try
-            {
-                this.map.addSource('helios-lidar-prefetch-src',
-                {
-                    type:     'raster',
-                    tiles:    [`${LIDAR_TERRAIN_PROTOCOL}://${this._engineId}/{z}/{x}/{y}`],
-                    tileSize: 512,
-                    minzoom:  LIDAR_TERRAIN_MIN_ZOOM,
-                    maxzoom:  LIDAR_TERRAIN_MAX_ZOOM
-                });
-                this.map.addLayer({
-                    id:     'helios-lidar-prefetch',
-                    type:   'raster',
-                    source: 'helios-lidar-prefetch-src',
-                    paint:
-                    {
-                        //Invisible to the user: this layer exists only
-                        //so MapLibre keeps requesting tiles via the
-                        //custom protocol, which is how we trigger the
-                        //LiDAR fetches that feed the scanner mesh.
-                        'raster-opacity':       0,
-                        'raster-fade-duration': 0
-                    }
-                }, 'helios-lidar-scanner');
-            }
-            catch (e) { console.warn('[HELIOS] LiDAR prefetch addSource failed:', e); }
+            this._scannerLayer?.clear();
+            return;
         }
-        else if (!haveLidar && haveSrc)
+        this._kickLidarTileFetches();
+    }
+
+    //Compute the 3 × 3 LiDAR tile grid around the home at z = 14
+    //(MapTiler-DEM-equivalent zoom for an area ~1.4 km wide), then
+    //fire one provider.fetchTile call per tile in parallel. Each
+    //completion feeds the scanner mesh via _onLidarTileLoaded.
+    //Idempotent: tiles already in the scanner mesh aren't re-fetched.
+    private _kickLidarTileFetches(): void
+    {
+        const provider = this._lidarProvider;
+        if (!provider || !this._scannerLayer) return;
+
+        const level      = this._lidarPrecisionLevel();
+        const rasterSize = PRECISION_TILE_RASTER[level] ?? 384;
+        const z          = LIDAR_TERRAIN_MAX_ZOOM;
+        const n          = Math.pow(2, z);
+        const homeX      = Math.floor((this.homeLon + 180) / 360 * n);
+        const latR       = this.homeLat * Math.PI / 180;
+        const homeY      = Math.floor((1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n);
+
+        for (let dy = -1; dy <= 1; dy++)
         {
-            try { if (this.map.getLayer('helios-lidar-prefetch')) this.map.removeLayer('helios-lidar-prefetch'); }
-            catch (_) {}
-            try { this.map.removeSource('helios-lidar-prefetch-src'); }
-            catch (_) {}
+            for (let dx = -1; dx <= 1; dx++)
+            {
+                const tx  = homeX + dx;
+                const ty  = homeY + dy;
+                const key = `${z}/${tx}/${ty}`;
+                //Already fetched (or in-flight cached by the scanner)
+                //→ skip the round-trip.
+                if (this._lidarTileKeys.has(key)) continue;
+                this._lidarTileKeys.add(key);
+
+                const bounds = tileToBounds(z, tx, ty);
+                provider.fetchTile({
+                    minLat:     bounds.s,
+                    minLon:     bounds.w,
+                    maxLat:     bounds.n,
+                    maxLon:     bounds.e,
+                    rasterSize
+                })
+                .then(data =>
+                {
+                    if (!data) { this._lidarTileKeys.delete(key); return; }
+                    this._onLidarTileLoaded(key, data);
+                })
+                .catch(err =>
+                {
+                    this._lidarTileKeys.delete(key);
+                    console.warn(`[HELIOS] LiDAR tile ${key} fetch failed`, err);
+                });
+            }
         }
     }
 
@@ -3464,7 +3477,7 @@ export class HeliosEngine
         window.clearTimeout(this._resizeDebounceTimer);
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
-        unregisterLidarTerrain(this._engineId);
+        this._lidarTileKeys.clear();
         this._scannerLayer?.clear();
         this._scannerLayer = null;
         this._resizeObserver?.disconnect();
