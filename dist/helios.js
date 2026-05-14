@@ -26447,6 +26447,8 @@ const DEFAULT_SHADOW_OPACITY = 0.32;
 const SHADOW_LAYER_IDS = [
   "helios-building-shadows"
 ];
+const SHADOW_RASTER_SIZE = 1024;
+const BLANK_SHADOW_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
 function bumpStat(key) {
   if (typeof window === "undefined") return;
   const w2 = window;
@@ -26820,6 +26822,87 @@ const _HeliosEngine = class _HeliosEngine {
     const raw = Number(this.cfg["shadow-opacity"]);
     if (!Number.isFinite(raw)) return DEFAULT_SHADOW_OPACITY;
     return Math.max(0, Math.min(1, raw));
+  }
+  //Lat/lon corners of the shadow image source, in [NW, NE, SE, SW]
+  //order (the convention MapLibre image sources expect). Sides are
+  //the building visibility radius in metres, converted to degrees
+  //with the standard cos(lat) longitude correction.
+  _shadowBoundsCornersLL() {
+    const radius = this._buildingRadiusMeters();
+    const cosLat = Math.cos(this.homeLat * Math.PI / 180);
+    const dLat = radius / 111320;
+    const dLon = radius / (111320 * cosLat);
+    const minLon = this.homeLon - dLon;
+    const maxLon = this.homeLon + dLon;
+    const minLat = this.homeLat - dLat;
+    const maxLat = this.homeLat + dLat;
+    return [
+      [minLon, maxLat],
+      // NW
+      [maxLon, maxLat],
+      // NE
+      [maxLon, minLat],
+      // SE
+      [minLon, minLat]
+      // SW
+    ];
+  }
+  //Rasterise the cast-shadow polygons onto an offscreen canvas and
+  //push the result to the image source backing the shadow layer.
+  //Painting every polygon at solid black means overlapping regions
+  //stay black (no alpha stacking); the layer's `raster-opacity`
+  //then applies a single per-pixel opacity that matches the user
+  //setting exactly, no matter how many shadow polygons overlapped.
+  _paintShadowRaster(features) {
+    if (!this.map) return;
+    const src = this.map.getSource("helios-building-shadows-src");
+    if (!src) return;
+    const corners = this._shadowBoundsCornersLL();
+    const minLon = corners[0][0], maxLat = corners[0][1];
+    const maxLon = corners[1][0], minLat = corners[2][1];
+    if (!this._shadowCanvas) {
+      this._shadowCanvas = document.createElement("canvas");
+      this._shadowCanvas.width = SHADOW_RASTER_SIZE;
+      this._shadowCanvas.height = SHADOW_RASTER_SIZE;
+    }
+    const canvas = this._shadowCanvas;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, SHADOW_RASTER_SIZE, SHADOW_RASTER_SIZE);
+    ctx.fillStyle = "#000000";
+    const lonSpan = maxLon - minLon;
+    const latSpan = maxLat - minLat;
+    const lonToPx = (lon) => (lon - minLon) / lonSpan * SHADOW_RASTER_SIZE;
+    const latToPx = (lat) => (maxLat - lat) / latSpan * SHADOW_RASTER_SIZE;
+    for (const feat of features.features) {
+      const geom = feat.geometry;
+      if (!geom) continue;
+      let polygons = null;
+      if (geom.type === "Polygon") polygons = [geom.coordinates];
+      else if (geom.type === "MultiPolygon") polygons = geom.coordinates;
+      if (!polygons) continue;
+      for (const poly of polygons) {
+        if (!poly.length) continue;
+        const outer = poly[0];
+        if (outer.length < 3) continue;
+        ctx.beginPath();
+        ctx.moveTo(lonToPx(outer[0][0]), latToPx(outer[0][1]));
+        for (let i2 = 1; i2 < outer.length; i2++) {
+          ctx.lineTo(lonToPx(outer[i2][0]), latToPx(outer[i2][1]));
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    try {
+      src.setCoordinates(corners);
+    } catch (_2) {
+    }
+    try {
+      const dataUrl = canvas.toDataURL("image/png");
+      src.updateImage({ url: dataUrl });
+    } catch (_2) {
+    }
   }
   _findHourIndex(t2) {
     const home = this._homeHourlyData;
@@ -27335,12 +27418,14 @@ const _HeliosEngine = class _HeliosEngine {
     } else {
       this.map.getSource("helios-buildings-home-src").setData(homeData);
     }
+    const shadowBounds = this._shadowBoundsCornersLL();
     if (!this.map.getSource("helios-building-shadows-src")) {
       this.map.addSource(
         "helios-building-shadows-src",
         {
-          type: "geojson",
-          data: { type: "FeatureCollection", features: [] }
+          type: "image",
+          url: BLANK_SHADOW_DATA_URL,
+          coordinates: shadowBounds
         }
       );
     }
@@ -27350,11 +27435,11 @@ const _HeliosEngine = class _HeliosEngine {
         {
           id: "helios-building-shadows",
           source: "helios-building-shadows-src",
-          type: "fill",
+          type: "raster",
           paint: {
-            "fill-color": "#000000",
-            "fill-opacity": shadowOpa,
-            "fill-antialias": true
+            "raster-opacity": shadowOpa,
+            "raster-fade-duration": 0,
+            "raster-resampling": "linear"
           }
         }
       );
@@ -27487,6 +27572,10 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarShadowAbort = ac;
     this._lidarShadowKey = key;
     console.info(`[HELIOS-ENGINE] LiDAR shadow fetch: provider=${provider.id}, level=${level}, raster=${rasterSize}, radius=${radius}m`);
+    try {
+      this.onShadowComputeStart?.();
+    } catch (_2) {
+    }
     provider.fetchShadowRegions({
       homeLat: this.homeLat,
       homeLon: this.homeLon,
@@ -27504,6 +27593,12 @@ const _HeliosEngine = class _HeliosEngine {
       console.warn("[HELIOS] LiDAR shadow fetch failed:", err);
       this._lidarShadowFeatures = null;
       this._lidarShadowKey = "";
+    }).finally(() => {
+      if (ac.signal.aborted) return;
+      try {
+        this.onShadowComputeEnd?.();
+      } catch (_2) {
+      }
     });
   }
   //Pushes the MapTiler footprints into the building rendering
@@ -27674,36 +27769,34 @@ const _HeliosEngine = class _HeliosEngine {
     } catch (_2) {
     }
     try {
-      const shadowsSrc = this.map.getSource("helios-building-shadows-src");
-      if (shadowsSrc) {
-        let input = { type: "FeatureCollection", features: [] };
-        if (this._shadowsEnabled()) {
-          if (this._lidarShadowFeatures && this._lidarShadowFeatures.features.length > 0) {
-            input = this._lidarShadowFeatures;
-          } else if (this._buildingsData) {
-            input = {
-              type: "FeatureCollection",
-              features: [
-                ...this._buildingsData.home.features,
-                ...this._buildingsData.surroundings.features
-              ]
-            };
-          }
+      let input = { type: "FeatureCollection", features: [] };
+      if (this._shadowsEnabled()) {
+        if (this._lidarShadowFeatures && this._lidarShadowFeatures.features.length > 0) {
+          input = this._lidarShadowFeatures;
+        } else if (this._buildingsData) {
+          input = {
+            type: "FeatureCollection",
+            features: [
+              ...this._buildingsData.home.features,
+              ...this._buildingsData.surroundings.features
+            ]
+          };
         }
-        shadowsSrc.setData(projectExtrusionShadows(
-          input,
-          {
-            sunAzimuthDeg: azimuth,
-            sunAltitudeDeg: altitude,
-            homeLat: this.homeLat,
-            //Clip shadows to the building visibility disc so
-            //they never extend past the rendered surroundings.
-            clipCenterLat: this.homeLat,
-            clipCenterLon: this.homeLon,
-            clipRadiusMeters: this._buildingRadiusMeters()
-          }
-        ));
       }
+      const projected = projectExtrusionShadows(
+        input,
+        {
+          sunAzimuthDeg: azimuth,
+          sunAltitudeDeg: altitude,
+          homeLat: this.homeLat,
+          //Clip shadows to the building visibility disc so
+          //they never extend past the rendered surroundings.
+          clipCenterLat: this.homeLat,
+          clipCenterLon: this.homeLon,
+          clipRadiusMeters: this._buildingRadiusMeters()
+        }
+      );
+      this._paintShadowRaster(projected);
     } catch (_2) {
     }
   }
@@ -28223,7 +28316,7 @@ const _HeliosEngine = class _HeliosEngine {
       for (const lid of SHADOW_LAYER_IDS) {
         if (this.map.getLayer(lid)) {
           try {
-            this.map.setPaintProperty(lid, "fill-opacity", nextShadowOpa);
+            this.map.setPaintProperty(lid, "raster-opacity", nextShadowOpa);
           } catch (_2) {
           }
         }
@@ -28281,6 +28374,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarShadowAbort = void 0;
     this._lidarShadowFeatures = null;
     this._lidarShadowKey = "";
+    this._shadowCanvas = void 0;
     this._resizeObserver?.disconnect();
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
@@ -29606,6 +29700,65 @@ const heliosCardStyles = i$3`
         color: white;
         display: inline-flex;
         align-items: center;
+    }
+
+    /*  Top-right overlay rail. Hosts the LiDAR shadow busy chip so the
+        user knows the shadows currently on screen are still computing.
+        Mirrors the clock's top spacing on the opposite edge so the two
+        overlays sit at the same height. Pointer events off so the chip
+        never gets in the way of map interaction. */
+    .overlay-top-right
+    {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        pointer-events: none;
+    }
+
+    /*  Passive 28 px square chip used as a "LiDAR shadow computing"
+        indicator. Same visual language as the date/time clock (white
+        surface, 1 px black border) so it doesn't introduce a new style
+        vocabulary; the only content is a small spinning ring. */
+    .shadow-busy-chip
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  28px;
+        height: 28px;
+        background: #ffffff;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+
+    /*  Rotating sun glyph used as the busy indicator. Matches the
+        default Helios sun tone so the spinner reads as a Helios sun
+        rather than a generic system loader. */
+    .shadow-busy-sun
+    {
+        --mdc-icon-size: 18px;
+        color: #EF9F27;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        animation: helios-shadow-spin 1.4s linear infinite;
+    }
+
+    ha-card.theme-dark .shadow-busy-chip
+    {
+        background: #14161c;
+        border-color: rgba(255, 255, 255, 0.6);
+    }
+
+    @keyframes helios-shadow-spin
+    {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
     }
 
     /*  Cloud-cover percentage chip, floating above the cloud disc
@@ -31146,7 +31299,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.28"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.29"}`,
       labelStyle,
       versionStyle
     );
@@ -31185,6 +31338,7 @@ let HeliosCard = class extends i {
     this._timeRange = null;
     this._selectedTime = null;
     this._isLiveMode = true;
+    this._shadowBusy = false;
     this._lastApiKey = "";
     this._lastHomeKey = "";
     this._lastConfigSig = "";
@@ -31734,6 +31888,12 @@ let HeliosCard = class extends i {
         this._lastApiKey = "";
         this._lastHomeKey = "";
         if (!this._initInflight) this._initEngine();
+      };
+      this._engine.onShadowComputeStart = () => {
+        this._shadowBusy = true;
+      };
+      this._engine.onShadowComputeEnd = () => {
+        this._shadowBusy = false;
       };
       this._initInflight = false;
     });
@@ -32849,6 +33009,18 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
+                ${hasApiKey && this._shadowBusy ? b`
+                    <div class="overlay-top-right">
+                        <div
+                            class="shadow-busy-chip"
+                            title="LiDAR"
+                            aria-label="LiDAR"
+                        >
+                            <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
+                        </div>
+                    </div>
+                ` : A}
+
                 ${hasApiKey ? b`
                     <div class="overlay-top-center">
                         <div class="clock ${this._isLiveMode ? "" : "clock-scrubbed"}">
@@ -33346,6 +33518,9 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_isLiveMode", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_shadowBusy", 2);
 HeliosCard = __decorateClass([
   t("helios-card")
 ], HeliosCard);

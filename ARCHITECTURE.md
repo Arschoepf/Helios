@@ -62,14 +62,17 @@ the sun arc) so every vertex shares the home's terrain elevation
 reference. The hover breakdown tooltip is wired directly on the
 SVG polygon.
 
-**Single flat-opacity shadow.** `projectExtrusionShadows` emits one
-convex-hull polygon per casting region (original vertices + opposite-
-of-sun projections), rendered by one fill layer at the user-
-configured `shadow-opacity`. Previously the projector emitted three
-nested polygons for a fade gradient, but on dense LiDAR scenes the
-3x polygon count tanked performance and the alpha compositing of
-many overlapping clumps saturated the shadow to almost black. A
-single flat layer is cheaper and reads more naturally.
+**Single flat-opacity shadow, raster-backed.** `projectExtrusionShadows`
+emits one convex-hull polygon per casting region (original vertices
++ opposite-of-sun projections). The engine no longer pushes those
+polygons into a fill layer: it rasterises them to a 1024×1024
+offscreen canvas at solid black, uploads the canvas as a MapLibre
+image source, and renders it with `raster-opacity = shadow-opacity`.
+Per-pixel rendering means many overlapping clump shadows can't
+saturate to black through alpha-compositing the way overlapping
+fill polygons would; every pixel is either covered or not, never
+stacked twice. Canvas anti-aliasing also softens the polygon edges
+for a cleaner read.
 
 **Editor reshuffle.** A new "Shading" section regroups every
 shadow-related option: the master toggle, the LiDAR precision

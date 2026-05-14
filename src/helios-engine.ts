@@ -155,15 +155,30 @@ export const LIDAR_PRECISION_RASTER: Record<LidarPrecisionLevel, number> = {
 export const DEFAULT_SHADOW_OPACITY = 0.32;
 
 
-//Single ground-shadow layer. We used to emit three nested fade-step
-//polygons per casting region for a gradient falloff, but the 3x
-//polygon count tanked perf on dense LiDAR scenes and the alpha
-//compositing over multiple overlapping clumps saturated the shadow
-//to almost black. One flat-opacity layer is cheaper and reads more
-//naturally.
+//Single ground-shadow layer, rendered as an image source rather
+//than a fill layer. The shadow projector produces one polygon per
+//casting region; the engine rasterises them onto an offscreen
+//canvas at full black, the canvas becomes a MapLibre image source,
+//and a raster layer paints it at `raster-opacity = shadow-opacity`.
+//Per-pixel rendering avoids the alpha-compositing saturation that
+//many overlapping fill polygons would produce in a dense forest
+//(every pixel is either covered or not, never stacked twice).
 export const SHADOW_LAYER_IDS: readonly string[] = [
     'helios-building-shadows'
 ];
+
+//Offscreen raster resolution for the shadow mask. 1024x1024 over a
+//building-radius bbox (up to ~2 km wide at max radius) gives ~2 m
+//per pixel at the worst case, finer than the LiDAR cell pitch we
+//feed in, so the polygon edges read as smooth anti-aliased curves
+//rather than visible stair-stepping.
+const SHADOW_RASTER_SIZE = 1024;
+
+//Fully-transparent 1x1 PNG used as the initial image of the shadow
+//source so MapLibre has something valid to bind before the first
+//paint pass runs.
+const BLANK_SHADOW_DATA_URL =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=';
 
 
 //Lifecycle instrumentation. Counters live on window.__heliosStats
@@ -649,6 +664,20 @@ export class HeliosEngine
     //changes so a slow IGN response can't overwrite a fresher request.
     private _lidarShadowAbort?: AbortController;
 
+    //Offscreen canvas used to rasterise cast shadows before uploading
+    //them to the MapLibre image source. Lives for the whole engine
+    //lifetime so we don't realloc on every sun tick. Sized at
+    //SHADOW_RASTER_SIZE; bounds are recomputed per refresh from the
+    //home + building-radius.
+    private _shadowCanvas?: HTMLCanvasElement;
+
+    //Card-side hooks for the LiDAR shadow compute pass so the card
+    //can surface a busy indicator while the WMS round-trip + raster
+    //paint run. Both are optional; the engine still computes
+    //silently if the card hasn't set them.
+    public onShadowComputeStart?: () => void;
+    public onShadowComputeEnd?:   () => void;
+
     constructor(
         container:    HTMLElement,
         config:       HeliosConfig,
@@ -1040,6 +1069,116 @@ export class HeliosEngine
         const raw = Number(this.cfg['shadow-opacity']);
         if (!Number.isFinite(raw)) return DEFAULT_SHADOW_OPACITY;
         return Math.max(0, Math.min(1, raw));
+    }
+
+    //Lat/lon corners of the shadow image source, in [NW, NE, SE, SW]
+    //order (the convention MapLibre image sources expect). Sides are
+    //the building visibility radius in metres, converted to degrees
+    //with the standard cos(lat) longitude correction.
+    private _shadowBoundsCornersLL():
+        [[number, number], [number, number], [number, number], [number, number]]
+    {
+        const radius  = this._buildingRadiusMeters();
+        const cosLat  = Math.cos(this.homeLat * Math.PI / 180);
+        const dLat    = radius / 111_320;
+        const dLon    = radius / (111_320 * cosLat);
+        const minLon  = this.homeLon - dLon;
+        const maxLon  = this.homeLon + dLon;
+        const minLat  = this.homeLat - dLat;
+        const maxLat  = this.homeLat + dLat;
+        return [
+            [minLon, maxLat],  // NW
+            [maxLon, maxLat],  // NE
+            [maxLon, minLat],  // SE
+            [minLon, minLat]   // SW
+        ];
+    }
+
+    //Rasterise the cast-shadow polygons onto an offscreen canvas and
+    //push the result to the image source backing the shadow layer.
+    //Painting every polygon at solid black means overlapping regions
+    //stay black (no alpha stacking); the layer's `raster-opacity`
+    //then applies a single per-pixel opacity that matches the user
+    //setting exactly, no matter how many shadow polygons overlapped.
+    private _paintShadowRaster(features: GeoJSON.FeatureCollection): void
+    {
+        if (!this.map) return;
+        const src = this.map.getSource('helios-building-shadows-src') as
+                    maplibregl.ImageSource | undefined;
+        if (!src) return;
+
+        const corners = this._shadowBoundsCornersLL();
+        const minLon  = corners[0][0], maxLat = corners[0][1];
+        const maxLon  = corners[1][0], minLat = corners[2][1];
+
+        if (!this._shadowCanvas)
+        {
+            this._shadowCanvas = document.createElement('canvas');
+            this._shadowCanvas.width  = SHADOW_RASTER_SIZE;
+            this._shadowCanvas.height = SHADOW_RASTER_SIZE;
+        }
+        const canvas = this._shadowCanvas;
+        const ctx    = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.clearRect(0, 0, SHADOW_RASTER_SIZE, SHADOW_RASTER_SIZE);
+        ctx.fillStyle = '#000000';
+
+        const lonSpan = maxLon - minLon;
+        const latSpan = maxLat - minLat;
+        const lonToPx = (lon: number): number =>
+            (lon - minLon) / lonSpan * SHADOW_RASTER_SIZE;
+        //Canvas Y is top-down (0 at top), lat is bottom-up, so the
+        //north edge maps to pixel 0 and the south edge to the last pixel.
+        const latToPx = (lat: number): number =>
+            (maxLat - lat) / latSpan * SHADOW_RASTER_SIZE;
+
+        let painted = 0;
+        for (const feat of features.features)
+        {
+            const geom = feat.geometry;
+            if (!geom) continue;
+            let polygons: number[][][][] | null = null;
+            if      (geom.type === 'Polygon')      polygons = [geom.coordinates as number[][][]];
+            else if (geom.type === 'MultiPolygon') polygons = geom.coordinates as number[][][][];
+            if (!polygons) continue;
+
+            for (const poly of polygons)
+            {
+                if (!poly.length) continue;
+                const outer = poly[0] as number[][];
+                if (outer.length < 3) continue;
+
+                ctx.beginPath();
+                ctx.moveTo(lonToPx(outer[0][0]), latToPx(outer[0][1]));
+                for (let i = 1; i < outer.length; i++)
+                {
+                    ctx.lineTo(lonToPx(outer[i][0]), latToPx(outer[i][1]));
+                }
+                ctx.closePath();
+                ctx.fill();
+                painted++;
+            }
+        }
+
+        //Keep the bounds in sync in case the home position or the
+        //building radius changed since the source was created. Cheap
+        //and idempotent.
+        try { src.setCoordinates(corners); }
+        catch (_) {}
+        //MapLibre 5's ImageSource.updateImage only takes a URL, so we
+        //serialise the canvas as a PNG data URL on each paint. PNG
+        //encode of a mostly-transparent 1024 raster lands in the
+        //~10-20 ms range on commodity hardware, well under the sun
+        //movement cadence that triggers shadow refreshes.
+        try
+        {
+            const dataUrl = canvas.toDataURL('image/png');
+            src.updateImage({ url: dataUrl });
+        }
+        catch (_) {}
+
+        void painted;
     }
 
     private _findHourIndex(t: Date): number
@@ -1758,16 +1897,25 @@ export class HeliosEngine
                 .setData(homeData);
         }
 
-        //Ground-projected shadows. Single source feeding a single
-        //flat-opacity fill layer drawn BEFORE the building extrusions
-        //so buildings hide the under-building part of their own
-        //shadow; the visible shadow is the spillover on the ground.
+        //Ground-projected shadows. Rendered as a single image source
+        //(black mask painted from shadow polygons on an offscreen
+        //canvas) drawn BEFORE the building extrusions so buildings
+        //hide the under-building part of their own shadow; the
+        //visible shadow is the spillover on the ground.
+        //
+        //Per-pixel rendering avoids the alpha-compositing saturation
+        //we'd get from many overlapping fill polygons in a dense
+        //forest. The image source bounds match the building visibility
+        //bbox so the raster is exactly the same disc as the rendered
+        //surroundings.
+        const shadowBounds = this._shadowBoundsCornersLL();
         if (!this.map.getSource('helios-building-shadows-src'))
         {
             this.map.addSource('helios-building-shadows-src',
             {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection
+                type:        'image',
+                url:         BLANK_SHADOW_DATA_URL,
+                coordinates: shadowBounds
             });
         }
         const shadowOpa = this._shadowOpacity();
@@ -1777,12 +1925,12 @@ export class HeliosEngine
             {
                 id:     'helios-building-shadows',
                 source: 'helios-building-shadows-src',
-                type:   'fill',
+                type:   'raster',
                 paint:
                 {
-                    'fill-color':     '#000000',
-                    'fill-opacity':   shadowOpa,
-                    'fill-antialias': true
+                    'raster-opacity':       shadowOpa,
+                    'raster-fade-duration': 0,
+                    'raster-resampling':    'linear'
                 }
             });
         }
@@ -1958,6 +2106,9 @@ export class HeliosEngine
 
         console.info(`[HELIOS-ENGINE] LiDAR shadow fetch: provider=${provider.id}, level=${level}, raster=${rasterSize}, radius=${radius}m`);
 
+        try { this.onShadowComputeStart?.(); }
+        catch (_) {}
+
         provider.fetchShadowRegions({
             homeLat:          this.homeLat,
             homeLon:          this.homeLon,
@@ -1982,6 +2133,12 @@ export class HeliosEngine
             console.warn('[HELIOS] LiDAR shadow fetch failed:', err);
             this._lidarShadowFeatures = null;
             this._lidarShadowKey      = '';
+        })
+        .finally(() =>
+        {
+            if (ac.signal.aborted) return;
+            try { this.onShadowComputeEnd?.(); }
+            catch (_) {}
         });
     }
 
@@ -2270,40 +2427,36 @@ export class HeliosEngine
         //  - LiDAR unavailable / out of cov. -> MapTiler footprints
         try
         {
-            const shadowsSrc = this.map.getSource('helios-building-shadows-src') as
-                               maplibregl.GeoJSONSource | undefined;
-            if (shadowsSrc)
+            let input: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+            if (this._shadowsEnabled())
             {
-                let input: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-                if (this._shadowsEnabled())
+                if (this._lidarShadowFeatures && this._lidarShadowFeatures.features.length > 0)
                 {
-                    if (this._lidarShadowFeatures && this._lidarShadowFeatures.features.length > 0)
-                    {
-                        input = this._lidarShadowFeatures;
-                    }
-                    else if (this._buildingsData)
-                    {
-                        input = {
-                            type:     'FeatureCollection',
-                            features: [
-                                ...this._buildingsData.home.features,
-                                ...this._buildingsData.surroundings.features
-                            ]
-                        };
-                    }
+                    input = this._lidarShadowFeatures;
                 }
-                shadowsSrc.setData(projectExtrusionShadows(input,
+                else if (this._buildingsData)
                 {
-                    sunAzimuthDeg:    azimuth,
-                    sunAltitudeDeg:   altitude,
-                    homeLat:          this.homeLat,
-                    //Clip shadows to the building visibility disc so
-                    //they never extend past the rendered surroundings.
-                    clipCenterLat:    this.homeLat,
-                    clipCenterLon:    this.homeLon,
-                    clipRadiusMeters: this._buildingRadiusMeters()
-                }));
+                    input = {
+                        type:     'FeatureCollection',
+                        features: [
+                            ...this._buildingsData.home.features,
+                            ...this._buildingsData.surroundings.features
+                        ]
+                    };
+                }
             }
+            const projected = projectExtrusionShadows(input,
+            {
+                sunAzimuthDeg:    azimuth,
+                sunAltitudeDeg:   altitude,
+                homeLat:          this.homeLat,
+                //Clip shadows to the building visibility disc so
+                //they never extend past the rendered surroundings.
+                clipCenterLat:    this.homeLat,
+                clipCenterLon:    this.homeLon,
+                clipRadiusMeters: this._buildingRadiusMeters()
+            });
+            this._paintShadowRaster(projected);
         }
         catch (_) {}
     }
@@ -3092,8 +3245,7 @@ export class HeliosEngine
             this._ensureLidarFetched();
         }
 
-        //Shadow opacity is a paint-level update on the single ground
-        //shadow layer.
+        //Shadow opacity is a paint-level update on the raster layer.
         const nextShadowOpa = this._shadowOpacity();
         if (nextShadowOpa !== prevShadowOpa)
         {
@@ -3101,7 +3253,7 @@ export class HeliosEngine
             {
                 if (this.map.getLayer(lid))
                 {
-                    try { this.map.setPaintProperty(lid, 'fill-opacity', nextShadowOpa); }
+                    try { this.map.setPaintProperty(lid, 'raster-opacity', nextShadowOpa); }
                     catch (_) {}
                 }
             }
@@ -3207,6 +3359,7 @@ export class HeliosEngine
         this._lidarShadowAbort    = undefined;
         this._lidarShadowFeatures = null;
         this._lidarShadowKey      = '';
+        this._shadowCanvas        = undefined;
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
         {

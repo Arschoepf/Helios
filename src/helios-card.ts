@@ -207,6 +207,11 @@ export class HeliosCard extends LitElement
     @state() private _timeRange:    { start: Date; end: Date } | null = null;
     @state() private _selectedTime: Date | null = null;
     @state() private _isLiveMode    = true;
+    //True while the engine is fetching the LiDAR shadow payload from
+    //the upstream provider and rasterising it for the image source.
+    //Drives the spinner chip pinned top-right of the map so the user
+    //knows the shadow layer they're about to see is still computing.
+    @state() private _shadowBusy    = false;
 
     private _timer?:           number;
     private _lastApiKey        = '';
@@ -1134,6 +1139,20 @@ export class HeliosCard extends LitElement
                 this._lastApiKey  = '';
                 this._lastHomeKey = '';
                 if (!this._initInflight) this._initEngine();
+            };
+
+            //LiDAR shadow compute: the engine fires these around its
+            //WMS round-trip + raster paint pass. The card surfaces a
+            //small spinner chip top-right so the user has a clear
+            //"shadows are coming" signal during the few seconds the
+            //fetch takes on a cold start.
+            this._engine.onShadowComputeStart = () =>
+            {
+                this._shadowBusy = true;
+            };
+            this._engine.onShadowComputeEnd = () =>
+            {
+                this._shadowBusy = false;
             };
 
             this._initInflight = false;
@@ -2934,6 +2953,18 @@ export class HeliosCard extends LitElement
                 ${hasApiKey ? html`
                     <div class="spinner-center ${this._fetching ? 'spinning' : ''}">
                         <div class="spinner"></div>
+                    </div>
+                ` : nothing}
+
+                ${hasApiKey && this._shadowBusy ? html`
+                    <div class="overlay-top-right">
+                        <div
+                            class="shadow-busy-chip"
+                            title="LiDAR"
+                            aria-label="LiDAR"
+                        >
+                            <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
+                        </div>
                     </div>
                 ` : nothing}
 

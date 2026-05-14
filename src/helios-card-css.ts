@@ -551,6 +551,65 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
+    /*  Top-right overlay rail. Hosts the LiDAR shadow busy chip so the
+        user knows the shadows currently on screen are still computing.
+        Mirrors the clock's top spacing on the opposite edge so the two
+        overlays sit at the same height. Pointer events off so the chip
+        never gets in the way of map interaction. */
+    .overlay-top-right
+    {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        pointer-events: none;
+    }
+
+    /*  Passive 28 px square chip used as a "LiDAR shadow computing"
+        indicator. Same visual language as the date/time clock (white
+        surface, 1 px black border) so it doesn't introduce a new style
+        vocabulary; the only content is a small spinning ring. */
+    .shadow-busy-chip
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  28px;
+        height: 28px;
+        background: #ffffff;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+
+    /*  Rotating sun glyph used as the busy indicator. Matches the
+        default Helios sun tone so the spinner reads as a Helios sun
+        rather than a generic system loader. */
+    .shadow-busy-sun
+    {
+        --mdc-icon-size: 18px;
+        color: #EF9F27;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        animation: helios-shadow-spin 1.4s linear infinite;
+    }
+
+    ha-card.theme-dark .shadow-busy-chip
+    {
+        background: #14161c;
+        border-color: rgba(255, 255, 255, 0.6);
+    }
+
+    @keyframes helios-shadow-spin
+    {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+    }
+
     /*  Cloud-cover percentage chip, floating above the cloud disc
         on the ground with a leader line down to its feature. */
     .cloud-pct-label
