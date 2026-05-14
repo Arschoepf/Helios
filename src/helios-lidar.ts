@@ -6,13 +6,14 @@
 //
 //Pipeline overview: when the user has shadows enabled AND a provider
 //covers the home, the engine calls fetchShadowRegions() with the home
-//+ surrounding MapTiler footprints and a radius. The provider fetches
-//a height raster around the home, classifies each cell as home /
-//building / vegetation against the footprint bboxes, flood-fills
-//connected cells of the same kind into regions and returns one
-//Polygon per region with `render_height` set to the region's mean
-//height. Those polygons feed projectExtrusionShadows() exactly like
-//the MapTiler footprints do when LiDAR is unavailable.
+//position and a radius. The provider fetches a height raster around
+//the home and bins above-threshold cells onto a fixed ~10 m grid,
+//emitting one Polygon per non-empty bin with `render_height` set to
+//the bin's mean cell height. Those bin polygons feed
+//projectExtrusionShadows() exactly like the MapTiler footprints do
+//when LiDAR is unavailable. Per-bin granularity (rather than one
+//convex hull per connected component) keeps a dense forest from
+//collapsing into one giant blanket shadow.
 
 export interface LidarSource
 {
@@ -27,11 +28,10 @@ export interface LidarSource
     //on every home-position change without measurable cost.
     covers(lat: number, lon: number): boolean;
 
-    //Fetch consolidated shadow regions (home, building, vegetation)
-    //around the home as a FeatureCollection of Polygons with
-    //render_height set per region. Returns an empty collection on
-    //network failure, out-of-coverage bbox or empty raster, so the
-    //caller can always use the result unconditionally.
+    //Fetch shadow regions around the home as a FeatureCollection of
+    //bin polygons with render_height set per bin. Returns an empty
+    //collection on network failure, out-of-coverage bbox or empty
+    //raster, so the caller can always use the result unconditionally.
     fetchShadowRegions(opts: LidarShadowFetchOptions): Promise<GeoJSON.FeatureCollection>;
 }
 
@@ -43,11 +43,6 @@ export interface LidarShadowFetchOptions
     //The provider over-fetches slightly so trees on the edge still
     //cast their shadow inward.
     radiusMeters:             number;
-    //MapTiler footprints used for cell classification. Home polygons
-    //claim a cell as kind='home', surrounding polygons claim it as
-    //'building', everything else with enough height is 'vegetation'.
-    homeFootprints?:          GeoJSON.FeatureCollection;
-    surroundingFootprints?:   GeoJSON.FeatureCollection;
     //Pixel count per side requested from the upstream raster. The
     //engine picks this based on the user's `lidar-precision`.
     rasterSize:               number;

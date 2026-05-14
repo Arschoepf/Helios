@@ -26272,7 +26272,8 @@ const M_PER_DEG_LAT = 111320;
 const HEIGHT_THRESH_M = 5;
 const HEIGHT_MAX_M = 100;
 const BBOX_PAD_FACTOR = 1.15;
-const BUILDING_MASK_PAD_M = 5;
+const BIN_TARGET_M = 10;
+const BIN_MIN_FILL_RATIO = 0.15;
 const franceLidarHd = {
   id: "fr-ign-lidarhd",
   name: "IGN LiDAR HD (France)",
@@ -26320,124 +26321,77 @@ const franceLidarHd = {
     const expectedBytes = rasterSize * rasterSize * 4;
     if (buf.byteLength < expectedBytes) return empty;
     const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
-    const padDegLat = BUILDING_MASK_PAD_M / M_PER_DEG_LAT;
-    const padDegLon = BUILDING_MASK_PAD_M / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
-    const inflate = (geom) => {
-      const bb = polygonBBox(geom);
-      if (!bb) return null;
-      return {
-        minLon: bb.minLon - padDegLon,
-        minLat: bb.minLat - padDegLat,
-        maxLon: bb.maxLon + padDegLon,
-        maxLat: bb.maxLat + padDegLat
-      };
-    };
-    const homeBboxes = [];
-    for (const f2 of opts.homeFootprints?.features ?? []) {
-      if (!f2.geometry) continue;
-      const bb = inflate(f2.geometry);
-      if (bb) homeBboxes.push(bb);
-    }
-    const surrBboxes = [];
-    for (const f2 of opts.surroundingFootprints?.features ?? []) {
-      if (!f2.geometry) continue;
-      const bb = inflate(f2.geometry);
-      if (bb) surrBboxes.push(bb);
-    }
     const pxLon = (maxLon - minLon) / rasterSize;
     const pxLat = (maxLat - minLat) / rasterSize;
-    const halfLon = pxLon / 2;
-    const halfLat = pxLat / 2;
+    const pxLatM = pxLat * M_PER_DEG_LAT;
+    const binCells = Math.max(2, Math.min(
+      Math.floor(rasterSize / 4),
+      Math.round(BIN_TARGET_M / pxLatM)
+    ));
+    const numBinsX = Math.ceil(rasterSize / binCells);
+    const numBinsY = Math.ceil(rasterSize / binCells);
+    const binHeightSum = new Float64Array(numBinsX * numBinsY);
+    const binCount = new Uint16Array(numBinsX * numBinsY);
     const cropM = opts.cropRadiusMeters && opts.cropRadiusMeters > 0 ? opts.cropRadiusMeters : null;
-    const N2 = rasterSize * rasterSize;
-    const kindArr = new Uint8Array(N2);
-    const hOk = new Float32Array(N2);
+    let keptCells = 0;
     let hMin = Infinity, hMax = -Infinity;
-    let keptHome = 0, keptBldg = 0, keptVeg = 0;
     for (let j = 0; j < rasterSize; j++) {
       const cLat = maxLat - (j + 0.5) * pxLat;
+      const binJ = j / binCells | 0;
       for (let i2 = 0; i2 < rasterSize; i2++) {
         const idx = j * rasterSize + i2;
         const h2 = heights[idx];
         if (!isFinite(h2) || h2 < HEIGHT_THRESH_M || h2 > HEIGHT_MAX_M) continue;
-        const cLon = minLon + (i2 + 0.5) * pxLon;
-        if (cropM !== null && haversineMeters(opts.homeLat, opts.homeLon, cLat, cLon) > cropM) {
-          continue;
+        if (cropM !== null) {
+          const cLon = minLon + (i2 + 0.5) * pxLon;
+          if (haversineMeters(opts.homeLat, opts.homeLon, cLat, cLon) > cropM) {
+            continue;
+          }
         }
-        let k2 = 3;
-        if (cellInsideAnyBBox(cLon, cLat, homeBboxes)) k2 = 1;
-        else if (cellInsideAnyBBox(cLon, cLat, surrBboxes)) k2 = 2;
-        kindArr[idx] = k2;
-        hOk[idx] = h2;
-        if (k2 === 1) keptHome++;
-        else if (k2 === 2) keptBldg++;
-        else keptVeg++;
+        const binI = i2 / binCells | 0;
+        const binIdx = binJ * numBinsX + binI;
+        binHeightSum[binIdx] += h2;
+        binCount[binIdx] += 1;
+        keptCells++;
         if (h2 < hMin) hMin = h2;
         if (h2 > hMax) hMax = h2;
       }
     }
-    const labels = new Int32Array(N2);
-    const stack = [];
-    const components = [];
-    let nextLabel = 0;
-    for (let seed = 0; seed < N2; seed++) {
-      const ks = kindArr[seed];
-      if (ks === 0 || labels[seed]) continue;
-      nextLabel++;
-      const cells = [];
-      let heightSum = 0;
-      stack.length = 0;
-      stack.push(seed);
-      while (stack.length) {
-        const idx = stack.pop();
-        if (labels[idx] || kindArr[idx] !== ks) continue;
-        labels[idx] = nextLabel;
-        cells.push(idx);
-        heightSum += hOk[idx];
-        const x2 = idx % rasterSize;
-        const y3 = idx / rasterSize | 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = x2 + dx, ny = y3 + dy;
-            if (nx < 0 || nx >= rasterSize || ny < 0 || ny >= rasterSize) continue;
-            const nIdx = ny * rasterSize + nx;
-            if (!labels[nIdx] && kindArr[nIdx] === ks) stack.push(nIdx);
-          }
-        }
-      }
-      components.push({ cells, heightSum });
-    }
+    const minFill = Math.max(1, Math.floor(binCells * binCells * BIN_MIN_FILL_RATIO));
     const out = [];
-    for (const comp of components) {
-      const corners = [];
-      for (const idx of comp.cells) {
-        const x2 = idx % rasterSize;
-        const y3 = idx / rasterSize | 0;
-        const cLon = minLon + (x2 + 0.5) * pxLon;
-        const cLat = maxLat - (y3 + 0.5) * pxLat;
-        corners.push([cLon - halfLon, cLat - halfLat]);
-        corners.push([cLon + halfLon, cLat - halfLat]);
-        corners.push([cLon + halfLon, cLat + halfLat]);
-        corners.push([cLon - halfLon, cLat + halfLat]);
+    for (let binJ = 0; binJ < numBinsY; binJ++) {
+      for (let binI = 0; binI < numBinsX; binI++) {
+        const binIdx = binJ * numBinsX + binI;
+        const count = binCount[binIdx];
+        if (count < minFill) continue;
+        const avgH = binHeightSum[binIdx] / count;
+        const i0 = binI * binCells;
+        const i1 = Math.min(rasterSize, i0 + binCells);
+        const j0 = binJ * binCells;
+        const j1 = Math.min(rasterSize, j0 + binCells);
+        const lonW = minLon + i0 * pxLon;
+        const lonE = minLon + i1 * pxLon;
+        const latN = maxLat - j0 * pxLat;
+        const latS = maxLat - j1 * pxLat;
+        out.push({
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: [[
+              [lonW, latS],
+              [lonE, latS],
+              [lonE, latN],
+              [lonW, latN],
+              [lonW, latS]
+            ]]
+          },
+          properties: { render_height: avgH, render_min_height: 0 }
+        });
       }
-      const hull = convexHull(corners);
-      if (hull.length < 3) continue;
-      hull.push([hull[0][0], hull[0][1]]);
-      const avg = comp.heightSum / comp.cells.length;
-      out.push({
-        type: "Feature",
-        geometry: { type: "Polygon", coordinates: [hull] },
-        properties: {
-          render_height: avg,
-          render_min_height: 0
-        }
-      });
     }
-    const totalKept = keptHome + keptBldg + keptVeg;
-    if (totalKept > 0) {
+    if (keptCells > 0) {
       console.info(
-        `[HELIOS] LiDAR shadows: ${keptHome} home + ${keptBldg} building + ${keptVeg} vegetation cells -> ${components.length} regions, height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
+        `[HELIOS] LiDAR shadows: ${keptCells} cells -> ${out.length} bins (${binCells}x${binCells} cells, ~${(binCells * pxLatM).toFixed(1)} m), height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
       );
     } else {
       console.info("[HELIOS] LiDAR cells: no cells passed the threshold");
@@ -26452,38 +26406,6 @@ function haversineMeters(lat1, lon1, lat2, lon2) {
   const dLon = (lon2 - lon1) * toRad;
   const a2 = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
   return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a2));
-}
-function polygonBBox(geom) {
-  let rings = null;
-  if (geom.type === "Polygon") {
-    rings = geom.coordinates;
-  } else if (geom.type === "MultiPolygon") {
-    const all = [];
-    for (const poly of geom.coordinates) {
-      if (poly.length) all.push(poly[0]);
-    }
-    rings = all;
-  }
-  if (!rings || rings.length === 0) return null;
-  let minLon = Infinity, minLat = Infinity;
-  let maxLon = -Infinity, maxLat = -Infinity;
-  for (const ring of rings) {
-    for (const [lon, lat] of ring) {
-      if (lon < minLon) minLon = lon;
-      if (lat < minLat) minLat = lat;
-      if (lon > maxLon) maxLon = lon;
-      if (lat > maxLat) maxLat = lat;
-    }
-  }
-  return { minLon, minLat, maxLon, maxLat };
-}
-function cellInsideAnyBBox(lon, lat, bboxes) {
-  for (const b2 of bboxes) {
-    if (lon >= b2.minLon && lon <= b2.maxLon && lat >= b2.minLat && lat <= b2.maxLat) {
-      return true;
-    }
-  }
-  return false;
 }
 const LIDAR_SOURCES = [
   franceLidarHd
@@ -27516,7 +27438,6 @@ const _HeliosEngine = class _HeliosEngine {
       this._pushRenderableSources();
       this._lastAtmosphereAlt = -999;
       this._refreshShadowsAndAtmosphere();
-      this._ensureLidarFetched();
     }).catch((err) => {
       if (err?.name === "AbortError") return;
       console.warn("[HELIOS] Buildings fetch failed:", err);
@@ -27545,7 +27466,6 @@ const _HeliosEngine = class _HeliosEngine {
       this._lidarShadowAbort = void 0;
       return;
     }
-    if (!this._buildingsData) return;
     const level = this._lidarPrecisionLevel();
     const rasterSize = LIDAR_PRECISION_RASTER[level];
     const radius = this._buildingRadiusMeters();
@@ -27560,8 +27480,6 @@ const _HeliosEngine = class _HeliosEngine {
       homeLat: this.homeLat,
       homeLon: this.homeLon,
       radiusMeters: radius,
-      homeFootprints: this._buildingsData?.home,
-      surroundingFootprints: this._buildingsData?.surroundings,
       rasterSize,
       cropRadiusMeters: radius,
       signal: ac.signal
@@ -31220,7 +31138,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.25"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.26"}`,
       labelStyle,
       versionStyle
     );

@@ -1922,10 +1922,6 @@ export class HeliosEngine
             //a full atmosphere pass and populates the shadow polygons.
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
-            //Footprints are now available, kick off the LiDAR shadow
-            //fetch which uses them to classify each cell (no-op when
-            //no provider covers the home).
-            this._ensureLidarFetched();
         })
         .catch(err =>
         {
@@ -1961,11 +1957,6 @@ export class HeliosEngine
             return;
         }
 
-        //LiDAR classification needs the MapTiler footprints; if they
-        //haven't arrived yet, the building fetch will re-invoke this
-        //method once they do.
-        if (!this._buildingsData) return;
-
         const level      = this._lidarPrecisionLevel();
         const rasterSize = LIDAR_PRECISION_RASTER[level];
         const radius     = this._buildingRadiusMeters();
@@ -1980,14 +1971,12 @@ export class HeliosEngine
         console.info(`[HELIOS-ENGINE] LiDAR shadow fetch: provider=${provider.id}, level=${level}, raster=${rasterSize}, radius=${radius}m`);
 
         provider.fetchShadowRegions({
-            homeLat:               this.homeLat,
-            homeLon:               this.homeLon,
-            radiusMeters:          radius,
-            homeFootprints:        this._buildingsData?.home,
-            surroundingFootprints: this._buildingsData?.surroundings,
+            homeLat:          this.homeLat,
+            homeLon:          this.homeLon,
+            radiusMeters:     radius,
             rasterSize,
-            cropRadiusMeters:      radius,
-            signal:                ac.signal
+            cropRadiusMeters: radius,
+            signal:           ac.signal
         })
         .then(fc =>
         {
