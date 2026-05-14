@@ -78,15 +78,21 @@ function ensureProtocolRegistered(): void
         const entry = _entries.get(engineId);
         if (!entry || !Number.isFinite(z) || !Number.isFinite(x) || !Number.isFinite(y))
         {
+            console.info(`[HELIOS-PROTO] tile request rejected: engineId=${engineId}, entry=${!!entry}, z/x/y=${z}/${x}/${y}`);
             return { data: emptyTile() };
         }
 
         const key = `${z}/${x}/${y}`;
         const cached = entry.tiles.get(key);
-        if (cached) return { data: cached.terrainPng.slice(0) };
+        if (cached)
+        {
+            console.info(`[HELIOS-PROTO] tile ${key}: cache hit`);
+            return { data: cached.terrainPng.slice(0) };
+        }
 
         //Compute the tile's WGS84 bbox, fire one provider fetch.
         const { n, s, w, e } = tileBounds(z, x, y);
+        console.info(`[HELIOS-PROTO] tile ${key}: fetching from ${entry.source.id}`);
         const tile = await entry.source.fetchTile({
             minLat:     s,
             minLon:     w,
@@ -94,16 +100,19 @@ function ensureProtocolRegistered(): void
             maxLon:     e,
             rasterSize: entry.rasterSize
         });
-        if (!tile) return { data: emptyTile() };
+        if (!tile)
+        {
+            console.warn(`[HELIOS-PROTO] tile ${key}: fetchTile returned null`);
+            return { data: emptyTile() };
+        }
 
         const terrainPng = await encodeTerrainRgb(tile);
         const stored: TileEntry = { data: tile, terrainPng };
         entry.tiles.set(key, stored);
 
-        //Notify the engine so the scanner mesh layer can build (or
-        //rebuild) the sub-mesh for this tile right away.
+        console.info(`[HELIOS-PROTO] tile ${key}: stored, firing onTileLoaded`);
         try { entry.onTileLoaded?.(key, tile); }
-        catch (_) {}
+        catch (e) { console.warn(`[HELIOS-PROTO] tile ${key}: onTileLoaded threw`, e); }
 
         return { data: terrainPng.slice(0) };
     });

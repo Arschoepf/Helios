@@ -26315,12 +26315,17 @@ function ensureProtocolRegistered() {
     const y3 = parseInt(parts[3], 10);
     const entry = _entries.get(engineId);
     if (!entry || !Number.isFinite(z2) || !Number.isFinite(x2) || !Number.isFinite(y3)) {
+      console.info(`[HELIOS-PROTO] tile request rejected: engineId=${engineId}, entry=${!!entry}, z/x/y=${z2}/${x2}/${y3}`);
       return { data: emptyTile() };
     }
     const key = `${z2}/${x2}/${y3}`;
     const cached = entry.tiles.get(key);
-    if (cached) return { data: cached.terrainPng.slice(0) };
+    if (cached) {
+      console.info(`[HELIOS-PROTO] tile ${key}: cache hit`);
+      return { data: cached.terrainPng.slice(0) };
+    }
     const { n: n3, s: s2, w: w2, e: e2 } = tileBounds(z2, x2, y3);
+    console.info(`[HELIOS-PROTO] tile ${key}: fetching from ${entry.source.id}`);
     const tile = await entry.source.fetchTile({
       minLat: s2,
       minLon: w2,
@@ -26328,13 +26333,18 @@ function ensureProtocolRegistered() {
       maxLon: e2,
       rasterSize: entry.rasterSize
     });
-    if (!tile) return { data: emptyTile() };
+    if (!tile) {
+      console.warn(`[HELIOS-PROTO] tile ${key}: fetchTile returned null`);
+      return { data: emptyTile() };
+    }
     const terrainPng = await encodeTerrainRgb(tile);
     const stored = { data: tile, terrainPng };
     entry.tiles.set(key, stored);
+    console.info(`[HELIOS-PROTO] tile ${key}: stored, firing onTileLoaded`);
     try {
       entry.onTileLoaded?.(key, tile);
-    } catch (_2) {
+    } catch (e22) {
+      console.warn(`[HELIOS-PROTO] tile ${key}: onTileLoaded threw`, e22);
     }
     return { data: terrainPng.slice(0) };
   });
@@ -26469,6 +26479,7 @@ class ScannerMeshLayer {
     this._subMeshes = /* @__PURE__ */ new Map();
     this._tiles = /* @__PURE__ */ new Map();
     this._visible = false;
+    this._didLogFirstRender = false;
     this.id = id;
     this._opts = opts;
   }
@@ -26480,14 +26491,23 @@ class ScannerMeshLayer {
     this._uint32Indices = isGl2 || !!gl.getExtension("OES_element_index_uint");
     const vs = compileShader(gl, gl.VERTEX_SHADER, VERT_SRC);
     const fs = compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
-    if (!vs || !fs) return;
+    if (!vs || !fs) {
+      console.warn("[HELIOS-SCAN] onAdd: shader compile failed");
+      return;
+    }
     this._program = linkProgram(gl, vs, fs);
-    if (!this._program) return;
+    if (!this._program) {
+      console.warn("[HELIOS-SCAN] onAdd: program link failed");
+      return;
+    }
     this._aPos = gl.getAttribLocation(this._program, "a_pos");
     this._aUv = gl.getAttribLocation(this._program, "a_uv");
     this._uMatrix = gl.getUniformLocation(this._program, "u_matrix");
     this._uTexture = gl.getUniformLocation(this._program, "u_texture");
     this._uOpacity = gl.getUniformLocation(this._program, "u_opacity");
+    console.info(
+      `[HELIOS-SCAN] onAdd: ok (gl${isGl2 ? "2" : "1"}, uint32=${this._uint32Indices}, attribs pos=${this._aPos} uv=${this._aUv}, pending tiles=${this._tiles.size})`
+    );
     const pending = Array.from(this._tiles.entries());
     this._tiles.clear();
     for (const [key, data] of pending) this.addTile(key, data);
@@ -26496,6 +26516,10 @@ class ScannerMeshLayer {
     if (!this._visible) return;
     if (!this._program) return;
     if (this._subMeshes.size === 0) return;
+    if (!this._didLogFirstRender) {
+      this._didLogFirstRender = true;
+      console.info(`[HELIOS-SCAN] first render: visible, ${this._subMeshes.size} submeshes`);
+    }
     const matrix = args.modelViewProjectionMatrix;
     gl.useProgram(this._program);
     gl.enable(gl.BLEND);
@@ -26535,12 +26559,19 @@ class ScannerMeshLayer {
   addTile(key, data) {
     this._tiles.set(key, data);
     const gl = this._gl;
-    if (!gl || !this._program) return;
+    if (!gl || !this._program) {
+      console.info(`[HELIOS-SCAN] addTile(${key}): buffered (gl=${!!gl}, program=${!!this._program})`);
+      return;
+    }
     this._destroySubMesh(key);
     const sub = this._buildSubMesh(gl, data);
-    if (!sub) return;
+    if (!sub) {
+      console.warn(`[HELIOS-SCAN] addTile(${key}): buildSubMesh returned null`);
+      return;
+    }
     this._subMeshes.set(key, sub);
     this._paintTexture(key, data);
+    console.info(`[HELIOS-SCAN] addTile(${key}): mesh built (${data.width}x${data.height}, ${sub.indexCount} indices)`);
     this._map?.triggerRepaint();
   }
   //Refresh every loaded tile's texture from the current sun
@@ -26559,6 +26590,7 @@ class ScannerMeshLayer {
     this._map?.triggerRepaint();
   }
   setVisible(v2) {
+    console.info(`[HELIOS-SCAN] setVisible(${v2}), submeshes=${this._subMeshes.size}, tiles=${this._tiles.size}`);
     this._visible = v2;
     this._map?.triggerRepaint();
   }
@@ -27855,6 +27887,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     const provider = findLidarSource(this.homeLat, this.homeLon);
     if (!provider) {
+      console.info(`[HELIOS-ENGINE] _ensureLidarFetched: no provider covers home`);
       this._lidarProvider = null;
       this._lidarHasTiles = false;
       unregisterLidarTerrain(this._engineId);
@@ -27864,6 +27897,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     this._lidarProvider = provider;
     const rasterSize = PRECISION_TILE_RASTER[level] ?? 384;
+    console.info(`[HELIOS-ENGINE] _ensureLidarFetched: provider=${provider.id}, level=${level}, rasterSize=${rasterSize}, engineId=${this._engineId}`);
     registerLidarTerrain(
       this._engineId,
       provider,
@@ -27878,6 +27912,7 @@ const _HeliosEngine = class _HeliosEngine {
   //right away), and flag the engine as "has LiDAR tiles" so the
   //card surfaces the scanner toggle button.
   _onLidarTileLoaded(key, data) {
+    console.info(`[HELIOS-ENGINE] LiDAR tile loaded ${key} (scannerLayer=${!!this._scannerLayer}, hadTiles=${this._lidarHasTiles})`);
     if (!this._scannerLayer) return;
     this._scannerLayer.addTile(key, data);
     if (!this._lidarHasTiles) {
@@ -27958,6 +27993,7 @@ const _HeliosEngine = class _HeliosEngine {
   //visibility flag (cheap, no GL re-init) and recompute its
   //per-tile textures from the current sun position on toggle ON.
   setPointCloudVisible(visible) {
+    console.info(`[HELIOS-ENGINE] setPointCloudVisible(${visible}), hasLayer=${!!this._scannerLayer}, hasTiles=${this._lidarHasTiles}`);
     this._scannerVisible = visible;
     if (!this._scannerLayer) return;
     this._scannerLayer.setVisible(visible);
@@ -31794,7 +31830,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.20"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.21"}`,
       labelStyle,
       versionStyle
     );

@@ -2068,6 +2068,7 @@ export class HeliosEngine
         const provider = findLidarSource(this.homeLat, this.homeLon);
         if (!provider)
         {
+            console.info(`[HELIOS-ENGINE] _ensureLidarFetched: no provider covers home`);
             this._lidarProvider = null;
             this._lidarHasTiles = false;
             unregisterLidarTerrain(this._engineId);
@@ -2078,6 +2079,7 @@ export class HeliosEngine
         this._lidarProvider = provider;
 
         const rasterSize = PRECISION_TILE_RASTER[level] ?? 384;
+        console.info(`[HELIOS-ENGINE] _ensureLidarFetched: provider=${provider.id}, level=${level}, rasterSize=${rasterSize}, engineId=${this._engineId}`);
         registerLidarTerrain(
             this._engineId,
             provider,
@@ -2095,6 +2097,7 @@ export class HeliosEngine
     //card surfaces the scanner toggle button.
     private _onLidarTileLoaded(key: string, data: LidarTileData): void
     {
+        console.info(`[HELIOS-ENGINE] LiDAR tile loaded ${key} (scannerLayer=${!!this._scannerLayer}, hadTiles=${this._lidarHasTiles})`);
         if (!this._scannerLayer) return;
         this._scannerLayer.addTile(key, data);
         if (!this._lidarHasTiles)
@@ -2203,6 +2206,7 @@ export class HeliosEngine
     //per-tile textures from the current sun position on toggle ON.
     public setPointCloudVisible(visible: boolean): void
     {
+        console.info(`[HELIOS-ENGINE] setPointCloudVisible(${visible}), hasLayer=${!!this._scannerLayer}, hasTiles=${this._lidarHasTiles}`);
         this._scannerVisible = visible;
         if (!this._scannerLayer) return;
         this._scannerLayer.setVisible(visible);

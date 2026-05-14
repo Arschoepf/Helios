@@ -141,7 +141,10 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
     //We never add / remove the layer to flip visibility (that would
     //tear down the GL context on every toggle); the layer stays on
     //the map and just skips the draw call when hidden.
-    private _visible   = false;
+    private _visible             = false;
+    //One-shot guard so the "first render" diagnostic only fires
+    //once per layer lifetime.
+    private _didLogFirstRender   = false;
 
     private _opts: ScannerMeshOptions;
 
@@ -158,23 +161,33 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
         this._map = map;
         this._gl  = gl;
 
-        //uint32 indices: native in WebGL 2, behind an extension in
-        //WebGL 1. A 384² mesh blows past the 65k vertex cap so we
-        //need 32-bit either way.
         const isGl2 = typeof (gl as WebGL2RenderingContext).createVertexArray === 'function';
         this._uint32Indices = isGl2 || !!gl.getExtension('OES_element_index_uint');
 
         const vs = compileShader(gl, gl.VERTEX_SHADER,   VERT_SRC);
         const fs = compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
-        if (!vs || !fs) return;
+        if (!vs || !fs)
+        {
+            console.warn('[HELIOS-SCAN] onAdd: shader compile failed');
+            return;
+        }
         this._program = linkProgram(gl, vs, fs);
-        if (!this._program) return;
+        if (!this._program)
+        {
+            console.warn('[HELIOS-SCAN] onAdd: program link failed');
+            return;
+        }
 
         this._aPos     = gl.getAttribLocation(this._program, 'a_pos');
         this._aUv      = gl.getAttribLocation(this._program, 'a_uv');
         this._uMatrix  = gl.getUniformLocation(this._program, 'u_matrix');
         this._uTexture = gl.getUniformLocation(this._program, 'u_texture');
         this._uOpacity = gl.getUniformLocation(this._program, 'u_opacity');
+
+        console.info(
+            `[HELIOS-SCAN] onAdd: ok (gl${isGl2 ? '2' : '1'}, uint32=${this._uint32Indices}, ` +
+            `attribs pos=${this._aPos} uv=${this._aUv}, pending tiles=${this._tiles.size})`
+        );
 
         //Rebuild any tiles that landed before the GL context was up.
         const pending = Array.from(this._tiles.entries());
@@ -187,6 +200,11 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
         if (!this._visible) return;
         if (!this._program) return;
         if (this._subMeshes.size === 0) return;
+        if (!this._didLogFirstRender)
+        {
+            this._didLogFirstRender = true;
+            console.info(`[HELIOS-SCAN] first render: visible, ${this._subMeshes.size} submeshes`);
+        }
         const matrix = args.modelViewProjectionMatrix;
 
         gl.useProgram(this._program);
@@ -245,19 +263,29 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
     {
         this._tiles.set(key, data);
         const gl = this._gl;
-        if (!gl || !this._program) return;
+        if (!gl || !this._program)
+        {
+            console.info(`[HELIOS-SCAN] addTile(${key}): buffered (gl=${!!gl}, program=${!!this._program})`);
+            return;
+        }
 
         //Tear down any previous mesh for the same key (e.g. same
         //tile re-fetched at a higher precision).
         this._destroySubMesh(key);
 
         const sub = this._buildSubMesh(gl, data);
-        if (!sub) return;
+        if (!sub)
+        {
+            console.warn(`[HELIOS-SCAN] addTile(${key}): buildSubMesh returned null`);
+            return;
+        }
         this._subMeshes.set(key, sub);
 
         //First-paint the texture so the user sees something the
         //frame the tile lands, rather than waiting on a compute pass.
         this._paintTexture(key, data);
+
+        console.info(`[HELIOS-SCAN] addTile(${key}): mesh built (${data.width}x${data.height}, ${sub.indexCount} indices)`);
 
         this._map?.triggerRepaint();
     }
@@ -283,6 +311,7 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
 
     setVisible(v: boolean): void
     {
+        console.info(`[HELIOS-SCAN] setVisible(${v}), submeshes=${this._subMeshes.size}, tiles=${this._tiles.size}`);
         this._visible = v;
         this._map?.triggerRepaint();
     }
