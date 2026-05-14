@@ -1,14 +1,16 @@
 //IGN LiDAR HD raster source for metropolitan France + Corsica.
 //
-//Pipeline:
-//  1. Two WMS GetMap calls in parallel (MNH height-above-ground +
-//     MNT bare-earth elevation), both as little-endian float32
-//     rasters (image/x-bil;bits=32).
-//  2. MNH cells outside [HEIGHT_THRESH_M, HEIGHT_MAX_M] are reset to
-//     0 so the consumer never has to repeat the noise filter.
-//  3. The two rasters share the same bbox + dimensions, so the
-//     engine can sample them in lockstep when computing the
-//     irradiance scanner.
+//Two parallel WMS GetMap calls per fetch:
+//  - MNT (Modele Numerique de Terrain): bare-earth elevation, the
+//    smooth ground the custom DEM source feeds to MapLibre's
+//    setTerrain.
+//  - MNS (Modele Numerique de Surface): full surface model
+//    (ground + vegetation + buildings + everything LiDAR picked up),
+//    drives the irradiance scanner's shadow ray cast so every
+//    above-ground feature contributes.
+//
+//Both rasters share the same bbox + dimensions, so consumers can
+//sample them in lockstep when computing the scanner colour.
 //
 //Coverage stops at metropolitan France + Corsica (the LiDAR HD survey
 //is still rolling out for DOM-TOM); we bail before the API call when
@@ -26,14 +28,8 @@ import type {
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
 //IGN reprojects the native LAMB-93 product to WGS84G server-side so
 //we can stay in lon/lat and avoid a coordinate transform.
-//
-//  MNH (Modele Numerique de Hauteur), height above local ground;
-//       drives the irradiance scanner shadow ray cast.
-//  MNT (Modele Numerique de Terrain), bare-earth ground elevation;
-//       drives the custom DEM source that replaces MapTiler terrain
-//       in the LiDAR area.
-const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
 const LAYER_MNT  = 'IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
+const LAYER_MNS  = 'IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
 
 //Bounding box of metropolitan France + Corsica, padded by ~0.3 deg
 //so coastal homes still trigger a fetch.
@@ -41,14 +37,9 @@ const FR_BBOX = { minLat: 41.0, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 
 const M_PER_DEG_LAT = 111_320;
 
-//MNH noise floor + ceiling. Below the floor we're picking up grass
-//and survey noise; above the ceiling we're picking up known garbage
-//(tall masts, errors).
-const HEIGHT_THRESH_M = 5;
-const HEIGHT_MAX_M    = 100;
-//Over-fetch so edge cells still get a chance to cast their shadow
-//inward into the visible disc.
-const BBOX_PAD_FACTOR = 1.15;
+//Over-fetch so edge cells still get a chance to contribute their
+//shadow inward into the visible disc.
+const BBOX_PAD_FACTOR = 1.10;
 
 export const franceLidarHd: LidarSource =
 {
@@ -78,62 +69,48 @@ export const franceLidarHd: LidarSource =
         const minLon = opts.homeLon - dLon;
         const maxLon = opts.homeLon + dLon;
 
-        const [mnhRaw, mntRaw] = await Promise.all([
-            fetchBilLayer(LAYER_MNH, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal),
-            fetchBilLayer(LAYER_MNT, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal)
+        const [mntRaw, mnsRaw] = await Promise.all([
+            fetchBilLayer(LAYER_MNT, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal),
+            fetchBilLayer(LAYER_MNS, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal)
         ]);
 
-        if (!mnhRaw || !mntRaw) return empty;
+        if (!mntRaw || !mnsRaw) return empty;
 
-        //Threshold MNH in place: anything outside the meaningful
-        //range collapses to 0 so downstream code can take "h > 0"
-        //as the canonical "this is an above-ground feature" test.
+        const cosLat     = Math.cos(opts.homeLat * Math.PI / 180);
+        const pxLatM     = ((maxLat - minLat) / rasterSize) * M_PER_DEG_LAT;
+        const pxLonM     = ((maxLon - minLon) / rasterSize) * (M_PER_DEG_LAT * cosLat);
+        const cellPitchM = 0.5 * (pxLatM + pxLonM);
+
+        //Sanity log on the surface delta so out-of-spec MNS values
+        //(typically NaNs or sea-level fall-backs) show up in the
+        //console without crashing the pipeline. We don't gate on it,
+        //the scanner compute clamps per pixel anyway.
         const N = rasterSize * rasterSize;
-        let nKept = 0;
-        let hMin  = Infinity, hMax = -Infinity;
+        let nLifted = 0;
+        let maxLift = 0;
         for (let i = 0; i < N; i++)
         {
-            const h = mnhRaw[i];
-            if (!isFinite(h) || h < HEIGHT_THRESH_M || h > HEIGHT_MAX_M)
+            const lift = mnsRaw[i] - mntRaw[i];
+            if (isFinite(lift) && lift > 0.5)
             {
-                mnhRaw[i] = 0;
-                continue;
+                nLifted++;
+                if (lift > maxLift) maxLift = lift;
             }
-            nKept++;
-            if (h < hMin) hMin = h;
-            if (h > hMax) hMax = h;
         }
-
-        const cosLat       = Math.cos(opts.homeLat * Math.PI / 180);
-        const pxLatM       = ((maxLat - minLat) / rasterSize) * M_PER_DEG_LAT;
-        const pxLonM       = ((maxLon - minLon) / rasterSize) * (M_PER_DEG_LAT * cosLat);
-        const cellPitchM   = 0.5 * (pxLatM + pxLonM);
+        console.info(
+            `[HELIOS] LiDAR: ${rasterSize}x${rasterSize} MNT + MNS rasters, ` +
+            `${nLifted} above-ground cells, max lift ${maxLift.toFixed(1)} m, ` +
+            `cell pitch ${cellPitchM.toFixed(2)} m`
+        );
 
         const rasters: LidarRasters = {
             width:      rasterSize,
             height:     rasterSize,
             bounds:     { minLon, minLat, maxLon, maxLat },
             cellPitchM,
-            mnh:        mnhRaw,
-            mnt:        mntRaw
+            mnt:        mntRaw,
+            mns:        mnsRaw
         };
-
-        if (nKept > 0)
-        {
-            console.info(
-                `[HELIOS] LiDAR: ${rasterSize}x${rasterSize} rasters, ` +
-                `${nKept} MNH cells above threshold, ` +
-                `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m, ` +
-                `cell pitch ${cellPitchM.toFixed(2)} m`
-            );
-        }
-        else
-        {
-            console.info(
-                `[HELIOS] LiDAR: ${rasterSize}x${rasterSize} rasters, ` +
-                `no MNH cells above ${HEIGHT_THRESH_M} m`
-            );
-        }
 
         return { rasters };
     }
@@ -143,7 +120,7 @@ export const franceLidarHd: LidarSource =
 
 //Single WMS GetMap call for one IGN elevation layer at the given
 //bbox + raster size. Returns null on any network / decode failure;
-//the caller bails when MNH or MNT is missing.
+//the caller bails when either layer is missing.
 async function fetchBilLayer(
     layer:      string,
     minLat:     number,

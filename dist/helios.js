@@ -26211,13 +26211,11 @@ function convexHull(pts) {
   return lower.concat(upper);
 }
 const WMS_URL = "https://data.geopf.fr/wms-r";
-const LAYER_MNH = "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
 const LAYER_MNT = "IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
+const LAYER_MNS = "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
 const FR_BBOX = { minLat: 41, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 const M_PER_DEG_LAT = 111320;
-const HEIGHT_THRESH_M = 5;
-const HEIGHT_MAX_M = 100;
-const BBOX_PAD_FACTOR = 1.15;
+const BBOX_PAD_FACTOR = 1.1;
 const franceLidarHd = {
   id: "fr-ign-lidarhd",
   name: "IGN LiDAR HD (France)",
@@ -26234,45 +26232,36 @@ const franceLidarHd = {
     const maxLat = opts.homeLat + dLat;
     const minLon = opts.homeLon - dLon;
     const maxLon = opts.homeLon + dLon;
-    const [mnhRaw, mntRaw] = await Promise.all([
-      fetchBilLayer(LAYER_MNH, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal),
-      fetchBilLayer(LAYER_MNT, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal)
+    const [mntRaw, mnsRaw] = await Promise.all([
+      fetchBilLayer(LAYER_MNT, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal),
+      fetchBilLayer(LAYER_MNS, minLat, minLon, maxLat, maxLon, rasterSize, opts.signal)
     ]);
-    if (!mnhRaw || !mntRaw) return empty;
-    const N2 = rasterSize * rasterSize;
-    let nKept = 0;
-    let hMin = Infinity, hMax = -Infinity;
-    for (let i2 = 0; i2 < N2; i2++) {
-      const h2 = mnhRaw[i2];
-      if (!isFinite(h2) || h2 < HEIGHT_THRESH_M || h2 > HEIGHT_MAX_M) {
-        mnhRaw[i2] = 0;
-        continue;
-      }
-      nKept++;
-      if (h2 < hMin) hMin = h2;
-      if (h2 > hMax) hMax = h2;
-    }
+    if (!mntRaw || !mnsRaw) return empty;
     const cosLat = Math.cos(opts.homeLat * Math.PI / 180);
     const pxLatM = (maxLat - minLat) / rasterSize * M_PER_DEG_LAT;
     const pxLonM = (maxLon - minLon) / rasterSize * (M_PER_DEG_LAT * cosLat);
     const cellPitchM = 0.5 * (pxLatM + pxLonM);
+    const N2 = rasterSize * rasterSize;
+    let nLifted = 0;
+    let maxLift = 0;
+    for (let i2 = 0; i2 < N2; i2++) {
+      const lift = mnsRaw[i2] - mntRaw[i2];
+      if (isFinite(lift) && lift > 0.5) {
+        nLifted++;
+        if (lift > maxLift) maxLift = lift;
+      }
+    }
+    console.info(
+      `[HELIOS] LiDAR: ${rasterSize}x${rasterSize} MNT + MNS rasters, ${nLifted} above-ground cells, max lift ${maxLift.toFixed(1)} m, cell pitch ${cellPitchM.toFixed(2)} m`
+    );
     const rasters = {
       width: rasterSize,
       height: rasterSize,
       bounds: { minLon, minLat, maxLon, maxLat },
       cellPitchM,
-      mnh: mnhRaw,
-      mnt: mntRaw
+      mnt: mntRaw,
+      mns: mnsRaw
     };
-    if (nKept > 0) {
-      console.info(
-        `[HELIOS] LiDAR: ${rasterSize}x${rasterSize} rasters, ${nKept} MNH cells above threshold, height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m, cell pitch ${cellPitchM.toFixed(2)} m`
-      );
-    } else {
-      console.info(
-        `[HELIOS] LiDAR: ${rasterSize}x${rasterSize} rasters, no MNH cells above ${HEIGHT_THRESH_M} m`
-      );
-    }
     return { rasters };
   }
 };
@@ -26541,6 +26530,8 @@ const LIDAR_PRECISION_RASTER = {
 const DEFAULT_SHADOW_OPACITY = 0.32;
 const DEFAULT_SCANNER_LOW_HEX = "#dc2626";
 const DEFAULT_SCANNER_HIGH_HEX = "#16a34a";
+const DEFAULT_SCANNER_OPACITY = 0.25;
+const LIDAR_FETCH_RADIUS_M = 500;
 const SHADOW_LAYER_IDS = [
   "helios-building-shadows",
   "helios-building-shadows-mid",
@@ -27637,7 +27628,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     const source = findLidarSource(this.homeLat, this.homeLon);
     if (!source) return;
-    const radius = this._buildingRadiusMeters();
+    const radius = LIDAR_FETCH_RADIUS_M;
     const rasterSize = LIDAR_PRECISION_RASTER[level];
     const key = `${source.id}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
     if (this._lidarData && this._lidarFetchKey === key) return;
@@ -27747,6 +27738,13 @@ const _HeliosEngine = class _HeliosEngine {
     homeSrc?.setData(this._buildingsData?.home ?? empty);
     surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
   }
+  //Final raster opacity once the reveal lands. Pulled from the
+  //user's `scanner-opacity` config; clamped to [0, 1].
+  _scannerOpacity() {
+    const raw = Number(this.cfg["scanner-opacity"]);
+    if (!Number.isFinite(raw)) return DEFAULT_SCANNER_OPACITY;
+    return Math.max(0, Math.min(1, raw));
+  }
   //Build a fresh irradiance image from the LiDAR rasters and push
   //it into the scanner source. Idempotent and cheap when the data
   //isn't there yet: returns early without touching anything.
@@ -27832,10 +27830,10 @@ const _HeliosEngine = class _HeliosEngine {
     const W = rasters.width;
     const H2 = rasters.height;
     const mnt = rasters.mnt;
-    const mnh = rasters.mnh;
+    const mns = rasters.mns;
     const pitchM = rasters.cellPitchM;
     const bounds = rasters.bounds;
-    const radius = this._buildingRadiusMeters();
+    const radius = LIDAR_FETCH_RADIUS_M;
     const buf = new Uint8ClampedArray(W * H2 * 4);
     const D2 = Math.PI / 180;
     const azR = sun.azimuth * D2;
@@ -27866,7 +27864,7 @@ const _HeliosEngine = class _HeliosEngine {
         const ri = row0 + k2 * dRow | 0;
         if (ci < 0 || ci >= W || ri < 0 || ri >= H2) return false;
         const idx = ri * W + ci;
-        const blockerH = mnt[idx] + mnh[idx];
+        const blockerH = mns[idx];
         const sunLineH = h0 + k2 * stepRiseM;
         if (blockerH > sunLineH + 0.5) return true;
         if (sunLineH > h0 + 100) return false;
@@ -27955,7 +27953,7 @@ const _HeliosEngine = class _HeliosEngine {
     if (!this.map.getLayer("helios-lidar-scanner")) return;
     if (!this._scannerVisible) return;
     this._cancelScannerReveal();
-    const target = _HeliosEngine.SCANNER_OPACITY;
+    const target = this._scannerOpacity();
     const duration = 700;
     const startT = performance.now();
     const step = (now) => {
@@ -28634,6 +28632,7 @@ const _HeliosEngine = class _HeliosEngine {
     const prevMaptilerSh = this._maptilerShadowsEnabled();
     const prevScanLow = toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX);
     const prevScanHigh = toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX);
+    const prevScanOpa = this._scannerOpacity();
     this.cfg = { ...cfg };
     if (!this.map) {
       return;
@@ -28729,6 +28728,13 @@ const _HeliosEngine = class _HeliosEngine {
     const nextScanHigh = toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX);
     if ((nextScanLow !== prevScanLow || nextScanHigh !== prevScanHigh) && this._scannerVisible) {
       this._computeLidarScanner();
+    }
+    const nextScanOpa = this._scannerOpacity();
+    if (nextScanOpa !== prevScanOpa && this.map.getLayer("helios-lidar-scanner") && this._scannerVisible) {
+      try {
+        this.map.setPaintProperty("helios-lidar-scanner", "raster-opacity", nextScanOpa);
+      } catch (_2) {
+      }
     }
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
@@ -28913,7 +28919,6 @@ _HeliosEngine.MINIMAL_KEEP_LAYER_IDS = /* @__PURE__ */ new Set([
   "Pathway",
   "Track"
 ]);
-_HeliosEngine.SCANNER_OPACITY = 0.85;
 _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC = 1.5;
 _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS = 5e3;
 let HeliosEngine = _HeliosEngine;
@@ -29011,7 +29016,8 @@ const en = {
     scannerSection: "Irradiance scanner",
     scannerSectionHint: "On-card toggle that paints every LiDAR cell with a two-stop colour ramp based on the irradiance it receives at the selected time. Low for night / shadow, high for full sun at STC (1 kW/m²). The default thermal red → green ramp reads cleanly on both light and dark basemaps.",
     scannerLowColor: "Low (zero irradiance) *",
-    scannerHighColor: "High (full irradiance) *"
+    scannerHighColor: "High (full irradiance) *",
+    scannerOpacity: "Scanner opacity *"
   }
 };
 const fr = {
@@ -29108,7 +29114,8 @@ const fr = {
     scannerSection: "Scanner d'irradiance",
     scannerSectionHint: "Bouton sur la carte qui colore chaque cellule LiDAR avec une rampe à deux teintes selon l'irradiance reçue à l'instant sélectionné. Teinte basse pour la nuit ou l'ombre, teinte haute pour le plein soleil à 1 kW/m². Par défaut un dégradé thermique rouge → vert qui lit bien sur fond clair comme sur fond sombre.",
     scannerLowColor: "Bas (irradiance nulle) *",
-    scannerHighColor: "Haut (irradiance max) *"
+    scannerHighColor: "Haut (irradiance max) *",
+    scannerOpacity: "Opacité du scanner *"
   }
 };
 const de = {
@@ -29205,7 +29212,8 @@ const de = {
     scannerSection: "Bestrahlungs-Scanner",
     scannerSectionHint: "Karten-Schaltfläche, die jede LiDAR-Zelle anhand der zum gewählten Zeitpunkt empfangenen Einstrahlung mit einer Zwei-Farben-Rampe einfärbt. Untere Farbe für Nacht / Schatten, obere für volle Sonne bei 1 kW/m². Standardmäßig ein thermischer Rot-Grün-Verlauf, der sowohl auf hellen wie auf dunklen Basemaps klar lesbar bleibt.",
     scannerLowColor: "Unten (keine Einstrahlung) *",
-    scannerHighColor: "Oben (volle Einstrahlung) *"
+    scannerHighColor: "Oben (volle Einstrahlung) *",
+    scannerOpacity: "Scanner-Deckkraft *"
   }
 };
 const es = {
@@ -29302,7 +29310,8 @@ const es = {
     scannerSection: "Escáner de irradiancia",
     scannerSectionHint: "Botón sobre el mapa que tiñe cada celda LiDAR con una rampa de dos colores según la irradiancia recibida en el instante seleccionado. Tono bajo para noche / sombra, tono alto para pleno sol a 1 kW/m². Por defecto un degradado térmico rojo → verde que se lee bien tanto en mapas claros como oscuros.",
     scannerLowColor: "Bajo (irradiancia nula) *",
-    scannerHighColor: "Alto (irradiancia máxima) *"
+    scannerHighColor: "Alto (irradiancia máxima) *",
+    scannerOpacity: "Opacidad del escáner *"
   }
 };
 const it = {
@@ -29399,7 +29408,8 @@ const it = {
     scannerSection: "Scanner di irradianza",
     scannerSectionHint: "Pulsante sulla mappa che colora ogni cella LiDAR con una rampa a due tonalità in base all'irradianza ricevuta all'istante selezionato. Tonalità bassa per notte / ombra, alta per pieno sole a 1 kW/m². Di default, un gradiente termico rosso → verde leggibile sia su mappe chiare che scure.",
     scannerLowColor: "Basso (irradianza nulla) *",
-    scannerHighColor: "Alto (irradianza massima) *"
+    scannerHighColor: "Alto (irradianza massima) *",
+    scannerOpacity: "Opacità dello scanner *"
   }
 };
 const nl = {
@@ -29496,7 +29506,8 @@ const nl = {
     scannerSection: "Instralingsscanner",
     scannerSectionHint: "Knop op de kaart die elke LiDAR-cel met een tweekleuren-verloop kleurt op basis van de op het gekozen moment ontvangen instraling. Lage tint voor nacht / schaduw, hoge tint voor volle zon bij 1 kW/m². Standaard een thermisch rood → groen verloop dat zowel op lichte als op donkere kaarten goed leesbaar blijft.",
     scannerLowColor: "Laag (geen instraling) *",
-    scannerHighColor: "Hoog (volle instraling) *"
+    scannerHighColor: "Hoog (volle instraling) *",
+    scannerOpacity: "Scannerdekking *"
   }
 };
 const pt = {
@@ -29593,7 +29604,8 @@ const pt = {
     scannerSection: "Scanner de irradiância",
     scannerSectionHint: "Botão no mapa que colore cada célula LiDAR com uma rampa de duas cores em função da irradiância recebida no instante selecionado. Tom baixo para noite / sombra, alto para sol pleno a 1 kW/m². Por padrão, um gradiente térmico vermelho → verde legível tanto em mapas claros como escuros.",
     scannerLowColor: "Baixo (irradiância nula) *",
-    scannerHighColor: "Alto (irradiância máxima) *"
+    scannerHighColor: "Alto (irradiância máxima) *",
+    scannerOpacity: "Opacidade do scanner *"
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -31439,6 +31451,17 @@ let HeliosCardEditor = class extends i {
                         @value-changed="${(e2) => this._color("scanner-color-high", e2)}"
                     ></helios-color-picker>
                 </label>
+                <label class="field">
+                    <span class="label">${t2.editor.scannerOpacity}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            .value="${String(c2["scanner-opacity"] ?? DEFAULT_SCANNER_OPACITY)}"
+                            @input="${(e2) => this._numSlider("scanner-opacity", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["scanner-opacity"] ?? DEFAULT_SCANNER_OPACITY), 0.05)}</span>
+                    </div>
+                </label>
                 <div class="hint">${t2.editor.scannerSectionHint}</div>
 
                 <div class="section-title">${t2.editor.colors}</div>
@@ -31795,7 +31818,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.18"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.19"}`,
       labelStyle,
       versionStyle
     );

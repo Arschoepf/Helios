@@ -143,6 +143,10 @@ export interface HeliosConfig
     //of the card palette.
     'scanner-color-low'?:        unknown;
     'scanner-color-high'?:       unknown;
+    //Raster-opacity for the scanner overlay once the reveal lands.
+    //Lower values let the basemap + LiDAR mesh read through more
+    //clearly; higher values make the colour ramp dominate.
+    'scanner-opacity'?:          unknown;
 }
 
 //Default values for the building config, exposed so the visual
@@ -180,6 +184,18 @@ export const DEFAULT_SHADOW_OPACITY = 0.32;
 //on both the dark satellite basemap and the light streets basemap.
 export const DEFAULT_SCANNER_LOW_HEX:  string = '#dc2626';
 export const DEFAULT_SCANNER_HIGH_HEX: string = '#16a34a';
+//Default raster-opacity for the scanner once the reveal lands.
+//Low enough that the underlying basemap + LiDAR mesh still reads
+//through, high enough that the colour ramp dominates near the
+//camera. User can adjust via `scanner-opacity`.
+export const DEFAULT_SCANNER_OPACITY = 0.25;
+
+//Fixed geographic radius (metres) of the LiDAR fetch bbox. The
+//camera at zoom 18 + pitch 55° sees roughly out to here, so the
+//LiDAR mesh + scanner cover the visible scene without depending
+//on the user's `building-radius` (which is a MapTiler-buildings
+//cluster knob, unrelated to the LiDAR coverage).
+export const LIDAR_FETCH_RADIUS_M = 500;
 
 //Layer ids for the N nested shadow steps emitted by helios-shadows.ts.
 //Hard-coded for SHADOW_FADE_STEPS = 3; if the constant grows the
@@ -2096,7 +2112,14 @@ export class HeliosEngine
         const source = findLidarSource(this.homeLat, this.homeLon);
         if (!source) return;
 
-        const radius     = this._buildingRadiusMeters();
+        //LiDAR fetch radius is decoupled from `building-radius` (the
+        //user's MapTiler-buildings cluster size): the LiDAR terrain
+        //needs to cover the camera's full visible area at zoom 18 +
+        //pitch 55°, which is bounded by viewport geometry rather than
+        //a config. A fixed 500 m radius (= 1 km bbox) reliably covers
+        //everything the camera can see; lidar-precision still controls
+        //the raster's sampling pitch within that bbox.
+        const radius     = LIDAR_FETCH_RADIUS_M;
         const rasterSize = LIDAR_PRECISION_RASTER[level];
         //Key includes the raster size so changing levels invalidates
         //the cache.
@@ -2259,10 +2282,14 @@ export class HeliosEngine
     //Cancellable so a fresh recompute (scrub, sun-tick) restarts the
     //reveal cleanly.
     private _scannerRevealRaf?: number;
-    //Final raster opacity once the reveal lands. Pulled from one
-    //place so the reveal target tracks any future config tweak
-    //without per-frame recomputation.
-    private static readonly SCANNER_OPACITY = 0.85;
+    //Final raster opacity once the reveal lands. Pulled from the
+    //user's `scanner-opacity` config; clamped to [0, 1].
+    private _scannerOpacity(): number
+    {
+        const raw = Number(this.cfg['scanner-opacity']);
+        if (!Number.isFinite(raw)) return DEFAULT_SCANNER_OPACITY;
+        return Math.max(0, Math.min(1, raw));
+    }
 
     //Card-side hooks for the scanner compute pass so the card can
     //show / hide a spinner near the scanner button. Both are optional;
@@ -2377,10 +2404,13 @@ export class HeliosEngine
         const W        = rasters.width;
         const H        = rasters.height;
         const mnt      = rasters.mnt;
-        const mnh      = rasters.mnh;
+        const mns      = rasters.mns;
         const pitchM   = rasters.cellPitchM;
         const bounds   = rasters.bounds;
-        const radius   = this._buildingRadiusMeters();
+        //Crop the scanner to the same disc as the LiDAR fetch so the
+        //texture stops at the LiDAR coverage edge instead of leaking
+        //into the bbox-padded corners with bogus data.
+        const radius   = LIDAR_FETCH_RADIUS_M;
 
         //Output image. RGBA, row-major top-down, same orientation as
         //the LiDAR raster. The MapLibre image source consumes it as a
@@ -2439,9 +2469,16 @@ export class HeliosEngine
                 const ri = (row0 + k * dRow) | 0;
                 if (ci < 0 || ci >= W || ri < 0 || ri >= H) return false;
                 const idx = ri * W + ci;
-                const blockerH = mnt[idx] + mnh[idx];
+                //MNS is the absolute surface elevation (ground + any
+                //above-ground feature). Comparing the sun line to it
+                //captures shadows from vegetation, buildings, walls,
+                //hedges, everything LiDAR picked up.
+                const blockerH = mns[idx];
                 const sunLineH = h0 + k * stepRiseM;
                 if (blockerH > sunLineH + 0.5) return true;
+                //Bail once the sun line clears the global LiDAR ceiling
+                //(no real-world structure rises that high above the
+                //starting cell), keeps low-sun walks bounded.
                 if (sunLineH > h0 + 100) return false;
             }
             return false;
@@ -2569,7 +2606,7 @@ export class HeliosEngine
 
         this._cancelScannerReveal();
 
-        const target   = HeliosEngine.SCANNER_OPACITY;
+        const target   = this._scannerOpacity();
         const duration = 700;
         const startT   = performance.now();
 
@@ -3627,6 +3664,7 @@ export class HeliosEngine
         const prevMaptilerSh  = this._maptilerShadowsEnabled();
         const prevScanLow     = toColor(this.cfg['scanner-color-low'],  DEFAULT_SCANNER_LOW_HEX);
         const prevScanHigh    = toColor(this.cfg['scanner-color-high'], DEFAULT_SCANNER_HIGH_HEX);
+        const prevScanOpa     = this._scannerOpacity();
         this.cfg = { ...cfg };
 
         if (!this.map)
@@ -3781,6 +3819,18 @@ export class HeliosEngine
             && this._scannerVisible)
         {
             this._computeLidarScanner();
+        }
+
+        //Opacity is a paint-level update on a live scanner layer,
+        //no re-compute needed. The next reveal animation will already
+        //pull the new value via _scannerOpacity().
+        const nextScanOpa = this._scannerOpacity();
+        if (nextScanOpa !== prevScanOpa
+            && this.map.getLayer('helios-lidar-scanner')
+            && this._scannerVisible)
+        {
+            try { this.map.setPaintProperty('helios-lidar-scanner', 'raster-opacity', nextScanOpa); }
+            catch (_) {}
         }
 
         if (this._homeHourlyData && this._mapReady)

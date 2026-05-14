@@ -37,7 +37,7 @@ export interface LidarFetchResult
 
 export interface LidarRasters
 {
-    //Raster dimensions; same for MNH and MNT, both decode at the
+    //Raster dimensions; same for MNT and MNS, both decode at the
     //provider's requested resolution.
     width:  number;
     height: number;
@@ -49,14 +49,18 @@ export interface LidarRasters
     //The engine uses it as the step size for the per-pixel shadow
     //ray cast.
     cellPitchM: number;
-    //Heights above local ground (MNH). Row-major, top-down. A value
-    //of 0 means "no significant above-ground feature here" (filtered
-    //by the provider's threshold + max).
-    mnh: Float32Array;
-    //Bare-earth elevation (MNT) in metres above mean sea level. Same
-    //orientation as `mnh`. Drives the custom DEM source that replaces
-    //MapTiler terrain in the LiDAR area.
+    //Bare-earth elevation (MNT, Modele Numerique de Terrain) in
+    //metres above mean sea level. Row-major, top-down. Drives the
+    //custom DEM source that replaces MapTiler terrain in the LiDAR
+    //area; also provides the ground-surface normal for the scanner's
+    //per-pixel incidence computation.
     mnt: Float32Array;
+    //Full surface elevation (MNS, Modele Numerique de Surface):
+    //bare-earth + every above-ground feature (vegetation, buildings,
+    //masts, ...). Same orientation as `mnt`. Drives the scanner's
+    //shadow ray cast: any cell whose MNS rises above the sun line
+    //casts a shadow on neighbouring ground pixels.
+    mns: Float32Array;
 }
 
 export interface LidarFetchOptions

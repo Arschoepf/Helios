@@ -100,6 +100,7 @@ export const nl: Translations = {
         scannerSection:        'Instralingsscanner',
         scannerSectionHint:    'Knop op de kaart die elke LiDAR-cel met een tweekleuren-verloop kleurt op basis van de op het gekozen moment ontvangen instraling. Lage tint voor nacht / schaduw, hoge tint voor volle zon bij 1 kW/m². Standaard een thermisch rood → groen verloop dat zowel op lichte als op donkere kaarten goed leesbaar blijft.',
         scannerLowColor:       'Laag (geen instraling) *',
-        scannerHighColor:      'Hoog (volle instraling) *'
+        scannerHighColor:      'Hoog (volle instraling) *',
+        scannerOpacity:        'Scannerdekking *'
     }
 };

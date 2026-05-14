@@ -146,6 +146,7 @@ export interface Translations
         scannerSectionHint:       string;
         scannerLowColor:          string;
         scannerHighColor:         string;
+        scannerOpacity:           string;
     };
 }
 

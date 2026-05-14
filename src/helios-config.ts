@@ -14,7 +14,8 @@ import
     DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_SCANNER_LOW_HEX,
-    DEFAULT_SCANNER_HIGH_HEX
+    DEFAULT_SCANNER_HIGH_HEX,
+    DEFAULT_SCANNER_OPACITY
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -744,6 +745,17 @@ export class HeliosCardEditor extends LitElement
                         .ariaLabel="${t.editor.scannerHighColor}"
                         @value-changed="${(e: CustomEvent) => this._color('scanner-color-high', e)}"
                     ></helios-color-picker>
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.scannerOpacity}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            .value="${String(c['scanner-opacity'] ?? DEFAULT_SCANNER_OPACITY)}"
+                            @input="${(e: Event) => this._numSlider('scanner-opacity', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['scanner-opacity'] ?? DEFAULT_SCANNER_OPACITY), 0.05)}</span>
+                    </div>
                 </label>
                 <div class="hint">${t.editor.scannerSectionHint}</div>
 

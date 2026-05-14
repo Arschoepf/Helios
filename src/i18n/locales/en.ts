@@ -110,6 +110,7 @@ export const en: Translations = {
         scannerSection:        'Irradiance scanner',
         scannerSectionHint:    'On-card toggle that paints every LiDAR cell with a two-stop colour ramp based on the irradiance it receives at the selected time. Low for night / shadow, high for full sun at STC (1 kW/m²). The default thermal red → green ramp reads cleanly on both light and dark basemaps.',
         scannerLowColor:       'Low (zero irradiance) *',
-        scannerHighColor:      'High (full irradiance) *'
+        scannerHighColor:      'High (full irradiance) *',
+        scannerOpacity:        'Scanner opacity *'
     }
 };

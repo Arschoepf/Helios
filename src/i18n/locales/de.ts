@@ -100,6 +100,7 @@ export const de: Translations = {
         scannerSection:        'Bestrahlungs-Scanner',
         scannerSectionHint:    'Karten-Schaltfläche, die jede LiDAR-Zelle anhand der zum gewählten Zeitpunkt empfangenen Einstrahlung mit einer Zwei-Farben-Rampe einfärbt. Untere Farbe für Nacht / Schatten, obere für volle Sonne bei 1 kW/m². Standardmäßig ein thermischer Rot-Grün-Verlauf, der sowohl auf hellen wie auf dunklen Basemaps klar lesbar bleibt.',
         scannerLowColor:       'Unten (keine Einstrahlung) *',
-        scannerHighColor:      'Oben (volle Einstrahlung) *'
+        scannerHighColor:      'Oben (volle Einstrahlung) *',
+        scannerOpacity:        'Scanner-Deckkraft *'
     }
 };

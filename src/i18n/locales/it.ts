@@ -100,6 +100,7 @@ export const it: Translations = {
         scannerSection:        'Scanner di irradianza',
         scannerSectionHint:    'Pulsante sulla mappa che colora ogni cella LiDAR con una rampa a due tonalità in base all\'irradianza ricevuta all\'istante selezionato. Tonalità bassa per notte / ombra, alta per pieno sole a 1 kW/m². Di default, un gradiente termico rosso → verde leggibile sia su mappe chiare che scure.',
         scannerLowColor:       'Basso (irradianza nulla) *',
-        scannerHighColor:      'Alto (irradianza massima) *'
+        scannerHighColor:      'Alto (irradianza massima) *',
+        scannerOpacity:        'Opacità dello scanner *'
     }
 };

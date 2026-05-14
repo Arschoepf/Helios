@@ -108,6 +108,7 @@ export const fr: Translations = {
         scannerSection:        'Scanner d\'irradiance',
         scannerSectionHint:    'Bouton sur la carte qui colore chaque cellule LiDAR avec une rampe à deux teintes selon l\'irradiance reçue à l\'instant sélectionné. Teinte basse pour la nuit ou l\'ombre, teinte haute pour le plein soleil à 1 kW/m². Par défaut un dégradé thermique rouge → vert qui lit bien sur fond clair comme sur fond sombre.',
         scannerLowColor:       'Bas (irradiance nulle) *',
-        scannerHighColor:      'Haut (irradiance max) *'
+        scannerHighColor:      'Haut (irradiance max) *',
+        scannerOpacity:        'Opacité du scanner *'
     }
 };

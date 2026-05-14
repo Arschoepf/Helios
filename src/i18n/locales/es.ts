@@ -100,6 +100,7 @@ export const es: Translations = {
         scannerSection:        'Escáner de irradiancia',
         scannerSectionHint:    'Botón sobre el mapa que tiñe cada celda LiDAR con una rampa de dos colores según la irradiancia recibida en el instante seleccionado. Tono bajo para noche / sombra, tono alto para pleno sol a 1 kW/m². Por defecto un degradado térmico rojo → verde que se lee bien tanto en mapas claros como oscuros.',
         scannerLowColor:       'Bajo (irradiancia nula) *',
-        scannerHighColor:      'Alto (irradiancia máxima) *'
+        scannerHighColor:      'Alto (irradiancia máxima) *',
+        scannerOpacity:        'Opacidad del escáner *'
     }
 };
