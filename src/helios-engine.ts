@@ -656,6 +656,12 @@ export class HeliosEngine
     //+ precision combination. Null until the first fetch lands; the
     //shadow projector reads this on every sun-position refresh.
     private _lidarShadowFeatures: GeoJSON.FeatureCollection | null = null;
+    //Diagnostics from the most recent LiDAR shadow fetch, surfaced via
+    //`window.heliosStats()`. Replaces what we used to print as
+    //`[HELIOS] LiDAR shadows: ... cells -> ... clumps` console info.
+    private _lidarShadowDiagnostics:
+        { cellsKept: number; cellsPerClumpCap: number; heightRangeM: [number, number] | null }
+        | null = null;
     //Fetch-key for the cached LiDAR shadow features. Lets us skip a
     //refetch when the user nudges the camera but home/radius/precision
     //haven't changed.
@@ -1436,6 +1442,7 @@ export class HeliosEngine
         //pipeline entirely.
         this._initHillshade();
         this._initNightShade();
+        this._initCropMask();
         this._initCloudCoverDisc();
         this._addBuildings();
         this._applyLabelVisibility();
@@ -1555,6 +1562,127 @@ export class HeliosEngine
                 'fill-opacity': 0
             }
         });
+    }
+
+    //Display-radius crop mask.
+    //
+    //A single fill layer that paints everything outside the configured
+    //display radius (formerly the "building visibility radius") in the
+    //card's theme background colour. Drawn ABOVE the basemap + the
+    //hillshade + the night-shade, BELOW our helios-buildings + shadow
+    //layers, so the user only ever sees the disc's content; anything
+    //the basemap renders outside that disc is hidden under the mask.
+    //
+    //The mask geometry is a polygon with TWO rings: an outer ~5 km
+    //square around the home (large enough to cover any screen at the
+    //locked z=18 view, even at pitch 55 deg) and an inner 64-segment
+    //disc at the radius. GeoJSON polygons with a second ring treat
+    //it as a hole, so the rendered fill is exactly the donut between
+    //the two.
+    //
+    //Beyond the visual crop, the opaque mask lets the GPU early-out
+    //fragments under it. The basemap tiles still load and rasterise
+    //inside MapLibre, but the alpha blending of every layer beneath
+    //the mask is skipped, which on dense urban basemaps and on small
+    //devices saves a measurable fraction of the per-frame cost.
+    private _initCropMask(): void
+    {
+        if (!this.map) return;
+
+        //Drop any stale instance so re-runs (style reload, theme
+        //switch) are idempotent.
+        if (this.map.getLayer('helios-crop-mask'))
+        {
+            this.map.removeLayer('helios-crop-mask');
+        }
+        if (this.map.getSource('helios-crop-mask-src'))
+        {
+            this.map.removeSource('helios-crop-mask-src');
+        }
+
+        const data = this._buildCropMaskFeature();
+        this.map.addSource('helios-crop-mask-src',
+        {
+            type: 'geojson',
+            data
+        });
+
+        const isDark = this._isMinimalStyle()
+            ? false
+            : String(this.cfg['card-theme'] ?? 'light').toLowerCase() === 'dark';
+        this.map.addLayer(
+        {
+            id:     'helios-crop-mask',
+            type:   'fill',
+            source: 'helios-crop-mask-src',
+            paint:
+            {
+                'fill-color':     isDark ? '#191a1b' : '#ffffff',
+                'fill-opacity':   1,
+                'fill-antialias': true
+            }
+        });
+    }
+
+    //Refresh the crop-mask geometry. Cheap (~64 cos/sin) so we can
+    //call it on every home / building-radius change without thought.
+    private _updateCropMask(): void
+    {
+        if (!this.map) return;
+        const src = this.map.getSource('helios-crop-mask-src') as
+                    maplibregl.GeoJSONSource | undefined;
+        if (!src) return;
+        src.setData(this._buildCropMaskFeature());
+    }
+
+    //Build the donut GeoJSON Feature consumed by the crop-mask source.
+    //Outer ring = 5 km bbox around home; inner ring = 64-segment disc
+    //at the display radius. The inner ring is generated CW so GeoJSON
+    //treats it as a hole regardless of the outer ring's orientation.
+    private _buildCropMaskFeature(): GeoJSON.Feature
+    {
+        const cosLat   = Math.cos(this.homeLat * Math.PI / 180);
+        //5 km outer extent is overkill for any single-card viewport at
+        //z=18 (~500 m wide at pitch 55), but cheap and gives plenty of
+        //margin if the user rotates the camera. Cropping outside the
+        //actual viewport would just create flicker on rotation.
+        const OUTER_M  = 5000;
+        const dLatOut  = OUTER_M  / 111_320;
+        const dLonOut  = OUTER_M  / (111_320 * cosLat);
+        const radius   = this._buildingRadiusMeters();
+        const dLatIn   = radius / 111_320;
+        const dLonIn   = radius / (111_320 * cosLat);
+
+        const outer: number[][] = [
+            [this.homeLon - dLonOut, this.homeLat - dLatOut],
+            [this.homeLon + dLonOut, this.homeLat - dLatOut],
+            [this.homeLon + dLonOut, this.homeLat + dLatOut],
+            [this.homeLon - dLonOut, this.homeLat + dLatOut],
+            [this.homeLon - dLonOut, this.homeLat - dLatOut]
+        ];
+
+        //CW order (i goes from segs down to 0) so GeoJSON treats this
+        //as a hole inside the outer ring.
+        const segs = 64;
+        const inner: number[][] = [];
+        for (let i = segs; i >= 0; i--)
+        {
+            const a = (i / segs) * 2 * Math.PI;
+            inner.push([
+                this.homeLon + Math.cos(a) * dLonIn,
+                this.homeLat + Math.sin(a) * dLatIn
+            ]);
+        }
+
+        return {
+            type: 'Feature',
+            geometry:
+            {
+                type:        'Polygon',
+                coordinates: [outer, inner]
+            },
+            properties: {}
+        };
     }
 
     //Cloud-cover disc setup.
@@ -2112,10 +2240,11 @@ export class HeliosEngine
         const provider = findLidarSource(this.homeLat, this.homeLon);
         if (!provider || !this._shadowsEnabled())
         {
-            this._lidarShadowFeatures  = null;
-            this._lidarShadowKey       = '';
+            this._lidarShadowFeatures    = null;
+            this._lidarShadowDiagnostics = null;
+            this._lidarShadowKey         = '';
             this._lidarShadowAbort?.abort();
-            this._lidarShadowAbort     = undefined;
+            this._lidarShadowAbort       = undefined;
             return;
         }
 
@@ -2141,10 +2270,11 @@ export class HeliosEngine
             cropRadiusMeters: radius,
             signal:           ac.signal
         })
-        .then(fc =>
+        .then(res =>
         {
             if (ac.signal.aborted || !this.map) return;
-            this._lidarShadowFeatures = fc;
+            this._lidarShadowFeatures    = res.features;
+            this._lidarShadowDiagnostics = res.diagnostics;
             //New shadow source available, force a full atmosphere /
             //shadow refresh on the next call rather than waiting for
             //the sun to move past the 0.5 deg threshold.
@@ -2155,8 +2285,9 @@ export class HeliosEngine
         {
             if ((err as { name?: string })?.name === 'AbortError') return;
             console.warn('[HELIOS] LiDAR shadow fetch failed:', err);
-            this._lidarShadowFeatures = null;
-            this._lidarShadowKey      = '';
+            this._lidarShadowFeatures    = null;
+            this._lidarShadowDiagnostics = null;
+            this._lidarShadowKey         = '';
         })
         .finally(() =>
         {
@@ -3202,8 +3333,10 @@ export class HeliosEngine
     //`getStatsSnapshot()` and surfaced through `window.heliosStats()`
     //for in-browser debugging. The shape is intentionally JSON-safe
     //so the user can `JSON.stringify(window.heliosStats())` and paste
-    //the result when filing an issue. No secrets are returned here
-    //(the API key lives on the card config, not on the engine).
+    //the result publicly when filing an issue. No PII is returned
+    //here: the home lat/lon and elevation are stripped (only the
+    //hemisphere is kept, the sun-arc orientation depends on it), and
+    //the API key never leaves the card-level snapshot anyway.
     public getStatsSnapshot(): Record<string, unknown>
     {
         const provider = findLidarSource(this.homeLat, this.homeLon);
@@ -3223,19 +3356,23 @@ export class HeliosEngine
         else                                              shadowSource = 'pending';
 
         return {
-            mapReady:            this._mapReady,
-            home:                { lat: this.homeLat, lon: this.homeLon },
-            homeElevation:       this.homeElevation ?? null,
-            lidarProvider:       provider ? provider.id : null,
+            mapReady:             this._mapReady,
+            //Home position deliberately omitted. `lidarProvider` and
+            //`hemisphere` cover every debug case we care about
+            //(coverage check + sun-arc orientation) without leaking
+            //the user's address.
+            hemisphere:           this.homeLat >= 0 ? 'N' : 'S',
+            lidarProvider:        provider ? provider.id : null,
             shadows:
             {
-                enabled:         shadowsOn,
-                source:          shadowSource,
-                opacity:         this._shadowOpacity(),
-                lidarClumps:     lidarFeatures?.features.length ?? 0,
-                lidarPrecision:  this._lidarPrecisionLevel(),
-                clipRadiusM:     this._buildingRadiusMeters(),
-                lastSigCached:   this._lastShadowSig !== undefined
+                enabled:          shadowsOn,
+                source:           shadowSource,
+                opacity:          this._shadowOpacity(),
+                lidarClumps:      lidarFeatures?.features.length ?? 0,
+                lidarPrecision:   this._lidarPrecisionLevel(),
+                clipRadiusM:      this._buildingRadiusMeters(),
+                lastSigCached:    this._lastShadowSig !== undefined,
+                lidarDiagnostics: this._lidarShadowDiagnostics
             },
             buildings:
             {
@@ -3247,18 +3384,22 @@ export class HeliosEngine
             },
             weather:
             {
-                samples:        this._homeHourlyData?.times.length ?? 0,
-                rateLimitStreak: this._rateLimitStreak
+                samples:          this._homeHourlyData?.times.length ?? 0,
+                rateLimitStreak:  this._rateLimitStreak
             },
             timeline:
             {
-                range:           this._getTimeRange(),
-                selectedTime:    this._selectedTime
+                //Range + selectedTime kept as ISO strings rather than
+                //Date instances so the snapshot round-trips through
+                //JSON.stringify cleanly.
+                rangeStart:       this._getTimeRange()?.start?.toISOString() ?? null,
+                rangeEnd:         this._getTimeRange()?.end?.toISOString()   ?? null,
+                selectedTime:     this._selectedTime?.toISOString() ?? null
             },
             caches:
             {
-                arcCacheDay:     this._arcInputsCache
-                    ? new Date(this._arcInputsCache.dayStartMs).toISOString()
+                arcCacheDay:      this._arcInputsCache
+                    ? new Date(this._arcInputsCache.dayStartMs).toISOString().slice(0, 10)
                     : null,
                 arcCacheCloudPct: this._arcInputsCache?.cloudPctInt ?? null
             }
@@ -3360,6 +3501,9 @@ export class HeliosEngine
             this._buildingsData     = null;
             this._buildingsFetchKey = '';
             this._addBuildings();
+            //Radius change also moves the crop-mask hole, so refresh
+            //the donut geometry to match.
+            this._updateCropMask();
         }
         else
         {
@@ -3390,8 +3534,9 @@ export class HeliosEngine
         const nextPrecision = this._lidarPrecisionLevel();
         if (nextPrecision !== prevPrecision)
         {
-            this._lidarShadowKey      = '';
-            this._lidarShadowFeatures = null;
+            this._lidarShadowKey         = '';
+            this._lidarShadowFeatures    = null;
+            this._lidarShadowDiagnostics = null;
             this._ensureLidarFetched();
         }
 
@@ -3421,10 +3566,11 @@ export class HeliosEngine
             }
             else
             {
-                this._lidarShadowFeatures = null;
-                this._lidarShadowKey      = '';
+                this._lidarShadowFeatures    = null;
+                this._lidarShadowDiagnostics = null;
+                this._lidarShadowKey         = '';
                 this._lidarShadowAbort?.abort();
-                this._lidarShadowAbort    = undefined;
+                this._lidarShadowAbort       = undefined;
             }
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
@@ -3506,12 +3652,13 @@ export class HeliosEngine
         this._fetchAbortController?.abort();
         this._buildingsAbort?.abort();
         this._lidarShadowAbort?.abort();
-        this._lidarShadowAbort    = undefined;
-        this._lidarShadowFeatures = null;
-        this._lidarShadowKey      = '';
-        this._shadowCanvas        = undefined;
-        this._arcInputsCache      = undefined;
-        this._lastShadowSig       = undefined;
+        this._lidarShadowAbort       = undefined;
+        this._lidarShadowFeatures    = null;
+        this._lidarShadowDiagnostics = null;
+        this._lidarShadowKey         = '';
+        this._shadowCanvas           = undefined;
+        this._arcInputsCache         = undefined;
+        this._lastShadowSig          = undefined;
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
         {
@@ -3606,6 +3753,7 @@ export class HeliosEngine
             for (const lid of [
                 'helios-hillshade',
                 'helios-night-shade',
+                'helios-crop-mask',
                 'helios-cloud-disc',
                 'helios-cloud-disc-ring',
                 'helios-cloud-ring',
@@ -3627,6 +3775,7 @@ export class HeliosEngine
             for (const sid of [
                 'helios-terrain',
                 'helios-night-shade',
+                'helios-crop-mask-src',
                 'helios-cloud-rings',
                 'helios-buildings-surroundings-src',
                 'helios-buildings-home-src',

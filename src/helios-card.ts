@@ -130,6 +130,7 @@ const _liveCards = new Set<HeliosCard>();
                 console.groupCollapsed(`%cCard #${i + 1}`, heading);
                 console.log('config:', snap.config);
                 console.log('engine:', snap.engine);
+                console.log('pv:',     snap.pv);
                 console.groupEnd();
             });
             console.groupEnd();
@@ -211,6 +212,10 @@ export class HeliosCard extends LitElement
     } | null = null;
     private _pvFetchKey  = '';
     private _pvFetching  = false;
+    //Most recent PV history fetch outcome, surfaced via
+    //`window.heliosStats()`. Replaces what we used to print as
+    //`[HELIOS] PV history sensor.xxx: N raw -> M samples over H h`.
+    private _pvHistoryDiagnostics: { rawEntries: number; samples: number; windowH: number } | null = null;
     //Rolling buffer of state samples. For cumulative-energy sensors
     //this gives a "last minute" instantaneous rate, fresher than the
     //historical fetch which only refreshes per timeline range.
@@ -353,9 +358,15 @@ export class HeliosCard extends LitElement
 
     //Diagnostic snapshot returned to `window.heliosStats()`. Includes
     //the live config (with the MapTiler API key redacted so the user
-    //can paste the output publicly) and, when the engine is up, the
-    //engine's own state snapshot. JSON-safe, no DOM references.
-    public getStatsSnapshot(): { config: Record<string, unknown>; engine: Record<string, unknown> | null }
+    //can paste the output publicly), the engine state snapshot when
+    //the engine is up, and a small PV block summarising the most
+    //recent history fetch outcome. JSON-safe, no DOM references, no
+    //PII (engine snapshot already strips the home lat/lon).
+    public getStatsSnapshot(): {
+        config: Record<string, unknown>;
+        engine: Record<string, unknown> | null;
+        pv:     Record<string, unknown>;
+    }
     {
         const cfg: Record<string, unknown> = {};
         if (this.config)
@@ -369,7 +380,15 @@ export class HeliosCard extends LitElement
         }
         return {
             config: cfg,
-            engine: this._engine ? this._engine.getStatsSnapshot() : null
+            engine: this._engine ? this._engine.getStatsSnapshot() : null,
+            pv:
+            {
+                entityConfigured: typeof this.config?.['pv-power-entity'] === 'string'
+                    && (this.config['pv-power-entity'] as string).length > 0,
+                unit:             this._pvUnit || null,
+                lastHistory:      this._pvHistoryDiagnostics,
+                calibrationK:     this._pvCalibK
+            }
         };
     }
 
@@ -1090,10 +1109,14 @@ export class HeliosCard extends LitElement
             }
 
             this._pvHistory = { times, values };
-            console.info(
-                `[HELIOS] PV history ${entityId}: ${arr.length} raw entries -> ${times.length} samples ` +
-                `over ${((fetchEnd.getTime() - start.getTime()) / 3_600_000).toFixed(1)} h`
-            );
+            //Snapshot the fetch outcome so `window.heliosStats()` can
+            //surface it without us logging on every fetch.
+            this._pvHistoryDiagnostics =
+            {
+                rawEntries: arr.length,
+                samples:    times.length,
+                windowH:    Number(((fetchEnd.getTime() - start.getTime()) / 3_600_000).toFixed(1))
+            };
             //Refresh the calibration buffer with the new history slice.
             //Safe to call when _homeHourlyData isn't ready yet, the
             //helper bails out and tries again next time.

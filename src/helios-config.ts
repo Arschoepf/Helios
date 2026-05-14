@@ -636,9 +636,8 @@ export class HeliosCardEditor extends LitElement
                 </div>
                 <div class="hint">${t.editor.performanceModeHint}</div>
 
-                <div class="section-title">${t.editor.buildingsSection}</div>
                 <label class="field">
-                    <span class="label">${t.editor.buildingRadius}</span>
+                    <span class="label">${t.editor.displayRadius}</span>
                     <div class="slider-row">
                         <input
                             type="range" min="20" max="1000" step="10"
@@ -648,6 +647,9 @@ export class HeliosCardEditor extends LitElement
                         <span class="slider-value">${this._fmtNum(Number(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
                     </div>
                 </label>
+                <div class="hint">${t.editor.displayRadiusHint}</div>
+
+                <div class="section-title">${t.editor.buildingsSection}</div>
                 <label class="field">
                     <span class="label">${t.editor.buildingClusterRadius}</span>
                     <div class="slider-row">

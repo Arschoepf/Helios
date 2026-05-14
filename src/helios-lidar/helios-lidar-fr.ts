@@ -26,7 +26,8 @@
 
 import type {
     LidarSource,
-    LidarShadowFetchOptions
+    LidarShadowFetchOptions,
+    LidarShadowResult
 } from '../helios-lidar';
 import { convexHull } from '../helios-shadows';
 
@@ -81,9 +82,18 @@ export const franceLidarHd: LidarSource =
             && lon >= FR_BBOX.minLon && lon <= FR_BBOX.maxLon;
     },
 
-    async fetchShadowRegions(opts: LidarShadowFetchOptions): Promise<GeoJSON.FeatureCollection>
+    async fetchShadowRegions(opts: LidarShadowFetchOptions): Promise<LidarShadowResult>
     {
-        const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+        const emptyFeatures: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+        const emptyResult: LidarShadowResult = {
+            features:    emptyFeatures,
+            diagnostics:
+            {
+                cellsKept:        0,
+                cellsPerClumpCap: 0,
+                heightRangeM:     null
+            }
+        };
 
         const rasterSize = Math.min(2048, Math.max(64, Math.round(opts.rasterSize)));
 
@@ -101,7 +111,7 @@ export const franceLidarHd: LidarSource =
         if (maxLat < FR_BBOX.minLat || minLat > FR_BBOX.maxLat
          || maxLon < FR_BBOX.minLon || minLon > FR_BBOX.maxLon)
         {
-            return empty;
+            return emptyResult;
         }
 
         //WMS 1.3.0 with EPSG:4326 wants axis order (lat, lon); 1.1.1
@@ -127,19 +137,19 @@ export const franceLidarHd: LidarSource =
         }
         catch (_)
         {
-            return empty;
+            return emptyResult;
         }
-        if (!resp.ok) return empty;
+        if (!resp.ok) return emptyResult;
 
         let buf: ArrayBuffer;
         try { buf = await resp.arrayBuffer(); }
-        catch (_) { return empty; }
+        catch (_) { return emptyResult; }
 
         //A short response means the server returned a ServiceException
         //XML rather than the binary raster (typical when the layer name
         //drifts); bail rather than read garbage as floats.
         const expectedBytes = rasterSize * rasterSize * 4;
-        if (buf.byteLength < expectedBytes) return empty;
+        if (buf.byteLength < expectedBytes) return emptyResult;
 
         const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
 
@@ -284,20 +294,24 @@ export const franceLidarHd: LidarSource =
             });
         }
 
-        if (keptCells > 0)
-        {
-            console.info(
-                `[HELIOS] LiDAR shadows: ${keptCells} cells -> ${out.length} clumps ` +
-                `(cap ${maxCellsPerComponent} cells, ~${Math.sqrt(TARGET_COMPONENT_AREA_M2).toFixed(0)} m), ` +
-                `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
-            );
-        }
-        else
-        {
-            console.info('[HELIOS] LiDAR cells: no cells passed the threshold');
-        }
-
-        return { type: 'FeatureCollection', features: out };
+        return {
+            features:
+            {
+                type:     'FeatureCollection',
+                features: out
+            },
+            diagnostics:
+            {
+                cellsKept:        keptCells,
+                cellsPerClumpCap: maxCellsPerComponent,
+                heightRangeM:     keptCells > 0
+                    ? [
+                        Number(hMin.toFixed(1)),
+                        Number(hMax.toFixed(1))
+                      ]
+                    : null
+            }
+        };
     }
 };
 

@@ -30,10 +30,30 @@ export interface LidarSource
     covers(lat: number, lon: number): boolean;
 
     //Fetch shadow regions around the home as a FeatureCollection of
-    //bin polygons with render_height set per bin. Returns an empty
-    //collection on network failure, out-of-coverage bbox or empty
-    //raster, so the caller can always use the result unconditionally.
-    fetchShadowRegions(opts: LidarShadowFetchOptions): Promise<GeoJSON.FeatureCollection>;
+    //bin polygons with render_height set per bin, together with a
+    //small diagnostics bag the engine surfaces through
+    //`window.heliosStats()`. Returns an empty collection on network
+    //failure, out-of-coverage bbox or empty raster, so the caller
+    //can always use the result unconditionally.
+    fetchShadowRegions(opts: LidarShadowFetchOptions): Promise<LidarShadowResult>;
+}
+
+export interface LidarShadowResult
+{
+    features:    GeoJSON.FeatureCollection;
+    diagnostics:
+    {
+        //Number of LiDAR cells that passed the height threshold and
+        //the circular crop. 0 when the home is outside coverage or
+        //the WMS round-trip failed.
+        cellsKept:   number;
+        //Cells-per-clump cap actually used (derived from the chosen
+        //precision). Surfaced so the user can confirm the size cap
+        //matches expectations.
+        cellsPerClumpCap: number;
+        //Min / max kept height in metres. null when no cell passed.
+        heightRangeM: [number, number] | null;
+    };
 }
 
 export interface LidarShadowFetchOptions

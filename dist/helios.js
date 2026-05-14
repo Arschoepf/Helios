@@ -26304,7 +26304,15 @@ const franceLidarHd = {
     return lat >= FR_BBOX.minLat && lat <= FR_BBOX.maxLat && lon >= FR_BBOX.minLon && lon <= FR_BBOX.maxLon;
   },
   async fetchShadowRegions(opts) {
-    const empty = { type: "FeatureCollection", features: [] };
+    const emptyFeatures = { type: "FeatureCollection", features: [] };
+    const emptyResult = {
+      features: emptyFeatures,
+      diagnostics: {
+        cellsKept: 0,
+        cellsPerClumpCap: 0,
+        heightRangeM: null
+      }
+    };
     const rasterSize = Math.min(2048, Math.max(64, Math.round(opts.rasterSize)));
     const r2 = Math.max(1, opts.radiusMeters);
     const dLat = r2 * BBOX_PAD_FACTOR / M_PER_DEG_LAT;
@@ -26314,7 +26322,7 @@ const franceLidarHd = {
     const minLon = opts.homeLon - dLon;
     const maxLon = opts.homeLon + dLon;
     if (maxLat < FR_BBOX.minLat || minLat > FR_BBOX.maxLat || maxLon < FR_BBOX.minLon || minLon > FR_BBOX.maxLon) {
-      return empty;
+      return emptyResult;
     }
     const params = new URLSearchParams({
       SERVICE: "WMS",
@@ -26332,17 +26340,17 @@ const franceLidarHd = {
     try {
       resp = await fetch(`${WMS_URL}?${params.toString()}`, { signal: opts.signal });
     } catch (_2) {
-      return empty;
+      return emptyResult;
     }
-    if (!resp.ok) return empty;
+    if (!resp.ok) return emptyResult;
     let buf;
     try {
       buf = await resp.arrayBuffer();
     } catch (_2) {
-      return empty;
+      return emptyResult;
     }
     const expectedBytes = rasterSize * rasterSize * 4;
-    if (buf.byteLength < expectedBytes) return empty;
+    if (buf.byteLength < expectedBytes) return emptyResult;
     const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
     const pxLon = (maxLon - minLon) / rasterSize;
     const pxLat = (maxLat - minLat) / rasterSize;
@@ -26438,14 +26446,20 @@ const franceLidarHd = {
         }
       });
     }
-    if (keptCells > 0) {
-      console.info(
-        `[HELIOS] LiDAR shadows: ${keptCells} cells -> ${out.length} clumps (cap ${maxCellsPerComponent} cells, ~${Math.sqrt(TARGET_COMPONENT_AREA_M2).toFixed(0)} m), height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
-      );
-    } else {
-      console.info("[HELIOS] LiDAR cells: no cells passed the threshold");
-    }
-    return { type: "FeatureCollection", features: out };
+    return {
+      features: {
+        type: "FeatureCollection",
+        features: out
+      },
+      diagnostics: {
+        cellsKept: keptCells,
+        cellsPerClumpCap: maxCellsPerComponent,
+        heightRangeM: keptCells > 0 ? [
+          Number(hMin.toFixed(1)),
+          Number(hMax.toFixed(1))
+        ] : null
+      }
+    };
   }
 };
 const EARTH_RADIUS_M = 63710088e-1;
@@ -26621,6 +26635,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._buildingsFetchKey = "";
     this._currentCloudPct = 0;
     this._lidarShadowFeatures = null;
+    this._lidarShadowDiagnostics = null;
     this._lidarShadowKey = "";
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
@@ -27082,6 +27097,7 @@ const _HeliosEngine = class _HeliosEngine {
     });
     this._initHillshade();
     this._initNightShade();
+    this._initCropMask();
     this._initCloudCoverDisc();
     this._addBuildings();
     this._applyLabelVisibility();
@@ -27181,6 +27197,102 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     );
+  }
+  //Display-radius crop mask.
+  //
+  //A single fill layer that paints everything outside the configured
+  //display radius (formerly the "building visibility radius") in the
+  //card's theme background colour. Drawn ABOVE the basemap + the
+  //hillshade + the night-shade, BELOW our helios-buildings + shadow
+  //layers, so the user only ever sees the disc's content; anything
+  //the basemap renders outside that disc is hidden under the mask.
+  //
+  //The mask geometry is a polygon with TWO rings: an outer ~5 km
+  //square around the home (large enough to cover any screen at the
+  //locked z=18 view, even at pitch 55 deg) and an inner 64-segment
+  //disc at the radius. GeoJSON polygons with a second ring treat
+  //it as a hole, so the rendered fill is exactly the donut between
+  //the two.
+  //
+  //Beyond the visual crop, the opaque mask lets the GPU early-out
+  //fragments under it. The basemap tiles still load and rasterise
+  //inside MapLibre, but the alpha blending of every layer beneath
+  //the mask is skipped, which on dense urban basemaps and on small
+  //devices saves a measurable fraction of the per-frame cost.
+  _initCropMask() {
+    if (!this.map) return;
+    if (this.map.getLayer("helios-crop-mask")) {
+      this.map.removeLayer("helios-crop-mask");
+    }
+    if (this.map.getSource("helios-crop-mask-src")) {
+      this.map.removeSource("helios-crop-mask-src");
+    }
+    const data = this._buildCropMaskFeature();
+    this.map.addSource(
+      "helios-crop-mask-src",
+      {
+        type: "geojson",
+        data
+      }
+    );
+    const isDark = this._isMinimalStyle() ? false : String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
+    this.map.addLayer(
+      {
+        id: "helios-crop-mask",
+        type: "fill",
+        source: "helios-crop-mask-src",
+        paint: {
+          "fill-color": isDark ? "#191a1b" : "#ffffff",
+          "fill-opacity": 1,
+          "fill-antialias": true
+        }
+      }
+    );
+  }
+  //Refresh the crop-mask geometry. Cheap (~64 cos/sin) so we can
+  //call it on every home / building-radius change without thought.
+  _updateCropMask() {
+    if (!this.map) return;
+    const src = this.map.getSource("helios-crop-mask-src");
+    if (!src) return;
+    src.setData(this._buildCropMaskFeature());
+  }
+  //Build the donut GeoJSON Feature consumed by the crop-mask source.
+  //Outer ring = 5 km bbox around home; inner ring = 64-segment disc
+  //at the display radius. The inner ring is generated CW so GeoJSON
+  //treats it as a hole regardless of the outer ring's orientation.
+  _buildCropMaskFeature() {
+    const cosLat = Math.cos(this.homeLat * Math.PI / 180);
+    const OUTER_M = 5e3;
+    const dLatOut = OUTER_M / 111320;
+    const dLonOut = OUTER_M / (111320 * cosLat);
+    const radius = this._buildingRadiusMeters();
+    const dLatIn = radius / 111320;
+    const dLonIn = radius / (111320 * cosLat);
+    const outer = [
+      [this.homeLon - dLonOut, this.homeLat - dLatOut],
+      [this.homeLon + dLonOut, this.homeLat - dLatOut],
+      [this.homeLon + dLonOut, this.homeLat + dLatOut],
+      [this.homeLon - dLonOut, this.homeLat + dLatOut],
+      [this.homeLon - dLonOut, this.homeLat - dLatOut]
+    ];
+    const segs = 64;
+    const inner = [];
+    for (let i2 = segs; i2 >= 0; i2--) {
+      const a2 = i2 / segs * 2 * Math.PI;
+      inner.push([
+        this.homeLon + Math.cos(a2) * dLonIn,
+        this.homeLat + Math.sin(a2) * dLatIn
+      ]);
+    }
+    return {
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [outer, inner]
+      },
+      properties: {}
+    };
   }
   //Cloud-cover disc setup.
   //
@@ -27589,6 +27701,7 @@ const _HeliosEngine = class _HeliosEngine {
     const provider = findLidarSource(this.homeLat, this.homeLon);
     if (!provider || !this._shadowsEnabled()) {
       this._lidarShadowFeatures = null;
+      this._lidarShadowDiagnostics = null;
       this._lidarShadowKey = "";
       this._lidarShadowAbort?.abort();
       this._lidarShadowAbort = void 0;
@@ -27614,15 +27727,17 @@ const _HeliosEngine = class _HeliosEngine {
       rasterSize,
       cropRadiusMeters: radius,
       signal: ac.signal
-    }).then((fc) => {
+    }).then((res) => {
       if (ac.signal.aborted || !this.map) return;
-      this._lidarShadowFeatures = fc;
+      this._lidarShadowFeatures = res.features;
+      this._lidarShadowDiagnostics = res.diagnostics;
       this._lastAtmosphereAlt = -999;
       this._refreshShadowsAndAtmosphere();
     }).catch((err) => {
       if (err?.name === "AbortError") return;
       console.warn("[HELIOS] LiDAR shadow fetch failed:", err);
       this._lidarShadowFeatures = null;
+      this._lidarShadowDiagnostics = null;
       this._lidarShadowKey = "";
     }).finally(() => {
       if (ac.signal.aborted) return;
@@ -28289,8 +28404,10 @@ const _HeliosEngine = class _HeliosEngine {
   //`getStatsSnapshot()` and surfaced through `window.heliosStats()`
   //for in-browser debugging. The shape is intentionally JSON-safe
   //so the user can `JSON.stringify(window.heliosStats())` and paste
-  //the result when filing an issue. No secrets are returned here
-  //(the API key lives on the card config, not on the engine).
+  //the result publicly when filing an issue. No PII is returned
+  //here: the home lat/lon and elevation are stripped (only the
+  //hemisphere is kept, the sun-arc orientation depends on it), and
+  //the API key never leaves the card-level snapshot anyway.
   getStatsSnapshot() {
     const provider = findLidarSource(this.homeLat, this.homeLon);
     const shadowsOn = this._shadowsEnabled();
@@ -28307,8 +28424,11 @@ const _HeliosEngine = class _HeliosEngine {
     else shadowSource = "pending";
     return {
       mapReady: this._mapReady,
-      home: { lat: this.homeLat, lon: this.homeLon },
-      homeElevation: this.homeElevation ?? null,
+      //Home position deliberately omitted. `lidarProvider` and
+      //`hemisphere` cover every debug case we care about
+      //(coverage check + sun-arc orientation) without leaking
+      //the user's address.
+      hemisphere: this.homeLat >= 0 ? "N" : "S",
       lidarProvider: provider ? provider.id : null,
       shadows: {
         enabled: shadowsOn,
@@ -28317,7 +28437,8 @@ const _HeliosEngine = class _HeliosEngine {
         lidarClumps: lidarFeatures?.features.length ?? 0,
         lidarPrecision: this._lidarPrecisionLevel(),
         clipRadiusM: this._buildingRadiusMeters(),
-        lastSigCached: this._lastShadowSig !== void 0
+        lastSigCached: this._lastShadowSig !== void 0,
+        lidarDiagnostics: this._lidarShadowDiagnostics
       },
       buildings: {
         radiusM: this._buildingRadiusMeters(),
@@ -28331,11 +28452,15 @@ const _HeliosEngine = class _HeliosEngine {
         rateLimitStreak: this._rateLimitStreak
       },
       timeline: {
-        range: this._getTimeRange(),
-        selectedTime: this._selectedTime
+        //Range + selectedTime kept as ISO strings rather than
+        //Date instances so the snapshot round-trips through
+        //JSON.stringify cleanly.
+        rangeStart: this._getTimeRange()?.start?.toISOString() ?? null,
+        rangeEnd: this._getTimeRange()?.end?.toISOString() ?? null,
+        selectedTime: this._selectedTime?.toISOString() ?? null
       },
       caches: {
-        arcCacheDay: this._arcInputsCache ? new Date(this._arcInputsCache.dayStartMs).toISOString() : null,
+        arcCacheDay: this._arcInputsCache ? new Date(this._arcInputsCache.dayStartMs).toISOString().slice(0, 10) : null,
         arcCacheCloudPct: this._arcInputsCache?.cloudPctInt ?? null
       }
     };
@@ -28406,6 +28531,7 @@ const _HeliosEngine = class _HeliosEngine {
       this._buildingsData = null;
       this._buildingsFetchKey = "";
       this._addBuildings();
+      this._updateCropMask();
     } else {
       if (nextOpacity !== prevOpacity && this.map.getLayer("helios-buildings-surroundings")) {
         this.map.setPaintProperty(
@@ -28426,6 +28552,7 @@ const _HeliosEngine = class _HeliosEngine {
     if (nextPrecision !== prevPrecision) {
       this._lidarShadowKey = "";
       this._lidarShadowFeatures = null;
+      this._lidarShadowDiagnostics = null;
       this._ensureLidarFetched();
     }
     const nextShadowOpa = this._shadowOpacity();
@@ -28445,6 +28572,7 @@ const _HeliosEngine = class _HeliosEngine {
         this._ensureLidarFetched();
       } else {
         this._lidarShadowFeatures = null;
+        this._lidarShadowDiagnostics = null;
         this._lidarShadowKey = "";
         this._lidarShadowAbort?.abort();
         this._lidarShadowAbort = void 0;
@@ -28490,6 +28618,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarShadowAbort?.abort();
     this._lidarShadowAbort = void 0;
     this._lidarShadowFeatures = null;
+    this._lidarShadowDiagnostics = null;
     this._lidarShadowKey = "";
     this._shadowCanvas = void 0;
     this._arcInputsCache = void 0;
@@ -28541,6 +28670,7 @@ const _HeliosEngine = class _HeliosEngine {
       for (const lid of [
         "helios-hillshade",
         "helios-night-shade",
+        "helios-crop-mask",
         "helios-cloud-disc",
         "helios-cloud-disc-ring",
         "helios-cloud-ring",
@@ -28562,6 +28692,7 @@ const _HeliosEngine = class _HeliosEngine {
       for (const sid of [
         "helios-terrain",
         "helios-night-shade",
+        "helios-crop-mask-src",
         "helios-cloud-rings",
         "helios-buildings-surroundings-src",
         "helios-buildings-home-src",
@@ -28695,7 +28826,8 @@ const en = {
     batteryColor: "Battery color *",
     buildingsSection: "Surrounding buildings",
     buildingsHint: 'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
-    buildingRadius: "Visibility radius *",
+    displayRadius: "Display radius *",
+    displayRadiusHint: "Defines the visible area around the home. Anything past this radius is hidden: basemap, relief, neighbouring buildings, shadows. Also drives the LiDAR fetch extent and the projected-shadow clip.",
     buildingClusterRadius: "Home cluster radius *",
     buildingOpacity: "Surrounding opacity *",
     buildingColor: "Building color *",
@@ -28786,7 +28918,8 @@ const fr = {
     batteryColor: "Couleur batterie *",
     buildingsSection: "Bâtiments alentour",
     buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
-    buildingRadius: "Rayon de visibilité *",
+    displayRadius: "Rayon d'affichage *",
+    displayRadiusHint: "Définit la zone visible autour de la maison. Tout ce qui se trouve au-delà de ce rayon est masqué : fond de carte, relief, bâtiments voisins, ombres. Pilote également l'étendue du fetch LiDAR et le clip des ombres projetées.",
     buildingClusterRadius: "Rayon de regroupement maison *",
     buildingOpacity: "Opacité des bâtiments voisins *",
     buildingColor: "Couleur des bâtiments *",
@@ -28877,7 +29010,8 @@ const de = {
     batteryColor: "Batteriefarbe *",
     buildingsSection: "Umliegende Gebäude",
     buildingsHint: 'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
-    buildingRadius: "Sichtradius *",
+    displayRadius: "Anzeigeradius *",
+    displayRadiusHint: "Bestimmt den um das Zuhause sichtbaren Bereich. Alles jenseits dieses Radius bleibt verborgen: Grundkarte, Relief, Nachbargebäude, Schatten. Steuert zugleich den LiDAR-Fetch-Bereich und das Clipping der projizierten Schatten.",
     buildingClusterRadius: "Cluster-Radius Zuhause *",
     buildingOpacity: "Deckkraft Nachbargebäude *",
     buildingColor: "Gebäudefarbe *",
@@ -28968,7 +29102,8 @@ const es = {
     batteryColor: "Color batería *",
     buildingsSection: "Edificios circundantes",
     buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».",
-    buildingRadius: "Radio de visibilidad *",
+    displayRadius: "Radio de visualización *",
+    displayRadiusHint: "Define el área visible alrededor de la casa. Todo lo que esté más allá de este radio queda oculto: mapa base, relieve, edificios vecinos, sombras. También determina el ámbito del fetch LiDAR y el recorte de las sombras proyectadas.",
     buildingClusterRadius: "Radio del grupo de la casa *",
     buildingOpacity: "Opacidad de los vecinos *",
     buildingColor: "Color de los edificios *",
@@ -29059,7 +29194,8 @@ const it = {
     batteryColor: "Colore batteria *",
     buildingsSection: "Edifici circostanti",
     buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».",
-    buildingRadius: "Raggio di visibilità *",
+    displayRadius: "Raggio di visualizzazione *",
+    displayRadiusHint: "Definisce l'area visibile attorno alla casa. Tutto ciò che è oltre questo raggio viene nascosto: mappa di base, rilievo, edifici vicini, ombre. Determina anche l'estensione del fetch LiDAR e il taglio delle ombre proiettate.",
     buildingClusterRadius: "Raggio del gruppo casa *",
     buildingOpacity: "Opacità degli edifici vicini *",
     buildingColor: "Colore degli edifici *",
@@ -29150,7 +29286,8 @@ const nl = {
     batteryColor: "Batterijkleur *",
     buildingsSection: "Omliggende gebouwen",
     buildingsHint: 'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
-    buildingRadius: "Zichtstraal *",
+    displayRadius: "Weergavestraal *",
+    displayRadiusHint: "Bepaalt het zichtbare gebied rond het huis. Alles buiten deze straal wordt verborgen: basiskaart, reliëf, naburige gebouwen, schaduwen. Stuurt ook de omvang van de LiDAR-fetch en de clip van de geprojecteerde schaduwen aan.",
     buildingClusterRadius: "Cluster-straal huis *",
     buildingOpacity: "Dekking omliggende gebouwen *",
     buildingColor: "Gebouwkleur *",
@@ -29241,7 +29378,8 @@ const pt = {
     batteryColor: "Cor da bateria *",
     buildingsSection: "Edifícios circundantes",
     buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».",
-    buildingRadius: "Raio de visibilidade *",
+    displayRadius: "Raio de visualização *",
+    displayRadiusHint: "Define a área visível em torno da casa. Tudo o que estiver para além deste raio fica oculto: mapa base, relevo, edifícios vizinhos, sombras. Também controla o âmbito do fetch LiDAR e o corte das sombras projetadas.",
     buildingClusterRadius: "Raio do grupo da casa *",
     buildingOpacity: "Opacidade dos vizinhos *",
     buildingColor: "Cor dos edifícios *",
@@ -30975,9 +31113,8 @@ let HeliosCardEditor = class extends i {
                 </div>
                 <div class="hint">${t2.editor.performanceModeHint}</div>
 
-                <div class="section-title">${t2.editor.buildingsSection}</div>
                 <label class="field">
-                    <span class="label">${t2.editor.buildingRadius}</span>
+                    <span class="label">${t2.editor.displayRadius}</span>
                     <div class="slider-row">
                         <input
                             type="range" min="20" max="1000" step="10"
@@ -30987,6 +31124,9 @@ let HeliosCardEditor = class extends i {
                         <span class="slider-value">${this._fmtNum(Number(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
                     </div>
                 </label>
+                <div class="hint">${t2.editor.displayRadiusHint}</div>
+
+                <div class="section-title">${t2.editor.buildingsSection}</div>
                 <label class="field">
                     <span class="label">${t2.editor.buildingClusterRadius}</span>
                     <div class="slider-row">
@@ -31418,7 +31558,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.33"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.34"}`,
       labelStyle,
       versionStyle
     );
@@ -31439,7 +31579,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.4.0-beta.33",
+        version: "1.4.0-beta.34",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -31447,7 +31587,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.4.0-beta.33"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.4.0-beta.34"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -31457,6 +31597,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         console.groupCollapsed(`%cCard #${i2 + 1}`, heading);
         console.log("config:", snap.config);
         console.log("engine:", snap.engine);
+        console.log("pv:", snap.pv);
         console.groupEnd();
       });
       console.groupEnd();
@@ -31482,6 +31623,7 @@ let HeliosCard = class extends i {
     this._pvHistory = null;
     this._pvFetchKey = "";
     this._pvFetching = false;
+    this._pvHistoryDiagnostics = null;
     this._pvSampleBuffer = [];
     this._batterySoc = null;
     this._batteryPower = null;
@@ -31534,8 +31676,10 @@ let HeliosCard = class extends i {
   }
   //Diagnostic snapshot returned to `window.heliosStats()`. Includes
   //the live config (with the MapTiler API key redacted so the user
-  //can paste the output publicly) and, when the engine is up, the
-  //engine's own state snapshot. JSON-safe, no DOM references.
+  //can paste the output publicly), the engine state snapshot when
+  //the engine is up, and a small PV block summarising the most
+  //recent history fetch outcome. JSON-safe, no DOM references, no
+  //PII (engine snapshot already strips the home lat/lon).
   getStatsSnapshot() {
     const cfg = {};
     if (this.config) {
@@ -31545,7 +31689,13 @@ let HeliosCard = class extends i {
     }
     return {
       config: cfg,
-      engine: this._engine ? this._engine.getStatsSnapshot() : null
+      engine: this._engine ? this._engine.getStatsSnapshot() : null,
+      pv: {
+        entityConfigured: typeof this.config?.["pv-power-entity"] === "string" && this.config["pv-power-entity"].length > 0,
+        unit: this._pvUnit || null,
+        lastHistory: this._pvHistoryDiagnostics,
+        calibrationK: this._pvCalibK
+      }
     };
   }
   //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
@@ -31999,9 +32149,11 @@ let HeliosCard = class extends i {
         values.push(v2);
       }
       this._pvHistory = { times, values };
-      console.info(
-        `[HELIOS] PV history ${entityId}: ${arr.length} raw entries -> ${times.length} samples over ${((fetchEnd.getTime() - start.getTime()) / 36e5).toFixed(1)} h`
-      );
+      this._pvHistoryDiagnostics = {
+        rawEntries: arr.length,
+        samples: times.length,
+        windowH: Number(((fetchEnd.getTime() - start.getTime()) / 36e5).toFixed(1))
+      };
       this._updatePvCalibration();
     } catch (e2) {
       console.warn("[HELIOS] PV history fetch failed:", e2);

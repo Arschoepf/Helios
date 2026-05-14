@@ -87,14 +87,20 @@ export interface Translations
         batteryPowerEntity:       string;
         batteryPowerEntityHelp:   string;
         batteryColor:             string;
-        //Radius (m) around the home within which surrounding buildings
-        //are rendered, the cluster radius that grows the home group to
-        //include attached outbuildings, the opacity of the surroundings,
-        //and the building base colour reused everywhere a building is
-        //extruded.
+        //Display radius (m) around the home: everything outside this
+        //disc is hidden by an opaque crop mask, regardless of what
+        //the basemap would otherwise show. Originally a buildings-
+        //only setting, hence the legacy `building-radius` config
+        //key; now also drives the LiDAR fetch bbox, the shadow clip,
+        //and the cropped viewport.
+        displayRadius:            string;
+        displayRadiusHint:        string;
+        //Surrounding buildings options. Cluster radius grows the home
+        //group to include attached outbuildings, opacity controls the
+        //transparency of the neighbours and the colour is the base
+        //tint reused for every rendered building.
         buildingsSection:         string;
         buildingsHint:            string;
-        buildingRadius:           string;
         buildingClusterRadius:    string;
         buildingOpacity:          string;
         buildingColor:            string;
