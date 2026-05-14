@@ -62,11 +62,14 @@ the sun arc) so every vertex shares the home's terrain elevation
 reference. The hover breakdown tooltip is wired directly on the
 SVG polygon.
 
-**Cast shadow gradient.** `projectExtrusionShadows` emits three
-nested polygons per casting region (decreasing length), rendered
-by three filtered fill layers at `fill-opacity = total / 3` each.
-Alpha compositing gives a linear fade from opaque at the footprint
-to one-third opaque at the shadow tip.
+**Single flat-opacity shadow.** `projectExtrusionShadows` emits one
+convex-hull polygon per casting region (original vertices + opposite-
+of-sun projections), rendered by one fill layer at the user-
+configured `shadow-opacity`. Previously the projector emitted three
+nested polygons for a fade gradient, but on dense LiDAR scenes the
+3x polygon count tanked performance and the alpha compositing of
+many overlapping clumps saturated the shadow to almost black. A
+single flat layer is cheaper and reads more naturally.
 
 **Editor reshuffle.** A new "Shading" section regroups every
 shadow-related option: the master toggle, the LiDAR precision
@@ -387,7 +390,7 @@ Helios/
 │   ├── helios-config.ts            Visual editor + color picker + config helpers
 │   ├── helios-engine.ts            Map orchestration + projection + layers
 │   ├── helios-buildings.ts         Self-sourced building tile fetch + radius/cluster filter
-│   ├── helios-shadows.ts           Ground-projected shadow polygons (fade-step gradient)
+│   ├── helios-shadows.ts           Ground-projected shadow polygons (single flat-opacity layer)
 │   ├── helios-lidar.ts             LidarSource interface + provider registry
 │   ├── helios-lidar/               Country-specific LiDAR providers
 │   │   └── helios-lidar-fr.ts      IGN HD (metropolitan France + Corsica) WMS pipeline
@@ -429,12 +432,11 @@ Each `src/helios-*.ts` file has a clearly bounded responsibility:
   two GeoJSON `FeatureCollection`s consumed by the engine.
 * **helios-shadows.ts**, `projectExtrusionShadows` takes a building
   / region FeatureCollection plus the current sun position and
-  returns a FeatureCollection of fade-step ground shadow polygons.
-  Each input region emits N nested polygons (`shadow_step`
-  property 0..N-1) the engine paints with stacked filtered layers
-  for an alpha-composited gradient. Output polygons are clipped
-  Sutherland-Hodgman against the building visibility disc so cast
-  shadows never extend past the rendered surroundings.
+  returns a FeatureCollection of single flat-opacity ground shadow
+  polygons (one convex hull per input region, no fade-step
+  stacking). Output polygons are clipped Sutherland-Hodgman against
+  the building visibility disc so cast shadows never extend past
+  the rendered surroundings.
 * **helios-lidar.ts**, `LidarSource` interface + `LIDAR_SOURCES`
   provider registry + `findLidarSource(lat, lon)` resolver. Adding
   a country means dropping a new file under `./helios-lidar/`.

@@ -3,7 +3,7 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './helios-sun';
 import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './helios-weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildings';
-import { projectExtrusionShadows, SHADOW_FADE_STEPS } from './helios-shadows';
+import { projectExtrusionShadows } from './helios-shadows';
 import { findLidarSource } from './helios-lidar';
 
 //Public types
@@ -155,15 +155,14 @@ export const LIDAR_PRECISION_RASTER: Record<LidarPrecisionLevel, number> = {
 export const DEFAULT_SHADOW_OPACITY = 0.32;
 
 
-//Layer ids for the N nested shadow steps emitted by helios-shadows.ts.
-//Hard-coded for SHADOW_FADE_STEPS = 3; if the constant grows the
-//build will fail loudly because TS will complain about an
-//out-of-bounds index. Filter-on-`shadow_step` per layer means a
-//single shared source feeds all three.
+//Single ground-shadow layer. We used to emit three nested fade-step
+//polygons per casting region for a gradient falloff, but the 3x
+//polygon count tanked perf on dense LiDAR scenes and the alpha
+//compositing over multiple overlapping clumps saturated the shadow
+//to almost black. One flat-opacity layer is cheaper and reads more
+//naturally.
 export const SHADOW_LAYER_IDS: readonly string[] = [
-    'helios-building-shadows',
-    'helios-building-shadows-mid',
-    'helios-building-shadows-far'
+    'helios-building-shadows'
 ];
 
 
@@ -1759,18 +1758,10 @@ export class HeliosEngine
                 .setData(homeData);
         }
 
-        //Ground-projected shadows. One geojson source feeding N
-        //filtered fill layers, where N = SHADOW_FADE_STEPS. Each
-        //casting region emits N nested polygons (decreasing length)
-        //with a `shadow_step` property; one layer per step renders
-        //the matching features at fill-opacity = total / N. Alpha
-        //compositing across the layers gives a linear fade from
-        //opaque at the footprint to 1/N of opaque at the shadow tip,
-        //which reads as a realistic gradient instead of a flat slab.
-        //
-        //All shadow layers are drawn BEFORE the building extrusions
+        //Ground-projected shadows. Single source feeding a single
+        //flat-opacity fill layer drawn BEFORE the building extrusions
         //so buildings hide the under-building part of their own
-        //shadow, the visible shadow is the spillover on the ground.
+        //shadow; the visible shadow is the spillover on the ground.
         if (!this.map.getSource('helios-building-shadows-src'))
         {
             this.map.addSource('helios-building-shadows-src',
@@ -1780,21 +1771,18 @@ export class HeliosEngine
             });
         }
         const shadowOpa = this._shadowOpacity();
-        for (let step = 0; step < SHADOW_FADE_STEPS; step++)
+        if (!this.map.getLayer('helios-building-shadows'))
         {
-            const lid = SHADOW_LAYER_IDS[step];
-            if (this.map.getLayer(lid)) continue;
             this.map.addLayer(
             {
-                id:     lid,
+                id:     'helios-building-shadows',
                 source: 'helios-building-shadows-src',
                 type:   'fill',
-                filter: ['==', ['get', 'shadow_step'], step],
                 paint:
                 {
                     'fill-color':     '#000000',
-                    'fill-opacity':   shadowOpa / SHADOW_FADE_STEPS,
-                    'fill-antialias': step === 0  // only the root layer pays for anti-aliasing
+                    'fill-opacity':   shadowOpa,
+                    'fill-antialias': true
                 }
             });
         }
@@ -3104,18 +3092,16 @@ export class HeliosEngine
             this._ensureLidarFetched();
         }
 
-        //Shadow opacity is a paint-level update spread over the N
-        //fade-step layers: each carries opacity = total / N so the
-        //alpha compositing gives the desired root opacity.
+        //Shadow opacity is a paint-level update on the single ground
+        //shadow layer.
         const nextShadowOpa = this._shadowOpacity();
         if (nextShadowOpa !== prevShadowOpa)
         {
-            const per = nextShadowOpa / SHADOW_FADE_STEPS;
             for (const lid of SHADOW_LAYER_IDS)
             {
                 if (this.map.getLayer(lid))
                 {
-                    try { this.map.setPaintProperty(lid, 'fill-opacity', per); }
+                    try { this.map.setPaintProperty(lid, 'fill-opacity', nextShadowOpa); }
                     catch (_) {}
                 }
             }
@@ -3322,9 +3308,7 @@ export class HeliosEngine
                 'helios-buildings-home',
                 'helios-buildings-surroundings-outline',
                 'helios-buildings-home-outline',
-                'helios-building-shadows',
-                'helios-building-shadows-mid',
-                'helios-building-shadows-far'
+                'helios-building-shadows'
             ])
             {
                 try { if (this.map.getLayer(lid)) this.map.removeLayer(lid); }

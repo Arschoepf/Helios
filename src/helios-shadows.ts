@@ -115,65 +115,45 @@ export function projectExtrusionShadows(
             const outer = poly[0] as number[][];
             if (outer.length < 3) continue;
 
-            //Three nested shadow polygons per region, each extending
-            //to a different fraction of the full length. Stacked on
-            //three filtered map layers, each at fill-opacity = α/3,
-            //the alpha-composited result fades smoothly from full α
-            //near the footprint (where all 3 overlap) to α/3 at the
-            //tip (where only the longest polygon reaches). The
-            //gradient reads as a soft falloff instead of a flat slab.
-            for (let step = 0; step < SHADOW_FADE_STEPS; step++)
+            //One flat-opacity shadow polygon per casting region: the
+            //convex hull of (original vertices + opposite-of-sun
+            //projections). The 3D extrusion of the original feature
+            //covers the under-feature part at render time, leaving
+            //only the ground spillover visible.
+            const cloud: Array<[number, number]> = [];
+            for (const p of outer)
             {
-                const frac    = (SHADOW_FADE_STEPS - step) / SHADOW_FADE_STEPS;
-                const dLonStep = dLonDeg * frac;
-                const dLatStep = dLatDeg * frac;
-
-                const cloud: Array<[number, number]> = [];
-                for (const p of outer)
-                {
-                    const lon = p[0], lat = p[1];
-                    cloud.push([lon,            lat]);
-                    cloud.push([lon + dLonStep, lat + dLatStep]);
-                }
-                const hull = convexHull(cloud);
-                if (hull.length < 3) continue;
-
-                //Optional clip-to-disc. The shadow trail can extend
-                //well past the building visibility radius for a tall
-                //region near the edge; clipping here keeps the visible
-                //shadows confined to the same disc as the rendered
-                //buildings.
-                let ring: Array<[number, number]> = hull;
-                if (clipRing)
-                {
-                    const clipped = clipConvexPolygon(hull, clipRing);
-                    if (clipped.length < 3) continue;
-                    ring = clipped;
-                }
-                ring = ring.slice();
-                ring.push([ring[0][0], ring[0][1]]);
-
-                out.push({
-                    type:       'Feature',
-                    geometry:   { type: 'Polygon', coordinates: [ring] },
-                    //`shadow_step` identifies which of the N nested
-                    //polygons this is: the engine sets up one filtered
-                    //fill layer per step that keys on this value.
-                    properties: { render_height: h, shadow_step: step }
-                });
+                const lon = p[0], lat = p[1];
+                cloud.push([lon,            lat]);
+                cloud.push([lon + dLonDeg,  lat + dLatDeg]);
             }
+            const hull = convexHull(cloud);
+            if (hull.length < 3) continue;
+
+            //Optional clip-to-disc. The shadow trail can extend well
+            //past the building visibility radius for a tall region
+            //near the edge; clipping here keeps the visible shadows
+            //confined to the same disc as the rendered buildings.
+            let ring: Array<[number, number]> = hull;
+            if (clipRing)
+            {
+                const clipped = clipConvexPolygon(hull, clipRing);
+                if (clipped.length < 3) continue;
+                ring = clipped;
+            }
+            ring = ring.slice();
+            ring.push([ring[0][0], ring[0][1]]);
+
+            out.push({
+                type:       'Feature',
+                geometry:   { type: 'Polygon', coordinates: [ring] },
+                properties: { render_height: h }
+            });
         }
     }
 
     return { type: 'FeatureCollection', features: out };
 }
-
-//Number of nested shadow polygons emitted per casting region. Each
-//step extends to (N - step) / N of the full length; the engine sets
-//up one filtered fill layer per step at fill-opacity = base / N, so
-//alpha compositing across the layers gives a linear fade from
-//opaque at the root to one Nth of opaque at the tip.
-export const SHADOW_FADE_STEPS = 3;
 
 //Sutherland-Hodgman polygon clip. Both `subject` and `clip` are
 //non-closed rings in CCW order. Returns the intersection ring (also

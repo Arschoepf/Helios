@@ -26172,40 +26172,31 @@ function projectExtrusionShadows(extrusions, opts) {
       if (!poly.length) continue;
       const outer = poly[0];
       if (outer.length < 3) continue;
-      for (let step = 0; step < SHADOW_FADE_STEPS; step++) {
-        const frac = (SHADOW_FADE_STEPS - step) / SHADOW_FADE_STEPS;
-        const dLonStep = dLonDeg * frac;
-        const dLatStep = dLatDeg * frac;
-        const cloud = [];
-        for (const p2 of outer) {
-          const lon = p2[0], lat = p2[1];
-          cloud.push([lon, lat]);
-          cloud.push([lon + dLonStep, lat + dLatStep]);
-        }
-        const hull = convexHull(cloud);
-        if (hull.length < 3) continue;
-        let ring = hull;
-        if (clipRing) {
-          const clipped = clipConvexPolygon(hull, clipRing);
-          if (clipped.length < 3) continue;
-          ring = clipped;
-        }
-        ring = ring.slice();
-        ring.push([ring[0][0], ring[0][1]]);
-        out.push({
-          type: "Feature",
-          geometry: { type: "Polygon", coordinates: [ring] },
-          //`shadow_step` identifies which of the N nested
-          //polygons this is: the engine sets up one filtered
-          //fill layer per step that keys on this value.
-          properties: { render_height: h2, shadow_step: step }
-        });
+      const cloud = [];
+      for (const p2 of outer) {
+        const lon = p2[0], lat = p2[1];
+        cloud.push([lon, lat]);
+        cloud.push([lon + dLonDeg, lat + dLatDeg]);
       }
+      const hull = convexHull(cloud);
+      if (hull.length < 3) continue;
+      let ring = hull;
+      if (clipRing) {
+        const clipped = clipConvexPolygon(hull, clipRing);
+        if (clipped.length < 3) continue;
+        ring = clipped;
+      }
+      ring = ring.slice();
+      ring.push([ring[0][0], ring[0][1]]);
+      out.push({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [ring] },
+        properties: { render_height: h2 }
+      });
     }
   }
   return { type: "FeatureCollection", features: out };
 }
-const SHADOW_FADE_STEPS = 3;
 function clipConvexPolygon(subject, clip) {
   if (subject.length < 3 || clip.length < 3) return [];
   let output = subject.slice();
@@ -26454,9 +26445,7 @@ const LIDAR_PRECISION_RASTER = {
 };
 const DEFAULT_SHADOW_OPACITY = 0.32;
 const SHADOW_LAYER_IDS = [
-  "helios-building-shadows",
-  "helios-building-shadows-mid",
-  "helios-building-shadows-far"
+  "helios-building-shadows"
 ];
 function bumpStat(key) {
   if (typeof window === "undefined") return;
@@ -27356,20 +27345,16 @@ const _HeliosEngine = class _HeliosEngine {
       );
     }
     const shadowOpa = this._shadowOpacity();
-    for (let step = 0; step < SHADOW_FADE_STEPS; step++) {
-      const lid = SHADOW_LAYER_IDS[step];
-      if (this.map.getLayer(lid)) continue;
+    if (!this.map.getLayer("helios-building-shadows")) {
       this.map.addLayer(
         {
-          id: lid,
+          id: "helios-building-shadows",
           source: "helios-building-shadows-src",
           type: "fill",
-          filter: ["==", ["get", "shadow_step"], step],
           paint: {
             "fill-color": "#000000",
-            "fill-opacity": shadowOpa / SHADOW_FADE_STEPS,
-            "fill-antialias": step === 0
-            // only the root layer pays for anti-aliasing
+            "fill-opacity": shadowOpa,
+            "fill-antialias": true
           }
         }
       );
@@ -28235,11 +28220,10 @@ const _HeliosEngine = class _HeliosEngine {
     }
     const nextShadowOpa = this._shadowOpacity();
     if (nextShadowOpa !== prevShadowOpa) {
-      const per = nextShadowOpa / SHADOW_FADE_STEPS;
       for (const lid of SHADOW_LAYER_IDS) {
         if (this.map.getLayer(lid)) {
           try {
-            this.map.setPaintProperty(lid, "fill-opacity", per);
+            this.map.setPaintProperty(lid, "fill-opacity", nextShadowOpa);
           } catch (_2) {
           }
         }
@@ -28351,9 +28335,7 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-buildings-home",
         "helios-buildings-surroundings-outline",
         "helios-buildings-home-outline",
-        "helios-building-shadows",
-        "helios-building-shadows-mid",
-        "helios-building-shadows-far"
+        "helios-building-shadows"
       ]) {
         try {
           if (this.map.getLayer(lid)) this.map.removeLayer(lid);
@@ -31164,7 +31146,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.27"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.28"}`,
       labelStyle,
       versionStyle
     );
