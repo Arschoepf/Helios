@@ -26516,19 +26516,11 @@ class ScannerMeshLayer {
     if (!this._visible) return;
     if (!this._program) return;
     if (this._subMeshes.size === 0) return;
-    const mvpFloat32 = args.modelViewProjectionMatrix;
-    const mvpF64 = new Float64Array(mvpFloat32);
-    if (!this._didLogFirstRender) {
-      this._didLogFirstRender = true;
-      const first = this._subMeshes.values().next().value;
-      if (first) {
-        const combo = mat4MultiplyF64(mvpF64, first.modelMatrix);
-        const corner = projectF64(combo, 0, 0, 0, 1);
-        console.info(
-          `[HELIOS-SCAN] first render: ${this._subMeshes.size} submeshes, tile-NW corner clip=(${(corner[0] / corner[3]).toFixed(3)}, ${(corner[1] / corner[3]).toFixed(3)}, ${(corner[2] / corner[3]).toFixed(3)}), w=${corner[3].toExponential(2)}`
-        );
-      }
-    }
+    const transform = this._map?.transform;
+    if (!transform || typeof transform.getMatrixForModel !== "function") return;
+    const mainMatrix = args.defaultProjectionData?.mainMatrix;
+    if (!mainMatrix) return;
+    const mainF64 = new Float64Array(mainMatrix);
     gl.useProgram(this._program);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -26537,8 +26529,21 @@ class ScannerMeshLayer {
     gl.uniform1f(this._uOpacity, this._opts.opacity);
     gl.uniform1i(this._uTexture, 0);
     const finalF32 = new Float32Array(16);
+    let loggedThisFrame = false;
     this._subMeshes.forEach((mesh) => {
-      const combo = mat4MultiplyF64(mvpF64, mesh.modelMatrix);
+      const modelMatrix = transform.getMatrixForModel(
+        [mesh.anchorLon, mesh.anchorLat],
+        0
+      );
+      const combo = mat4MultiplyF64(mainF64, modelMatrix);
+      if (!this._didLogFirstRender && !loggedThisFrame) {
+        loggedThisFrame = true;
+        this._didLogFirstRender = true;
+        const corner = projectF64(combo, 0, 0, 0, 1);
+        console.info(
+          `[HELIOS-SCAN] first render: ${this._subMeshes.size} submeshes, tile-NW corner clip=(${(corner[0] / corner[3]).toFixed(3)}, ${(corner[1] / corner[3]).toFixed(3)}, ${(corner[2] / corner[3]).toFixed(3)}), w=${corner[3].toExponential(2)}`
+        );
+      }
       for (let i2 = 0; i2 < 16; i2++) finalF32[i2] = combo[i2];
       gl.uniformMatrix4fv(this._uMatrix, false, finalF32);
       gl.activeTexture(gl.TEXTURE0);
@@ -26645,9 +26650,11 @@ class ScannerMeshLayer {
     const nTris = nQuads * 2;
     const nIdx = nTris * 3;
     const buf = new Float32Array(nVerts * 5);
-    const originMC = maplibregl.MercatorCoordinate.fromLngLat([data.bounds.minLon, data.bounds.maxLat], 0);
-    const originX = originMC.x;
-    const originY = originMC.y;
+    const anchorLon = data.bounds.minLon;
+    const anchorLat = data.bounds.maxLat;
+    const cosLat = Math.cos((data.bounds.minLat + data.bounds.maxLat) * 0.5 * Math.PI / 180);
+    const mPerLonDeg = 111320 * cosLat;
+    const mPerLatDeg = 111320;
     for (let j = 0; j < H2; j++) {
       const v2 = (j + 0.5) / H2;
       const lat = data.bounds.maxLat - (j + 0.5) * (data.bounds.maxLat - data.bounds.minLat) / H2;
@@ -26657,33 +26664,17 @@ class ScannerMeshLayer {
         const idx = j * W + i2;
         const h2 = data.mns[idx];
         const elev = (isFinite(h2) ? h2 : data.mnt[idx]) + SCANNER_LIFT_M;
-        const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], elev);
+        const eastM = (lon - anchorLon) * mPerLonDeg;
+        const northM = (lat - anchorLat) * mPerLatDeg;
+        const upM = elev;
         const off = idx * 5;
-        buf[off] = mc.x - originX;
-        buf[off + 1] = mc.y - originY;
-        buf[off + 2] = mc.z;
+        buf[off] = eastM;
+        buf[off + 1] = northM;
+        buf[off + 2] = upM;
         buf[off + 3] = u2;
         buf[off + 4] = v2;
       }
     }
-    const modelMatrix = new Float64Array([
-      1,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-      originX,
-      originY,
-      0,
-      1
-    ]);
     const vbo = gl.createBuffer();
     if (!vbo) return null;
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
@@ -26740,7 +26731,8 @@ class ScannerMeshLayer {
       texture,
       width: W,
       height: H2,
-      modelMatrix
+      anchorLon,
+      anchorLat
     };
   }
   _paintTexture(key, data) {
@@ -27974,50 +27966,55 @@ const _HeliosEngine = class _HeliosEngine {
       }
     }
   }
-  //Idempotent terrain source swap. When LiDAR is active AND the
-  //engine isn't in performance mode, we add a `helios-lidar-terrain`
-  //raster-dem source pointing at the custom protocol and call
-  //setTerrain() with it. When LiDAR goes off, we revert to the
-  //global MapTiler DEM.
+  //Terrain stays on MapTiler's global DEM; LiDAR data only drives
+  //the irradiance scanner now (cleaner terrain mesh, no
+  //per-tile WMS load weighing on the camera response).
+  //
+  //We still want IGN tiles fetched whenever the scanner is on, so
+  //the custom protocol is wired as a regular `raster` source +
+  //layer with raster-opacity = 0. MapLibre asks for tiles to render
+  //the (invisible) layer; the protocol piggy-backs on those
+  //requests to load MNT + MNS for the scanner mesh.
   _applyLidarTerrain() {
     if (!this.map) return;
-    if (this._performanceMode()) {
-      return;
-    }
-    const haveLidarDem = this._lidarActive();
-    const haveSource = !!this.map.getSource("helios-lidar-terrain");
-    if (haveLidarDem && !haveSource) {
+    const haveLidar = this._lidarActive();
+    const haveSrc = !!this.map.getSource("helios-lidar-prefetch-src");
+    if (haveLidar && !haveSrc) {
       try {
         this.map.addSource(
-          "helios-lidar-terrain",
+          "helios-lidar-prefetch-src",
           {
-            type: "raster-dem",
+            type: "raster",
             tiles: [`${LIDAR_TERRAIN_PROTOCOL}://${this._engineId}/{z}/{x}/{y}`],
             tileSize: 512,
             minzoom: LIDAR_TERRAIN_MIN_ZOOM,
-            maxzoom: LIDAR_TERRAIN_MAX_ZOOM,
-            encoding: "mapbox"
+            maxzoom: LIDAR_TERRAIN_MAX_ZOOM
           }
         );
+        this.map.addLayer({
+          id: "helios-lidar-prefetch",
+          type: "raster",
+          source: "helios-lidar-prefetch-src",
+          paint: {
+            //Invisible to the user: this layer exists only
+            //so MapLibre keeps requesting tiles via the
+            //custom protocol, which is how we trigger the
+            //LiDAR fetches that feed the scanner mesh.
+            "raster-opacity": 0,
+            "raster-fade-duration": 0
+          }
+        }, "helios-lidar-scanner");
       } catch (e2) {
-        console.warn("[HELIOS] LiDAR terrain addSource failed:", e2);
+        console.warn("[HELIOS] LiDAR prefetch addSource failed:", e2);
       }
-    } else if (!haveLidarDem && haveSource) {
+    } else if (!haveLidar && haveSrc) {
       try {
-        this.map.setTerrain({ source: "helios-terrain", exaggeration: 1.2 });
+        if (this.map.getLayer("helios-lidar-prefetch")) this.map.removeLayer("helios-lidar-prefetch");
       } catch (_2) {
       }
       try {
-        this.map.removeSource("helios-lidar-terrain");
+        this.map.removeSource("helios-lidar-prefetch-src");
       } catch (_2) {
-      }
-      return;
-    }
-    if (haveLidarDem) {
-      try {
-        this.map.setTerrain({ source: "helios-lidar-terrain", exaggeration: 1.4 });
-      } catch (e2) {
-        console.warn("[HELIOS] setTerrain (lidar) failed:", e2);
       }
     }
   }
@@ -28898,6 +28895,7 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-building-shadows",
         "helios-building-shadows-mid",
         "helios-building-shadows-far",
+        "helios-lidar-prefetch",
         "helios-lidar-scanner"
       ]) {
         try {
@@ -28911,7 +28909,7 @@ const _HeliosEngine = class _HeliosEngine {
       }
       for (const sid of [
         "helios-terrain",
-        "helios-lidar-terrain",
+        "helios-lidar-prefetch-src",
         "helios-night-shade",
         "helios-cloud-rings",
         "helios-buildings-surroundings-src",
@@ -31881,7 +31879,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.22"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.23"}`,
       labelStyle,
       versionStyle
     );

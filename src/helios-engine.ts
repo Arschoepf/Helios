@@ -2109,66 +2109,57 @@ export class HeliosEngine
         }
     }
 
-    //Idempotent terrain source swap. When LiDAR is active AND the
-    //engine isn't in performance mode, we add a `helios-lidar-terrain`
-    //raster-dem source pointing at the custom protocol and call
-    //setTerrain() with it. When LiDAR goes off, we revert to the
-    //global MapTiler DEM.
+    //Terrain stays on MapTiler's global DEM; LiDAR data only drives
+    //the irradiance scanner now (cleaner terrain mesh, no
+    //per-tile WMS load weighing on the camera response).
+    //
+    //We still want IGN tiles fetched whenever the scanner is on, so
+    //the custom protocol is wired as a regular `raster` source +
+    //layer with raster-opacity = 0. MapLibre asks for tiles to render
+    //the (invisible) layer; the protocol piggy-backs on those
+    //requests to load MNT + MNS for the scanner mesh.
     private _applyLidarTerrain(): void
     {
         if (!this.map) return;
-        if (this._performanceMode())
-        {
-            //Performance mode disables terrain entirely; nothing to do.
-            return;
-        }
 
-        const haveLidarDem = this._lidarActive();
-        const haveSource   = !!this.map.getSource('helios-lidar-terrain');
+        const haveLidar = this._lidarActive();
+        const haveSrc   = !!this.map.getSource('helios-lidar-prefetch-src');
 
-        if (haveLidarDem && !haveSource)
+        if (haveLidar && !haveSrc)
         {
             try
             {
-                //Pure LiDAR pipeline: every tile MapLibre asks for
-                //goes through the custom protocol, which fetches IGN
-                //per tile. No MapTiler composite, so the terrain mesh
-                //is uniformly LiDAR-derived. Tiles outside the
-                //provider's coverage come back as flat sea-level
-                //placeholders (camera's far view is the only place
-                //that ever sees that).
-                this.map.addSource('helios-lidar-terrain',
+                this.map.addSource('helios-lidar-prefetch-src',
                 {
-                    type:     'raster-dem',
+                    type:     'raster',
                     tiles:    [`${LIDAR_TERRAIN_PROTOCOL}://${this._engineId}/{z}/{x}/{y}`],
                     tileSize: 512,
                     minzoom:  LIDAR_TERRAIN_MIN_ZOOM,
-                    maxzoom:  LIDAR_TERRAIN_MAX_ZOOM,
-                    encoding: 'mapbox'
+                    maxzoom:  LIDAR_TERRAIN_MAX_ZOOM
                 });
+                this.map.addLayer({
+                    id:     'helios-lidar-prefetch',
+                    type:   'raster',
+                    source: 'helios-lidar-prefetch-src',
+                    paint:
+                    {
+                        //Invisible to the user: this layer exists only
+                        //so MapLibre keeps requesting tiles via the
+                        //custom protocol, which is how we trigger the
+                        //LiDAR fetches that feed the scanner mesh.
+                        'raster-opacity':       0,
+                        'raster-fade-duration': 0
+                    }
+                }, 'helios-lidar-scanner');
             }
-            catch (e) { console.warn('[HELIOS] LiDAR terrain addSource failed:', e); }
+            catch (e) { console.warn('[HELIOS] LiDAR prefetch addSource failed:', e); }
         }
-        else if (!haveLidarDem && haveSource)
+        else if (!haveLidar && haveSrc)
         {
-            try { this.map.setTerrain({ source: 'helios-terrain', exaggeration: 1.2 }); }
+            try { if (this.map.getLayer('helios-lidar-prefetch')) this.map.removeLayer('helios-lidar-prefetch'); }
             catch (_) {}
-            try { this.map.removeSource('helios-lidar-terrain'); }
+            try { this.map.removeSource('helios-lidar-prefetch-src'); }
             catch (_) {}
-            return;
-        }
-
-        if (haveLidarDem)
-        {
-            try
-            {
-                //Slight extra exaggeration on the LiDAR DEM: the
-                //higher native resolution means subtle relief reads
-                //less than on the smoothed MapTiler DEM, so we lift
-                //the vertical scale a touch to compensate.
-                this.map.setTerrain({ source: 'helios-lidar-terrain', exaggeration: 1.4 });
-            }
-            catch (e) { console.warn('[HELIOS] setTerrain (lidar) failed:', e); }
         }
     }
 
@@ -3580,6 +3571,7 @@ export class HeliosEngine
                 'helios-building-shadows',
                 'helios-building-shadows-mid',
                 'helios-building-shadows-far',
+                'helios-lidar-prefetch',
                 'helios-lidar-scanner'
             ])
             {
@@ -3593,7 +3585,7 @@ export class HeliosEngine
             catch (_) {}
             for (const sid of [
                 'helios-terrain',
-                'helios-lidar-terrain',
+                'helios-lidar-prefetch-src',
                 'helios-night-shade',
                 'helios-cloud-rings',
                 'helios-buildings-surroundings-src',

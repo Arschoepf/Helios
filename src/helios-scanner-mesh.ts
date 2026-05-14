@@ -97,12 +97,14 @@ interface SubMesh
     texture:    WebGLTexture;
     width:      number;
     height:     number;
-    //4x4 model matrix (Float64): translates Mercator-delta vertex
-    //coords back to global Mercator world coords. We pre-multiply it
-    //with MapLibre's MVP per frame (in Float64) so the final Float32
-    //matrix uploaded to the shader still preserves sub-metre vertex
-    //differences, which a naive Float32-only path collapses at z=18.
-    modelMatrix: Float64Array;
+    //Tile NW-corner lnglat. Passed to map.transform.getMatrixForModel
+    //every frame so the model-placement matrix follows the camera; we
+    //combine it with defaultProjectionData.mainMatrix in Float64,
+    //then downcast to Float32 for the shader, which keeps sub-metre
+    //per-vertex precision at zoom 18 (the path the older Float32-only
+    //version collapsed under).
+    anchorLon:  number;
+    anchorLat:  number;
 }
 
 //----------------------------------------------------------------- options
@@ -209,33 +211,19 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
         if (!this._visible) return;
         if (!this._program) return;
         if (this._subMeshes.size === 0) return;
-        const mvpFloat32 = args.modelViewProjectionMatrix as unknown as Float32Array;
 
-        //Promote MapLibre's MVP into Float64 once per frame so the
-        //per-submesh translation multiply preserves the per-vertex
-        //precision the Float32 path collapses at zoom 18.
-        const mvpF64 = new Float64Array(mvpFloat32);
-
-        if (!this._didLogFirstRender)
-        {
-            this._didLogFirstRender = true;
-            //Sample the first vertex of the first submesh through the
-            //full transform and log the resulting clip-space position
-            //so a "scanner invisible" report shows whether the mesh
-            //ends up inside [-1, 1] or off-screen.
-            const first = this._subMeshes.values().next().value as SubMesh | undefined;
-            if (first)
-            {
-                const combo = mat4MultiplyF64(mvpF64, first.modelMatrix);
-                const corner = projectF64(combo, 0, 0, 0, 1);
-                console.info(
-                    `[HELIOS-SCAN] first render: ${this._subMeshes.size} submeshes, ` +
-                    `tile-NW corner clip=(${(corner[0] / corner[3]).toFixed(3)}, ` +
-                    `${(corner[1] / corner[3]).toFixed(3)}, ` +
-                    `${(corner[2] / corner[3]).toFixed(3)}), w=${corner[3].toExponential(2)}`
-                );
-            }
-        }
+        //Use MapLibre's own model-placement path: getMatrixForModel
+        //returns a matrix that translates + scales metre-space coords
+        //to MapLibre's internal world space, and defaultProjectionData
+        //.mainMatrix projects world to clip. This is the documented
+        //custom-layer pattern (see the official "add a 3D model"
+        //example) and survives the precision wall the global
+        //modelViewProjectionMatrix hits at zoom 18.
+        const transform = (this._map as any)?.transform;
+        if (!transform || typeof transform.getMatrixForModel !== 'function') return;
+        const mainMatrix = args.defaultProjectionData?.mainMatrix as ArrayLike<number> | undefined;
+        if (!mainMatrix) return;
+        const mainF64 = new Float64Array(mainMatrix as ArrayLike<number>);
 
         gl.useProgram(this._program);
         gl.enable(gl.BLEND);
@@ -252,10 +240,29 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
         gl.uniform1i(this._uTexture, 0);
 
         const finalF32 = new Float32Array(16);
+        let loggedThisFrame = false;
         this._subMeshes.forEach(mesh =>
         {
-            //Combine MVP × modelMatrix in Float64, downcast last.
-            const combo = mat4MultiplyF64(mvpF64, mesh.modelMatrix);
+            //Per-tile model matrix from MapLibre. Combined in Float64
+            //so the upload to the shader keeps useful precision.
+            const modelMatrix = transform.getMatrixForModel(
+                [mesh.anchorLon, mesh.anchorLat], 0
+            ) as ArrayLike<number>;
+            const combo = mat4MultiplyF64(mainF64, modelMatrix);
+
+            if (!this._didLogFirstRender && !loggedThisFrame)
+            {
+                loggedThisFrame = true;
+                this._didLogFirstRender = true;
+                const corner = projectF64(combo, 0, 0, 0, 1);
+                console.info(
+                    `[HELIOS-SCAN] first render: ${this._subMeshes.size} submeshes, ` +
+                    `tile-NW corner clip=(${(corner[0] / corner[3]).toFixed(3)}, ` +
+                    `${(corner[1] / corner[3]).toFixed(3)}, ` +
+                    `${(corner[2] / corner[3]).toFixed(3)}), w=${corner[3].toExponential(2)}`
+                );
+            }
+
             for (let i = 0; i < 16; i++) finalF32[i] = combo[i];
             gl.uniformMatrix4fv(this._uMatrix, false, finalF32);
 
@@ -403,14 +410,17 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
         const nIdx   = nTris * 3;
 
         const buf = new Float32Array(nVerts * 5);
-        //Tile origin in Mercator (NW corner at altitude 0). The
-        //combined matrix multiplication is computed CPU-side in
-        //Float64 below; vertex positions are stored as deltas from
-        //this origin so the magnitude stays small (~1e-5 at z=14)
-        //and Float32 keeps full precision over the tile extent.
-        const originMC = maplibregl.MercatorCoordinate.fromLngLat([data.bounds.minLon, data.bounds.maxLat], 0);
-        const originX  = originMC.x;
-        const originY  = originMC.y;
+        //Anchor = NW corner of the tile. getMatrixForModel(anchor)
+        //returns a matrix that places (rotates, scales, translates)
+        //model-local metre-space vertices at the right spot on the
+        //map. We store vertices as metres east / north / up from
+        //the anchor so the magnitudes stay small (a few hundred at
+        //most) and Float32 keeps full precision through the shader.
+        const anchorLon = data.bounds.minLon;
+        const anchorLat = data.bounds.maxLat;
+        const cosLat    = Math.cos(((data.bounds.minLat + data.bounds.maxLat) * 0.5) * Math.PI / 180);
+        const mPerLonDeg = 111_320 * cosLat;
+        const mPerLatDeg = 111_320;
 
         for (let j = 0; j < H; j++)
         {
@@ -424,32 +434,22 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
                 const h   = data.mns[idx];
                 const elev = (isFinite(h) ? h : data.mnt[idx]) + SCANNER_LIFT_M;
 
-                //MercatorCoordinate.fromLngLat does the Float64 math
-                //internally, then we subtract the origin (still in
-                //Float64) before downcasting to Float32. The 1m-scale
-                //differences between vertices that float32 swallowed
-                //when storing global Mercator coords near 0.5 are
-                //preserved here because the deltas are ~1e-5 max.
-                const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], elev);
+                //Metres east of anchor (positive east), north of
+                //anchor (positive north, so negative for southerly
+                //vertices since anchor is the NW corner), and up
+                //above sea level.
+                const eastM  = (lon - anchorLon) * mPerLonDeg;
+                const northM = (lat - anchorLat) * mPerLatDeg;   // ≤ 0 for the southern half of the tile
+                const upM    = elev;
+
                 const off = idx * 5;
-                buf[off    ] = mc.x - originX;
-                buf[off + 1] = mc.y - originY;
-                buf[off + 2] = mc.z;     // originMC.z = 0, so no subtraction needed
+                buf[off    ] = eastM;
+                buf[off + 1] = northM;
+                buf[off + 2] = upM;
                 buf[off + 3] = u;
                 buf[off + 4] = v;
             }
         }
-
-        //Translation matrix that takes the Mercator-delta vertices
-        //back to global Mercator. Stored as Float64; we'll multiply
-        //it with the MVP every frame in Float64 and only downcast
-        //the result at upload time.
-        const modelMatrix = new Float64Array([
-            1, 0, 0, 0,
-            0, 1, 0, 0,
-            0, 0, 1, 0,
-            originX, originY, 0, 1
-        ]);
 
         const vbo = gl.createBuffer();
         if (!vbo) return null;
@@ -507,7 +507,8 @@ export class ScannerMeshLayer implements maplibregl.CustomLayerInterface
             texture,
             width:      W,
             height:     H,
-            modelMatrix
+            anchorLon,
+            anchorLat
         };
     }
 
