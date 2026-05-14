@@ -7,7 +7,7 @@
 
 **HELIOS** is a custom [Home Assistant](https://www.home-assistant.io/) Lovelace card that visualises solar conditions at your home in real time.
 
-It pulls weather forecasts from **Open-Meteo** (no key needed), reads the optional production sensor of your photovoltaic install from your HA states, and stitches them together onto an interactive 3D map powered by **MapLibre GL** and **MapTiler**. The whole map, sun arc, sun disc, incidence ray, cloud cover, building extrusions, terrain hillshade, irradiance graph, PV graph, reflects the timeline cursor; scrub it 2 days into the past or 2 days into the future and watch every layer follow.
+It pulls weather forecasts from **Open-Meteo** (no key needed), reads the optional production sensor of your photovoltaic install from your HA states, and stitches them together onto an interactive 3D map powered by **MapLibre GL** and **MapTiler**. The whole map, sun arc, sun disc, incidence ray, cloud cover, building extrusions and cast shadows, terrain hillshade, irradiance graph, PV graph, reflects the timeline cursor; scrub it 2 days into the past or 2 days into the future and watch every layer follow.
 
 ---
 
@@ -90,11 +90,9 @@ Every option below is editable visually:
 | `building-cluster-radius` | meters | `0` | Distance around the home within which every building joins the home group at full opacity. Use this to attach verandas, garages and sheds to the main house. Range: 0–100 m. |
 | `building-opacity` | 0–1 | `0.25` | Opacity of the surrounding buildings. The home (and its cluster) always stays at full opacity so it reads as the focal point. |
 | `building-color` | hex | `#d2d2d7` | Base colour for every rendered building, modulated by sun altitude across the day. |
-| `lidar-precision` | `'off' \| 'low' \| 'medium' \| 'high' \| 'ultra'` | `'low'` | LiDAR data resolution. When on (and the home is covered by a supported provider, currently IGN HD over metropolitan France + Corsica), the card fetches MNH (surface height) + MNT (bare-earth) rasters around the home. The MNT replaces the MapTiler DEM inside the bbox (real topography); the MNH drives the irradiance-scanner cell grid and the on-card cast-shadow geometry. Each level maps to a denser sampling grid (`low` ~384², `ultra` 1024²). |
+| `shadows-enabled` | boolean | `true` | Master toggle for cast ground shadows. When `false`, no shadows are projected. When `true`, the source is picked automatically: a LiDAR provider when one covers the home (buildings AND vegetation), MapTiler footprints otherwise (buildings only). All shadows are clipped to the building visibility radius for consistency with the rendered surroundings. |
+| `lidar-precision` | `'low' \| 'medium' \| 'high'` | `'medium'` | LiDAR raster size when a provider covers the home (currently IGN HD over metropolitan France + Corsica). Higher = finer shadow contours but a bigger payload. `low` 256², `medium` 512², `high` 1024² (close to IGN native sampling). No effect out of coverage. |
 | `shadow-opacity` | 0–1 | `0.32` | Opacity of the cast ground shadows. |
-| `building-shadows-enabled` | boolean | `true` | When `false`, suppresses the MapTiler-derived shadow approximation. Useful in flat or dense urban areas where the approximation reads as noise. The irradiance scanner's per-cell shadow ray cast is unaffected. |
-| `scanner-color-low` | hex | `#dc2626` | Irradiance-scanner low stop (zero irradiance / shadow / night). |
-| `scanner-color-high` | hex | `#16a34a` | Irradiance-scanner high stop (full sun at STC, 1 kW/m²). |
 | `sun-color` | hex | `#EF9F27` | Sun disc + arc + timeline irradiance area. |
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
 | `pv-power-entity` | entity_id | - | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |

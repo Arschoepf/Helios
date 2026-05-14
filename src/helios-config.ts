@@ -12,10 +12,7 @@ import
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_BUILDING_COLOR_HEX,
     DEFAULT_LIDAR_PRECISION,
-    DEFAULT_SHADOW_OPACITY,
-    DEFAULT_SCANNER_LOW_HEX,
-    DEFAULT_SCANNER_HIGH_HEX,
-    DEFAULT_SCANNER_OPACITY
+    DEFAULT_SHADOW_OPACITY
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -683,6 +680,24 @@ export class HeliosCardEditor extends LitElement
                 </label>
                 <div class="hint">${t.editor.buildingsHint}</div>
 
+                <div class="section-title">${t.editor.shadowsSection}</div>
+                <div class="field">
+                    <span class="label">${t.editor.shadowsEnabled}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['shadows-enabled'] !== false) ? 'active' : ''}"
+                            @click="${() => this._update('shadows-enabled', true)}"
+                        >${t.editor.shadowsEnabledOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['shadows-enabled'] === false) ? 'active' : ''}"
+                            @click="${() => this._update('shadows-enabled', false)}"
+                        >${t.editor.shadowsEnabledOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${t.editor.shadowsEnabledHint}</div>
+
                 <label class="field">
                     <span class="label">${t.editor.lidarPrecision}</span>
                     <select
@@ -690,11 +705,9 @@ export class HeliosCardEditor extends LitElement
                         .value="${String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)}"
                         @change="${(e: Event) => this._update('lidar-precision', (e.target as HTMLSelectElement).value)}"
                     >
-                        <option value="off"    ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'off'}">${t.editor.lidarPrecisionOff}</option>
                         <option value="low"    ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'low'}">${t.editor.lidarPrecisionLow}</option>
                         <option value="medium" ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'medium'}">${t.editor.lidarPrecisionMedium}</option>
                         <option value="high"   ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'high'}">${t.editor.lidarPrecisionHigh}</option>
-                        <option value="ultra"  ?selected="${(String(c['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION)) === 'ultra'}">${t.editor.lidarPrecisionUltra}</option>
                     </select>
                 </label>
                 <div class="hint">${t.editor.lidarPrecisionHint}</div>
@@ -711,53 +724,6 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </label>
                 <div class="hint">${t.editor.shadowOpacityHint}</div>
-
-                <div class="field">
-                    <span class="label">${t.editor.buildingShadows}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['building-shadows-enabled'] !== false) ? 'active' : ''}"
-                            @click="${() => this._update('building-shadows-enabled', true)}"
-                        >${t.editor.buildingShadowsOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['building-shadows-enabled'] === false) ? 'active' : ''}"
-                            @click="${() => this._update('building-shadows-enabled', false)}"
-                        >${t.editor.buildingShadowsOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.buildingShadowsHint}</div>
-
-                <div class="section-title">${t.editor.scannerSection}</div>
-                <label class="field">
-                    <span class="label">${t.editor.scannerLowColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c['scanner-color-low'], DEFAULT_SCANNER_LOW_HEX)}"
-                        .ariaLabel="${t.editor.scannerLowColor}"
-                        @value-changed="${(e: CustomEvent) => this._color('scanner-color-low', e)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t.editor.scannerHighColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c['scanner-color-high'], DEFAULT_SCANNER_HIGH_HEX)}"
-                        .ariaLabel="${t.editor.scannerHighColor}"
-                        @value-changed="${(e: CustomEvent) => this._color('scanner-color-high', e)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t.editor.scannerOpacity}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="1" step="0.05"
-                            .value="${String(c['scanner-opacity'] ?? DEFAULT_SCANNER_OPACITY)}"
-                            @input="${(e: Event) => this._numSlider('scanner-opacity', e)}"
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['scanner-opacity'] ?? DEFAULT_SCANNER_OPACITY), 0.05)}</span>
-                    </div>
-                </label>
-                <div class="hint">${t.editor.scannerSectionHint}</div>
 
                 <div class="section-title">${t.editor.colors}</div>
                 <label class="field">

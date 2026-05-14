@@ -25958,7 +25958,7 @@ function writeUtf8(buf, str, pos) {
   }
   return pos;
 }
-const EARTH_RADIUS_M = 63710088e-1;
+const EARTH_RADIUS_M$1 = 63710088e-1;
 const HOME_FALLBACK_M = 30;
 function lonLatToTile(lon, lat, z2) {
   const n3 = Math.pow(2, z2);
@@ -25967,12 +25967,12 @@ function lonLatToTile(lon, lat, z2) {
   const y3 = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n3);
   return { x: x2, y: y3 };
 }
-function haversineMeters(lat1, lon1, lat2, lon2) {
+function haversineMeters$1(lat1, lon1, lat2, lon2) {
   const toRad = Math.PI / 180;
   const dLat = (lat2 - lat1) * toRad;
   const dLon = (lon2 - lon1) * toRad;
   const a2 = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a2));
+  return 2 * EARTH_RADIUS_M$1 * Math.asin(Math.sqrt(a2));
 }
 function metersToDegLat(m2) {
   return m2 / 111320;
@@ -26102,7 +26102,7 @@ async function fetchBuildingsAroundHome(opts) {
   for (const f2 of features) {
     const contains = polygonContains(f2.geometry, opts.homeLon, opts.homeLat);
     const rep = representativePoint(f2.geometry);
-    const d2 = rep ? haversineMeters(opts.homeLat, opts.homeLon, rep[1], rep[0]) : Infinity;
+    const d2 = rep ? haversineMeters$1(opts.homeLat, opts.homeLon, rep[1], rep[0]) : Infinity;
     if (contains || cluster > 0 && d2 <= cluster) {
       homeCluster.push(f2);
       continue;
@@ -26137,6 +26137,21 @@ function projectExtrusionShadows(extrusions, opts) {
   const tanAlt = Math.tan(altR);
   const mPerDegLon = M_PER_DEG_LAT$1 * Math.cos(opts.homeLat * D2);
   const minH = opts.minHeightM ?? 2;
+  let clipRing = null;
+  if (typeof opts.clipCenterLat === "number" && typeof opts.clipCenterLon === "number" && typeof opts.clipRadiusMeters === "number" && opts.clipRadiusMeters > 0) {
+    const segs = 64;
+    const dLatDisc = opts.clipRadiusMeters / M_PER_DEG_LAT$1;
+    const dLonDisc = opts.clipRadiusMeters / (M_PER_DEG_LAT$1 * Math.cos(opts.clipCenterLat * D2));
+    const ring = [];
+    for (let i2 = 0; i2 < segs; i2++) {
+      const a2 = i2 / segs * 2 * Math.PI;
+      ring.push([
+        opts.clipCenterLon + Math.cos(a2) * dLonDisc,
+        opts.clipCenterLat + Math.sin(a2) * dLatDisc
+      ]);
+    }
+    clipRing = ring;
+  }
   const out = [];
   for (const feat of extrusions.features) {
     const geom = feat.geometry;
@@ -26169,16 +26184,20 @@ function projectExtrusionShadows(extrusions, opts) {
         }
         const hull = convexHull(cloud);
         if (hull.length < 3) continue;
-        hull.push([hull[0][0], hull[0][1]]);
+        let ring = hull;
+        if (clipRing) {
+          const clipped = clipConvexPolygon(hull, clipRing);
+          if (clipped.length < 3) continue;
+          ring = clipped;
+        }
+        ring = ring.slice();
+        ring.push([ring[0][0], ring[0][1]]);
         out.push({
           type: "Feature",
-          geometry: { type: "Polygon", coordinates: [hull] },
-          //Preserve the casting region's render_height so a
-          //downstream irradiance pass can compare it to a
-          //candidate point's height (a tall point isn't in
-          //the shadow of a short region beneath it).
+          geometry: { type: "Polygon", coordinates: [ring] },
           //`shadow_step` identifies which of the N nested
-          //polygons this is: layer filters key on it.
+          //polygons this is: the engine sets up one filtered
+          //fill layer per step that keys on this value.
           properties: { render_height: h2, shadow_step: step }
         });
       }
@@ -26187,6 +26206,42 @@ function projectExtrusionShadows(extrusions, opts) {
   return { type: "FeatureCollection", features: out };
 }
 const SHADOW_FADE_STEPS = 3;
+function clipConvexPolygon(subject, clip) {
+  if (subject.length < 3 || clip.length < 3) return [];
+  let output = subject.slice();
+  for (let e2 = 0; e2 < clip.length; e2++) {
+    if (output.length === 0) return [];
+    const e1 = clip[e2];
+    const e22 = clip[(e2 + 1) % clip.length];
+    const input = output;
+    output = [];
+    const inside = (p2) => (e22[0] - e1[0]) * (p2[1] - e1[1]) - (e22[1] - e1[1]) * (p2[0] - e1[0]);
+    const intersect = (a2, b2) => {
+      const x1 = e1[0], y1 = e1[1], x2 = e22[0], y22 = e22[1];
+      const x3 = a2[0], y3 = a2[1], x4 = b2[0], y4 = b2[1];
+      const den = (x1 - x2) * (y3 - y4) - (y1 - y22) * (x3 - x4);
+      if (den === 0) return [b2[0], b2[1]];
+      const t2 = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+      return [x1 + t2 * (x2 - x1), y1 + t2 * (y22 - y1)];
+    };
+    for (let i2 = 0; i2 < input.length; i2++) {
+      const curr = input[i2];
+      const next = input[(i2 + 1) % input.length];
+      const cIn = inside(curr) >= 0;
+      const nIn = inside(next) >= 0;
+      if (cIn) {
+        if (nIn) output.push(next);
+        else output.push(intersect(curr, next));
+      } else {
+        if (nIn) {
+          output.push(intersect(curr, next));
+          output.push(next);
+        }
+      }
+    }
+  }
+  return output;
+}
 function convexHull(pts) {
   if (pts.length < 3) return pts.slice();
   const arr = pts.slice().sort((a2, b2) => a2[0] - b2[0] || a2[1] - b2[1]);
@@ -26211,74 +26266,224 @@ function convexHull(pts) {
   return lower.concat(upper);
 }
 const WMS_URL = "https://data.geopf.fr/wms-r";
-const LAYER_MNT = "IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
-const LAYER_MNS = "IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
+const LAYER_MNH = "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
 const FR_BBOX = { minLat: 41, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 const M_PER_DEG_LAT = 111320;
+const HEIGHT_THRESH_M = 5;
+const HEIGHT_MAX_M = 100;
+const BBOX_PAD_FACTOR = 1.15;
+const BUILDING_MASK_PAD_M = 5;
 const franceLidarHd = {
   id: "fr-ign-lidarhd",
   name: "IGN LiDAR HD (France)",
   covers(lat, lon) {
     return lat >= FR_BBOX.minLat && lat <= FR_BBOX.maxLat && lon >= FR_BBOX.minLon && lon <= FR_BBOX.maxLon;
   },
-  async fetchTile(opts) {
+  async fetchShadowRegions(opts) {
+    const empty = { type: "FeatureCollection", features: [] };
     const rasterSize = Math.min(2048, Math.max(64, Math.round(opts.rasterSize)));
-    if (opts.maxLat < FR_BBOX.minLat || opts.minLat > FR_BBOX.maxLat || opts.maxLon < FR_BBOX.minLon || opts.minLon > FR_BBOX.maxLon) {
-      return null;
+    const r2 = Math.max(1, opts.radiusMeters);
+    const dLat = r2 * BBOX_PAD_FACTOR / M_PER_DEG_LAT;
+    const dLon = r2 * BBOX_PAD_FACTOR / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
+    const minLat = opts.homeLat - dLat;
+    const maxLat = opts.homeLat + dLat;
+    const minLon = opts.homeLon - dLon;
+    const maxLon = opts.homeLon + dLon;
+    if (maxLat < FR_BBOX.minLat || minLat > FR_BBOX.maxLat || maxLon < FR_BBOX.minLon || minLon > FR_BBOX.maxLon) {
+      return empty;
     }
-    const [mnt, mns] = await Promise.all([
-      fetchBilLayer(LAYER_MNT, opts.minLat, opts.minLon, opts.maxLat, opts.maxLon, rasterSize, opts.signal),
-      fetchBilLayer(LAYER_MNS, opts.minLat, opts.minLon, opts.maxLat, opts.maxLon, rasterSize, opts.signal)
-    ]);
-    if (!mnt || !mns) return null;
-    const cosLat = Math.cos((opts.minLat + opts.maxLat) * 0.5 * Math.PI / 180);
-    const pxLatM = (opts.maxLat - opts.minLat) / rasterSize * M_PER_DEG_LAT;
-    const pxLonM = (opts.maxLon - opts.minLon) / rasterSize * (M_PER_DEG_LAT * cosLat);
-    const cellPitchM = 0.5 * (pxLatM + pxLonM);
-    return {
-      width: rasterSize,
-      height: rasterSize,
-      bounds: {
-        minLon: opts.minLon,
-        minLat: opts.minLat,
-        maxLon: opts.maxLon,
-        maxLat: opts.maxLat
-      },
-      cellPitchM,
-      mnt,
-      mns
+    const params = new URLSearchParams({
+      SERVICE: "WMS",
+      VERSION: "1.3.0",
+      REQUEST: "GetMap",
+      LAYERS: LAYER_MNH,
+      STYLES: "",
+      CRS: "EPSG:4326",
+      BBOX: `${minLat},${minLon},${maxLat},${maxLon}`,
+      WIDTH: String(rasterSize),
+      HEIGHT: String(rasterSize),
+      FORMAT: "image/x-bil;bits=32"
+    });
+    let resp;
+    try {
+      resp = await fetch(`${WMS_URL}?${params.toString()}`, { signal: opts.signal });
+    } catch (_2) {
+      return empty;
+    }
+    if (!resp.ok) return empty;
+    let buf;
+    try {
+      buf = await resp.arrayBuffer();
+    } catch (_2) {
+      return empty;
+    }
+    const expectedBytes = rasterSize * rasterSize * 4;
+    if (buf.byteLength < expectedBytes) return empty;
+    const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
+    const padDegLat = BUILDING_MASK_PAD_M / M_PER_DEG_LAT;
+    const padDegLon = BUILDING_MASK_PAD_M / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
+    const inflate = (geom) => {
+      const bb = polygonBBox(geom);
+      if (!bb) return null;
+      return {
+        minLon: bb.minLon - padDegLon,
+        minLat: bb.minLat - padDegLat,
+        maxLon: bb.maxLon + padDegLon,
+        maxLat: bb.maxLat + padDegLat
+      };
     };
+    const homeBboxes = [];
+    for (const f2 of opts.homeFootprints?.features ?? []) {
+      if (!f2.geometry) continue;
+      const bb = inflate(f2.geometry);
+      if (bb) homeBboxes.push(bb);
+    }
+    const surrBboxes = [];
+    for (const f2 of opts.surroundingFootprints?.features ?? []) {
+      if (!f2.geometry) continue;
+      const bb = inflate(f2.geometry);
+      if (bb) surrBboxes.push(bb);
+    }
+    const pxLon = (maxLon - minLon) / rasterSize;
+    const pxLat = (maxLat - minLat) / rasterSize;
+    const halfLon = pxLon / 2;
+    const halfLat = pxLat / 2;
+    const cropM = opts.cropRadiusMeters && opts.cropRadiusMeters > 0 ? opts.cropRadiusMeters : null;
+    const N2 = rasterSize * rasterSize;
+    const kindArr = new Uint8Array(N2);
+    const hOk = new Float32Array(N2);
+    let hMin = Infinity, hMax = -Infinity;
+    let keptHome = 0, keptBldg = 0, keptVeg = 0;
+    for (let j = 0; j < rasterSize; j++) {
+      const cLat = maxLat - (j + 0.5) * pxLat;
+      for (let i2 = 0; i2 < rasterSize; i2++) {
+        const idx = j * rasterSize + i2;
+        const h2 = heights[idx];
+        if (!isFinite(h2) || h2 < HEIGHT_THRESH_M || h2 > HEIGHT_MAX_M) continue;
+        const cLon = minLon + (i2 + 0.5) * pxLon;
+        if (cropM !== null && haversineMeters(opts.homeLat, opts.homeLon, cLat, cLon) > cropM) {
+          continue;
+        }
+        let k2 = 3;
+        if (cellInsideAnyBBox(cLon, cLat, homeBboxes)) k2 = 1;
+        else if (cellInsideAnyBBox(cLon, cLat, surrBboxes)) k2 = 2;
+        kindArr[idx] = k2;
+        hOk[idx] = h2;
+        if (k2 === 1) keptHome++;
+        else if (k2 === 2) keptBldg++;
+        else keptVeg++;
+        if (h2 < hMin) hMin = h2;
+        if (h2 > hMax) hMax = h2;
+      }
+    }
+    const labels = new Int32Array(N2);
+    const stack = [];
+    const components = [];
+    let nextLabel = 0;
+    for (let seed = 0; seed < N2; seed++) {
+      const ks = kindArr[seed];
+      if (ks === 0 || labels[seed]) continue;
+      nextLabel++;
+      const cells = [];
+      let heightSum = 0;
+      stack.length = 0;
+      stack.push(seed);
+      while (stack.length) {
+        const idx = stack.pop();
+        if (labels[idx] || kindArr[idx] !== ks) continue;
+        labels[idx] = nextLabel;
+        cells.push(idx);
+        heightSum += hOk[idx];
+        const x2 = idx % rasterSize;
+        const y3 = idx / rasterSize | 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x2 + dx, ny = y3 + dy;
+            if (nx < 0 || nx >= rasterSize || ny < 0 || ny >= rasterSize) continue;
+            const nIdx = ny * rasterSize + nx;
+            if (!labels[nIdx] && kindArr[nIdx] === ks) stack.push(nIdx);
+          }
+        }
+      }
+      components.push({ cells, heightSum });
+    }
+    const out = [];
+    for (const comp of components) {
+      const corners = [];
+      for (const idx of comp.cells) {
+        const x2 = idx % rasterSize;
+        const y3 = idx / rasterSize | 0;
+        const cLon = minLon + (x2 + 0.5) * pxLon;
+        const cLat = maxLat - (y3 + 0.5) * pxLat;
+        corners.push([cLon - halfLon, cLat - halfLat]);
+        corners.push([cLon + halfLon, cLat - halfLat]);
+        corners.push([cLon + halfLon, cLat + halfLat]);
+        corners.push([cLon - halfLon, cLat + halfLat]);
+      }
+      const hull = convexHull(corners);
+      if (hull.length < 3) continue;
+      hull.push([hull[0][0], hull[0][1]]);
+      const avg = comp.heightSum / comp.cells.length;
+      out.push({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [hull] },
+        properties: {
+          render_height: avg,
+          render_min_height: 0
+        }
+      });
+    }
+    const totalKept = keptHome + keptBldg + keptVeg;
+    if (totalKept > 0) {
+      console.info(
+        `[HELIOS] LiDAR shadows: ${keptHome} home + ${keptBldg} building + ${keptVeg} vegetation cells -> ${components.length} regions, height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
+      );
+    } else {
+      console.info("[HELIOS] LiDAR cells: no cells passed the threshold");
+    }
+    return { type: "FeatureCollection", features: out };
   }
 };
-async function fetchBilLayer(layer, minLat, minLon, maxLat, maxLon, rasterSize, signal) {
-  const params = new URLSearchParams({
-    SERVICE: "WMS",
-    VERSION: "1.3.0",
-    REQUEST: "GetMap",
-    LAYERS: layer,
-    STYLES: "",
-    CRS: "EPSG:4326",
-    BBOX: `${minLat},${minLon},${maxLat},${maxLon}`,
-    WIDTH: String(rasterSize),
-    HEIGHT: String(rasterSize),
-    FORMAT: "image/x-bil;bits=32"
-  });
-  let resp;
-  try {
-    resp = await fetch(`${WMS_URL}?${params.toString()}`, { signal });
-  } catch (_2) {
-    return null;
+const EARTH_RADIUS_M = 63710088e-1;
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a2 = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a2));
+}
+function polygonBBox(geom) {
+  let rings = null;
+  if (geom.type === "Polygon") {
+    rings = geom.coordinates;
+  } else if (geom.type === "MultiPolygon") {
+    const all = [];
+    for (const poly of geom.coordinates) {
+      if (poly.length) all.push(poly[0]);
+    }
+    rings = all;
   }
-  if (!resp.ok) return null;
-  let buf;
-  try {
-    buf = await resp.arrayBuffer();
-  } catch (_2) {
-    return null;
+  if (!rings || rings.length === 0) return null;
+  let minLon = Infinity, minLat = Infinity;
+  let maxLon = -Infinity, maxLat = -Infinity;
+  for (const ring of rings) {
+    for (const [lon, lat] of ring) {
+      if (lon < minLon) minLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lon > maxLon) maxLon = lon;
+      if (lat > maxLat) maxLat = lat;
+    }
   }
-  const expectedBytes = rasterSize * rasterSize * 4;
-  if (buf.byteLength < expectedBytes) return null;
-  return new Float32Array(buf, 0, rasterSize * rasterSize);
+  return { minLon, minLat, maxLon, maxLat };
+}
+function cellInsideAnyBBox(lon, lat, bboxes) {
+  for (const b2 of bboxes) {
+    if (lon >= b2.minLon && lon <= b2.maxLon && lat >= b2.minLat && lat <= b2.maxLat) {
+      return true;
+    }
+  }
+  return false;
 }
 const LIDAR_SOURCES = [
   franceLidarHd
@@ -26289,457 +26494,17 @@ function findLidarSource(lat, lon) {
   }
   return null;
 }
-const LIDAR_TERRAIN_MAX_ZOOM = 14;
-const PRECISION_TILE_RASTER = {
-  low: 256,
-  medium: 384,
-  high: 512,
-  ultra: 768
-};
-const SCANNER_LIFT_M = 5;
-const VERT_SRC = `
-attribute vec3 a_pos;
-attribute vec2 a_uv;
-uniform mat4 u_matrix;
-varying vec2 v_uv;
-void main()
-{
-    gl_Position = u_matrix * vec4(a_pos, 1.0);
-    v_uv = a_uv;
-}
-`;
-const FRAG_SRC = `
-precision mediump float;
-varying vec2 v_uv;
-uniform sampler2D u_texture;
-uniform float u_opacity;
-void main()
-{
-    vec4 c = texture2D(u_texture, v_uv);
-    gl_FragColor = vec4(c.rgb, c.a * u_opacity);
-}
-`;
-function compileShader(gl, type, src) {
-  const sh = gl.createShader(type);
-  if (!sh) return null;
-  gl.shaderSource(sh, src);
-  gl.compileShader(sh);
-  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-    console.warn("[HELIOS] scanner shader compile failed:", gl.getShaderInfoLog(sh));
-    gl.deleteShader(sh);
-    return null;
-  }
-  return sh;
-}
-function linkProgram(gl, vs, fs) {
-  const p2 = gl.createProgram();
-  if (!p2) return null;
-  gl.attachShader(p2, vs);
-  gl.attachShader(p2, fs);
-  gl.linkProgram(p2);
-  if (!gl.getProgramParameter(p2, gl.LINK_STATUS)) {
-    console.warn("[HELIOS] scanner program link failed:", gl.getProgramInfoLog(p2));
-    gl.deleteProgram(p2);
-    return null;
-  }
-  return p2;
-}
-class ScannerMeshLayer {
-  constructor(id, opts) {
-    this.type = "custom";
-    this.renderingMode = "3d";
-    this._program = null;
-    this._aPos = 0;
-    this._aUv = 0;
-    this._uMatrix = null;
-    this._uTexture = null;
-    this._uOpacity = null;
-    this._uint32Indices = false;
-    this._subMeshes = /* @__PURE__ */ new Map();
-    this._tiles = /* @__PURE__ */ new Map();
-    this._visible = false;
-    this._didLogFirstRender = false;
-    this.id = id;
-    this._opts = opts;
-  }
-  //CustomLayerInterface ---------------------------------------------
-  onAdd(map, gl) {
-    this._map = map;
-    this._gl = gl;
-    const isGl2 = typeof gl.createVertexArray === "function";
-    this._uint32Indices = isGl2 || !!gl.getExtension("OES_element_index_uint");
-    const vs = compileShader(gl, gl.VERTEX_SHADER, VERT_SRC);
-    const fs = compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
-    if (!vs || !fs) {
-      console.warn("[HELIOS-SCAN] onAdd: shader compile failed");
-      return;
-    }
-    this._program = linkProgram(gl, vs, fs);
-    if (!this._program) {
-      console.warn("[HELIOS-SCAN] onAdd: program link failed");
-      return;
-    }
-    this._aPos = gl.getAttribLocation(this._program, "a_pos");
-    this._aUv = gl.getAttribLocation(this._program, "a_uv");
-    this._uMatrix = gl.getUniformLocation(this._program, "u_matrix");
-    this._uTexture = gl.getUniformLocation(this._program, "u_texture");
-    this._uOpacity = gl.getUniformLocation(this._program, "u_opacity");
-    console.info(
-      `[HELIOS-SCAN] onAdd: ok (gl${isGl2 ? "2" : "1"}, uint32=${this._uint32Indices}, attribs pos=${this._aPos} uv=${this._aUv}, pending tiles=${this._tiles.size})`
-    );
-    const pending = Array.from(this._tiles.entries());
-    this._tiles.clear();
-    for (const [key, data] of pending) this.addTile(key, data);
-  }
-  render(gl, args) {
-    if (!this._visible) return;
-    if (!this._program) return;
-    if (this._subMeshes.size === 0) return;
-    const transform = this._map?.transform;
-    if (!transform || typeof transform.getMatrixForModel !== "function") return;
-    const mainMatrix = args.defaultProjectionData?.mainMatrix;
-    if (!mainMatrix) return;
-    const mainF64 = new Float64Array(mainMatrix);
-    gl.useProgram(this._program);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    gl.depthMask(false);
-    gl.disable(gl.DEPTH_TEST);
-    gl.uniform1f(this._uOpacity, this._opts.opacity);
-    gl.uniform1i(this._uTexture, 0);
-    const finalF32 = new Float32Array(16);
-    let loggedThisFrame = false;
-    this._subMeshes.forEach((mesh) => {
-      const modelMatrix = transform.getMatrixForModel(
-        [mesh.anchorLon, mesh.anchorLat],
-        0
-      );
-      const combo = mat4MultiplyF64(mainF64, modelMatrix);
-      if (!this._didLogFirstRender && !loggedThisFrame) {
-        loggedThisFrame = true;
-        this._didLogFirstRender = true;
-        const corner = projectF64(combo, 0, 0, 0, 1);
-        console.info(
-          `[HELIOS-SCAN] first render: ${this._subMeshes.size} submeshes, tile-NW corner clip=(${(corner[0] / corner[3]).toFixed(3)}, ${(corner[1] / corner[3]).toFixed(3)}, ${(corner[2] / corner[3]).toFixed(3)}), w=${corner[3].toExponential(2)}`
-        );
-      }
-      for (let i2 = 0; i2 < 16; i2++) finalF32[i2] = combo[i2];
-      gl.uniformMatrix4fv(this._uMatrix, false, finalF32);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, mesh.texture);
-      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ibo);
-      gl.vertexAttribPointer(this._aPos, 3, gl.FLOAT, false, 20, 0);
-      gl.vertexAttribPointer(this._aUv, 2, gl.FLOAT, false, 20, 12);
-      gl.enableVertexAttribArray(this._aPos);
-      gl.enableVertexAttribArray(this._aUv);
-      gl.drawElements(gl.TRIANGLES, mesh.indexCount, mesh.indexType, 0);
-    });
-  }
-  onRemove(_map, gl) {
-    this._subMeshes.forEach((mesh) => {
-      gl.deleteBuffer(mesh.vbo);
-      gl.deleteBuffer(mesh.ibo);
-      gl.deleteTexture(mesh.texture);
-    });
-    this._subMeshes.clear();
-    if (this._program) gl.deleteProgram(this._program);
-    this._program = null;
-    this._gl = void 0;
-    this._map = void 0;
-  }
-  //Public API -------------------------------------------------------
-  //Push a tile's data in: build the sub-mesh geometry (once) and
-  //paint its first irradiance texture.
-  addTile(key, data) {
-    this._tiles.set(key, data);
-    const gl = this._gl;
-    if (!gl || !this._program) {
-      console.info(`[HELIOS-SCAN] addTile(${key}): buffered (gl=${!!gl}, program=${!!this._program})`);
-      return;
-    }
-    this._destroySubMesh(key);
-    const sub = this._buildSubMesh(gl, data);
-    if (!sub) {
-      console.warn(`[HELIOS-SCAN] addTile(${key}): buildSubMesh returned null`);
-      return;
-    }
-    this._subMeshes.set(key, sub);
-    this._paintTexture(key, data);
-    console.info(`[HELIOS-SCAN] addTile(${key}): mesh built (${data.width}x${data.height}, ${sub.indexCount} indices)`);
-    this._map?.triggerRepaint();
-  }
-  //Refresh every loaded tile's texture from the current sun
-  //position + the cached colour-ramp config. Cheap enough to run
-  //synchronously on a scrub or a tick (~10-50 ms / tile).
-  refreshTextures(time, cloudCover, lowHex, highHex) {
-    this._opts.time = time;
-    this._opts.cloudCover = cloudCover;
-    this._opts.sunColorLow = lowHex;
-    this._opts.sunColorHigh = highHex;
-    this._tiles.forEach((data, key) => this._paintTexture(key, data));
-    this._map?.triggerRepaint();
-  }
-  updateOpacity(opacity) {
-    this._opts.opacity = Math.max(0, Math.min(1, opacity));
-    this._map?.triggerRepaint();
-  }
-  setVisible(v2) {
-    console.info(`[HELIOS-SCAN] setVisible(${v2}), submeshes=${this._subMeshes.size}, tiles=${this._tiles.size}`);
-    this._visible = v2;
-    this._map?.triggerRepaint();
-  }
-  isVisible() {
-    return this._visible;
-  }
-  clear() {
-    const gl = this._gl;
-    if (gl) {
-      this._subMeshes.forEach((mesh) => {
-        gl.deleteBuffer(mesh.vbo);
-        gl.deleteBuffer(mesh.ibo);
-        gl.deleteTexture(mesh.texture);
-      });
-    }
-    this._subMeshes.clear();
-    this._tiles.clear();
-    this._map?.triggerRepaint();
-  }
-  hasTiles() {
-    return this._tiles.size > 0;
-  }
-  //Internals --------------------------------------------------------
-  _destroySubMesh(key) {
-    const mesh = this._subMeshes.get(key);
-    const gl = this._gl;
-    if (!mesh || !gl) return;
-    gl.deleteBuffer(mesh.vbo);
-    gl.deleteBuffer(mesh.ibo);
-    gl.deleteTexture(mesh.texture);
-    this._subMeshes.delete(key);
-  }
-  //Generate a flat grid of vertices over the tile bbox, with Z =
-  //MNS height (full LiDAR surface) + a 10 cm lift. Two triangles
-  //per quad. UVs map each vertex to its raster cell.
-  _buildSubMesh(gl, data) {
-    const W = data.width;
-    const H2 = data.height;
-    const nVerts = W * H2;
-    const nQuads = (W - 1) * (H2 - 1);
-    const nTris = nQuads * 2;
-    const nIdx = nTris * 3;
-    const buf = new Float32Array(nVerts * 5);
-    const anchorLon = data.bounds.minLon;
-    const anchorLat = data.bounds.maxLat;
-    const cosLat = Math.cos((data.bounds.minLat + data.bounds.maxLat) * 0.5 * Math.PI / 180);
-    const mPerLonDeg = 111320 * cosLat;
-    const mPerLatDeg = 111320;
-    for (let j = 0; j < H2; j++) {
-      const v2 = (j + 0.5) / H2;
-      const lat = data.bounds.maxLat - (j + 0.5) * (data.bounds.maxLat - data.bounds.minLat) / H2;
-      for (let i2 = 0; i2 < W; i2++) {
-        const u2 = (i2 + 0.5) / W;
-        const lon = data.bounds.minLon + (i2 + 0.5) * (data.bounds.maxLon - data.bounds.minLon) / W;
-        const idx = j * W + i2;
-        const h2 = data.mns[idx];
-        const elev = (isFinite(h2) ? h2 : data.mnt[idx]) + SCANNER_LIFT_M;
-        const eastM = (lon - anchorLon) * mPerLonDeg;
-        const southM = (anchorLat - lat) * mPerLatDeg;
-        const upM = elev;
-        const off = idx * 5;
-        buf[off] = eastM;
-        buf[off + 1] = southM;
-        buf[off + 2] = upM;
-        buf[off + 3] = u2;
-        buf[off + 4] = v2;
-      }
-    }
-    const vbo = gl.createBuffer();
-    if (!vbo) return null;
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, buf, gl.STATIC_DRAW);
-    let indexArr;
-    let indexType;
-    if (this._uint32Indices && nVerts > 65535) {
-      indexArr = new Uint32Array(nIdx);
-      indexType = gl.UNSIGNED_INT;
-    } else {
-      indexArr = new Uint16Array(nIdx);
-      indexType = gl.UNSIGNED_SHORT;
-    }
-    let p2 = 0;
-    for (let j = 0; j < H2 - 1; j++) {
-      for (let i2 = 0; i2 < W - 1; i2++) {
-        const a2 = j * W + i2;
-        const b2 = a2 + 1;
-        const c2 = a2 + W;
-        const d2 = c2 + 1;
-        indexArr[p2++] = a2;
-        indexArr[p2++] = b2;
-        indexArr[p2++] = c2;
-        indexArr[p2++] = b2;
-        indexArr[p2++] = d2;
-        indexArr[p2++] = c2;
-      }
-    }
-    const ibo = gl.createBuffer();
-    if (!ibo) {
-      gl.deleteBuffer(vbo);
-      return null;
-    }
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indexArr, gl.STATIC_DRAW);
-    const texture = gl.createTexture();
-    if (!texture) {
-      gl.deleteBuffer(vbo);
-      gl.deleteBuffer(ibo);
-      return null;
-    }
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    const empty = new Uint8Array(W * H2 * 4);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H2, 0, gl.RGBA, gl.UNSIGNED_BYTE, empty);
-    return {
-      vbo,
-      ibo,
-      indexCount: nIdx,
-      indexType,
-      texture,
-      width: W,
-      height: H2,
-      anchorLon,
-      anchorLat
-    };
-  }
-  _paintTexture(key, data) {
-    const gl = this._gl;
-    const mesh = this._subMeshes.get(key);
-    if (!gl || !mesh) return;
-    const buf = this._computeTextureBytes(data);
-    gl.bindTexture(gl.TEXTURE_2D, mesh.texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, data.width, data.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, buf);
-  }
-  //Per-pixel irradiance compute, identical algorithm to the old
-  //raster scanner but scoped to one tile. Cross-tile shadow walks
-  //are intentionally skipped here: a tile's shadow ray cast only
-  //reads cells in its own raster, which means the very edge of a
-  //tile may underestimate shadows for trees that sit in the next
-  //tile over. The visual gap is sub-pixel at the camera's typical
-  //distance; the simplicity wins.
-  _computeTextureBytes(data) {
-    const W = data.width;
-    const H2 = data.height;
-    const mnt = data.mnt;
-    const mns = data.mns;
-    const pitchM = data.cellPitchM;
-    const bounds = data.bounds;
-    const out = new Uint8Array(W * H2 * 4);
-    const lowRgb = parseHex$1(this._opts.sunColorLow, [220, 38, 38]);
-    const highRgb = parseHex$1(this._opts.sunColorHigh, [22, 163, 74]);
-    const sun = getSunPosition(this._opts.time, this._opts.homeLat, this._opts.homeLon);
-    const D2 = Math.PI / 180;
-    const azR = sun.azimuth * D2;
-    const altR = Math.max(0, sun.altitude) * D2;
-    const cosAlt = Math.cos(altR);
-    const sinAlt = Math.sin(altR);
-    const sx = Math.sin(azR) * cosAlt;
-    const sy = Math.cos(azR) * cosAlt;
-    const sz = sinAlt;
-    const ghi = sun.altitude > 0 ? computeIrradianceWm2(this._opts.time, this._opts.homeLat, this._opts.homeLon, this._opts.cloudCover) : 0;
-    const ghiNorm = Math.min(1, ghi / 1e3);
-    const dCol = Math.sin(azR);
-    const dRow = -Math.cos(azR);
-    const stepRiseM = pitchM * Math.tan(altR);
-    const RAY_MAX = 200;
-    const cosLat = Math.cos((bounds.minLat + bounds.maxLat) * 0.5 * D2);
-    const pxLatM = (bounds.maxLat - bounds.minLat) / H2 * 111320;
-    const pxLonM = (bounds.maxLon - bounds.minLon) / W * (111320 * cosLat);
-    const isInShadow = (col0, row0, h0) => {
-      for (let k2 = 1; k2 <= RAY_MAX; k2++) {
-        const ci = col0 + k2 * dCol | 0;
-        const ri = row0 + k2 * dRow | 0;
-        if (ci < 0 || ci >= W || ri < 0 || ri >= H2) return false;
-        const idx = ri * W + ci;
-        const blockerH = mns[idx];
-        const sunLineH = h0 + k2 * stepRiseM;
-        if (blockerH > sunLineH + 0.5) return true;
-        if (sunLineH > h0 + 100) return false;
-      }
-      return false;
-    };
-    for (let j = 0; j < H2; j++) {
-      const rowOff = j * W;
-      const jm = j > 0 ? j - 1 : j;
-      const jp = j < H2 - 1 ? j + 1 : j;
-      for (let i2 = 0; i2 < W; i2++) {
-        const off = (rowOff + i2) * 4;
-        const im = i2 > 0 ? i2 - 1 : i2;
-        const ip = i2 < W - 1 ? i2 + 1 : i2;
-        const gradX = (mnt[rowOff + ip] - mnt[rowOff + im]) / (2 * pxLonM);
-        const gradY = (mnt[jm * W + i2] - mnt[jp * W + i2]) / (2 * pxLatM);
-        const nl2 = Math.hypot(gradX, gradY, 1);
-        const nx = -gradX / nl2;
-        const ny = -gradY / nl2;
-        const nz = 1 / nl2;
-        const cosI = sun.altitude > 0 ? Math.max(0, nx * sx + ny * sy + nz * sz) : 0;
-        let ratio = 0;
-        if (cosI > 0 && ghi > 0) {
-          if (!isInShadow(i2 + 0.5, j + 0.5, mnt[rowOff + i2])) {
-            ratio = cosI * ghiNorm;
-            if (ratio > 1) ratio = 1;
-          }
-        }
-        out[off] = Math.round(lowRgb[0] + (highRgb[0] - lowRgb[0]) * ratio);
-        out[off + 1] = Math.round(lowRgb[1] + (highRgb[1] - lowRgb[1]) * ratio);
-        out[off + 2] = Math.round(lowRgb[2] + (highRgb[2] - lowRgb[2]) * ratio);
-        out[off + 3] = 255;
-      }
-    }
-    return out;
-  }
-}
-function parseHex$1(v2, fallback) {
-  const s2 = v2.trim().replace("#", "");
-  if (s2.length !== 6) return fallback;
-  const r2 = parseInt(s2.slice(0, 2), 16);
-  const g2 = parseInt(s2.slice(2, 4), 16);
-  const b2 = parseInt(s2.slice(4, 6), 16);
-  if (isNaN(r2) || isNaN(g2) || isNaN(b2)) return fallback;
-  return [r2, g2, b2];
-}
-function mat4MultiplyF64(a2, b2) {
-  const out = new Float64Array(16);
-  for (let col = 0; col < 4; col++) {
-    for (let row = 0; row < 4; row++) {
-      let sum = 0;
-      for (let k2 = 0; k2 < 4; k2++) {
-        sum += a2[k2 * 4 + row] * b2[col * 4 + k2];
-      }
-      out[col * 4 + row] = sum;
-    }
-  }
-  return out;
-}
-function projectF64(m2, x2, y3, z2, w2) {
-  return [
-    m2[0] * x2 + m2[4] * y3 + m2[8] * z2 + m2[12] * w2,
-    m2[1] * x2 + m2[5] * y3 + m2[9] * z2 + m2[13] * w2,
-    m2[2] * x2 + m2[6] * y3 + m2[10] * z2 + m2[14] * w2,
-    m2[3] * x2 + m2[7] * y3 + m2[11] * z2 + m2[15] * w2
-  ];
-}
 const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
 const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 const DEFAULT_BUILDING_COLOR_HEX = "#d2d2d7";
-const DEFAULT_LIDAR_PRECISION = "low";
+const DEFAULT_LIDAR_PRECISION = "medium";
+const LIDAR_PRECISION_RASTER = {
+  low: 256,
+  medium: 512,
+  high: 1024
+};
 const DEFAULT_SHADOW_OPACITY = 0.32;
-const DEFAULT_SCANNER_LOW_HEX = "#dc2626";
-const DEFAULT_SCANNER_HIGH_HEX = "#16a34a";
-const DEFAULT_SCANNER_OPACITY = 0.25;
 const SHADOW_LAYER_IDS = [
   "helios-building-shadows",
   "helios-building-shadows-mid",
@@ -26763,14 +26528,6 @@ function bumpStat(key) {
 }
 const MAX_LIVE_ENGINES = 2;
 const _liveEngines = /* @__PURE__ */ new Set();
-function tileToBounds(z2, x2, y3) {
-  const n3 = Math.PI - 2 * Math.PI * y3 / Math.pow(2, z2);
-  const s2 = Math.PI - 2 * Math.PI * (y3 + 1) / Math.pow(2, z2);
-  const w2 = x2 / Math.pow(2, z2) * 360 - 180;
-  const e2 = (x2 + 1) / Math.pow(2, z2) * 360 - 180;
-  const toLat = (rad) => 180 / Math.PI * Math.atan(0.5 * (Math.exp(rad) - Math.exp(-rad)));
-  return { n: toLat(n3), s: toLat(s2), w: w2, e: e2 };
-}
 const IS_MOBILE = (() => {
   if (typeof navigator === "undefined") {
     return false;
@@ -26892,11 +26649,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._buildingsData = null;
     this._buildingsFetchKey = "";
     this._currentCloudPct = 0;
-    this._lidarProvider = null;
-    this._lidarHasTiles = false;
-    this._lidarTileKeys = /* @__PURE__ */ new Set();
-    this._scannerLayer = null;
-    this._scannerVisible = false;
+    this._lidarShadowFeatures = null;
+    this._lidarShadowKey = "";
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
@@ -27114,22 +26868,16 @@ const _HeliosEngine = class _HeliosEngine {
   //LidarPrecisionLevel members.
   _lidarPrecisionLevel() {
     const v2 = String(this.cfg["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION).toLowerCase();
-    if (v2 === "off" || v2 === "low" || v2 === "medium" || v2 === "high" || v2 === "ultra") {
+    if (v2 === "low" || v2 === "medium" || v2 === "high") {
       return v2;
     }
     return DEFAULT_LIDAR_PRECISION;
   }
-  //True when the LiDAR pipeline is enabled by config AND a
-  //provider covers the home. The custom protocol may or may not
-  //have fetched any tiles yet (MapLibre drives that).
-  _lidarActive() {
-    return this._lidarPrecisionLevel() !== "off" && this._lidarProvider !== null;
-  }
-  //MapTiler-derived shadows are gated on the user's config toggle.
-  //LiDAR-driven shadows ignore this flag (they always render when
-  //the pipeline yields data).
-  _maptilerShadowsEnabled() {
-    return this.cfg["building-shadows-enabled"] !== false;
+  //Master shadow toggle. When false, no cast shadows are rendered
+  //(neither LiDAR nor MapTiler). When true, the source is picked
+  //based on whether a LiDAR provider covers the home.
+  _shadowsEnabled() {
+    return this.cfg["shadows-enabled"] !== false;
   }
   _shadowOpacity() {
     const raw = Number(this.cfg["shadow-opacity"]);
@@ -27438,8 +27186,7 @@ const _HeliosEngine = class _HeliosEngine {
   //then skips rendering this frame). Vertices are computed at sea-
   //level offsets around the home and projected with anchor at the
   //home's terrain elevation, so the resulting polygons stay true
-  //circles regardless of how aggressively the LiDAR DEM deforms
-  //the ground beneath them.
+  //circles regardless of the terrain mesh underneath.
   projectCloudScene() {
     if (!this.map || !this._mapReady) return null;
     const pct = this._currentCloudPct;
@@ -27729,21 +27476,6 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     );
-    if (!this._scannerLayer) {
-      this._scannerLayer = new ScannerMeshLayer("helios-lidar-scanner", {
-        homeLat: this.homeLat,
-        homeLon: this.homeLon,
-        sunColorLow: toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX),
-        sunColorHigh: toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX),
-        cloudCover: 0,
-        opacity: this._scannerOpacity(),
-        time: this._selectedTime ?? /* @__PURE__ */ new Date()
-      });
-      this._scannerLayer.setVisible(this._scannerVisible);
-    }
-    if (!this.map.getLayer("helios-lidar-scanner")) {
-      this.map.addLayer(this._scannerLayer);
-    }
     this._ensureBuildingsFetched();
     this._ensureLidarFetched();
   }
@@ -27790,116 +27522,60 @@ const _HeliosEngine = class _HeliosEngine {
       console.warn("[HELIOS] Buildings fetch failed:", err);
     });
   }
-  //Wire up the LiDAR pipeline for the current home + precision
-  //setting. Idempotent: safe to call after any config change.
+  //Wire up the LiDAR shadow pipeline for the current home + precision
+  //setting. Idempotent: safe to call after any config / position
+  //change.
   //
   //  - Resolves the country provider that covers the home (France
   //    HD only for now, see helios-lidar.ts).
-  //  - When LiDAR is on AND a provider matches, registers the custom
-  //    DEM protocol with that provider. Every terrain-rgb tile
-  //    MapLibre requests then fires a per-tile WMS call against the
-  //    provider; the protocol caches the result and notifies us
-  //    through `onTileLoaded` so the scanner mesh layer can grow.
-  //  - When LiDAR is off or no provider matches, unregisters the
-  //    protocol and clears the scanner mesh.
+  //  - When shadows are enabled AND a provider matches, fires one
+  //    radius-based fetch against the provider; the result is a
+  //    FeatureCollection of consolidated shadow polygons fed to the
+  //    shadow projector.
+  //  - When shadows are disabled or no provider matches, clears any
+  //    cached features so the next shadow refresh falls back to the
+  //    MapTiler footprints (or to no shadows if disabled).
   _ensureLidarFetched() {
     if (!this.map) return;
-    const level = this._lidarPrecisionLevel();
-    if (level === "off") {
-      this._lidarProvider = null;
-      this._lidarHasTiles = false;
-      this._lidarTileKeys.clear();
-      this._scannerLayer?.clear();
-      return;
-    }
     const provider = findLidarSource(this.homeLat, this.homeLon);
-    if (!provider) {
-      console.info(`[HELIOS-ENGINE] _ensureLidarFetched: no provider covers home`);
-      this._lidarProvider = null;
-      this._lidarHasTiles = false;
-      this._lidarTileKeys.clear();
-      this._scannerLayer?.clear();
+    if (!provider || !this._shadowsEnabled()) {
+      this._lidarShadowFeatures = null;
+      this._lidarShadowKey = "";
+      this._lidarShadowAbort?.abort();
+      this._lidarShadowAbort = void 0;
       return;
     }
-    this._lidarProvider = provider;
-    const rasterSize = PRECISION_TILE_RASTER[level] ?? 384;
-    console.info(`[HELIOS-ENGINE] _ensureLidarFetched: provider=${provider.id}, level=${level}, rasterSize=${rasterSize}`);
-    this._lidarTileKeys.clear();
-    this._scannerLayer?.clear();
-    this._kickLidarTileFetches();
-  }
-  //Per-tile arrival hook. Called from the custom DEM protocol once
-  //per fresh fetch (cache hits don't re-fire). We push the tile
-  //into the scanner mesh layer (which builds its sub-mesh + texture
-  //right away), and flag the engine as "has LiDAR tiles" so the
-  //card surfaces the scanner toggle button.
-  _onLidarTileLoaded(key, data) {
-    console.info(`[HELIOS-ENGINE] LiDAR tile loaded ${key} (scannerLayer=${!!this._scannerLayer}, hadTiles=${this._lidarHasTiles})`);
-    if (!this._scannerLayer) return;
-    this._scannerLayer.addTile(key, data);
-    if (!this._lidarHasTiles) {
-      this._lidarHasTiles = true;
-      try {
-        this.onMapTransform?.();
-      } catch (_2) {
-      }
-    }
-  }
-  //Terrain stays on MapTiler's global DEM; LiDAR data feeds the
-  //irradiance scanner only. We fetch the LiDAR tiles directly
-  //from the provider (no MapLibre tile pipeline involved), so
-  //there's no LiDAR-driven layer / source on the map at all.
-  //Kept as a stub for the existing call sites; everything happens
-  //in `_kickLidarTileFetches`.
-  _applyLidarTerrain() {
-    if (!this.map) return;
-    if (!this._lidarActive()) {
-      this._scannerLayer?.clear();
-      return;
-    }
-    this._kickLidarTileFetches();
-  }
-  //Compute the 3 × 3 LiDAR tile grid around the home at z = 14
-  //(MapTiler-DEM-equivalent zoom for an area ~1.4 km wide), then
-  //fire one provider.fetchTile call per tile in parallel. Each
-  //completion feeds the scanner mesh via _onLidarTileLoaded.
-  //Idempotent: tiles already in the scanner mesh aren't re-fetched.
-  _kickLidarTileFetches() {
-    const provider = this._lidarProvider;
-    if (!provider || !this._scannerLayer) return;
+    if (!this._buildingsData) return;
     const level = this._lidarPrecisionLevel();
-    const rasterSize = PRECISION_TILE_RASTER[level] ?? 384;
-    const z2 = LIDAR_TERRAIN_MAX_ZOOM;
-    const n3 = Math.pow(2, z2);
-    const homeX = Math.floor((this.homeLon + 180) / 360 * n3);
-    const latR = this.homeLat * Math.PI / 180;
-    const homeY = Math.floor((1 - Math.log(Math.tan(latR) + 1 / Math.cos(latR)) / Math.PI) / 2 * n3);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const tx = homeX + dx;
-        const ty = homeY + dy;
-        const key = `${z2}/${tx}/${ty}`;
-        if (this._lidarTileKeys.has(key)) continue;
-        this._lidarTileKeys.add(key);
-        const bounds = tileToBounds(z2, tx, ty);
-        provider.fetchTile({
-          minLat: bounds.s,
-          minLon: bounds.w,
-          maxLat: bounds.n,
-          maxLon: bounds.e,
-          rasterSize
-        }).then((data) => {
-          if (!data) {
-            this._lidarTileKeys.delete(key);
-            return;
-          }
-          this._onLidarTileLoaded(key, data);
-        }).catch((err) => {
-          this._lidarTileKeys.delete(key);
-          console.warn(`[HELIOS] LiDAR tile ${key} fetch failed`, err);
-        });
-      }
-    }
+    const rasterSize = LIDAR_PRECISION_RASTER[level];
+    const radius = this._buildingRadiusMeters();
+    const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
+    if (this._lidarShadowKey === key && this._lidarShadowFeatures) return;
+    this._lidarShadowAbort?.abort();
+    const ac = new AbortController();
+    this._lidarShadowAbort = ac;
+    this._lidarShadowKey = key;
+    console.info(`[HELIOS-ENGINE] LiDAR shadow fetch: provider=${provider.id}, level=${level}, raster=${rasterSize}, radius=${radius}m`);
+    provider.fetchShadowRegions({
+      homeLat: this.homeLat,
+      homeLon: this.homeLon,
+      radiusMeters: radius,
+      homeFootprints: this._buildingsData?.home,
+      surroundingFootprints: this._buildingsData?.surroundings,
+      rasterSize,
+      cropRadiusMeters: radius,
+      signal: ac.signal
+    }).then((fc) => {
+      if (ac.signal.aborted || !this.map) return;
+      this._lidarShadowFeatures = fc;
+      this._lastAtmosphereAlt = -999;
+      this._refreshShadowsAndAtmosphere();
+    }).catch((err) => {
+      if (err?.name === "AbortError") return;
+      console.warn("[HELIOS] LiDAR shadow fetch failed:", err);
+      this._lidarShadowFeatures = null;
+      this._lidarShadowKey = "";
+    });
   }
   //Pushes the MapTiler footprints into the building rendering
   //sources. Buildings are always MapTiler-driven; LiDAR data is
@@ -27911,59 +27587,6 @@ const _HeliosEngine = class _HeliosEngine {
     const empty = { type: "FeatureCollection", features: [] };
     homeSrc?.setData(this._buildingsData?.home ?? empty);
     surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
-  }
-  //Final raster opacity once the reveal lands. Pulled from the
-  //user's `scanner-opacity` config; clamped to [0, 1].
-  _scannerOpacity() {
-    const raw = Number(this.cfg["scanner-opacity"]);
-    if (!Number.isFinite(raw)) return DEFAULT_SCANNER_OPACITY;
-    return Math.max(0, Math.min(1, raw));
-  }
-  //Toggle visibility of the LiDAR scanner mesh. The custom WebGL
-  //layer stays on the map across toggles; we flip its internal
-  //visibility flag (cheap, no GL re-init) and recompute its
-  //per-tile textures from the current sun position on toggle ON.
-  setPointCloudVisible(visible) {
-    console.info(`[HELIOS-ENGINE] setPointCloudVisible(${visible}), hasLayer=${!!this._scannerLayer}, hasTiles=${this._lidarHasTiles}`);
-    this._scannerVisible = visible;
-    if (!this._scannerLayer) return;
-    this._scannerLayer.setVisible(visible);
-    if (visible) {
-      this.onPointCloudComputeStart?.();
-      const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
-      const cloud = this._homeHourlyData ? this._getWeatherAtTime(t2)?.cloudCover ?? 0 : 0;
-      this._scannerLayer.refreshTextures(
-        t2,
-        cloud,
-        toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX),
-        toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX)
-      );
-      this._scannerLayer.updateOpacity(this._scannerOpacity());
-      this.onPointCloudComputeEnd?.();
-    }
-  }
-  //True once the LiDAR pipeline has yielded at least one tile.
-  //The card uses this to gate the scanner toggle button: the
-  //user only sees the button after the first tile lands, which
-  //also signals the home is inside a provider's coverage.
-  hasLidarPointCloud() {
-    return this._lidarHasTiles;
-  }
-  //Trigger a fresh per-tile texture compute from the current sun
-  //position. Called by _refreshShadowsAndAtmosphere on every sun
-  //movement past the 0.5° threshold, so the scanner colours track
-  //time-of-day without burning frames between meaningful changes.
-  _recomputeScannerIfVisible() {
-    if (!this._scannerVisible || !this._scannerLayer) return;
-    if (!this._scannerLayer.hasTiles()) return;
-    const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
-    const cloud = this._homeHourlyData ? this._getWeatherAtTime(t2)?.cloudCover ?? 0 : 0;
-    this._scannerLayer.refreshTextures(
-      t2,
-      cloud,
-      toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX),
-      toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX)
-    );
   }
   //Linear interpolation between two RGB hex strings.
   _lerpHex(a2, b2, t2) {
@@ -28124,25 +27747,36 @@ const _HeliosEngine = class _HeliosEngine {
     try {
       const shadowsSrc = this.map.getSource("helios-building-shadows-src");
       if (shadowsSrc) {
-        const input = this._buildingsData && this._maptilerShadowsEnabled() ? {
-          type: "FeatureCollection",
-          features: [
-            ...this._buildingsData.home.features,
-            ...this._buildingsData.surroundings.features
-          ]
-        } : { type: "FeatureCollection", features: [] };
+        let input = { type: "FeatureCollection", features: [] };
+        if (this._shadowsEnabled()) {
+          if (this._lidarShadowFeatures && this._lidarShadowFeatures.features.length > 0) {
+            input = this._lidarShadowFeatures;
+          } else if (this._buildingsData) {
+            input = {
+              type: "FeatureCollection",
+              features: [
+                ...this._buildingsData.home.features,
+                ...this._buildingsData.surroundings.features
+              ]
+            };
+          }
+        }
         shadowsSrc.setData(projectExtrusionShadows(
           input,
           {
             sunAzimuthDeg: azimuth,
             sunAltitudeDeg: altitude,
-            homeLat: this.homeLat
+            homeLat: this.homeLat,
+            //Clip shadows to the building visibility disc so
+            //they never extend past the rendered surroundings.
+            clipCenterLat: this.homeLat,
+            clipCenterLon: this.homeLon,
+            clipRadiusMeters: this._buildingRadiusMeters()
           }
         ));
       }
     } catch (_2) {
     }
-    this._recomputeScannerIfVisible();
   }
   //Precision is fixed to 'high' (multi-model median). The function
   //is kept so the rest of the engine stays precision-aware if a
@@ -28579,10 +28213,7 @@ const _HeliosEngine = class _HeliosEngine {
     const prevColor = this._buildingColor();
     const prevPrecision = this._lidarPrecisionLevel();
     const prevShadowOpa = this._shadowOpacity();
-    const prevMaptilerSh = this._maptilerShadowsEnabled();
-    const prevScanLow = toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX);
-    const prevScanHigh = toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX);
-    const prevScanOpa = this._scannerOpacity();
+    const prevShadowsOn = this._shadowsEnabled();
     this.cfg = { ...cfg };
     if (!this.map) {
       return;
@@ -28618,7 +28249,6 @@ const _HeliosEngine = class _HeliosEngine {
           this.map.setPixelRatio(px);
         } catch (_2) {
         }
-        this._applyLidarTerrain();
       }
     }
     if (this.map.getLayer("helios-hillshade")) {
@@ -28655,6 +28285,8 @@ const _HeliosEngine = class _HeliosEngine {
     }
     const nextPrecision = this._lidarPrecisionLevel();
     if (nextPrecision !== prevPrecision) {
+      this._lidarShadowKey = "";
+      this._lidarShadowFeatures = null;
       this._ensureLidarFetched();
     }
     const nextShadowOpa = this._shadowOpacity();
@@ -28669,19 +28301,18 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     }
-    const nextMaptilerSh = this._maptilerShadowsEnabled();
-    if (nextMaptilerSh !== prevMaptilerSh) {
+    const nextShadowsOn = this._shadowsEnabled();
+    if (nextShadowsOn !== prevShadowsOn) {
+      if (nextShadowsOn) {
+        this._ensureLidarFetched();
+      } else {
+        this._lidarShadowFeatures = null;
+        this._lidarShadowKey = "";
+        this._lidarShadowAbort?.abort();
+        this._lidarShadowAbort = void 0;
+      }
       this._lastAtmosphereAlt = -999;
       this._refreshShadowsAndAtmosphere();
-    }
-    const nextScanLow = toColor(this.cfg["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX);
-    const nextScanHigh = toColor(this.cfg["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX);
-    if (nextScanLow !== prevScanLow || nextScanHigh !== prevScanHigh) {
-      this._recomputeScannerIfVisible();
-    }
-    const nextScanOpa = this._scannerOpacity();
-    if (nextScanOpa !== prevScanOpa && this._scannerLayer) {
-      this._scannerLayer.updateOpacity(nextScanOpa);
     }
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
@@ -28718,9 +28349,10 @@ const _HeliosEngine = class _HeliosEngine {
     window.clearTimeout(this._resizeDebounceTimer);
     this._fetchAbortController?.abort();
     this._buildingsAbort?.abort();
-    this._lidarTileKeys.clear();
-    this._scannerLayer?.clear();
-    this._scannerLayer = null;
+    this._lidarShadowAbort?.abort();
+    this._lidarShadowAbort = void 0;
+    this._lidarShadowFeatures = null;
+    this._lidarShadowKey = "";
     this._resizeObserver?.disconnect();
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
@@ -28777,9 +28409,7 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-buildings-home-outline",
         "helios-building-shadows",
         "helios-building-shadows-mid",
-        "helios-building-shadows-far",
-        "helios-lidar-prefetch",
-        "helios-lidar-scanner"
+        "helios-building-shadows-far"
       ]) {
         try {
           if (this.map.getLayer(lid)) this.map.removeLayer(lid);
@@ -28792,7 +28422,6 @@ const _HeliosEngine = class _HeliosEngine {
       }
       for (const sid of [
         "helios-terrain",
-        "helios-lidar-prefetch-src",
         "helios-night-shade",
         "helios-cloud-rings",
         "helios-buildings-surroundings-src",
@@ -28807,8 +28436,6 @@ const _HeliosEngine = class _HeliosEngine {
     }
     this._buildingsData = null;
     this._buildingsFetchKey = "";
-    this._lidarProvider = null;
-    this._lidarHasTiles = false;
     this._homeHourlyData = null;
     this._bumpInactivityCanvas = void 0;
     this._bumpInactivityHandler = void 0;
@@ -28943,25 +28570,18 @@ const en = {
     terrainDetailFine: "Fine",
     terrainDetailHint: "Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame, only worth it on capable desktops.",
     mapStyleSatellite: "Satellite",
+    shadowsSection: "Shading",
+    shadowsEnabled: "Show shadows *",
+    shadowsEnabledOn: "Shown",
+    shadowsEnabledOff: "Hidden",
+    shadowsEnabledHint: "Master toggle for cast ground shadows. When hidden, no shadows are projected at all. When shown, the source picks itself: a LiDAR provider when one covers your location (buildings + vegetation), MapTiler footprints otherwise (buildings only).",
     lidarPrecision: "LiDAR precision *",
-    lidarPrecisionOff: "Off",
     lidarPrecisionLow: "Low",
     lidarPrecisionMedium: "Medium",
     lidarPrecisionHigh: "High",
-    lidarPrecisionUltra: "Ultra",
-    lidarPrecisionHint: "Drives the LiDAR-based topography, the cast-shadow geometry AND the irradiance scanner density. Only available in France for now.",
+    lidarPrecisionHint: "If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat MapTiler footprints and this setting has no effect.",
     shadowOpacity: "Shadow opacity *",
-    shadowOpacityHint: "Opacity of the cast ground shadows.",
-    buildingShadows: "MapTiler building shadows *",
-    buildingShadowsOn: "Shown",
-    buildingShadowsOff: "Hidden",
-    buildingShadowsHint: "When LiDAR is unavailable (precision off, or home outside France), shadows are approximated from the flat MapTiler footprints. Hide them in flat or dense urban areas where the approximation reads as noise. LiDAR-driven shadows are unaffected.",
-    lidarPointCloud: "LiDAR scanner view",
-    scannerSection: "Irradiance scanner",
-    scannerSectionHint: "On-card toggle that paints every LiDAR cell with a two-stop colour ramp based on the irradiance it receives at the selected time. Low for night / shadow, high for full sun at STC (1 kW/m²). The default thermal red → green ramp reads cleanly on both light and dark basemaps.",
-    scannerLowColor: "Low (zero irradiance) *",
-    scannerHighColor: "High (full irradiance) *",
-    scannerOpacity: "Scanner opacity *"
+    shadowOpacityHint: "Opacity of the cast ground shadows."
   }
 };
 const fr = {
@@ -29041,25 +28661,18 @@ const fr = {
     terrainDetailFine: "Précis",
     terrainDetailHint: "Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation, réservé aux PC desktops puissants.",
     mapStyleSatellite: "Satellite",
+    shadowsSection: "Ombrage",
+    shadowsEnabled: "Afficher les ombres *",
+    shadowsEnabledOn: "Affichées",
+    shadowsEnabledOff: "Masquées",
+    shadowsEnabledHint: "Interrupteur principal des ombres projetées au sol. Si elles sont masquées, aucune ombre n'est calculée. Si elles sont affichées, la source est choisie automatiquement : provider LiDAR quand ta zone est couverte (bâtiments et végétation), empreintes plates MapTiler sinon (bâtiments uniquement).",
     lidarPrecision: "Précision LiDAR *",
-    lidarPrecisionOff: "Off",
     lidarPrecisionLow: "Basse",
     lidarPrecisionMedium: "Moyenne",
     lidarPrecisionHigh: "Haute",
-    lidarPrecisionUltra: "Ultra",
-    lidarPrecisionHint: "Pilote la topographie LiDAR, la géométrie des ombres ET la densité du scanner d'irradiance. Uniquement disponible en France pour l'instant.",
+    lidarPrecisionHint: "Si ta zone est couverte par un provider LiDAR intégré à Helios, tu bénéficies d'ombres plus réalistes (bâtiments ET végétation). Des décalages peuvent apparaître entre les bâtiments affichés et leurs ombres : les données LiDAR sont enregistrées à un instant donné et ne reflètent pas toujours l'état actuel du terrain. Hors zone LiDAR, les ombres retombent sur les empreintes plates MapTiler et cette option n'a aucun effet.",
     shadowOpacity: "Opacité des ombres *",
-    shadowOpacityHint: "Opacité des ombres projetées au sol.",
-    buildingShadows: "Ombres MapTiler *",
-    buildingShadowsOn: "Affichées",
-    buildingShadowsOff: "Masquées",
-    buildingShadowsHint: "Quand le LiDAR n'est pas disponible (précision off, ou hors France), les ombres sont approximées à partir des empreintes plates MapTiler. À masquer en zone plate ou très urbaine où l'approximation ressemble plus à du bruit qu'à de la donnée. Sans effet sur les ombres LiDAR.",
-    lidarPointCloud: "Vue scanner LiDAR",
-    scannerSection: "Scanner d'irradiance",
-    scannerSectionHint: "Bouton sur la carte qui colore chaque cellule LiDAR avec une rampe à deux teintes selon l'irradiance reçue à l'instant sélectionné. Teinte basse pour la nuit ou l'ombre, teinte haute pour le plein soleil à 1 kW/m². Par défaut un dégradé thermique rouge → vert qui lit bien sur fond clair comme sur fond sombre.",
-    scannerLowColor: "Bas (irradiance nulle) *",
-    scannerHighColor: "Haut (irradiance max) *",
-    scannerOpacity: "Opacité du scanner *"
+    shadowOpacityHint: "Opacité des ombres projetées au sol."
   }
 };
 const de = {
@@ -29139,25 +28752,18 @@ const de = {
     terrainDetailFine: "Fein",
     terrainDetailHint: "Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe, nur auf leistungsfähigen Desktops sinnvoll.",
     mapStyleSatellite: "Satellit",
+    shadowsSection: "Schattierung",
+    shadowsEnabled: "Schatten anzeigen *",
+    shadowsEnabledOn: "Sichtbar",
+    shadowsEnabledOff: "Ausgeblendet",
+    shadowsEnabledHint: "Hauptschalter für die am Boden geworfenen Schatten. Ausgeblendet werden gar keine Schatten berechnet. Sichtbar wählt die Quelle automatisch: ein LiDAR-Provider, wenn er das Gebiet abdeckt (Gebäude und Vegetation), sonst die flachen MapTiler-Grundrisse (nur Gebäude).",
     lidarPrecision: "LiDAR-Präzision *",
-    lidarPrecisionOff: "Aus",
     lidarPrecisionLow: "Niedrig",
     lidarPrecisionMedium: "Mittel",
     lidarPrecisionHigh: "Hoch",
-    lidarPrecisionUltra: "Ultra",
-    lidarPrecisionHint: "Steuert die LiDAR-basierte Topografie, die Schattengeometrie UND die Dichte des Bestrahlungsscanners. Derzeit nur in Frankreich verfügbar.",
+    lidarPrecisionHint: "Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen MapTiler-Grundrisse, und diese Option bleibt wirkungslos.",
     shadowOpacity: "Schatten-Deckkraft *",
-    shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
-    buildingShadows: "MapTiler-Gebäudeschatten *",
-    buildingShadowsOn: "Sichtbar",
-    buildingShadowsOff: "Ausgeblendet",
-    buildingShadowsHint: "Wenn LiDAR nicht verfügbar ist (Präzision aus oder Wohnsitz außerhalb Frankreich), werden Schatten aus den flachen MapTiler-Grundrissen abgeschätzt. In flachem oder dichtem städtischem Gebiet ausblenden, wo die Näherung wie Rauschen wirkt. LiDAR-Schatten bleiben unberührt.",
-    lidarPointCloud: "LiDAR-Scanner-Ansicht",
-    scannerSection: "Bestrahlungs-Scanner",
-    scannerSectionHint: "Karten-Schaltfläche, die jede LiDAR-Zelle anhand der zum gewählten Zeitpunkt empfangenen Einstrahlung mit einer Zwei-Farben-Rampe einfärbt. Untere Farbe für Nacht / Schatten, obere für volle Sonne bei 1 kW/m². Standardmäßig ein thermischer Rot-Grün-Verlauf, der sowohl auf hellen wie auf dunklen Basemaps klar lesbar bleibt.",
-    scannerLowColor: "Unten (keine Einstrahlung) *",
-    scannerHighColor: "Oben (volle Einstrahlung) *",
-    scannerOpacity: "Scanner-Deckkraft *"
+    shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten."
   }
 };
 const es = {
@@ -29237,25 +28843,18 @@ const es = {
     terrainDetailFine: "Preciso",
     terrainDetailHint: "Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación, útil solo en PCs potentes.",
     mapStyleSatellite: "Satélite",
+    shadowsSection: "Sombreado",
+    shadowsEnabled: "Mostrar sombras *",
+    shadowsEnabledOn: "Mostradas",
+    shadowsEnabledOff: "Ocultas",
+    shadowsEnabledHint: "Interruptor principal de las sombras proyectadas en el suelo. Si están ocultas, no se calcula ninguna sombra. Si están mostradas, la fuente se elige sola: un proveedor LiDAR si cubre tu zona (edificios y vegetación), o las huellas planas de MapTiler en caso contrario (solo edificios).",
     lidarPrecision: "Precisión LiDAR *",
-    lidarPrecisionOff: "Off",
     lidarPrecisionLow: "Baja",
     lidarPrecisionMedium: "Media",
     lidarPrecisionHigh: "Alta",
-    lidarPrecisionUltra: "Ultra",
-    lidarPrecisionHint: "Controla la topografía LiDAR, la geometría de las sombras Y la densidad del escáner de irradiancia. Solo disponible en Francia por ahora.",
+    lidarPrecisionHint: "Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de MapTiler y esta opción no tiene efecto.",
     shadowOpacity: "Opacidad de las sombras *",
-    shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
-    buildingShadows: "Sombras MapTiler *",
-    buildingShadowsOn: "Mostradas",
-    buildingShadowsOff: "Ocultas",
-    buildingShadowsHint: "Cuando LiDAR no está disponible (precisión apagada, o casa fuera de Francia), las sombras se aproximan a partir de las huellas planas de MapTiler. Oculta en zonas planas o urbanas densas donde la aproximación se lee como ruido. Las sombras LiDAR no se ven afectadas.",
-    lidarPointCloud: "Vista escáner LiDAR",
-    scannerSection: "Escáner de irradiancia",
-    scannerSectionHint: "Botón sobre el mapa que tiñe cada celda LiDAR con una rampa de dos colores según la irradiancia recibida en el instante seleccionado. Tono bajo para noche / sombra, tono alto para pleno sol a 1 kW/m². Por defecto un degradado térmico rojo → verde que se lee bien tanto en mapas claros como oscuros.",
-    scannerLowColor: "Bajo (irradiancia nula) *",
-    scannerHighColor: "Alto (irradiancia máxima) *",
-    scannerOpacity: "Opacidad del escáner *"
+    shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo."
   }
 };
 const it = {
@@ -29335,25 +28934,18 @@ const it = {
     terrainDetailFine: "Fine",
     terrainDetailHint: "Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione, utile solo su PC desktop potenti.",
     mapStyleSatellite: "Satellite",
+    shadowsSection: "Ombreggiatura",
+    shadowsEnabled: "Mostrare le ombre *",
+    shadowsEnabledOn: "Visibili",
+    shadowsEnabledOff: "Nascoste",
+    shadowsEnabledHint: "Interruttore principale delle ombre proiettate a terra. Se nascoste, non viene calcolata alcuna ombra. Se visibili, la sorgente viene scelta da sola: un provider LiDAR se copre la tua zona (edifici e vegetazione), altrimenti le impronte piatte di MapTiler (solo edifici).",
     lidarPrecision: "Precisione LiDAR *",
-    lidarPrecisionOff: "Off",
     lidarPrecisionLow: "Bassa",
     lidarPrecisionMedium: "Media",
     lidarPrecisionHigh: "Alta",
-    lidarPrecisionUltra: "Ultra",
-    lidarPrecisionHint: "Pilota la topografia LiDAR, la geometria delle ombre E la densità dello scanner di irradianza. Solo disponibile in Francia per ora.",
+    lidarPrecisionHint: "Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte MapTiler e questa opzione non ha alcun effetto.",
     shadowOpacity: "Opacità delle ombre *",
-    shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
-    buildingShadows: "Ombre MapTiler *",
-    buildingShadowsOn: "Visibili",
-    buildingShadowsOff: "Nascoste",
-    buildingShadowsHint: "Quando LiDAR non è disponibile (precisione disattivata o casa fuori dalla Francia), le ombre vengono approssimate dalle impronte piatte MapTiler. Nascondi in zone piatte o urbane dense dove l'approssimazione si legge come rumore. Le ombre LiDAR non sono interessate.",
-    lidarPointCloud: "Vista scanner LiDAR",
-    scannerSection: "Scanner di irradianza",
-    scannerSectionHint: "Pulsante sulla mappa che colora ogni cella LiDAR con una rampa a due tonalità in base all'irradianza ricevuta all'istante selezionato. Tonalità bassa per notte / ombra, alta per pieno sole a 1 kW/m². Di default, un gradiente termico rosso → verde leggibile sia su mappe chiare che scure.",
-    scannerLowColor: "Basso (irradianza nulla) *",
-    scannerHighColor: "Alto (irradianza massima) *",
-    scannerOpacity: "Opacità dello scanner *"
+    shadowOpacityHint: "Opacità delle ombre proiettate a terra."
   }
 };
 const nl = {
@@ -29433,25 +29025,18 @@ const nl = {
     terrainDetailFine: "Fijn",
     terrainDetailHint: "Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe, alleen zinvol op krachtige desktops.",
     mapStyleSatellite: "Satelliet",
+    shadowsSection: "Schaduw",
+    shadowsEnabled: "Schaduwen tonen *",
+    shadowsEnabledOn: "Zichtbaar",
+    shadowsEnabledOff: "Verborgen",
+    shadowsEnabledHint: "Hoofdschakelaar voor de op de grond geprojecteerde schaduwen. Verborgen betekent geen enkele schaduwberekening. Zichtbaar kiest de bron zelf: een LiDAR-provider als die je gebied dekt (gebouwen en vegetatie), anders de platte MapTiler-omtreklijnen (alleen gebouwen).",
     lidarPrecision: "LiDAR-precisie *",
-    lidarPrecisionOff: "Uit",
     lidarPrecisionLow: "Laag",
     lidarPrecisionMedium: "Middel",
     lidarPrecisionHigh: "Hoog",
-    lidarPrecisionUltra: "Ultra",
-    lidarPrecisionHint: "Stuurt de LiDAR-gedreven topografie, de schaduwgeometrie EN de dichtheid van de instralingsscanner aan. Voorlopig alleen beschikbaar in Frankrijk.",
+    lidarPrecisionHint: "Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte MapTiler-omtreklijnen en heeft deze optie geen effect.",
     shadowOpacity: "Schaduwdekking *",
-    shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
-    buildingShadows: "MapTiler-gebouwschaduwen *",
-    buildingShadowsOn: "Zichtbaar",
-    buildingShadowsOff: "Verborgen",
-    buildingShadowsHint: "Wanneer LiDAR niet beschikbaar is (precisie uit, of huis buiten Frankrijk) worden schaduwen benaderd op basis van de platte MapTiler-omtreklijnen. Verbergen in vlakke of dichte stedelijke gebieden waar de benadering meer ruis dan informatie oplevert. LiDAR-schaduwen blijven ongewijzigd.",
-    lidarPointCloud: "LiDAR-scannerweergave",
-    scannerSection: "Instralingsscanner",
-    scannerSectionHint: "Knop op de kaart die elke LiDAR-cel met een tweekleuren-verloop kleurt op basis van de op het gekozen moment ontvangen instraling. Lage tint voor nacht / schaduw, hoge tint voor volle zon bij 1 kW/m². Standaard een thermisch rood → groen verloop dat zowel op lichte als op donkere kaarten goed leesbaar blijft.",
-    scannerLowColor: "Laag (geen instraling) *",
-    scannerHighColor: "Hoog (volle instraling) *",
-    scannerOpacity: "Scannerdekking *"
+    shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen."
   }
 };
 const pt = {
@@ -29531,25 +29116,18 @@ const pt = {
     terrainDetailFine: "Preciso",
     terrainDetailHint: "Suave (predefinição) amostra o relevo a cada ~20 m e mantém-se fluido em qualquer dispositivo. Preciso amostra a cada ~5 m para um relevo mais detalhado mas ~16× mais vértices a projetar por frame de rotação, útil apenas em PCs potentes.",
     mapStyleSatellite: "Satélite",
+    shadowsSection: "Sombreamento",
+    shadowsEnabled: "Mostrar sombras *",
+    shadowsEnabledOn: "Visíveis",
+    shadowsEnabledOff: "Ocultas",
+    shadowsEnabledHint: "Interruptor principal das sombras projetadas no chão. Quando ocultas, nenhuma sombra é calculada. Quando visíveis, a fonte é escolhida automaticamente: um fornecedor LiDAR se cobrir a tua zona (edifícios e vegetação), caso contrário as impressões planas MapTiler (apenas edifícios).",
     lidarPrecision: "Precisão LiDAR *",
-    lidarPrecisionOff: "Off",
     lidarPrecisionLow: "Baixa",
     lidarPrecisionMedium: "Média",
     lidarPrecisionHigh: "Alta",
-    lidarPrecisionUltra: "Ultra",
-    lidarPrecisionHint: "Controla a topografia LiDAR, a geometria das sombras E a densidade do scanner de irradiância. Apenas disponível em França por agora.",
+    lidarPrecisionHint: "Se a tua zona é coberta por um fornecedor LiDAR integrado no Helios, beneficias de sombras mais realistas (edifícios E vegetação). Podem aparecer desfasamentos entre os edifícios desenhados e as suas sombras: os dados LiDAR são capturados num instante preciso e nem sempre refletem o estado atual do terreno. Fora da cobertura LiDAR, as sombras voltam às impressões planas MapTiler e esta opção não tem qualquer efeito.",
     shadowOpacity: "Opacidade das sombras *",
-    shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
-    buildingShadows: "Sombras MapTiler *",
-    buildingShadowsOn: "Visíveis",
-    buildingShadowsOff: "Ocultas",
-    buildingShadowsHint: "Quando o LiDAR não está disponível (precisão desligada, ou casa fora de França), as sombras são aproximadas a partir das impressões planas MapTiler. Oculte em zonas planas ou urbanas densas onde a aproximação parece mais ruído do que dado. As sombras LiDAR não são afetadas.",
-    lidarPointCloud: "Vista scanner LiDAR",
-    scannerSection: "Scanner de irradiância",
-    scannerSectionHint: "Botão no mapa que colore cada célula LiDAR com uma rampa de duas cores em função da irradiância recebida no instante selecionado. Tom baixo para noite / sombra, alto para sol pleno a 1 kW/m². Por padrão, um gradiente térmico vermelho → verde legível tanto em mapas claros como escuros.",
-    scannerLowColor: "Baixo (irradiância nula) *",
-    scannerHighColor: "Alto (irradiância máxima) *",
-    scannerOpacity: "Opacidade do scanner *"
+    shadowOpacityHint: "Opacidade das sombras projetadas no chão."
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt };
@@ -30104,94 +29682,6 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Top-right control rail. Hosts on-card map controls (currently
-        the LiDAR scanner toggle). Mirrors the clock's top spacing on
-        the opposite edge so the two overlays sit at the same height. */
-    .overlay-top-right
-    {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        z-index: 5;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        pointer-events: none;
-    }
-
-    /*  Square chip-button: same visual language as the date/time clock
-        (white surface, 1px black border, ha-icon glyph) so the on-map
-        controls don't introduce a new style vocabulary. */
-    .map-btn
-    {
-        pointer-events: auto;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width:  28px;
-        height: 28px;
-        padding: 0;
-        background: #ffffff;
-        color:      #000000;
-        border: 1px solid #000000;
-        border-radius: 3px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        cursor: pointer;
-        transition: background 0.12s, color 0.12s;
-    }
-
-    .map-btn:hover  { background: #f4f4f4; }
-    .map-btn:active { background: #ececec; }
-
-    /*  Active state: same blue plate as the "back to live" tab and the
-        scrub cursor, telling the user this control is currently on. */
-    .map-btn.map-btn-on
-    {
-        background: rgba(31, 111, 235, 0.95);
-        color: #ffffff;
-        border-color: rgba(20, 78, 168, 0.95);
-    }
-    .map-btn.map-btn-on:hover  { background: rgba(24, 92, 199, 0.95); }
-    .map-btn.map-btn-on:active { background: rgba(20, 78, 168, 0.95); }
-
-    .map-btn ha-icon
-    {
-        --mdc-icon-size: 18px;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    /*  Busy spinner shown inside the map button while a chunked
-        compute job is running (e.g. the LiDAR irradiance pass). Pure
-        CSS, no extra DOM: same disc as the .spinner used at the
-        centre of the card but sized to fit the button. The active
-        (on) skin uses a white ring against the blue plate; the
-        idle skin uses a grey-on-white ring matching the chip border. */
-    .map-btn-spinner
-    {
-        width:  16px;
-        height: 16px;
-        border-radius: 50%;
-        border: 2px solid rgba(0, 0, 0, 0.18);
-        border-top-color: #000000;
-        animation: helios-spin 0.9s linear infinite;
-    }
-    .map-btn.map-btn-on .map-btn-spinner
-    {
-        border-color:     rgba(255, 255, 255, 0.40);
-        border-top-color: #ffffff;
-    }
-    ha-card.theme-dark .map-btn:not(.map-btn-on) .map-btn-spinner
-    {
-        border-color:     rgba(255, 255, 255, 0.20);
-        border-top-color: #e6e6e6;
-    }
-    @keyframes helios-spin
-    {
-        from { transform: rotate(0deg); }
-        to   { transform: rotate(360deg); }
-    }
-
     /*  Cloud-cover percentage chip, floating above the cloud disc
         on the ground with a leader line down to its feature. */
     .cloud-pct-label
@@ -30402,10 +29892,9 @@ const heliosCardStyles = i$3`
         the live cloud %, the fixed 100 % reference ring outline)
         projected from a geographic circle around the home through
         the engine's anchor-at-home pipeline, so they stay a true
-        circle whatever the LiDAR-deformed terrain does underneath.
-        Sits below the solar overlay in stacking order (z-index 3 vs
-        4) so the sun arc + sun disc draw on top, like they did
-        when the cloud was a MapLibre layer below the sun overlay. */
+        circle whatever the terrain mesh does underneath. Sits below
+        the solar overlay in stacking order (z-index 3 vs 4) so the
+        sun arc + sun disc draw on top. */
     .cloud-svg
     {
         position: absolute;
@@ -31332,6 +30821,24 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="hint">${t2.editor.buildingsHint}</div>
 
+                <div class="section-title">${t2.editor.shadowsSection}</div>
+                <div class="field">
+                    <span class="label">${t2.editor.shadowsEnabled}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${c2["shadows-enabled"] !== false ? "active" : ""}"
+                            @click="${() => this._update("shadows-enabled", true)}"
+                        >${t2.editor.shadowsEnabledOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${c2["shadows-enabled"] === false ? "active" : ""}"
+                            @click="${() => this._update("shadows-enabled", false)}"
+                        >${t2.editor.shadowsEnabledOff}</button>
+                    </div>
+                </div>
+                <div class="hint">${t2.editor.shadowsEnabledHint}</div>
+
                 <label class="field">
                     <span class="label">${t2.editor.lidarPrecision}</span>
                     <select
@@ -31339,11 +30846,9 @@ let HeliosCardEditor = class extends i {
                         .value="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION)}"
                         @change="${(e2) => this._update("lidar-precision", e2.target.value)}"
                     >
-                        <option value="off"    ?selected="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION) === "off"}">${t2.editor.lidarPrecisionOff}</option>
                         <option value="low"    ?selected="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION) === "low"}">${t2.editor.lidarPrecisionLow}</option>
                         <option value="medium" ?selected="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION) === "medium"}">${t2.editor.lidarPrecisionMedium}</option>
                         <option value="high"   ?selected="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION) === "high"}">${t2.editor.lidarPrecisionHigh}</option>
-                        <option value="ultra"  ?selected="${String(c2["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION) === "ultra"}">${t2.editor.lidarPrecisionUltra}</option>
                     </select>
                 </label>
                 <div class="hint">${t2.editor.lidarPrecisionHint}</div>
@@ -31360,53 +30865,6 @@ let HeliosCardEditor = class extends i {
                     </div>
                 </label>
                 <div class="hint">${t2.editor.shadowOpacityHint}</div>
-
-                <div class="field">
-                    <span class="label">${t2.editor.buildingShadows}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${c2["building-shadows-enabled"] !== false ? "active" : ""}"
-                            @click="${() => this._update("building-shadows-enabled", true)}"
-                        >${t2.editor.buildingShadowsOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${c2["building-shadows-enabled"] === false ? "active" : ""}"
-                            @click="${() => this._update("building-shadows-enabled", false)}"
-                        >${t2.editor.buildingShadowsOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t2.editor.buildingShadowsHint}</div>
-
-                <div class="section-title">${t2.editor.scannerSection}</div>
-                <label class="field">
-                    <span class="label">${t2.editor.scannerLowColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["scanner-color-low"], DEFAULT_SCANNER_LOW_HEX)}"
-                        .ariaLabel="${t2.editor.scannerLowColor}"
-                        @value-changed="${(e2) => this._color("scanner-color-low", e2)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t2.editor.scannerHighColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["scanner-color-high"], DEFAULT_SCANNER_HIGH_HEX)}"
-                        .ariaLabel="${t2.editor.scannerHighColor}"
-                        @value-changed="${(e2) => this._color("scanner-color-high", e2)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t2.editor.scannerOpacity}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="1" step="0.05"
-                            .value="${String(c2["scanner-opacity"] ?? DEFAULT_SCANNER_OPACITY)}"
-                            @input="${(e2) => this._numSlider("scanner-opacity", e2)}"
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c2["scanner-opacity"] ?? DEFAULT_SCANNER_OPACITY), 0.05)}</span>
-                    </div>
-                </label>
-                <div class="hint">${t2.editor.scannerSectionHint}</div>
 
                 <div class="section-title">${t2.editor.colors}</div>
                 <label class="field">
@@ -31762,7 +31220,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.24"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.25"}`,
       labelStyle,
       versionStyle
     );
@@ -31801,8 +31259,6 @@ let HeliosCard = class extends i {
     this._timeRange = null;
     this._selectedTime = null;
     this._isLiveMode = true;
-    this._pointCloudOn = false;
-    this._pointCloudBusy = false;
     this._lastApiKey = "";
     this._lastHomeKey = "";
     this._lastConfigSig = "";
@@ -32353,12 +31809,6 @@ let HeliosCard = class extends i {
         this._lastHomeKey = "";
         if (!this._initInflight) this._initEngine();
       };
-      this._engine.onPointCloudComputeStart = () => {
-        this._pointCloudBusy = true;
-      };
-      this._engine.onPointCloudComputeEnd = () => {
-        this._pointCloudBusy = false;
-      };
       this._initInflight = false;
     });
   }
@@ -32470,10 +31920,6 @@ let HeliosCard = class extends i {
     this._selectedTime = null;
     this._isLiveMode = true;
     this._engine?.setSelectedTime(null);
-  }
-  _togglePointCloud() {
-    this._pointCloudOn = !this._pointCloudOn;
-    this._engine?.setPointCloudVisible(this._pointCloudOn);
   }
   //Cloud-disc hover: drive the breakdown tooltip directly off the
   //SVG polygon's pointer events now that the disc is no longer a
@@ -33494,19 +32940,6 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
-                ${hasApiKey && this._engine?.hasLidarPointCloud() ? b`
-                    <div class="overlay-top-right">
-                        <button
-                            class="map-btn ${this._pointCloudOn ? "map-btn-on" : ""} ${this._pointCloudBusy ? "map-btn-busy" : ""}"
-                            title="${t2.editor.lidarPointCloud}"
-                            aria-label="${t2.editor.lidarPointCloud}"
-                            @click="${this._togglePointCloud}"
-                        >
-                            ${this._pointCloudBusy ? b`<div class="map-btn-spinner"></div>` : b`<ha-icon icon="mdi:dots-grid"></ha-icon>`}
-                        </button>
-                    </div>
-                ` : A}
-
                 ${hasApiKey && this._cloudScene ? (() => {
       const cs = this._cloudScene;
       const discPts = cs.disc.length >= 3 ? cs.disc.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
@@ -33987,12 +33420,6 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_isLiveMode", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_pointCloudOn", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_pointCloudBusy", 2);
 HeliosCard = __decorateClass([
   t("helios-card")
 ], HeliosCard);

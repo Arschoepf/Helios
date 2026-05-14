@@ -551,94 +551,6 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Top-right control rail. Hosts on-card map controls (currently
-        the LiDAR scanner toggle). Mirrors the clock's top spacing on
-        the opposite edge so the two overlays sit at the same height. */
-    .overlay-top-right
-    {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        z-index: 5;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        pointer-events: none;
-    }
-
-    /*  Square chip-button: same visual language as the date/time clock
-        (white surface, 1px black border, ha-icon glyph) so the on-map
-        controls don't introduce a new style vocabulary. */
-    .map-btn
-    {
-        pointer-events: auto;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width:  28px;
-        height: 28px;
-        padding: 0;
-        background: #ffffff;
-        color:      #000000;
-        border: 1px solid #000000;
-        border-radius: 3px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        cursor: pointer;
-        transition: background 0.12s, color 0.12s;
-    }
-
-    .map-btn:hover  { background: #f4f4f4; }
-    .map-btn:active { background: #ececec; }
-
-    /*  Active state: same blue plate as the "back to live" tab and the
-        scrub cursor, telling the user this control is currently on. */
-    .map-btn.map-btn-on
-    {
-        background: rgba(31, 111, 235, 0.95);
-        color: #ffffff;
-        border-color: rgba(20, 78, 168, 0.95);
-    }
-    .map-btn.map-btn-on:hover  { background: rgba(24, 92, 199, 0.95); }
-    .map-btn.map-btn-on:active { background: rgba(20, 78, 168, 0.95); }
-
-    .map-btn ha-icon
-    {
-        --mdc-icon-size: 18px;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    /*  Busy spinner shown inside the map button while a chunked
-        compute job is running (e.g. the LiDAR irradiance pass). Pure
-        CSS, no extra DOM: same disc as the .spinner used at the
-        centre of the card but sized to fit the button. The active
-        (on) skin uses a white ring against the blue plate; the
-        idle skin uses a grey-on-white ring matching the chip border. */
-    .map-btn-spinner
-    {
-        width:  16px;
-        height: 16px;
-        border-radius: 50%;
-        border: 2px solid rgba(0, 0, 0, 0.18);
-        border-top-color: #000000;
-        animation: helios-spin 0.9s linear infinite;
-    }
-    .map-btn.map-btn-on .map-btn-spinner
-    {
-        border-color:     rgba(255, 255, 255, 0.40);
-        border-top-color: #ffffff;
-    }
-    ha-card.theme-dark .map-btn:not(.map-btn-on) .map-btn-spinner
-    {
-        border-color:     rgba(255, 255, 255, 0.20);
-        border-top-color: #e6e6e6;
-    }
-    @keyframes helios-spin
-    {
-        from { transform: rotate(0deg); }
-        to   { transform: rotate(360deg); }
-    }
-
     /*  Cloud-cover percentage chip, floating above the cloud disc
         on the ground with a leader line down to its feature. */
     .cloud-pct-label
@@ -849,10 +761,9 @@ export const heliosCardStyles = css`
         the live cloud %, the fixed 100 % reference ring outline)
         projected from a geographic circle around the home through
         the engine's anchor-at-home pipeline, so they stay a true
-        circle whatever the LiDAR-deformed terrain does underneath.
-        Sits below the solar overlay in stacking order (z-index 3 vs
-        4) so the sun arc + sun disc draw on top, like they did
-        when the cloud was a MapLibre layer below the sun overlay. */
+        circle whatever the terrain mesh does underneath. Sits below
+        the solar overlay in stacking order (z-index 3 vs 4) so the
+        sun arc + sun disc draw on top. */
     .cloud-svg
     {
         position: absolute;
