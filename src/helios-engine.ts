@@ -2130,8 +2130,6 @@ export class HeliosEngine
         this._lidarShadowAbort = ac;
         this._lidarShadowKey   = key;
 
-        console.info(`[HELIOS-ENGINE] LiDAR shadow fetch: provider=${provider.id}, level=${level}, raster=${rasterSize}, radius=${radius}m`);
-
         try { this.onShadowComputeStart?.(); }
         catch (_) {}
 
@@ -3197,6 +3195,73 @@ export class HeliosEngine
             times: home.times.slice(),
             irradiance,
             cloud
+        };
+    }
+
+    //Snapshot of the engine's live state. Consumed by the card's own
+    //`getStatsSnapshot()` and surfaced through `window.heliosStats()`
+    //for in-browser debugging. The shape is intentionally JSON-safe
+    //so the user can `JSON.stringify(window.heliosStats())` and paste
+    //the result when filing an issue. No secrets are returned here
+    //(the API key lives on the card config, not on the engine).
+    public getStatsSnapshot(): Record<string, unknown>
+    {
+        const provider = findLidarSource(this.homeLat, this.homeLon);
+        const shadowsOn = this._shadowsEnabled();
+        const lidarFeatures = this._lidarShadowFeatures;
+        const buildingsFootprints = this._buildingsData
+            ? {
+                home:         this._buildingsData.home.features.length,
+                surroundings: this._buildingsData.surroundings.features.length
+              }
+            : null;
+        let shadowSource: string;
+        if (!shadowsOn)                                  shadowSource = 'disabled';
+        else if (lidarFeatures && lidarFeatures.features.length > 0)
+                                                          shadowSource = 'lidar';
+        else if (this._buildingsData)                    shadowSource = 'maptiler';
+        else                                              shadowSource = 'pending';
+
+        return {
+            mapReady:            this._mapReady,
+            home:                { lat: this.homeLat, lon: this.homeLon },
+            homeElevation:       this.homeElevation ?? null,
+            lidarProvider:       provider ? provider.id : null,
+            shadows:
+            {
+                enabled:         shadowsOn,
+                source:          shadowSource,
+                opacity:         this._shadowOpacity(),
+                lidarClumps:     lidarFeatures?.features.length ?? 0,
+                lidarPrecision:  this._lidarPrecisionLevel(),
+                clipRadiusM:     this._buildingRadiusMeters(),
+                lastSigCached:   this._lastShadowSig !== undefined
+            },
+            buildings:
+            {
+                radiusM:          this._buildingRadiusMeters(),
+                clusterRadiusM:   this._buildingClusterRadiusMeters(),
+                opacity:          this._buildingOpacity(),
+                color:            this._buildingColor(),
+                footprints:       buildingsFootprints
+            },
+            weather:
+            {
+                samples:        this._homeHourlyData?.times.length ?? 0,
+                rateLimitStreak: this._rateLimitStreak
+            },
+            timeline:
+            {
+                range:           this._getTimeRange(),
+                selectedTime:    this._selectedTime
+            },
+            caches:
+            {
+                arcCacheDay:     this._arcInputsCache
+                    ? new Date(this._arcInputsCache.dayStartMs).toISOString()
+                    : null,
+                arcCacheCloudPct: this._arcInputsCache?.cloudPctInt ?? null
+            }
         };
     }
 

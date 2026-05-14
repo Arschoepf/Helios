@@ -27603,7 +27603,6 @@ const _HeliosEngine = class _HeliosEngine {
     const ac = new AbortController();
     this._lidarShadowAbort = ac;
     this._lidarShadowKey = key;
-    console.info(`[HELIOS-ENGINE] LiDAR shadow fetch: provider=${provider.id}, level=${level}, raster=${rasterSize}, radius=${radius}m`);
     try {
       this.onShadowComputeStart?.();
     } catch (_2) {
@@ -28284,6 +28283,61 @@ const _HeliosEngine = class _HeliosEngine {
       times: home.times.slice(),
       irradiance,
       cloud
+    };
+  }
+  //Snapshot of the engine's live state. Consumed by the card's own
+  //`getStatsSnapshot()` and surfaced through `window.heliosStats()`
+  //for in-browser debugging. The shape is intentionally JSON-safe
+  //so the user can `JSON.stringify(window.heliosStats())` and paste
+  //the result when filing an issue. No secrets are returned here
+  //(the API key lives on the card config, not on the engine).
+  getStatsSnapshot() {
+    const provider = findLidarSource(this.homeLat, this.homeLon);
+    const shadowsOn = this._shadowsEnabled();
+    const lidarFeatures = this._lidarShadowFeatures;
+    const buildingsFootprints = this._buildingsData ? {
+      home: this._buildingsData.home.features.length,
+      surroundings: this._buildingsData.surroundings.features.length
+    } : null;
+    let shadowSource;
+    if (!shadowsOn) shadowSource = "disabled";
+    else if (lidarFeatures && lidarFeatures.features.length > 0)
+      shadowSource = "lidar";
+    else if (this._buildingsData) shadowSource = "maptiler";
+    else shadowSource = "pending";
+    return {
+      mapReady: this._mapReady,
+      home: { lat: this.homeLat, lon: this.homeLon },
+      homeElevation: this.homeElevation ?? null,
+      lidarProvider: provider ? provider.id : null,
+      shadows: {
+        enabled: shadowsOn,
+        source: shadowSource,
+        opacity: this._shadowOpacity(),
+        lidarClumps: lidarFeatures?.features.length ?? 0,
+        lidarPrecision: this._lidarPrecisionLevel(),
+        clipRadiusM: this._buildingRadiusMeters(),
+        lastSigCached: this._lastShadowSig !== void 0
+      },
+      buildings: {
+        radiusM: this._buildingRadiusMeters(),
+        clusterRadiusM: this._buildingClusterRadiusMeters(),
+        opacity: this._buildingOpacity(),
+        color: this._buildingColor(),
+        footprints: buildingsFootprints
+      },
+      weather: {
+        samples: this._homeHourlyData?.times.length ?? 0,
+        rateLimitStreak: this._rateLimitStreak
+      },
+      timeline: {
+        range: this._getTimeRange(),
+        selectedTime: this._selectedTime
+      },
+      caches: {
+        arcCacheDay: this._arcInputsCache ? new Date(this._arcInputsCache.dayStartMs).toISOString() : null,
+        arcCacheCloudPct: this._arcInputsCache?.cloudPctInt ?? null
+      }
     };
   }
   updateConfig(cfg) {
@@ -31364,10 +31418,50 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.32"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.33"}`,
       labelStyle,
       versionStyle
     );
+    console.info(
+      `%c☀ HELIOS%c run window.heliosStats() in the console for a live config + engine dump`,
+      labelStyle,
+      "color:#6b7280;font-style:italic;"
+    );
+  }
+}
+const _liveCards = /* @__PURE__ */ new Set();
+{
+  const w2 = window;
+  if (!w2.heliosStats) {
+    w2.heliosStats = () => {
+      const cards = Array.from(_liveCards).map((c2, i2) => ({
+        index: i2,
+        snapshot: c2.getStatsSnapshot()
+      }));
+      const out = {
+        version: "1.4.0-beta.33",
+        cards: cards.length,
+        lifecycle: w2.__heliosStats ?? null,
+        details: cards
+      };
+      const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
+      const heading = "color:#f59e0b;font-weight:bold;";
+      console.groupCollapsed(
+        `%c☀ HELIOS stats%c v${"1.4.0-beta.33"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        label,
+        "color:#6b7280;font-weight:normal;"
+      );
+      console.log("%cLifecycle counters", heading, w2.__heliosStats ?? "(none yet)");
+      cards.forEach((c2, i2) => {
+        const snap = c2.snapshot;
+        console.groupCollapsed(`%cCard #${i2 + 1}`, heading);
+        console.log("config:", snap.config);
+        console.log("engine:", snap.engine);
+        console.groupEnd();
+      });
+      console.groupEnd();
+      return out;
+    };
   }
 }
 let HeliosCard = class extends i {
@@ -31438,6 +31532,22 @@ let HeliosCard = class extends i {
   static getStubConfig() {
     return { "maptiler-api-key": "" };
   }
+  //Diagnostic snapshot returned to `window.heliosStats()`. Includes
+  //the live config (with the MapTiler API key redacted so the user
+  //can paste the output publicly) and, when the engine is up, the
+  //engine's own state snapshot. JSON-safe, no DOM references.
+  getStatsSnapshot() {
+    const cfg = {};
+    if (this.config) {
+      for (const [k2, v2] of Object.entries(this.config)) {
+        cfg[k2] = k2 === "maptiler-api-key" && typeof v2 === "string" && v2.length > 0 ? `***redacted (${v2.length} chars)***` : v2;
+      }
+    }
+    return {
+      config: cfg,
+      engine: this._engine ? this._engine.getStatsSnapshot() : null
+    };
+  }
   //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
   getCardSize() {
     return 12;
@@ -31464,6 +31574,7 @@ let HeliosCard = class extends i {
   }
   connectedCallback() {
     super.connectedCallback();
+    _liveCards.add(this);
     this._tick();
     this._timer = window.setInterval(() => this._tick(), 1e3);
     this._initVisibilityObserver();
@@ -31493,6 +31604,7 @@ let HeliosCard = class extends i {
   }
   disconnectedCallback() {
     super.disconnectedCallback();
+    _liveCards.delete(this);
     window.clearInterval(this._timer);
     this._visibilityObserver?.disconnect();
     this._visibilityObserver = void 0;

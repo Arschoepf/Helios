@@ -610,6 +610,38 @@ values can't be entered.
 
 ---
 
+## Diagnostics
+
+The bundle exposes a single global command for in-browser debugging:
+
+```js
+window.heliosStats()
+```
+
+Runs against every `<helios-card>` currently mounted on the page and
+returns a JSON-safe snapshot AND prints a grouped console dump. Each
+card section contains:
+
+- **config**, the live `setConfig` payload with the MapTiler API key
+  redacted (length kept so the user can confirm a key is set without
+  exposing it).
+- **engine**, the engine's own snapshot: home lat/lon, resolved
+  LiDAR provider (or `null` when out of coverage), shadow source
+  (`disabled` / `lidar` / `maptiler` / `pending`), shadow opacity and
+  LiDAR clump count, building footprints count, weather samples,
+  active timeline range, cache state for the per-day sun arc and
+  the last shadow signature.
+
+A `lifecycle` block aggregates module-level counters maintained by
+the engine (`window.__heliosStats`): engines created vs cleaned up,
+WebGL context-lost events, building fetches fired, etc. Useful for
+diagnosing leaks across editor previews and reloads.
+
+`heliosStats()` does not mutate any state; it can be invoked from
+the user's console at any time.
+
+---
+
 ## Build & publish
 
 ```bash

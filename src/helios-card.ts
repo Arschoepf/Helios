@@ -69,10 +69,74 @@ if (!window.customCards.some(c => c.type === 'helios-card'))
             labelStyle,
             versionStyle
         );
+        console.info(
+            `%c☀ HELIOS%c run window.heliosStats() in the console for a live config + engine dump`,
+            labelStyle,
+            'color:#6b7280;font-style:italic;'
+        );
     }
 }
 
 
+//Module-level registry of every live `<helios-card>` instance. Hooked
+//by the card's connectedCallback / disconnectedCallback so that
+//`window.heliosStats()` can enumerate every card currently on screen,
+//dump its (sanitised) config and ask each engine for its live state.
+//Defined here rather than as a static on the class so the global
+//`heliosStats()` function below can close over it without forcing the
+//class to be fully constructed first.
+const _liveCards = new Set<HeliosCard>();
+
+//Public diagnostic command, exposed once on first bundle load. Returns
+//a JSON-safe snapshot AND prints a grouped, human-readable dump to the
+//console. The dump includes the build version, the lifecycle counters
+//tracked by the engine, and one section per card (config + engine
+//state). The MapTiler API key is redacted before output so users can
+//paste the result publicly when filing an issue. Re-invoking from
+//the console refreshes the snapshot.
+{
+    interface HeliosWin extends Window
+    {
+        heliosStats?: () => Record<string, unknown>;
+        __heliosStats?: Record<string, unknown>;
+    }
+    const w = window as HeliosWin;
+    if (!w.heliosStats)
+    {
+        w.heliosStats = () =>
+        {
+            const cards = Array.from(_liveCards).map((c, i) =>
+            ({
+                index:  i,
+                snapshot: c.getStatsSnapshot()
+            }));
+
+            const out: Record<string, unknown> =
+            {
+                version:   __HELIOS_VERSION__,
+                cards:     cards.length,
+                lifecycle: w.__heliosStats ?? null,
+                details:   cards
+            };
+
+            const label    = 'background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;';
+            const heading  = 'color:#f59e0b;font-weight:bold;';
+            console.groupCollapsed(`%c☀ HELIOS stats%c v${__HELIOS_VERSION__}, ${cards.length} card${cards.length === 1 ? '' : 's'} alive`,
+                label, 'color:#6b7280;font-weight:normal;');
+            console.log('%cLifecycle counters', heading, w.__heliosStats ?? '(none yet)');
+            cards.forEach((c, i) =>
+            {
+                const snap = c.snapshot;
+                console.groupCollapsed(`%cCard #${i + 1}`, heading);
+                console.log('config:', snap.config);
+                console.log('engine:', snap.engine);
+                console.groupEnd();
+            });
+            console.groupEnd();
+            return out;
+        };
+    }
+}
 
 
 //Main card
@@ -287,6 +351,28 @@ export class HeliosCard extends LitElement
         return { 'maptiler-api-key': '' };
     }
 
+    //Diagnostic snapshot returned to `window.heliosStats()`. Includes
+    //the live config (with the MapTiler API key redacted so the user
+    //can paste the output publicly) and, when the engine is up, the
+    //engine's own state snapshot. JSON-safe, no DOM references.
+    public getStatsSnapshot(): { config: Record<string, unknown>; engine: Record<string, unknown> | null }
+    {
+        const cfg: Record<string, unknown> = {};
+        if (this.config)
+        {
+            for (const [k, v] of Object.entries(this.config))
+            {
+                cfg[k] = (k === 'maptiler-api-key' && typeof v === 'string' && v.length > 0)
+                    ? `***redacted (${v.length} chars)***`
+                    : v;
+            }
+        }
+        return {
+            config: cfg,
+            engine: this._engine ? this._engine.getStatsSnapshot() : null
+        };
+    }
+
     //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
     public getCardSize(): number
     {
@@ -325,6 +411,7 @@ export class HeliosCard extends LitElement
     public connectedCallback(): void
     {
         super.connectedCallback();
+        _liveCards.add(this);
         this._tick();
         this._timer = window.setInterval(() => this._tick(), 1000);
         this._initVisibilityObserver();
@@ -378,6 +465,7 @@ export class HeliosCard extends LitElement
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
+        _liveCards.delete(this);
         window.clearInterval(this._timer);
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
