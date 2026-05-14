@@ -671,6 +671,32 @@ export class HeliosEngine
     //home + building-radius.
     private _shadowCanvas?: HTMLCanvasElement;
 
+    //Cache of the 96 per-day sun arc samples. Sun position + clear-sky
+    //irradiance depend only on the calendar day and the cloud cover,
+    //not on the live map matrix, so we recompute the heavy trig only
+    //when those inputs change. On every transform / rotation tick the
+    //cached lon/lat/altitudeM tuples are re-projected through the
+    //current map matrix and that's it. Invalidated when day rolls or
+    //the live cloud cover shifts by more than a whole percent.
+    private _arcInputsCache?: {
+        dayStartMs: number;
+        cloudPctInt: number;
+        samples: Array<{
+            lon: number;
+            lat: number;
+            altitudeM: number;
+            wm2: number;
+            belowHorizon: boolean;
+        } | null>;
+    };
+
+    //Last signature of the shadow raster inputs (sun position rounded,
+    //home, radius, source-features identity + length). When unchanged
+    //we skip the project + paint + PNG-encode round-trip entirely,
+    //which is the single most expensive recurring op on a refresh
+    //driven by something other than actual sun movement.
+    private _lastShadowSig?: string;
+
     //Card-side hooks for the LiDAR shadow compute pass so the card
     //can surface a busy indicator while the WMS round-trip + raster
     //paint run. Both are optional; the engine still computes
@@ -703,7 +729,7 @@ export class HeliosEngine
         {
             const oldest = _liveEngines.values().next().value;
             if (!oldest) break;
-            console.warn('[HELIOS] WebGL context cap reached — force-cleaning the oldest engine');
+            console.warn('[HELIOS] WebGL context cap reached, force-cleaning the oldest engine');
             try { oldest.cleanup(); }
             catch (_) {}
             //cleanup() removes it from the set, but be defensive in
@@ -920,7 +946,7 @@ export class HeliosEngine
             e.preventDefault();
             bumpStat('contextLostEvents');
             this._mapReady = false;
-            console.warn('[HELIOS] WebGL context lost — requesting card re-init');
+            console.warn('[HELIOS] WebGL context lost, requesting card re-init');
             this.onContextLost?.();
         };
         this._webglRestoredHandler = () =>
@@ -2427,36 +2453,58 @@ export class HeliosEngine
         //  - LiDAR unavailable / out of cov. -> MapTiler footprints
         try
         {
-            let input: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-            if (this._shadowsEnabled())
+            const shadowsOn = this._shadowsEnabled();
+            const radius    = this._buildingRadiusMeters();
+            //Signature of every input the shadow raster depends on.
+            //Same signature = same image; the project + canvas paint +
+            //PNG encode round-trip can be skipped entirely. Altitude
+            //and azimuth are rounded to 0.01 deg, ~36 seconds of sun
+            //motion, well below the visual threshold for a shadow shift.
+            const lidarRef = this._lidarShadowFeatures;
+            const sig =
+                `${shadowsOn ? '1' : '0'}` +
+                `|${altitude.toFixed(2)}|${azimuth.toFixed(2)}` +
+                `|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}` +
+                `|${radius}` +
+                `|L${lidarRef ? lidarRef.features.length : -1}` +
+                `|B${this._buildingsData
+                    ? (this._buildingsData.home.features.length
+                       + this._buildingsData.surroundings.features.length)
+                    : -1}`;
+            if (sig !== this._lastShadowSig)
             {
-                if (this._lidarShadowFeatures && this._lidarShadowFeatures.features.length > 0)
+                this._lastShadowSig = sig;
+                let input: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+                if (shadowsOn)
                 {
-                    input = this._lidarShadowFeatures;
+                    if (lidarRef && lidarRef.features.length > 0)
+                    {
+                        input = lidarRef;
+                    }
+                    else if (this._buildingsData)
+                    {
+                        input = {
+                            type:     'FeatureCollection',
+                            features: [
+                                ...this._buildingsData.home.features,
+                                ...this._buildingsData.surroundings.features
+                            ]
+                        };
+                    }
                 }
-                else if (this._buildingsData)
+                const projected = projectExtrusionShadows(input,
                 {
-                    input = {
-                        type:     'FeatureCollection',
-                        features: [
-                            ...this._buildingsData.home.features,
-                            ...this._buildingsData.surroundings.features
-                        ]
-                    };
-                }
+                    sunAzimuthDeg:    azimuth,
+                    sunAltitudeDeg:   altitude,
+                    homeLat:          this.homeLat,
+                    //Clip shadows to the building visibility disc so
+                    //they never extend past the rendered surroundings.
+                    clipCenterLat:    this.homeLat,
+                    clipCenterLon:    this.homeLon,
+                    clipRadiusMeters: radius
+                });
+                this._paintShadowRaster(projected);
             }
-            const projected = projectExtrusionShadows(input,
-            {
-                sunAzimuthDeg:    azimuth,
-                sunAltitudeDeg:   altitude,
-                homeLat:          this.homeLat,
-                //Clip shadows to the building visibility disc so
-                //they never extend past the rendered surroundings.
-                clipCenterLat:    this.homeLat,
-                clipCenterLon:    this.homeLon,
-                clipRadiusMeters: this._buildingRadiusMeters()
-            });
-            this._paintShadowRaster(projected);
         }
         catch (_) {}
     }
@@ -2886,10 +2934,59 @@ export class HeliosEngine
             })()
             : 0;
 
-        //First pass: project every arc sample, recording depth.
-        //We need the full set of depths before we can normalise
-        //them into nearness factors, so we collect everything first
-        //and assign nearness in a second pass below.
+        //Reuse the cached arc inputs when both the calendar day and
+        //the (integer-rounded) live cloud cover are unchanged. The
+        //heavy trig (96 getSunPosition + 96 computeIrradianceWm2
+        //calls per pass) fires only when the cache misses; on every
+        //transform / rotation frame we just re-project the cached
+        //lon/lat/altitudeM tuples through the current map matrix.
+        const dayStartMs  = dayStart.getTime();
+        const cloudPctInt = Math.round(liveCloud);
+        let cache = this._arcInputsCache;
+        if (
+            !cache
+         || cache.dayStartMs  !== dayStartMs
+         || cache.cloudPctInt !== cloudPctInt
+        )
+        {
+            const samples: Array<{
+                lon: number;
+                lat: number;
+                altitudeM: number;
+                wm2: number;
+                belowHorizon: boolean;
+            } | null> = [];
+            for (let i = 0; i < SUN_ARC_SAMPLES; i++)
+            {
+                const t = new Date(dayStartMs + i * stepMs);
+                const sun3D = this._sunSpherePoint(t);
+                if (!sun3D)
+                {
+                    samples.push(null);
+                    continue;
+                }
+                const wm2 = computeIrradianceWm2(t, this.homeLat, this.homeLon, liveCloud);
+                samples.push({
+                    lon:          sun3D.lon,
+                    lat:          sun3D.lat,
+                    altitudeM:    sun3D.altitudeM,
+                    wm2,
+                    //altitudeM in _sunSpherePoint is R·sin(α), same
+                    //sign as α, so a negative altitudeM means the sun
+                    //is below the horizon at this sample. Surface that
+                    //as a flag rather than the raw value because the
+                    //card only needs to switch render modes (solid vs
+                    //dotted), not the exact angle.
+                    belowHorizon: sun3D.altitudeM < 0
+                });
+            }
+            cache = { dayStartMs, cloudPctInt, samples };
+            this._arcInputsCache = cache;
+        }
+
+        //Per-frame work: re-project the cached samples through the
+        //current map matrix, recording depth so we can normalise to
+        //a nearness factor below.
         type RawArcPoint = {
             x: number; y: number; irradiance: number; depth: number;
             belowHorizon: boolean;
@@ -2897,29 +2994,17 @@ export class HeliosEngine
         const raw: RawArcPoint[] = [];
         for (let i = 0; i < SUN_ARC_SAMPLES; i++)
         {
-            const t = new Date(dayStart.getTime() + i * stepMs);
-            const sun3D = this._sunSpherePoint(t);
-            if (!sun3D)
-            {
-                continue;
-            }
-            const px = this._projectScenePoint(sun3D.lon, sun3D.lat, sun3D.altitudeM,
+            const s = cache.samples[i];
+            if (!s) continue;
+            const px = this._projectScenePoint(s.lon, s.lat, s.altitudeM,
                 { anchorAtHome: true });
-            if (!px)
-            {
-                continue;
-            }
-            const wm2 = computeIrradianceWm2(t, this.homeLat, this.homeLon, liveCloud);
-            //altitudeM in _sunSpherePoint is R·sin(α), same sign as α,
-            //so a negative altitudeM means the sun is below the horizon
-            //at this sample. We surface that as a flag rather than the
-            //raw value because the card only needs to switch render
-            //modes (solid vs dotted), not the exact angle.
+            if (!px) continue;
             raw.push({
-                x: px.x, y: px.y,
-                irradiance:    wm2,
-                depth:         px.depth,
-                belowHorizon:  sun3D.altitudeM < 0
+                x:            px.x,
+                y:            px.y,
+                irradiance:   s.wm2,
+                depth:        px.depth,
+                belowHorizon: s.belowHorizon
             });
         }
 
@@ -3360,6 +3445,8 @@ export class HeliosEngine
         this._lidarShadowFeatures = null;
         this._lidarShadowKey      = '';
         this._shadowCanvas        = undefined;
+        this._arcInputsCache      = undefined;
+        this._lastShadowSig       = undefined;
         this._resizeObserver?.disconnect();
         if (this._autoRotateRaf !== undefined)
         {

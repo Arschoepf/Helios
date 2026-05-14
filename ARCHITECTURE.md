@@ -12,7 +12,7 @@ the home and reflected in a scrubbable 5-day timeline.
 
 Each entry consolidates everything between two stable releases.
 
-### v1.4.0, LiDAR-driven shadows, SVG cloud overlay, Shading section
+### v1.4.0, LiDAR-driven shadows, raster shadow layer, SVG cloud overlay
 
 Headline iteration on top of v1.3.0. Integrates the French national
 LiDAR HD dataset (IGN, metropolitan France + Corsica) as a source
@@ -32,29 +32,37 @@ picked automatically:
   BIL height raster client-side, runs a size-capped 8-connected
   flood fill on the above-threshold cells (each clump capped at ~80
   m² physical), and emits one convex-hull Polygon per clump with
-  `render_height` set to the clump's mean cell height. Those
-  polygons feed `projectExtrusionShadows()` exactly like the
-  MapTiler path. The size cap keeps a dense forest from collapsing
-  into one giant blanket shadow while the convex hull preserves the
-  organic, non-grid-aligned shape of each clump, so cast shadows
-  alpha-composite into a dappled forest pattern instead of a
-  visible tile mosaic.
+  `render_height` set to the clump's mean cell height. The size cap
+  keeps a dense forest from collapsing into one giant blanket shadow
+  while the convex hull preserves the organic, non-grid-aligned
+  shape of each clump.
 - **Outside coverage.** The card falls back to the MapTiler home +
-  surroundings footprints, projected through the same shadow
-  emitter (buildings only, no vegetation).
+  surroundings footprints (buildings only, no vegetation).
+
+`projectExtrusionShadows` projects each casting polygon's vertices
+in the opposite-of-sun direction and emits the convex hull as a
+single flat-opacity shadow polygon. The result is clipped to the
+building visibility disc via Sutherland-Hodgman against a 64-segment
+disc approximation so a tall tree at the edge no longer trails a
+200 m shadow past the visible surroundings.
+
+**Raster-backed rendering.** Instead of pushing those shadow
+polygons into a MapLibre fill layer, the engine rasterises them
+onto a 1024×1024 offscreen canvas at solid black, uploads the
+canvas as a MapLibre image source, and renders a raster layer at
+`raster-opacity = shadow-opacity`. Per-pixel rendering means many
+overlapping clump shadows can't saturate to black through
+alpha-compositing the way overlapping fill polygons would; every
+pixel is either covered or not, never stacked twice. Canvas
+anti-aliasing also softens the polygon edges. A rotating-sun chip
+top-right of the map signals the user that LiDAR shadows are still
+being fetched + painted.
 
 `lidar-precision` (`low / medium / high` mapped to 256² / 512² /
 1024² rasters) controls the IGN raster sampling. It has no effect
 out of coverage.
 
-**Shadow clipping.** Every cast shadow is clipped to the building
-visibility disc via Sutherland-Hodgman against a 64-segment
-polygonal approximation. A tall tree right at the edge of the
-radius no longer projects a 200 m tail past the visible
-surroundings. Consistent with the buildings layer, which is itself
-filtered to that disc.
-
-**Cloud disc + ring → SVG.** The translucent on-ground cloud-cover
+**Cloud disc + ring as SVG.** The translucent on-ground cloud-cover
 disc and its fixed 100 % reference ring live as SVG polygons in a
 dedicated `.cloud-svg` overlay, projected through
 `_projectScenePoint(..., anchorAtHome: true)` (same trick used by
@@ -62,23 +70,32 @@ the sun arc) so every vertex shares the home's terrain elevation
 reference. The hover breakdown tooltip is wired directly on the
 SVG polygon.
 
-**Single flat-opacity shadow, raster-backed.** `projectExtrusionShadows`
-emits one convex-hull polygon per casting region (original vertices
-+ opposite-of-sun projections). The engine no longer pushes those
-polygons into a fill layer: it rasterises them to a 1024×1024
-offscreen canvas at solid black, uploads the canvas as a MapLibre
-image source, and renders it with `raster-opacity = shadow-opacity`.
-Per-pixel rendering means many overlapping clump shadows can't
-saturate to black through alpha-compositing the way overlapping
-fill polygons would; every pixel is either covered or not, never
-stacked twice. Canvas anti-aliasing also softens the polygon edges
-for a cleaner read.
-
 **Editor reshuffle.** A new "Shading" section regroups every
 shadow-related option: the master toggle, the LiDAR precision
 selector (`low / medium / high`), and the opacity slider. The
-old "MapTiler shadows" toggle and the irradiance-scanner section
-are gone.
+v1.3.x "MapTiler shadows" toggle and the v1.4-beta irradiance
+scanner section are gone.
+
+**Performance.** Three caches absorb the hottest paths so the
+rotation cost stays flat:
+
+- The 96-sample sun arc table (sun position + clear-sky GHI per
+  15 min step) is memoised per (calendar day, integer cloud %).
+  On every map transform we re-project the cached lon/lat/altitudeM
+  tuples through the current matrix and skip 96 × 2 trig calls.
+- `projectExtrusionShadows` caches its 64-vertex clip disc and the
+  per-edge direction vectors that Sutherland-Hodgman consumes,
+  keyed on (clip center, radius). Rebuilt only when the home or the
+  building radius actually changes.
+- `_refreshShadowsAndAtmosphere` carries a signature of the inputs
+  the raster mask depends on (sun position rounded to 0.01°, source
+  features identity + length, radius, home). Same signature, the
+  project + canvas paint + PNG encode round-trip is skipped
+  entirely.
+
+`getSunPosition` also keeps a single-entry cache so consecutive
+calls in the same Lit cycle return immediately, and the PV chart's
+hourly aggregation is memoised against the history reference.
 
 **i18n.** New keys: `shadowsSection`, `shadowsEnabled*`,
 `lidarPrecision*`, `shadowOpacity*`, `mapStyleMinimal`,

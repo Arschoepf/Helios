@@ -10,9 +10,24 @@
 //Sun altitude / azimuth at a given UTC instant for a lat/lon point.
 //Both returned values are in degrees; azimuth is measured clockwise
 //from north.
+//
+//A single-entry cache absorbs the very common pattern where multiple
+//render passes in the same Lit cycle (atmosphere refresh, shadow
+//projection, PV legend) ask for the same (time, home) tuple in
+//quick succession. The cache keys on the JS timestamp + 6-decimal
+//lat/lon so two cards at distinct homes don't poison each other.
+let _sunCacheKey: string | null = null;
+let _sunCacheValue: { altitude: number; azimuth: number } | null = null;
+
 export function getSunPosition(date: Date, lat: number, lon: number):
     { altitude: number; azimuth: number }
 {
+    const key = `${date.getTime()}|${lat.toFixed(6)}|${lon.toFixed(6)}`;
+    if (key === _sunCacheKey && _sunCacheValue !== null)
+    {
+        return _sunCacheValue;
+    }
+
     const D    = Math.PI / 180;
     const H    = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
     const doy  = Math.floor((date.getTime() - Date.UTC(date.getUTCFullYear(), 0, 0)) / 86_400_000);
@@ -39,7 +54,10 @@ export function getSunPosition(date: Date, lat: number, lon: number):
     {
         az = 360 - az;
     }
-    return { altitude: alt, azimuth: az };
+    const result = { altitude: alt, azimuth: az };
+    _sunCacheKey   = key;
+    _sunCacheValue = result;
+    return result;
 }
 
 

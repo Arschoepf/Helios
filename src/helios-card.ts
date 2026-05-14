@@ -2395,13 +2395,31 @@ export class HeliosCard extends LitElement
     //Bucket the raw PV history into one (avg-watts) value per local
     //hour, handling cumulative-energy sensors via the same
     //differentiation logic the chart renderer uses.
+    //Memoized aggregation of the PV history by hour bucket. The
+    //result is invariant for a given (history reference, unit) pair,
+    //but the PV chart re-renders on every Lit cycle (clock tick).
+    //Cache keyed on the history reference + unit; cleared by garbage
+    //collection when the history is replaced.
+    private _aggregatePvCache?: {
+        hist: { times: Date[]; values: number[] };
+        unit: string;
+        out:  Map<number, number>;
+    };
+
     private _aggregatePvWattsPerHour(): Map<number, number>
     {
-        const out  = new Map<number, number>();
         const hist = this._pvHistory;
-        if (!hist || hist.times.length === 0) return out;
+        if (!hist || hist.times.length === 0) return new Map();
+        const unit = this._pvUnit ?? '';
 
-        const lu = (this._pvUnit || '').toLowerCase();
+        const cached = this._aggregatePvCache;
+        if (cached && cached.hist === hist && cached.unit === unit)
+        {
+            return cached.out;
+        }
+
+        const out  = new Map<number, number>();
+        const lu = unit.toLowerCase();
         const isCumulativeEnergy = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
 
         let times:  Date[]   = hist.times;
@@ -2431,7 +2449,7 @@ export class HeliosCard extends LitElement
             const ts = times[i].getTime();
             const v  = values[i];
             if (!isFinite(v)) continue;
-            const w = this._pvNormalizeToWatts(v, this._pvUnit ?? '');
+            const w = this._pvNormalizeToWatts(v, unit);
             //Floor to the hour boundary.
             const hourTs = Math.floor(ts / 3_600_000) * 3_600_000;
             sums.set  (hourTs, (sums.get(hourTs)   ?? 0) + w);
@@ -2442,6 +2460,8 @@ export class HeliosCard extends LitElement
             const c = counts.get(hourTs) ?? 1;
             out.set(hourTs, sum / c);
         }
+
+        this._aggregatePvCache = { hist, unit, out };
         return out;
     }
 
@@ -2634,13 +2654,12 @@ export class HeliosCard extends LitElement
         const layout         = this._labelLayout;
         const showLabel      = hasApiKey && layout !== null && this._cloudCover >= 0;
 
-        //Photovoltaic production chip, sits where the cloud chip
-        //used to live (above the home), tinted in the configured
-        //production colour and tied to the home with an animated
-        //leader line whose dashes flow from the house up to the
-        //chip. Only renders when the user has set the optional
-        //`pv-power-entity` config and the live state read produced
-        //a finite numeric value.
+        //Photovoltaic production chip, pinned above the home, tinted
+        //in the configured production colour and tied to the home
+        //with an animated leader line whose dashes flow from the
+        //house up to the chip. Only renders when the user has set
+        //the optional `pv-power-entity` config and the live state
+        //read produced a finite numeric value.
         const pvEntityId   = String(this.config?.['pv-power-entity'] ?? '').trim();
         const pvColor      = cfgHex(this.config?.['pv-color'], DEFAULT_PV_COLOR_HEX);
         //When the user scrubs the timeline into the past, the chip

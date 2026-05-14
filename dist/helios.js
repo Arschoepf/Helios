@@ -24526,7 +24526,13 @@ ${n4.shaderPreludeCode.vertexSource}`, define: n4.shaderDefine }, defaultProject
 })(maplibreGl);
 var maplibreGlExports = maplibreGl.exports;
 const maplibregl = /* @__PURE__ */ getDefaultExportFromCjs(maplibreGlExports);
+let _sunCacheKey = null;
+let _sunCacheValue = null;
 function getSunPosition(date, lat, lon) {
+  const key = `${date.getTime()}|${lat.toFixed(6)}|${lon.toFixed(6)}`;
+  if (key === _sunCacheKey && _sunCacheValue !== null) {
+    return _sunCacheValue;
+  }
   const D2 = Math.PI / 180;
   const H2 = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
   const doy = Math.floor((date.getTime() - Date.UTC(date.getUTCFullYear(), 0, 0)) / 864e5);
@@ -24543,7 +24549,10 @@ function getSunPosition(date, lat, lon) {
   if (ha > 0) {
     az = 360 - az;
   }
-  return { altitude: alt, azimuth: az };
+  const result = { altitude: alt, azimuth: az };
+  _sunCacheKey = key;
+  _sunCacheValue = result;
+  return result;
 }
 function computePvPower(date, lat, lon, cloudCoverPct) {
   const sun = getSunPosition(date, lat, lon);
@@ -26042,7 +26051,7 @@ async function fetchBuildingsAroundHome(opts) {
     }
   }
   if (tilesToFetch.length > 16) {
-    throw new Error(`[HELIOS] fetchBuildingsAroundHome: ${tilesToFetch.length} tiles requested — radius/zoom misconfigured`);
+    throw new Error(`[HELIOS] fetchBuildingsAroundHome: ${tilesToFetch.length} tiles requested, radius/zoom misconfigured`);
   }
   const features = [];
   await Promise.all(tilesToFetch.map(async ({ x: x2, y: y3 }) => {
@@ -26137,21 +26146,7 @@ function projectExtrusionShadows(extrusions, opts) {
   const tanAlt = Math.tan(altR);
   const mPerDegLon = M_PER_DEG_LAT$1 * Math.cos(opts.homeLat * D2);
   const minH = opts.minHeightM ?? 2;
-  let clipRing = null;
-  if (typeof opts.clipCenterLat === "number" && typeof opts.clipCenterLon === "number" && typeof opts.clipRadiusMeters === "number" && opts.clipRadiusMeters > 0) {
-    const segs = 64;
-    const dLatDisc = opts.clipRadiusMeters / M_PER_DEG_LAT$1;
-    const dLonDisc = opts.clipRadiusMeters / (M_PER_DEG_LAT$1 * Math.cos(opts.clipCenterLat * D2));
-    const ring = [];
-    for (let i2 = 0; i2 < segs; i2++) {
-      const a2 = i2 / segs * 2 * Math.PI;
-      ring.push([
-        opts.clipCenterLon + Math.cos(a2) * dLonDisc,
-        opts.clipCenterLat + Math.sin(a2) * dLatDisc
-      ]);
-    }
-    clipRing = ring;
-  }
+  const clipBundle = typeof opts.clipCenterLat === "number" && typeof opts.clipCenterLon === "number" && typeof opts.clipRadiusMeters === "number" && opts.clipRadiusMeters > 0 ? getClipBundle(opts.clipCenterLat, opts.clipCenterLon, opts.clipRadiusMeters) : null;
   const out = [];
   for (const feat of extrusions.features) {
     const geom = feat.geometry;
@@ -26181,8 +26176,8 @@ function projectExtrusionShadows(extrusions, opts) {
       const hull = convexHull(cloud);
       if (hull.length < 3) continue;
       let ring = hull;
-      if (clipRing) {
-        const clipped = clipConvexPolygon(hull, clipRing);
+      if (clipBundle) {
+        const clipped = clipConvexPolygon(hull, clipBundle);
         if (clipped.length < 3) continue;
         ring = clipped;
       }
@@ -26197,37 +26192,74 @@ function projectExtrusionShadows(extrusions, opts) {
   }
   return { type: "FeatureCollection", features: out };
 }
+let _clipBundleKey = null;
+let _clipBundleCache = null;
+function getClipBundle(centerLat, centerLon, radiusMeters) {
+  const key = `${centerLat.toFixed(6)}|${centerLon.toFixed(6)}|${radiusMeters}`;
+  if (key === _clipBundleKey && _clipBundleCache !== null) {
+    return _clipBundleCache;
+  }
+  const segs = 64;
+  const D2 = Math.PI / 180;
+  const dLatDsc = radiusMeters / M_PER_DEG_LAT$1;
+  const dLonDsc = radiusMeters / (M_PER_DEG_LAT$1 * Math.cos(centerLat * D2));
+  const ring = new Array(segs);
+  for (let i2 = 0; i2 < segs; i2++) {
+    const a2 = i2 / segs * 2 * Math.PI;
+    ring[i2] = [
+      centerLon + Math.cos(a2) * dLonDsc,
+      centerLat + Math.sin(a2) * dLatDsc
+    ];
+  }
+  const dx = new Float64Array(segs);
+  const dy = new Float64Array(segs);
+  for (let i2 = 0; i2 < segs; i2++) {
+    const n3 = (i2 + 1) % segs;
+    dx[i2] = ring[n3][0] - ring[i2][0];
+    dy[i2] = ring[n3][1] - ring[i2][1];
+  }
+  _clipBundleKey = key;
+  _clipBundleCache = { ring, dx, dy };
+  return _clipBundleCache;
+}
 function clipConvexPolygon(subject, clip) {
-  if (subject.length < 3 || clip.length < 3) return [];
+  const ring = clip.ring;
+  if (subject.length < 3 || ring.length < 3) return [];
   let output = subject.slice();
-  for (let e2 = 0; e2 < clip.length; e2++) {
+  const dxArr = clip.dx;
+  const dyArr = clip.dy;
+  for (let e2 = 0; e2 < ring.length; e2++) {
     if (output.length === 0) return [];
-    const e1 = clip[e2];
-    const e22 = clip[(e2 + 1) % clip.length];
+    const e1x = ring[e2][0];
+    const e1y = ring[e2][1];
+    const edx = dxArr[e2];
+    const edy = dyArr[e2];
     const input = output;
     output = [];
-    const inside = (p2) => (e22[0] - e1[0]) * (p2[1] - e1[1]) - (e22[1] - e1[1]) * (p2[0] - e1[0]);
-    const intersect = (a2, b2) => {
-      const x1 = e1[0], y1 = e1[1], x2 = e22[0], y22 = e22[1];
-      const x3 = a2[0], y3 = a2[1], x4 = b2[0], y4 = b2[1];
-      const den = (x1 - x2) * (y3 - y4) - (y1 - y22) * (x3 - x4);
-      if (den === 0) return [b2[0], b2[1]];
-      const t2 = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
-      return [x1 + t2 * (x2 - x1), y1 + t2 * (y22 - y1)];
-    };
     for (let i2 = 0; i2 < input.length; i2++) {
       const curr = input[i2];
       const next = input[(i2 + 1) % input.length];
-      const cIn = inside(curr) >= 0;
-      const nIn = inside(next) >= 0;
+      const cCross = edx * (curr[1] - e1y) - edy * (curr[0] - e1x);
+      const nCross = edx * (next[1] - e1y) - edy * (next[0] - e1x);
+      const cIn = cCross >= 0;
+      const nIn = nCross >= 0;
       if (cIn) {
-        if (nIn) output.push(next);
-        else output.push(intersect(curr, next));
-      } else {
         if (nIn) {
-          output.push(intersect(curr, next));
           output.push(next);
+        } else {
+          const t2 = cCross / (cCross - nCross);
+          output.push([
+            curr[0] + t2 * (next[0] - curr[0]),
+            curr[1] + t2 * (next[1] - curr[1])
+          ]);
         }
+      } else if (nIn) {
+        const t2 = cCross / (cCross - nCross);
+        output.push([
+          curr[0] + t2 * (next[0] - curr[0]),
+          curr[1] + t2 * (next[1] - curr[1])
+        ]);
+        output.push(next);
       }
     }
   }
@@ -26599,7 +26631,7 @@ const _HeliosEngine = class _HeliosEngine {
     while (_liveEngines.size >= MAX_LIVE_ENGINES) {
       const oldest = _liveEngines.values().next().value;
       if (!oldest) break;
-      console.warn("[HELIOS] WebGL context cap reached — force-cleaning the oldest engine");
+      console.warn("[HELIOS] WebGL context cap reached, force-cleaning the oldest engine");
       try {
         oldest.cleanup();
       } catch (_2) {
@@ -26719,7 +26751,7 @@ const _HeliosEngine = class _HeliosEngine {
       e2.preventDefault();
       bumpStat("contextLostEvents");
       this._mapReady = false;
-      console.warn("[HELIOS] WebGL context lost — requesting card re-init");
+      console.warn("[HELIOS] WebGL context lost, requesting card re-init");
       this.onContextLost?.();
     };
     this._webglRestoredHandler = () => {
@@ -27769,34 +27801,41 @@ const _HeliosEngine = class _HeliosEngine {
     } catch (_2) {
     }
     try {
-      let input = { type: "FeatureCollection", features: [] };
-      if (this._shadowsEnabled()) {
-        if (this._lidarShadowFeatures && this._lidarShadowFeatures.features.length > 0) {
-          input = this._lidarShadowFeatures;
-        } else if (this._buildingsData) {
-          input = {
-            type: "FeatureCollection",
-            features: [
-              ...this._buildingsData.home.features,
-              ...this._buildingsData.surroundings.features
-            ]
-          };
+      const shadowsOn = this._shadowsEnabled();
+      const radius = this._buildingRadiusMeters();
+      const lidarRef = this._lidarShadowFeatures;
+      const sig = `${shadowsOn ? "1" : "0"}|${altitude.toFixed(2)}|${azimuth.toFixed(2)}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|L${lidarRef ? lidarRef.features.length : -1}|B${this._buildingsData ? this._buildingsData.home.features.length + this._buildingsData.surroundings.features.length : -1}`;
+      if (sig !== this._lastShadowSig) {
+        this._lastShadowSig = sig;
+        let input = { type: "FeatureCollection", features: [] };
+        if (shadowsOn) {
+          if (lidarRef && lidarRef.features.length > 0) {
+            input = lidarRef;
+          } else if (this._buildingsData) {
+            input = {
+              type: "FeatureCollection",
+              features: [
+                ...this._buildingsData.home.features,
+                ...this._buildingsData.surroundings.features
+              ]
+            };
+          }
         }
+        const projected = projectExtrusionShadows(
+          input,
+          {
+            sunAzimuthDeg: azimuth,
+            sunAltitudeDeg: altitude,
+            homeLat: this.homeLat,
+            //Clip shadows to the building visibility disc so
+            //they never extend past the rendered surroundings.
+            clipCenterLat: this.homeLat,
+            clipCenterLon: this.homeLon,
+            clipRadiusMeters: radius
+          }
+        );
+        this._paintShadowRaster(projected);
       }
-      const projected = projectExtrusionShadows(
-        input,
-        {
-          sunAzimuthDeg: azimuth,
-          sunAltitudeDeg: altitude,
-          homeLat: this.homeLat,
-          //Clip shadows to the building visibility disc so
-          //they never extend past the rendered surroundings.
-          clipCenterLat: this.homeLat,
-          clipCenterLon: this.homeLon,
-          clipRadiusMeters: this._buildingRadiusMeters()
-        }
-      );
-      this._paintShadowRaster(projected);
     } catch (_2) {
     }
   }
@@ -28055,29 +28094,53 @@ const _HeliosEngine = class _HeliosEngine {
       const w2 = this._getWeatherAtTime(now);
       return w2?.cloudCover ?? 0;
     })() : 0;
+    const dayStartMs = dayStart.getTime();
+    const cloudPctInt = Math.round(liveCloud);
+    let cache = this._arcInputsCache;
+    if (!cache || cache.dayStartMs !== dayStartMs || cache.cloudPctInt !== cloudPctInt) {
+      const samples = [];
+      for (let i2 = 0; i2 < SUN_ARC_SAMPLES; i2++) {
+        const t2 = new Date(dayStartMs + i2 * stepMs);
+        const sun3D = this._sunSpherePoint(t2);
+        if (!sun3D) {
+          samples.push(null);
+          continue;
+        }
+        const wm2 = computeIrradianceWm2(t2, this.homeLat, this.homeLon, liveCloud);
+        samples.push({
+          lon: sun3D.lon,
+          lat: sun3D.lat,
+          altitudeM: sun3D.altitudeM,
+          wm2,
+          //altitudeM in _sunSpherePoint is R·sin(α), same
+          //sign as α, so a negative altitudeM means the sun
+          //is below the horizon at this sample. Surface that
+          //as a flag rather than the raw value because the
+          //card only needs to switch render modes (solid vs
+          //dotted), not the exact angle.
+          belowHorizon: sun3D.altitudeM < 0
+        });
+      }
+      cache = { dayStartMs, cloudPctInt, samples };
+      this._arcInputsCache = cache;
+    }
     const raw = [];
     for (let i2 = 0; i2 < SUN_ARC_SAMPLES; i2++) {
-      const t2 = new Date(dayStart.getTime() + i2 * stepMs);
-      const sun3D = this._sunSpherePoint(t2);
-      if (!sun3D) {
-        continue;
-      }
+      const s2 = cache.samples[i2];
+      if (!s2) continue;
       const px = this._projectScenePoint(
-        sun3D.lon,
-        sun3D.lat,
-        sun3D.altitudeM,
+        s2.lon,
+        s2.lat,
+        s2.altitudeM,
         { anchorAtHome: true }
       );
-      if (!px) {
-        continue;
-      }
-      const wm2 = computeIrradianceWm2(t2, this.homeLat, this.homeLon, liveCloud);
+      if (!px) continue;
       raw.push({
         x: px.x,
         y: px.y,
-        irradiance: wm2,
+        irradiance: s2.wm2,
         depth: px.depth,
-        belowHorizon: sun3D.altitudeM < 0
+        belowHorizon: s2.belowHorizon
       });
     }
     const sunNow3D = this._sunSpherePoint(now);
@@ -28375,6 +28438,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarShadowFeatures = null;
     this._lidarShadowKey = "";
     this._shadowCanvas = void 0;
+    this._arcInputsCache = void 0;
+    this._lastShadowSig = void 0;
     this._resizeObserver?.disconnect();
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
@@ -28568,9 +28633,9 @@ const en = {
     pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
     pvColor: "Production color *",
     batterySection: "Home battery",
-    batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip — State of Charge on the LEFT, signed Power on the RIGHT — connected to PV with a static dotted hairline. Either entity is independently optional; the chip on its side appears as soon as the entity is set.",
+    batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional; the chip on its side appears as soon as the entity is set.",
     batterySocEntity: "State of charge entity",
-    batterySocEntityHelp: 'Pick a battery State of Charge sensor (% — usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
+    batterySocEntityHelp: 'Pick a battery State of Charge sensor (%, usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
     batteryPowerEntity: "Power entity",
     batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
     batteryColor: "Battery color *",
@@ -28659,9 +28724,9 @@ const fr = {
     pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
     pvColor: "Couleur de production *",
     batterySection: "Batterie domestique",
-    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV — état de charge à GAUCHE, puissance signée à DROITE — reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles ; la pastille correspondante s'affiche dès que l'entité est renseignée.",
+    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles ; la pastille correspondante s'affiche dès que l'entité est renseignée.",
     batterySocEntity: "Entité d'état de charge",
-    batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (% — typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
+    batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (%, typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
     batteryPowerEntity: "Entité de puissance",
     batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
     batteryColor: "Couleur batterie *",
@@ -28750,9 +28815,9 @@ const de = {
     pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
     pvColor: "Produktionsfarbe *",
     batterySection: "Hausbatterie",
-    batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips — Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS — über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional; der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
+    batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional; der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
     batterySocEntity: "Ladezustand-Entität",
-    batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (% — typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
+    batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (%, typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
     batteryPowerEntity: "Leistungs-Entität",
     batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
     batteryColor: "Batteriefarbe *",
@@ -28841,9 +28906,9 @@ const es = {
     pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
     pvColor: "Color de producción *",
     batterySection: "Batería doméstica",
-    batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV — estado de carga a la IZQUIERDA, potencia con signo a la DERECHA — conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales; el chip correspondiente aparece en cuanto la entidad está definida.",
+    batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales; el chip correspondiente aparece en cuanto la entidad está definida.",
     batterySocEntity: "Entidad de estado de carga",
-    batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (% — típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
+    batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (%, típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
     batteryPowerEntity: "Entidad de potencia",
     batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
     batteryColor: "Color batería *",
@@ -28932,9 +28997,9 @@ const it = {
     pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
     pvColor: "Colore di produzione *",
     batterySection: "Batteria domestica",
-    batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV — stato di carica a SINISTRA, potenza con segno a DESTRA — collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali; la pastiglia corrispondente appare appena l'entità è impostata.",
+    batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali; la pastiglia corrispondente appare appena l'entità è impostata.",
     batterySocEntity: "Entità stato di carica",
-    batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (% — tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
+    batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (%, tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
     batteryPowerEntity: "Entità di potenza",
     batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
     batteryColor: "Colore batteria *",
@@ -29023,9 +29088,9 @@ const nl = {
     pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
     pvColor: "Productiekleur *",
     batterySection: "Thuisbatterij",
-    batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip — laadtoestand LINKS, ondertekend vermogen RECHTS — verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel; de bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
+    batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel; de bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
     batterySocEntity: "Laadtoestand-entiteit",
-    batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (% — meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
+    batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (%, meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
     batteryPowerEntity: "Vermogen-entiteit",
     batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
     batteryColor: "Batterijkleur *",
@@ -29114,9 +29179,9 @@ const pt = {
     pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
     pvColor: "Cor de produção *",
     batterySection: "Bateria doméstica",
-    batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV — estado de carga à ESQUERDA, potência com sinal à DIREITA — ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais; o chip correspondente aparece assim que a entidade é definida.",
+    batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais; o chip correspondente aparece assim que a entidade é definida.",
     batterySocEntity: "Entidade do estado de carga",
-    batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (% — normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
+    batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (%, normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
     batteryPowerEntity: "Entidade de potência",
     batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
     batteryColor: "Cor da bateria *",
@@ -31299,7 +31364,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.31"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.32"}`,
       labelStyle,
       versionStyle
     );
@@ -32698,14 +32763,16 @@ let HeliosCard = class extends i {
     } catch (_2) {
     }
   }
-  //Bucket the raw PV history into one (avg-watts) value per local
-  //hour, handling cumulative-energy sensors via the same
-  //differentiation logic the chart renderer uses.
   _aggregatePvWattsPerHour() {
-    const out = /* @__PURE__ */ new Map();
     const hist = this._pvHistory;
-    if (!hist || hist.times.length === 0) return out;
-    const lu = (this._pvUnit || "").toLowerCase();
+    if (!hist || hist.times.length === 0) return /* @__PURE__ */ new Map();
+    const unit = this._pvUnit ?? "";
+    const cached = this._aggregatePvCache;
+    if (cached && cached.hist === hist && cached.unit === unit) {
+      return cached.out;
+    }
+    const out = /* @__PURE__ */ new Map();
+    const lu = unit.toLowerCase();
     const isCumulativeEnergy = lu === "wh" || lu === "kwh" || lu === "mwh";
     let times = hist.times;
     let values = hist.values;
@@ -32729,7 +32796,7 @@ let HeliosCard = class extends i {
       const ts = times[i2].getTime();
       const v2 = values[i2];
       if (!isFinite(v2)) continue;
-      const w2 = this._pvNormalizeToWatts(v2, this._pvUnit ?? "");
+      const w2 = this._pvNormalizeToWatts(v2, unit);
       const hourTs = Math.floor(ts / 36e5) * 36e5;
       sums.set(hourTs, (sums.get(hourTs) ?? 0) + w2);
       counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
@@ -32738,6 +32805,7 @@ let HeliosCard = class extends i {
       const c2 = counts.get(hourTs) ?? 1;
       out.set(hourTs, sum / c2);
     }
+    this._aggregatePvCache = { hist, unit, out };
     return out;
   }
   //Refresh the per-hour calibration buffer from the current

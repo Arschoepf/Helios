@@ -204,7 +204,7 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
     //bail rather than hammer the API.
     if (tilesToFetch.length > 16)
     {
-        throw new Error(`[HELIOS] fetchBuildingsAroundHome: ${tilesToFetch.length} tiles requested — radius/zoom misconfigured`);
+        throw new Error(`[HELIOS] fetchBuildingsAroundHome: ${tilesToFetch.length} tiles requested, radius/zoom misconfigured`);
     }
 
     const features: GeoJSON.Feature[] = [];

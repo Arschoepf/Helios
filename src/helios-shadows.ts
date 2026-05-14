@@ -57,33 +57,19 @@ export function projectExtrusionShadows(
     const mPerDegLon = M_PER_DEG_LAT * Math.cos(opts.homeLat * D);
     const minH       = opts.minHeightM ?? 2;
 
-    //Build the clip polygon once per call. We approximate the disc
-    //with 64 vertices (smooth at typical card zoom, negligible cost).
-    //Generated in CCW order so the Sutherland-Hodgman half-plane test
-    //treats "inside the disc" as "left of every edge".
-    let clipRing: Array<[number, number]> | null = null;
-    if (
+    //Build the clip polygon once per (clip center, radius) tuple,
+    //cached across calls. The 64-vertex disc approximation doesn't
+    //depend on sun position, so re-generating it on every refresh
+    //was pure waste; same for the per-edge direction vectors that
+    //Sutherland-Hodgman consumes (pre-baked here as `clipEdges`).
+    const clipBundle = (
         typeof opts.clipCenterLat   === 'number'
      && typeof opts.clipCenterLon   === 'number'
      && typeof opts.clipRadiusMeters === 'number'
      && opts.clipRadiusMeters > 0
     )
-    {
-        const segs = 64;
-        const dLatDisc = opts.clipRadiusMeters / M_PER_DEG_LAT;
-        const dLonDisc = opts.clipRadiusMeters
-                       / (M_PER_DEG_LAT * Math.cos(opts.clipCenterLat * D));
-        const ring: Array<[number, number]> = [];
-        for (let i = 0; i < segs; i++)
-        {
-            const a = (i / segs) * 2 * Math.PI;
-            ring.push([
-                opts.clipCenterLon + Math.cos(a) * dLonDisc,
-                opts.clipCenterLat + Math.sin(a) * dLatDisc
-            ]);
-        }
-        clipRing = ring;
-    }
+        ? getClipBundle(opts.clipCenterLat, opts.clipCenterLon, opts.clipRadiusMeters)
+        : null;
 
     const out: GeoJSON.Feature[] = [];
 
@@ -135,9 +121,9 @@ export function projectExtrusionShadows(
             //near the edge; clipping here keeps the visible shadows
             //confined to the same disc as the rendered buildings.
             let ring: Array<[number, number]> = hull;
-            if (clipRing)
+            if (clipBundle)
             {
-                const clipped = clipConvexPolygon(hull, clipRing);
+                const clipped = clipConvexPolygon(hull, clipBundle);
                 if (clipped.length < 3) continue;
                 ring = clipped;
             }
@@ -155,62 +141,127 @@ export function projectExtrusionShadows(
     return { type: 'FeatureCollection', features: out };
 }
 
-//Sutherland-Hodgman polygon clip. Both `subject` and `clip` are
-//non-closed rings in CCW order. Returns the intersection ring (also
-//non-closed, possibly empty). Robust for any convex `clip`; the
-//subject does not need to be convex but is in our pipeline (each
-//shadow polygon is a convex hull). The "inside" test is the standard
-//left-of-edge sign of the 2D cross product.
+//Cached approximation of the clip disc. The 64-vertex ring and the
+//per-edge `dx`, `dy` deltas Sutherland-Hodgman consumes never depend
+//on the sun position, so we rebuild them only when the clip center
+//or radius actually changes.
+interface ClipBundle
+{
+    ring: Array<[number, number]>;
+    //Pre-baked edge vectors, indexed by edge i.
+    //  dx[i] = ring[(i+1) % N].x - ring[i].x
+    //  dy[i] = ring[(i+1) % N].y - ring[i].y
+    dx:   Float64Array;
+    dy:   Float64Array;
+}
+
+let _clipBundleKey:    string | null = null;
+let _clipBundleCache:  ClipBundle | null = null;
+
+function getClipBundle(
+    centerLat:     number,
+    centerLon:     number,
+    radiusMeters:  number
+): ClipBundle
+{
+    const key = `${centerLat.toFixed(6)}|${centerLon.toFixed(6)}|${radiusMeters}`;
+    if (key === _clipBundleKey && _clipBundleCache !== null)
+    {
+        return _clipBundleCache;
+    }
+
+    const segs    = 64;
+    const D       = Math.PI / 180;
+    const dLatDsc = radiusMeters / M_PER_DEG_LAT;
+    const dLonDsc = radiusMeters / (M_PER_DEG_LAT * Math.cos(centerLat * D));
+    const ring: Array<[number, number]> = new Array(segs);
+    for (let i = 0; i < segs; i++)
+    {
+        const a = (i / segs) * 2 * Math.PI;
+        ring[i] = [
+            centerLon + Math.cos(a) * dLonDsc,
+            centerLat + Math.sin(a) * dLatDsc
+        ];
+    }
+    const dx = new Float64Array(segs);
+    const dy = new Float64Array(segs);
+    for (let i = 0; i < segs; i++)
+    {
+        const n = (i + 1) % segs;
+        dx[i] = ring[n][0] - ring[i][0];
+        dy[i] = ring[n][1] - ring[i][1];
+    }
+    _clipBundleKey   = key;
+    _clipBundleCache = { ring, dx, dy };
+    return _clipBundleCache;
+}
+
+//Sutherland-Hodgman polygon clip. `subject` is a non-closed ring in
+//CCW order; `clip` is the pre-baked bundle from `getClipBundle`
+//(CCW ring + per-edge direction vectors). Returns the intersection
+//ring (also non-closed, possibly empty). The "inside" test is the
+//standard left-of-edge sign of the 2D cross product.
 function clipConvexPolygon(
     subject: Array<[number, number]>,
-    clip:    Array<[number, number]>
+    clip:    ClipBundle
 ): Array<[number, number]>
 {
-    if (subject.length < 3 || clip.length < 3) return [];
+    const ring = clip.ring;
+    if (subject.length < 3 || ring.length < 3) return [];
     let output: Array<[number, number]> = subject.slice();
 
-    for (let e = 0; e < clip.length; e++)
+    const dxArr = clip.dx;
+    const dyArr = clip.dy;
+
+    for (let e = 0; e < ring.length; e++)
     {
         if (output.length === 0) return [];
-        const e1 = clip[e];
-        const e2 = clip[(e + 1) % clip.length];
+        const e1x = ring[e][0];
+        const e1y = ring[e][1];
+        const edx = dxArr[e];
+        const edy = dyArr[e];
 
         const input = output;
         output = [];
-
-        const inside = (p: [number, number]): number =>
-            (e2[0] - e1[0]) * (p[1] - e1[1]) - (e2[1] - e1[1]) * (p[0] - e1[0]);
-
-        const intersect = (
-            a: [number, number], b: [number, number]
-        ): [number, number] =>
-        {
-            const x1 = e1[0], y1 = e1[1], x2 = e2[0], y2 = e2[1];
-            const x3 = a[0],  y3 = a[1],  x4 = b[0],  y4 = b[1];
-            const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-            if (den === 0) return [b[0], b[1]];
-            const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
-            return [x1 + t * (x2 - x1), y1 + t * (y2 - y1)];
-        };
 
         for (let i = 0; i < input.length; i++)
         {
             const curr = input[i];
             const next = input[(i + 1) % input.length];
-            const cIn  = inside(curr) >= 0;
-            const nIn  = inside(next) >= 0;
+            //Cross product of (edge_dir, point - e1). Positive = left
+            //of edge = inside for our CCW clip ring.
+            const cCross = edx * (curr[1] - e1y) - edy * (curr[0] - e1x);
+            const nCross = edx * (next[1] - e1y) - edy * (next[0] - e1x);
+            const cIn = cCross >= 0;
+            const nIn = nCross >= 0;
             if (cIn)
-            {
-                if (nIn) output.push(next);
-                else     output.push(intersect(curr, next));
-            }
-            else
             {
                 if (nIn)
                 {
-                    output.push(intersect(curr, next));
                     output.push(next);
                 }
+                else
+                {
+                    //Line-line intersection between (curr,next) and
+                    //(e1, e1+edge). Solved with the cross-product
+                    //ratio cCross / (cCross - nCross); curr lies at
+                    //distance proportional to cCross, next at nCross,
+                    //and the zero-crossing splits them linearly.
+                    const t = cCross / (cCross - nCross);
+                    output.push([
+                        curr[0] + t * (next[0] - curr[0]),
+                        curr[1] + t * (next[1] - curr[1])
+                    ]);
+                }
+            }
+            else if (nIn)
+            {
+                const t = cCross / (cCross - nCross);
+                output.push([
+                    curr[0] + t * (next[0] - curr[0]),
+                    curr[1] + t * (next[1] - curr[1])
+                ]);
+                output.push(next);
             }
         }
     }
