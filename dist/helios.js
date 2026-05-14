@@ -27235,16 +27235,23 @@ const _HeliosEngine = class _HeliosEngine {
         data
       }
     );
-    const isDark = this._isMinimalStyle() ? false : String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
+    const isDark = String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
     this.map.addLayer(
       {
         id: "helios-crop-mask",
         type: "fill",
         source: "helios-crop-mask-src",
         paint: {
-          "fill-color": isDark ? "#191a1b" : "#ffffff",
-          "fill-opacity": 1,
-          "fill-antialias": true
+          "fill-color": isDark ? "#14161c" : "#ffffff",
+          //Per-feature opacity, driven by the `opacity` property
+          //the source emits on each concentric ring. The inner
+          //rings around the disc edge fade in gradually; the
+          //outer ring is fully opaque.
+          "fill-opacity": ["get", "opacity"],
+          //Hard-edged on purpose. The fade lives in the ring
+          //stack, antialiasing the polygon edges would only
+          //bleed neighbouring rings together at the seams.
+          "fill-antialias": false
         }
       }
     );
@@ -27257,42 +27264,94 @@ const _HeliosEngine = class _HeliosEngine {
     if (!src) return;
     src.setData(this._buildCropMaskFeature());
   }
-  //Build the donut GeoJSON Feature consumed by the crop-mask source.
-  //Outer ring = 5 km bbox around home; inner ring = 64-segment disc
-  //at the display radius. The inner ring is generated CW so GeoJSON
-  //treats it as a hole regardless of the outer ring's orientation.
+  //Build the crop-mask geometry as a stack of N concentric donut
+  //features so the mask can fade smoothly into the disc rather
+  //than cutting on a hard edge.
+  //
+  //  - The outermost feature spans (radius + FADE_M) ... 5 km at
+  //    full opacity (1.0). Anything past the fade band is solid.
+  //  - The fade band (radius ... radius + FADE_M) is divided into
+  //    FADE_STEPS non-overlapping sub-rings, each with linearly
+  //    increasing opacity. Non-overlapping is key: with overlap,
+  //    fill-opacity composes via SRC_OVER and the band saturates
+  //    to opaque, defeating the gradient. The fill layer reads
+  //    `opacity` off each feature so a single layer renders the
+  //    whole stack.
+  //  - All rings share the same outer-square bound (5 km bbox)
+  //    except their inner hole shrinks step by step. GeoJSON
+  //    polygons treat the second ring as a hole, so each feature
+  //    paints just its band.
+  //
+  //  Layout (radii, metres):
+  //      r0 = radius              (disc edge,         opacity 0)
+  //      r1 = radius + FADE_M/N   (band 1,            opacity 1/N)
+  //      r2 = radius + 2*FADE_M/N (band 2,            opacity 2/N)
+  //      ...
+  //      rN = radius + FADE_M     (fully opaque from here outward)
+  //      ROut = 5 km              (outer bound)
   _buildCropMaskFeature() {
     const cosLat = Math.cos(this.homeLat * Math.PI / 180);
+    const FADE_M = 40;
+    const FADE_STEPS = 8;
+    const SEGS = 64;
     const OUTER_M = 5e3;
     const dLatOut = OUTER_M / 111320;
     const dLonOut = OUTER_M / (111320 * cosLat);
     const radius = this._buildingRadiusMeters();
-    const dLatIn = radius / 111320;
-    const dLonIn = radius / (111320 * cosLat);
-    const outer = [
+    const ringAtRadius = (rM) => {
+      const dLat = rM / 111320;
+      const dLon = rM / (111320 * cosLat);
+      const out = [];
+      for (let i2 = SEGS; i2 >= 0; i2--) {
+        const a2 = i2 / SEGS * 2 * Math.PI;
+        out.push([
+          this.homeLon + Math.cos(a2) * dLon,
+          this.homeLat + Math.sin(a2) * dLat
+        ]);
+      }
+      return out;
+    };
+    const outerSquare = [
       [this.homeLon - dLonOut, this.homeLat - dLatOut],
       [this.homeLon + dLonOut, this.homeLat - dLatOut],
       [this.homeLon + dLonOut, this.homeLat + dLatOut],
       [this.homeLon - dLonOut, this.homeLat + dLatOut],
       [this.homeLon - dLonOut, this.homeLat - dLatOut]
     ];
-    const segs = 64;
-    const inner = [];
-    for (let i2 = segs; i2 >= 0; i2--) {
-      const a2 = i2 / segs * 2 * Math.PI;
-      inner.push([
-        this.homeLon + Math.cos(a2) * dLonIn,
-        this.homeLat + Math.sin(a2) * dLatIn
-      ]);
+    const features = [];
+    const step = FADE_M / FADE_STEPS;
+    for (let i2 = 0; i2 < FADE_STEPS; i2++) {
+      const innerR = radius + i2 * step;
+      const outerR = radius + (i2 + 1) * step;
+      const opacity = (i2 + 1) / FADE_STEPS;
+      features.push({
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          //Outer ring first (CCW from the radial generator
+          //above is actually OK for polygons whose hole is
+          //inside); MapLibre's fill renderer treats the
+          //second ring as a hole either way.
+          coordinates: [
+            //Outer band edge (the larger ring) becomes
+            //the polygon outer ring.
+            ringAtRadius(outerR).reverse(),
+            //Inner band edge becomes the hole.
+            ringAtRadius(innerR)
+          ]
+        },
+        properties: { opacity }
+      });
     }
-    return {
+    features.push({
       type: "Feature",
       geometry: {
         type: "Polygon",
-        coordinates: [outer, inner]
+        coordinates: [outerSquare, ringAtRadius(radius + FADE_M)]
       },
-      properties: {}
-    };
+      properties: { opacity: 1 }
+    });
+    return { type: "FeatureCollection", features };
   }
   //Cloud-cover disc setup.
   //
@@ -31558,7 +31617,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.34"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.35"}`,
       labelStyle,
       versionStyle
     );
@@ -31579,7 +31638,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.4.0-beta.34",
+        version: "1.4.0-beta.35",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -31587,7 +31646,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.4.0-beta.34"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.4.0-beta.35"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

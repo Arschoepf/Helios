@@ -1607,9 +1607,12 @@ export class HeliosEngine
             data
         });
 
-        const isDark = this._isMinimalStyle()
-            ? false
-            : String(this.cfg['card-theme'] ?? 'light').toLowerCase() === 'dark';
+        //Theme background: matches the card chrome's surface so the
+        //masked area visually merges with the surrounding card
+        //rather than fighting it. Independent of `map-style`,
+        //`card-theme: dark` keeps the surface near-black even on
+        //the `minimal` basemap.
+        const isDark = String(this.cfg['card-theme'] ?? 'light').toLowerCase() === 'dark';
         this.map.addLayer(
         {
             id:     'helios-crop-mask',
@@ -1617,9 +1620,16 @@ export class HeliosEngine
             source: 'helios-crop-mask-src',
             paint:
             {
-                'fill-color':     isDark ? '#191a1b' : '#ffffff',
-                'fill-opacity':   1,
-                'fill-antialias': true
+                'fill-color':     isDark ? '#14161c' : '#ffffff',
+                //Per-feature opacity, driven by the `opacity` property
+                //the source emits on each concentric ring. The inner
+                //rings around the disc edge fade in gradually; the
+                //outer ring is fully opaque.
+                'fill-opacity':   ['get', 'opacity'],
+                //Hard-edged on purpose. The fade lives in the ring
+                //stack, antialiasing the polygon edges would only
+                //bleed neighbouring rings together at the seams.
+                'fill-antialias': false
             }
         });
     }
@@ -1635,25 +1645,65 @@ export class HeliosEngine
         src.setData(this._buildCropMaskFeature());
     }
 
-    //Build the donut GeoJSON Feature consumed by the crop-mask source.
-    //Outer ring = 5 km bbox around home; inner ring = 64-segment disc
-    //at the display radius. The inner ring is generated CW so GeoJSON
-    //treats it as a hole regardless of the outer ring's orientation.
-    private _buildCropMaskFeature(): GeoJSON.Feature
+    //Build the crop-mask geometry as a stack of N concentric donut
+    //features so the mask can fade smoothly into the disc rather
+    //than cutting on a hard edge.
+    //
+    //  - The outermost feature spans (radius + FADE_M) ... 5 km at
+    //    full opacity (1.0). Anything past the fade band is solid.
+    //  - The fade band (radius ... radius + FADE_M) is divided into
+    //    FADE_STEPS non-overlapping sub-rings, each with linearly
+    //    increasing opacity. Non-overlapping is key: with overlap,
+    //    fill-opacity composes via SRC_OVER and the band saturates
+    //    to opaque, defeating the gradient. The fill layer reads
+    //    `opacity` off each feature so a single layer renders the
+    //    whole stack.
+    //  - All rings share the same outer-square bound (5 km bbox)
+    //    except their inner hole shrinks step by step. GeoJSON
+    //    polygons treat the second ring as a hole, so each feature
+    //    paints just its band.
+    //
+    //  Layout (radii, metres):
+    //      r0 = radius              (disc edge,         opacity 0)
+    //      r1 = radius + FADE_M/N   (band 1,            opacity 1/N)
+    //      r2 = radius + 2*FADE_M/N (band 2,            opacity 2/N)
+    //      ...
+    //      rN = radius + FADE_M     (fully opaque from here outward)
+    //      ROut = 5 km              (outer bound)
+    private _buildCropMaskFeature(): GeoJSON.FeatureCollection
     {
-        const cosLat   = Math.cos(this.homeLat * Math.PI / 180);
-        //5 km outer extent is overkill for any single-card viewport at
-        //z=18 (~500 m wide at pitch 55), but cheap and gives plenty of
-        //margin if the user rotates the camera. Cropping outside the
-        //actual viewport would just create flicker on rotation.
-        const OUTER_M  = 5000;
-        const dLatOut  = OUTER_M  / 111_320;
-        const dLonOut  = OUTER_M  / (111_320 * cosLat);
-        const radius   = this._buildingRadiusMeters();
-        const dLatIn   = radius / 111_320;
-        const dLonIn   = radius / (111_320 * cosLat);
+        const cosLat  = Math.cos(this.homeLat * Math.PI / 180);
+        //Fade transition width and step count. 40 m / 8 steps gives a
+        //5 m-per-step gradient; smooth at zoom 18 viewports while
+        //keeping the feature count tiny.
+        const FADE_M       = 40;
+        const FADE_STEPS   = 8;
+        const SEGS         = 64;
+        const OUTER_M      = 5000;
+        const dLatOut      = OUTER_M / 111_320;
+        const dLonOut      = OUTER_M / (111_320 * cosLat);
+        const radius       = this._buildingRadiusMeters();
 
-        const outer: number[][] = [
+        //Pre-compute disc rings at every step radius. Each ring is in
+        //CW order (i from SEGS down to 0) so GeoJSON treats it as a
+        //hole inside the outer-square ring.
+        const ringAtRadius = (rM: number): number[][] =>
+        {
+            const dLat = rM / 111_320;
+            const dLon = rM / (111_320 * cosLat);
+            const out: number[][] = [];
+            for (let i = SEGS; i >= 0; i--)
+            {
+                const a = (i / SEGS) * 2 * Math.PI;
+                out.push([
+                    this.homeLon + Math.cos(a) * dLon,
+                    this.homeLat + Math.sin(a) * dLat
+                ]);
+            }
+            return out;
+        };
+
+        const outerSquare: number[][] = [
             [this.homeLon - dLonOut, this.homeLat - dLatOut],
             [this.homeLon + dLonOut, this.homeLat - dLatOut],
             [this.homeLon + dLonOut, this.homeLat + dLatOut],
@@ -1661,28 +1711,51 @@ export class HeliosEngine
             [this.homeLon - dLonOut, this.homeLat - dLatOut]
         ];
 
-        //CW order (i goes from segs down to 0) so GeoJSON treats this
-        //as a hole inside the outer ring.
-        const segs = 64;
-        const inner: number[][] = [];
-        for (let i = segs; i >= 0; i--)
+        const features: GeoJSON.Feature[] = [];
+        //Step rings inside the fade band. Each band has outer ring at
+        //(radius + (i+1) * step) and inner ring at (radius + i * step).
+        const step = FADE_M / FADE_STEPS;
+        for (let i = 0; i < FADE_STEPS; i++)
         {
-            const a = (i / segs) * 2 * Math.PI;
-            inner.push([
-                this.homeLon + Math.cos(a) * dLonIn,
-                this.homeLat + Math.sin(a) * dLatIn
-            ]);
+            const innerR = radius + i * step;
+            const outerR = radius + (i + 1) * step;
+            const opacity = (i + 1) / FADE_STEPS;
+            features.push({
+                type: 'Feature',
+                geometry:
+                {
+                    type:        'Polygon',
+                    //Outer ring first (CCW from the radial generator
+                    //above is actually OK for polygons whose hole is
+                    //inside); MapLibre's fill renderer treats the
+                    //second ring as a hole either way.
+                    coordinates:
+                    [
+                        //Outer band edge (the larger ring) becomes
+                        //the polygon outer ring.
+                        ringAtRadius(outerR).reverse(),
+                        //Inner band edge becomes the hole.
+                        ringAtRadius(innerR)
+                    ]
+                },
+                properties: { opacity }
+            });
         }
 
-        return {
+        //Outermost feature: from the end of the fade band out to 5 km,
+        //fully opaque. Single donut with the outer-square as the
+        //outer ring and the fade-band's outer edge as the hole.
+        features.push({
             type: 'Feature',
             geometry:
             {
                 type:        'Polygon',
-                coordinates: [outer, inner]
+                coordinates: [outerSquare, ringAtRadius(radius + FADE_M)]
             },
-            properties: {}
-        };
+            properties: { opacity: 1 }
+        });
+
+        return { type: 'FeatureCollection', features };
     }
 
     //Cloud-cover disc setup.
