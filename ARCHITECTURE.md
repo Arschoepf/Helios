@@ -28,15 +28,17 @@ whether cast shadows are rendered at all. When on, the source is
 picked automatically:
 
 - **Home inside a LiDAR provider's coverage.** The card fires one
-  WMS round-trip to IGN's `IGNF_LIDAR-HD_MNH_*` service, decodes
-  the BIL height raster client-side, bins above-threshold cells
-  onto a coarse ~10 m grid, and emits one rectangular Polygon per
-  non-empty bin with `render_height` set to the bin's mean cell
-  height. Those polygons feed `projectExtrusionShadows()` exactly
-  like the MapTiler path. Per-bin granularity keeps a dense forest
-  from collapsing into one giant blanket shadow: each ~10 m patch
-  casts its own short trail, the trails alpha-composite into a
-  realistic dappled pattern.
+  WMS round-trip to IGN's `IGNF_LIDAR-HD_MNH_*` service, decodes the
+  BIL height raster client-side, runs a size-capped 8-connected
+  flood fill on the above-threshold cells (each clump capped at ~80
+  m² physical), and emits one convex-hull Polygon per clump with
+  `render_height` set to the clump's mean cell height. Those
+  polygons feed `projectExtrusionShadows()` exactly like the
+  MapTiler path. The size cap keeps a dense forest from collapsing
+  into one giant blanket shadow while the convex hull preserves the
+  organic, non-grid-aligned shape of each clump, so cast shadows
+  alpha-composite into a dappled forest pattern instead of a
+  visible tile mosaic.
 - **Outside coverage.** The card falls back to the MapTiler home +
   surroundings footprints, projected through the same shadow
   emitter (buildings only, no vegetation).
@@ -438,11 +440,11 @@ Each `src/helios-*.ts` file has a clearly bounded responsibility:
   a country means dropping a new file under `./helios-lidar/`.
 * **helios-lidar/helios-lidar-fr.ts**, IGN LiDAR HD pipeline for
   metropolitan France + Corsica. One WMS round-trip on
-  `IGNF_LIDAR-HD_MNH_*` (`image/x-bil;bits=32`), above-threshold
-  cells binned onto a coarse ~10 m grid, one rectangular Polygon
-  per non-empty bin with `render_height = mean(cells in bin)`.
-  Output feeds `projectExtrusionShadows` exactly like the
-  MapTiler footprint path.
+  `IGNF_LIDAR-HD_MNH_*` (`image/x-bil;bits=32`), size-capped
+  8-connected flood fill on above-threshold cells (clump cap ~80 m²
+  physical), one convex-hull Polygon per clump with `render_height
+  = mean(clump cells)`. Output feeds `projectExtrusionShadows`
+  exactly like the MapTiler footprint path.
 * **helios-sun.ts**, `getSunPosition`, `computePvPower`,
   `computeIrradianceWm2`. Pure functions; no DOM, no map.
 * **helios-weather.ts**, `fetchHomePointData` and friends:
@@ -521,7 +523,7 @@ full opacity. Surroundings are another `FeatureCollection`, painted
 at the configured opacity. Both share the same `fill-extrusion-color`
 modulated by sun altitude.
 
-### LiDAR shadow binning
+### LiDAR shadow consolidation
 
 When `shadows-enabled` is true AND a LiDAR provider covers the home,
 the engine fires `franceLidarHd.fetchShadowRegions()` with the home
@@ -536,23 +538,25 @@ float32 height raster client-side. Then:
 - **Filter.** Cells with `5 ≤ h ≤ 100 m` pass the height threshold.
   Cells beyond `radiusMeters` haversine from the home are dropped
   (circular crop).
-- **Bin.** Surviving cells accumulate into a regular grid whose cell
-  size targets ~10 m physically, so each bin covers an area roughly
-  the size of a small tree clump or a single building. The bin step
-  is computed from the actual pixel pitch (`BIN_TARGET_M / pxLatM`),
-  clamped to `[2, rasterSize/4]` cells so the count stays sensible
-  across precisions.
-- **Emit.** Each bin with at least `BIN_MIN_FILL_RATIO` (15 %) of
-  its cells above threshold emits one rectangular Polygon (4 corners
-  of the bin bbox) with `render_height` set to the mean of the bin's
-  contributing cells. Sparse bins (a single isolated tree in a
-  meadow) are dropped to keep the shadow output clean.
+- **Flood-fill with size cap.** 8-connected BFS, but each component
+  stops growing once it reaches `TARGET_COMPONENT_AREA_M2 / cellArea`
+  cells (~80 m² physical). When the cap hits, leftover neighbours
+  are picked up by the outer scan loop as fresh seeds, so a dense
+  forest decomposes into many small clumps instead of one giant
+  region. The cell cap is recomputed per precision from the actual
+  pixel pitch so the physical clump size stays consistent.
+- **Convex hull per clump.** For each clump, take the convex hull of
+  the cells' four corners and emit one Polygon with `render_height
+  = mean(clump cells)`. The hull is an irregular, non-axis-aligned
+  polygon, so cast shadows from many overlapping clumps alpha-
+  composite into a continuous dappled pattern instead of looking
+  like a grid-aligned tile mosaic. Single-cell or near-single-cell
+  components (< `MIN_COMPONENT_CELLS`) are dropped so noise from
+  the height threshold doesn't render as speckled dots.
 
-Per-bin granularity keeps a dense forest from collapsing into one
-giant blanket shadow: each ~10 m patch casts its own short trail,
-the trails alpha-composite into a dappled pattern that reads
-naturally. Polygon count is bounded by `(rasterSize / binCells)²`,
-typically a few thousand per fetch.
+Polygon count: typically a few hundred to a few thousand clumps per
+fetch, scaling with the wooded area covered rather than the raster
+resolution.
 
 Those polygons feed `projectExtrusionShadows` exactly like the
 MapTiler footprints when no provider covers the home. The result

@@ -10,25 +10,25 @@
 //The endpoint accepts FORMAT=image/x-bil;bits=32, which streams the
 //raster as raw little-endian float32 height values, no header.
 //
-//We then BIN the above-threshold cells onto a coarse ~10 m grid
-//(target physical size, computed from the actual pixel pitch) and
-//emit one rectangular Polygon per non-empty bin with render_height
-//set to the bin's mean cell height. Per-bin granularity (rather
-//than a single convex hull over each connected component) keeps a
-//dense forest from collapsing into one giant blanket shadow: each
-//~10 m patch casts its own short shadow trail, the trails alpha-
-//composite into a realistic dappled pattern when projected.
+//Consolidation pipeline:
 //
-//Coverage: France metropolitaine + Corse, no DOM-TOM (the LiDAR HD
-//programme is still in roll-out for those territories). We stay
-//outside the API entirely when home is outside that bbox.
-//
-//Reference: https://geoservices.ign.fr/lidarhd
+//  1. Classify cells. Cells above the height threshold pass; the
+//     rest (grass, bare ground, noise) are dropped. Optional circular
+//     crop keeps the output inside the visible disc.
+//  2. Flood-fill with a size cap. 8-connected BFS, but a component
+//     stops growing once it reaches TARGET_COMPONENT_AREA_M2 / cell
+//     area cells. The remaining seeds are picked up by the outer scan
+//     loop and start fresh components. A dense forest therefore
+//     breaks into many small clumps instead of one giant blob.
+//  3. Convex hull per clump. Organic, non-axis-aligned polygons that
+//     alpha-composite into a dappled shadow pattern when projected,
+//     instead of looking like a grid-aligned tile texture.
 
 import type {
     LidarSource,
     LidarShadowFetchOptions
 } from '../helios-lidar';
+import { convexHull } from '../helios-shadows';
 
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
 const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
@@ -43,24 +43,32 @@ const FR_BBOX = { minLat: 41.0, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 const M_PER_DEG_LAT = 111_320;
 
 //Tuning constants.
-//  HEIGHT_THRESH_M     , keep cells at or above this height (skip grass).
-//  HEIGHT_MAX_M        , sanity clamp; anything above (giant sequoias top
-//                        out at ~95 m) is treated as a garbage value.
-//  BBOX_PAD_FACTOR     , over-fetch slightly so trees on the edge of the
-//                        visible radius still cast their shadow inward.
-//  BIN_TARGET_M        , physical target size of one shadow bin. ~10 m
-//                        keeps the count manageable while preserving
-//                        enough granularity that individual tree groups
-//                        cast distinguishable shadows.
-//  BIN_MIN_FILL_RATIO  , a bin is emitted only when this fraction of
-//                        its cells passes the height threshold. Drops
-//                        sparse bins (a single tree on grass) so the
-//                        shadow output stays clean.
-const HEIGHT_THRESH_M     = 5;
-const HEIGHT_MAX_M        = 100;
-const BBOX_PAD_FACTOR     = 1.15;
-const BIN_TARGET_M        = 10;
-const BIN_MIN_FILL_RATIO  = 0.15;
+//  HEIGHT_THRESH_M            , keep cells at or above this height
+//                               (skip grass and bare ground noise).
+//  HEIGHT_MAX_M               , sanity clamp; anything above (giant
+//                               sequoias top out at ~95 m) is treated
+//                               as a garbage value.
+//  BBOX_PAD_FACTOR            , over-fetch slightly so trees on the
+//                               edge of the visible radius still cast
+//                               their shadow inward.
+//  TARGET_COMPONENT_AREA_M2   , physical target area of one flood-fill
+//                               component. The cell cap is derived
+//                               from this and the actual pixel pitch
+//                               so component size is consistent across
+//                               precisions. ~80 m² maps to a roughly
+//                               9 m × 9 m clump, the size of a small
+//                               tree group or a single building, which
+//                               keeps each cast shadow distinguishable
+//                               and avoids the giant-blanket effect.
+//  MIN_COMPONENT_CELLS        , floor on cells per component before
+//                               we bother emitting a polygon. Drops
+//                               single-cell noise that would render
+//                               as speckled dot shadows.
+const HEIGHT_THRESH_M          = 5;
+const HEIGHT_MAX_M             = 100;
+const BBOX_PAD_FACTOR          = 1.15;
+const TARGET_COMPONENT_AREA_M2 = 80;
+const MIN_COMPONENT_CELLS      = 3;
 
 export const franceLidarHd: LidarSource =
 {
@@ -135,41 +143,38 @@ export const franceLidarHd: LidarSource =
 
         const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
 
-        const pxLon = (maxLon - minLon) / rasterSize;
-        const pxLat = (maxLat - minLat) / rasterSize;
-        const pxLatM = pxLat * M_PER_DEG_LAT;
+        const pxLon   = (maxLon - minLon) / rasterSize;
+        const pxLat   = (maxLat - minLat) / rasterSize;
+        const halfLon = pxLon / 2;
+        const halfLat = pxLat / 2;
+        const pxLatM  = pxLat * M_PER_DEG_LAT;
+        const cellAreaM2 = pxLatM * pxLatM;
 
-        //Bin size in cells, picked so each bin is roughly BIN_TARGET_M
-        //metres on a side regardless of the user's chosen precision.
-        //Clamped to [2, rasterSize/4] so we never produce fewer than
-        //16 bins per side (otherwise the shadow output reads as one
-        //slab) or more than rasterSize/2 (otherwise the cell-per-bin
-        //count drops too low for a meaningful average).
-        const binCells  = Math.max(2, Math.min(
-            Math.floor(rasterSize / 4),
-            Math.round(BIN_TARGET_M / pxLatM)
-        ));
-        const numBinsX  = Math.ceil(rasterSize / binCells);
-        const numBinsY  = Math.ceil(rasterSize / binCells);
-
-        const binHeightSum = new Float64Array(numBinsX * numBinsY);
-        const binCount     = new Uint16Array(numBinsX * numBinsY);
+        //Component cell cap. Derived from TARGET_COMPONENT_AREA_M2 so
+        //components stay at roughly the same physical size whatever
+        //the chosen precision. Clamped to a sane range so a very low
+        //precision still produces multi-cell components and a very
+        //high precision doesn't cap so loosely that one component can
+        //swallow a whole forest again.
+        const maxCellsPerComponent = Math.max(4, Math.min(400,
+            Math.round(TARGET_COMPONENT_AREA_M2 / cellAreaM2)));
 
         const cropM = opts.cropRadiusMeters && opts.cropRadiusMeters > 0
             ? opts.cropRadiusMeters
             : null;
 
-        //Pass 1: accumulate cells above the height threshold into
-        //their respective bins. Row j = 0 is the NORTH edge of the
-        //bbox (WMS image convention, top-down); latitude decreases
-        //as j grows.
-        let keptCells = 0;
+        //Pass 1: identify valid cells (above threshold + inside crop).
+        //Row j = 0 is the NORTH edge of the bbox (WMS image convention,
+        //top-down); latitude decreases as j grows.
+        const N        = rasterSize * rasterSize;
+        const validArr = new Uint8Array(N);
+        const hOk      = new Float32Array(N);
+        let keptCells  = 0;
         let hMin = Infinity, hMax = -Infinity;
 
         for (let j = 0; j < rasterSize; j++)
         {
             const cLat = maxLat - (j + 0.5) * pxLat;
-            const binJ = (j / binCells) | 0;
             for (let i = 0; i < rasterSize; i++)
             {
                 const idx = j * rasterSize + i;
@@ -185,68 +190,105 @@ export const franceLidarHd: LidarSource =
                     }
                 }
 
-                const binI    = (i / binCells) | 0;
-                const binIdx  = binJ * numBinsX + binI;
-                binHeightSum[binIdx] += h;
-                binCount[binIdx]     += 1;
+                validArr[idx] = 1;
+                hOk[idx]      = h;
                 keptCells++;
                 if (h < hMin) hMin = h;
                 if (h > hMax) hMax = h;
             }
         }
 
-        //Pass 2: emit one rectangular polygon per non-empty bin. A bin
-        //needs at least BIN_MIN_FILL_RATIO of its cells above threshold
-        //to be emitted, dropping sparse bins (single isolated tree on
-        //grass) that would otherwise create speckled stray shadows.
-        const minFill = Math.max(1, Math.floor(binCells * binCells * BIN_MIN_FILL_RATIO));
-        const out: GeoJSON.Feature[] = [];
+        //Pass 2: size-capped 8-connected flood fill. Once a component
+        //reaches maxCellsPerComponent cells, the BFS stops and the
+        //next unvisited valid cell becomes the seed of a fresh
+        //component. A dense forest therefore decomposes into many
+        //small organic clumps rather than one giant convex hull.
+        const labels = new Int32Array(N);
+        const stack: number[] = [];
+        const components: Array<{ cells: number[]; heightSum: number }> = [];
+        let nextLabel = 0;
 
-        for (let binJ = 0; binJ < numBinsY; binJ++)
+        for (let seed = 0; seed < N; seed++)
         {
-            for (let binI = 0; binI < numBinsX; binI++)
+            if (!validArr[seed] || labels[seed]) continue;
+
+            nextLabel++;
+            const cells: number[] = [];
+            let heightSum = 0;
+            stack.length = 0;
+            stack.push(seed);
+
+            while (stack.length && cells.length < maxCellsPerComponent)
             {
-                const binIdx = binJ * numBinsX + binI;
-                const count  = binCount[binIdx];
-                if (count < minFill) continue;
+                const idx = stack.pop()!;
+                if (labels[idx] || !validArr[idx]) continue;
+                labels[idx] = nextLabel;
+                cells.push(idx);
+                heightSum += hOk[idx];
 
-                const avgH = binHeightSum[binIdx] / count;
-
-                const i0   = binI * binCells;
-                const i1   = Math.min(rasterSize, i0 + binCells);
-                const j0   = binJ * binCells;
-                const j1   = Math.min(rasterSize, j0 + binCells);
-
-                const lonW = minLon + i0 * pxLon;
-                const lonE = minLon + i1 * pxLon;
-                const latN = maxLat - j0 * pxLat;
-                const latS = maxLat - j1 * pxLat;
-
-                //Closed CCW ring (GeoJSON outer-ring convention).
-                out.push({
-                    type:       'Feature',
-                    geometry:
+                const x = idx % rasterSize;
+                const y = (idx / rasterSize) | 0;
+                for (let dy = -1; dy <= 1; dy++)
+                {
+                    for (let dx = -1; dx <= 1; dx++)
                     {
-                        type:        'Polygon',
-                        coordinates:
-                        [[
-                            [lonW, latS],
-                            [lonE, latS],
-                            [lonE, latN],
-                            [lonW, latN],
-                            [lonW, latS]
-                        ]]
-                    },
-                    properties: { render_height: avgH, render_min_height: 0 }
-                });
+                        if (dx === 0 && dy === 0) continue;
+                        const nx = x + dx, ny = y + dy;
+                        if (nx < 0 || nx >= rasterSize || ny < 0 || ny >= rasterSize) continue;
+                        const nIdx = ny * rasterSize + nx;
+                        if (!labels[nIdx] && validArr[nIdx]) stack.push(nIdx);
+                    }
+                }
             }
+
+            if (cells.length >= MIN_COMPONENT_CELLS)
+            {
+                components.push({ cells, heightSum });
+            }
+        }
+
+        //Pass 3: one convex-hull Polygon per component. We collect the
+        //4 corners of every cell and take the hull, an irregular
+        //(non-axis-aligned) polygon that breaks the grid alignment of
+        //the underlying raster. Multiple capped hulls overlap inside a
+        //dense forest, their projected shadows alpha-composite into a
+        //continuous-but-dappled pattern.
+        const out: GeoJSON.Feature[] = [];
+        for (const comp of components)
+        {
+            const corners: Array<[number, number]> = [];
+            for (const idx of comp.cells)
+            {
+                const x = idx % rasterSize;
+                const y = (idx / rasterSize) | 0;
+                const cLon = minLon + (x + 0.5) * pxLon;
+                const cLat = maxLat - (y + 0.5) * pxLat;
+                corners.push([cLon - halfLon, cLat - halfLat]);
+                corners.push([cLon + halfLon, cLat - halfLat]);
+                corners.push([cLon + halfLon, cLat + halfLat]);
+                corners.push([cLon - halfLon, cLat + halfLat]);
+            }
+            const hull = convexHull(corners);
+            if (hull.length < 3) continue;
+            hull.push([hull[0][0], hull[0][1]]);
+
+            const avg = comp.heightSum / comp.cells.length;
+            out.push({
+                type:       'Feature',
+                geometry:   { type: 'Polygon', coordinates: [hull] },
+                properties:
+                {
+                    render_height:     avg,
+                    render_min_height: 0
+                }
+            });
         }
 
         if (keptCells > 0)
         {
             console.info(
-                `[HELIOS] LiDAR shadows: ${keptCells} cells -> ${out.length} bins ` +
-                `(${binCells}x${binCells} cells, ~${(binCells * pxLatM).toFixed(1)} m), ` +
+                `[HELIOS] LiDAR shadows: ${keptCells} cells -> ${out.length} clumps ` +
+                `(cap ${maxCellsPerComponent} cells, ~${Math.sqrt(TARGET_COMPONENT_AREA_M2).toFixed(0)} m), ` +
                 `height range [${hMin.toFixed(1)}, ${hMax.toFixed(1)}] m`
             );
         }

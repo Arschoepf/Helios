@@ -7,13 +7,14 @@
 //Pipeline overview: when the user has shadows enabled AND a provider
 //covers the home, the engine calls fetchShadowRegions() with the home
 //position and a radius. The provider fetches a height raster around
-//the home and bins above-threshold cells onto a fixed ~10 m grid,
-//emitting one Polygon per non-empty bin with `render_height` set to
-//the bin's mean cell height. Those bin polygons feed
-//projectExtrusionShadows() exactly like the MapTiler footprints do
-//when LiDAR is unavailable. Per-bin granularity (rather than one
-//convex hull per connected component) keeps a dense forest from
-//collapsing into one giant blanket shadow.
+//the home, runs a size-capped 8-connected flood fill on the cells
+//above the height threshold, and emits one convex-hull Polygon per
+//capped clump with `render_height` set to the clump's mean cell
+//height. Those polygons feed projectExtrusionShadows() exactly like
+//the MapTiler footprints do when LiDAR is unavailable. Capping the
+//clump area keeps a dense forest from collapsing into one giant
+//blanket shadow while preserving the organic, non-grid-aligned
+//shape of a convex hull.
 
 export interface LidarSource
 {
