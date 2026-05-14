@@ -31299,7 +31299,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.29"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.30"}`,
       labelStyle,
       versionStyle
     );
@@ -31789,30 +31789,42 @@ let HeliosCard = class extends i {
       const arr = (result && result[entityId]) ?? [];
       const times = [];
       const values = [];
+      let lastTsMs = null;
       for (const item of arr) {
-        const stateStr = typeof item?.s === "string" ? item.s : typeof item?.state === "string" ? item.state : null;
-        if (stateStr === null || stateStr === "unavailable" || stateStr === "unknown" || stateStr === "") {
+        const sRaw = item?.s ?? item?.state;
+        if (sRaw === null || sRaw === void 0 || sRaw === "unavailable" || sRaw === "unknown" || sRaw === "") {
           continue;
         }
-        const v2 = parseFloat(stateStr);
+        const v2 = parseFloat(String(sRaw));
         if (!isFinite(v2)) {
           continue;
         }
         let ts = null;
-        if (typeof item?.lu === "number") {
-          ts = new Date(item.lu * 1e3);
-        } else if (typeof item?.last_updated === "string") {
-          ts = new Date(item.last_updated);
-        } else if (typeof item?.last_changed === "string") {
-          ts = new Date(item.last_changed);
+        const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+        if (typeof tsRaw === "number") {
+          ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1e3);
+        } else if (typeof tsRaw === "string") {
+          const asNum = Number(tsRaw);
+          if (Number.isFinite(asNum) && asNum > 1e9) {
+            ts = new Date(asNum > 1e12 ? asNum : asNum * 1e3);
+          } else {
+            ts = new Date(tsRaw);
+          }
+        }
+        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) {
+          ts = new Date(lastTsMs);
         }
         if (!ts || isNaN(ts.getTime())) {
           continue;
         }
+        lastTsMs = ts.getTime();
         times.push(ts);
         values.push(v2);
       }
       this._pvHistory = { times, values };
+      console.info(
+        `[HELIOS] PV history ${entityId}: ${arr.length} raw entries -> ${times.length} samples over ${((fetchEnd.getTime() - start.getTime()) / 36e5).toFixed(1)} h`
+      );
       this._updatePvCalibration();
     } catch (e2) {
       console.warn("[HELIOS] PV history fetch failed:", e2);

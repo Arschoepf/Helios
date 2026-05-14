@@ -924,53 +924,88 @@ export class HeliosCard extends LitElement
             const arr: any[] = (result && result[entityId]) ?? [];
             const times:  Date[]   = [];
             const values: number[] = [];
+            let lastTsMs: number | null = null;
 
             for (const item of arr)
             {
-                //HA's history payload uses a few different field
-                //layouts depending on the requested options and the
-                //version of the core; cover the common ones.
-                const stateStr =
-                    typeof item?.s === 'string'      ? item.s :
-                    typeof item?.state === 'string'  ? item.state :
-                    null;
-                if (stateStr === null
-                    || stateStr === 'unavailable'
-                    || stateStr === 'unknown'
-                    || stateStr === '')
+                //HA's history payload uses several field layouts
+                //depending on the requested options, the recorder
+                //version and the entity. We accept anything that can
+                //be coerced to a finite number for the value and a
+                //valid Date for the timestamp, rather than gating on
+                //a specific JS type, because some integrations write
+                //the state as a number (not a string) and some HA
+                //versions omit `lu` on entries where the timestamp
+                //matches the previous one.
+                const sRaw = item?.s ?? item?.state;
+                if (sRaw === null
+                    || sRaw === undefined
+                    || sRaw === 'unavailable'
+                    || sRaw === 'unknown'
+                    || sRaw === '')
                 {
                     continue;
                 }
-                const v = parseFloat(stateStr);
+                const v = parseFloat(String(sRaw));
                 if (!isFinite(v))
                 {
                     continue;
                 }
 
+                //Timestamp resolution order: epoch-seconds float
+                //(`lu` / `lc`, minimal_response default), then ISO
+                //strings (`last_updated` / `last_changed`, full
+                //response). When none is set we re-use the previous
+                //entry's timestamp, the common case for HA's
+                //"only-state-changed" compaction where unchanged
+                //timestamps are simply omitted.
                 let ts: Date | null = null;
-                if (typeof item?.lu === 'number')
+                const tsRaw =
+                    item?.lu             ??
+                    item?.lc             ??
+                    item?.last_updated   ??
+                    item?.last_changed   ??
+                    null;
+                if (typeof tsRaw === 'number')
                 {
-                    //minimal_response delivers epoch seconds as a float.
-                    ts = new Date(item.lu * 1000);
+                    //epoch seconds (minimal_response) or epoch ms
+                    //(some integrations). Distinguish by magnitude:
+                    //a value above 10^12 is already in ms.
+                    ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
                 }
-                else if (typeof item?.last_updated === 'string')
+                else if (typeof tsRaw === 'string')
                 {
-                    ts = new Date(item.last_updated);
+                    //Could be an ISO date string or a stringified
+                    //epoch; try both.
+                    const asNum = Number(tsRaw);
+                    if (Number.isFinite(asNum) && asNum > 1e9)
+                    {
+                        ts = new Date(asNum > 1e12 ? asNum : asNum * 1000);
+                    }
+                    else
+                    {
+                        ts = new Date(tsRaw);
+                    }
                 }
-                else if (typeof item?.last_changed === 'string')
+                if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
                 {
-                    ts = new Date(item.last_changed);
+                    ts = new Date(lastTsMs);
                 }
                 if (!ts || isNaN(ts.getTime()))
                 {
                     continue;
                 }
 
+                lastTsMs = ts.getTime();
                 times.push(ts);
                 values.push(v);
             }
 
             this._pvHistory = { times, values };
+            console.info(
+                `[HELIOS] PV history ${entityId}: ${arr.length} raw entries -> ${times.length} samples ` +
+                `over ${((fetchEnd.getTime() - start.getTime()) / 3_600_000).toFixed(1)} h`
+            );
             //Refresh the calibration buffer with the new history slice.
             //Safe to call when _homeHourlyData isn't ready yet, the
             //helper bails out and tries again next time.
