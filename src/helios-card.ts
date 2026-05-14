@@ -1662,6 +1662,25 @@ export class HeliosCard extends LitElement
         const xOf = (t: Date): number =>
             ((t.getTime() - startMs) / rangeMs) * W;
 
+        //Observed samples are in the entity's native power unit
+        //(kW / W / MW for a power entity, or differentiated to that
+        //unit / hour for a cumulative-energy entity). Calibration k
+        //is "W per percent of STC", so a raw `pct * k` predicted
+        //value is in WATTS. Mixing units on the same Y axis would
+        //flatten the observed curve into invisibility when the
+        //entity is in kW and the predicted is in W (yMax pegged to
+        //thousands while observed sits at single digits). Compute
+        //the W → native scale once and apply it to the predicted
+        //series so both feed yMax on the same axis.
+        const nativeFromW = (() => {
+            const native = isCumulativeEnergy
+                ? (lu === 'kwh' ? 'kw' : lu === 'mwh' ? 'mw' : lu === 'wh' ? 'w' : '')
+                : lu;
+            if (native === 'kw') return 1 / 1000;
+            if (native === 'mw') return 1 / 1_000_000;
+            return 1;
+        })();
+
         //Predicted PV for hours from "now" forward, uses the live
         //calibration scalar (W per percent of STC) learned from past
         //samples. Skipped silently when there aren't enough samples
@@ -1682,7 +1701,7 @@ export class HeliosCard extends LitElement
                 if (tMs >  endMsAbs) continue;
                 const pct = computePvPower(series.times[i], lat, lon, series.cloud[i] ?? 0);
                 if (pct <= 0) continue;
-                predictedSamples.push({ t: series.times[i], v: pct * k });
+                predictedSamples.push({ t: series.times[i], v: pct * k * nativeFromW });
             }
         }
 

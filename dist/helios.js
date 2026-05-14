@@ -31299,7 +31299,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.30"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.31"}`,
       labelStyle,
       versionStyle
     );
@@ -32231,6 +32231,12 @@ let HeliosCard = class extends i {
       samples.push({ t: t2, v: v2 });
     }
     const xOf = (t2) => (t2.getTime() - startMs) / rangeMs * W;
+    const nativeFromW = (() => {
+      const native = isCumulativeEnergy ? lu === "kwh" ? "kw" : lu === "mwh" ? "mw" : lu === "wh" ? "w" : "" : lu;
+      if (native === "kw") return 1 / 1e3;
+      if (native === "mw") return 1 / 1e6;
+      return 1;
+    })();
     const k2 = this._pvCalibK;
     const lat = this.hass?.config?.latitude;
     const lon = this.hass?.config?.longitude;
@@ -32245,7 +32251,7 @@ let HeliosCard = class extends i {
         if (tMs > endMsAbs) continue;
         const pct = computePvPower(series.times[i2], lat, lon, series.cloud[i2] ?? 0);
         if (pct <= 0) continue;
-        predictedSamples.push({ t: series.times[i2], v: pct * k2 });
+        predictedSamples.push({ t: series.times[i2], v: pct * k2 * nativeFromW });
       }
     }
     const HOUR_MS = 36e5;
