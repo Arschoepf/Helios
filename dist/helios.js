@@ -26417,7 +26417,7 @@ function emptyTile() {
   _emptyTileCache = out.buffer;
   return _emptyTileCache.slice(0);
 }
-const SCANNER_LIFT_M = 0.1;
+const SCANNER_LIFT_M = 5;
 const VERT_SRC = `
 attribute vec3 a_pos;
 attribute vec2 a_uv;
@@ -26516,20 +26516,31 @@ class ScannerMeshLayer {
     if (!this._visible) return;
     if (!this._program) return;
     if (this._subMeshes.size === 0) return;
+    const mvpFloat32 = args.modelViewProjectionMatrix;
+    const mvpF64 = new Float64Array(mvpFloat32);
     if (!this._didLogFirstRender) {
       this._didLogFirstRender = true;
-      console.info(`[HELIOS-SCAN] first render: visible, ${this._subMeshes.size} submeshes`);
+      const first = this._subMeshes.values().next().value;
+      if (first) {
+        const combo = mat4MultiplyF64(mvpF64, first.modelMatrix);
+        const corner = projectF64(combo, 0, 0, 0, 1);
+        console.info(
+          `[HELIOS-SCAN] first render: ${this._subMeshes.size} submeshes, tile-NW corner clip=(${(corner[0] / corner[3]).toFixed(3)}, ${(corner[1] / corner[3]).toFixed(3)}, ${(corner[2] / corner[3]).toFixed(3)}), w=${corner[3].toExponential(2)}`
+        );
+      }
     }
-    const matrix = args.modelViewProjectionMatrix;
     gl.useProgram(this._program);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.depthMask(false);
-    gl.enable(gl.DEPTH_TEST);
-    gl.uniformMatrix4fv(this._uMatrix, false, matrix);
+    gl.disable(gl.DEPTH_TEST);
     gl.uniform1f(this._uOpacity, this._opts.opacity);
     gl.uniform1i(this._uTexture, 0);
+    const finalF32 = new Float32Array(16);
     this._subMeshes.forEach((mesh) => {
+      const combo = mat4MultiplyF64(mvpF64, mesh.modelMatrix);
+      for (let i2 = 0; i2 < 16; i2++) finalF32[i2] = combo[i2];
+      gl.uniformMatrix4fv(this._uMatrix, false, finalF32);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, mesh.texture);
       gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
@@ -26634,9 +26645,9 @@ class ScannerMeshLayer {
     const nTris = nQuads * 2;
     const nIdx = nTris * 3;
     const buf = new Float32Array(nVerts * 5);
-    const midLat = (data.bounds.minLat + data.bounds.maxLat) * 0.5;
-    const mcOrigin = maplibregl.MercatorCoordinate.fromLngLat([data.bounds.minLon, midLat], 0);
-    const meterScale = mcOrigin.meterInMercatorCoordinateUnits();
+    const originMC = maplibregl.MercatorCoordinate.fromLngLat([data.bounds.minLon, data.bounds.maxLat], 0);
+    const originX = originMC.x;
+    const originY = originMC.y;
     for (let j = 0; j < H2; j++) {
       const v2 = (j + 0.5) / H2;
       const lat = data.bounds.maxLat - (j + 0.5) * (data.bounds.maxLat - data.bounds.minLat) / H2;
@@ -26646,15 +26657,33 @@ class ScannerMeshLayer {
         const idx = j * W + i2;
         const h2 = data.mns[idx];
         const elev = (isFinite(h2) ? h2 : data.mnt[idx]) + SCANNER_LIFT_M;
-        const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0);
+        const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], elev);
         const off = idx * 5;
-        buf[off] = mc.x;
-        buf[off + 1] = mc.y;
-        buf[off + 2] = elev * meterScale;
+        buf[off] = mc.x - originX;
+        buf[off + 1] = mc.y - originY;
+        buf[off + 2] = mc.z;
         buf[off + 3] = u2;
         buf[off + 4] = v2;
       }
     }
+    const modelMatrix = new Float64Array([
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      originX,
+      originY,
+      0,
+      1
+    ]);
     const vbo = gl.createBuffer();
     if (!vbo) return null;
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
@@ -26710,7 +26739,8 @@ class ScannerMeshLayer {
       indexType,
       texture,
       width: W,
-      height: H2
+      height: H2,
+      modelMatrix
     };
   }
   _paintTexture(key, data) {
@@ -26808,6 +26838,27 @@ function parseHex$1(v2, fallback) {
   const b2 = parseInt(s2.slice(4, 6), 16);
   if (isNaN(r2) || isNaN(g2) || isNaN(b2)) return fallback;
   return [r2, g2, b2];
+}
+function mat4MultiplyF64(a2, b2) {
+  const out = new Float64Array(16);
+  for (let col = 0; col < 4; col++) {
+    for (let row = 0; row < 4; row++) {
+      let sum = 0;
+      for (let k2 = 0; k2 < 4; k2++) {
+        sum += a2[k2 * 4 + row] * b2[col * 4 + k2];
+      }
+      out[col * 4 + row] = sum;
+    }
+  }
+  return out;
+}
+function projectF64(m2, x2, y3, z2, w2) {
+  return [
+    m2[0] * x2 + m2[4] * y3 + m2[8] * z2 + m2[12] * w2,
+    m2[1] * x2 + m2[5] * y3 + m2[9] * z2 + m2[13] * w2,
+    m2[2] * x2 + m2[6] * y3 + m2[10] * z2 + m2[14] * w2,
+    m2[3] * x2 + m2[7] * y3 + m2[11] * z2 + m2[15] * w2
+  ];
 }
 const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
@@ -31830,7 +31881,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.21"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.22"}`,
       labelStyle,
       versionStyle
     );
