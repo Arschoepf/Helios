@@ -712,6 +712,50 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
+    /*  PV → home leader. Vertical dashed line from the PV chip's
+        bottom edge down to the home marker, painted in the configured
+        PV colour. Same dash vocabulary as the battery leader so the
+        two flows read as one coherent visual language. Animation runs
+        only when current production is positive; idle state keeps the
+        line static. Sits at z 5, BELOW the chip cluster (z 6) so the
+        dashes pass behind the PV / SoC / Power chips. */
+    .pv-home-leader-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    .pv-home-leader-line
+    {
+        stroke: var(--pv-leader-color, #27B36B);
+        stroke-width: 1.5;
+        stroke-opacity: 0.85;
+        stroke-linecap: round;
+        stroke-dasharray: 6 5;
+        fill: none;
+    }
+
+    .pv-home-leader-animated
+    {
+        animation: pv-home-leader-flow var(--pv-flow-duration, 30s) linear infinite;
+    }
+
+    @keyframes pv-home-leader-flow
+    {
+        from { stroke-dashoffset: 0;   }
+        to   { stroke-dashoffset: -11; }
+    }
+
+    .pv-home-leader-arrow
+    {
+        opacity: 0.9;
+    }
+
+
     /*  Battery leaders.
         Both SoC ↔ PV and PV ↔ Power share the exact same visual
         vocabulary: dashed L-shaped path with a rounded fillet at
@@ -814,15 +858,6 @@ export const heliosCardStyles = css`
     }
     .solar-svg-back  { z-index: 4; }
     .solar-svg-front { z-index: 7; }
-
-    /*  Sun halo, the outermost layer of the disc IIFE. The fill is
-        the configured sun colour at an irradiance-driven opacity;
-        the blur softens the edge into a glow that feathers gently
-        into the basemap. Kept at 8 px regardless of sun radius: a
-        constant absolute blur reads as a believable atmospheric
-        scatter, scaling it with the disc would either smear the
-        glow at high zoom or make it look hard at low zoom. */
-    .solar-sun-halo { filter: blur(8px); }
 
     /*  Cloud-cover overlay. Two polygons (the filled disc sized by
         the live cloud %, the fixed 100 % reference ring outline)

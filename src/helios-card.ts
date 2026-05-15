@@ -2898,6 +2898,24 @@ export class HeliosCard extends LitElement
         const pvDisplayValue = showPvLabel
             ? this._formatPvValue(pvRate!.value, pvRate!.unit)
             : '';
+
+        //PV → home animated leader. Same vocabulary as the existing
+        //battery leaders (dashed line + arrow), painted in the
+        //configured PV colour. Speed is normalised against the user's
+        //own theoretical peak: when the calibration scalar k is known
+        //(W per percent of STC), the peak is 100 × k and the flow
+        //saturates exactly there; without calibration we fall back to
+        //a 5 kW reference matching the battery leader's saturation so
+        //the visual cadence reads consistently. Idle (no flow, no
+        //arrow) when current production is zero or negative.
+        const pvWattsNow = (pvRate !== null)
+            ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit)
+            : 0;
+        const pvPeakRefW = (this._pvCalibK !== null && this._pvCalibK > 0)
+            ? this._pvCalibK * 100
+            : 5000;
+        const pvFlowDuration = HeliosCard._flowDuration(pvWattsNow, pvPeakRefW, 0.5);
+        const pvIdle         = !(pvWattsNow > 0);
         //Animation duration of the leader-line dash flow, fast when
         //production is high, slow when production is low. Mapped on
         //the same scale as the sun ray below so the two streams feel
@@ -3002,7 +3020,12 @@ export class HeliosCard extends LitElement
         //  90° at the corner. SMIL parametrises the path at
         //  constant linear velocity, so the time spent on the
         //  fillet shrinks proportionally with `flowDuration`.
-        const PV_LEG_OFFSET_PX     = 7;
+        //L-leg starting points. The PV chip is 76 px wide (min-width
+        //set on .pv-pct-label); pinning the legs at 25 % and 75 % of
+        //that width drops each foot 19 px off the chip's centre, well
+        //inside the chip body so the L's vertical leg visibly emerges
+        //from a clear PV anchor instead of crowding the chip's centre.
+        const PV_LEG_OFFSET_PX     = 19;
         const PV_HALF_HEIGHT_PX    = 11;
         //Half-width of the PV chip, min-width:76 in .pv-pct-label,
         //so 38 px from centre to either side. Used for the solar-ray
@@ -3395,6 +3418,42 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
+                <!--  PV → home animated leader. Vertical dashed line
+                      from the PV chip's bottom edge down to the home
+                      marker, painted in the configured PV colour and
+                      flowing toward the home at a pace proportional
+                      to live production over theoretical peak. Same
+                      dash vocabulary as the battery leader, no L bend
+                      because PV and the home share the same X anchor
+                      so a straight segment is the right vocabulary.
+                      Hidden when no PV entity is configured.  -->
+                ${showPvLabel ? html`
+                    <svg class="pv-home-leader-svg">
+                        <line
+                            class="pv-home-leader-line ${pvIdle ? '' : 'pv-home-leader-animated'}"
+                            style="--pv-leader-color:${pvColor}; --pv-flow-duration:${pvFlowDuration}s"
+                            x1="${layout!.pvLabel.x}"
+                            y1="${layout!.pvLabel.y + PV_HALF_HEIGHT_PX}"
+                            x2="${layout!.home.x}"
+                            y2="${layout!.home.y}"
+                        ></line>
+                        ${!pvIdle ? svg`
+                            <polygon
+                                class="pv-home-leader-arrow"
+                                points="-2,-4 4,0 -2,4"
+                                fill="${pvColor}"
+                            >
+                                <animateMotion
+                                    dur="${pvFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="M ${layout!.pvLabel.x},${layout!.pvLabel.y + PV_HALF_HEIGHT_PX} L ${layout!.home.x},${layout!.home.y}"
+                                ></animateMotion>
+                            </polygon>
+                        ` : nothing}
+                    </svg>
+                ` : nothing}
+
                 ${showPvLabel ? html`
                     <div
                         class="pv-pct-label"
@@ -3542,13 +3601,16 @@ export class HeliosCard extends LitElement
                             //Sun disc, four concentric layers, painted
                             //in render order (back to front):
                             //  0. Halo, soft glow whose radius (3 ×
-                            //     disc) and opacity (irradianceRatio ×
-                            //     0.55) both scale with irradiance, so
-                            //     a clear-sky noon sun radiates a
-                            //     visible aura while a cloudy or low-
-                            //     altitude sun stays compact. Blurred
-                            //     via CSS filter so the edges feather
-                            //     gently into the basemap.
+                            //     disc) and centre opacity both scale
+                            //     with irradiance, so a clear-sky noon
+                            //     sun radiates a visible aura while a
+                            //     cloudy or low-altitude sun stays
+                            //     compact. The fill uses a radial
+                            //     gradient that drops cleanly from the
+                            //     irradiance-driven opacity at the
+                            //     centre to fully transparent at the
+                            //     rim, so the glow feathers into the
+                            //     basemap without any hard edge.
                             //  1. Background fill (configured colour at
                             //     SUN_FILL_OPACITY_BG) so the empty disc
                             //     reads as faintly tinted glass.
@@ -3571,15 +3633,20 @@ export class HeliosCard extends LitElement
                             //Same square-root mapping as sunFillRatio so
                             //a 50 % reading visually halves the AREA of
                             //the glow rather than its radius.
-                            const haloR     = r * 3;
-                            const haloAlpha = sunFillRatio * 0.55;
+                            const haloR        = r * 3;
+                            const haloAlphaMax = sunFillRatio * 0.55;
                             return svg`
+                                <defs>
+                                    <radialGradient id="solar-halo-grad">
+                                        <stop offset="0%"   stop-color="${sunColor}" stop-opacity="${haloAlphaMax}"></stop>
+                                        <stop offset="100%" stop-color="${sunColor}" stop-opacity="0"></stop>
+                                    </radialGradient>
+                                </defs>
                                 <circle
                                     class="solar-sun-halo"
                                     cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
                                     r="${haloR}"
-                                    fill="${sunColor}"
-                                    fill-opacity="${haloAlpha}"
+                                    fill="url(#solar-halo-grad)"
                                 ></circle>
                                 <circle
                                     class="solar-sun-bg"

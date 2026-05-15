@@ -469,7 +469,7 @@ const CLOUD_CIRCLE_SEGMENTS     = 128;
 //(minus the battery vertical offset); the PV chip is mirrored
 //below the shelf. Adjusting this single constant slides the whole
 //cluster up or down without disturbing its internal geometry.
-const PV_CHIP_OFFSET_PX         = 65;
+const PV_CHIP_OFFSET_PX         = 115;
 
 
 //Solar-arc parameters. The arc traces the sun's full 24h

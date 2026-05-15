@@ -26595,7 +26595,7 @@ function buildCirclePolygon(centerLon, centerLat, radiusMetres, segments = 64) {
 }
 const CLOUD_DISC_RADIUS_M = 30;
 const CLOUD_CIRCLE_SEGMENTS = 128;
-const PV_CHIP_OFFSET_PX = 65;
+const PV_CHIP_OFFSET_PX = 115;
 const SUN_ARC_RADIUS_M = 40;
 const SUN_ARC_SAMPLES = 96;
 const SUN_ARC_NIGHT_OPACITY = 0.25;
@@ -30203,6 +30203,50 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
+    /*  PV → home leader. Vertical dashed line from the PV chip's
+        bottom edge down to the home marker, painted in the configured
+        PV colour. Same dash vocabulary as the battery leader so the
+        two flows read as one coherent visual language. Animation runs
+        only when current production is positive; idle state keeps the
+        line static. Sits at z 5, BELOW the chip cluster (z 6) so the
+        dashes pass behind the PV / SoC / Power chips. */
+    .pv-home-leader-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    .pv-home-leader-line
+    {
+        stroke: var(--pv-leader-color, #27B36B);
+        stroke-width: 1.5;
+        stroke-opacity: 0.85;
+        stroke-linecap: round;
+        stroke-dasharray: 6 5;
+        fill: none;
+    }
+
+    .pv-home-leader-animated
+    {
+        animation: pv-home-leader-flow var(--pv-flow-duration, 30s) linear infinite;
+    }
+
+    @keyframes pv-home-leader-flow
+    {
+        from { stroke-dashoffset: 0;   }
+        to   { stroke-dashoffset: -11; }
+    }
+
+    .pv-home-leader-arrow
+    {
+        opacity: 0.9;
+    }
+
+
     /*  Battery leaders.
         Both SoC ↔ PV and PV ↔ Power share the exact same visual
         vocabulary: dashed L-shaped path with a rounded fillet at
@@ -30305,15 +30349,6 @@ const heliosCardStyles = i$3`
     }
     .solar-svg-back  { z-index: 4; }
     .solar-svg-front { z-index: 7; }
-
-    /*  Sun halo, the outermost layer of the disc IIFE. The fill is
-        the configured sun colour at an irradiance-driven opacity;
-        the blur softens the edge into a glow that feathers gently
-        into the basemap. Kept at 8 px regardless of sun radius: a
-        constant absolute blur reads as a believable atmospheric
-        scatter, scaling it with the disc would either smear the
-        glow at high zoom or make it look hard at low zoom. */
-    .solar-sun-halo { filter: blur(8px); }
 
     /*  Cloud-cover overlay. Two polygons (the filled disc sized by
         the live cloud %, the fixed 100 % reference ring outline)
@@ -31651,7 +31686,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.38"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.39"}`,
       labelStyle,
       versionStyle
     );
@@ -31672,7 +31707,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.4.0-beta.38",
+        version: "1.4.0-beta.39",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -31680,7 +31715,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.4.0-beta.38"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.4.0-beta.39"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -33351,6 +33386,10 @@ let HeliosCard = class extends i {
     const pvRate = pvEntityId !== "" && layout !== null ? pvScrubbing ? this._pvRateAtTime(this._selectedTime) : this._pvCurrent !== null ? this._currentPvRate() : null : null;
     const showPvLabel = hasApiKey && layout !== null && pvEntityId !== "" && !pvScrubFuture && pvRate !== null;
     const pvDisplayValue = showPvLabel ? this._formatPvValue(pvRate.value, pvRate.unit) : "";
+    const pvWattsNow = pvRate !== null ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit) : 0;
+    const pvPeakRefW = this._pvCalibK !== null && this._pvCalibK > 0 ? this._pvCalibK * 100 : 5e3;
+    const pvFlowDuration = HeliosCard._flowDuration(pvWattsNow, pvPeakRefW, 0.5);
+    const pvIdle = !(pvWattsNow > 0);
     const batterySocEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
     const batteryPowerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
     const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
@@ -33367,7 +33406,7 @@ let HeliosCard = class extends i {
     const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
     const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
     const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
-    const PV_LEG_OFFSET_PX = 7;
+    const PV_LEG_OFFSET_PX = 19;
     const PV_HALF_HEIGHT_PX = 11;
     const PV_HALF_WIDTH_PX = 38;
     const BAT_CHIP_NUDGE_PX = 32;
@@ -33645,6 +33684,42 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
+                <!--  PV → home animated leader. Vertical dashed line
+                      from the PV chip's bottom edge down to the home
+                      marker, painted in the configured PV colour and
+                      flowing toward the home at a pace proportional
+                      to live production over theoretical peak. Same
+                      dash vocabulary as the battery leader, no L bend
+                      because PV and the home share the same X anchor
+                      so a straight segment is the right vocabulary.
+                      Hidden when no PV entity is configured.  -->
+                ${showPvLabel ? b`
+                    <svg class="pv-home-leader-svg">
+                        <line
+                            class="pv-home-leader-line ${pvIdle ? "" : "pv-home-leader-animated"}"
+                            style="--pv-leader-color:${pvColor}; --pv-flow-duration:${pvFlowDuration}s"
+                            x1="${layout.pvLabel.x}"
+                            y1="${layout.pvLabel.y + PV_HALF_HEIGHT_PX}"
+                            x2="${layout.home.x}"
+                            y2="${layout.home.y}"
+                        ></line>
+                        ${!pvIdle ? w`
+                            <polygon
+                                class="pv-home-leader-arrow"
+                                points="-2,-4 4,0 -2,4"
+                                fill="${pvColor}"
+                            >
+                                <animateMotion
+                                    dur="${pvFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="M ${layout.pvLabel.x},${layout.pvLabel.y + PV_HALF_HEIGHT_PX} L ${layout.home.x},${layout.home.y}"
+                                ></animateMotion>
+                            </polygon>
+                        ` : A}
+                    </svg>
+                ` : A}
+
                 ${showPvLabel ? b`
                     <div
                         class="pv-pct-label"
@@ -33790,14 +33865,19 @@ let HeliosCard = class extends i {
       const r2 = HeliosCard.SUN_R_FAR + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene.sun.nearness;
       const rInner = r2 * sunFillRatio;
       const haloR = r2 * 3;
-      const haloAlpha = sunFillRatio * 0.55;
+      const haloAlphaMax = sunFillRatio * 0.55;
       return w`
+                                <defs>
+                                    <radialGradient id="solar-halo-grad">
+                                        <stop offset="0%"   stop-color="${sunColor}" stop-opacity="${haloAlphaMax}"></stop>
+                                        <stop offset="100%" stop-color="${sunColor}" stop-opacity="0"></stop>
+                                    </radialGradient>
+                                </defs>
                                 <circle
                                     class="solar-sun-halo"
                                     cx="${sunScene.sun.x}" cy="${sunScene.sun.y}"
                                     r="${haloR}"
-                                    fill="${sunColor}"
-                                    fill-opacity="${haloAlpha}"
+                                    fill="url(#solar-halo-grad)"
                                 ></circle>
                                 <circle
                                     class="solar-sun-bg"
