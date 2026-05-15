@@ -3451,6 +3451,17 @@ export class HeliosCard extends LitElement
                                 ></animateMotion>
                             </polygon>
                         ` : nothing}
+                        <!--  Anchor bead at the home end of the leader,
+                              same colour as the line so the two read
+                              as one continuous element. Marks where
+                              the produced energy lands.  -->
+                        <circle
+                            class="pv-home-leader-anchor"
+                            cx="${layout!.home.x}"
+                            cy="${layout!.home.y}"
+                            r="3"
+                            fill="${pvColor}"
+                        ></circle>
                     </svg>
                 ` : nothing}
 

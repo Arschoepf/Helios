@@ -26568,7 +26568,7 @@ function parseHex(v2, fallback) {
 const DEFAULT_SUN_COLOR_HEX = "#EF9F27";
 const DEFAULT_CLOUD_COLOR_HEX = "#5A8DC4";
 const DEFAULT_PV_COLOR_HEX = "#27B36B";
-const DEFAULT_BATTERY_COLOR_HEX = "#D32F2F";
+const DEFAULT_BATTERY_COLOR_HEX = "#FF5252";
 const DEFAULT_CLOUD_RGB = [90, 141, 196];
 function geoDistM(lat1, lon1, lat2, lon2) {
   const R2 = 6371e3;
@@ -31686,7 +31686,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.39"}`,
+      `%c☀ HELIOS%c v${"1.4.0"}`,
       labelStyle,
       versionStyle
     );
@@ -31707,7 +31707,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.4.0-beta.39",
+        version: "1.4.0",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -31715,7 +31715,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.4.0-beta.39"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.4.0"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -33717,6 +33717,17 @@ let HeliosCard = class extends i {
                                 ></animateMotion>
                             </polygon>
                         ` : A}
+                        <!--  Anchor bead at the home end of the leader,
+                              same colour as the line so the two read
+                              as one continuous element. Marks where
+                              the produced energy lands.  -->
+                        <circle
+                            class="pv-home-leader-anchor"
+                            cx="${layout.home.x}"
+                            cy="${layout.home.y}"
+                            r="3"
+                            fill="${pvColor}"
+                        ></circle>
                     </svg>
                 ` : A}
 

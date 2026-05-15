@@ -12,7 +12,7 @@ the home and reflected in a scrubbable 5-day timeline.
 
 Each entry consolidates everything between two stable releases.
 
-### v1.4.0, LiDAR-driven shadows, raster shadow layer, SVG cloud overlay
+### v1.4.0, LiDAR-driven shadows, sun halo, home halo, focal home cluster
 
 Headline iteration on top of v1.3.0. Integrates the French national
 LiDAR HD dataset (IGN, metropolitan France + Corsica) as a source
@@ -22,6 +22,72 @@ the flat MapTiler footprints (buildings only) used everywhere else.
 The cloud-cover disc + 100 % ring move from MapLibre fill layers to
 an SVG overlay so they stay a true circle whatever the terrain mesh
 does underneath.
+
+**Visual stack rework.** The home and its readouts get a coherent
+redesign so the focal cluster reads as the centre of the card:
+
+- The solar overlay splits into two passes. Below-horizon (dotted)
+  segments render BEHIND the home chip cluster (z 4), so the home
+  reads cleanly through the night portion of the orbit. Above-
+  horizon arc + incidence ray + sun disc + W/m² readout render in
+  FRONT of every chip (z 7), so the live sun always dominates the
+  stack visually.
+- New irradiance-driven sun halo, a soft glow at 3× the disc radius,
+  filled by an SVG `radialGradient` that drops from
+  `sunFillRatio × 0.55` opacity at the centre to fully transparent
+  at the rim. Clear-sky noon radiates a visible aura without any
+  hard edge.
+- New sun-coloured home halo, a blurred MapLibre `line` layer
+  (`line-width: 8`, `line-blur: 6`, `line-opacity: 0.55`) painted
+  underneath the crisp black home outline (bumped from 2 px to
+  3 px). The halo colour tracks the configured sun colour through
+  `updateConfig`, keeping the home visually tied to the Helios
+  brand palette.
+- Cloud chip anchor rotates 45° CCW in the (east, north) world
+  frame: NH east → NE, SH west → SW. Both project to the screen's
+  lower-left at the hemisphere's resting bearing, leaving the
+  upper-screen quadrant to the irradiance chip and the sun.
+- New PV → home animated leader: a vertical dashed line in the
+  configured PV colour from the production chip's bottom edge down
+  to a small anchor bead on the home, dashes flow toward the home
+  at a speed proportional to current production over the user's
+  theoretical peak (`100 × pvCalibK` when calibrated, 5 kW fallback
+  while it warms up). Static and arrow-less when production is 0.
+- PV / SoC / Power chip cluster lifts 50 px (PV_CHIP_OFFSET_PX
+  65 → 115) so the home reads as a calm anchor with no chip on the
+  roof. SoC and Power chips' L-leader vertical legs halve
+  (BATTERY_CHIP_Y_OFFSET_PX 40 → 20), and their feet move from the
+  PV chip's centre to 25 % / 75 % of its width.
+- Date/time chip moves from top-centre to top-left, mirroring the
+  back-to-live button on the opposite edge. The button itself drops
+  from a folder-style tab hanging below the clock to a standalone
+  22 × 22 px chip in the top-right rail, matching the clock's
+  rendered height; its icon shrinks from 18 px to 14 px. Both rails
+  share the 8 px frame margin used by the timeline.
+- Default battery colour changes from `#D32F2F` (Material Red 700)
+  to `#FF5252` (Material Red A200) for chip-on-map legibility
+  against busy satellite basemaps in both light and dark themes.
+
+**Debug helper.** A non-persisted home-location override is exposed
+on `window` so visual issues reported by users can be reproduced on
+the developer's instance without touching HA's config:
+
+```js
+setHeliosLocation(lat, lon)   // override home for every live card
+clearHeliosLocation()         // revert to hass.config
+```
+
+The override sits on `window.__heliosLocationOverride` only (no
+localStorage), so a page refresh always restores `hass.config`. Each
+card reads through a private `_getHomeCoords()` helper that prefers
+the override and falls back to `hass.config.{latitude,longitude}`;
+when the helper toggles, every live card invalidates its cached
+home key and re-inits the engine + weather fetch + PV calibration
+bucket against the new coordinates. Calibration data is preserved
+across overrides because `helios-pv-calib:${lat}_${lon}` is the
+storage key in both `localStorage` and HA's `frontend/user_data`,
+so each location owns its own bucket and going back recovers the
+original cache untouched.
 
 **Shadow pipeline.** A single master `shadows-enabled` toggle drives
 whether cast shadows are rendered at all. When on, the source is
@@ -100,6 +166,16 @@ hourly aggregation is memoised against the history reference.
 **i18n.** New keys: `shadowsSection`, `shadowsEnabled*`,
 `lidarPrecision*`, `shadowOpacity*`, `mapStyleMinimal`,
 `mapStyleSatellite`, `terrainDetail*`. All 7 locales updated.
+
+**LiDAR coverage.** Only **IGN HD over metropolitan France + Corsica**
+in this release. Adding a country is a single-file drop under
+`./helios-lidar/`: implement the `LidarSource` interface from
+`helios-lidar.ts` and register the provider in `LIDAR_SOURCES`. The
+`findLidarSource(lat, lon)` resolver returns the first matching
+provider, or `null` for an out-of-coverage home, in which case the
+engine falls back to MapTiler footprints automatically. Additional
+providers are tracked separately as national open-data APIs become
+available.
 
 ### v1.3.0, Auto-calibrating PV, terrain detail, mobile rotation, stability
 
@@ -358,12 +434,17 @@ conditions at the user's home. The full picture sits on a single
 
 * **Sun arc**, the sun's full 24 h trajectory across the sky,
   projected onto the screen with depth (thicker stroke when in
-  front of the camera, thinner behind). Below-horizon segments
-  render as discrete dots so "underground" portions of the arc are
-  visible without competing with daylight ones.
-* **Sun disc**, the live position on the arc. The inner fill
-  scales with irradiance (full at 1 000 W/m², empty at night),
-  conveying the W/m² reading geometrically.
+  front of the camera, thinner behind). Split into two passes:
+  below-horizon dots render behind the home chip cluster so the
+  home stays readable through the night half of the loop;
+  above-horizon segments + sun disc + W/m² chip render in front
+  of every chip so the live sun always dominates the stack.
+* **Sun disc with halo**, the live position on the arc. Four
+  concentric layers, painted back-to-front: an irradiance-driven
+  halo (SVG `radialGradient`, 100 % alpha at the centre, 0 % at
+  the rim, peak alpha = `sqrt(irradiance/1000) × 0.55`); a
+  background tint; an inner fill whose radius scales with
+  irradiance; an outer rim.
 * **Incidence ray**, dashed line from the sun to the PV chip,
   animated to flow at a speed proportional to live irradiance.
   Snaps to the side of the PV chip facing the sun.
@@ -373,21 +454,32 @@ conditions at the user's home. The full picture sits on a single
   marks the 100 % reference.
 * **Solar irradiance chip**, pinned above the sun disc, shows the
   live W/m² figure.
-* **Cloud cover chip**, pinned just outside the cloud disc, shows
-  the live cloud %. Hovering the disc reveals a low/mid/high
+* **Cloud cover chip**, pinned just outside the cloud disc at a
+  hemisphere-aware geographic anchor (NE of home in NH, SW in SH).
+  Shows the live cloud %. Hovering the disc reveals a low/mid/high
   breakdown tooltip.
+* **Home halo**, a soft sun-coloured glow under the focal home
+  outline so the building reads at a glance even on a busy basemap.
 * **PV production chip** *(optional)*, when a `pv-power-entity`
-  is configured, a chip near the home shows the *instantaneous*
+  is configured, a chip above the home shows the *instantaneous*
   production in W or kW. Cumulative-energy sensors (kWh) are
   differentiated automatically over a rolling 60 s window.
+* **PV → home animated leader**, a vertical dashed line in the
+  configured PV colour from the PV chip's bottom edge down to a
+  small anchor bead on the home. Dashes flow toward the home at a
+  speed proportional to current production over the user's
+  theoretical peak (100 × `pvCalibK` when calibrated, 5 kW
+  fallback). Static and arrow-less when production is 0.
 * **Home battery chips** *(optional)*, State-of-Charge and signed
   instantaneous Power flank the PV chip, each connected to PV by
-  an L-shaped leader. The Power leader's dashes flow with the
-  sign of the live power.
-* **Date/time chip**, top-centre of the card, follows the
-  timeline cursor (live or scrubbed).
-* **Back-to-live tab**, hangs under the date/time chip while
-  scrubbing.
+  an L-shaped leader whose foot lands at 25 % / 75 % of the PV
+  chip's width. The Power leader's dashes flow with the sign of
+  the live power.
+* **Date/time chip**, top-LEFT of the card, follows the timeline
+  cursor (live or scrubbed).
+* **Back-to-live button**, top-RIGHT rail, mirrors the date/time
+  chip on the opposite edge. Shows only while scrubbing. Shares
+  its column with the LiDAR busy chip when both are active.
 * **Timeline**, bottom of the card, 5 days wide. Dual-area chart
   with irradiance (top) and cloud cover (bottom) sharing a
   midline that doubles as a date axis. A second chart for PV
@@ -640,6 +732,20 @@ diagnosing leaks across editor previews and reloads.
 `heliosStats()` does not mutate any state; it can be invoked from
 the user's console at any time.
 
+Two companion helpers let developers reproduce visual issues on a
+different home location without touching HA's config:
+
+```js
+setHeliosLocation(lat, lon)   // override home for every live card
+clearHeliosLocation()         // revert to hass.config
+```
+
+The override lives on `window.__heliosLocationOverride` only; a page
+refresh always restores HA's home. PV calibration cache buckets are
+keyed by `lat.toFixed(3)_lon.toFixed(3)` in both `localStorage` and
+HA's `frontend/user_data`, so each location owns its own bucket and
+the user's original cache is recovered untouched on return.
+
 ---
 
 ## Build & publish
@@ -675,6 +781,12 @@ To publish a release:
   loads / month) is more than enough for a typical Helios install,
   but every dashboard load and rotation cycle does consume tile
   quota. Open-Meteo doesn't need a key.
+* **LiDAR coverage**, only metropolitan France + Corsica today
+  (IGN HD). Out-of-coverage homes fall back to MapTiler footprints
+  (buildings only, no vegetation), so the visual works worldwide
+  but trees / hedges do not cast shadows outside France. Additional
+  providers are on the roadmap as national open-data APIs become
+  available.
 * **WebGL contexts on long-lived dashboards**, browsers cap
   concurrent WebGL contexts at 8–16. Helios releases its context
   cleanly on every re-init via `WEBGL_lose_context`, but if you

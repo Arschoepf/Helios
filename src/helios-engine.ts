@@ -374,11 +374,12 @@ export const DEFAULT_CLOUD_COLOR_HEX: string = '#5A8DC4';
 //and reads as "solar production" without competing with the orange sun
 //or the blue cloud colours.
 export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
-//Saturated red, distinct from sun (orange), cloud (blue), PV
+//Bright red, distinct from sun (orange), cloud (blue), PV
 //(green), and easy to associate visually with battery
-//discharge / "energy on draw" semantics. Reads cleanly on the
-//80 % white chip background.
-export const DEFAULT_BATTERY_COLOR_HEX: string = '#D32F2F';
+//discharge / "energy on draw" semantics. Picked for chip-on-map
+//legibility against busy satellite basemaps in both light and
+//dark themes.
+export const DEFAULT_BATTERY_COLOR_HEX: string = '#FF5252';
 
 const DEFAULT_CLOUD_RGB: RGB = [0x5A, 0x8D, 0xC4];
 
