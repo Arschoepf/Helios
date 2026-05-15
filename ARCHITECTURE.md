@@ -1,4 +1,4 @@
-# HELIOS, v1.4.0
+# HELIOS, v1.5.0
 
 HELIOS is a Home Assistant Lovelace custom card that visualises solar
 conditions at a home in real time: sun arc, irradiance, cloud cover,
@@ -21,6 +21,101 @@ configuration of credentials.
 ## Changelog
 
 Each entry consolidates everything between two stable releases.
+
+### v1.5.0, OpenFreeMap migration, manual PV peak, detail dashboard, multi-country LiDAR
+
+A four-headed iteration on top of v1.4.0. Drops the MapTiler dependency
+entirely, replaces auto-calibrating PV with a one-line manual input,
+opens a click-through detail dashboard on the home, and rounds out the
+LiDAR provider roster started in v1.4.0.
+
+**OpenFreeMap migration.** The map stack moves from MapTiler (paid API
+key, opt-in for HACS users) to [OpenFreeMap](https://openfreemap.org/),
+which serves OpenMapTiles-schema vector tiles plus three maintained
+styles (Liberty, Positron, Fiord) for free with no key, no signup and
+no rate limit. The card now ships with zero credentials to configure;
+the basemap and the buildings tile fetch (`helios-buildings.ts`) both
+resolve their tile URL once at boot from OpenFreeMap's public
+TileJSON. Three knock-on cleanups:
+
+- The `maptiler-key` config option is removed (silently ignored if
+  present in old YAML; the engine never reads it).
+- The `topo` map style is gone (MapTiler-specific). `map-style` now
+  accepts `streets` (Liberty) and `minimal` (Positron).
+- A `styleimagemissing` handler stubs unknown sprite refs with a 1 px
+  transparent image so OFM's smaller sprite sheet can't spam console
+  warnings on style switch.
+
+**Manual PV peak power.** The auto-calibration buffer (a 14-day
+rolling fit of `predicted vs actual` samples kept in localStorage and
+HA's `frontend/user_data`) is gone. Users now enter the installation's
+peak power directly via a new `pv-peak-kwp` numeric option in the
+editor. `_pvCalibK()` returns `kwp * 10` when set, `null` otherwise.
+When `null`, the dotted forecast line and the predicted-value mode of
+the PV chip both hide; the live observation, the PV chip and the
+peak-of-day highlight still render. A one-shot boot routine
+(`_wipeLegacyPvCalibStorage`, gated by a `helios-pv-calib:wiped-v1`
+flag) deletes legacy calibration buckets so the migration is silent
+for existing users.
+
+**Detail dashboard.** Clicking the home triggers a camera dive (zoom
++ pitch ease) and fades a chip-styled overlay over the HUD with four
+sections that appear in sequence (500 ms stagger between cards):
+
+- **Today**: produced kWh, projected end-of-day total, peak-of-day
+  time. No curve, the timeline above already carries that shape.
+- **The week**: 7 vertical "bottle" gauges, one per recent day,
+  filled to that day's total kWh against the rolling max. Compact
+  (~90 px tall, bottle width auto-fits the card).
+- **Tomorrow**: a single chip with weather icon + estimated kWh +
+  expected peak hour, derived from the multi-model forecast and the
+  Haurwitz / Kasten-Czeplak clear-sky model scaled by `pv-peak-kwp`.
+- **Battery**: a vessel showing live SoC and the day's charge /
+  discharge totals, present only if at least one battery entity is
+  configured.
+
+Each card shares the same chip vocabulary as the on-map overlays
+(white surface, 1 px black border, soft shadow), with a dark-theme
+override for `card-theme: 'dark'`. Click anywhere outside a card to
+exit; the camera eases back to its pre-dive bearing and the HUD
+fades back in.
+
+**Hover home glow (replaces always-on halo).** The v1.4.0
+sun-coloured halo painted under the home's outline as a permanent
+MapLibre `line` layer is replaced by an SVG glow toggled on the
+`home_hover` state. The home then reads as a calm anchor at rest and
+the focal building only "lights up" when the cursor is over it,
+signalling the click affordance for the detail dashboard.
+
+**Multi-country LiDAR roster (continuing v1.4.0).** Four providers
+land alongside the existing IGN-FR pipeline: Defra (England,
+GeoTIFF DSM minus DTM), IGN España PNOA-LiDAR (peninsular Spain +
+Balearics, two MDSn coverages merged via element-wise MAX), PDOK
+AHN4 (Netherlands, GeoTIFF DSM minus DTM), Kartverket NHM (Norway +
+Svalbard, ArcGIS Float32 GeoTIFF DOM minus DTM). All five route
+through the shared post-processing in
+`./helios-lidar/helios-lidar-pipeline.ts`. The `geotiff` package
+(~120 KB gzip, lazy-loaded codecs inlined by Vite
+`inlineDynamicImports`) is the only third-party dependency added.
+
+Probed and parked: Wales (NRW, per-tile ZIP only), Switzerland
+(swisstopo, WMS only carries pre-rendered hillshade), Slovakia
+(ZBGIS, surface only as PNG), Denmark (Datafordeler DHM, requires
+per-user OAuth).
+
+**Timeline polish.** Daily kWh totals now appear under each date
+label on the timeline. Sunrise / sunset ring markers on the sun arc
+were swapped for MDI icons. The bottom scrub chip is gone; the
+clock chip in the top-left flips to the blue scrub theme during a
+scrub, and the back-to-live button is fused next to it. Auto-rotate
+defaults to `false` (was `true`) so a fresh install is calm by
+default; users opt in for kiosk dashboards.
+
+**i18n.** New keys: `todayLabel`, `todayProduced`, `todayForecast`,
+`todayPeak`, `weekLabel`, `tomorrowLabel`, `tomorrowPeak`,
+`batteryLabel`, `batteryCharged`, `batteryDischarged`,
+`pvPeakPower`, `pvPeakPowerHelp`. Norwegian (`no`) added as the 8th
+locale.
 
 ### v1.4.0, LiDAR-driven shadows, sun halo, home halo, focal home cluster
 
@@ -177,15 +272,15 @@ hourly aggregation is memoised against the history reference.
 `lidarPrecision*`, `shadowOpacity*`, `mapStyleMinimal`,
 `mapStyleSatellite`, `terrainDetail*`. All 7 locales updated.
 
-**LiDAR coverage.** Five providers wired in v1.4.1: IGN HD (France),
-Environment Agency LiDAR Composite (England), IGN España PNOA-LiDAR
-MDSn (Spain), PDOK AHN4 (Netherlands), Kartverket NHM (Norway).
-Adding a country is a single-file drop under
-`./helios-lidar/providers/`: implement the `LidarSource` interface
-from `helios-lidar.ts` and register the provider in `LIDAR_SOURCES`.
-The `findLidarSource(lat, lon)` resolver returns the first matching
-provider, or `null` for an out-of-coverage home, in which case the
-engine falls back to MapTiler footprints automatically.
+**LiDAR coverage.** France IGN HD lands here in v1.4.0; the four
+other providers (Defra UK, IGN ES, PDOK NL, Kartverket NO) land in
+v1.5.0 alongside the OpenFreeMap migration. Adding a country is a
+single-file drop under `./helios-lidar/providers/`: implement the
+`LidarSource` interface from `helios-lidar.ts` and register the
+provider in `LIDAR_SOURCES`. The `findLidarSource(lat, lon)`
+resolver returns the first matching provider, or `null` for an
+out-of-coverage home, in which case the engine falls back to its
+basemap building footprints automatically.
 
 The shared post-processing (flood-fill on cells above a height
 threshold + size cap + convex hull) lives in
@@ -688,8 +783,8 @@ TileJSON at `https://tiles.openfreemap.org/planet`; OpenFreeMap
 rotates the underlying snapshot path every few weeks, so caching
 the template per page lifetime keeps us pointed at whatever
 snapshot is current. Each tile's `building` source-layer is
-decoded (same OpenMapTiles schema MapTiler v3 ships, so
-`render_height` and `render_min_height` are present); MultiPolygon
+decoded (OpenMapTiles schema, so `render_height` and
+`render_min_height` are present); MultiPolygon
 features are split into independent Polygon features. Then each
 feature is classified:
 
@@ -706,14 +801,16 @@ modulated by sun altitude.
 ### LiDAR shadow consolidation
 
 When `shadows-enabled` is true AND a LiDAR provider covers the home,
-the engine fires `franceLidarHd.fetchShadowRegions()` with the home
-position, the building visibility radius and a raster size driven
-by `lidar-precision` (256² / 512² / 1024²).
+the engine resolves the matching `LidarSource` via
+`findLidarSource(lat, lon)` and calls its `fetchShadowRegions()` with
+the home position, the building visibility radius and a raster size
+driven by `lidar-precision` (256² / 512² / 1024²).
 
-The provider runs one WMS GetMap against
-`IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G` with
-`FORMAT=image/x-bil;bits=32`, decoding the raw little-endian
-float32 height raster client-side. Then:
+Each provider does one (France: BIL float32 from IGN's
+`IGNF_LIDAR-HD_MNH_*` WMS) or two (UK / NL / NO: GeoTIFF DSM minus
+DTM; Spain: vegetation MDSn merged with buildings MDSn via MAX)
+upstream fetches, decodes them client-side and hands a single
+height raster to the shared post-processing pipeline. Then:
 
 - **Filter.** Cells with `5 ≤ h ≤ 100 m` pass the height threshold.
   Cells beyond `radiusMeters` haversine from the home are dropped
@@ -828,8 +925,8 @@ To publish a release:
    bundle).
 2. Tag the commit and push:
    ```bash
-   git tag v1.4.0
-   git push origin v1.4.0
+   git tag v1.5.0
+   git push origin v1.5.0
    ```
 3. Create a GitHub Release (HACS needs a Release, not just a tag).
    The `release.yml` workflow rebuilds `dist/helios.js` from the
@@ -847,11 +944,11 @@ To publish a release:
   building tiles all come from OpenFreeMap's public CDN. There's no
   per-user rate limit, but the project is run by a single
   organisation; if their CDN goes down, the basemap stops loading
-  for everyone. No commercial SLA is offered. As of v1.4.1 this is
+  for everyone. No commercial SLA is offered. Since v1.5.0 this is
   the only third-party hard dependency for the map to render.
-* **LiDAR coverage**, five providers integrated as of v1.4.1
-  (France IGN HD, England Defra, Spain IGN, Netherlands PDOK,
-  Norway Kartverket). Out-of-coverage homes fall back to
+* **LiDAR coverage**, five providers integrated today (France IGN
+  HD, England Defra, Spain IGN, Netherlands PDOK, Norway
+  Kartverket). Out-of-coverage homes fall back to
   OpenFreeMap building footprints (buildings only, no vegetation),
   so the visual works worldwide but trees / hedges only cast
   shadows in covered countries. Additional providers are on the
@@ -862,5 +959,5 @@ To publish a release:
   cleanly on every re-init via `WEBGL_lose_context`, but if you
   stack many MapLibre-backed cards in the same dashboard you may
   hit the limit; the browser will then recycle aggressively and
-  performance can degrade. Use `performance-mode: true` or
+  performance can degrade. Use `pixel-ratio: 1x` and
   `map-style: minimal` on such setups.

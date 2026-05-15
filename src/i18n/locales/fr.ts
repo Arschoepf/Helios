@@ -25,6 +25,7 @@ export const fr: Translations = {
         todayLabel:         'Aujourd\'hui',
         todayProduced:      'produit',
         todayForecast:      'prévu fin de journée',
+        todayPeak:          'pic aujourd\'hui',
         weekLabel:          'La période',
         tomorrowLabel:      'Demain',
         tomorrowPeak:       'pic prévu vers',

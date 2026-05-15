@@ -32387,6 +32387,7 @@ const en = {
     todayLabel: "Today",
     todayProduced: "produced",
     todayForecast: "forecast end of day",
+    todayPeak: "peak today",
     weekLabel: "This period",
     tomorrowLabel: "Tomorrow",
     tomorrowPeak: "peak expected around",
@@ -32475,6 +32476,7 @@ const fr = {
     todayLabel: "Aujourd'hui",
     todayProduced: "produit",
     todayForecast: "prévu fin de journée",
+    todayPeak: "pic aujourd'hui",
     weekLabel: "La période",
     tomorrowLabel: "Demain",
     tomorrowPeak: "pic prévu vers",
@@ -32563,6 +32565,7 @@ const de = {
     todayLabel: "Heute",
     todayProduced: "erzeugt",
     todayForecast: "Prognose Tagesende",
+    todayPeak: "Spitze heute",
     weekLabel: "Der Zeitraum",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "Spitze erwartet gegen",
@@ -32651,6 +32654,7 @@ const es = {
     todayLabel: "Hoy",
     todayProduced: "producido",
     todayForecast: "previsto fin del día",
+    todayPeak: "pico hoy",
     weekLabel: "El período",
     tomorrowLabel: "Mañana",
     tomorrowPeak: "pico previsto sobre las",
@@ -32739,6 +32743,7 @@ const it = {
     todayLabel: "Oggi",
     todayProduced: "prodotto",
     todayForecast: "previsto fine giornata",
+    todayPeak: "picco oggi",
     weekLabel: "Il periodo",
     tomorrowLabel: "Domani",
     tomorrowPeak: "picco previsto verso le",
@@ -32827,6 +32832,7 @@ const nl = {
     todayLabel: "Vandaag",
     todayProduced: "opgewekt",
     todayForecast: "verwacht einde dag",
+    todayPeak: "piek vandaag",
     weekLabel: "De periode",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "piek verwacht rond",
@@ -32915,6 +32921,7 @@ const pt = {
     todayLabel: "Hoje",
     todayProduced: "produzido",
     todayForecast: "previsto fim do dia",
+    todayPeak: "pico hoje",
     weekLabel: "O período",
     tomorrowLabel: "Amanhã",
     tomorrowPeak: "pico previsto por volta das",
@@ -33003,6 +33010,7 @@ const no = {
     todayLabel: "I dag",
     todayProduced: "produsert",
     todayForecast: "estimert dagsslutt",
+    todayPeak: "topp i dag",
     weekLabel: "Perioden",
     tomorrowLabel: "I morgen",
     tomorrowPeak: "topp ventet rundt",
@@ -33267,15 +33275,12 @@ const heliosCardStyles = i$3`
     {
         position: absolute;
         inset: 0;
-        background:
-            linear-gradient(180deg,
-                rgba(10, 14, 24, 0.86) 0%,
-                rgba(20, 26, 42, 0.92) 100%);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
         z-index: 60;
         opacity: 0;
-        animation: detail-panel-fade-in 0.35s ease forwards;
+        animation: detail-panel-fade-in 0.25s ease forwards;
         display: flex;
         flex-direction: column;
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
@@ -33286,120 +33291,116 @@ const heliosCardStyles = i$3`
         to   { opacity: 1; }
     }
 
-    /*  Light-theme panel: the Fiord-tinted dark scrim from the base
-        rule reads too heavy against an otherwise pale dashboard.
-        Switch to a near-white scrim with a hint of warmth so the
-        sections still pop without going full noir. */
-    ha-card.theme-light .detail-panel
-    {
-        background:
-            linear-gradient(180deg,
-                rgba(248, 250, 254, 0.92) 0%,
-                rgba(232, 238, 248, 0.96) 100%);
-        color: #15202b;
-    }
-
     .detail-close-btn
     {
         position: absolute;
-        top: 12px;
-        right: 12px;
-        width:  32px;
-        height: 32px;
+        top: 10px;
+        right: 10px;
+        width:  28px;
+        height: 28px;
         padding: 0;
-        background: rgba(255, 255, 255, 0.10);
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: #ffffff;
+        border: 1px solid #000000;
         border-radius: 50%;
-        color: rgba(255, 255, 255, 0.85);
+        color: #000000;
         cursor: pointer;
         z-index: 1;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        transition: background 0.15s, transform 0.15s;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        transition: transform 0.12s;
     }
-    .detail-close-btn:hover  { background: rgba(255, 255, 255, 0.18); transform: scale(1.05); }
-    .detail-close-btn:active { background: rgba(255, 255, 255, 0.25); transform: scale(0.95); }
-    .detail-close-btn ha-icon { --mdc-icon-size: 20px; color: inherit; }
-    ha-card.theme-light .detail-close-btn
+    .detail-close-btn:hover  { transform: scale(1.05); }
+    .detail-close-btn:active { transform: scale(0.95); }
+    .detail-close-btn ha-icon { --mdc-icon-size: 16px; color: inherit; }
+    ha-card.theme-dark .detail-close-btn
     {
-        background: rgba(15, 23, 42, 0.06);
-        border-color: rgba(15, 23, 42, 0.15);
-        color: rgba(15, 23, 42, 0.75);
+        background: #191a1b;
+        color:      #e6e6e6;
+        border-color: rgba(255, 255, 255, 0.20);
     }
-    ha-card.theme-light .detail-close-btn:hover  { background: rgba(15, 23, 42, 0.12); }
 
     .detail-panel-inner
     {
         flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding: 24px 28px 32px;
+        padding: 14px 14px 14px;
         display: flex;
         flex-direction: column;
-        gap: 28px;
-        color: #e8eef8;
-    }
-    ha-card.theme-light .detail-panel-inner
-    {
-        color: #1c2733;
+        gap: 10px;
+        overflow: hidden;
     }
 
-    /*  Each section is a self-contained block. Header on top
-        (icon + small-caps label + optional trailing big number),
-        then the illustration that IS the data underneath. */
-    .dash-section
+    /*  Each dashboard section is a chip-style card: same visual
+        language as the on-map readouts (white plate, 1 px black
+        border, soft shadow). Compact, dense, readable at-a-glance.
+        Sections appear sequentially with a 0.5 s stagger so the
+        eye lands on each one in turn. */
+    .dash-card
     {
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        padding: 8px 12px;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 6px;
         opacity: 0;
-        transform: translateY(8px);
-        animation: dash-section-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        transform: translateY(6px);
+        animation: dash-card-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
-    .dash-section:nth-of-type(1) { animation-delay: 0.05s; }
-    .dash-section:nth-of-type(2) { animation-delay: 0.15s; }
-    .dash-section:nth-of-type(3) { animation-delay: 0.25s; }
-    .dash-section:nth-of-type(4) { animation-delay: 0.35s; }
-    @keyframes dash-section-in
+    .dash-card:nth-of-type(1) { animation-delay: 0.00s; }
+    .dash-card:nth-of-type(2) { animation-delay: 0.50s; }
+    .dash-card:nth-of-type(3) { animation-delay: 1.00s; }
+    .dash-card:nth-of-type(4) { animation-delay: 1.50s; }
+    @keyframes dash-card-in
     {
         to { opacity: 1; transform: translateY(0); }
     }
 
-    .dash-section-header
+    ha-card.theme-dark .dash-card
+    {
+        background: #191a1b;
+        color:      #e6e6e6;
+        border-color: rgba(255, 255, 255, 0.20);
+    }
+
+    .dash-card-header
     {
         display: flex;
-        align-items: baseline;
-        gap: 10px;
+        align-items: center;
+        gap: 8px;
     }
-    .dash-section-icon
+    .dash-card-icon
     {
-        --mdc-icon-size: 18px;
-        align-self: center;
+        --mdc-icon-size: 16px;
+        flex-shrink: 0;
     }
-    .dash-section-label
+    .dash-card-label
     {
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
-        letter-spacing: 2.5px;
+        letter-spacing: 1.5px;
         text-transform: uppercase;
         opacity: 0.65;
     }
-    .dash-section-trailing
+    .dash-card-trailing
     {
         margin-left: auto;
         display: inline-flex;
         align-items: baseline;
-        gap: 4px;
+        gap: 3px;
     }
-    .dash-section-trailing-forecast
+    .dash-card-trailing-forecast
     {
         font-style: italic;
         opacity: 0.85;
     }
     .dash-stat-value
     {
-        font-size: 44px;
+        font-size: 28px;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
         line-height: 1;
@@ -33407,21 +33408,21 @@ const heliosCardStyles = i$3`
     }
     .dash-stat-unit
     {
-        font-size: 18px;
+        font-size: 13px;
         font-weight: 500;
         opacity: 0.65;
-        margin-left: 4px;
+        margin-left: 3px;
     }
     .dash-stat-value-sm
     {
-        font-size: 22px;
+        font-size: 18px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
         line-height: 1;
     }
     .dash-stat-unit-sm
     {
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 500;
         opacity: 0.65;
     }
@@ -33430,212 +33431,152 @@ const heliosCardStyles = i$3`
 
     .dash-today-body
     {
-        display: grid;
-        grid-template-columns: minmax(140px, 220px) 1fr;
-        gap: 16px;
-        align-items: stretch;
-    }
-    .dash-today-stats
-    {
         display: flex;
-        flex-direction: column;
-        justify-content: center;
-        gap: 4px;
+        align-items: center;
+        gap: 12px;
+        padding: 2px 0;
     }
     .dash-today-produced
     {
         display: inline-flex;
         align-items: baseline;
     }
-    .dash-today-produced-label
+    .dash-today-side
     {
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 1.5px;
-        text-transform: uppercase;
-        opacity: 0.55;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-width: 0;
     }
-    .dash-today-forecast
+    .dash-today-line
     {
-        margin-top: 8px;
-        font-size: 13px;
-        font-weight: 500;
-        opacity: 0.75;
-        font-variant-numeric: tabular-nums;
-        font-style: italic;
         display: inline-flex;
-        align-items: baseline;
+        align-items: center;
         gap: 6px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
-    .dash-forecast-arrow { font-size: 16px; opacity: 0.7; }
-    .dash-today-forecast-suffix
+    .dash-today-line ha-icon { --mdc-icon-size: 14px; }
+    .dash-today-line .dash-line-arrow { font-size: 14px; opacity: 0.65; font-weight: 600; }
+    .dash-today-line .dash-line-value { font-weight: 700; }
+    .dash-today-line .dash-line-label
     {
-        font-size: 11px;
+        font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 1px;
-        opacity: 0.7;
-        font-style: normal;
+        opacity: 0.55;
     }
-    .dash-today-curve
-    {
-        width: 100%;
-        height: 180px;
-        display: block;
-    }
-    .dash-today-curve .dash-curve-obs-line { stroke-width: 2;   stroke-linecap: round; stroke-linejoin: round; }
-    .dash-today-curve .dash-curve-fc-line  { stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 4 3; opacity: 0.65; }
-    .dash-today-curve .dash-curve-fc-area  { opacity: 0.45; }
-    .dash-today-curve .dash-now-line       { stroke: currentColor; stroke-width: 1; opacity: 0.35; }
-    .dash-today-curve .dash-peak-tether    { stroke: currentColor; stroke-width: 1; opacity: 0.35; stroke-dasharray: 2 2; }
-    .dash-today-curve .dash-peak-chip text { fill: currentColor; font-size: 10px; font-weight: 700; opacity: 0.85; font-variant-numeric: tabular-nums; }
-    .dash-today-curve .dash-hour-tick      { fill: currentColor; font-size: 10px; opacity: 0.4; font-variant-numeric: tabular-nums; }
+    .dash-today-forecast .dash-line-value { font-style: italic; }
 
     /*  Section: week                                                   */
 
     .dash-week-bottles
     {
         width: 100%;
-        height: 220px;
+        height: 90px;
         display: block;
     }
     .dash-week-bottles .dash-bottle-shell
     {
-        fill: rgba(255, 255, 255, 0.04);
-        stroke: rgba(255, 255, 255, 0.18);
+        fill: rgba(0, 0, 0, 0.04);
+        stroke: rgba(0, 0, 0, 0.25);
         stroke-width: 1;
     }
-    ha-card.theme-light .dash-week-bottles .dash-bottle-shell
+    ha-card.theme-dark .dash-week-bottles .dash-bottle-shell
     {
-        fill: rgba(15, 23, 42, 0.04);
-        stroke: rgba(15, 23, 42, 0.18);
+        fill: rgba(255, 255, 255, 0.04);
+        stroke: rgba(255, 255, 255, 0.25);
     }
-    .dash-week-bottles .dash-bottle.is-future .dash-bottle-shell
-    {
-        stroke-dasharray: 3 2;
-    }
+    .dash-week-bottles .dash-bottle.is-future .dash-bottle-shell { stroke-dasharray: 2 2; }
     .dash-week-bottles .dash-bottle-day
     {
         fill: currentColor;
-        font-size: 11px;
-        font-weight: 600;
+        font-size: 8px;
+        font-weight: 700;
         opacity: 0.7;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
     }
-    .dash-week-bottles .dash-bottle-kwh
-    {
-        fill: currentColor;
-        font-size: 12px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-    }
-    .dash-week-bottles .dash-bottle.is-today .dash-bottle-day,
-    .dash-week-bottles .dash-bottle.is-today .dash-bottle-kwh
-    {
-        opacity: 1;
-    }
-    .dash-week-bottles .dash-bottle.is-future .dash-bottle-day,
-    .dash-week-bottles .dash-bottle.is-future .dash-bottle-kwh
-    {
-        opacity: 0.55;
-        font-style: italic;
-    }
+    .dash-week-bottles .dash-bottle.is-today .dash-bottle-day { opacity: 1; }
+    .dash-week-bottles .dash-bottle.is-future .dash-bottle-day { opacity: 0.55; font-style: italic; }
 
     /*  Section: tomorrow                                               */
 
-    .dash-tomorrow-scene
+    .dash-tomorrow-peak
     {
-        width: 100%;
-        height: 200px;
-        display: block;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    .dash-tomorrow-scene .dash-sun-disc
-    {
-        filter: drop-shadow(0 0 6px currentColor);
-    }
-    .dash-tomorrow-caption
-    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
         font-size: 12px;
-        font-weight: 500;
-        letter-spacing: 0.5px;
-        opacity: 0.75;
-        text-align: center;
-        font-style: italic;
         font-variant-numeric: tabular-nums;
     }
+    .dash-tomorrow-peak ha-icon { --mdc-icon-size: 14px; }
+    .dash-tomorrow-peak .dash-line-label
+    {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.55;
+    }
+    .dash-tomorrow-peak .dash-line-value { font-weight: 700; }
 
     /*  Section: battery                                                */
 
     .dash-battery-body
     {
-        display: grid;
-        grid-template-columns: 200px 1fr;
-        gap: 24px;
+        display: flex;
         align-items: center;
+        gap: 14px;
     }
     .dash-battery-vessel
     {
-        width: 200px;
-        height: 240px;
+        width: 50px;
+        height: 84px;
+        flex-shrink: 0;
         display: block;
     }
     .dash-battery-vessel .dash-batt-shell,
     .dash-battery-vessel .dash-batt-cap
     {
+        fill: rgba(0, 0, 0, 0.04);
+        stroke: rgba(0, 0, 0, 0.30);
+        stroke-width: 1;
+    }
+    ha-card.theme-dark .dash-battery-vessel .dash-batt-shell,
+    ha-card.theme-dark .dash-battery-vessel .dash-batt-cap
+    {
         fill: rgba(255, 255, 255, 0.04);
         stroke: rgba(255, 255, 255, 0.30);
-        stroke-width: 1.5;
-    }
-    ha-card.theme-light .dash-battery-vessel .dash-batt-shell,
-    ha-card.theme-light .dash-battery-vessel .dash-batt-cap
-    {
-        fill: rgba(15, 23, 42, 0.04);
-        stroke: rgba(15, 23, 42, 0.30);
     }
     .dash-battery-flows
     {
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
     }
     .dash-battery-flow
     {
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        gap: 10px;
+        gap: 6px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
-    .dash-battery-flow ha-icon { --mdc-icon-size: 20px; }
+    .dash-battery-flow ha-icon { --mdc-icon-size: 14px; }
     .dash-battery-flow-charge    ha-icon { color: #22c55e; }
     .dash-battery-flow-discharge ha-icon { color: #ef4444; }
-    .dash-flow-value
-    {
-        font-size: 22px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-        line-height: 1;
-    }
+    .dash-flow-value { font-weight: 700; }
     .dash-flow-label
     {
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 1px;
+        font-size: 10px;
         text-transform: uppercase;
-        opacity: 0.6;
-        margin-top: 2px;
-    }
-
-    /*  Mobile / narrow card: stack the today + battery 2-column
-        layouts vertically so the illustrations stay readable. */
-    @media (max-width: 520px)
-    {
-        .dash-today-body,
-        .dash-battery-body
-        {
-            grid-template-columns: 1fr;
-        }
-        .dash-battery-vessel { margin: 0 auto; }
+        letter-spacing: 1px;
+        opacity: 0.55;
     }
 
 
@@ -35717,7 +35658,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.5.0-beta.2"}`,
+      `%c☀ HELIOS%c v${"1.5.0-beta.3"}`,
       labelStyle,
       versionStyle
     );
@@ -35738,7 +35679,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.5.0-beta.2",
+        version: "1.5.0-beta.3",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -35746,7 +35687,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.5.0-beta.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.5.0-beta.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -38164,120 +38105,41 @@ let HeliosCard = class extends i {
   _renderDashTodaySection(t2, pvColor, sunColor) {
     const data = this._computeTodayHourly();
     const HOUR_MS = 36e5;
-    const today0 = /* @__PURE__ */ new Date();
-    today0.setHours(0, 0, 0, 0);
-    const startMs = today0.getTime();
-    const nowMs = Date.now();
-    const W = 600;
-    const H2 = 180;
-    const padTop = 20;
-    const padBot = 30;
-    const usableH = H2 - padTop - padBot;
-    const yMax = Math.max(100, data.peakW * 1.15);
-    const xOf = (hourTs) => (hourTs - startMs) / HOUR_MS * (W / 24) + W / 24 / 2;
-    const yOf = (w2) => padTop + usableH - w2 / yMax * usableH;
-    const obsPoints = [];
-    const fcPoints = [];
-    for (const b2 of data.bins) {
-      const x2 = xOf(b2.hourTs);
-      if (b2.observedW !== null) obsPoints.push([x2, yOf(b2.observedW)]);
-      if (b2.hourTs > nowMs && b2.forecastW !== null) {
-        fcPoints.push([x2, yOf(b2.forecastW)]);
-      }
-    }
-    const smoothPath = (pts) => {
-      if (pts.length < 2) return "";
-      if (pts.length === 2) {
-        return `M ${pts[0][0]},${pts[0][1]} L ${pts[1][0]},${pts[1][1]}`;
-      }
-      let d2 = `M ${pts[0][0]},${pts[0][1]}`;
-      for (let i2 = 0; i2 < pts.length - 1; i2++) {
-        const p0 = pts[Math.max(0, i2 - 1)];
-        const p1 = pts[i2];
-        const p2 = pts[i2 + 1];
-        const p3 = pts[Math.min(pts.length - 1, i2 + 2)];
-        const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
-        const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
-        const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
-        const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
-        d2 += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2[0]},${p2[1]}`;
-      }
-      return d2;
-    };
-    const closedPath = (pts) => {
-      if (pts.length < 2) return "";
-      const baseY = padTop + usableH;
-      return smoothPath(pts) + ` L ${pts[pts.length - 1][0]},${baseY} L ${pts[0][0]},${baseY} Z`;
-    };
-    const nowX = xOf(nowMs);
-    const peakX = data.peakHourTs !== null ? xOf(data.peakHourTs) : null;
-    const peakY = data.peakHourTs !== null ? yOf(data.peakW) : null;
     const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
       hourCycle: "h23"
     }) : "";
     const peakValueLabel = this._formatPvWatts(data.peakW);
+    const showForecast = data.forecastKwh > data.producedKwh + 0.05;
+    const showPeak = data.peakHourTs !== null && data.peakW > 50;
     return b`
-            <section class="dash-section dash-today">
-                <header class="dash-section-header">
-                    <ha-icon class="dash-section-icon" icon="mdi:weather-sunny" style="color:${sunColor}"></ha-icon>
-                    <span class="dash-section-label">${t2.detail.todayLabel}</span>
+            <section class="dash-section dash-card dash-today">
+                <header class="dash-card-header">
+                    <ha-icon class="dash-card-icon" icon="mdi:weather-sunny" style="color:${sunColor}"></ha-icon>
+                    <span class="dash-card-label">${t2.detail.todayLabel}</span>
                 </header>
                 <div class="dash-today-body">
-                    <div class="dash-today-stats">
-                        <div class="dash-today-produced">
-                            <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
-                            <span class="dash-stat-unit">kWh</span>
-                        </div>
-                        <div class="dash-today-produced-label">${t2.detail.todayProduced}</div>
-                        ${data.forecastKwh > data.producedKwh + 0.05 ? b`
-                            <div class="dash-today-forecast">
-                                <span class="dash-forecast-arrow">→</span>
-                                <span>${this._formatLocalisedNumber(data.forecastKwh, 1)} kWh</span>
-                                <span class="dash-today-forecast-suffix">${t2.detail.todayForecast}</span>
+                    <div class="dash-today-produced" style="color:${pvColor}">
+                        <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
+                        <span class="dash-stat-unit">kWh</span>
+                    </div>
+                    <div class="dash-today-side">
+                        ${showForecast ? b`
+                            <div class="dash-today-line dash-today-forecast">
+                                <span class="dash-line-arrow">→</span>
+                                <span class="dash-line-value">${this._formatLocalisedNumber(data.forecastKwh, 1)} kWh</span>
+                                <span class="dash-line-label">${t2.detail.todayForecast}</span>
+                            </div>
+                        ` : A}
+                        ${showPeak ? b`
+                            <div class="dash-today-line dash-today-peak">
+                                <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
+                                <span class="dash-line-value">${peakTimeLabel} · ${peakValueLabel}</span>
+                                <span class="dash-line-label">${t2.detail.todayPeak}</span>
                             </div>
                         ` : A}
                     </div>
-                    <svg class="dash-today-curve" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="none">
-                        <defs>
-                            <linearGradient id="dash-pv-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%"   stop-color="${pvColor}" stop-opacity="0.55"/>
-                                <stop offset="100%" stop-color="${pvColor}" stop-opacity="0"/>
-                            </linearGradient>
-                        </defs>
-
-                        <!-- Forecast area (faded) -->
-                        ${fcPoints.length >= 2 ? w`
-                            <path class="dash-curve-fc-area" d="${closedPath(fcPoints)}" fill="url(#dash-pv-grad-${this._instanceId})"/>
-                            <path class="dash-curve-fc-line" d="${smoothPath(fcPoints)}" stroke="${pvColor}" fill="none"/>
-                        ` : A}
-
-                        <!-- Observed area (solid) -->
-                        ${obsPoints.length >= 2 ? w`
-                            <path class="dash-curve-obs-area" d="${closedPath(obsPoints)}" fill="url(#dash-pv-grad-${this._instanceId})"/>
-                            <path class="dash-curve-obs-line" d="${smoothPath(obsPoints)}" stroke="${pvColor}" fill="none"/>
-                        ` : A}
-
-                        <!-- Now cursor -->
-                        ${nowX >= 0 && nowX <= W ? w`
-                            <line class="dash-now-line" x1="${nowX}" y1="${padTop}" x2="${nowX}" y2="${padTop + usableH}"/>
-                        ` : A}
-
-                        <!-- Peak marker + chip -->
-                        ${peakX !== null && peakY !== null && data.peakW > 50 ? w`
-                            <circle class="dash-peak-dot" cx="${peakX}" cy="${peakY}" r="4" fill="${sunColor}"/>
-                            <line class="dash-peak-tether" x1="${peakX}" y1="${peakY}" x2="${peakX}" y2="${padTop - 6}"/>
-                            <g class="dash-peak-chip" transform="translate(${peakX}, ${padTop - 8})">
-                                <text text-anchor="middle">${peakTimeLabel} · ${peakValueLabel}</text>
-                            </g>
-                        ` : A}
-
-                        <!-- Hour ticks at the bottom -->
-                        ${[6, 9, 12, 15, 18].map((h2) => w`
-                            <text class="dash-hour-tick" x="${xOf(startMs + h2 * HOUR_MS)}" y="${H2 - 8}" text-anchor="middle">${h2}h</text>
-                        `)}
-                    </svg>
                 </div>
             </section>
         `;
@@ -38319,24 +38181,24 @@ let HeliosCard = class extends i {
     const days = this._computeWeekKwh();
     const totalKwh = days.reduce((s2, d2) => s2 + (d2.isPast || d2.isToday ? d2.observed : d2.forecast), 0);
     const maxKwh = Math.max(...days.map((d2) => d2.forecast), 1);
-    const W = 600;
-    const H2 = 220;
-    const padTop = 20;
-    const padBot = 50;
+    const W = 300;
+    const H2 = 90;
+    const padTop = 4;
+    const padBot = 22;
     const usableH = H2 - padTop - padBot;
     const nDays = days.length;
     const slotW = W / nDays;
-    const bottleW = Math.min(60, slotW * 0.55);
+    const bottleW = Math.min(36, slotW * 0.55);
     const dayLabel = (ms) => {
       const d2 = new Date(ms);
       return d2.toLocaleDateString([], { weekday: "short" }).slice(0, 3);
     };
     return b`
-            <section class="dash-section dash-week">
-                <header class="dash-section-header">
-                    <ha-icon class="dash-section-icon" icon="mdi:calendar-week" style="color:${pvColor}"></ha-icon>
-                    <span class="dash-section-label">${t2.detail.weekLabel}</span>
-                    <span class="dash-section-trailing">
+            <section class="dash-section dash-card dash-week">
+                <header class="dash-card-header">
+                    <ha-icon class="dash-card-icon" icon="mdi:calendar-week" style="color:${pvColor}"></ha-icon>
+                    <span class="dash-card-label">${t2.detail.weekLabel}</span>
+                    <span class="dash-card-trailing">
                         <span class="dash-stat-value-sm">${this._formatLocalisedNumber(totalKwh, 1)}</span>
                         <span class="dash-stat-unit-sm">kWh</span>
                     </span>
@@ -38353,44 +38215,27 @@ let HeliosCard = class extends i {
       const fcY = by + bH - fcH;
       return w`
                             <g class="dash-bottle ${d2.isToday ? "is-today" : d2.isPast ? "is-past" : "is-future"}">
-                                <!-- Bottle outline -->
                                 <rect class="dash-bottle-shell"
                                       x="${bx}" y="${by}"
                                       width="${bottleW}" height="${bH}"
-                                      rx="${bottleW / 6}" />
-
-                                <!-- Forecast fill (pale) -->
+                                      rx="${bottleW / 4}" />
                                 ${fcH > 0 ? w`
                                     <rect class="dash-bottle-forecast"
                                           x="${bx}" y="${fcY}"
                                           width="${bottleW}" height="${fcH}"
-                                          rx="${bottleW / 6}"
+                                          rx="${bottleW / 4}"
                                           fill="${pvColor}" fill-opacity="0.25"/>
                                 ` : A}
-
-                                <!-- Observed fill (solid) on top -->
                                 ${obsH > 0 ? w`
                                     <rect class="dash-bottle-observed"
                                           x="${bx}" y="${obsY}"
                                           width="${bottleW}" height="${obsH}"
-                                          rx="${bottleW / 6}"
+                                          rx="${bottleW / 4}"
                                           fill="${pvColor}" fill-opacity="0.85"/>
                                 ` : A}
-
-                                <!-- Highlight reflection (subtle vertical strip) -->
-                                <rect class="dash-bottle-shine"
-                                      x="${bx + bottleW * 0.15}" y="${by + 4}"
-                                      width="${bottleW * 0.12}" height="${bH - 8}"
-                                      rx="${bottleW / 12}"
-                                      fill="white" fill-opacity="0.08"/>
-
-                                <!-- Day label -->
                                 <text class="dash-bottle-day"
-                                      x="${cx}" y="${by + bH + 18}"
+                                      x="${cx}" y="${by + bH + 14}"
                                       text-anchor="middle">${dayLabel(d2.dayMs)}</text>
-                                <text class="dash-bottle-kwh"
-                                      x="${cx}" y="${by + bH + 36}"
-                                      text-anchor="middle">${this._formatLocalisedNumber(d2.forecast, 1)}</text>
                             </g>
                         `;
     })}
@@ -38434,74 +38279,30 @@ let HeliosCard = class extends i {
     const avgCloud = cloudWeight > 0 ? cloudSum / cloudWeight : 0;
     return { totalKwh, peakHourTs, peakW, avgCloud };
   }
-  _renderDashTomorrowSection(t2, sunColor, cloudColor) {
+  _renderDashTomorrowSection(t2, sunColor, _cloudColor) {
     const data = this._computeTomorrow();
     const HOUR_MS = 36e5;
-    const W = 600;
-    const H2 = 200;
-    const peakHour = data.peakHourTs !== null ? new Date(data.peakHourTs).getHours() + 0.5 : 12;
-    const sunX = (Math.max(6, Math.min(20, peakHour)) - 6) / 14 * (W * 0.8) + W * 0.1;
-    const cloudFactor = Math.max(0, Math.min(1, data.avgCloud / 100));
-    const sunY = 60 + cloudFactor * 40;
-    const sunR = 16 + Math.min(22, data.totalKwh / 25 * 22);
-    const cloudOpacity = Math.max(0.15, Math.min(0.85, cloudFactor));
     const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
       hourCycle: "h23"
     }) : "";
     return b`
-            <section class="dash-section dash-tomorrow">
-                <header class="dash-section-header">
-                    <ha-icon class="dash-section-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
-                    <span class="dash-section-label">${t2.detail.tomorrowLabel}</span>
-                    <span class="dash-section-trailing dash-section-trailing-forecast">
+            <section class="dash-section dash-card dash-tomorrow">
+                <header class="dash-card-header">
+                    <ha-icon class="dash-card-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
+                    <span class="dash-card-label">${t2.detail.tomorrowLabel}</span>
+                    <span class="dash-card-trailing dash-card-trailing-forecast">
                         <span class="dash-stat-value-sm">≈ ${this._formatLocalisedNumber(data.totalKwh, 1)}</span>
                         <span class="dash-stat-unit-sm">kWh</span>
                     </span>
                 </header>
-                <svg class="dash-tomorrow-scene" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="xMidYMid meet">
-                    <!-- Sky gradient backdrop -->
-                    <defs>
-                        <linearGradient id="dash-sky-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="${sunColor}" stop-opacity="${0.04 + (1 - cloudFactor) * 0.1}"/>
-                            <stop offset="100%" stop-color="${cloudColor}" stop-opacity="${0.05 + cloudFactor * 0.2}"/>
-                        </linearGradient>
-                        <radialGradient id="dash-sun-glow-${this._instanceId}" cx="50%" cy="50%" r="50%">
-                            <stop offset="0%"  stop-color="${sunColor}" stop-opacity="0.55"/>
-                            <stop offset="60%" stop-color="${sunColor}" stop-opacity="0.20"/>
-                            <stop offset="100%" stop-color="${sunColor}" stop-opacity="0"/>
-                        </radialGradient>
-                    </defs>
-
-                    <!-- Sky backdrop -->
-                    <rect x="0" y="0" width="${W}" height="${H2 * 0.85}" fill="url(#dash-sky-grad-${this._instanceId})"/>
-
-                    <!-- Sun glow halo -->
-                    <circle cx="${sunX}" cy="${sunY}" r="${sunR * 2.2}" fill="url(#dash-sun-glow-${this._instanceId})"/>
-                    <!-- Sun disc -->
-                    <circle class="dash-sun-disc" cx="${sunX}" cy="${sunY}" r="${sunR}" fill="${sunColor}"/>
-
-                    <!-- Stylised cloud puffs (two clusters at variable opacity) -->
-                    <g class="dash-clouds" fill="${cloudColor}" opacity="${cloudOpacity}">
-                        <ellipse cx="${W * 0.22}" cy="${H2 * 0.32}" rx="58" ry="20"/>
-                        <circle  cx="${W * 0.16}" cy="${H2 * 0.3}" r="22"/>
-                        <circle  cx="${W * 0.28}" cy="${H2 * 0.28}" r="18"/>
-                        <ellipse cx="${W * 0.78}" cy="${H2 * 0.22}" rx="70" ry="22"/>
-                        <circle  cx="${W * 0.72}" cy="${H2 * 0.2}" r="22"/>
-                        <circle  cx="${W * 0.84}" cy="${H2 * 0.18}" r="20"/>
-                    </g>
-
-                    <!-- Wavy horizon line -->
-                    <path class="dash-horizon"
-                          d="M 0 ${H2 * 0.85} Q ${W * 0.25} ${H2 * 0.83} ${W * 0.5} ${H2 * 0.85} T ${W} ${H2 * 0.85} L ${W} ${H2} L 0 ${H2} Z"
-                          fill="${sunColor}" fill-opacity="0.08"/>
-                    <path class="dash-horizon-line"
-                          d="M 0 ${H2 * 0.85} Q ${W * 0.25} ${H2 * 0.83} ${W * 0.5} ${H2 * 0.85} T ${W} ${H2 * 0.85}"
-                          stroke="${sunColor}" stroke-opacity="0.4" fill="none" stroke-width="1.5"/>
-                </svg>
                 ${data.peakHourTs !== null ? b`
-                    <div class="dash-tomorrow-caption">${t2.detail.tomorrowPeak} ${peakTimeLabel}</div>
+                    <div class="dash-tomorrow-peak">
+                        <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
+                        <span class="dash-line-label">${t2.detail.tomorrowPeak}</span>
+                        <span class="dash-line-value">${peakTimeLabel}</span>
+                    </div>
                 ` : A}
             </section>
         `;
@@ -38536,21 +38337,21 @@ let HeliosCard = class extends i {
   _renderDashBatterySection(t2, batteryColor) {
     const data = this._computeBatteryToday();
     const soc = data.socNow ?? 0;
-    const W = 200;
-    const H2 = 240;
-    const capW = 40, capH = 14;
-    const cellX = 60, cellY = 30;
-    const cellW = 80, cellH = H2 - cellY - 20;
-    const liquidH = Math.max(0, Math.min(100, soc)) / 100 * (cellH - 6);
-    const liquidY = cellY + cellH - 3 - liquidH;
-    const liquidX = cellX + 3;
-    const liquidW = cellW - 6;
+    const W = 60;
+    const H2 = 100;
+    const capW = 18, capH = 6;
+    const cellX = 8, cellY = 12;
+    const cellW = W - 2 * cellX, cellH = H2 - cellY - 6;
+    const liquidH = Math.max(0, Math.min(100, soc)) / 100 * (cellH - 4);
+    const liquidY = cellY + cellH - 2 - liquidH;
+    const liquidX = cellX + 2;
+    const liquidW = cellW - 4;
     return b`
-            <section class="dash-section dash-battery">
-                <header class="dash-section-header">
-                    <ha-icon class="dash-section-icon" icon="mdi:battery" style="color:${batteryColor}"></ha-icon>
-                    <span class="dash-section-label">${t2.detail.batteryLabel}</span>
-                    <span class="dash-section-trailing">
+            <section class="dash-section dash-card dash-battery">
+                <header class="dash-card-header">
+                    <ha-icon class="dash-card-icon" icon="mdi:battery" style="color:${batteryColor}"></ha-icon>
+                    <span class="dash-card-label">${t2.detail.batteryLabel}</span>
+                    <span class="dash-card-trailing">
                         <span class="dash-stat-value-sm">${Math.round(soc)}</span>
                         <span class="dash-stat-unit-sm">%</span>
                     </span>
@@ -38563,46 +38364,30 @@ let HeliosCard = class extends i {
                                 <stop offset="100%" stop-color="${batteryColor}" stop-opacity="0.6"/>
                             </linearGradient>
                         </defs>
-                        <!-- Battery cap -->
                         <rect class="dash-batt-cap"
                               x="${(W - capW) / 2}" y="${cellY - capH}"
-                              width="${capW}" height="${capH}" rx="3"/>
-                        <!-- Battery cell -->
+                              width="${capW}" height="${capH}" rx="1.5"/>
                         <rect class="dash-batt-shell"
                               x="${cellX}" y="${cellY}"
-                              width="${cellW}" height="${cellH}" rx="8"/>
-                        <!-- Liquid fill -->
+                              width="${cellW}" height="${cellH}" rx="3"/>
                         ${liquidH > 0 ? w`
                             <rect class="dash-batt-liquid"
                                   x="${liquidX}" y="${liquidY}"
                                   width="${liquidW}" height="${liquidH}"
-                                  rx="5"
+                                  rx="2"
                                   fill="url(#dash-batt-grad-${this._instanceId})"/>
-                            <!-- Wave on top of liquid -->
-                            <path class="dash-batt-wave"
-                                  d="M ${liquidX} ${liquidY}
-                                     Q ${liquidX + liquidW * 0.25} ${liquidY - 4}
-                                       ${liquidX + liquidW * 0.5} ${liquidY}
-                                     T ${liquidX + liquidW} ${liquidY}
-                                     L ${liquidX + liquidW} ${liquidY + 6}
-                                     L ${liquidX} ${liquidY + 6} Z"
-                                  fill="${batteryColor}" fill-opacity="0.95"/>
                         ` : A}
                     </svg>
                     <div class="dash-battery-flows">
                         <div class="dash-battery-flow dash-battery-flow-charge">
                             <ha-icon icon="mdi:arrow-up-bold"></ha-icon>
-                            <div>
-                                <div class="dash-flow-value">${this._formatLocalisedNumber(data.chargedKwh, 1)} kWh</div>
-                                <div class="dash-flow-label">${t2.detail.batteryCharged}</div>
-                            </div>
+                            <span class="dash-flow-value">${this._formatLocalisedNumber(data.chargedKwh, 1)} kWh</span>
+                            <span class="dash-flow-label">${t2.detail.batteryCharged}</span>
                         </div>
                         <div class="dash-battery-flow dash-battery-flow-discharge">
                             <ha-icon icon="mdi:arrow-down-bold"></ha-icon>
-                            <div>
-                                <div class="dash-flow-value">${this._formatLocalisedNumber(data.dischargedKwh, 1)} kWh</div>
-                                <div class="dash-flow-label">${t2.detail.batteryDischarged}</div>
-                            </div>
+                            <span class="dash-flow-value">${this._formatLocalisedNumber(data.dischargedKwh, 1)} kWh</span>
+                            <span class="dash-flow-label">${t2.detail.batteryDischarged}</span>
                         </div>
                     </div>
                 </div>

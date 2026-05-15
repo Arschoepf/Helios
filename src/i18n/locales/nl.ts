@@ -18,6 +18,7 @@ export const nl: Translations = {
         todayLabel:         'Vandaag',
         todayProduced:      'opgewekt',
         todayForecast:      'verwacht einde dag',
+        todayPeak:          'piek vandaag',
         weekLabel:          'De periode',
         tomorrowLabel:      'Morgen',
         tomorrowPeak:       'piek verwacht rond',

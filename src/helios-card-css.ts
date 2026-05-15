@@ -188,15 +188,12 @@ export const heliosCardStyles = css`
     {
         position: absolute;
         inset: 0;
-        background:
-            linear-gradient(180deg,
-                rgba(10, 14, 24, 0.86) 0%,
-                rgba(20, 26, 42, 0.92) 100%);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
         z-index: 60;
         opacity: 0;
-        animation: detail-panel-fade-in 0.35s ease forwards;
+        animation: detail-panel-fade-in 0.25s ease forwards;
         display: flex;
         flex-direction: column;
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
@@ -207,120 +204,116 @@ export const heliosCardStyles = css`
         to   { opacity: 1; }
     }
 
-    /*  Light-theme panel: the Fiord-tinted dark scrim from the base
-        rule reads too heavy against an otherwise pale dashboard.
-        Switch to a near-white scrim with a hint of warmth so the
-        sections still pop without going full noir. */
-    ha-card.theme-light .detail-panel
-    {
-        background:
-            linear-gradient(180deg,
-                rgba(248, 250, 254, 0.92) 0%,
-                rgba(232, 238, 248, 0.96) 100%);
-        color: #15202b;
-    }
-
     .detail-close-btn
     {
         position: absolute;
-        top: 12px;
-        right: 12px;
-        width:  32px;
-        height: 32px;
+        top: 10px;
+        right: 10px;
+        width:  28px;
+        height: 28px;
         padding: 0;
-        background: rgba(255, 255, 255, 0.10);
-        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: #ffffff;
+        border: 1px solid #000000;
         border-radius: 50%;
-        color: rgba(255, 255, 255, 0.85);
+        color: #000000;
         cursor: pointer;
         z-index: 1;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        transition: background 0.15s, transform 0.15s;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        transition: transform 0.12s;
     }
-    .detail-close-btn:hover  { background: rgba(255, 255, 255, 0.18); transform: scale(1.05); }
-    .detail-close-btn:active { background: rgba(255, 255, 255, 0.25); transform: scale(0.95); }
-    .detail-close-btn ha-icon { --mdc-icon-size: 20px; color: inherit; }
-    ha-card.theme-light .detail-close-btn
+    .detail-close-btn:hover  { transform: scale(1.05); }
+    .detail-close-btn:active { transform: scale(0.95); }
+    .detail-close-btn ha-icon { --mdc-icon-size: 16px; color: inherit; }
+    ha-card.theme-dark .detail-close-btn
     {
-        background: rgba(15, 23, 42, 0.06);
-        border-color: rgba(15, 23, 42, 0.15);
-        color: rgba(15, 23, 42, 0.75);
+        background: #191a1b;
+        color:      #e6e6e6;
+        border-color: rgba(255, 255, 255, 0.20);
     }
-    ha-card.theme-light .detail-close-btn:hover  { background: rgba(15, 23, 42, 0.12); }
 
     .detail-panel-inner
     {
         flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-        padding: 24px 28px 32px;
+        padding: 14px 14px 14px;
         display: flex;
         flex-direction: column;
-        gap: 28px;
-        color: #e8eef8;
-    }
-    ha-card.theme-light .detail-panel-inner
-    {
-        color: #1c2733;
+        gap: 10px;
+        overflow: hidden;
     }
 
-    /*  Each section is a self-contained block. Header on top
-        (icon + small-caps label + optional trailing big number),
-        then the illustration that IS the data underneath. */
-    .dash-section
+    /*  Each dashboard section is a chip-style card: same visual
+        language as the on-map readouts (white plate, 1 px black
+        border, soft shadow). Compact, dense, readable at-a-glance.
+        Sections appear sequentially with a 0.5 s stagger so the
+        eye lands on each one in turn. */
+    .dash-card
     {
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        padding: 8px 12px;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 6px;
         opacity: 0;
-        transform: translateY(8px);
-        animation: dash-section-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        transform: translateY(6px);
+        animation: dash-card-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
-    .dash-section:nth-of-type(1) { animation-delay: 0.05s; }
-    .dash-section:nth-of-type(2) { animation-delay: 0.15s; }
-    .dash-section:nth-of-type(3) { animation-delay: 0.25s; }
-    .dash-section:nth-of-type(4) { animation-delay: 0.35s; }
-    @keyframes dash-section-in
+    .dash-card:nth-of-type(1) { animation-delay: 0.00s; }
+    .dash-card:nth-of-type(2) { animation-delay: 0.50s; }
+    .dash-card:nth-of-type(3) { animation-delay: 1.00s; }
+    .dash-card:nth-of-type(4) { animation-delay: 1.50s; }
+    @keyframes dash-card-in
     {
         to { opacity: 1; transform: translateY(0); }
     }
 
-    .dash-section-header
+    ha-card.theme-dark .dash-card
+    {
+        background: #191a1b;
+        color:      #e6e6e6;
+        border-color: rgba(255, 255, 255, 0.20);
+    }
+
+    .dash-card-header
     {
         display: flex;
-        align-items: baseline;
-        gap: 10px;
+        align-items: center;
+        gap: 8px;
     }
-    .dash-section-icon
+    .dash-card-icon
     {
-        --mdc-icon-size: 18px;
-        align-self: center;
+        --mdc-icon-size: 16px;
+        flex-shrink: 0;
     }
-    .dash-section-label
+    .dash-card-label
     {
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
-        letter-spacing: 2.5px;
+        letter-spacing: 1.5px;
         text-transform: uppercase;
         opacity: 0.65;
     }
-    .dash-section-trailing
+    .dash-card-trailing
     {
         margin-left: auto;
         display: inline-flex;
         align-items: baseline;
-        gap: 4px;
+        gap: 3px;
     }
-    .dash-section-trailing-forecast
+    .dash-card-trailing-forecast
     {
         font-style: italic;
         opacity: 0.85;
     }
     .dash-stat-value
     {
-        font-size: 44px;
+        font-size: 28px;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
         line-height: 1;
@@ -328,21 +321,21 @@ export const heliosCardStyles = css`
     }
     .dash-stat-unit
     {
-        font-size: 18px;
+        font-size: 13px;
         font-weight: 500;
         opacity: 0.65;
-        margin-left: 4px;
+        margin-left: 3px;
     }
     .dash-stat-value-sm
     {
-        font-size: 22px;
+        font-size: 18px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
         line-height: 1;
     }
     .dash-stat-unit-sm
     {
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 500;
         opacity: 0.65;
     }
@@ -351,212 +344,152 @@ export const heliosCardStyles = css`
 
     .dash-today-body
     {
-        display: grid;
-        grid-template-columns: minmax(140px, 220px) 1fr;
-        gap: 16px;
-        align-items: stretch;
-    }
-    .dash-today-stats
-    {
         display: flex;
-        flex-direction: column;
-        justify-content: center;
-        gap: 4px;
+        align-items: center;
+        gap: 12px;
+        padding: 2px 0;
     }
     .dash-today-produced
     {
         display: inline-flex;
         align-items: baseline;
     }
-    .dash-today-produced-label
+    .dash-today-side
     {
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 1.5px;
-        text-transform: uppercase;
-        opacity: 0.55;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex: 1;
+        min-width: 0;
     }
-    .dash-today-forecast
+    .dash-today-line
     {
-        margin-top: 8px;
-        font-size: 13px;
-        font-weight: 500;
-        opacity: 0.75;
-        font-variant-numeric: tabular-nums;
-        font-style: italic;
         display: inline-flex;
-        align-items: baseline;
+        align-items: center;
         gap: 6px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
-    .dash-forecast-arrow { font-size: 16px; opacity: 0.7; }
-    .dash-today-forecast-suffix
+    .dash-today-line ha-icon { --mdc-icon-size: 14px; }
+    .dash-today-line .dash-line-arrow { font-size: 14px; opacity: 0.65; font-weight: 600; }
+    .dash-today-line .dash-line-value { font-weight: 700; }
+    .dash-today-line .dash-line-label
     {
-        font-size: 11px;
+        font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 1px;
-        opacity: 0.7;
-        font-style: normal;
+        opacity: 0.55;
     }
-    .dash-today-curve
-    {
-        width: 100%;
-        height: 180px;
-        display: block;
-    }
-    .dash-today-curve .dash-curve-obs-line { stroke-width: 2;   stroke-linecap: round; stroke-linejoin: round; }
-    .dash-today-curve .dash-curve-fc-line  { stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 4 3; opacity: 0.65; }
-    .dash-today-curve .dash-curve-fc-area  { opacity: 0.45; }
-    .dash-today-curve .dash-now-line       { stroke: currentColor; stroke-width: 1; opacity: 0.35; }
-    .dash-today-curve .dash-peak-tether    { stroke: currentColor; stroke-width: 1; opacity: 0.35; stroke-dasharray: 2 2; }
-    .dash-today-curve .dash-peak-chip text { fill: currentColor; font-size: 10px; font-weight: 700; opacity: 0.85; font-variant-numeric: tabular-nums; }
-    .dash-today-curve .dash-hour-tick      { fill: currentColor; font-size: 10px; opacity: 0.4; font-variant-numeric: tabular-nums; }
+    .dash-today-forecast .dash-line-value { font-style: italic; }
 
     /*  Section: week                                                   */
 
     .dash-week-bottles
     {
         width: 100%;
-        height: 220px;
+        height: 90px;
         display: block;
     }
     .dash-week-bottles .dash-bottle-shell
     {
-        fill: rgba(255, 255, 255, 0.04);
-        stroke: rgba(255, 255, 255, 0.18);
+        fill: rgba(0, 0, 0, 0.04);
+        stroke: rgba(0, 0, 0, 0.25);
         stroke-width: 1;
     }
-    ha-card.theme-light .dash-week-bottles .dash-bottle-shell
+    ha-card.theme-dark .dash-week-bottles .dash-bottle-shell
     {
-        fill: rgba(15, 23, 42, 0.04);
-        stroke: rgba(15, 23, 42, 0.18);
+        fill: rgba(255, 255, 255, 0.04);
+        stroke: rgba(255, 255, 255, 0.25);
     }
-    .dash-week-bottles .dash-bottle.is-future .dash-bottle-shell
-    {
-        stroke-dasharray: 3 2;
-    }
+    .dash-week-bottles .dash-bottle.is-future .dash-bottle-shell { stroke-dasharray: 2 2; }
     .dash-week-bottles .dash-bottle-day
     {
         fill: currentColor;
-        font-size: 11px;
-        font-weight: 600;
+        font-size: 8px;
+        font-weight: 700;
         opacity: 0.7;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
     }
-    .dash-week-bottles .dash-bottle-kwh
-    {
-        fill: currentColor;
-        font-size: 12px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-    }
-    .dash-week-bottles .dash-bottle.is-today .dash-bottle-day,
-    .dash-week-bottles .dash-bottle.is-today .dash-bottle-kwh
-    {
-        opacity: 1;
-    }
-    .dash-week-bottles .dash-bottle.is-future .dash-bottle-day,
-    .dash-week-bottles .dash-bottle.is-future .dash-bottle-kwh
-    {
-        opacity: 0.55;
-        font-style: italic;
-    }
+    .dash-week-bottles .dash-bottle.is-today .dash-bottle-day { opacity: 1; }
+    .dash-week-bottles .dash-bottle.is-future .dash-bottle-day { opacity: 0.55; font-style: italic; }
 
     /*  Section: tomorrow                                               */
 
-    .dash-tomorrow-scene
+    .dash-tomorrow-peak
     {
-        width: 100%;
-        height: 200px;
-        display: block;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    .dash-tomorrow-scene .dash-sun-disc
-    {
-        filter: drop-shadow(0 0 6px currentColor);
-    }
-    .dash-tomorrow-caption
-    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
         font-size: 12px;
-        font-weight: 500;
-        letter-spacing: 0.5px;
-        opacity: 0.75;
-        text-align: center;
-        font-style: italic;
         font-variant-numeric: tabular-nums;
     }
+    .dash-tomorrow-peak ha-icon { --mdc-icon-size: 14px; }
+    .dash-tomorrow-peak .dash-line-label
+    {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.55;
+    }
+    .dash-tomorrow-peak .dash-line-value { font-weight: 700; }
 
     /*  Section: battery                                                */
 
     .dash-battery-body
     {
-        display: grid;
-        grid-template-columns: 200px 1fr;
-        gap: 24px;
+        display: flex;
         align-items: center;
+        gap: 14px;
     }
     .dash-battery-vessel
     {
-        width: 200px;
-        height: 240px;
+        width: 50px;
+        height: 84px;
+        flex-shrink: 0;
         display: block;
     }
     .dash-battery-vessel .dash-batt-shell,
     .dash-battery-vessel .dash-batt-cap
     {
+        fill: rgba(0, 0, 0, 0.04);
+        stroke: rgba(0, 0, 0, 0.30);
+        stroke-width: 1;
+    }
+    ha-card.theme-dark .dash-battery-vessel .dash-batt-shell,
+    ha-card.theme-dark .dash-battery-vessel .dash-batt-cap
+    {
         fill: rgba(255, 255, 255, 0.04);
         stroke: rgba(255, 255, 255, 0.30);
-        stroke-width: 1.5;
-    }
-    ha-card.theme-light .dash-battery-vessel .dash-batt-shell,
-    ha-card.theme-light .dash-battery-vessel .dash-batt-cap
-    {
-        fill: rgba(15, 23, 42, 0.04);
-        stroke: rgba(15, 23, 42, 0.30);
     }
     .dash-battery-flows
     {
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
     }
     .dash-battery-flow
     {
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        gap: 10px;
+        gap: 6px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
-    .dash-battery-flow ha-icon { --mdc-icon-size: 20px; }
+    .dash-battery-flow ha-icon { --mdc-icon-size: 14px; }
     .dash-battery-flow-charge    ha-icon { color: #22c55e; }
     .dash-battery-flow-discharge ha-icon { color: #ef4444; }
-    .dash-flow-value
-    {
-        font-size: 22px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-        line-height: 1;
-    }
+    .dash-flow-value { font-weight: 700; }
     .dash-flow-label
     {
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 1px;
+        font-size: 10px;
         text-transform: uppercase;
-        opacity: 0.6;
-        margin-top: 2px;
-    }
-
-    /*  Mobile / narrow card: stack the today + battery 2-column
-        layouts vertically so the illustrations stay readable. */
-    @media (max-width: 520px)
-    {
-        .dash-today-body,
-        .dash-battery-body
-        {
-            grid-template-columns: 1fr;
-        }
-        .dash-battery-vessel { margin: 0 auto; }
+        letter-spacing: 1px;
+        opacity: 0.55;
     }
 
 

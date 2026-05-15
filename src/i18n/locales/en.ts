@@ -28,6 +28,7 @@ export const en: Translations = {
         todayLabel:         'Today',
         todayProduced:      'produced',
         todayForecast:      'forecast end of day',
+        todayPeak:          'peak today',
         weekLabel:          'This period',
         tomorrowLabel:      'Tomorrow',
         tomorrowPeak:       'peak expected around',

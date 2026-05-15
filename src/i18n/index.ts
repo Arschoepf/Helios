@@ -49,6 +49,7 @@ export interface Translations
         todayLabel:        string;
         todayProduced:     string;
         todayForecast:     string;
+        todayPeak:         string;
         weekLabel:         string;
         tomorrowLabel:     string;
         tomorrowPeak:      string;

@@ -18,13 +18,14 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 * **Incidence ray**, dashed line from sun to PV chip, animated to flow at a speed proportional to live irradiance. The stronger the sun, the faster it pulses.
 * **Cloud cover disc**, translucent disc on the ground, scaled by live cloud-cover %, outlined in the configured cloud colour. A fixed black ring marks the 100 % reference. Hover for the low/mid/high breakdown.
 * **PV production chip** *(optional)*, pin above the home, shows the **instantaneous** production in W/kW. Cumulative-energy sensors (kWh) are differentiated automatically over a rolling 60 s window.
-* **PV → home animated leader**, a vertical dashed line in the configured PV colour from the production chip down to a small anchor bead on the home; dashes flow toward the home at a speed proportional to current production over your theoretical peak (learned from the auto-calibration buffer, or 5 kW fallback while it warms up). Static and arrow-less when production is zero.
+* **PV → home animated leader**, a vertical dashed line in the configured PV colour from the production chip down to a small anchor bead on the home; when you set the installation's peak power (kWp) in the editor, dashes flow toward the home at a speed proportional to current production over that peak. Static and arrow-less when production is zero.
 * **PV production overlay + forecast** *(optional)*, when a PV entity is configured, the card surfaces the current production as a chip below the home and a dedicated graph above the timeline. If you also enter your installation's peak power (kWp) in the editor, a dotted forecast line based on the Haurwitz / Kasten-Czeplak clear-sky model + live cloud cover overlays the past observation, and the chip switches to a predicted value (italicised, prefixed `≈`) when scrubbing into the future.
 * **Home battery overlay** *(optional)*, two independent chips flank the PV chip on the same horizontal axis: State of Charge on the left, signed instantaneous power on the right. Each chip is connected to PV by a short static dotted L-leader. Either entity is independently optional; the corresponding chip only renders when its entity is set.
-* **Sun-coloured home halo**, a soft glow underneath the home outline so the focal building reads at a glance even on a busy basemap. Halo colour tracks the configured sun colour.
-* **Auto-rotation**, when the user is idle, the camera slowly orbits the home in the opposite direction to the sun's apparent motion (~1°/s). Any pinch / drag pauses it instantly and it resumes after a few seconds of stillness.
+* **Detail dashboard**, click the home to dive into a chip-styled overlay with four compact sections that fade in one after the other: today's produced kWh + projected end-of-day total + peak time, a 7-day "bottles" chart of recent production, tomorrow's forecast headline (estimated kWh + peak hour), and a battery vessel showing live SoC + the day's charge / discharge totals. Click anywhere outside to exit.
+* **Hover home glow**, hovering the home triggers a soft sun-coloured halo underneath the silhouette so the focal building reads as interactive before you click. Halo colour tracks the configured sun colour.
+* **Auto-rotation** *(opt-in)*, when enabled, the camera slowly orbits the home in the opposite direction to the sun's apparent motion (~1°/s) after a few seconds of inactivity. Any pinch / drag pauses it instantly and it resumes after a fresh idle window.
 * **Timeline**, 5 days wide (2 past + today + 2 forecast). Dual-area chart with irradiance on top and cloud cover below. A second graph appears above when a PV entity is configured. Click or drag anywhere on the timeline to scrub; the whole map snaps to the selected instant.
-* **Multilingual**, English, French, German, Spanish, Italian, Dutch, Portuguese. Adapts to your Home Assistant language.
+* **Multilingual**, English, French, German, Spanish, Italian, Dutch, Portuguese, Norwegian. Adapts to your Home Assistant language.
 
 ---
 
@@ -80,7 +81,7 @@ Every option below is editable visually:
 | `map-style` | `'streets' \| 'minimal'` | `'streets'` | Basemap style. `streets` resolves to OpenFreeMap's [Liberty](https://tiles.openfreemap.org/styles/liberty) (full-colour OpenMapTiles look); `minimal` resolves to [Positron](https://tiles.openfreemap.org/styles/positron) (muted grey, very sober). Both flip to OpenFreeMap's [Dark](https://tiles.openfreemap.org/styles/dark) when `card-theme` is `'dark'`. |
 | `card-theme` | `'light' \| 'dark'` | `'light'` | Card chrome skin (chips, charts, buttons, tooltips, scrub overlay) AND the 3D map basemap flip between a light surface (white plate) and a dark surface (near-black `#191a1b` plate), so the card sits cleanly inside light or dark Home Assistant dashboards. |
 | `pixel-ratio` | `'auto' \| '1x'` | `'auto'` | WebGL canvas pixel density. `auto` uses the device's native devicePixelRatio (capped at 2 on desktop, 1.25 on mobile). `1x` forces 1.0, the cheapest per-frame fragment workload, useful on low-end devices or for long sessions where battery / heat matters more than crispness. |
-| `auto-rotate-enabled` | boolean | `true` | When `true`, the camera orbits the home slowly during idle. Any pinch / drag / wheel pauses it for 5 s and it resumes from the user's bearing. Disable on low-power devices or if the constant motion is distracting. |
+| `auto-rotate-enabled` | boolean | `false` | When `true`, the camera orbits the home slowly during idle. Any pinch / drag / wheel pauses it for 5 s and it resumes from the user's bearing. Off by default; enable for kiosk / always-on dashboards. |
 | `show-labels` | boolean | `true` | Show street names, building numbers, POIs and place names on the basemap. |
 | `building-radius` | meters | `100` | Distance around the home within which surrounding buildings are rendered in 3D. Buildings outside the radius are not drawn, the perf win in dense urban areas. Range: 20–1000 m. |
 | `building-cluster-radius` | meters | `0` | Distance around the home within which every building joins the home group at full opacity. Use this to attach verandas, garages and sheds to the main house. Range: 0–100 m. |
@@ -92,6 +93,7 @@ Every option below is editable visually:
 | `sun-color` | hex | `#EF9F27` | Sun disc + arc + timeline irradiance area. |
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
 | `pv-power-entity` | entity_id | - | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |
+| `pv-peak-kwp` | number | - | Optional. Installed peak power in kilowatts-peak. When set, drives the dotted clear-sky forecast line on the PV chart and paces the PV → home animated leader against your installation. Leave empty to hide the forecast (live observation + today's peak still display). |
 | `pv-color` | hex | `#27B36B` | PV chip border + text + leader + dedicated graph. |
 | `battery-soc-entity` | entity_id | - | Optional. Battery State-of-Charge sensor (`%`, usually `device_class: battery`). Renders as a chip on the LEFT of the PV chip showing the live percentage. |
 | `battery-power-entity` | entity_id | - | Optional. Battery power sensor (W/kW). Signed: positive is interpreted as charging. Renders as a chip on the RIGHT of the PV chip showing the signed reading verbatim. |
@@ -111,6 +113,7 @@ The PV entity picker filters to sensors that look like a power or energy reading
 * **Multi-model weather**, every fetch queries one global model (ECMWF IFS 0.25°) plus the most accurate national/regional model for your home location (AROME-France, UKMO UK, DWD ICON-D2, ItaliaMeteo, MET Nordic, NOAA HRRR, KMA LDPS, JMA MSM, BOM ACCESS-G, or ECMWF + GFS elsewhere). Per-timestep median fusion absorbs single-model outliers.
 * **Effective cloud cover**, the card replaces Open-Meteo's raw `cloud_cover` (satellite-view total) with `low + 0.6·mid + 0.2·high` (capped at 100 %), matching ground perception and shortwave attenuation.
 * **PV instantaneous rate**, for cumulative-energy sensors, the card maintains a 5-minute rolling buffer of state samples and differentiates over a ~60 s window, giving a real "what's being produced right now" reading instead of a misleading lifetime total.
+* **PV forecast (optional)**, when `pv-peak-kwp` is set, the card multiplies the live `effective_cover` by Haurwitz / Kasten-Czeplak per timestamp and scales by the installed peak power, painting a dotted prediction curve on the PV chart that the live observation tracks against. Scrubbing into the future flips the PV chip to the predicted figure (italicised, prefixed `≈`).
 
 Full algorithm + architecture details: see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -211,7 +214,7 @@ I build bridges between data and reality. To me, development is more than a prof
 
 If you find this project useful and want to support its development, feel free to buy me a coffee (or another battery ;-))!
 
-<a href="https://www.buymeacoffee.com/reikanysora"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee or a beer ?&emoji=&slug=reikanysora&button_colour=874efe&font_colour=ffffff&font_family=Lato&outline_colour=ffffff&coffee_colour=FFDD00" /></a>
+<a href="https://www.buymeacoffee.com/reikanysora"><img src="https://img.buymeacoffee.com/button-api/?text=+1 W/m² of motivation&emoji=☀️&slug=reikanysora&button_colour=5F7FFF&font_colour=ffffff&font_family=Inter&outline_colour=000000&coffee_colour=FFDD00" /></a>
 
 ---
 

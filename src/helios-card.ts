@@ -3773,7 +3773,7 @@ export class HeliosCard extends LitElement
     //already knows from the card itself.
     private _renderDashboard(): TemplateResult
     {
-        const t        = pickTranslations(this.hass?.language);
+        const t            = pickTranslations(this.hass?.language);
         const sunColor     = cfgHex(this.config?.['sun-color'],     DEFAULT_SUN_COLOR_HEX);
         const cloudColor   = cfgHex(this.config?.['cloud-color'],   DEFAULT_CLOUD_COLOR_HEX);
         const pvColor      = cfgHex(this.config?.['pv-color'],      DEFAULT_PV_COLOR_HEX);
@@ -3956,79 +3956,8 @@ export class HeliosCard extends LitElement
         sunColor: string
     ): TemplateResult
     {
-        const data = this._computeTodayHourly();
+        const data    = this._computeTodayHourly();
         const HOUR_MS = 3_600_000;
-        const today0  = new Date();
-        today0.setHours(0, 0, 0, 0);
-        const startMs = today0.getTime();
-        const nowMs   = Date.now();
-
-        //SVG canvas: 600 × 180. Hour bins 0..23 mapped to 0..600 px.
-        const W = 600;
-        const H = 180;
-        const padTop = 20;
-        const padBot = 30;
-        const usableH = H - padTop - padBot;
-
-        //Y-scale: peak watts → top of usable area. Reserve 15 % at
-        //the top for the peak chip.
-        const yMax = Math.max(100, data.peakW * 1.15);
-        const xOf = (hourTs: number): number =>
-            ((hourTs - startMs) / HOUR_MS) * (W / 24) + (W / 24) / 2;
-        const yOf = (w: number): number =>
-            padTop + usableH - (w / yMax) * usableH;
-
-        //Build observed + forecast paths separately so we can stroke
-        //and fill them with different styles (solid vs dashed).
-        const obsPoints: Array<[number, number]> = [];
-        const fcPoints:  Array<[number, number]> = [];
-        for (const b of data.bins)
-        {
-            const x = xOf(b.hourTs);
-            if (b.observedW !== null) obsPoints.push([x, yOf(b.observedW)]);
-            if (b.hourTs > nowMs && b.forecastW !== null)
-            {
-                fcPoints.push([x, yOf(b.forecastW)]);
-            }
-        }
-
-        //Smooth the curves with a Catmull-Rom-to-Bezier conversion so
-        //they feel painted rather than chiselled. Falls back to a
-        //plain polyline when there are too few points.
-        const smoothPath = (pts: Array<[number, number]>): string =>
-        {
-            if (pts.length < 2) return '';
-            if (pts.length === 2)
-            {
-                return `M ${pts[0][0]},${pts[0][1]} L ${pts[1][0]},${pts[1][1]}`;
-            }
-            let d = `M ${pts[0][0]},${pts[0][1]}`;
-            for (let i = 0; i < pts.length - 1; i++)
-            {
-                const p0 = pts[Math.max(0, i - 1)];
-                const p1 = pts[i];
-                const p2 = pts[i + 1];
-                const p3 = pts[Math.min(pts.length - 1, i + 2)];
-                const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
-                const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
-                const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
-                const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
-                d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2[0]},${p2[1]}`;
-            }
-            return d;
-        };
-
-        //Filled-area variant: line path closed back to baseline.
-        const closedPath = (pts: Array<[number, number]>): string =>
-        {
-            if (pts.length < 2) return '';
-            const baseY = padTop + usableH;
-            return smoothPath(pts) + ` L ${pts[pts.length - 1][0]},${baseY} L ${pts[0][0]},${baseY} Z`;
-        };
-
-        const nowX = xOf(nowMs);
-        const peakX = data.peakHourTs !== null ? xOf(data.peakHourTs) : null;
-        const peakY = data.peakHourTs !== null ? yOf(data.peakW) : null;
 
         const peakTimeLabel = data.peakHourTs !== null
             ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
@@ -4036,67 +3965,36 @@ export class HeliosCard extends LitElement
             })
             : '';
         const peakValueLabel = this._formatPvWatts(data.peakW);
+        const showForecast   = data.forecastKwh > data.producedKwh + 0.05;
+        const showPeak       = data.peakHourTs !== null && data.peakW > 50;
 
         return html`
-            <section class="dash-section dash-today">
-                <header class="dash-section-header">
-                    <ha-icon class="dash-section-icon" icon="mdi:weather-sunny" style="color:${sunColor}"></ha-icon>
-                    <span class="dash-section-label">${t.detail.todayLabel}</span>
+            <section class="dash-section dash-card dash-today">
+                <header class="dash-card-header">
+                    <ha-icon class="dash-card-icon" icon="mdi:weather-sunny" style="color:${sunColor}"></ha-icon>
+                    <span class="dash-card-label">${t.detail.todayLabel}</span>
                 </header>
                 <div class="dash-today-body">
-                    <div class="dash-today-stats">
-                        <div class="dash-today-produced">
-                            <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
-                            <span class="dash-stat-unit">kWh</span>
-                        </div>
-                        <div class="dash-today-produced-label">${t.detail.todayProduced}</div>
-                        ${data.forecastKwh > data.producedKwh + 0.05 ? html`
-                            <div class="dash-today-forecast">
-                                <span class="dash-forecast-arrow">→</span>
-                                <span>${this._formatLocalisedNumber(data.forecastKwh, 1)} kWh</span>
-                                <span class="dash-today-forecast-suffix">${t.detail.todayForecast}</span>
+                    <div class="dash-today-produced" style="color:${pvColor}">
+                        <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
+                        <span class="dash-stat-unit">kWh</span>
+                    </div>
+                    <div class="dash-today-side">
+                        ${showForecast ? html`
+                            <div class="dash-today-line dash-today-forecast">
+                                <span class="dash-line-arrow">→</span>
+                                <span class="dash-line-value">${this._formatLocalisedNumber(data.forecastKwh, 1)} kWh</span>
+                                <span class="dash-line-label">${t.detail.todayForecast}</span>
+                            </div>
+                        ` : nothing}
+                        ${showPeak ? html`
+                            <div class="dash-today-line dash-today-peak">
+                                <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
+                                <span class="dash-line-value">${peakTimeLabel} · ${peakValueLabel}</span>
+                                <span class="dash-line-label">${t.detail.todayPeak}</span>
                             </div>
                         ` : nothing}
                     </div>
-                    <svg class="dash-today-curve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
-                        <defs>
-                            <linearGradient id="dash-pv-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%"   stop-color="${pvColor}" stop-opacity="0.55"/>
-                                <stop offset="100%" stop-color="${pvColor}" stop-opacity="0"/>
-                            </linearGradient>
-                        </defs>
-
-                        <!-- Forecast area (faded) -->
-                        ${fcPoints.length >= 2 ? svg`
-                            <path class="dash-curve-fc-area" d="${closedPath(fcPoints)}" fill="url(#dash-pv-grad-${this._instanceId})"/>
-                            <path class="dash-curve-fc-line" d="${smoothPath(fcPoints)}" stroke="${pvColor}" fill="none"/>
-                        ` : nothing}
-
-                        <!-- Observed area (solid) -->
-                        ${obsPoints.length >= 2 ? svg`
-                            <path class="dash-curve-obs-area" d="${closedPath(obsPoints)}" fill="url(#dash-pv-grad-${this._instanceId})"/>
-                            <path class="dash-curve-obs-line" d="${smoothPath(obsPoints)}" stroke="${pvColor}" fill="none"/>
-                        ` : nothing}
-
-                        <!-- Now cursor -->
-                        ${(nowX >= 0 && nowX <= W) ? svg`
-                            <line class="dash-now-line" x1="${nowX}" y1="${padTop}" x2="${nowX}" y2="${padTop + usableH}"/>
-                        ` : nothing}
-
-                        <!-- Peak marker + chip -->
-                        ${(peakX !== null && peakY !== null && data.peakW > 50) ? svg`
-                            <circle class="dash-peak-dot" cx="${peakX}" cy="${peakY}" r="4" fill="${sunColor}"/>
-                            <line class="dash-peak-tether" x1="${peakX}" y1="${peakY}" x2="${peakX}" y2="${padTop - 6}"/>
-                            <g class="dash-peak-chip" transform="translate(${peakX}, ${padTop - 8})">
-                                <text text-anchor="middle">${peakTimeLabel} · ${peakValueLabel}</text>
-                            </g>
-                        ` : nothing}
-
-                        <!-- Hour ticks at the bottom -->
-                        ${[6, 9, 12, 15, 18].map(h => svg`
-                            <text class="dash-hour-tick" x="${xOf(startMs + h * HOUR_MS)}" y="${H - 8}" text-anchor="middle">${h}h</text>
-                        `)}
-                    </svg>
                 </div>
             </section>
         `;
@@ -4166,15 +4064,18 @@ export class HeliosCard extends LitElement
         const totalKwh = days.reduce((s, d) => s + (d.isPast || d.isToday ? d.observed : d.forecast), 0);
         const maxKwh   = Math.max(...days.map(d => d.forecast), 1);
 
-        //SVG canvas: 600 × 200. 5 bottle slots evenly spaced.
-        const W = 600;
-        const H = 220;
-        const padTop = 20;
-        const padBot = 50;
+        //Compact bottles canvas, sized so the section fits in the
+        //chip-card without scrolling. preserveAspectRatio keeps the
+        //bottles centred when the card resizes; viewBox is the data
+        //space, the SVG element scales to its container width.
+        const W = 300;
+        const H = 90;
+        const padTop = 4;
+        const padBot = 22;
         const usableH = H - padTop - padBot;
         const nDays = days.length;
         const slotW = W / nDays;
-        const bottleW = Math.min(60, slotW * 0.55);
+        const bottleW = Math.min(36, slotW * 0.55);
 
         const dayLabel = (ms: number): string =>
         {
@@ -4183,11 +4084,11 @@ export class HeliosCard extends LitElement
         };
 
         return html`
-            <section class="dash-section dash-week">
-                <header class="dash-section-header">
-                    <ha-icon class="dash-section-icon" icon="mdi:calendar-week" style="color:${pvColor}"></ha-icon>
-                    <span class="dash-section-label">${t.detail.weekLabel}</span>
-                    <span class="dash-section-trailing">
+            <section class="dash-section dash-card dash-week">
+                <header class="dash-card-header">
+                    <ha-icon class="dash-card-icon" icon="mdi:calendar-week" style="color:${pvColor}"></ha-icon>
+                    <span class="dash-card-label">${t.detail.weekLabel}</span>
+                    <span class="dash-card-trailing">
                         <span class="dash-stat-value-sm">${this._formatLocalisedNumber(totalKwh, 1)}</span>
                         <span class="dash-stat-unit-sm">kWh</span>
                     </span>
@@ -4204,44 +4105,27 @@ export class HeliosCard extends LitElement
                         const fcY      = by + bH - fcH;
                         return svg`
                             <g class="dash-bottle ${d.isToday ? 'is-today' : (d.isPast ? 'is-past' : 'is-future')}">
-                                <!-- Bottle outline -->
                                 <rect class="dash-bottle-shell"
                                       x="${bx}" y="${by}"
                                       width="${bottleW}" height="${bH}"
-                                      rx="${bottleW / 6}" />
-
-                                <!-- Forecast fill (pale) -->
+                                      rx="${bottleW / 4}" />
                                 ${fcH > 0 ? svg`
                                     <rect class="dash-bottle-forecast"
                                           x="${bx}" y="${fcY}"
                                           width="${bottleW}" height="${fcH}"
-                                          rx="${bottleW / 6}"
+                                          rx="${bottleW / 4}"
                                           fill="${pvColor}" fill-opacity="0.25"/>
                                 ` : nothing}
-
-                                <!-- Observed fill (solid) on top -->
                                 ${obsH > 0 ? svg`
                                     <rect class="dash-bottle-observed"
                                           x="${bx}" y="${obsY}"
                                           width="${bottleW}" height="${obsH}"
-                                          rx="${bottleW / 6}"
+                                          rx="${bottleW / 4}"
                                           fill="${pvColor}" fill-opacity="0.85"/>
                                 ` : nothing}
-
-                                <!-- Highlight reflection (subtle vertical strip) -->
-                                <rect class="dash-bottle-shine"
-                                      x="${bx + bottleW * 0.15}" y="${by + 4}"
-                                      width="${bottleW * 0.12}" height="${bH - 8}"
-                                      rx="${bottleW / 12}"
-                                      fill="white" fill-opacity="0.08"/>
-
-                                <!-- Day label -->
                                 <text class="dash-bottle-day"
-                                      x="${cx}" y="${by + bH + 18}"
+                                      x="${cx}" y="${by + bH + 14}"
                                       text-anchor="middle">${dayLabel(d.dayMs)}</text>
-                                <text class="dash-bottle-kwh"
-                                      x="${cx}" y="${by + bH + 36}"
-                                      text-anchor="middle">${this._formatLocalisedNumber(d.forecast, 1)}</text>
                             </g>
                         `;
                     })}
@@ -4306,32 +4190,11 @@ export class HeliosCard extends LitElement
     private _renderDashTomorrowSection(
         t:          ReturnType<typeof pickTranslations>,
         sunColor:   string,
-        cloudColor: string
+        _cloudColor: string
     ): TemplateResult
     {
         const data = this._computeTomorrow();
         const HOUR_MS = 3_600_000;
-
-        //Scene canvas: 600 × 200.
-        const W = 600;
-        const H = 200;
-        //Sun position: x mapped from peak hour (6h-20h window), y rises
-        //higher when the day is brighter (less cloudy).
-        const peakHour = data.peakHourTs !== null
-            ? (new Date(data.peakHourTs).getHours() + 0.5)
-            : 12;
-        //Map 6h..20h → 0.1*W .. 0.9*W
-        const sunX = ((Math.max(6, Math.min(20, peakHour)) - 6) / 14) * (W * 0.8) + W * 0.1;
-        //Sun y: higher (smaller y) when cloud cover is low
-        const cloudFactor = Math.max(0, Math.min(1, data.avgCloud / 100));
-        const sunY = 60 + cloudFactor * 40;
-        //Sun radius: bigger when expected production is higher.
-        //Reference: 25 kWh = max radius 38; 0 kWh = min 16.
-        const sunR = 16 + Math.min(22, (data.totalKwh / 25) * 22);
-
-        //Cloud opacity scales with avgCloud. Two stylised cloud puffs
-        //(ellipses + circles cluster).
-        const cloudOpacity = Math.max(0.15, Math.min(0.85, cloudFactor));
 
         const peakTimeLabel = data.peakHourTs !== null
             ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
@@ -4340,57 +4203,21 @@ export class HeliosCard extends LitElement
             : '';
 
         return html`
-            <section class="dash-section dash-tomorrow">
-                <header class="dash-section-header">
-                    <ha-icon class="dash-section-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
-                    <span class="dash-section-label">${t.detail.tomorrowLabel}</span>
-                    <span class="dash-section-trailing dash-section-trailing-forecast">
+            <section class="dash-section dash-card dash-tomorrow">
+                <header class="dash-card-header">
+                    <ha-icon class="dash-card-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
+                    <span class="dash-card-label">${t.detail.tomorrowLabel}</span>
+                    <span class="dash-card-trailing dash-card-trailing-forecast">
                         <span class="dash-stat-value-sm">≈ ${this._formatLocalisedNumber(data.totalKwh, 1)}</span>
                         <span class="dash-stat-unit-sm">kWh</span>
                     </span>
                 </header>
-                <svg class="dash-tomorrow-scene" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
-                    <!-- Sky gradient backdrop -->
-                    <defs>
-                        <linearGradient id="dash-sky-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="${sunColor}" stop-opacity="${0.04 + (1 - cloudFactor) * 0.10}"/>
-                            <stop offset="100%" stop-color="${cloudColor}" stop-opacity="${0.05 + cloudFactor * 0.20}"/>
-                        </linearGradient>
-                        <radialGradient id="dash-sun-glow-${this._instanceId}" cx="50%" cy="50%" r="50%">
-                            <stop offset="0%"  stop-color="${sunColor}" stop-opacity="0.55"/>
-                            <stop offset="60%" stop-color="${sunColor}" stop-opacity="0.20"/>
-                            <stop offset="100%" stop-color="${sunColor}" stop-opacity="0"/>
-                        </radialGradient>
-                    </defs>
-
-                    <!-- Sky backdrop -->
-                    <rect x="0" y="0" width="${W}" height="${H * 0.85}" fill="url(#dash-sky-grad-${this._instanceId})"/>
-
-                    <!-- Sun glow halo -->
-                    <circle cx="${sunX}" cy="${sunY}" r="${sunR * 2.2}" fill="url(#dash-sun-glow-${this._instanceId})"/>
-                    <!-- Sun disc -->
-                    <circle class="dash-sun-disc" cx="${sunX}" cy="${sunY}" r="${sunR}" fill="${sunColor}"/>
-
-                    <!-- Stylised cloud puffs (two clusters at variable opacity) -->
-                    <g class="dash-clouds" fill="${cloudColor}" opacity="${cloudOpacity}">
-                        <ellipse cx="${W * 0.22}" cy="${H * 0.32}" rx="58" ry="20"/>
-                        <circle  cx="${W * 0.16}" cy="${H * 0.30}" r="22"/>
-                        <circle  cx="${W * 0.28}" cy="${H * 0.28}" r="18"/>
-                        <ellipse cx="${W * 0.78}" cy="${H * 0.22}" rx="70" ry="22"/>
-                        <circle  cx="${W * 0.72}" cy="${H * 0.20}" r="22"/>
-                        <circle  cx="${W * 0.84}" cy="${H * 0.18}" r="20"/>
-                    </g>
-
-                    <!-- Wavy horizon line -->
-                    <path class="dash-horizon"
-                          d="M 0 ${H * 0.85} Q ${W * 0.25} ${H * 0.83} ${W * 0.5} ${H * 0.85} T ${W} ${H * 0.85} L ${W} ${H} L 0 ${H} Z"
-                          fill="${sunColor}" fill-opacity="0.08"/>
-                    <path class="dash-horizon-line"
-                          d="M 0 ${H * 0.85} Q ${W * 0.25} ${H * 0.83} ${W * 0.5} ${H * 0.85} T ${W} ${H * 0.85}"
-                          stroke="${sunColor}" stroke-opacity="0.4" fill="none" stroke-width="1.5"/>
-                </svg>
                 ${data.peakHourTs !== null ? html`
-                    <div class="dash-tomorrow-caption">${t.detail.tomorrowPeak} ${peakTimeLabel}</div>
+                    <div class="dash-tomorrow-peak">
+                        <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
+                        <span class="dash-line-label">${t.detail.tomorrowPeak}</span>
+                        <span class="dash-line-value">${peakTimeLabel}</span>
+                    </div>
                 ` : nothing}
             </section>
         `;
@@ -4445,24 +4272,25 @@ export class HeliosCard extends LitElement
         const soc  = data.socNow ?? 0;
 
         //Vessel canvas: 200 × 240, drawn as a stylised vertical
-        //battery cell with a cap on top. Liquid rises from the
-        //bottom to soc%.
-        const W = 200;
-        const H = 240;
-        const capW = 40, capH = 14;
-        const cellX = 60, cellY = 30;
-        const cellW = 80, cellH = H - cellY - 20;
-        const liquidH = (Math.max(0, Math.min(100, soc)) / 100) * (cellH - 6);
-        const liquidY = cellY + cellH - 3 - liquidH;
-        const liquidX = cellX + 3;
-        const liquidW = cellW - 6;
+        //Compact vessel for the chip-card layout. The battery cap +
+        //cell are drawn relative to the SVG viewBox and scale with
+        //the card width via CSS.
+        const W = 60;
+        const H = 100;
+        const capW = 18, capH = 6;
+        const cellX = 8, cellY = 12;
+        const cellW = W - 2 * cellX, cellH = H - cellY - 6;
+        const liquidH = (Math.max(0, Math.min(100, soc)) / 100) * (cellH - 4);
+        const liquidY = cellY + cellH - 2 - liquidH;
+        const liquidX = cellX + 2;
+        const liquidW = cellW - 4;
 
         return html`
-            <section class="dash-section dash-battery">
-                <header class="dash-section-header">
-                    <ha-icon class="dash-section-icon" icon="mdi:battery" style="color:${batteryColor}"></ha-icon>
-                    <span class="dash-section-label">${t.detail.batteryLabel}</span>
-                    <span class="dash-section-trailing">
+            <section class="dash-section dash-card dash-battery">
+                <header class="dash-card-header">
+                    <ha-icon class="dash-card-icon" icon="mdi:battery" style="color:${batteryColor}"></ha-icon>
+                    <span class="dash-card-label">${t.detail.batteryLabel}</span>
+                    <span class="dash-card-trailing">
                         <span class="dash-stat-value-sm">${Math.round(soc)}</span>
                         <span class="dash-stat-unit-sm">%</span>
                     </span>
@@ -4475,46 +4303,30 @@ export class HeliosCard extends LitElement
                                 <stop offset="100%" stop-color="${batteryColor}" stop-opacity="0.6"/>
                             </linearGradient>
                         </defs>
-                        <!-- Battery cap -->
                         <rect class="dash-batt-cap"
                               x="${(W - capW) / 2}" y="${cellY - capH}"
-                              width="${capW}" height="${capH}" rx="3"/>
-                        <!-- Battery cell -->
+                              width="${capW}" height="${capH}" rx="1.5"/>
                         <rect class="dash-batt-shell"
                               x="${cellX}" y="${cellY}"
-                              width="${cellW}" height="${cellH}" rx="8"/>
-                        <!-- Liquid fill -->
+                              width="${cellW}" height="${cellH}" rx="3"/>
                         ${liquidH > 0 ? svg`
                             <rect class="dash-batt-liquid"
                                   x="${liquidX}" y="${liquidY}"
                                   width="${liquidW}" height="${liquidH}"
-                                  rx="5"
+                                  rx="2"
                                   fill="url(#dash-batt-grad-${this._instanceId})"/>
-                            <!-- Wave on top of liquid -->
-                            <path class="dash-batt-wave"
-                                  d="M ${liquidX} ${liquidY}
-                                     Q ${liquidX + liquidW * 0.25} ${liquidY - 4}
-                                       ${liquidX + liquidW * 0.5} ${liquidY}
-                                     T ${liquidX + liquidW} ${liquidY}
-                                     L ${liquidX + liquidW} ${liquidY + 6}
-                                     L ${liquidX} ${liquidY + 6} Z"
-                                  fill="${batteryColor}" fill-opacity="0.95"/>
                         ` : nothing}
                     </svg>
                     <div class="dash-battery-flows">
                         <div class="dash-battery-flow dash-battery-flow-charge">
                             <ha-icon icon="mdi:arrow-up-bold"></ha-icon>
-                            <div>
-                                <div class="dash-flow-value">${this._formatLocalisedNumber(data.chargedKwh, 1)} kWh</div>
-                                <div class="dash-flow-label">${t.detail.batteryCharged}</div>
-                            </div>
+                            <span class="dash-flow-value">${this._formatLocalisedNumber(data.chargedKwh, 1)} kWh</span>
+                            <span class="dash-flow-label">${t.detail.batteryCharged}</span>
                         </div>
                         <div class="dash-battery-flow dash-battery-flow-discharge">
                             <ha-icon icon="mdi:arrow-down-bold"></ha-icon>
-                            <div>
-                                <div class="dash-flow-value">${this._formatLocalisedNumber(data.dischargedKwh, 1)} kWh</div>
-                                <div class="dash-flow-label">${t.detail.batteryDischarged}</div>
-                            </div>
+                            <span class="dash-flow-value">${this._formatLocalisedNumber(data.dischargedKwh, 1)} kWh</span>
+                            <span class="dash-flow-label">${t.detail.batteryDischarged}</span>
                         </div>
                     </div>
                 </div>
