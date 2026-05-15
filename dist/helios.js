@@ -27526,7 +27526,8 @@ const _HeliosEngine = class _HeliosEngine {
       "helios-buildings-surroundings",
       "helios-buildings-home",
       "helios-buildings-surroundings-outline",
-      "helios-buildings-home-outline"
+      "helios-buildings-home-outline",
+      "helios-buildings-home-outline-glow"
     ]) {
       if (this.map.getLayer(lid)) this.map.removeLayer(lid);
     }
@@ -27685,6 +27686,20 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     );
+    const homeGlowColor = typeof this.cfg["sun-color"] === "string" && /^#[0-9a-f]{6}$/i.test(this.cfg["sun-color"]) ? this.cfg["sun-color"] : DEFAULT_SUN_COLOR_HEX;
+    this.map.addLayer(
+      {
+        id: "helios-buildings-home-outline-glow",
+        source: "helios-buildings-home-src",
+        type: "line",
+        paint: {
+          "line-color": homeGlowColor,
+          "line-width": 8,
+          "line-blur": 6,
+          "line-opacity": 0.55
+        }
+      }
+    );
     this.map.addLayer(
       {
         id: "helios-buildings-home-outline",
@@ -27692,8 +27707,8 @@ const _HeliosEngine = class _HeliosEngine {
         type: "line",
         paint: {
           "line-color": "#000000",
-          "line-width": 2,
-          "line-opacity": 0.85
+          "line-width": 3,
+          "line-opacity": 0.9
         }
       }
     );
@@ -28616,6 +28631,10 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     }
+    if (this.map.getLayer("helios-buildings-home-outline-glow")) {
+      const glow = typeof this.cfg["sun-color"] === "string" && /^#[0-9a-f]{6}$/i.test(this.cfg["sun-color"]) ? this.cfg["sun-color"] : DEFAULT_SUN_COLOR_HEX;
+      this.map.setPaintProperty("helios-buildings-home-outline-glow", "line-color", glow);
+    }
     const nextPrecision = this._lidarPrecisionLevel();
     if (nextPrecision !== prevPrecision) {
       this._lidarShadowKey = "";
@@ -28746,6 +28765,7 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-buildings-home",
         "helios-buildings-surroundings-outline",
         "helios-buildings-home-outline",
+        "helios-buildings-home-outline-glow",
         "helios-building-shadows"
       ]) {
         try {
@@ -29985,41 +30005,35 @@ const heliosCardStyles = i$3`
     .clock-date { opacity: 0.75; }
     .clock-time { opacity: 1;    }
 
-    /*  "Back to live" tab, hangs from the bottom-centre of the
-        clock as a small folder-style tab when the user has scrubbed
-        away from now. Same blue plate as the on-chart scrub cursor
-        and the scrub-time pill, white restore icon centred. The
-        top corners are squared and the top edge sits 1 px UNDER the
-        clock's bottom border (negative margin) so the two chips
-        visually merge into one stacked control. Mobile-friendly tap
-        target (~26 × 22 px, well above the 24 × 24 px iOS minimum)
-        without competing with the timeline scrub gesture below. */
-    .clock-tab
+    /*  "Back to live" button, top-right rail. Same blue plate as the
+        on-chart scrub cursor and the scrub-time pill, white restore
+        icon centred. 28 × 28 px square chip matching the LiDAR busy
+        chip's footprint so the two stack into a clean vertical column
+        when both are visible. Mobile-friendly tap target, pointer
+        events on so the button stays clickable even though its parent
+        rail has events off. */
+    .live-return-btn
     {
-        margin-top: -1px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 40px;
-        height: 24px;
-        padding: 0 12px;
+        width:  28px;
+        height: 28px;
+        padding: 0;
         background: rgba(31, 111, 235, 0.95);
         color: white;
         border: 1px solid rgba(20, 78, 168, 0.95);
-        border-top: 0;
-        border-radius: 0 0 3px 3px;
+        border-radius: 3px;
         cursor: pointer;
         pointer-events: auto;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         transition: background 0.12s;
-        position: relative;
-        z-index: 1;
     }
 
-    .clock-tab:hover  { background: rgba(24, 92, 199, 0.95); }
-    .clock-tab:active { background: rgba(20, 78, 168, 0.95); }
+    .live-return-btn:hover  { background: rgba(24, 92, 199, 0.95); }
+    .live-return-btn:active { background: rgba(20, 78, 168, 0.95); }
 
-    .clock-tab ha-icon
+    .live-return-btn ha-icon
     {
         --mdc-icon-size: 18px;
         color: white;
@@ -30055,59 +30069,83 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
-    /*  Minimalist compass, option C from the design pass: a small
-        glass-like disc with one orange "N" triangle that orbits the
-        rim to keep pointing at true north. No bezel labels, no needle
-        tail, no graduations, the whole element reads as a single
-        glyph at a glance. 3D feel comes from layered radial gradients
-        + a multi-stop box-shadow stack (outer drop + inset top
-        highlight + inset bottom shadow). */
-    .compass
+    /*  Compass needle, no bezel. The outer container sets up the 3D
+        perspective + the same 55° pitch the MapLibre camera uses, so
+        the needle reads as if it's resting on the tilted ground plane.
+        The pitch value is hardcoded to match HeliosEngine's fixed
+        pitch: if that ever becomes user-configurable, expose it via
+        projectHomeLabelLayout and drive this transform from the layout. */
+    .compass-needle
     {
-        position: relative;
         width:  44px;
         height: 44px;
-        border-radius: 50%;
-        background:
-            radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.12), transparent 50%),
-            radial-gradient(circle at 65% 75%, rgba(0, 0, 0, 0.45), transparent 60%),
-            linear-gradient(135deg, rgba(45, 50, 60, 0.92), rgba(18, 22, 30, 0.88));
-        border: 1px solid rgba(255, 255, 255, 0.10);
-        box-shadow:
-            0 2px 6px rgba(0, 0, 0, 0.55),
-            inset 0 1px 1px rgba(255, 255, 255, 0.10),
-            inset 0 -2px 3px rgba(0, 0, 0, 0.45);
-        overflow: hidden;
+        perspective: 200px;
+        pointer-events: none;
     }
 
-    /*  Rotating rose, counter-rotates by -bearing via inline style so
-        the N glyph orbits the rim to track true north. transform-origin
-        defaults to the disc centre, which is what we want. The short
-        transition smooths bearing inertia without making the compass
-        feel laggy under fast user rotation. */
-    .compass-rose
+    /*  Spin layer, counter-rotates around the ground-plane normal by
+        the negated map bearing so the red N half always points at
+        true north. preserve-3d propagates the parent's perspective to
+        the children, otherwise the rotateX would collapse back to 2D
+        and the foreshortening cue would vanish. */
+    .compass-needle-spin
     {
-        position: absolute;
-        inset: 0;
+        width:  100%;
+        height: 100%;
+        position: relative;
+        transform-style: preserve-3d;
         transition: transform 120ms linear;
     }
 
-    /*  N marker, equilateral-ish triangle pointing inward from the
-        rim. Coloured with the configured sun-color so the glyph
-        adopts the user's theme, with a soft drop-shadow glow to lift
-        it off the dark disc face. */
-    .compass-north
+    /*  Tilt wrapper baked into both halves, applied via the shared
+        transform on each triangle. We tilt INSIDE the spinning frame
+        so the needle stays laid on the ground plane regardless of
+        bearing, instead of being a static plane the needle paints on
+        top of (which would look like a 2D arrow that yaws but never
+        lays down). */
+    .compass-needle-n,
+    .compass-needle-s
     {
         position: absolute;
-        top: 3px;
         left: 50%;
-        transform: translateX(-50%);
-        width: 0;
-        height: 0;
-        border-left: 5px solid transparent;
-        border-right: 5px solid transparent;
-        border-bottom: 9px solid var(--compass-north-color, #EF9F27);
-        filter: drop-shadow(0 0 3px rgba(239, 159, 39, 0.40));
+        width: 14px;
+        margin-left: -7px;
+        height: 22px;
+        backface-visibility: hidden;
+    }
+
+    /*  Red half, points UP toward N. clip-path carves the triangle so
+        we can paint a top-to-bottom gradient (a CSS border triangle
+        would be a single colour). Two gradients stacked: a lateral
+        light-to-dark sweep mimics a faceted needle catching light from
+        the upper-left, the linear vertical gradient brightens the tip
+        to suggest a sharp metal edge. The element is then laid back
+        with rotateX(55deg) so it appears to rest on the basemap. */
+    .compass-needle-n
+    {
+        top: 0;
+        background:
+            linear-gradient(95deg, rgba(255, 255, 255, 0.18) 0%, transparent 35%, rgba(0, 0, 0, 0.35) 100%),
+            linear-gradient(to bottom, #ff5e5e 0%, #c91313 70%, #7a0a0a 100%);
+        clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+        transform: translateZ(0.5px) rotateX(55deg);
+        transform-origin: 50% 100%;
+        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
+    }
+
+    /*  Grey half, points DOWN toward S. Symmetric to the N half but
+        flipped, with a muted gunmetal palette so the eye locks on the
+        red side as the canonical direction marker. */
+    .compass-needle-s
+    {
+        top: 22px;
+        background:
+            linear-gradient(95deg, rgba(255, 255, 255, 0.15) 0%, transparent 40%, rgba(0, 0, 0, 0.40) 100%),
+            linear-gradient(to top, #4a4f57 0%, #2a2e34 70%, #18191c 100%);
+        clip-path: polygon(50% 100%, 100% 0%, 0% 0%);
+        transform: translateZ(0.5px) rotateX(55deg);
+        transform-origin: 50% 0%;
+        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
     }
 
     /*  Passive 28 px square chip used as a "LiDAR shadow computing"
@@ -31703,7 +31741,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.36"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.37"}`,
       labelStyle,
       versionStyle
     );
@@ -31724,7 +31762,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.4.0-beta.36",
+        version: "1.4.0-beta.37",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -31732,7 +31770,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.4.0-beta.36"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.4.0-beta.37"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -33565,33 +33603,51 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
-                ${hasApiKey && this._shadowBusy ? b`
+                <!--  Top-right column. Hosts the back-to-live button
+                      (shown only while the user has scrubbed away from
+                      now) on top, and the LiDAR shadow busy chip below
+                      it. When both are visible they stack vertically;
+                      when only one is visible the column still sits at
+                      the same 8 px edge margin as the clock and timeline.  -->
+                ${hasApiKey && (!this._isLiveMode || this._shadowBusy) ? b`
                     <div class="overlay-top-right">
-                        <div
-                            class="shadow-busy-chip"
-                            title="LiDAR"
-                            aria-label="LiDAR"
-                        >
-                            <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
-                        </div>
+                        ${!this._isLiveMode ? b`
+                            <button
+                                class="live-return-btn"
+                                @click="${this._resetToLive}"
+                                aria-label="Back to live"
+                            >
+                                <ha-icon icon="mdi:restore"></ha-icon>
+                            </button>
+                        ` : A}
+                        ${this._shadowBusy ? b`
+                            <div
+                                class="shadow-busy-chip"
+                                title="LiDAR"
+                                aria-label="LiDAR"
+                            >
+                                <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
+                            </div>
+                        ` : A}
                     </div>
                 ` : A}
 
-                <!--  Minimalist compass, top-left. The outer disc is
-                      static (glass-like 3D well), the inner rose
-                      counter-rotates by -bearing so the orange "N"
-                      triangle always points at true north regardless
-                      of the user's spin. MapLibre's getBearing()
-                      reports degrees clockwise from north, so the CSS
-                      rotation is its negation.  -->
+                <!--  Compass needle, top-left. No bezel, no graduations:
+                      just a double-arrow with N (red) up / S (grey)
+                      down, laid flat on the same tilted plane as the
+                      map (pitch 55°) so it reads as if it's resting
+                      on the ground. The inner spin element counter-
+                      rotates by -bearing so the red half always points
+                      at true north regardless of the user's rotation.  -->
                 ${hasApiKey && layout ? b`
                     <div class="overlay-top-left">
-                        <div class="compass" aria-label="Compass">
+                        <div class="compass-needle" aria-label="Compass">
                             <div
-                                class="compass-rose"
+                                class="compass-needle-spin"
                                 style="transform: rotate(${-layout.bearing}deg)"
                             >
-                                <div class="compass-north" style="--compass-north-color:${sunColor}"></div>
+                                <div class="compass-needle-n"></div>
+                                <div class="compass-needle-s"></div>
                             </div>
                         </div>
                     </div>
@@ -33599,18 +33655,10 @@ let HeliosCard = class extends i {
 
                 ${hasApiKey ? b`
                     <div class="overlay-top-center">
-                        <div class="clock ${this._isLiveMode ? "" : "clock-scrubbed"}">
+                        <div class="clock">
                             <span class="clock-date">${displayDateLabel}</span>
                             <span class="clock-time">${displayTimeLabel}</span>
                         </div>
-                        ${!this._isLiveMode ? b`
-                            <button
-                                class="clock-tab"
-                                @click="${this._resetToLive}"
-                            >
-                                <ha-icon icon="mdi:restore"></ha-icon>
-                            </button>
-                        ` : A}
                     </div>
                 ` : A}
 

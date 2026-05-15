@@ -3239,33 +3239,51 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                ${hasApiKey && this._shadowBusy ? html`
+                <!--  Top-right column. Hosts the back-to-live button
+                      (shown only while the user has scrubbed away from
+                      now) on top, and the LiDAR shadow busy chip below
+                      it. When both are visible they stack vertically;
+                      when only one is visible the column still sits at
+                      the same 8 px edge margin as the clock and timeline.  -->
+                ${hasApiKey && (!this._isLiveMode || this._shadowBusy) ? html`
                     <div class="overlay-top-right">
-                        <div
-                            class="shadow-busy-chip"
-                            title="LiDAR"
-                            aria-label="LiDAR"
-                        >
-                            <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
-                        </div>
+                        ${!this._isLiveMode ? html`
+                            <button
+                                class="live-return-btn"
+                                @click="${this._resetToLive}"
+                                aria-label="Back to live"
+                            >
+                                <ha-icon icon="mdi:restore"></ha-icon>
+                            </button>
+                        ` : nothing}
+                        ${this._shadowBusy ? html`
+                            <div
+                                class="shadow-busy-chip"
+                                title="LiDAR"
+                                aria-label="LiDAR"
+                            >
+                                <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
+                            </div>
+                        ` : nothing}
                     </div>
                 ` : nothing}
 
-                <!--  Minimalist compass, top-left. The outer disc is
-                      static (glass-like 3D well), the inner rose
-                      counter-rotates by -bearing so the orange "N"
-                      triangle always points at true north regardless
-                      of the user's spin. MapLibre's getBearing()
-                      reports degrees clockwise from north, so the CSS
-                      rotation is its negation.  -->
+                <!--  Compass needle, top-left. No bezel, no graduations:
+                      just a double-arrow with N (red) up / S (grey)
+                      down, laid flat on the same tilted plane as the
+                      map (pitch 55°) so it reads as if it's resting
+                      on the ground. The inner spin element counter-
+                      rotates by -bearing so the red half always points
+                      at true north regardless of the user's rotation.  -->
                 ${hasApiKey && layout ? html`
                     <div class="overlay-top-left">
-                        <div class="compass" aria-label="Compass">
+                        <div class="compass-needle" aria-label="Compass">
                             <div
-                                class="compass-rose"
+                                class="compass-needle-spin"
                                 style="transform: rotate(${-layout.bearing}deg)"
                             >
-                                <div class="compass-north" style="--compass-north-color:${sunColor}"></div>
+                                <div class="compass-needle-n"></div>
+                                <div class="compass-needle-s"></div>
                             </div>
                         </div>
                     </div>
@@ -3273,18 +3291,10 @@ export class HeliosCard extends LitElement
 
                 ${hasApiKey ? html`
                     <div class="overlay-top-center">
-                        <div class="clock ${this._isLiveMode ? '' : 'clock-scrubbed'}">
+                        <div class="clock">
                             <span class="clock-date">${displayDateLabel}</span>
                             <span class="clock-time">${displayTimeLabel}</span>
                         </div>
-                        ${!this._isLiveMode ? html`
-                            <button
-                                class="clock-tab"
-                                @click="${this._resetToLive}"
-                            >
-                                <ha-icon icon="mdi:restore"></ha-icon>
-                            </button>
-                        ` : nothing}
                     </div>
                 ` : nothing}
 

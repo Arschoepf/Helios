@@ -1988,7 +1988,8 @@ export class HeliosEngine
             'helios-buildings-surroundings',
             'helios-buildings-home',
             'helios-buildings-surroundings-outline',
-            'helios-buildings-home-outline'
+            'helios-buildings-home-outline',
+            'helios-buildings-home-outline-glow'
         ])
         {
             if (this.map.getLayer(lid)) this.map.removeLayer(lid);
@@ -2195,10 +2196,10 @@ export class HeliosEngine
         });
 
         //Cell-shaded outlines: a thin black line on the surroundings'
-        //ground footprint, a thicker / darker line on the home so the
-        //focal building reads even when its colour matches the
-        //surroundings. Drawn ON TOP of the extrusions so the outlines
-        //sit over the building edges at ground level.
+        //ground footprint, a thicker line on the home so the focal
+        //building reads even when its colour matches the surroundings.
+        //Drawn ON TOP of the extrusions so the outlines sit over the
+        //building edges at ground level.
         this.map.addLayer(
         {
             id:     'helios-buildings-surroundings-outline',
@@ -2211,6 +2212,30 @@ export class HeliosEngine
                 'line-opacity': 0.35
             }
         });
+        //Sun-coloured glow underneath the home outline. Wide, blurred,
+        //low opacity, paints a halo around the home footprint so the
+        //focal building reads at a glance even on a busy basemap. Drawn
+        //BEFORE the crisp black outline so the line stays sharp on top
+        //of the soft halo. Color tracks the configured sun-color so the
+        //home stays visually tied to the Helios brand palette.
+        const homeGlowColor =
+            (typeof this.cfg['sun-color'] === 'string'
+             && /^#[0-9a-f]{6}$/i.test(this.cfg['sun-color'] as string))
+                ? (this.cfg['sun-color'] as string)
+                : DEFAULT_SUN_COLOR_HEX;
+        this.map.addLayer(
+        {
+            id:     'helios-buildings-home-outline-glow',
+            source: 'helios-buildings-home-src',
+            type:   'line',
+            paint:
+            {
+                'line-color':   homeGlowColor,
+                'line-width':   8,
+                'line-blur':    6,
+                'line-opacity': 0.55
+            }
+        });
         this.map.addLayer(
         {
             id:     'helios-buildings-home-outline',
@@ -2219,8 +2244,8 @@ export class HeliosEngine
             paint:
             {
                 'line-color':   '#000000',
-                'line-width':   2,
-                'line-opacity': 0.85
+                'line-width':   3,
+                'line-opacity': 0.90
             }
         });
 
@@ -3616,6 +3641,19 @@ export class HeliosEngine
             }
         }
 
+        //Home glow tracks the configured sun-color so the halo around
+        //the focal building stays consistent with the rest of the
+        //Helios brand palette as the user themes the card.
+        if (this.map.getLayer('helios-buildings-home-outline-glow'))
+        {
+            const glow =
+                (typeof this.cfg['sun-color'] === 'string'
+                 && /^#[0-9a-f]{6}$/i.test(this.cfg['sun-color'] as string))
+                    ? (this.cfg['sun-color'] as string)
+                    : DEFAULT_SUN_COLOR_HEX;
+            this.map.setPaintProperty('helios-buildings-home-outline-glow', 'line-color', glow);
+        }
+
         //LiDAR precision change invalidates the cached shadow features
         //(fetch key includes the raster size) and triggers a refetch
         //at the new sampling. _ensureLidarFetched handles the diff.
@@ -3849,6 +3887,7 @@ export class HeliosEngine
                 'helios-buildings-home',
                 'helios-buildings-surroundings-outline',
                 'helios-buildings-home-outline',
+                'helios-buildings-home-outline-glow',
                 'helios-building-shadows'
             ])
             {
