@@ -13,8 +13,17 @@ export const it: Translations = {
     {
         title:    'Vista dettagliata',
         subtitle: 'Pannello dettagliato in arrivo.',
-        exitHint: 'Tocca un punto qualsiasi per uscire'
-    },
+        exitHint: 'Tocca un punto qualsiasi per uscire',
+    
+        todayLabel:         'Oggi',
+        todayProduced:      'prodotto',
+        todayForecast:      'previsto fine giornata',
+        weekLabel:          'Il periodo',
+        tomorrowLabel:      'Domani',
+        tomorrowPeak:       'picco previsto verso le',
+        batteryLabel:       'Batteria',
+        batteryCharged:     'caricato oggi',
+        batteryDischarged:  'usato oggi',},
 
     editor:
     {

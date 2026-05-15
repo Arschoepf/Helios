@@ -32383,7 +32383,16 @@ const en = {
   detail: {
     title: "Detailed view",
     subtitle: "Detailed dashboard coming soon.",
-    exitHint: "Tap anywhere to exit"
+    exitHint: "Tap anywhere to exit",
+    todayLabel: "Today",
+    todayProduced: "produced",
+    todayForecast: "forecast end of day",
+    weekLabel: "This period",
+    tomorrowLabel: "Tomorrow",
+    tomorrowPeak: "peak expected around",
+    batteryLabel: "Battery",
+    batteryCharged: "charged today",
+    batteryDischarged: "used today"
   },
   editor: {
     mapSection: "Map",
@@ -32462,7 +32471,16 @@ const fr = {
   detail: {
     title: "Vue détaillée",
     subtitle: "Tableau de bord détaillé à venir.",
-    exitHint: "Cliquez n'importe où pour quitter"
+    exitHint: "Cliquez n'importe où pour quitter",
+    todayLabel: "Aujourd'hui",
+    todayProduced: "produit",
+    todayForecast: "prévu fin de journée",
+    weekLabel: "La période",
+    tomorrowLabel: "Demain",
+    tomorrowPeak: "pic prévu vers",
+    batteryLabel: "Batterie",
+    batteryCharged: "chargé aujourd'hui",
+    batteryDischarged: "utilisé aujourd'hui"
   },
   editor: {
     mapSection: "Carte",
@@ -32541,7 +32559,16 @@ const de = {
   detail: {
     title: "Detailansicht",
     subtitle: "Detailliertes Dashboard demnächst.",
-    exitHint: "Tippe irgendwo, um zu schließen"
+    exitHint: "Tippe irgendwo, um zu schließen",
+    todayLabel: "Heute",
+    todayProduced: "erzeugt",
+    todayForecast: "Prognose Tagesende",
+    weekLabel: "Der Zeitraum",
+    tomorrowLabel: "Morgen",
+    tomorrowPeak: "Spitze erwartet gegen",
+    batteryLabel: "Batterie",
+    batteryCharged: "heute geladen",
+    batteryDischarged: "heute entladen"
   },
   editor: {
     mapSection: "Karte",
@@ -32620,7 +32647,16 @@ const es = {
   detail: {
     title: "Vista detallada",
     subtitle: "Panel detallado próximamente.",
-    exitHint: "Toca en cualquier lugar para salir"
+    exitHint: "Toca en cualquier lugar para salir",
+    todayLabel: "Hoy",
+    todayProduced: "producido",
+    todayForecast: "previsto fin del día",
+    weekLabel: "El período",
+    tomorrowLabel: "Mañana",
+    tomorrowPeak: "pico previsto sobre las",
+    batteryLabel: "Batería",
+    batteryCharged: "cargado hoy",
+    batteryDischarged: "usado hoy"
   },
   editor: {
     mapSection: "Mapa",
@@ -32699,7 +32735,16 @@ const it = {
   detail: {
     title: "Vista dettagliata",
     subtitle: "Pannello dettagliato in arrivo.",
-    exitHint: "Tocca un punto qualsiasi per uscire"
+    exitHint: "Tocca un punto qualsiasi per uscire",
+    todayLabel: "Oggi",
+    todayProduced: "prodotto",
+    todayForecast: "previsto fine giornata",
+    weekLabel: "Il periodo",
+    tomorrowLabel: "Domani",
+    tomorrowPeak: "picco previsto verso le",
+    batteryLabel: "Batteria",
+    batteryCharged: "caricato oggi",
+    batteryDischarged: "usato oggi"
   },
   editor: {
     mapSection: "Mappa",
@@ -32778,7 +32823,16 @@ const nl = {
   detail: {
     title: "Detailweergave",
     subtitle: "Gedetailleerd dashboard binnenkort.",
-    exitHint: "Tik ergens om te sluiten"
+    exitHint: "Tik ergens om te sluiten",
+    todayLabel: "Vandaag",
+    todayProduced: "opgewekt",
+    todayForecast: "verwacht einde dag",
+    weekLabel: "De periode",
+    tomorrowLabel: "Morgen",
+    tomorrowPeak: "piek verwacht rond",
+    batteryLabel: "Batterij",
+    batteryCharged: "vandaag opgeladen",
+    batteryDischarged: "vandaag gebruikt"
   },
   editor: {
     mapSection: "Kaart",
@@ -32857,7 +32911,16 @@ const pt = {
   detail: {
     title: "Vista detalhada",
     subtitle: "Painel detalhado em breve.",
-    exitHint: "Toca em qualquer lugar para sair"
+    exitHint: "Toca em qualquer lugar para sair",
+    todayLabel: "Hoje",
+    todayProduced: "produzido",
+    todayForecast: "previsto fim do dia",
+    weekLabel: "O período",
+    tomorrowLabel: "Amanhã",
+    tomorrowPeak: "pico previsto por volta das",
+    batteryLabel: "Bateria",
+    batteryCharged: "carregado hoje",
+    batteryDischarged: "usado hoje"
   },
   editor: {
     mapSection: "Mapa",
@@ -32936,7 +32999,16 @@ const no = {
   detail: {
     title: "Detaljvisning",
     subtitle: "Detaljert dashbord kommer snart.",
-    exitHint: "Trykk hvor som helst for å gå ut"
+    exitHint: "Trykk hvor som helst for å gå ut",
+    todayLabel: "I dag",
+    todayProduced: "produsert",
+    todayForecast: "estimert dagsslutt",
+    weekLabel: "Perioden",
+    tomorrowLabel: "I morgen",
+    tomorrowPeak: "topp ventet rundt",
+    batteryLabel: "Batteri",
+    batteryCharged: "ladet i dag",
+    batteryDischarged: "brukt i dag"
   },
   editor: {
     mapSection: "Kart",
@@ -33182,24 +33254,31 @@ const heliosCardStyles = i$3`
     }
 
     /*  Detail panel, takes over the card while detail mode is on.
-        Click anywhere on it exits back to the resting view. The
-        backdrop is a soft scrim so the basemap behind stays
-        readable (the camera is zoomed + tilted underneath) without
-        competing with the panel content. */
+        Hosts the four-section dashboard (today / week / tomorrow /
+        battery). The backdrop is a soft scrim + blur so the basemap
+        behind stays readable (the camera is zoomed and pitched
+        underneath) without competing with the panel content. The
+        panel itself no longer dismisses on a stray click; the
+        dedicated close button in the corner handles exit, since the
+        sections are scrollable on small viewports and a global
+        click-to-dismiss would close the panel on every internal
+        touch. */
     .detail-panel
     {
         position: absolute;
         inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(0, 0, 0, 0.45);
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-        cursor: pointer;
+        background:
+            linear-gradient(180deg,
+                rgba(10, 14, 24, 0.86) 0%,
+                rgba(20, 26, 42, 0.92) 100%);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
         z-index: 60;
         opacity: 0;
         animation: detail-panel-fade-in 0.35s ease forwards;
+        display: flex;
+        flex-direction: column;
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
     }
     @keyframes detail-panel-fade-in
     {
@@ -33207,51 +33286,356 @@ const heliosCardStyles = i$3`
         to   { opacity: 1; }
     }
 
+    /*  Light-theme panel: the Fiord-tinted dark scrim from the base
+        rule reads too heavy against an otherwise pale dashboard.
+        Switch to a near-white scrim with a hint of warmth so the
+        sections still pop without going full noir. */
+    ha-card.theme-light .detail-panel
+    {
+        background:
+            linear-gradient(180deg,
+                rgba(248, 250, 254, 0.92) 0%,
+                rgba(232, 238, 248, 0.96) 100%);
+        color: #15202b;
+    }
+
+    .detail-close-btn
+    {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width:  32px;
+        height: 32px;
+        padding: 0;
+        background: rgba(255, 255, 255, 0.10);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 50%;
+        color: rgba(255, 255, 255, 0.85);
+        cursor: pointer;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s, transform 0.15s;
+    }
+    .detail-close-btn:hover  { background: rgba(255, 255, 255, 0.18); transform: scale(1.05); }
+    .detail-close-btn:active { background: rgba(255, 255, 255, 0.25); transform: scale(0.95); }
+    .detail-close-btn ha-icon { --mdc-icon-size: 20px; color: inherit; }
+    ha-card.theme-light .detail-close-btn
+    {
+        background: rgba(15, 23, 42, 0.06);
+        border-color: rgba(15, 23, 42, 0.15);
+        color: rgba(15, 23, 42, 0.75);
+    }
+    ha-card.theme-light .detail-close-btn:hover  { background: rgba(15, 23, 42, 0.12); }
+
     .detail-panel-inner
     {
-        text-align: center;
-        color: #ffffff;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        padding: 24px 32px;
-        max-width: 80%;
-        pointer-events: none;
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 24px 28px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+        color: #e8eef8;
+    }
+    ha-card.theme-light .detail-panel-inner
+    {
+        color: #1c2733;
     }
 
-    .detail-panel-icon
+    /*  Each section is a self-contained block. Header on top
+        (icon + small-caps label + optional trailing big number),
+        then the illustration that IS the data underneath. */
+    .dash-section
     {
-        --mdc-icon-size: 56px;
-        color: #ffffff;
-        opacity: 0.85;
-        margin-bottom: 12px;
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        opacity: 0;
+        transform: translateY(8px);
+        animation: dash-section-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    .dash-section:nth-of-type(1) { animation-delay: 0.05s; }
+    .dash-section:nth-of-type(2) { animation-delay: 0.15s; }
+    .dash-section:nth-of-type(3) { animation-delay: 0.25s; }
+    .dash-section:nth-of-type(4) { animation-delay: 0.35s; }
+    @keyframes dash-section-in
+    {
+        to { opacity: 1; transform: translateY(0); }
     }
 
-    .detail-panel-title
+    .dash-section-header
     {
-        font-size: 1.5rem;
-        font-weight: 300;
-        letter-spacing: 4px;
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+    }
+    .dash-section-icon
+    {
+        --mdc-icon-size: 18px;
+        align-self: center;
+    }
+    .dash-section-label
+    {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 2.5px;
         text-transform: uppercase;
-        margin-bottom: 8px;
+        opacity: 0.65;
+    }
+    .dash-section-trailing
+    {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 4px;
+    }
+    .dash-section-trailing-forecast
+    {
+        font-style: italic;
+        opacity: 0.85;
+    }
+    .dash-stat-value
+    {
+        font-size: 44px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        letter-spacing: -0.5px;
+    }
+    .dash-stat-unit
+    {
+        font-size: 18px;
+        font-weight: 500;
+        opacity: 0.65;
+        margin-left: 4px;
+    }
+    .dash-stat-value-sm
+    {
+        font-size: 22px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+    }
+    .dash-stat-unit-sm
+    {
+        font-size: 12px;
+        font-weight: 500;
+        opacity: 0.65;
     }
 
-    .detail-panel-subtitle
-    {
-        font-size: 0.95rem;
-        opacity: 0.75;
-        margin-bottom: 24px;
-        font-weight: 300;
-    }
+    /*  Section: today                                                  */
 
-    .detail-panel-hint
+    .dash-today-body
     {
-        font-size: 0.8rem;
+        display: grid;
+        grid-template-columns: minmax(140px, 220px) 1fr;
+        gap: 16px;
+        align-items: stretch;
+    }
+    .dash-today-stats
+    {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+    }
+    .dash-today-produced
+    {
+        display: inline-flex;
+        align-items: baseline;
+    }
+    .dash-today-produced-label
+    {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
         opacity: 0.55;
+    }
+    .dash-today-forecast
+    {
+        margin-top: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        opacity: 0.75;
+        font-variant-numeric: tabular-nums;
+        font-style: italic;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 6px;
+    }
+    .dash-forecast-arrow { font-size: 16px; opacity: 0.7; }
+    .dash-today-forecast-suffix
+    {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.7;
+        font-style: normal;
+    }
+    .dash-today-curve
+    {
+        width: 100%;
+        height: 180px;
+        display: block;
+    }
+    .dash-today-curve .dash-curve-obs-line { stroke-width: 2;   stroke-linecap: round; stroke-linejoin: round; }
+    .dash-today-curve .dash-curve-fc-line  { stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 4 3; opacity: 0.65; }
+    .dash-today-curve .dash-curve-fc-area  { opacity: 0.45; }
+    .dash-today-curve .dash-now-line       { stroke: currentColor; stroke-width: 1; opacity: 0.35; }
+    .dash-today-curve .dash-peak-tether    { stroke: currentColor; stroke-width: 1; opacity: 0.35; stroke-dasharray: 2 2; }
+    .dash-today-curve .dash-peak-chip text { fill: currentColor; font-size: 10px; font-weight: 700; opacity: 0.85; font-variant-numeric: tabular-nums; }
+    .dash-today-curve .dash-hour-tick      { fill: currentColor; font-size: 10px; opacity: 0.4; font-variant-numeric: tabular-nums; }
+
+    /*  Section: week                                                   */
+
+    .dash-week-bottles
+    {
+        width: 100%;
+        height: 220px;
+        display: block;
+    }
+    .dash-week-bottles .dash-bottle-shell
+    {
+        fill: rgba(255, 255, 255, 0.04);
+        stroke: rgba(255, 255, 255, 0.18);
+        stroke-width: 1;
+    }
+    ha-card.theme-light .dash-week-bottles .dash-bottle-shell
+    {
+        fill: rgba(15, 23, 42, 0.04);
+        stroke: rgba(15, 23, 42, 0.18);
+    }
+    .dash-week-bottles .dash-bottle.is-future .dash-bottle-shell
+    {
+        stroke-dasharray: 3 2;
+    }
+    .dash-week-bottles .dash-bottle-day
+    {
+        fill: currentColor;
+        font-size: 11px;
+        font-weight: 600;
+        opacity: 0.7;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .dash-week-bottles .dash-bottle-kwh
+    {
+        fill: currentColor;
+        font-size: 12px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .dash-week-bottles .dash-bottle.is-today .dash-bottle-day,
+    .dash-week-bottles .dash-bottle.is-today .dash-bottle-kwh
+    {
+        opacity: 1;
+    }
+    .dash-week-bottles .dash-bottle.is-future .dash-bottle-day,
+    .dash-week-bottles .dash-bottle.is-future .dash-bottle-kwh
+    {
+        opacity: 0.55;
+        font-style: italic;
+    }
+
+    /*  Section: tomorrow                                               */
+
+    .dash-tomorrow-scene
+    {
+        width: 100%;
+        height: 200px;
+        display: block;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .dash-tomorrow-scene .dash-sun-disc
+    {
+        filter: drop-shadow(0 0 6px currentColor);
+    }
+    .dash-tomorrow-caption
+    {
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        opacity: 0.75;
+        text-align: center;
+        font-style: italic;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*  Section: battery                                                */
+
+    .dash-battery-body
+    {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 24px;
+        align-items: center;
+    }
+    .dash-battery-vessel
+    {
+        width: 200px;
+        height: 240px;
+        display: block;
+    }
+    .dash-battery-vessel .dash-batt-shell,
+    .dash-battery-vessel .dash-batt-cap
+    {
+        fill: rgba(255, 255, 255, 0.04);
+        stroke: rgba(255, 255, 255, 0.30);
+        stroke-width: 1.5;
+    }
+    ha-card.theme-light .dash-battery-vessel .dash-batt-shell,
+    ha-card.theme-light .dash-battery-vessel .dash-batt-cap
+    {
+        fill: rgba(15, 23, 42, 0.04);
+        stroke: rgba(15, 23, 42, 0.30);
+    }
+    .dash-battery-flows
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .dash-battery-flow
+    {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .dash-battery-flow ha-icon { --mdc-icon-size: 20px; }
+    .dash-battery-flow-charge    ha-icon { color: #22c55e; }
+    .dash-battery-flow-discharge ha-icon { color: #ef4444; }
+    .dash-flow-value
+    {
+        font-size: 22px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+    }
+    .dash-flow-label
+    {
+        font-size: 11px;
+        font-weight: 500;
         letter-spacing: 1px;
         text-transform: uppercase;
-        font-weight: 300;
+        opacity: 0.6;
+        margin-top: 2px;
+    }
+
+    /*  Mobile / narrow card: stack the today + battery 2-column
+        layouts vertically so the illustrations stay readable. */
+    @media (max-width: 520px)
+    {
+        .dash-today-body,
+        .dash-battery-body
+        {
+            grid-template-columns: 1fr;
+        }
+        .dash-battery-vessel { margin: 0 auto; }
     }
 
 
@@ -35333,7 +35717,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.5.0-beta.1"}`,
+      `%c☀ HELIOS%c v${"1.5.0-beta.2"}`,
       labelStyle,
       versionStyle
     );
@@ -35354,7 +35738,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.5.0-beta.1",
+        version: "1.5.0-beta.2",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -35362,7 +35746,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.5.0-beta.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.5.0-beta.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -35454,6 +35838,7 @@ let HeliosCard = class extends i {
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
     this._boundPointerUp = (e2) => this._onTimelinePointerUp(e2);
+    this._instanceId = `h${Math.floor(Math.random() * 1e9).toString(36)}`;
     this._onHomeEnter = () => {
       this._homeHover = true;
     };
@@ -37582,24 +37967,15 @@ let HeliosCard = class extends i {
                 ` : A}
 
                 <!--  Detail dashboard overlay, takes over the card
-                      while _detailMode is on. Click anywhere on the
-                      panel exits back to the resting view. The CSS
-                      class .detail-active on ha-card fades out every
-                      pre-existing overlay so the panel reads as the
-                      sole content while open.  -->
-                ${this._detailMode ? b`
-                    <div
-                        class="detail-panel"
-                        @click="${this._onExitDetail}"
-                    >
-                        <div class="detail-panel-inner">
-                            <ha-icon class="detail-panel-icon" icon="mdi:home-analytics"></ha-icon>
-                            <div class="detail-panel-title">${pickTranslations(this.hass?.language).detail.title}</div>
-                            <div class="detail-panel-subtitle">${pickTranslations(this.hass?.language).detail.subtitle}</div>
-                            <div class="detail-panel-hint">${pickTranslations(this.hass?.language).detail.exitHint}</div>
-                        </div>
-                    </div>
-                ` : A}
+                      while _detailMode is on. The CSS class
+                      .detail-active on ha-card fades out every
+                      pre-existing overlay so the panel reads as
+                      the sole content while open. The panel itself
+                      no longer dismisses on a content click (that
+                      would fire on every internal scroll / tap),
+                      a dedicated close button in the corner handles
+                      exit.  -->
+                ${this._detailMode ? this._renderDashboard() : A}
 
             </ha-card>
         `;
@@ -37649,6 +38025,589 @@ let HeliosCard = class extends i {
     this._homeHover = false;
     this._detailMode = true;
     this._engine?.setDetailMode(true);
+  }
+  //----------------------------------------------------------------- Dashboard
+  //Renders the detail-mode panel: 4 stacked sections (today, week,
+  //tomorrow, battery) plus a close button. Each section uses one
+  //big SVG illustration that IS the data; numbers are annotations
+  //around the illustration, not the centerpiece. Battery section is
+  //skipped silently when neither battery entity is configured.
+  //
+  //The panel uses the configured colour palette (sun / cloud / pv /
+  //battery) so the dashboard reads as the same product the user
+  //already knows from the card itself.
+  _renderDashboard() {
+    const t2 = pickTranslations(this.hass?.language);
+    const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
+    const cloudColor = cfgHex(this.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
+    const pvColor = cfgHex(this.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
+    const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
+    const hasBattery = String(this.config?.["battery-soc-entity"] ?? "").trim() !== "" || String(this.config?.["battery-power-entity"] ?? "").trim() !== "";
+    return b`
+            <div class="detail-panel">
+                <button
+                    class="detail-close-btn"
+                    @click="${this._onExitDetail}"
+                    aria-label="${t2.detail.exitHint}"
+                >
+                    <ha-icon icon="mdi:close"></ha-icon>
+                </button>
+                <div class="detail-panel-inner">
+                    ${this._renderDashTodaySection(t2, pvColor, sunColor)}
+                    ${this._renderDashWeekSection(t2, pvColor)}
+                    ${this._renderDashTomorrowSection(t2, sunColor, cloudColor)}
+                    ${hasBattery ? this._renderDashBatterySection(t2, batteryColor) : A}
+                </div>
+            </div>
+        `;
+  }
+  //--------------------------------------- Section: Aujourd'hui (today)
+  //Computes hourly production for today, splitting observed (past
+  //+ now) from forecast (now → midnight). Returns one bin per hour
+  //of the day [0..23], with watts at the hour's midpoint. Bins
+  //missing observed data fall back to the forecast value where
+  //available; truly empty bins (no kWp configured + before sensor
+  //has started) get 0 W.
+  _computeTodayHourly() {
+    const HOUR_MS = 36e5;
+    const today0 = /* @__PURE__ */ new Date();
+    today0.setHours(0, 0, 0, 0);
+    const startMs = today0.getTime();
+    const endMs = startMs + 24 * HOUR_MS;
+    const nowMs = Date.now();
+    const bins = [];
+    for (let h2 = 0; h2 < 24; h2++) {
+      bins.push({
+        hourTs: startMs + h2 * HOUR_MS,
+        observedW: null,
+        forecastW: null
+      });
+    }
+    const hist = this._pvHistory;
+    if (hist && hist.times.length > 0) {
+      const unit = (this._pvUnit || "").toLowerCase();
+      const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
+      let times = hist.times;
+      let values2 = hist.values;
+      if (isCumulativeEnergy && times.length >= 2) {
+        const dT = [];
+        const dV = [];
+        for (let i2 = 1; i2 < times.length; i2++) {
+          const dtH = (times[i2].getTime() - times[i2 - 1].getTime()) / 36e5;
+          if (dtH <= 0 || dtH > 6) continue;
+          const dv = values2[i2] - values2[i2 - 1];
+          if (dv < 0) continue;
+          dT.push(times[i2]);
+          dV.push(dv / dtH);
+        }
+        times = dT;
+        values2 = dV;
+      }
+      const sums = /* @__PURE__ */ new Map();
+      const counts = /* @__PURE__ */ new Map();
+      for (let i2 = 0; i2 < times.length; i2++) {
+        const tMs = times[i2].getTime();
+        if (tMs < startMs || tMs >= endMs) continue;
+        const w2 = this._pvNormalizeToWatts(values2[i2], this._pvUnit);
+        if (!isFinite(w2)) continue;
+        const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+        sums.set(hourTs, (sums.get(hourTs) ?? 0) + w2);
+        counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
+      }
+      for (let h2 = 0; h2 < 24; h2++) {
+        const sum2 = sums.get(bins[h2].hourTs);
+        const cnt = counts.get(bins[h2].hourTs);
+        if (sum2 !== void 0 && cnt && cnt > 0) {
+          bins[h2].observedW = sum2 / cnt;
+        }
+      }
+    }
+    const k2 = this._pvCalibK();
+    const series = this._chartSeries;
+    const coords = this._getHomeCoords();
+    if (k2 !== null && k2 > 0 && series && coords) {
+      for (let i2 = 0; i2 < series.times.length; i2++) {
+        const tMs = series.times[i2].getTime();
+        if (tMs < startMs || tMs >= endMs) continue;
+        const cloud = series.cloud[i2] ?? 0;
+        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud);
+        if (pct < 0) continue;
+        const watts = pct * k2;
+        const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+        const idx = (hourTs - startMs) / HOUR_MS;
+        if (idx >= 0 && idx < 24) {
+          bins[idx].forecastW = watts;
+        }
+      }
+    }
+    let peakW = 0;
+    let peakHourTs = null;
+    let producedKwh = 0;
+    let forecastKwh = 0;
+    for (const b2 of bins) {
+      const w2 = b2.observedW ?? b2.forecastW ?? 0;
+      if (w2 > peakW) {
+        peakW = w2;
+        peakHourTs = b2.hourTs;
+      }
+      if (b2.observedW !== null) producedKwh += b2.observedW / 1e3;
+      if (b2.hourTs + HOUR_MS <= nowMs) {
+        if (b2.observedW !== null) forecastKwh += b2.observedW / 1e3;
+      } else if (b2.hourTs > nowMs) {
+        if (b2.forecastW !== null) forecastKwh += b2.forecastW / 1e3;
+      } else {
+        forecastKwh += (b2.observedW ?? b2.forecastW ?? 0) / 1e3;
+      }
+    }
+    return { bins, peakHourTs, peakW, producedKwh, forecastKwh };
+  }
+  _renderDashTodaySection(t2, pvColor, sunColor) {
+    const data = this._computeTodayHourly();
+    const HOUR_MS = 36e5;
+    const today0 = /* @__PURE__ */ new Date();
+    today0.setHours(0, 0, 0, 0);
+    const startMs = today0.getTime();
+    const nowMs = Date.now();
+    const W = 600;
+    const H2 = 180;
+    const padTop = 20;
+    const padBot = 30;
+    const usableH = H2 - padTop - padBot;
+    const yMax = Math.max(100, data.peakW * 1.15);
+    const xOf = (hourTs) => (hourTs - startMs) / HOUR_MS * (W / 24) + W / 24 / 2;
+    const yOf = (w2) => padTop + usableH - w2 / yMax * usableH;
+    const obsPoints = [];
+    const fcPoints = [];
+    for (const b2 of data.bins) {
+      const x2 = xOf(b2.hourTs);
+      if (b2.observedW !== null) obsPoints.push([x2, yOf(b2.observedW)]);
+      if (b2.hourTs > nowMs && b2.forecastW !== null) {
+        fcPoints.push([x2, yOf(b2.forecastW)]);
+      }
+    }
+    const smoothPath = (pts) => {
+      if (pts.length < 2) return "";
+      if (pts.length === 2) {
+        return `M ${pts[0][0]},${pts[0][1]} L ${pts[1][0]},${pts[1][1]}`;
+      }
+      let d2 = `M ${pts[0][0]},${pts[0][1]}`;
+      for (let i2 = 0; i2 < pts.length - 1; i2++) {
+        const p0 = pts[Math.max(0, i2 - 1)];
+        const p1 = pts[i2];
+        const p2 = pts[i2 + 1];
+        const p3 = pts[Math.min(pts.length - 1, i2 + 2)];
+        const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
+        const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
+        const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
+        const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
+        d2 += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2[0]},${p2[1]}`;
+      }
+      return d2;
+    };
+    const closedPath = (pts) => {
+      if (pts.length < 2) return "";
+      const baseY = padTop + usableH;
+      return smoothPath(pts) + ` L ${pts[pts.length - 1][0]},${baseY} L ${pts[0][0]},${baseY} Z`;
+    };
+    const nowX = xOf(nowMs);
+    const peakX = data.peakHourTs !== null ? xOf(data.peakHourTs) : null;
+    const peakY = data.peakHourTs !== null ? yOf(data.peakW) : null;
+    const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    }) : "";
+    const peakValueLabel = this._formatPvWatts(data.peakW);
+    return b`
+            <section class="dash-section dash-today">
+                <header class="dash-section-header">
+                    <ha-icon class="dash-section-icon" icon="mdi:weather-sunny" style="color:${sunColor}"></ha-icon>
+                    <span class="dash-section-label">${t2.detail.todayLabel}</span>
+                </header>
+                <div class="dash-today-body">
+                    <div class="dash-today-stats">
+                        <div class="dash-today-produced">
+                            <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
+                            <span class="dash-stat-unit">kWh</span>
+                        </div>
+                        <div class="dash-today-produced-label">${t2.detail.todayProduced}</div>
+                        ${data.forecastKwh > data.producedKwh + 0.05 ? b`
+                            <div class="dash-today-forecast">
+                                <span class="dash-forecast-arrow">→</span>
+                                <span>${this._formatLocalisedNumber(data.forecastKwh, 1)} kWh</span>
+                                <span class="dash-today-forecast-suffix">${t2.detail.todayForecast}</span>
+                            </div>
+                        ` : A}
+                    </div>
+                    <svg class="dash-today-curve" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="none">
+                        <defs>
+                            <linearGradient id="dash-pv-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%"   stop-color="${pvColor}" stop-opacity="0.55"/>
+                                <stop offset="100%" stop-color="${pvColor}" stop-opacity="0"/>
+                            </linearGradient>
+                        </defs>
+
+                        <!-- Forecast area (faded) -->
+                        ${fcPoints.length >= 2 ? w`
+                            <path class="dash-curve-fc-area" d="${closedPath(fcPoints)}" fill="url(#dash-pv-grad-${this._instanceId})"/>
+                            <path class="dash-curve-fc-line" d="${smoothPath(fcPoints)}" stroke="${pvColor}" fill="none"/>
+                        ` : A}
+
+                        <!-- Observed area (solid) -->
+                        ${obsPoints.length >= 2 ? w`
+                            <path class="dash-curve-obs-area" d="${closedPath(obsPoints)}" fill="url(#dash-pv-grad-${this._instanceId})"/>
+                            <path class="dash-curve-obs-line" d="${smoothPath(obsPoints)}" stroke="${pvColor}" fill="none"/>
+                        ` : A}
+
+                        <!-- Now cursor -->
+                        ${nowX >= 0 && nowX <= W ? w`
+                            <line class="dash-now-line" x1="${nowX}" y1="${padTop}" x2="${nowX}" y2="${padTop + usableH}"/>
+                        ` : A}
+
+                        <!-- Peak marker + chip -->
+                        ${peakX !== null && peakY !== null && data.peakW > 50 ? w`
+                            <circle class="dash-peak-dot" cx="${peakX}" cy="${peakY}" r="4" fill="${sunColor}"/>
+                            <line class="dash-peak-tether" x1="${peakX}" y1="${peakY}" x2="${peakX}" y2="${padTop - 6}"/>
+                            <g class="dash-peak-chip" transform="translate(${peakX}, ${padTop - 8})">
+                                <text text-anchor="middle">${peakTimeLabel} · ${peakValueLabel}</text>
+                            </g>
+                        ` : A}
+
+                        <!-- Hour ticks at the bottom -->
+                        ${[6, 9, 12, 15, 18].map((h2) => w`
+                            <text class="dash-hour-tick" x="${xOf(startMs + h2 * HOUR_MS)}" y="${H2 - 8}" text-anchor="middle">${h2}h</text>
+                        `)}
+                    </svg>
+                </div>
+            </section>
+        `;
+  }
+  //Helper: format a wattage value as a short label (W or kW).
+  _formatPvWatts(w2) {
+    if (!isFinite(w2) || w2 < 0) return "0 W";
+    if (w2 >= 1e3) return this._formatLocalisedNumber(w2 / 1e3, 2) + " kW";
+    return Math.round(w2) + " W";
+  }
+  //--------------------------------------- Section: La semaine (this week)
+  //Returns daily kWh totals for the 5-day window centred around
+  //today (2 past + today + 2 future, matching what the engine's
+  //weather forecast covers). Past + today integrate observed PV
+  //history; future days come from the kWp × clear-sky forecast.
+  _computeWeekKwh() {
+    const HOUR_MS = 36e5;
+    const today0 = /* @__PURE__ */ new Date();
+    today0.setHours(0, 0, 0, 0);
+    const todayMs = today0.getTime();
+    const allDaily = this._computeDailyKwhTotals();
+    const out = [];
+    for (let d2 = -2; d2 <= 2; d2++) {
+      const dayMs = todayMs + d2 * 24 * HOUR_MS;
+      const total = allDaily.get(dayMs) ?? 0;
+      const observed = d2 <= 0 ? total : 0;
+      const forecast = total;
+      out.push({
+        dayMs,
+        observed,
+        forecast,
+        isToday: d2 === 0,
+        isPast: d2 < 0
+      });
+    }
+    return out;
+  }
+  _renderDashWeekSection(t2, pvColor) {
+    const days = this._computeWeekKwh();
+    const totalKwh = days.reduce((s2, d2) => s2 + (d2.isPast || d2.isToday ? d2.observed : d2.forecast), 0);
+    const maxKwh = Math.max(...days.map((d2) => d2.forecast), 1);
+    const W = 600;
+    const H2 = 220;
+    const padTop = 20;
+    const padBot = 50;
+    const usableH = H2 - padTop - padBot;
+    const nDays = days.length;
+    const slotW = W / nDays;
+    const bottleW = Math.min(60, slotW * 0.55);
+    const dayLabel = (ms) => {
+      const d2 = new Date(ms);
+      return d2.toLocaleDateString([], { weekday: "short" }).slice(0, 3);
+    };
+    return b`
+            <section class="dash-section dash-week">
+                <header class="dash-section-header">
+                    <ha-icon class="dash-section-icon" icon="mdi:calendar-week" style="color:${pvColor}"></ha-icon>
+                    <span class="dash-section-label">${t2.detail.weekLabel}</span>
+                    <span class="dash-section-trailing">
+                        <span class="dash-stat-value-sm">${this._formatLocalisedNumber(totalKwh, 1)}</span>
+                        <span class="dash-stat-unit-sm">kWh</span>
+                    </span>
+                </header>
+                <svg class="dash-week-bottles" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="xMidYMid meet">
+                    ${days.map((d2, i2) => {
+      const cx = slotW * i2 + slotW / 2;
+      const bx = cx - bottleW / 2;
+      const by = padTop;
+      const bH = usableH;
+      const obsH = d2.observed / maxKwh * bH;
+      const fcH = d2.forecast / maxKwh * bH;
+      const obsY = by + bH - obsH;
+      const fcY = by + bH - fcH;
+      return w`
+                            <g class="dash-bottle ${d2.isToday ? "is-today" : d2.isPast ? "is-past" : "is-future"}">
+                                <!-- Bottle outline -->
+                                <rect class="dash-bottle-shell"
+                                      x="${bx}" y="${by}"
+                                      width="${bottleW}" height="${bH}"
+                                      rx="${bottleW / 6}" />
+
+                                <!-- Forecast fill (pale) -->
+                                ${fcH > 0 ? w`
+                                    <rect class="dash-bottle-forecast"
+                                          x="${bx}" y="${fcY}"
+                                          width="${bottleW}" height="${fcH}"
+                                          rx="${bottleW / 6}"
+                                          fill="${pvColor}" fill-opacity="0.25"/>
+                                ` : A}
+
+                                <!-- Observed fill (solid) on top -->
+                                ${obsH > 0 ? w`
+                                    <rect class="dash-bottle-observed"
+                                          x="${bx}" y="${obsY}"
+                                          width="${bottleW}" height="${obsH}"
+                                          rx="${bottleW / 6}"
+                                          fill="${pvColor}" fill-opacity="0.85"/>
+                                ` : A}
+
+                                <!-- Highlight reflection (subtle vertical strip) -->
+                                <rect class="dash-bottle-shine"
+                                      x="${bx + bottleW * 0.15}" y="${by + 4}"
+                                      width="${bottleW * 0.12}" height="${bH - 8}"
+                                      rx="${bottleW / 12}"
+                                      fill="white" fill-opacity="0.08"/>
+
+                                <!-- Day label -->
+                                <text class="dash-bottle-day"
+                                      x="${cx}" y="${by + bH + 18}"
+                                      text-anchor="middle">${dayLabel(d2.dayMs)}</text>
+                                <text class="dash-bottle-kwh"
+                                      x="${cx}" y="${by + bH + 36}"
+                                      text-anchor="middle">${this._formatLocalisedNumber(d2.forecast, 1)}</text>
+                            </g>
+                        `;
+    })}
+                </svg>
+            </section>
+        `;
+  }
+  //--------------------------------------- Section: Demain (tomorrow)
+  _computeTomorrow() {
+    const HOUR_MS = 36e5;
+    const today0 = /* @__PURE__ */ new Date();
+    today0.setHours(0, 0, 0, 0);
+    const tomorrowMs = today0.getTime() + 24 * HOUR_MS;
+    const endMs = tomorrowMs + 24 * HOUR_MS;
+    const series = this._chartSeries;
+    const coords = this._getHomeCoords();
+    const k2 = this._pvCalibK();
+    let totalKwh = 0;
+    let peakHourTs = null;
+    let peakW = 0;
+    let cloudSum = 0;
+    let cloudWeight = 0;
+    if (series && coords) {
+      for (let i2 = 0; i2 < series.times.length; i2++) {
+        const tMs = series.times[i2].getTime();
+        if (tMs < tomorrowMs || tMs >= endMs) continue;
+        const cloud = series.cloud[i2] ?? 0;
+        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud);
+        if (pct > 0 && k2 !== null) {
+          const watts = pct * k2;
+          totalKwh += watts / 1e3;
+          if (watts > peakW) {
+            peakW = watts;
+            peakHourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+          }
+          cloudSum += cloud * pct;
+          cloudWeight += pct;
+        }
+      }
+    }
+    const avgCloud = cloudWeight > 0 ? cloudSum / cloudWeight : 0;
+    return { totalKwh, peakHourTs, peakW, avgCloud };
+  }
+  _renderDashTomorrowSection(t2, sunColor, cloudColor) {
+    const data = this._computeTomorrow();
+    const HOUR_MS = 36e5;
+    const W = 600;
+    const H2 = 200;
+    const peakHour = data.peakHourTs !== null ? new Date(data.peakHourTs).getHours() + 0.5 : 12;
+    const sunX = (Math.max(6, Math.min(20, peakHour)) - 6) / 14 * (W * 0.8) + W * 0.1;
+    const cloudFactor = Math.max(0, Math.min(1, data.avgCloud / 100));
+    const sunY = 60 + cloudFactor * 40;
+    const sunR = 16 + Math.min(22, data.totalKwh / 25 * 22);
+    const cloudOpacity = Math.max(0.15, Math.min(0.85, cloudFactor));
+    const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    }) : "";
+    return b`
+            <section class="dash-section dash-tomorrow">
+                <header class="dash-section-header">
+                    <ha-icon class="dash-section-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
+                    <span class="dash-section-label">${t2.detail.tomorrowLabel}</span>
+                    <span class="dash-section-trailing dash-section-trailing-forecast">
+                        <span class="dash-stat-value-sm">≈ ${this._formatLocalisedNumber(data.totalKwh, 1)}</span>
+                        <span class="dash-stat-unit-sm">kWh</span>
+                    </span>
+                </header>
+                <svg class="dash-tomorrow-scene" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="xMidYMid meet">
+                    <!-- Sky gradient backdrop -->
+                    <defs>
+                        <linearGradient id="dash-sky-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="${sunColor}" stop-opacity="${0.04 + (1 - cloudFactor) * 0.1}"/>
+                            <stop offset="100%" stop-color="${cloudColor}" stop-opacity="${0.05 + cloudFactor * 0.2}"/>
+                        </linearGradient>
+                        <radialGradient id="dash-sun-glow-${this._instanceId}" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%"  stop-color="${sunColor}" stop-opacity="0.55"/>
+                            <stop offset="60%" stop-color="${sunColor}" stop-opacity="0.20"/>
+                            <stop offset="100%" stop-color="${sunColor}" stop-opacity="0"/>
+                        </radialGradient>
+                    </defs>
+
+                    <!-- Sky backdrop -->
+                    <rect x="0" y="0" width="${W}" height="${H2 * 0.85}" fill="url(#dash-sky-grad-${this._instanceId})"/>
+
+                    <!-- Sun glow halo -->
+                    <circle cx="${sunX}" cy="${sunY}" r="${sunR * 2.2}" fill="url(#dash-sun-glow-${this._instanceId})"/>
+                    <!-- Sun disc -->
+                    <circle class="dash-sun-disc" cx="${sunX}" cy="${sunY}" r="${sunR}" fill="${sunColor}"/>
+
+                    <!-- Stylised cloud puffs (two clusters at variable opacity) -->
+                    <g class="dash-clouds" fill="${cloudColor}" opacity="${cloudOpacity}">
+                        <ellipse cx="${W * 0.22}" cy="${H2 * 0.32}" rx="58" ry="20"/>
+                        <circle  cx="${W * 0.16}" cy="${H2 * 0.3}" r="22"/>
+                        <circle  cx="${W * 0.28}" cy="${H2 * 0.28}" r="18"/>
+                        <ellipse cx="${W * 0.78}" cy="${H2 * 0.22}" rx="70" ry="22"/>
+                        <circle  cx="${W * 0.72}" cy="${H2 * 0.2}" r="22"/>
+                        <circle  cx="${W * 0.84}" cy="${H2 * 0.18}" r="20"/>
+                    </g>
+
+                    <!-- Wavy horizon line -->
+                    <path class="dash-horizon"
+                          d="M 0 ${H2 * 0.85} Q ${W * 0.25} ${H2 * 0.83} ${W * 0.5} ${H2 * 0.85} T ${W} ${H2 * 0.85} L ${W} ${H2} L 0 ${H2} Z"
+                          fill="${sunColor}" fill-opacity="0.08"/>
+                    <path class="dash-horizon-line"
+                          d="M 0 ${H2 * 0.85} Q ${W * 0.25} ${H2 * 0.83} ${W * 0.5} ${H2 * 0.85} T ${W} ${H2 * 0.85}"
+                          stroke="${sunColor}" stroke-opacity="0.4" fill="none" stroke-width="1.5"/>
+                </svg>
+                ${data.peakHourTs !== null ? b`
+                    <div class="dash-tomorrow-caption">${t2.detail.tomorrowPeak} ${peakTimeLabel}</div>
+                ` : A}
+            </section>
+        `;
+  }
+  //--------------------------------------- Section: Batterie (battery)
+  _computeBatteryToday() {
+    const today0 = /* @__PURE__ */ new Date();
+    today0.setHours(0, 0, 0, 0);
+    const startMs = today0.getTime();
+    const endMs = Date.now();
+    let chargedKwh = 0;
+    let dischargedKwh = 0;
+    const hist = this._batteryPowerHistory;
+    if (hist && hist.times.length >= 2) {
+      for (let i2 = 1; i2 < hist.times.length; i2++) {
+        const tMs = hist.times[i2].getTime();
+        if (tMs < startMs || tMs > endMs) continue;
+        const dtH = (tMs - hist.times[i2 - 1].getTime()) / 36e5;
+        if (dtH <= 0 || dtH > 6) continue;
+        const wAvg = (this._pvNormalizeToWatts(hist.values[i2 - 1], this._batteryPowerUnit) + this._pvNormalizeToWatts(hist.values[i2], this._batteryPowerUnit)) / 2;
+        const kwh = wAvg * dtH / 1e3;
+        if (kwh > 0) chargedKwh += kwh;
+        else dischargedKwh += -kwh;
+      }
+    }
+    return {
+      socNow: this._batterySoc,
+      chargedKwh,
+      dischargedKwh
+    };
+  }
+  _renderDashBatterySection(t2, batteryColor) {
+    const data = this._computeBatteryToday();
+    const soc = data.socNow ?? 0;
+    const W = 200;
+    const H2 = 240;
+    const capW = 40, capH = 14;
+    const cellX = 60, cellY = 30;
+    const cellW = 80, cellH = H2 - cellY - 20;
+    const liquidH = Math.max(0, Math.min(100, soc)) / 100 * (cellH - 6);
+    const liquidY = cellY + cellH - 3 - liquidH;
+    const liquidX = cellX + 3;
+    const liquidW = cellW - 6;
+    return b`
+            <section class="dash-section dash-battery">
+                <header class="dash-section-header">
+                    <ha-icon class="dash-section-icon" icon="mdi:battery" style="color:${batteryColor}"></ha-icon>
+                    <span class="dash-section-label">${t2.detail.batteryLabel}</span>
+                    <span class="dash-section-trailing">
+                        <span class="dash-stat-value-sm">${Math.round(soc)}</span>
+                        <span class="dash-stat-unit-sm">%</span>
+                    </span>
+                </header>
+                <div class="dash-battery-body">
+                    <svg class="dash-battery-vessel" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="dash-batt-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%"   stop-color="${batteryColor}" stop-opacity="0.95"/>
+                                <stop offset="100%" stop-color="${batteryColor}" stop-opacity="0.6"/>
+                            </linearGradient>
+                        </defs>
+                        <!-- Battery cap -->
+                        <rect class="dash-batt-cap"
+                              x="${(W - capW) / 2}" y="${cellY - capH}"
+                              width="${capW}" height="${capH}" rx="3"/>
+                        <!-- Battery cell -->
+                        <rect class="dash-batt-shell"
+                              x="${cellX}" y="${cellY}"
+                              width="${cellW}" height="${cellH}" rx="8"/>
+                        <!-- Liquid fill -->
+                        ${liquidH > 0 ? w`
+                            <rect class="dash-batt-liquid"
+                                  x="${liquidX}" y="${liquidY}"
+                                  width="${liquidW}" height="${liquidH}"
+                                  rx="5"
+                                  fill="url(#dash-batt-grad-${this._instanceId})"/>
+                            <!-- Wave on top of liquid -->
+                            <path class="dash-batt-wave"
+                                  d="M ${liquidX} ${liquidY}
+                                     Q ${liquidX + liquidW * 0.25} ${liquidY - 4}
+                                       ${liquidX + liquidW * 0.5} ${liquidY}
+                                     T ${liquidX + liquidW} ${liquidY}
+                                     L ${liquidX + liquidW} ${liquidY + 6}
+                                     L ${liquidX} ${liquidY + 6} Z"
+                                  fill="${batteryColor}" fill-opacity="0.95"/>
+                        ` : A}
+                    </svg>
+                    <div class="dash-battery-flows">
+                        <div class="dash-battery-flow dash-battery-flow-charge">
+                            <ha-icon icon="mdi:arrow-up-bold"></ha-icon>
+                            <div>
+                                <div class="dash-flow-value">${this._formatLocalisedNumber(data.chargedKwh, 1)} kWh</div>
+                                <div class="dash-flow-label">${t2.detail.batteryCharged}</div>
+                            </div>
+                        </div>
+                        <div class="dash-battery-flow dash-battery-flow-discharge">
+                            <ha-icon icon="mdi:arrow-down-bold"></ha-icon>
+                            <div>
+                                <div class="dash-flow-value">${this._formatLocalisedNumber(data.dischargedKwh, 1)} kWh</div>
+                                <div class="dash-flow-label">${t2.detail.batteryDischarged}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        `;
   }
   _onExitDetail(e2) {
     e2.stopPropagation();

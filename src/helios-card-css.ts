@@ -175,24 +175,31 @@ export const heliosCardStyles = css`
     }
 
     /*  Detail panel, takes over the card while detail mode is on.
-        Click anywhere on it exits back to the resting view. The
-        backdrop is a soft scrim so the basemap behind stays
-        readable (the camera is zoomed + tilted underneath) without
-        competing with the panel content. */
+        Hosts the four-section dashboard (today / week / tomorrow /
+        battery). The backdrop is a soft scrim + blur so the basemap
+        behind stays readable (the camera is zoomed and pitched
+        underneath) without competing with the panel content. The
+        panel itself no longer dismisses on a stray click; the
+        dedicated close button in the corner handles exit, since the
+        sections are scrollable on small viewports and a global
+        click-to-dismiss would close the panel on every internal
+        touch. */
     .detail-panel
     {
         position: absolute;
         inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(0, 0, 0, 0.45);
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-        cursor: pointer;
+        background:
+            linear-gradient(180deg,
+                rgba(10, 14, 24, 0.86) 0%,
+                rgba(20, 26, 42, 0.92) 100%);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
         z-index: 60;
         opacity: 0;
         animation: detail-panel-fade-in 0.35s ease forwards;
+        display: flex;
+        flex-direction: column;
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
     }
     @keyframes detail-panel-fade-in
     {
@@ -200,51 +207,356 @@ export const heliosCardStyles = css`
         to   { opacity: 1; }
     }
 
+    /*  Light-theme panel: the Fiord-tinted dark scrim from the base
+        rule reads too heavy against an otherwise pale dashboard.
+        Switch to a near-white scrim with a hint of warmth so the
+        sections still pop without going full noir. */
+    ha-card.theme-light .detail-panel
+    {
+        background:
+            linear-gradient(180deg,
+                rgba(248, 250, 254, 0.92) 0%,
+                rgba(232, 238, 248, 0.96) 100%);
+        color: #15202b;
+    }
+
+    .detail-close-btn
+    {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width:  32px;
+        height: 32px;
+        padding: 0;
+        background: rgba(255, 255, 255, 0.10);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 50%;
+        color: rgba(255, 255, 255, 0.85);
+        cursor: pointer;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s, transform 0.15s;
+    }
+    .detail-close-btn:hover  { background: rgba(255, 255, 255, 0.18); transform: scale(1.05); }
+    .detail-close-btn:active { background: rgba(255, 255, 255, 0.25); transform: scale(0.95); }
+    .detail-close-btn ha-icon { --mdc-icon-size: 20px; color: inherit; }
+    ha-card.theme-light .detail-close-btn
+    {
+        background: rgba(15, 23, 42, 0.06);
+        border-color: rgba(15, 23, 42, 0.15);
+        color: rgba(15, 23, 42, 0.75);
+    }
+    ha-card.theme-light .detail-close-btn:hover  { background: rgba(15, 23, 42, 0.12); }
+
     .detail-panel-inner
     {
-        text-align: center;
-        color: #ffffff;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        padding: 24px 32px;
-        max-width: 80%;
-        pointer-events: none;
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 24px 28px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+        color: #e8eef8;
+    }
+    ha-card.theme-light .detail-panel-inner
+    {
+        color: #1c2733;
     }
 
-    .detail-panel-icon
+    /*  Each section is a self-contained block. Header on top
+        (icon + small-caps label + optional trailing big number),
+        then the illustration that IS the data underneath. */
+    .dash-section
     {
-        --mdc-icon-size: 56px;
-        color: #ffffff;
-        opacity: 0.85;
-        margin-bottom: 12px;
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        opacity: 0;
+        transform: translateY(8px);
+        animation: dash-section-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    .dash-section:nth-of-type(1) { animation-delay: 0.05s; }
+    .dash-section:nth-of-type(2) { animation-delay: 0.15s; }
+    .dash-section:nth-of-type(3) { animation-delay: 0.25s; }
+    .dash-section:nth-of-type(4) { animation-delay: 0.35s; }
+    @keyframes dash-section-in
+    {
+        to { opacity: 1; transform: translateY(0); }
     }
 
-    .detail-panel-title
+    .dash-section-header
     {
-        font-size: 1.5rem;
-        font-weight: 300;
-        letter-spacing: 4px;
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+    }
+    .dash-section-icon
+    {
+        --mdc-icon-size: 18px;
+        align-self: center;
+    }
+    .dash-section-label
+    {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 2.5px;
         text-transform: uppercase;
-        margin-bottom: 8px;
+        opacity: 0.65;
+    }
+    .dash-section-trailing
+    {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 4px;
+    }
+    .dash-section-trailing-forecast
+    {
+        font-style: italic;
+        opacity: 0.85;
+    }
+    .dash-stat-value
+    {
+        font-size: 44px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        letter-spacing: -0.5px;
+    }
+    .dash-stat-unit
+    {
+        font-size: 18px;
+        font-weight: 500;
+        opacity: 0.65;
+        margin-left: 4px;
+    }
+    .dash-stat-value-sm
+    {
+        font-size: 22px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+    }
+    .dash-stat-unit-sm
+    {
+        font-size: 12px;
+        font-weight: 500;
+        opacity: 0.65;
     }
 
-    .detail-panel-subtitle
-    {
-        font-size: 0.95rem;
-        opacity: 0.75;
-        margin-bottom: 24px;
-        font-weight: 300;
-    }
+    /*  Section: today                                                  */
 
-    .detail-panel-hint
+    .dash-today-body
     {
-        font-size: 0.8rem;
+        display: grid;
+        grid-template-columns: minmax(140px, 220px) 1fr;
+        gap: 16px;
+        align-items: stretch;
+    }
+    .dash-today-stats
+    {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+    }
+    .dash-today-produced
+    {
+        display: inline-flex;
+        align-items: baseline;
+    }
+    .dash-today-produced-label
+    {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
         opacity: 0.55;
+    }
+    .dash-today-forecast
+    {
+        margin-top: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        opacity: 0.75;
+        font-variant-numeric: tabular-nums;
+        font-style: italic;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 6px;
+    }
+    .dash-forecast-arrow { font-size: 16px; opacity: 0.7; }
+    .dash-today-forecast-suffix
+    {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.7;
+        font-style: normal;
+    }
+    .dash-today-curve
+    {
+        width: 100%;
+        height: 180px;
+        display: block;
+    }
+    .dash-today-curve .dash-curve-obs-line { stroke-width: 2;   stroke-linecap: round; stroke-linejoin: round; }
+    .dash-today-curve .dash-curve-fc-line  { stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 4 3; opacity: 0.65; }
+    .dash-today-curve .dash-curve-fc-area  { opacity: 0.45; }
+    .dash-today-curve .dash-now-line       { stroke: currentColor; stroke-width: 1; opacity: 0.35; }
+    .dash-today-curve .dash-peak-tether    { stroke: currentColor; stroke-width: 1; opacity: 0.35; stroke-dasharray: 2 2; }
+    .dash-today-curve .dash-peak-chip text { fill: currentColor; font-size: 10px; font-weight: 700; opacity: 0.85; font-variant-numeric: tabular-nums; }
+    .dash-today-curve .dash-hour-tick      { fill: currentColor; font-size: 10px; opacity: 0.4; font-variant-numeric: tabular-nums; }
+
+    /*  Section: week                                                   */
+
+    .dash-week-bottles
+    {
+        width: 100%;
+        height: 220px;
+        display: block;
+    }
+    .dash-week-bottles .dash-bottle-shell
+    {
+        fill: rgba(255, 255, 255, 0.04);
+        stroke: rgba(255, 255, 255, 0.18);
+        stroke-width: 1;
+    }
+    ha-card.theme-light .dash-week-bottles .dash-bottle-shell
+    {
+        fill: rgba(15, 23, 42, 0.04);
+        stroke: rgba(15, 23, 42, 0.18);
+    }
+    .dash-week-bottles .dash-bottle.is-future .dash-bottle-shell
+    {
+        stroke-dasharray: 3 2;
+    }
+    .dash-week-bottles .dash-bottle-day
+    {
+        fill: currentColor;
+        font-size: 11px;
+        font-weight: 600;
+        opacity: 0.7;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .dash-week-bottles .dash-bottle-kwh
+    {
+        fill: currentColor;
+        font-size: 12px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .dash-week-bottles .dash-bottle.is-today .dash-bottle-day,
+    .dash-week-bottles .dash-bottle.is-today .dash-bottle-kwh
+    {
+        opacity: 1;
+    }
+    .dash-week-bottles .dash-bottle.is-future .dash-bottle-day,
+    .dash-week-bottles .dash-bottle.is-future .dash-bottle-kwh
+    {
+        opacity: 0.55;
+        font-style: italic;
+    }
+
+    /*  Section: tomorrow                                               */
+
+    .dash-tomorrow-scene
+    {
+        width: 100%;
+        height: 200px;
+        display: block;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .dash-tomorrow-scene .dash-sun-disc
+    {
+        filter: drop-shadow(0 0 6px currentColor);
+    }
+    .dash-tomorrow-caption
+    {
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        opacity: 0.75;
+        text-align: center;
+        font-style: italic;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*  Section: battery                                                */
+
+    .dash-battery-body
+    {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 24px;
+        align-items: center;
+    }
+    .dash-battery-vessel
+    {
+        width: 200px;
+        height: 240px;
+        display: block;
+    }
+    .dash-battery-vessel .dash-batt-shell,
+    .dash-battery-vessel .dash-batt-cap
+    {
+        fill: rgba(255, 255, 255, 0.04);
+        stroke: rgba(255, 255, 255, 0.30);
+        stroke-width: 1.5;
+    }
+    ha-card.theme-light .dash-battery-vessel .dash-batt-shell,
+    ha-card.theme-light .dash-battery-vessel .dash-batt-cap
+    {
+        fill: rgba(15, 23, 42, 0.04);
+        stroke: rgba(15, 23, 42, 0.30);
+    }
+    .dash-battery-flows
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .dash-battery-flow
+    {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .dash-battery-flow ha-icon { --mdc-icon-size: 20px; }
+    .dash-battery-flow-charge    ha-icon { color: #22c55e; }
+    .dash-battery-flow-discharge ha-icon { color: #ef4444; }
+    .dash-flow-value
+    {
+        font-size: 22px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+    }
+    .dash-flow-label
+    {
+        font-size: 11px;
+        font-weight: 500;
         letter-spacing: 1px;
         text-transform: uppercase;
-        font-weight: 300;
+        opacity: 0.6;
+        margin-top: 2px;
+    }
+
+    /*  Mobile / narrow card: stack the today + battery 2-column
+        layouts vertically so the illustrations stay readable. */
+    @media (max-width: 520px)
+    {
+        .dash-today-body,
+        .dash-battery-body
+        {
+            grid-template-columns: 1fr;
+        }
+        .dash-battery-vessel { margin: 0 auto; }
     }
 
 

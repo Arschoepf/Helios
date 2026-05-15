@@ -31,7 +31,30 @@ export interface Translations
     {
         title:     string;       //"Detailed view" / "Vue détaillée"
         subtitle:  string;       //placeholder body line
-        exitHint:  string;       //"Click anywhere to exit"
+        exitHint:  string;       //close-button aria-label
+
+        //Section labels and short captions for the detail-mode
+        //dashboard. Each section is one factual block:
+        //  todayLabel      , top of the today section
+        //  todayProduced   , subtitle under the produced kWh value
+        //  todayForecast   , trailing text after the projected total
+        //                    (e.g. "prévu fin de journée")
+        //  weekLabel       , top of the week-bottles section
+        //  tomorrowLabel   , top of the tomorrow horizon section
+        //  tomorrowPeak    , prefix before the peak time chip
+        //                    (e.g. "pic prévu vers")
+        //  batteryLabel    , top of the battery vessel section
+        //  batteryCharged  , label under the charge total
+        //  batteryDischarged , label under the discharge total
+        todayLabel:        string;
+        todayProduced:     string;
+        todayForecast:     string;
+        weekLabel:         string;
+        tomorrowLabel:     string;
+        tomorrowPeak:      string;
+        batteryLabel:      string;
+        batteryCharged:    string;
+        batteryDischarged: string;
     };
 
     editor:

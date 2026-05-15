@@ -3689,24 +3689,15 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 <!--  Detail dashboard overlay, takes over the card
-                      while _detailMode is on. Click anywhere on the
-                      panel exits back to the resting view. The CSS
-                      class .detail-active on ha-card fades out every
-                      pre-existing overlay so the panel reads as the
-                      sole content while open.  -->
-                ${this._detailMode ? html`
-                    <div
-                        class="detail-panel"
-                        @click="${this._onExitDetail}"
-                    >
-                        <div class="detail-panel-inner">
-                            <ha-icon class="detail-panel-icon" icon="mdi:home-analytics"></ha-icon>
-                            <div class="detail-panel-title">${pickTranslations(this.hass?.language).detail.title}</div>
-                            <div class="detail-panel-subtitle">${pickTranslations(this.hass?.language).detail.subtitle}</div>
-                            <div class="detail-panel-hint">${pickTranslations(this.hass?.language).detail.exitHint}</div>
-                        </div>
-                    </div>
-                ` : nothing}
+                      while _detailMode is on. The CSS class
+                      .detail-active on ha-card fades out every
+                      pre-existing overlay so the panel reads as
+                      the sole content while open. The panel itself
+                      no longer dismisses on a content click (that
+                      would fire on every internal scroll / tap),
+                      a dedicated close button in the corner handles
+                      exit.  -->
+                ${this._detailMode ? this._renderDashboard() : nothing}
 
             </ha-card>
         `;
@@ -3768,6 +3759,773 @@ export class HeliosCard extends LitElement
         this._detailMode = true;
         this._engine?.setDetailMode(true);
     }
+
+    //----------------------------------------------------------------- Dashboard
+
+    //Renders the detail-mode panel: 4 stacked sections (today, week,
+    //tomorrow, battery) plus a close button. Each section uses one
+    //big SVG illustration that IS the data; numbers are annotations
+    //around the illustration, not the centerpiece. Battery section is
+    //skipped silently when neither battery entity is configured.
+    //
+    //The panel uses the configured colour palette (sun / cloud / pv /
+    //battery) so the dashboard reads as the same product the user
+    //already knows from the card itself.
+    private _renderDashboard(): TemplateResult
+    {
+        const t        = pickTranslations(this.hass?.language);
+        const sunColor     = cfgHex(this.config?.['sun-color'],     DEFAULT_SUN_COLOR_HEX);
+        const cloudColor   = cfgHex(this.config?.['cloud-color'],   DEFAULT_CLOUD_COLOR_HEX);
+        const pvColor      = cfgHex(this.config?.['pv-color'],      DEFAULT_PV_COLOR_HEX);
+        const batteryColor = cfgHex(this.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
+
+        const hasBattery =
+            String(this.config?.['battery-soc-entity']   ?? '').trim() !== ''
+         || String(this.config?.['battery-power-entity'] ?? '').trim() !== '';
+
+        return html`
+            <div class="detail-panel">
+                <button
+                    class="detail-close-btn"
+                    @click="${this._onExitDetail}"
+                    aria-label="${t.detail.exitHint}"
+                >
+                    <ha-icon icon="mdi:close"></ha-icon>
+                </button>
+                <div class="detail-panel-inner">
+                    ${this._renderDashTodaySection(t, pvColor, sunColor)}
+                    ${this._renderDashWeekSection(t, pvColor)}
+                    ${this._renderDashTomorrowSection(t, sunColor, cloudColor)}
+                    ${hasBattery ? this._renderDashBatterySection(t, batteryColor) : nothing}
+                </div>
+            </div>
+        `;
+    }
+
+    //--------------------------------------- Section: Aujourd'hui (today)
+
+    //Computes hourly production for today, splitting observed (past
+    //+ now) from forecast (now → midnight). Returns one bin per hour
+    //of the day [0..23], with watts at the hour's midpoint. Bins
+    //missing observed data fall back to the forecast value where
+    //available; truly empty bins (no kWp configured + before sensor
+    //has started) get 0 W.
+    private _computeTodayHourly(): {
+        bins:        Array<{ hourTs: number; observedW: number | null; forecastW: number | null }>;
+        peakHourTs:  number | null;
+        peakW:       number;
+        producedKwh: number;
+        forecastKwh: number;   //today's projected total at end-of-day
+    }
+    {
+        const HOUR_MS = 3_600_000;
+        const today0  = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const startMs = today0.getTime();
+        const endMs   = startMs + 24 * HOUR_MS;
+        const nowMs   = Date.now();
+
+        const bins: Array<{
+            hourTs: number;
+            observedW: number | null;
+            forecastW: number | null;
+        }> = [];
+        for (let h = 0; h < 24; h++)
+        {
+            bins.push({
+                hourTs:    startMs + h * HOUR_MS,
+                observedW: null,
+                forecastW: null
+            });
+        }
+
+        //Pass 1: observed. Aggregate _pvHistory into hourly buckets.
+        //Same approach the chart uses (cumulative-energy sensors get
+        //differentiated, power sensors are averaged).
+        const hist = this._pvHistory;
+        if (hist && hist.times.length > 0)
+        {
+            const unit = (this._pvUnit || '').toLowerCase();
+            const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+            let times:  Date[]   = hist.times;
+            let values: number[] = hist.values;
+            if (isCumulativeEnergy && times.length >= 2)
+            {
+                const dT: Date[] = [];
+                const dV: number[] = [];
+                for (let i = 1; i < times.length; i++)
+                {
+                    const dtH = (times[i].getTime() - times[i - 1].getTime()) / 3_600_000;
+                    if (dtH <= 0 || dtH > 6) continue;
+                    const dv  = values[i] - values[i - 1];
+                    if (dv < 0) continue;
+                    dT.push(times[i]);
+                    dV.push(dv / dtH);
+                }
+                times = dT;
+                values = dV;
+            }
+            const sums   = new Map<number, number>();
+            const counts = new Map<number, number>();
+            for (let i = 0; i < times.length; i++)
+            {
+                const tMs = times[i].getTime();
+                if (tMs < startMs || tMs >= endMs) continue;
+                const w = this._pvNormalizeToWatts(values[i], this._pvUnit);
+                if (!isFinite(w)) continue;
+                const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+                sums  .set(hourTs, (sums  .get(hourTs) ?? 0) + w);
+                counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
+            }
+            for (let h = 0; h < 24; h++)
+            {
+                const sum = sums  .get(bins[h].hourTs);
+                const cnt = counts.get(bins[h].hourTs);
+                if (sum !== undefined && cnt && cnt > 0)
+                {
+                    bins[h].observedW = sum / cnt;
+                }
+            }
+        }
+
+        //Pass 2: forecast. Only when peak power is configured. Fill
+        //in every hour bin (so we can show the full curve), but the
+        //caller will combine observed + forecast for the area split.
+        const k      = this._pvCalibK();
+        const series = this._chartSeries;
+        const coords = this._getHomeCoords();
+        if (k !== null && k > 0 && series && coords)
+        {
+            for (let i = 0; i < series.times.length; i++)
+            {
+                const tMs = series.times[i].getTime();
+                if (tMs < startMs || tMs >= endMs) continue;
+                const cloud = series.cloud[i] ?? 0;
+                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud);
+                if (pct < 0) continue;
+                const watts = pct * k;
+                const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+                const idx = (hourTs - startMs) / HOUR_MS;
+                if (idx >= 0 && idx < 24)
+                {
+                    bins[idx].forecastW = watts;
+                }
+            }
+        }
+
+        //Aggregate: peak (across all bins, taking observed > forecast),
+        //produced kWh (sum of observed × 1h), forecast end-of-day
+        //(observed past + forecast future).
+        let peakW = 0;
+        let peakHourTs: number | null = null;
+        let producedKwh = 0;
+        let forecastKwh = 0;
+        for (const b of bins)
+        {
+            const w = b.observedW ?? b.forecastW ?? 0;
+            if (w > peakW) { peakW = w; peakHourTs = b.hourTs; }
+
+            if (b.observedW !== null) producedKwh += b.observedW / 1000;
+
+            if (b.hourTs + HOUR_MS <= nowMs)
+            {
+                //Past hour: count observed if available, else nothing
+                //(no forecast for the past).
+                if (b.observedW !== null) forecastKwh += b.observedW / 1000;
+            }
+            else if (b.hourTs > nowMs)
+            {
+                //Future hour: count forecast if available.
+                if (b.forecastW !== null) forecastKwh += b.forecastW / 1000;
+            }
+            else
+            {
+                //Hour straddling "now": count observed if available,
+                //fall back to forecast (so the running total covers
+                //the whole hour).
+                forecastKwh += (b.observedW ?? b.forecastW ?? 0) / 1000;
+            }
+        }
+
+        return { bins, peakHourTs, peakW, producedKwh, forecastKwh };
+    }
+
+    private _renderDashTodaySection(
+        t:        ReturnType<typeof pickTranslations>,
+        pvColor:  string,
+        sunColor: string
+    ): TemplateResult
+    {
+        const data = this._computeTodayHourly();
+        const HOUR_MS = 3_600_000;
+        const today0  = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const startMs = today0.getTime();
+        const nowMs   = Date.now();
+
+        //SVG canvas: 600 × 180. Hour bins 0..23 mapped to 0..600 px.
+        const W = 600;
+        const H = 180;
+        const padTop = 20;
+        const padBot = 30;
+        const usableH = H - padTop - padBot;
+
+        //Y-scale: peak watts → top of usable area. Reserve 15 % at
+        //the top for the peak chip.
+        const yMax = Math.max(100, data.peakW * 1.15);
+        const xOf = (hourTs: number): number =>
+            ((hourTs - startMs) / HOUR_MS) * (W / 24) + (W / 24) / 2;
+        const yOf = (w: number): number =>
+            padTop + usableH - (w / yMax) * usableH;
+
+        //Build observed + forecast paths separately so we can stroke
+        //and fill them with different styles (solid vs dashed).
+        const obsPoints: Array<[number, number]> = [];
+        const fcPoints:  Array<[number, number]> = [];
+        for (const b of data.bins)
+        {
+            const x = xOf(b.hourTs);
+            if (b.observedW !== null) obsPoints.push([x, yOf(b.observedW)]);
+            if (b.hourTs > nowMs && b.forecastW !== null)
+            {
+                fcPoints.push([x, yOf(b.forecastW)]);
+            }
+        }
+
+        //Smooth the curves with a Catmull-Rom-to-Bezier conversion so
+        //they feel painted rather than chiselled. Falls back to a
+        //plain polyline when there are too few points.
+        const smoothPath = (pts: Array<[number, number]>): string =>
+        {
+            if (pts.length < 2) return '';
+            if (pts.length === 2)
+            {
+                return `M ${pts[0][0]},${pts[0][1]} L ${pts[1][0]},${pts[1][1]}`;
+            }
+            let d = `M ${pts[0][0]},${pts[0][1]}`;
+            for (let i = 0; i < pts.length - 1; i++)
+            {
+                const p0 = pts[Math.max(0, i - 1)];
+                const p1 = pts[i];
+                const p2 = pts[i + 1];
+                const p3 = pts[Math.min(pts.length - 1, i + 2)];
+                const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
+                const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
+                const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
+                const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
+                d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2[0]},${p2[1]}`;
+            }
+            return d;
+        };
+
+        //Filled-area variant: line path closed back to baseline.
+        const closedPath = (pts: Array<[number, number]>): string =>
+        {
+            if (pts.length < 2) return '';
+            const baseY = padTop + usableH;
+            return smoothPath(pts) + ` L ${pts[pts.length - 1][0]},${baseY} L ${pts[0][0]},${baseY} Z`;
+        };
+
+        const nowX = xOf(nowMs);
+        const peakX = data.peakHourTs !== null ? xOf(data.peakHourTs) : null;
+        const peakY = data.peakHourTs !== null ? yOf(data.peakW) : null;
+
+        const peakTimeLabel = data.peakHourTs !== null
+            ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
+                hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+            })
+            : '';
+        const peakValueLabel = this._formatPvWatts(data.peakW);
+
+        return html`
+            <section class="dash-section dash-today">
+                <header class="dash-section-header">
+                    <ha-icon class="dash-section-icon" icon="mdi:weather-sunny" style="color:${sunColor}"></ha-icon>
+                    <span class="dash-section-label">${t.detail.todayLabel}</span>
+                </header>
+                <div class="dash-today-body">
+                    <div class="dash-today-stats">
+                        <div class="dash-today-produced">
+                            <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
+                            <span class="dash-stat-unit">kWh</span>
+                        </div>
+                        <div class="dash-today-produced-label">${t.detail.todayProduced}</div>
+                        ${data.forecastKwh > data.producedKwh + 0.05 ? html`
+                            <div class="dash-today-forecast">
+                                <span class="dash-forecast-arrow">→</span>
+                                <span>${this._formatLocalisedNumber(data.forecastKwh, 1)} kWh</span>
+                                <span class="dash-today-forecast-suffix">${t.detail.todayForecast}</span>
+                            </div>
+                        ` : nothing}
+                    </div>
+                    <svg class="dash-today-curve" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+                        <defs>
+                            <linearGradient id="dash-pv-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%"   stop-color="${pvColor}" stop-opacity="0.55"/>
+                                <stop offset="100%" stop-color="${pvColor}" stop-opacity="0"/>
+                            </linearGradient>
+                        </defs>
+
+                        <!-- Forecast area (faded) -->
+                        ${fcPoints.length >= 2 ? svg`
+                            <path class="dash-curve-fc-area" d="${closedPath(fcPoints)}" fill="url(#dash-pv-grad-${this._instanceId})"/>
+                            <path class="dash-curve-fc-line" d="${smoothPath(fcPoints)}" stroke="${pvColor}" fill="none"/>
+                        ` : nothing}
+
+                        <!-- Observed area (solid) -->
+                        ${obsPoints.length >= 2 ? svg`
+                            <path class="dash-curve-obs-area" d="${closedPath(obsPoints)}" fill="url(#dash-pv-grad-${this._instanceId})"/>
+                            <path class="dash-curve-obs-line" d="${smoothPath(obsPoints)}" stroke="${pvColor}" fill="none"/>
+                        ` : nothing}
+
+                        <!-- Now cursor -->
+                        ${(nowX >= 0 && nowX <= W) ? svg`
+                            <line class="dash-now-line" x1="${nowX}" y1="${padTop}" x2="${nowX}" y2="${padTop + usableH}"/>
+                        ` : nothing}
+
+                        <!-- Peak marker + chip -->
+                        ${(peakX !== null && peakY !== null && data.peakW > 50) ? svg`
+                            <circle class="dash-peak-dot" cx="${peakX}" cy="${peakY}" r="4" fill="${sunColor}"/>
+                            <line class="dash-peak-tether" x1="${peakX}" y1="${peakY}" x2="${peakX}" y2="${padTop - 6}"/>
+                            <g class="dash-peak-chip" transform="translate(${peakX}, ${padTop - 8})">
+                                <text text-anchor="middle">${peakTimeLabel} · ${peakValueLabel}</text>
+                            </g>
+                        ` : nothing}
+
+                        <!-- Hour ticks at the bottom -->
+                        ${[6, 9, 12, 15, 18].map(h => svg`
+                            <text class="dash-hour-tick" x="${xOf(startMs + h * HOUR_MS)}" y="${H - 8}" text-anchor="middle">${h}h</text>
+                        `)}
+                    </svg>
+                </div>
+            </section>
+        `;
+    }
+
+    //Helper: format a wattage value as a short label (W or kW).
+    private _formatPvWatts(w: number): string
+    {
+        if (!isFinite(w) || w < 0) return '0 W';
+        if (w >= 1000) return this._formatLocalisedNumber(w / 1000, 2) + ' kW';
+        return Math.round(w) + ' W';
+    }
+
+    //--------------------------------------- Section: La semaine (this week)
+
+    //Returns daily kWh totals for the 5-day window centred around
+    //today (2 past + today + 2 future, matching what the engine's
+    //weather forecast covers). Past + today integrate observed PV
+    //history; future days come from the kWp × clear-sky forecast.
+    private _computeWeekKwh(): Array<{
+        dayMs:    number;
+        observed: number;          //integrated observed PV for the day
+        forecast: number;          //projected total (today: observed + forecast remainder; future: forecast only)
+        isToday:  boolean;
+        isPast:   boolean;
+    }>
+    {
+        const HOUR_MS = 3_600_000;
+        const today0  = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const todayMs = today0.getTime();
+
+        //Reuse the daily kWh helper (already built for the timeline
+        //labels) and walk the 5-day window manually.
+        const allDaily = this._computeDailyKwhTotals();
+
+        const out: Array<{
+            dayMs:    number;
+            observed: number;
+            forecast: number;
+            isToday:  boolean;
+            isPast:   boolean;
+        }> = [];
+        for (let d = -2; d <= 2; d++)
+        {
+            const dayMs = todayMs + d * 24 * HOUR_MS;
+            const total = allDaily.get(dayMs) ?? 0;
+            const observed = (d <= 0) ? total : 0;
+            const forecast = total;
+            out.push({
+                dayMs,
+                observed,
+                forecast,
+                isToday: d === 0,
+                isPast:  d <  0
+            });
+        }
+        return out;
+    }
+
+    private _renderDashWeekSection(
+        t:       ReturnType<typeof pickTranslations>,
+        pvColor: string
+    ): TemplateResult
+    {
+        const days = this._computeWeekKwh();
+        const totalKwh = days.reduce((s, d) => s + (d.isPast || d.isToday ? d.observed : d.forecast), 0);
+        const maxKwh   = Math.max(...days.map(d => d.forecast), 1);
+
+        //SVG canvas: 600 × 200. 5 bottle slots evenly spaced.
+        const W = 600;
+        const H = 220;
+        const padTop = 20;
+        const padBot = 50;
+        const usableH = H - padTop - padBot;
+        const nDays = days.length;
+        const slotW = W / nDays;
+        const bottleW = Math.min(60, slotW * 0.55);
+
+        const dayLabel = (ms: number): string =>
+        {
+            const d = new Date(ms);
+            return d.toLocaleDateString([], { weekday: 'short' }).slice(0, 3);
+        };
+
+        return html`
+            <section class="dash-section dash-week">
+                <header class="dash-section-header">
+                    <ha-icon class="dash-section-icon" icon="mdi:calendar-week" style="color:${pvColor}"></ha-icon>
+                    <span class="dash-section-label">${t.detail.weekLabel}</span>
+                    <span class="dash-section-trailing">
+                        <span class="dash-stat-value-sm">${this._formatLocalisedNumber(totalKwh, 1)}</span>
+                        <span class="dash-stat-unit-sm">kWh</span>
+                    </span>
+                </header>
+                <svg class="dash-week-bottles" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+                    ${days.map((d, i) => {
+                        const cx       = slotW * i + slotW / 2;
+                        const bx       = cx - bottleW / 2;
+                        const by       = padTop;
+                        const bH       = usableH;
+                        const obsH     = (d.observed / maxKwh) * bH;
+                        const fcH      = (d.forecast / maxKwh) * bH;
+                        const obsY     = by + bH - obsH;
+                        const fcY      = by + bH - fcH;
+                        return svg`
+                            <g class="dash-bottle ${d.isToday ? 'is-today' : (d.isPast ? 'is-past' : 'is-future')}">
+                                <!-- Bottle outline -->
+                                <rect class="dash-bottle-shell"
+                                      x="${bx}" y="${by}"
+                                      width="${bottleW}" height="${bH}"
+                                      rx="${bottleW / 6}" />
+
+                                <!-- Forecast fill (pale) -->
+                                ${fcH > 0 ? svg`
+                                    <rect class="dash-bottle-forecast"
+                                          x="${bx}" y="${fcY}"
+                                          width="${bottleW}" height="${fcH}"
+                                          rx="${bottleW / 6}"
+                                          fill="${pvColor}" fill-opacity="0.25"/>
+                                ` : nothing}
+
+                                <!-- Observed fill (solid) on top -->
+                                ${obsH > 0 ? svg`
+                                    <rect class="dash-bottle-observed"
+                                          x="${bx}" y="${obsY}"
+                                          width="${bottleW}" height="${obsH}"
+                                          rx="${bottleW / 6}"
+                                          fill="${pvColor}" fill-opacity="0.85"/>
+                                ` : nothing}
+
+                                <!-- Highlight reflection (subtle vertical strip) -->
+                                <rect class="dash-bottle-shine"
+                                      x="${bx + bottleW * 0.15}" y="${by + 4}"
+                                      width="${bottleW * 0.12}" height="${bH - 8}"
+                                      rx="${bottleW / 12}"
+                                      fill="white" fill-opacity="0.08"/>
+
+                                <!-- Day label -->
+                                <text class="dash-bottle-day"
+                                      x="${cx}" y="${by + bH + 18}"
+                                      text-anchor="middle">${dayLabel(d.dayMs)}</text>
+                                <text class="dash-bottle-kwh"
+                                      x="${cx}" y="${by + bH + 36}"
+                                      text-anchor="middle">${this._formatLocalisedNumber(d.forecast, 1)}</text>
+                            </g>
+                        `;
+                    })}
+                </svg>
+            </section>
+        `;
+    }
+
+    //--------------------------------------- Section: Demain (tomorrow)
+
+    private _computeTomorrow(): {
+        totalKwh:   number;
+        peakHourTs: number | null;
+        peakW:      number;
+        avgCloud:   number;       //0..100, weighted by daylight hours
+    }
+    {
+        const HOUR_MS = 3_600_000;
+        const today0  = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const tomorrowMs = today0.getTime() + 24 * HOUR_MS;
+        const endMs      = tomorrowMs + 24 * HOUR_MS;
+
+        const series = this._chartSeries;
+        const coords = this._getHomeCoords();
+        const k      = this._pvCalibK();
+
+        let totalKwh = 0;
+        let peakHourTs: number | null = null;
+        let peakW = 0;
+        let cloudSum = 0;
+        let cloudWeight = 0;
+
+        if (series && coords)
+        {
+            for (let i = 0; i < series.times.length; i++)
+            {
+                const tMs = series.times[i].getTime();
+                if (tMs < tomorrowMs || tMs >= endMs) continue;
+                const cloud = series.cloud[i] ?? 0;
+                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud);
+                if (pct > 0 && k !== null)
+                {
+                    const watts = pct * k;
+                    totalKwh += watts / 1000;
+                    if (watts > peakW)
+                    {
+                        peakW = watts;
+                        peakHourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+                    }
+                    cloudSum    += cloud * pct;
+                    cloudWeight += pct;
+                }
+            }
+        }
+
+        const avgCloud = cloudWeight > 0 ? cloudSum / cloudWeight : 0;
+
+        return { totalKwh, peakHourTs, peakW, avgCloud };
+    }
+
+    private _renderDashTomorrowSection(
+        t:          ReturnType<typeof pickTranslations>,
+        sunColor:   string,
+        cloudColor: string
+    ): TemplateResult
+    {
+        const data = this._computeTomorrow();
+        const HOUR_MS = 3_600_000;
+
+        //Scene canvas: 600 × 200.
+        const W = 600;
+        const H = 200;
+        //Sun position: x mapped from peak hour (6h-20h window), y rises
+        //higher when the day is brighter (less cloudy).
+        const peakHour = data.peakHourTs !== null
+            ? (new Date(data.peakHourTs).getHours() + 0.5)
+            : 12;
+        //Map 6h..20h → 0.1*W .. 0.9*W
+        const sunX = ((Math.max(6, Math.min(20, peakHour)) - 6) / 14) * (W * 0.8) + W * 0.1;
+        //Sun y: higher (smaller y) when cloud cover is low
+        const cloudFactor = Math.max(0, Math.min(1, data.avgCloud / 100));
+        const sunY = 60 + cloudFactor * 40;
+        //Sun radius: bigger when expected production is higher.
+        //Reference: 25 kWh = max radius 38; 0 kWh = min 16.
+        const sunR = 16 + Math.min(22, (data.totalKwh / 25) * 22);
+
+        //Cloud opacity scales with avgCloud. Two stylised cloud puffs
+        //(ellipses + circles cluster).
+        const cloudOpacity = Math.max(0.15, Math.min(0.85, cloudFactor));
+
+        const peakTimeLabel = data.peakHourTs !== null
+            ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
+                hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+            })
+            : '';
+
+        return html`
+            <section class="dash-section dash-tomorrow">
+                <header class="dash-section-header">
+                    <ha-icon class="dash-section-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
+                    <span class="dash-section-label">${t.detail.tomorrowLabel}</span>
+                    <span class="dash-section-trailing dash-section-trailing-forecast">
+                        <span class="dash-stat-value-sm">≈ ${this._formatLocalisedNumber(data.totalKwh, 1)}</span>
+                        <span class="dash-stat-unit-sm">kWh</span>
+                    </span>
+                </header>
+                <svg class="dash-tomorrow-scene" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+                    <!-- Sky gradient backdrop -->
+                    <defs>
+                        <linearGradient id="dash-sky-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="${sunColor}" stop-opacity="${0.04 + (1 - cloudFactor) * 0.10}"/>
+                            <stop offset="100%" stop-color="${cloudColor}" stop-opacity="${0.05 + cloudFactor * 0.20}"/>
+                        </linearGradient>
+                        <radialGradient id="dash-sun-glow-${this._instanceId}" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%"  stop-color="${sunColor}" stop-opacity="0.55"/>
+                            <stop offset="60%" stop-color="${sunColor}" stop-opacity="0.20"/>
+                            <stop offset="100%" stop-color="${sunColor}" stop-opacity="0"/>
+                        </radialGradient>
+                    </defs>
+
+                    <!-- Sky backdrop -->
+                    <rect x="0" y="0" width="${W}" height="${H * 0.85}" fill="url(#dash-sky-grad-${this._instanceId})"/>
+
+                    <!-- Sun glow halo -->
+                    <circle cx="${sunX}" cy="${sunY}" r="${sunR * 2.2}" fill="url(#dash-sun-glow-${this._instanceId})"/>
+                    <!-- Sun disc -->
+                    <circle class="dash-sun-disc" cx="${sunX}" cy="${sunY}" r="${sunR}" fill="${sunColor}"/>
+
+                    <!-- Stylised cloud puffs (two clusters at variable opacity) -->
+                    <g class="dash-clouds" fill="${cloudColor}" opacity="${cloudOpacity}">
+                        <ellipse cx="${W * 0.22}" cy="${H * 0.32}" rx="58" ry="20"/>
+                        <circle  cx="${W * 0.16}" cy="${H * 0.30}" r="22"/>
+                        <circle  cx="${W * 0.28}" cy="${H * 0.28}" r="18"/>
+                        <ellipse cx="${W * 0.78}" cy="${H * 0.22}" rx="70" ry="22"/>
+                        <circle  cx="${W * 0.72}" cy="${H * 0.20}" r="22"/>
+                        <circle  cx="${W * 0.84}" cy="${H * 0.18}" r="20"/>
+                    </g>
+
+                    <!-- Wavy horizon line -->
+                    <path class="dash-horizon"
+                          d="M 0 ${H * 0.85} Q ${W * 0.25} ${H * 0.83} ${W * 0.5} ${H * 0.85} T ${W} ${H * 0.85} L ${W} ${H} L 0 ${H} Z"
+                          fill="${sunColor}" fill-opacity="0.08"/>
+                    <path class="dash-horizon-line"
+                          d="M 0 ${H * 0.85} Q ${W * 0.25} ${H * 0.83} ${W * 0.5} ${H * 0.85} T ${W} ${H * 0.85}"
+                          stroke="${sunColor}" stroke-opacity="0.4" fill="none" stroke-width="1.5"/>
+                </svg>
+                ${data.peakHourTs !== null ? html`
+                    <div class="dash-tomorrow-caption">${t.detail.tomorrowPeak} ${peakTimeLabel}</div>
+                ` : nothing}
+            </section>
+        `;
+    }
+
+    //--------------------------------------- Section: Batterie (battery)
+
+    private _computeBatteryToday(): {
+        socNow:        number | null;
+        chargedKwh:    number;
+        dischargedKwh: number;
+    }
+    {
+        const today0 = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const startMs = today0.getTime();
+        const endMs   = Date.now();
+
+        let chargedKwh    = 0;
+        let dischargedKwh = 0;
+
+        const hist = this._batteryPowerHistory;
+        if (hist && hist.times.length >= 2)
+        {
+            for (let i = 1; i < hist.times.length; i++)
+            {
+                const tMs = hist.times[i].getTime();
+                if (tMs < startMs || tMs > endMs) continue;
+                const dtH = (tMs - hist.times[i - 1].getTime()) / 3_600_000;
+                if (dtH <= 0 || dtH > 6) continue;
+                const wAvg = (this._pvNormalizeToWatts(hist.values[i - 1], this._batteryPowerUnit)
+                            + this._pvNormalizeToWatts(hist.values[i],     this._batteryPowerUnit)) / 2;
+                const kwh = (wAvg * dtH) / 1000;
+                if (kwh > 0)      chargedKwh    += kwh;
+                else              dischargedKwh += -kwh;
+            }
+        }
+
+        return {
+            socNow: this._batterySoc,
+            chargedKwh,
+            dischargedKwh
+        };
+    }
+
+    private _renderDashBatterySection(
+        t:            ReturnType<typeof pickTranslations>,
+        batteryColor: string
+    ): TemplateResult
+    {
+        const data = this._computeBatteryToday();
+        const soc  = data.socNow ?? 0;
+
+        //Vessel canvas: 200 × 240, drawn as a stylised vertical
+        //battery cell with a cap on top. Liquid rises from the
+        //bottom to soc%.
+        const W = 200;
+        const H = 240;
+        const capW = 40, capH = 14;
+        const cellX = 60, cellY = 30;
+        const cellW = 80, cellH = H - cellY - 20;
+        const liquidH = (Math.max(0, Math.min(100, soc)) / 100) * (cellH - 6);
+        const liquidY = cellY + cellH - 3 - liquidH;
+        const liquidX = cellX + 3;
+        const liquidW = cellW - 6;
+
+        return html`
+            <section class="dash-section dash-battery">
+                <header class="dash-section-header">
+                    <ha-icon class="dash-section-icon" icon="mdi:battery" style="color:${batteryColor}"></ha-icon>
+                    <span class="dash-section-label">${t.detail.batteryLabel}</span>
+                    <span class="dash-section-trailing">
+                        <span class="dash-stat-value-sm">${Math.round(soc)}</span>
+                        <span class="dash-stat-unit-sm">%</span>
+                    </span>
+                </header>
+                <div class="dash-battery-body">
+                    <svg class="dash-battery-vessel" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="dash-batt-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%"   stop-color="${batteryColor}" stop-opacity="0.95"/>
+                                <stop offset="100%" stop-color="${batteryColor}" stop-opacity="0.6"/>
+                            </linearGradient>
+                        </defs>
+                        <!-- Battery cap -->
+                        <rect class="dash-batt-cap"
+                              x="${(W - capW) / 2}" y="${cellY - capH}"
+                              width="${capW}" height="${capH}" rx="3"/>
+                        <!-- Battery cell -->
+                        <rect class="dash-batt-shell"
+                              x="${cellX}" y="${cellY}"
+                              width="${cellW}" height="${cellH}" rx="8"/>
+                        <!-- Liquid fill -->
+                        ${liquidH > 0 ? svg`
+                            <rect class="dash-batt-liquid"
+                                  x="${liquidX}" y="${liquidY}"
+                                  width="${liquidW}" height="${liquidH}"
+                                  rx="5"
+                                  fill="url(#dash-batt-grad-${this._instanceId})"/>
+                            <!-- Wave on top of liquid -->
+                            <path class="dash-batt-wave"
+                                  d="M ${liquidX} ${liquidY}
+                                     Q ${liquidX + liquidW * 0.25} ${liquidY - 4}
+                                       ${liquidX + liquidW * 0.5} ${liquidY}
+                                     T ${liquidX + liquidW} ${liquidY}
+                                     L ${liquidX + liquidW} ${liquidY + 6}
+                                     L ${liquidX} ${liquidY + 6} Z"
+                                  fill="${batteryColor}" fill-opacity="0.95"/>
+                        ` : nothing}
+                    </svg>
+                    <div class="dash-battery-flows">
+                        <div class="dash-battery-flow dash-battery-flow-charge">
+                            <ha-icon icon="mdi:arrow-up-bold"></ha-icon>
+                            <div>
+                                <div class="dash-flow-value">${this._formatLocalisedNumber(data.chargedKwh, 1)} kWh</div>
+                                <div class="dash-flow-label">${t.detail.batteryCharged}</div>
+                            </div>
+                        </div>
+                        <div class="dash-battery-flow dash-battery-flow-discharge">
+                            <ha-icon icon="mdi:arrow-down-bold"></ha-icon>
+                            <div>
+                                <div class="dash-flow-value">${this._formatLocalisedNumber(data.dischargedKwh, 1)} kWh</div>
+                                <div class="dash-flow-label">${t.detail.batteryDischarged}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        `;
+    }
+
+    //Per-card unique id used to namespace SVG <defs> ids so multiple
+    //Helios cards on the same dashboard don't clash on gradient /
+    //filter references.
+    private _instanceId = `h${Math.floor(Math.random() * 1e9).toString(36)}`;
 
     private _onExitDetail(e: Event): void
     {

@@ -13,8 +13,17 @@ export const pt: Translations = {
     {
         title:    'Vista detalhada',
         subtitle: 'Painel detalhado em breve.',
-        exitHint: 'Toca em qualquer lugar para sair'
-    },
+        exitHint: 'Toca em qualquer lugar para sair',
+    
+        todayLabel:         'Hoje',
+        todayProduced:      'produzido',
+        todayForecast:      'previsto fim do dia',
+        weekLabel:          'O período',
+        tomorrowLabel:      'Amanhã',
+        tomorrowPeak:       'pico previsto por volta das',
+        batteryLabel:       'Bateria',
+        batteryCharged:     'carregado hoje',
+        batteryDischarged:  'usado hoje',},
 
     editor:
     {

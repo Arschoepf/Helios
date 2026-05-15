@@ -22,8 +22,17 @@ export const no: Translations = {
     {
         title:    'Detaljvisning',
         subtitle: 'Detaljert dashbord kommer snart.',
-        exitHint: 'Trykk hvor som helst for å gå ut'
-    },
+        exitHint: 'Trykk hvor som helst for å gå ut',
+    
+        todayLabel:         'I dag',
+        todayProduced:      'produsert',
+        todayForecast:      'estimert dagsslutt',
+        weekLabel:          'Perioden',
+        tomorrowLabel:      'I morgen',
+        tomorrowPeak:       'topp ventet rundt',
+        batteryLabel:       'Batteri',
+        batteryCharged:     'ladet i dag',
+        batteryDischarged:  'brukt i dag',},
 
     editor:
     {

@@ -23,8 +23,17 @@ export const en: Translations = {
     {
         title:    'Detailed view',
         subtitle: 'Detailed dashboard coming soon.',
-        exitHint: 'Tap anywhere to exit'
-    },
+        exitHint: 'Tap anywhere to exit',
+    
+        todayLabel:         'Today',
+        todayProduced:      'produced',
+        todayForecast:      'forecast end of day',
+        weekLabel:          'This period',
+        tomorrowLabel:      'Tomorrow',
+        tomorrowPeak:       'peak expected around',
+        batteryLabel:       'Battery',
+        batteryCharged:     'charged today',
+        batteryDischarged:  'used today',},
 
     editor:
     {

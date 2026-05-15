@@ -13,8 +13,17 @@ export const nl: Translations = {
     {
         title:    'Detailweergave',
         subtitle: 'Gedetailleerd dashboard binnenkort.',
-        exitHint: 'Tik ergens om te sluiten'
-    },
+        exitHint: 'Tik ergens om te sluiten',
+    
+        todayLabel:         'Vandaag',
+        todayProduced:      'opgewekt',
+        todayForecast:      'verwacht einde dag',
+        weekLabel:          'De periode',
+        tomorrowLabel:      'Morgen',
+        tomorrowPeak:       'piek verwacht rond',
+        batteryLabel:       'Batterij',
+        batteryCharged:     'vandaag opgeladen',
+        batteryDischarged:  'vandaag gebruikt',},
 
     editor:
     {
