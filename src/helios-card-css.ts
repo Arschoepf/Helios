@@ -237,18 +237,19 @@ export const heliosCardStyles = css`
     .detail-panel-inner
     {
         flex: 1;
-        padding: 14px 14px 14px;
+        padding: 12px;
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        overflow: hidden;
+        gap: 8px;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
 
     /*  Each dashboard section is a chip-style card: same visual
         language as the on-map readouts (white plate, 1 px black
         border, soft shadow). Compact, dense, readable at-a-glance.
-        Sections appear sequentially with a 0.5 s stagger so the
-        eye lands on each one in turn. */
+        Sections appear sequentially with a short stagger so the eye
+        lands on each one in turn without dragging the reveal. */
     .dash-card
     {
         background: #ffffff;
@@ -256,18 +257,18 @@ export const heliosCardStyles = css`
         border:     1px solid #000000;
         border-radius: 4px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        padding: 8px 12px;
+        padding: 6px 10px;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 4px;
         opacity: 0;
-        transform: translateY(6px);
-        animation: dash-card-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        transform: translateY(8px);
+        animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
     .dash-card:nth-of-type(1) { animation-delay: 0.00s; }
-    .dash-card:nth-of-type(2) { animation-delay: 0.50s; }
-    .dash-card:nth-of-type(3) { animation-delay: 1.00s; }
-    .dash-card:nth-of-type(4) { animation-delay: 1.50s; }
+    .dash-card:nth-of-type(2) { animation-delay: 0.18s; }
+    .dash-card:nth-of-type(3) { animation-delay: 0.36s; }
+    .dash-card:nth-of-type(4) { animation-delay: 0.54s; }
     @keyframes dash-card-in
     {
         to { opacity: 1; transform: translateY(0); }
@@ -388,7 +389,7 @@ export const heliosCardStyles = css`
     .dash-week-bottles
     {
         width: 100%;
-        height: 90px;
+        height: 70px;
         display: block;
     }
     .dash-week-bottles .dash-bottle-shell
@@ -441,12 +442,12 @@ export const heliosCardStyles = css`
     {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 12px;
     }
     .dash-battery-vessel
     {
-        width: 50px;
-        height: 84px;
+        width: 36px;
+        height: 60px;
         flex-shrink: 0;
         display: block;
     }

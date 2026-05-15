@@ -32386,14 +32386,14 @@ const en = {
     exitHint: "Tap anywhere to exit",
     todayLabel: "Today",
     todayProduced: "produced",
-    todayForecast: "forecast end of day",
-    todayPeak: "peak today",
+    todayForecast: "forecast",
+    todayPeak: "peak",
     weekLabel: "This period",
     tomorrowLabel: "Tomorrow",
     tomorrowPeak: "peak expected around",
     batteryLabel: "Battery",
-    batteryCharged: "charged today",
-    batteryDischarged: "used today"
+    batteryCharged: "charged",
+    batteryDischarged: "discharged"
   },
   editor: {
     mapSection: "Map",
@@ -32475,14 +32475,14 @@ const fr = {
     exitHint: "Cliquez n'importe où pour quitter",
     todayLabel: "Aujourd'hui",
     todayProduced: "produit",
-    todayForecast: "prévu fin de journée",
-    todayPeak: "pic aujourd'hui",
+    todayForecast: "prévu",
+    todayPeak: "pic",
     weekLabel: "La période",
     tomorrowLabel: "Demain",
     tomorrowPeak: "pic prévu vers",
     batteryLabel: "Batterie",
-    batteryCharged: "chargé aujourd'hui",
-    batteryDischarged: "utilisé aujourd'hui"
+    batteryCharged: "chargé",
+    batteryDischarged: "déchargé"
   },
   editor: {
     mapSection: "Carte",
@@ -32564,14 +32564,14 @@ const de = {
     exitHint: "Tippe irgendwo, um zu schließen",
     todayLabel: "Heute",
     todayProduced: "erzeugt",
-    todayForecast: "Prognose Tagesende",
-    todayPeak: "Spitze heute",
+    todayForecast: "Prognose",
+    todayPeak: "Spitze",
     weekLabel: "Der Zeitraum",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "Spitze erwartet gegen",
     batteryLabel: "Batterie",
-    batteryCharged: "heute geladen",
-    batteryDischarged: "heute entladen"
+    batteryCharged: "geladen",
+    batteryDischarged: "entladen"
   },
   editor: {
     mapSection: "Karte",
@@ -32653,14 +32653,14 @@ const es = {
     exitHint: "Toca en cualquier lugar para salir",
     todayLabel: "Hoy",
     todayProduced: "producido",
-    todayForecast: "previsto fin del día",
-    todayPeak: "pico hoy",
+    todayForecast: "previsto",
+    todayPeak: "pico",
     weekLabel: "El período",
     tomorrowLabel: "Mañana",
     tomorrowPeak: "pico previsto sobre las",
     batteryLabel: "Batería",
-    batteryCharged: "cargado hoy",
-    batteryDischarged: "usado hoy"
+    batteryCharged: "cargado",
+    batteryDischarged: "descargado"
   },
   editor: {
     mapSection: "Mapa",
@@ -32742,14 +32742,14 @@ const it = {
     exitHint: "Tocca un punto qualsiasi per uscire",
     todayLabel: "Oggi",
     todayProduced: "prodotto",
-    todayForecast: "previsto fine giornata",
-    todayPeak: "picco oggi",
+    todayForecast: "previsto",
+    todayPeak: "picco",
     weekLabel: "Il periodo",
     tomorrowLabel: "Domani",
     tomorrowPeak: "picco previsto verso le",
     batteryLabel: "Batteria",
-    batteryCharged: "caricato oggi",
-    batteryDischarged: "usato oggi"
+    batteryCharged: "caricato",
+    batteryDischarged: "scaricato"
   },
   editor: {
     mapSection: "Mappa",
@@ -32831,14 +32831,14 @@ const nl = {
     exitHint: "Tik ergens om te sluiten",
     todayLabel: "Vandaag",
     todayProduced: "opgewekt",
-    todayForecast: "verwacht einde dag",
-    todayPeak: "piek vandaag",
+    todayForecast: "verwacht",
+    todayPeak: "piek",
     weekLabel: "De periode",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "piek verwacht rond",
     batteryLabel: "Batterij",
-    batteryCharged: "vandaag opgeladen",
-    batteryDischarged: "vandaag gebruikt"
+    batteryCharged: "opgeladen",
+    batteryDischarged: "ontladen"
   },
   editor: {
     mapSection: "Kaart",
@@ -32920,14 +32920,14 @@ const pt = {
     exitHint: "Toca em qualquer lugar para sair",
     todayLabel: "Hoje",
     todayProduced: "produzido",
-    todayForecast: "previsto fim do dia",
-    todayPeak: "pico hoje",
+    todayForecast: "previsto",
+    todayPeak: "pico",
     weekLabel: "O período",
     tomorrowLabel: "Amanhã",
     tomorrowPeak: "pico previsto por volta das",
     batteryLabel: "Bateria",
-    batteryCharged: "carregado hoje",
-    batteryDischarged: "usado hoje"
+    batteryCharged: "carregado",
+    batteryDischarged: "descarregado"
   },
   editor: {
     mapSection: "Mapa",
@@ -33009,14 +33009,14 @@ const no = {
     exitHint: "Trykk hvor som helst for å gå ut",
     todayLabel: "I dag",
     todayProduced: "produsert",
-    todayForecast: "estimert dagsslutt",
-    todayPeak: "topp i dag",
+    todayForecast: "estimert",
+    todayPeak: "topp",
     weekLabel: "Perioden",
     tomorrowLabel: "I morgen",
     tomorrowPeak: "topp ventet rundt",
     batteryLabel: "Batteri",
-    batteryCharged: "ladet i dag",
-    batteryDischarged: "brukt i dag"
+    batteryCharged: "ladet",
+    batteryDischarged: "utladet"
   },
   editor: {
     mapSection: "Kart",
@@ -33324,18 +33324,19 @@ const heliosCardStyles = i$3`
     .detail-panel-inner
     {
         flex: 1;
-        padding: 14px 14px 14px;
+        padding: 12px;
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        overflow: hidden;
+        gap: 8px;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
 
     /*  Each dashboard section is a chip-style card: same visual
         language as the on-map readouts (white plate, 1 px black
         border, soft shadow). Compact, dense, readable at-a-glance.
-        Sections appear sequentially with a 0.5 s stagger so the
-        eye lands on each one in turn. */
+        Sections appear sequentially with a short stagger so the eye
+        lands on each one in turn without dragging the reveal. */
     .dash-card
     {
         background: #ffffff;
@@ -33343,18 +33344,18 @@ const heliosCardStyles = i$3`
         border:     1px solid #000000;
         border-radius: 4px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        padding: 8px 12px;
+        padding: 6px 10px;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 4px;
         opacity: 0;
-        transform: translateY(6px);
-        animation: dash-card-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        transform: translateY(8px);
+        animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
     .dash-card:nth-of-type(1) { animation-delay: 0.00s; }
-    .dash-card:nth-of-type(2) { animation-delay: 0.50s; }
-    .dash-card:nth-of-type(3) { animation-delay: 1.00s; }
-    .dash-card:nth-of-type(4) { animation-delay: 1.50s; }
+    .dash-card:nth-of-type(2) { animation-delay: 0.18s; }
+    .dash-card:nth-of-type(3) { animation-delay: 0.36s; }
+    .dash-card:nth-of-type(4) { animation-delay: 0.54s; }
     @keyframes dash-card-in
     {
         to { opacity: 1; transform: translateY(0); }
@@ -33475,7 +33476,7 @@ const heliosCardStyles = i$3`
     .dash-week-bottles
     {
         width: 100%;
-        height: 90px;
+        height: 70px;
         display: block;
     }
     .dash-week-bottles .dash-bottle-shell
@@ -33528,12 +33529,12 @@ const heliosCardStyles = i$3`
     {
         display: flex;
         align-items: center;
-        gap: 14px;
+        gap: 12px;
     }
     .dash-battery-vessel
     {
-        width: 50px;
-        height: 84px;
+        width: 36px;
+        height: 60px;
         flex-shrink: 0;
         display: block;
     }
@@ -35658,7 +35659,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.5.0-beta.3"}`,
+      `%c☀ HELIOS%c v${"1.5.0-beta.4"}`,
       labelStyle,
       versionStyle
     );
@@ -35679,7 +35680,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.5.0-beta.3",
+        version: "1.5.0-beta.4",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -35687,7 +35688,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.5.0-beta.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.5.0-beta.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -38182,13 +38183,13 @@ let HeliosCard = class extends i {
     const totalKwh = days.reduce((s2, d2) => s2 + (d2.isPast || d2.isToday ? d2.observed : d2.forecast), 0);
     const maxKwh = Math.max(...days.map((d2) => d2.forecast), 1);
     const W = 300;
-    const H2 = 90;
-    const padTop = 4;
-    const padBot = 22;
+    const H2 = 70;
+    const padTop = 2;
+    const padBot = 16;
     const usableH = H2 - padTop - padBot;
     const nDays = days.length;
     const slotW = W / nDays;
-    const bottleW = Math.min(36, slotW * 0.55);
+    const bottleW = Math.min(32, slotW * 0.55);
     const dayLabel = (ms) => {
       const d2 = new Date(ms);
       return d2.toLocaleDateString([], { weekday: "short" }).slice(0, 3);

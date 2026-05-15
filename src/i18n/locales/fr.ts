@@ -24,14 +24,14 @@ export const fr: Translations = {
         exitHint: 'Cliquez n\'importe où pour quitter',
         todayLabel:         'Aujourd\'hui',
         todayProduced:      'produit',
-        todayForecast:      'prévu fin de journée',
-        todayPeak:          'pic aujourd\'hui',
+        todayForecast:      'prévu',
+        todayPeak:          'pic',
         weekLabel:          'La période',
         tomorrowLabel:      'Demain',
         tomorrowPeak:       'pic prévu vers',
         batteryLabel:       'Batterie',
-        batteryCharged:     'chargé aujourd\'hui',
-        batteryDischarged:  'utilisé aujourd\'hui',
+        batteryCharged:     'chargé',
+        batteryDischarged:  'déchargé',
     },
 
     editor:

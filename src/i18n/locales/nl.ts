@@ -17,14 +17,14 @@ export const nl: Translations = {
     
         todayLabel:         'Vandaag',
         todayProduced:      'opgewekt',
-        todayForecast:      'verwacht einde dag',
-        todayPeak:          'piek vandaag',
+        todayForecast:      'verwacht',
+        todayPeak:          'piek',
         weekLabel:          'De periode',
         tomorrowLabel:      'Morgen',
         tomorrowPeak:       'piek verwacht rond',
         batteryLabel:       'Batterij',
-        batteryCharged:     'vandaag opgeladen',
-        batteryDischarged:  'vandaag gebruikt',},
+        batteryCharged:     'opgeladen',
+        batteryDischarged:  'ontladen',},
 
     editor:
     {

@@ -4069,13 +4069,13 @@ export class HeliosCard extends LitElement
         //bottles centred when the card resizes; viewBox is the data
         //space, the SVG element scales to its container width.
         const W = 300;
-        const H = 90;
-        const padTop = 4;
-        const padBot = 22;
+        const H = 70;
+        const padTop = 2;
+        const padBot = 16;
         const usableH = H - padTop - padBot;
         const nDays = days.length;
         const slotW = W / nDays;
-        const bottleW = Math.min(36, slotW * 0.55);
+        const bottleW = Math.min(32, slotW * 0.55);
 
         const dayLabel = (ms: number): string =>
         {

@@ -26,14 +26,14 @@ export const no: Translations = {
     
         todayLabel:         'I dag',
         todayProduced:      'produsert',
-        todayForecast:      'estimert dagsslutt',
-        todayPeak:          'topp i dag',
+        todayForecast:      'estimert',
+        todayPeak:          'topp',
         weekLabel:          'Perioden',
         tomorrowLabel:      'I morgen',
         tomorrowPeak:       'topp ventet rundt',
         batteryLabel:       'Batteri',
-        batteryCharged:     'ladet i dag',
-        batteryDischarged:  'brukt i dag',},
+        batteryCharged:     'ladet',
+        batteryDischarged:  'utladet',},
 
     editor:
     {

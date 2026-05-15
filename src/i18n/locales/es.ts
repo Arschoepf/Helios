@@ -17,14 +17,14 @@ export const es: Translations = {
     
         todayLabel:         'Hoy',
         todayProduced:      'producido',
-        todayForecast:      'previsto fin del día',
-        todayPeak:          'pico hoy',
+        todayForecast:      'previsto',
+        todayPeak:          'pico',
         weekLabel:          'El período',
         tomorrowLabel:      'Mañana',
         tomorrowPeak:       'pico previsto sobre las',
         batteryLabel:       'Batería',
-        batteryCharged:     'cargado hoy',
-        batteryDischarged:  'usado hoy',},
+        batteryCharged:     'cargado',
+        batteryDischarged:  'descargado',},
 
     editor:
     {
