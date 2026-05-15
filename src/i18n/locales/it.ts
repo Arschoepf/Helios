@@ -19,7 +19,6 @@ export const it: Translations = {
         todayProduced:      'prodotto',
         todayForecast:      'previsto',
         todayPeak:          'picco',
-        weekLabel:          'Il periodo',
         tomorrowLabel:      'Domani',
         tomorrowPeak:       'picco previsto verso le',
         batteryLabel:       'Batteria',

@@ -237,10 +237,10 @@ export const heliosCardStyles = css`
     .detail-panel-inner
     {
         flex: 1;
-        padding: 12px;
+        padding: 14px;
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
         overflow-y: auto;
         overflow-x: hidden;
     }
@@ -257,10 +257,10 @@ export const heliosCardStyles = css`
         border:     1px solid #000000;
         border-radius: 4px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        padding: 6px 10px;
+        padding: 10px 14px;
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 6px;
         opacity: 0;
         transform: translateY(8px);
         animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -384,38 +384,6 @@ export const heliosCardStyles = css`
     }
     .dash-today-forecast .dash-line-value { font-style: italic; }
 
-    /*  Section: week                                                   */
-
-    .dash-week-bottles
-    {
-        width: 100%;
-        height: 70px;
-        display: block;
-    }
-    .dash-week-bottles .dash-bottle-shell
-    {
-        fill: rgba(0, 0, 0, 0.04);
-        stroke: rgba(0, 0, 0, 0.25);
-        stroke-width: 1;
-    }
-    ha-card.theme-dark .dash-week-bottles .dash-bottle-shell
-    {
-        fill: rgba(255, 255, 255, 0.04);
-        stroke: rgba(255, 255, 255, 0.25);
-    }
-    .dash-week-bottles .dash-bottle.is-future .dash-bottle-shell { stroke-dasharray: 2 2; }
-    .dash-week-bottles .dash-bottle-day
-    {
-        fill: currentColor;
-        font-size: 8px;
-        font-weight: 700;
-        opacity: 0.7;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .dash-week-bottles .dash-bottle.is-today .dash-bottle-day { opacity: 1; }
-    .dash-week-bottles .dash-bottle.is-future .dash-bottle-day { opacity: 0.55; font-style: italic; }
-
     /*  Section: tomorrow                                               */
 
     .dash-tomorrow-peak
@@ -446,8 +414,8 @@ export const heliosCardStyles = css`
     }
     .dash-battery-vessel
     {
-        width: 36px;
-        height: 60px;
+        width: 44px;
+        height: 72px;
         flex-shrink: 0;
         display: block;
     }

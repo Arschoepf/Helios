@@ -38,11 +38,9 @@ export interface Translations
         //  todayLabel      , top of the today section
         //  todayProduced   , subtitle under the produced kWh value
         //  todayForecast   , trailing text after the projected total
-        //                    (e.g. "prévu fin de journée")
-        //  weekLabel       , top of the week-bottles section
-        //  tomorrowLabel   , top of the tomorrow horizon section
+        //  todayPeak       , trailing text after the peak readout
+        //  tomorrowLabel   , top of the tomorrow card
         //  tomorrowPeak    , prefix before the peak time chip
-        //                    (e.g. "pic prévu vers")
         //  batteryLabel    , top of the battery vessel section
         //  batteryCharged  , label under the charge total
         //  batteryDischarged , label under the discharge total
@@ -50,7 +48,6 @@ export interface Translations
         todayProduced:     string;
         todayForecast:     string;
         todayPeak:         string;
-        weekLabel:         string;
         tomorrowLabel:     string;
         tomorrowPeak:      string;
         batteryLabel:      string;

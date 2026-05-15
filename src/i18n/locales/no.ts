@@ -28,7 +28,6 @@ export const no: Translations = {
         todayProduced:      'produsert',
         todayForecast:      'estimert',
         todayPeak:          'topp',
-        weekLabel:          'Perioden',
         tomorrowLabel:      'I morgen',
         tomorrowPeak:       'topp ventet rundt',
         batteryLabel:       'Batteri',

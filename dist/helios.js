@@ -32388,7 +32388,6 @@ const en = {
     todayProduced: "produced",
     todayForecast: "forecast",
     todayPeak: "peak",
-    weekLabel: "This period",
     tomorrowLabel: "Tomorrow",
     tomorrowPeak: "peak expected around",
     batteryLabel: "Battery",
@@ -32477,7 +32476,6 @@ const fr = {
     todayProduced: "produit",
     todayForecast: "prévu",
     todayPeak: "pic",
-    weekLabel: "La période",
     tomorrowLabel: "Demain",
     tomorrowPeak: "pic prévu vers",
     batteryLabel: "Batterie",
@@ -32566,7 +32564,6 @@ const de = {
     todayProduced: "erzeugt",
     todayForecast: "Prognose",
     todayPeak: "Spitze",
-    weekLabel: "Der Zeitraum",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "Spitze erwartet gegen",
     batteryLabel: "Batterie",
@@ -32655,7 +32652,6 @@ const es = {
     todayProduced: "producido",
     todayForecast: "previsto",
     todayPeak: "pico",
-    weekLabel: "El período",
     tomorrowLabel: "Mañana",
     tomorrowPeak: "pico previsto sobre las",
     batteryLabel: "Batería",
@@ -32744,7 +32740,6 @@ const it = {
     todayProduced: "prodotto",
     todayForecast: "previsto",
     todayPeak: "picco",
-    weekLabel: "Il periodo",
     tomorrowLabel: "Domani",
     tomorrowPeak: "picco previsto verso le",
     batteryLabel: "Batteria",
@@ -32833,7 +32828,6 @@ const nl = {
     todayProduced: "opgewekt",
     todayForecast: "verwacht",
     todayPeak: "piek",
-    weekLabel: "De periode",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "piek verwacht rond",
     batteryLabel: "Batterij",
@@ -32922,7 +32916,6 @@ const pt = {
     todayProduced: "produzido",
     todayForecast: "previsto",
     todayPeak: "pico",
-    weekLabel: "O período",
     tomorrowLabel: "Amanhã",
     tomorrowPeak: "pico previsto por volta das",
     batteryLabel: "Bateria",
@@ -33011,7 +33004,6 @@ const no = {
     todayProduced: "produsert",
     todayForecast: "estimert",
     todayPeak: "topp",
-    weekLabel: "Perioden",
     tomorrowLabel: "I morgen",
     tomorrowPeak: "topp ventet rundt",
     batteryLabel: "Batteri",
@@ -33324,10 +33316,10 @@ const heliosCardStyles = i$3`
     .detail-panel-inner
     {
         flex: 1;
-        padding: 12px;
+        padding: 14px;
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
         overflow-y: auto;
         overflow-x: hidden;
     }
@@ -33344,10 +33336,10 @@ const heliosCardStyles = i$3`
         border:     1px solid #000000;
         border-radius: 4px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        padding: 6px 10px;
+        padding: 10px 14px;
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 6px;
         opacity: 0;
         transform: translateY(8px);
         animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -33471,38 +33463,6 @@ const heliosCardStyles = i$3`
     }
     .dash-today-forecast .dash-line-value { font-style: italic; }
 
-    /*  Section: week                                                   */
-
-    .dash-week-bottles
-    {
-        width: 100%;
-        height: 70px;
-        display: block;
-    }
-    .dash-week-bottles .dash-bottle-shell
-    {
-        fill: rgba(0, 0, 0, 0.04);
-        stroke: rgba(0, 0, 0, 0.25);
-        stroke-width: 1;
-    }
-    ha-card.theme-dark .dash-week-bottles .dash-bottle-shell
-    {
-        fill: rgba(255, 255, 255, 0.04);
-        stroke: rgba(255, 255, 255, 0.25);
-    }
-    .dash-week-bottles .dash-bottle.is-future .dash-bottle-shell { stroke-dasharray: 2 2; }
-    .dash-week-bottles .dash-bottle-day
-    {
-        fill: currentColor;
-        font-size: 8px;
-        font-weight: 700;
-        opacity: 0.7;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .dash-week-bottles .dash-bottle.is-today .dash-bottle-day { opacity: 1; }
-    .dash-week-bottles .dash-bottle.is-future .dash-bottle-day { opacity: 0.55; font-style: italic; }
-
     /*  Section: tomorrow                                               */
 
     .dash-tomorrow-peak
@@ -33533,8 +33493,8 @@ const heliosCardStyles = i$3`
     }
     .dash-battery-vessel
     {
-        width: 36px;
-        height: 60px;
+        width: 44px;
+        height: 72px;
         flex-shrink: 0;
         display: block;
     }
@@ -35659,7 +35619,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.5.0-beta.4"}`,
+      `%c☀ HELIOS%c v${"1.5.0-beta.5"}`,
       labelStyle,
       versionStyle
     );
@@ -35680,7 +35640,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.5.0-beta.4",
+        version: "1.5.0-beta.5",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -35688,7 +35648,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.5.0-beta.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.5.0-beta.5"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -37996,7 +37956,6 @@ let HeliosCard = class extends i {
                 </button>
                 <div class="detail-panel-inner">
                     ${this._renderDashTodaySection(t2, pvColor, sunColor)}
-                    ${this._renderDashWeekSection(t2, pvColor)}
                     ${this._renderDashTomorrowSection(t2, sunColor, cloudColor)}
                     ${hasBattery ? this._renderDashBatterySection(t2, batteryColor) : A}
                 </div>
@@ -38150,99 +38109,6 @@ let HeliosCard = class extends i {
     if (!isFinite(w2) || w2 < 0) return "0 W";
     if (w2 >= 1e3) return this._formatLocalisedNumber(w2 / 1e3, 2) + " kW";
     return Math.round(w2) + " W";
-  }
-  //--------------------------------------- Section: La semaine (this week)
-  //Returns daily kWh totals for the 5-day window centred around
-  //today (2 past + today + 2 future, matching what the engine's
-  //weather forecast covers). Past + today integrate observed PV
-  //history; future days come from the kWp × clear-sky forecast.
-  _computeWeekKwh() {
-    const HOUR_MS = 36e5;
-    const today0 = /* @__PURE__ */ new Date();
-    today0.setHours(0, 0, 0, 0);
-    const todayMs = today0.getTime();
-    const allDaily = this._computeDailyKwhTotals();
-    const out = [];
-    for (let d2 = -2; d2 <= 2; d2++) {
-      const dayMs = todayMs + d2 * 24 * HOUR_MS;
-      const total = allDaily.get(dayMs) ?? 0;
-      const observed = d2 <= 0 ? total : 0;
-      const forecast = total;
-      out.push({
-        dayMs,
-        observed,
-        forecast,
-        isToday: d2 === 0,
-        isPast: d2 < 0
-      });
-    }
-    return out;
-  }
-  _renderDashWeekSection(t2, pvColor) {
-    const days = this._computeWeekKwh();
-    const totalKwh = days.reduce((s2, d2) => s2 + (d2.isPast || d2.isToday ? d2.observed : d2.forecast), 0);
-    const maxKwh = Math.max(...days.map((d2) => d2.forecast), 1);
-    const W = 300;
-    const H2 = 70;
-    const padTop = 2;
-    const padBot = 16;
-    const usableH = H2 - padTop - padBot;
-    const nDays = days.length;
-    const slotW = W / nDays;
-    const bottleW = Math.min(32, slotW * 0.55);
-    const dayLabel = (ms) => {
-      const d2 = new Date(ms);
-      return d2.toLocaleDateString([], { weekday: "short" }).slice(0, 3);
-    };
-    return b`
-            <section class="dash-section dash-card dash-week">
-                <header class="dash-card-header">
-                    <ha-icon class="dash-card-icon" icon="mdi:calendar-week" style="color:${pvColor}"></ha-icon>
-                    <span class="dash-card-label">${t2.detail.weekLabel}</span>
-                    <span class="dash-card-trailing">
-                        <span class="dash-stat-value-sm">${this._formatLocalisedNumber(totalKwh, 1)}</span>
-                        <span class="dash-stat-unit-sm">kWh</span>
-                    </span>
-                </header>
-                <svg class="dash-week-bottles" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="xMidYMid meet">
-                    ${days.map((d2, i2) => {
-      const cx = slotW * i2 + slotW / 2;
-      const bx = cx - bottleW / 2;
-      const by = padTop;
-      const bH = usableH;
-      const obsH = d2.observed / maxKwh * bH;
-      const fcH = d2.forecast / maxKwh * bH;
-      const obsY = by + bH - obsH;
-      const fcY = by + bH - fcH;
-      return w`
-                            <g class="dash-bottle ${d2.isToday ? "is-today" : d2.isPast ? "is-past" : "is-future"}">
-                                <rect class="dash-bottle-shell"
-                                      x="${bx}" y="${by}"
-                                      width="${bottleW}" height="${bH}"
-                                      rx="${bottleW / 4}" />
-                                ${fcH > 0 ? w`
-                                    <rect class="dash-bottle-forecast"
-                                          x="${bx}" y="${fcY}"
-                                          width="${bottleW}" height="${fcH}"
-                                          rx="${bottleW / 4}"
-                                          fill="${pvColor}" fill-opacity="0.25"/>
-                                ` : A}
-                                ${obsH > 0 ? w`
-                                    <rect class="dash-bottle-observed"
-                                          x="${bx}" y="${obsY}"
-                                          width="${bottleW}" height="${obsH}"
-                                          rx="${bottleW / 4}"
-                                          fill="${pvColor}" fill-opacity="0.85"/>
-                                ` : A}
-                                <text class="dash-bottle-day"
-                                      x="${cx}" y="${by + bH + 14}"
-                                      text-anchor="middle">${dayLabel(d2.dayMs)}</text>
-                            </g>
-                        `;
-    })}
-                </svg>
-            </section>
-        `;
   }
   //--------------------------------------- Section: Demain (tomorrow)
   _computeTomorrow() {

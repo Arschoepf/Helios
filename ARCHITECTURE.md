@@ -59,20 +59,22 @@ flag) deletes legacy calibration buckets so the migration is silent
 for existing users.
 
 **Detail dashboard.** Clicking the home triggers a camera dive (zoom
-+ pitch ease) and fades a chip-styled overlay over the HUD with four
-sections that appear in sequence (500 ms stagger between cards):
++ pitch ease) and fades a chip-styled overlay over the HUD with up
+to three sections that appear in sequence (~180 ms stagger between
+cards):
 
 - **Today**: produced kWh, projected end-of-day total, peak-of-day
   time. No curve, the timeline above already carries that shape.
-- **The week**: 7 vertical "bottle" gauges, one per recent day,
-  filled to that day's total kWh against the rolling max. Compact
-  (~90 px tall, bottle width auto-fits the card).
 - **Tomorrow**: a single chip with weather icon + estimated kWh +
   expected peak hour, derived from the multi-model forecast and the
   Haurwitz / Kasten-Czeplak clear-sky model scaled by `pv-peak-kwp`.
 - **Battery**: a vessel showing live SoC and the day's charge /
   discharge totals, present only if at least one battery entity is
   configured.
+
+A weekly view was prototyped (5-day "bottle" gauges) but cut: HA's
+own Energy dashboard already covers that ground, and squeezing
+4 cards into a sub-8-row card layout was too cramped.
 
 Each card shares the same chip vocabulary as the on-map overlays
 (white surface, 1 px black border, soft shadow), with a dark-theme
@@ -112,10 +114,9 @@ defaults to `false` (was `true`) so a fresh install is calm by
 default; users opt in for kiosk dashboards.
 
 **i18n.** New keys: `todayLabel`, `todayProduced`, `todayForecast`,
-`todayPeak`, `weekLabel`, `tomorrowLabel`, `tomorrowPeak`,
-`batteryLabel`, `batteryCharged`, `batteryDischarged`,
-`pvPeakPower`, `pvPeakPowerHelp`. Norwegian (`no`) added as the 8th
-locale.
+`todayPeak`, `tomorrowLabel`, `tomorrowPeak`, `batteryLabel`,
+`batteryCharged`, `batteryDischarged`, `pvPeakPower`,
+`pvPeakPowerHelp`. Norwegian (`no`) added as the 8th locale.
 
 ### v1.4.0, LiDAR-driven shadows, sun halo, home halo, focal home cluster
 

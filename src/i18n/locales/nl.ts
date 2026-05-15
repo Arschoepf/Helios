@@ -19,7 +19,6 @@ export const nl: Translations = {
         todayProduced:      'opgewekt',
         todayForecast:      'verwacht',
         todayPeak:          'piek',
-        weekLabel:          'De periode',
         tomorrowLabel:      'Morgen',
         tomorrowPeak:       'piek verwacht rond',
         batteryLabel:       'Batterij',
