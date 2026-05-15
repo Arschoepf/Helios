@@ -568,6 +568,72 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
+    /*  Compass anchor, mirrors overlay-top-right on the opposite edge
+        so the corner overlays sit at matching heights. */
+    .overlay-top-left
+    {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        z-index: 5;
+        pointer-events: none;
+    }
+
+    /*  Minimalist compass, option C from the design pass: a small
+        glass-like disc with one orange "N" triangle that orbits the
+        rim to keep pointing at true north. No bezel labels, no needle
+        tail, no graduations, the whole element reads as a single
+        glyph at a glance. 3D feel comes from layered radial gradients
+        + a multi-stop box-shadow stack (outer drop + inset top
+        highlight + inset bottom shadow). */
+    .compass
+    {
+        position: relative;
+        width:  44px;
+        height: 44px;
+        border-radius: 50%;
+        background:
+            radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.12), transparent 50%),
+            radial-gradient(circle at 65% 75%, rgba(0, 0, 0, 0.45), transparent 60%),
+            linear-gradient(135deg, rgba(45, 50, 60, 0.92), rgba(18, 22, 30, 0.88));
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        box-shadow:
+            0 2px 6px rgba(0, 0, 0, 0.55),
+            inset 0 1px 1px rgba(255, 255, 255, 0.10),
+            inset 0 -2px 3px rgba(0, 0, 0, 0.45);
+        overflow: hidden;
+    }
+
+    /*  Rotating rose, counter-rotates by -bearing via inline style so
+        the N glyph orbits the rim to track true north. transform-origin
+        defaults to the disc centre, which is what we want. The short
+        transition smooths bearing inertia without making the compass
+        feel laggy under fast user rotation. */
+    .compass-rose
+    {
+        position: absolute;
+        inset: 0;
+        transition: transform 120ms linear;
+    }
+
+    /*  N marker, equilateral-ish triangle pointing inward from the
+        rim. Coloured with the configured sun-color so the glyph
+        adopts the user's theme, with a soft drop-shadow glow to lift
+        it off the dark disc face. */
+    .compass-north
+    {
+        position: absolute;
+        top: 3px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-bottom: 9px solid var(--compass-north-color, #EF9F27);
+        filter: drop-shadow(0 0 3px rgba(239, 159, 39, 0.40));
+    }
+
     /*  Passive 28 px square chip used as a "LiDAR shadow computing"
         indicator. Same visual language as the date/time clock (white
         surface, 1 px black border) so it doesn't introduce a new style
@@ -802,9 +868,17 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Solar overlay, sun arc, current sun disc, incidence ray.
-        Single SVG layer spanning the card; opacity fades to 0 at
-        night via inline style from the engine. */
+    /*  Solar overlay, split into two passes so chips never occlude
+        the live sun while the night portion of the loop still reads
+        as background:
+          - .solar-svg-back paints only the dotted below-horizon
+            segments and stacks BELOW the home chip cluster (z 4)
+            so the home + readouts sit clearly on top of the night
+            half of the orbit.
+          - .solar-svg-front paints the above-horizon arc, the
+            incidence ray, and the sun disc, and stacks ABOVE the
+            chips (z 7) so the live sun always dominates the stack.
+            The card is named Helios, the sun must win the stack. */
     .solar-svg
     {
         position: absolute;
@@ -812,9 +886,10 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         pointer-events: none;
-        z-index: 4;
         transition: opacity 600ms ease-out;
     }
+    .solar-svg-back  { z-index: 4; }
+    .solar-svg-front { z-index: 7; }
 
     /*  Cloud-cover overlay. Two polygons (the filled disc sized by
         the live cloud %, the fixed 100 % reference ring outline)
@@ -938,13 +1013,15 @@ export const heliosCardStyles = css`
 
 
     /*  Solar irradiance label, chip pinned above the live sun
-        position, same chip language as the cloud and PV chips. */
+        position, same chip language as the cloud and PV chips.
+        Sits in the front layer (z 7) so it stacks on top of every
+        home-anchored chip, matching the front-pass solar overlay. */
     .solar-pct-label
     {
         position: absolute;
         transform: translate(-50%, -100%);
         pointer-events: none;
-        z-index: 6;
+        z-index: 7;
         display: inline-flex;
         align-items: center;
         gap: 3px;

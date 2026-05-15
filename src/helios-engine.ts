@@ -2874,6 +2874,7 @@ export class HeliosEngine
         batteryPowerLabel: { x: number; y: number };
         ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
+        bearing:           number;
     } | null
     {
         if (!this.map)
@@ -2888,18 +2889,27 @@ export class HeliosEngine
         const home = m.project([this.homeLon, this.homeLat]);
 
         //Hemisphere-aware fixed geographic anchor on the disc edge:
-        //  NH (default bearing 180° → south-up) → east of home
-        //  SH (default bearing   0° → north-up) → west of home
-        //Both pick the side that projects to the LEFT of screen at
-        //the hemisphere's default bearing, so the chip starts at the
-        //expected spot. Once anchored to a single lon/lat the chip
-        //orbits the home smoothly under rotation rather than jumping
-        //between sampled "leftmost" estimates.
+        //  NH (default bearing 180° → south-up) → north-east of home
+        //  SH (default bearing   0° → north-up) → south-west of home
+        //Both pick the side that projects to the LOWER-LEFT of screen
+        //at the hemisphere's default bearing, putting the cloud chip
+        //away from the irradiance chip's natural top-of-arc position
+        //and giving each readout its own quadrant. Once anchored to a
+        //single lon/lat the chip orbits the home smoothly under user
+        //rotation rather than jumping between sampled estimates.
         const lat0   = this.homeLat;
         const cosLat = Math.cos(lat0 * Math.PI / 180);
-        const anchorDE = lat0 >= 0 ? CLOUD_DISC_RADIUS_M : -CLOUD_DISC_RADIUS_M;
+        const baseDE = lat0 >= 0 ? CLOUD_DISC_RADIUS_M : -CLOUD_DISC_RADIUS_M;
+        //Rotate the base (east in NH, west in SH) by +45° CCW in the
+        //(east, north) world frame. Symmetrical signs land NH at NE
+        //and SH at SW, both of which project to screen-lower-left at
+        //the hemisphere's resting bearing.
+        const ROT      = Math.PI / 4;
+        const anchorDE = baseDE * Math.cos(ROT);
+        const anchorDN = baseDE * Math.sin(ROT);
         const anchorDLng = anchorDE / (111_320 * cosLat);
-        const anchor = m.project([this.homeLon + anchorDLng, this.homeLat]);
+        const anchorDLat = anchorDN / 111_320;
+        const anchor = m.project([this.homeLon + anchorDLng, this.homeLat + anchorDLat]);
         const ringEdgeX = anchor.x;
         const ringEdgeY = anchor.y;
 
@@ -2937,7 +2947,12 @@ export class HeliosEngine
             batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
             batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
             ringEdge:          { x: ringEdgeX,                      y: ringEdgeY   },
-            home:              { x: home.x,                         y: home.y      }
+            home:              { x: home.x,                         y: home.y      },
+            //Current camera bearing in degrees clockwise from true
+            //north, as MapLibre reports it. The card uses this to
+            //counter-rotate the corner compass so its N marker keeps
+            //pointing at true north regardless of the user's spin.
+            bearing:           m.getBearing()
         };
     }
 

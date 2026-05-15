@@ -28138,9 +28138,13 @@ const _HeliosEngine = class _HeliosEngine {
     const home = m2.project([this.homeLon, this.homeLat]);
     const lat0 = this.homeLat;
     const cosLat = Math.cos(lat0 * Math.PI / 180);
-    const anchorDE = lat0 >= 0 ? CLOUD_DISC_RADIUS_M : -CLOUD_DISC_RADIUS_M;
+    const baseDE = lat0 >= 0 ? CLOUD_DISC_RADIUS_M : -CLOUD_DISC_RADIUS_M;
+    const ROT = Math.PI / 4;
+    const anchorDE = baseDE * Math.cos(ROT);
+    const anchorDN = baseDE * Math.sin(ROT);
     const anchorDLng = anchorDE / (111320 * cosLat);
-    const anchor = m2.project([this.homeLon + anchorDLng, this.homeLat]);
+    const anchorDLat = anchorDN / 111320;
+    const anchor = m2.project([this.homeLon + anchorDLng, this.homeLat + anchorDLat]);
     const ringEdgeX = anchor.x;
     const ringEdgeY = anchor.y;
     const CLOUD_CHIP_NUDGE_PX = 30;
@@ -28160,7 +28164,12 @@ const _HeliosEngine = class _HeliosEngine {
       batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       ringEdge: { x: ringEdgeX, y: ringEdgeY },
-      home: { x: home.x, y: home.y }
+      home: { x: home.x, y: home.y },
+      //Current camera bearing in degrees clockwise from true
+      //north, as MapLibre reports it. The card uses this to
+      //counter-rotate the corner compass so its N marker keeps
+      //pointing at true north regardless of the user's spin.
+      bearing: m2.getBearing()
     };
   }
   //Project a 3D point (longitude, latitude, altitude_m) into
@@ -30035,6 +30044,72 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
+    /*  Compass anchor, mirrors overlay-top-right on the opposite edge
+        so the corner overlays sit at matching heights. */
+    .overlay-top-left
+    {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        z-index: 5;
+        pointer-events: none;
+    }
+
+    /*  Minimalist compass, option C from the design pass: a small
+        glass-like disc with one orange "N" triangle that orbits the
+        rim to keep pointing at true north. No bezel labels, no needle
+        tail, no graduations, the whole element reads as a single
+        glyph at a glance. 3D feel comes from layered radial gradients
+        + a multi-stop box-shadow stack (outer drop + inset top
+        highlight + inset bottom shadow). */
+    .compass
+    {
+        position: relative;
+        width:  44px;
+        height: 44px;
+        border-radius: 50%;
+        background:
+            radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.12), transparent 50%),
+            radial-gradient(circle at 65% 75%, rgba(0, 0, 0, 0.45), transparent 60%),
+            linear-gradient(135deg, rgba(45, 50, 60, 0.92), rgba(18, 22, 30, 0.88));
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        box-shadow:
+            0 2px 6px rgba(0, 0, 0, 0.55),
+            inset 0 1px 1px rgba(255, 255, 255, 0.10),
+            inset 0 -2px 3px rgba(0, 0, 0, 0.45);
+        overflow: hidden;
+    }
+
+    /*  Rotating rose, counter-rotates by -bearing via inline style so
+        the N glyph orbits the rim to track true north. transform-origin
+        defaults to the disc centre, which is what we want. The short
+        transition smooths bearing inertia without making the compass
+        feel laggy under fast user rotation. */
+    .compass-rose
+    {
+        position: absolute;
+        inset: 0;
+        transition: transform 120ms linear;
+    }
+
+    /*  N marker, equilateral-ish triangle pointing inward from the
+        rim. Coloured with the configured sun-color so the glyph
+        adopts the user's theme, with a soft drop-shadow glow to lift
+        it off the dark disc face. */
+    .compass-north
+    {
+        position: absolute;
+        top: 3px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-bottom: 9px solid var(--compass-north-color, #EF9F27);
+        filter: drop-shadow(0 0 3px rgba(239, 159, 39, 0.40));
+    }
+
     /*  Passive 28 px square chip used as a "LiDAR shadow computing"
         indicator. Same visual language as the date/time clock (white
         surface, 1 px black border) so it doesn't introduce a new style
@@ -30269,9 +30344,17 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Solar overlay, sun arc, current sun disc, incidence ray.
-        Single SVG layer spanning the card; opacity fades to 0 at
-        night via inline style from the engine. */
+    /*  Solar overlay, split into two passes so chips never occlude
+        the live sun while the night portion of the loop still reads
+        as background:
+          - .solar-svg-back paints only the dotted below-horizon
+            segments and stacks BELOW the home chip cluster (z 4)
+            so the home + readouts sit clearly on top of the night
+            half of the orbit.
+          - .solar-svg-front paints the above-horizon arc, the
+            incidence ray, and the sun disc, and stacks ABOVE the
+            chips (z 7) so the live sun always dominates the stack.
+            The card is named Helios, the sun must win the stack. */
     .solar-svg
     {
         position: absolute;
@@ -30279,9 +30362,10 @@ const heliosCardStyles = i$3`
         width: 100%;
         height: 100%;
         pointer-events: none;
-        z-index: 4;
         transition: opacity 600ms ease-out;
     }
+    .solar-svg-back  { z-index: 4; }
+    .solar-svg-front { z-index: 7; }
 
     /*  Cloud-cover overlay. Two polygons (the filled disc sized by
         the live cloud %, the fixed 100 % reference ring outline)
@@ -30405,13 +30489,15 @@ const heliosCardStyles = i$3`
 
 
     /*  Solar irradiance label, chip pinned above the live sun
-        position, same chip language as the cloud and PV chips. */
+        position, same chip language as the cloud and PV chips.
+        Sits in the front layer (z 7) so it stacks on top of every
+        home-anchored chip, matching the front-pass solar overlay. */
     .solar-pct-label
     {
         position: absolute;
         transform: translate(-50%, -100%);
         pointer-events: none;
-        z-index: 6;
+        z-index: 7;
         display: inline-flex;
         align-items: center;
         gap: 3px;
@@ -31617,7 +31703,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.35"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.36"}`,
       labelStyle,
       versionStyle
     );
@@ -31638,7 +31724,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.4.0-beta.35",
+        version: "1.4.0-beta.36",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -31646,7 +31732,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.4.0-beta.35"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.4.0-beta.36"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -31661,6 +31747,40 @@ const _liveCards = /* @__PURE__ */ new Set();
       });
       console.groupEnd();
       return out;
+    };
+  }
+}
+{
+  const w2 = window;
+  const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
+  if (!w2.setHeliosLocation) {
+    w2.setHeliosLocation = (lat, lon) => {
+      if (typeof lat !== "number" || typeof lon !== "number" || !isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        console.warn("☀ HELIOS: setHeliosLocation expected (lat[-90..90], lon[-180..180]), got", lat, lon);
+        return;
+      }
+      w2.__heliosLocationOverride = { lat, lon };
+      console.info(
+        `%c☀ HELIOS%c location override → ${lat.toFixed(5)}, ${lon.toFixed(5)} (refresh page to revert)`,
+        label,
+        "color:#6b7280;"
+      );
+      for (const card of _liveCards) card.invalidateLocation();
+    };
+  }
+  if (!w2.clearHeliosLocation) {
+    w2.clearHeliosLocation = () => {
+      if (!w2.__heliosLocationOverride) {
+        console.info("☀ HELIOS: no location override active");
+        return;
+      }
+      w2.__heliosLocationOverride = void 0;
+      console.info(
+        `%c☀ HELIOS%c location override cleared, reverting to hass.config`,
+        label,
+        "color:#6b7280;"
+      );
+      for (const card of _liveCards) card.invalidateLocation();
     };
   }
 }
@@ -31756,6 +31876,30 @@ let HeliosCard = class extends i {
         calibrationK: this._pvCalibK
       }
     };
+  }
+  //Called by the global `setHeliosLocation` / `clearHeliosLocation`
+  //debug helpers. Clears the cached home key so the next `updated()`
+  //pass sees `identityChanged` and re-inits the engine against the
+  //new coordinates, then schedules a re-render to trigger that pass.
+  invalidateLocation() {
+    this._lastHomeKey = "";
+    this.requestUpdate();
+  }
+  //Resolves the home coordinates. Reads the debug override on
+  //`window.__heliosLocationOverride` first (set via the global
+  //`setHeliosLocation` helper), then falls back to HA's configured
+  //home at hass.config.{latitude,longitude}. Returns null only when
+  //neither source has a usable pair.
+  _getHomeCoords() {
+    const w2 = window;
+    const o2 = w2.__heliosLocationOverride;
+    if (o2 && typeof o2.lat === "number" && typeof o2.lon === "number" && isFinite(o2.lat) && isFinite(o2.lon)) {
+      return { lat: o2.lat, lon: o2.lon };
+    }
+    const lat = this.hass?.config?.latitude;
+    const lon = this.hass?.config?.longitude;
+    if (typeof lat !== "number" || typeof lon !== "number") return null;
+    return { lat, lon };
   }
   //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
   getCardSize() {
@@ -31866,11 +32010,11 @@ let HeliosCard = class extends i {
       return;
     }
     const apiKey = String(this.config["maptiler-api-key"] ?? "").trim();
-    const lat = this.hass.config.latitude;
-    const lon = this.hass.config.longitude;
-    if (lat === void 0 || lon === void 0 || !apiKey) {
+    const coords = this._getHomeCoords();
+    if (!coords || !apiKey) {
       return;
     }
+    const { lat, lon } = coords;
     if (!this._pvCalibHARead) {
       void this._reconcilePvCalibWithHA();
     }
@@ -32253,11 +32397,12 @@ let HeliosCard = class extends i {
         this._initInflight = false;
         return;
       }
-      const { latitude: lat, longitude: lon } = this.hass.config;
-      if (lat === void 0 || lon === void 0) {
+      const coords = this._getHomeCoords();
+      if (!coords) {
         this._initInflight = false;
         return;
       }
+      const { lat, lon } = coords;
       const elevation = this.hass.config.elevation;
       this._engine?.cleanup();
       while (container.firstChild) {
@@ -32626,8 +32771,9 @@ let HeliosCard = class extends i {
       return 1;
     })();
     const k2 = this._pvCalibK;
-    const lat = this.hass?.config?.latitude;
-    const lon = this.hass?.config?.longitude;
+    const coords = this._getHomeCoords();
+    const lat = coords?.lat;
+    const lon = coords?.lon;
     const series = this._chartSeries;
     const predictedSamples = [];
     if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
@@ -32986,10 +33132,9 @@ let HeliosCard = class extends i {
     return 0;
   }
   _pvCalibStorageKey() {
-    const lat = this.hass?.config?.latitude;
-    const lon = this.hass?.config?.longitude;
-    if (typeof lat !== "number" || typeof lon !== "number") return null;
-    return `helios-pv-calib:${lat.toFixed(3)}_${lon.toFixed(3)}`;
+    const coords = this._getHomeCoords();
+    if (!coords) return null;
+    return `helios-pv-calib:${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
   }
   //Synchronous read from localStorage cache. Used at boot so the
   //first chart render already has whatever data we have locally;
@@ -33136,9 +33281,9 @@ let HeliosCard = class extends i {
   //prune old entries, save, and recompute k. Called whenever either
   //input changes.
   _updatePvCalibration() {
-    const lat = this.hass?.config?.latitude;
-    const lon = this.hass?.config?.longitude;
-    if (typeof lat !== "number" || typeof lon !== "number") return;
+    const coords = this._getHomeCoords();
+    if (!coords) return;
+    const { lat, lon } = coords;
     const series = this._chartSeries;
     if (!series || series.times.length === 0) return;
     const buckets = this._aggregatePvWattsPerHour();
@@ -33309,6 +33454,8 @@ let HeliosCard = class extends i {
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
     const sunRimColor = this._darkenHex(sunColor, 0.2);
     const arcSegments = showSun ? this._buildArcSegments(sunScene.arc, sunColor) : [];
+    const arcSegmentsBack = arcSegments.filter((s2) => s2.belowHorizon);
+    const arcSegmentsFront = arcSegments.filter((s2) => !s2.belowHorizon);
     const showRay = showSun && sunScene.sun.altitude > 0;
     const sunWm2 = sunScene?.sun.irradiance ?? 0;
     const sunWm2Round = Math.round(sunWm2);
@@ -33430,6 +33577,26 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
+                <!--  Minimalist compass, top-left. The outer disc is
+                      static (glass-like 3D well), the inner rose
+                      counter-rotates by -bearing so the orange "N"
+                      triangle always points at true north regardless
+                      of the user's spin. MapLibre's getBearing()
+                      reports degrees clockwise from north, so the CSS
+                      rotation is its negation.  -->
+                ${hasApiKey && layout ? b`
+                    <div class="overlay-top-left">
+                        <div class="compass" aria-label="Compass">
+                            <div
+                                class="compass-rose"
+                                style="transform: rotate(${-layout.bearing}deg)"
+                            >
+                                <div class="compass-north" style="--compass-north-color:${sunColor}"></div>
+                            </div>
+                        </div>
+                    </div>
+                ` : A}
+
                 ${hasApiKey ? b`
                     <div class="overlay-top-center">
                         <div class="clock ${this._isLiveMode ? "" : "clock-scrubbed"}">
@@ -33472,100 +33639,36 @@ let HeliosCard = class extends i {
                     `;
     })() : A}
 
-${showSun ? b`
+                <!--  Solar arc, BACK pass. Renders only the dotted
+                      below-horizon segments (the sun's path through
+                      the underside of the celestial sphere), so the
+                      home and its chips read in front of the night
+                      half of the loop. Above-horizon segments, the
+                      ray, the disc and the W/m² readout move to the
+                      FRONT pass at the end of the overlay stack.  -->
+                ${showSun && arcSegmentsBack.length > 0 ? b`
                     <svg
-                        class="solar-svg"
+                        class="solar-svg solar-svg-back"
                         style="opacity:${sunScene.daylight}"
                     >
-                        <!--  Arc, single colour pass, depth conveyed
-                              by per-segment stroke-width modulation.
-                              First pass paints a faint dark outline
-                              for legibility against bright basemap
-                              areas; second pass paints the configured
-                              sun colour on top.  -->
-                        ${arcSegments.map((s2) => w`
+                        ${arcSegmentsBack.map((s2) => w`
                             <line
-                                class="${s2.belowHorizon ? "solar-arc-outline solar-arc-night" : "solar-arc-outline"}"
+                                class="solar-arc-outline solar-arc-night"
                                 x1="${s2.x1}" y1="${s2.y1}"
                                 x2="${s2.x2}" y2="${s2.y2}"
-                                stroke-width="${(HeliosCard.OUTLINE_FAR + (HeliosCard.OUTLINE_NEAR - HeliosCard.OUTLINE_FAR) * s2.nearness) * (s2.belowHorizon ? HeliosCard.NIGHT_STROKE_FACTOR : 1)}"
+                                stroke-width="${(HeliosCard.OUTLINE_FAR + (HeliosCard.OUTLINE_NEAR - HeliosCard.OUTLINE_FAR) * s2.nearness) * HeliosCard.NIGHT_STROKE_FACTOR}"
                             ></line>
                         `)}
-                        ${arcSegments.map((s2) => w`
+                        ${arcSegmentsBack.map((s2) => w`
                             <line
-                                class="${s2.belowHorizon ? "solar-arc-segment solar-arc-night" : "solar-arc-segment"}"
+                                class="solar-arc-segment solar-arc-night"
                                 x1="${s2.x1}" y1="${s2.y1}"
                                 x2="${s2.x2}" y2="${s2.y2}"
                                 stroke="${s2.color}"
-                                stroke-width="${(HeliosCard.SEGMENT_FAR + (HeliosCard.SEGMENT_NEAR - HeliosCard.SEGMENT_FAR) * s2.nearness) * (s2.belowHorizon ? HeliosCard.NIGHT_STROKE_FACTOR : 1)}"
+                                stroke-width="${(HeliosCard.SEGMENT_FAR + (HeliosCard.SEGMENT_NEAR - HeliosCard.SEGMENT_FAR) * s2.nearness) * HeliosCard.NIGHT_STROKE_FACTOR}"
                             ></line>
                         `)}
-                        ${showRay ? w`
-                            <line
-                                class="solar-ray"
-                                style="--sun-flow-duration:${sunFlowDuration}s"
-                                x1="${sunScene.sun.x}"  y1="${sunScene.sun.y}"
-                                x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
-                                stroke="${sunColor}"
-                            ></line>
-                            <polygon
-                                class="solar-ray-arrow"
-                                points="-6,-4 0,0 -6,4"
-                                fill="${sunColor}"
-                            >
-                                <animateMotion
-                                    dur="${sunFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${sunScene.sun.x},${sunScene.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
-                                ></animateMotion>
-                            </polygon>
-                        ` : A}
-                        ${(() => {
-      const r2 = HeliosCard.SUN_R_FAR + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene.sun.nearness;
-      const rInner = r2 * sunFillRatio;
-      return w`
-                                <circle
-                                    class="solar-sun-bg"
-                                    cx="${sunScene.sun.x}" cy="${sunScene.sun.y}"
-                                    r="${r2}"
-                                    fill="${sunColor}"
-                                    fill-opacity="${HeliosCard.SUN_FILL_OPACITY_BG}"
-                                ></circle>
-                                <circle
-                                    class="solar-sun-fill"
-                                    cx="${sunScene.sun.x}" cy="${sunScene.sun.y}"
-                                    r="${rInner}"
-                                    fill="${sunColor}"
-                                    stroke="${sunRimColor}"
-                                    stroke-width="0.5"
-                                ></circle>
-                                <circle
-                                    class="solar-sun-rim"
-                                    cx="${sunScene.sun.x}" cy="${sunScene.sun.y}"
-                                    r="${r2}"
-                                    fill="none"
-                                    stroke="${sunColor}"
-                                    stroke-width="${HeliosCard.SUN_RIM_WIDTH}"
-                                ></circle>
-                            `;
-    })()}
                     </svg>
-                ` : A}
-
-                <!--  Always-visible W/m² label, pinned above the sun
-                      disc. Same visual language as the cloud-cover
-                      label above the home: black border, white card,
-                      tabular numerals, they read as a matched pair
-                      of cartographic readouts.  -->
-                ${showSunLabel ? b`
-                    <div
-                        class="solar-pct-label"
-                        style="left:${sunScene.sun.x}px; top:${sunScene.sun.y - 22}px"
-                    >
-                        <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
-                        <span>${sunWm2Round} W/m²</span>
-                    </div>
                 ` : A}
 
                 ${showLabel ? (() => {
@@ -33695,6 +33798,102 @@ ${showSun ? b`
                             <span>${batteryPowerText}</span>
                         </div>
                     ` : A}
+                ` : A}
+
+                <!--  Solar arc, FRONT pass. Renders the above-horizon
+                      portion of the sun's loop, the incidence ray to
+                      the PV chip, and the sun disc itself, placed AFTER
+                      every home-anchored chip so the live sun always
+                      reads on top. The card is named Helios, the sun
+                      must dominate the stack visually.  -->
+                ${showSun && arcSegmentsFront.length > 0 ? b`
+                    <svg
+                        class="solar-svg solar-svg-front"
+                        style="opacity:${sunScene.daylight}"
+                    >
+                        ${arcSegmentsFront.map((s2) => w`
+                            <line
+                                class="solar-arc-outline"
+                                x1="${s2.x1}" y1="${s2.y1}"
+                                x2="${s2.x2}" y2="${s2.y2}"
+                                stroke-width="${HeliosCard.OUTLINE_FAR + (HeliosCard.OUTLINE_NEAR - HeliosCard.OUTLINE_FAR) * s2.nearness}"
+                            ></line>
+                        `)}
+                        ${arcSegmentsFront.map((s2) => w`
+                            <line
+                                class="solar-arc-segment"
+                                x1="${s2.x1}" y1="${s2.y1}"
+                                x2="${s2.x2}" y2="${s2.y2}"
+                                stroke="${s2.color}"
+                                stroke-width="${HeliosCard.SEGMENT_FAR + (HeliosCard.SEGMENT_NEAR - HeliosCard.SEGMENT_FAR) * s2.nearness}"
+                            ></line>
+                        `)}
+                        ${showRay ? w`
+                            <line
+                                class="solar-ray"
+                                style="--sun-flow-duration:${sunFlowDuration}s"
+                                x1="${sunScene.sun.x}"  y1="${sunScene.sun.y}"
+                                x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
+                                stroke="${sunColor}"
+                            ></line>
+                            <polygon
+                                class="solar-ray-arrow"
+                                points="-6,-4 0,0 -6,4"
+                                fill="${sunColor}"
+                            >
+                                <animateMotion
+                                    dur="${sunFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    rotate="auto"
+                                    path="M ${sunScene.sun.x},${sunScene.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
+                                ></animateMotion>
+                            </polygon>
+                        ` : A}
+                        ${(() => {
+      const r2 = HeliosCard.SUN_R_FAR + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene.sun.nearness;
+      const rInner = r2 * sunFillRatio;
+      return w`
+                                <circle
+                                    class="solar-sun-bg"
+                                    cx="${sunScene.sun.x}" cy="${sunScene.sun.y}"
+                                    r="${r2}"
+                                    fill="${sunColor}"
+                                    fill-opacity="${HeliosCard.SUN_FILL_OPACITY_BG}"
+                                ></circle>
+                                <circle
+                                    class="solar-sun-fill"
+                                    cx="${sunScene.sun.x}" cy="${sunScene.sun.y}"
+                                    r="${rInner}"
+                                    fill="${sunColor}"
+                                    stroke="${sunRimColor}"
+                                    stroke-width="0.5"
+                                ></circle>
+                                <circle
+                                    class="solar-sun-rim"
+                                    cx="${sunScene.sun.x}" cy="${sunScene.sun.y}"
+                                    r="${r2}"
+                                    fill="none"
+                                    stroke="${sunColor}"
+                                    stroke-width="${HeliosCard.SUN_RIM_WIDTH}"
+                                ></circle>
+                            `;
+    })()}
+                    </svg>
+                ` : A}
+
+                <!--  W/m² label, pinned above the sun disc. Same
+                      visual language as the cloud-cover label, both
+                      read as a matched pair of cartographic readouts.
+                      Lands after the front-pass arc so the readout
+                      sits on top of the sun glyph as well.  -->
+                ${showSunLabel ? b`
+                    <div
+                        class="solar-pct-label"
+                        style="left:${sunScene.sun.x}px; top:${sunScene.sun.y - 22}px"
+                    >
+                        <ha-icon icon="mdi:white-balance-sunny"></ha-icon>
+                        <span>${sunWm2Round} W/m²</span>
+                    </div>
                 ` : A}
 
             </ha-card>
