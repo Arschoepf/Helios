@@ -37,10 +37,19 @@ export default defineConfig({
         },
         rollupOptions:
         {
-            //Bundle everything (lit, maplibre-gl, ...) into a single
-            //file so the user only needs to register one resource URL
-            //in Lovelace. No external imports.
-            external: []
+            //Bundle everything (lit, maplibre-gl, geotiff codecs, ...)
+            //into a single file so the user only needs to register one
+            //resource URL in Lovelace. No external imports, and no
+            //code-splitting either: geotiff dynamically imports its
+            //per-format decoders (pako, zstd, lerc, jpeg, lzw, ...),
+            //which would normally land in separate chunks. inlineDynamicImports
+            //hoists every dynamic import into the main bundle so HACS
+            //sees a single helios.js artefact.
+            external: [],
+            output:
+            {
+                inlineDynamicImports: true
+            }
         },
         //Trim down build output: minify but keep readable enough for
         //the curious user to inspect. Terser preserves classnames so

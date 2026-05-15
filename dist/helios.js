@@ -2506,7 +2506,7 @@ var maplibreGl = { exports: {} };
         return r3 * o3 - s3 * i3 == 0 && r3 * s3 <= 0 && i3 * o3 <= 0;
       }
       function Rn(t3, e3, n4, r3) {
-        return 0 != (i3 = [r3[0] - n4[0], r3[1] - n4[1]])[0] * (s3 = [e3[0] - t3[0], e3[1] - t3[1]])[1] - i3[1] * s3[0] && !(!Xn(t3, e3, n4, r3) || !Xn(n4, r3, t3, e3));
+        return 0 != (i3 = [r3[0] - n4[0], r3[1] - n4[1]])[0] * (s3 = [e3[0] - t3[0], e3[1] - t3[1]])[1] - i3[1] * s3[0] && !(!Xn2(t3, e3, n4, r3) || !Xn2(n4, r3, t3, e3));
         var i3, s3;
       }
       function Nn(t3, e3, n4) {
@@ -2535,11 +2535,11 @@ var maplibreGl = { exports: {} };
         for (const n4 of e3) if (qn(t3, n4)) return true;
         return false;
       }
-      function Xn(t3, e3, n4, r3) {
+      function Xn2(t3, e3, n4, r3) {
         const i3 = r3[0] - n4[0], s3 = r3[1] - n4[1], o3 = (t3[0] - n4[0]) * s3 - i3 * (t3[1] - n4[1]), a3 = (e3[0] - n4[0]) * s3 - i3 * (e3[1] - n4[1]);
         return o3 > 0 && a3 < 0 || o3 < 0 && a3 > 0;
       }
-      function Yn(t3, e3, n4) {
+      function Yn2(t3, e3, n4) {
         const r3 = [];
         for (let i3 = 0; i3 < t3.length; i3++) {
           const s3 = [];
@@ -2551,10 +2551,10 @@ var maplibreGl = { exports: {} };
         }
         return r3;
       }
-      function Zn(t3, e3, n4) {
+      function Zn2(t3, e3, n4) {
         const r3 = [];
         for (let i3 = 0; i3 < t3.length; i3++) {
-          const s3 = Yn(t3[i3], e3, n4);
+          const s3 = Yn2(t3[i3], e3, n4);
           r3.push(s3);
         }
         return r3;
@@ -2619,12 +2619,12 @@ var maplibreGl = { exports: {} };
             if ("Point" === t3.geometryType()) return function(t4, e3) {
               const n4 = [1 / 0, 1 / 0, -1 / 0, -1 / 0], r3 = [1 / 0, 1 / 0, -1 / 0, -1 / 0], i3 = t4.canonicalID();
               if ("Polygon" === e3.type) {
-                const s3 = Yn(e3.coordinates, r3, i3), o3 = Wn(t4.geometry(), n4, r3, i3);
+                const s3 = Yn2(e3.coordinates, r3, i3), o3 = Wn(t4.geometry(), n4, r3, i3);
                 if (!On(n4, r3)) return false;
                 for (const t5 of o3) if (!Un(t5, s3)) return false;
               }
               if ("MultiPolygon" === e3.type) {
-                const s3 = Zn(e3.coordinates, r3, i3), o3 = Wn(t4.geometry(), n4, r3, i3);
+                const s3 = Zn2(e3.coordinates, r3, i3), o3 = Wn(t4.geometry(), n4, r3, i3);
                 if (!On(n4, r3)) return false;
                 for (const t5 of o3) if (!jn(t5, s3)) return false;
               }
@@ -2633,12 +2633,12 @@ var maplibreGl = { exports: {} };
             if ("LineString" === t3.geometryType()) return function(t4, e3) {
               const n4 = [1 / 0, 1 / 0, -1 / 0, -1 / 0], r3 = [1 / 0, 1 / 0, -1 / 0, -1 / 0], i3 = t4.canonicalID();
               if ("Polygon" === e3.type) {
-                const s3 = Yn(e3.coordinates, r3, i3), o3 = Kn(t4.geometry(), n4, r3, i3);
+                const s3 = Yn2(e3.coordinates, r3, i3), o3 = Kn(t4.geometry(), n4, r3, i3);
                 if (!On(n4, r3)) return false;
                 for (const t5 of o3) if (!qn(t5, s3)) return false;
               }
               if ("MultiPolygon" === e3.type) {
-                const s3 = Zn(e3.coordinates, r3, i3), o3 = Kn(t4.geometry(), n4, r3, i3);
+                const s3 = Zn2(e3.coordinates, r3, i3), o3 = Kn(t4.geometry(), n4, r3, i3);
                 if (!On(n4, r3)) return false;
                 for (const t5 of o3) if (!Gn(t5, s3)) return false;
               }
@@ -4628,12 +4628,12 @@ Use an identity property function instead: \`{ "type": "identity", "property": $
         }
       }
       let eo;
-      var no = { get paint() {
+      var no2 = { get paint() {
         return eo = eo || new Ks({ "raster-opacity": new Xs(wt.paint_raster["raster-opacity"]), "raster-hue-rotate": new Xs(wt.paint_raster["raster-hue-rotate"]), "raster-brightness-min": new Xs(wt.paint_raster["raster-brightness-min"]), "raster-brightness-max": new Xs(wt.paint_raster["raster-brightness-max"]), "raster-saturation": new Xs(wt.paint_raster["raster-saturation"]), "raster-contrast": new Xs(wt.paint_raster["raster-contrast"]), resampling: new Xs(wt.paint_raster.resampling), "raster-resampling": new Xs(wt.paint_raster["raster-resampling"]), "raster-fade-duration": new Xs(wt.paint_raster["raster-fade-duration"]) });
       } };
       class ro extends to {
         constructor(t3, e3) {
-          super(t3, no, e3);
+          super(t3, no2, e3);
         }
       }
       const io = { Int8: Int8Array, Uint8: Uint8Array, Int16: Int16Array, Uint16: Uint16Array, Int32: Int32Array, Uint32: Uint32Array, Float32: Float32Array };
@@ -19950,7 +19950,7 @@ uniform ${i4} ${o4} u_${a4};
       const ao = (e3, t3, i3 = 0) => ({ u_image: 0, u_unpack: t3.getUnpackVector(), u_dimension: [t3.stride, t3.stride], u_elevation_stops: 1, u_color_stops: 4, u_color_ramp_size: i3, u_opacity: e3.paint.get("color-relief-opacity") }), ro = (e3, i3, o3, a3) => {
         const r3 = e3.transform;
         return { u_translation: uo(e3, i3, o3), u_ratio: a3 / t2.aK(i3, 1, r3.zoom), u_device_pixel_ratio: e3.pixelRatio, u_units_to_pixels: [1 / r3.pixelsToGLUnits[0], 1 / r3.pixelsToGLUnits[1]] };
-      }, so = (e3, i3, o3, a3, r3) => t2.e(ro(e3, i3, o3, a3), { u_image: 0, u_image_height: r3 }), no = (e3, i3, o3, a3, r3) => {
+      }, so = (e3, i3, o3, a3, r3) => t2.e(ro(e3, i3, o3, a3), { u_image: 0, u_image_height: r3 }), no2 = (e3, i3, o3, a3, r3) => {
         const s3 = e3.transform, n4 = ho(i3, s3);
         return { u_translation: uo(e3, i3, o3), u_texsize: i3.imageAtlasTexture.size, u_ratio: a3 / t2.aK(i3, 1, s3.zoom), u_device_pixel_ratio: e3.pixelRatio, u_image: 0, u_scale: [n4, r3.fromScale, r3.toScale], u_fade: r3.t, u_units_to_pixels: [1 / s3.pixelsToGLUnits[0], 1 / s3.pixelsToGLUnits[1]] };
       }, lo = (e3, i3, o3, a3, r3) => {
@@ -20894,7 +20894,7 @@ uniform ${i4} ${o4} u_${a4};
           }
           const E3 = b3.getProjectionData({ overscaledTileID: a4, applyGlobeMatrix: !s3, applyTerrainMatrix: true }), S3 = b3.getPixelScale();
           let z3;
-          p3 ? (z3 = no(e3, o4, i3, S3, f3), Pa(v3, x3, o4, l4, f3)) : d3 && m3 ? (z3 = co(e3, o4, i3, S3, f3, n5.lineClipsArray.length), Ia(e3, t3, v3, x3, i3, n5, a4, l4, f3)) : d3 ? (z3 = lo(e3, o4, i3, S3, f3), Ca(e3, v3, x3, l4, P3, f3)) : m3 ? (z3 = so(e3, o4, i3, S3, n5.lineClipsArray.length), Ma(e3, t3, v3, x3, i3, n5, a4)) : z3 = ro(e3, o4, i3, S3);
+          p3 ? (z3 = no2(e3, o4, i3, S3, f3), Pa(v3, x3, o4, l4, f3)) : d3 && m3 ? (z3 = co(e3, o4, i3, S3, f3, n5.lineClipsArray.length), Ia(e3, t3, v3, x3, i3, n5, a4, l4, f3)) : d3 ? (z3 = lo(e3, o4, i3, S3, f3), Ca(e3, v3, x3, l4, P3, f3)) : m3 ? (z3 = so(e3, o4, i3, S3, n5.lineClipsArray.length), Ma(e3, t3, v3, x3, i3, n5, a4)) : z3 = ro(e3, o4, i3, S3);
           const R3 = e3.stencilModeForClipping(a4);
           T2.draw(v3, x3.TRIANGLES, c3, R3, h3, ii.disabled, z3, C3, E3, i3.id, n5.layoutVertexBuffer, n5.indexBuffer, n5.segments, i3.paint, e3.transform.zoom, l4, n5.layoutVertexBuffer2), y4 = false;
         }
@@ -24584,9 +24584,9 @@ const RATE_LIMIT_BACKOFF_MS = [
   15 * 6e4,
   60 * 6e4
 ];
-function medianOfNumbers(values) {
+function medianOfNumbers(values2) {
   const clean = [];
-  for (const v2 of values) {
+  for (const v2 of values2) {
     if (v2 == null || Number.isNaN(v2)) continue;
     clean.push(v2);
   }
@@ -24636,9 +24636,9 @@ function cacheKey(lat, lon, precision) {
 }
 function readCache(lat, lon, precision) {
   try {
-    const raw = window.localStorage?.getItem(cacheKey(lat, lon, precision));
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
+    const raw2 = window.localStorage?.getItem(cacheKey(lat, lon, precision));
+    if (!raw2) return null;
+    const obj = JSON.parse(raw2);
     if (Date.now() - obj.storedAt > CACHE_TTL_MS) return null;
     if (new Date(obj.storedAt).toDateString() !== (/* @__PURE__ */ new Date()).toDateString()) {
       return null;
@@ -25057,7 +25057,7 @@ class VectorTileFeature {
    * @param {string[]} keys
    * @param {(number | string | boolean)[]} values
    */
-  constructor(pbf, end, extent, keys, values) {
+  constructor(pbf, end, extent, keys, values2) {
     this.properties = {};
     this.extent = extent;
     this.type = 0;
@@ -25065,7 +25065,7 @@ class VectorTileFeature {
     this._pbf = pbf;
     this._geometry = -1;
     this._keys = keys;
-    this._values = values;
+    this._values = values2;
     pbf.readFields(readFeature, this, end);
   }
   loadGeometry() {
@@ -25214,13 +25214,13 @@ function classifyRings(rings) {
   return polygons;
 }
 function signedArea(ring) {
-  let sum = 0;
+  let sum2 = 0;
   for (let i2 = 0, len = ring.length, j = len - 1, p1, p2; i2 < len; j = i2++) {
     p1 = ring[i2];
     p2 = ring[j];
-    sum += (p2.x - p1.x) * (p1.y + p2.y);
+    sum2 += (p2.x - p1.x) * (p1.y + p2.y);
   }
-  return sum;
+  return sum2;
 }
 class VectorTileLayer {
   /**
@@ -25400,9 +25400,9 @@ class Pbf {
     return readUtf8(this.buf, pos, end);
   }
   readBytes() {
-    const end = this.readVarint() + this.pos, buffer = this.buf.subarray(this.pos, end);
+    const end = this.readVarint() + this.pos, buffer2 = this.buf.subarray(this.pos, end);
     this.pos = end;
-    return buffer;
+    return buffer2;
   }
   // verbose for performance reasons; doesn't affect gzipped size
   /**
@@ -25576,11 +25576,11 @@ class Pbf {
     this.pos += 8;
   }
   /** @param {Uint8Array} buffer */
-  writeBytes(buffer) {
-    const len = buffer.length;
+  writeBytes(buffer2) {
+    const len = buffer2.length;
     this.writeVarint(len);
     this.realloc(len);
-    for (let i2 = 0; i2 < len; i2++) this.buf[this.pos++] = buffer[i2];
+    for (let i2 = 0; i2 < len; i2++) this.buf[this.pos++] = buffer2[i2];
   }
   /**
    * @template T
@@ -25674,9 +25674,9 @@ class Pbf {
    * @param {number} tag
    * @param {Uint8Array} buffer
    */
-  writeBytesField(tag, buffer) {
+  writeBytesField(tag, buffer2) {
     this.writeTag(tag, PBF_BYTES);
-    this.writeBytes(buffer);
+    this.writeBytes(buffer2);
   }
   /**
    * @param {number} tag
@@ -26027,6 +26027,29 @@ function representativePoint(geom) {
   }
   return [sx / ring.length, sy / ring.length];
 }
+const OFM_TILEJSON_URL = "https://tiles.openfreemap.org/planet";
+let _ofmTileTemplate = null;
+let _ofmTileTemplateInflight = null;
+async function getOpenFreeMapTileTemplate(signal) {
+  if (_ofmTileTemplate) return _ofmTileTemplate;
+  if (_ofmTileTemplateInflight) return _ofmTileTemplateInflight;
+  _ofmTileTemplateInflight = (async () => {
+    try {
+      const resp = await fetch(OFM_TILEJSON_URL, { signal });
+      if (!resp.ok) return null;
+      const tj = await resp.json();
+      const url = Array.isArray(tj.tiles) && tj.tiles.length > 0 ? tj.tiles[0] : null;
+      if (!url) return null;
+      _ofmTileTemplate = url;
+      return url;
+    } catch (_2) {
+      return null;
+    } finally {
+      _ofmTileTemplateInflight = null;
+    }
+  })();
+  return _ofmTileTemplateInflight;
+}
 async function fetchBuildingsAroundHome(opts) {
   const z2 = Math.max(0, Math.floor(opts.zoom ?? 14));
   const r2 = Math.max(1, opts.radiusMeters);
@@ -26053,9 +26076,16 @@ async function fetchBuildingsAroundHome(opts) {
   if (tilesToFetch.length > 16) {
     throw new Error(`[HELIOS] fetchBuildingsAroundHome: ${tilesToFetch.length} tiles requested, radius/zoom misconfigured`);
   }
+  const tileTemplate = await getOpenFreeMapTileTemplate(opts.signal);
+  if (!tileTemplate) {
+    return {
+      home: { type: "FeatureCollection", features: [] },
+      surroundings: { type: "FeatureCollection", features: [] }
+    };
+  }
   const features = [];
   await Promise.all(tilesToFetch.map(async ({ x: x2, y: y3 }) => {
-    const url = `https://api.maptiler.com/tiles/v3/${z2}/${x2}/${y3}.pbf?key=${opts.apiKey}`;
+    const url = tileTemplate.replace("{z}", String(z2)).replace("{x}", String(x2)).replace("{y}", String(y3));
     let resp;
     try {
       resp = await fetch(url, { signal: opts.signal });
@@ -26238,28 +26268,28 @@ function clipConvexPolygon(subject, clip) {
     output = [];
     for (let i2 = 0; i2 < input.length; i2++) {
       const curr = input[i2];
-      const next = input[(i2 + 1) % input.length];
+      const next3 = input[(i2 + 1) % input.length];
       const cCross = edx * (curr[1] - e1y) - edy * (curr[0] - e1x);
-      const nCross = edx * (next[1] - e1y) - edy * (next[0] - e1x);
+      const nCross = edx * (next3[1] - e1y) - edy * (next3[0] - e1x);
       const cIn = cCross >= 0;
       const nIn = nCross >= 0;
       if (cIn) {
         if (nIn) {
-          output.push(next);
+          output.push(next3);
         } else {
           const t2 = cCross / (cCross - nCross);
           output.push([
-            curr[0] + t2 * (next[0] - curr[0]),
-            curr[1] + t2 * (next[1] - curr[1])
+            curr[0] + t2 * (next3[0] - curr[0]),
+            curr[1] + t2 * (next3[1] - curr[1])
           ]);
         }
       } else if (nIn) {
         const t2 = cCross / (cCross - nCross);
         output.push([
-          curr[0] + t2 * (next[0] - curr[0]),
-          curr[1] + t2 * (next[1] - curr[1])
+          curr[0] + t2 * (next3[0] - curr[0]),
+          curr[1] + t2 * (next3[1] - curr[1])
         ]);
-        output.push(next);
+        output.push(next3);
       }
     }
   }
@@ -26288,15 +26318,166 @@ function convexHull(pts) {
   upper.pop();
   return lower.concat(upper);
 }
+const DEFAULT_HEIGHT_THRESH_M = 5;
+const DEFAULT_HEIGHT_MAX_M = 100;
+const DEFAULT_TARGET_AREA_M2 = 80;
+const DEFAULT_MIN_COMPONENT_CELLS = 3;
+const M_PER_DEG_LAT = 111320;
+const EARTH_RADIUS_M = 63710088e-1;
+function processHeightRaster(heights, geo, opts = {}) {
+  const heightThresh = opts.heightThreshM ?? DEFAULT_HEIGHT_THRESH_M;
+  const heightMax = opts.heightMaxM ?? DEFAULT_HEIGHT_MAX_M;
+  const targetArea = opts.targetAreaM2 ?? DEFAULT_TARGET_AREA_M2;
+  const minCells = opts.minComponentCells ?? DEFAULT_MIN_COMPONENT_CELLS;
+  const { rasterSize, minLat, maxLat, minLon, maxLon } = geo;
+  const N2 = rasterSize * rasterSize;
+  if (heights.length < N2) {
+    return emptyResult();
+  }
+  const pxLon = (maxLon - minLon) / rasterSize;
+  const pxLat = (maxLat - minLat) / rasterSize;
+  const halfLon = pxLon / 2;
+  const halfLat = pxLat / 2;
+  const pxLatM = pxLat * M_PER_DEG_LAT;
+  const cellAreaM2 = pxLatM * pxLatM;
+  const maxCellsPerComponent = Math.max(4, Math.min(
+    400,
+    Math.round(targetArea / Math.max(0.01, cellAreaM2))
+  ));
+  const cropM = geo.cropRadiusMeters && geo.cropRadiusMeters > 0 ? geo.cropRadiusMeters : null;
+  const validArr = new Uint8Array(N2);
+  const hOk = new Float32Array(N2);
+  let keptCells = 0;
+  let hMin = Infinity, hMax = -Infinity;
+  for (let j = 0; j < rasterSize; j++) {
+    const cLat = maxLat - (j + 0.5) * pxLat;
+    for (let i2 = 0; i2 < rasterSize; i2++) {
+      const idx = j * rasterSize + i2;
+      const h2 = heights[idx];
+      if (!isFinite(h2) || h2 < heightThresh || h2 > heightMax) continue;
+      if (cropM !== null) {
+        const cLon = minLon + (i2 + 0.5) * pxLon;
+        if (haversineMeters(geo.homeLat, geo.homeLon, cLat, cLon) > cropM) {
+          continue;
+        }
+      }
+      validArr[idx] = 1;
+      hOk[idx] = h2;
+      keptCells++;
+      if (h2 < hMin) hMin = h2;
+      if (h2 > hMax) hMax = h2;
+    }
+  }
+  const labels = new Int32Array(N2);
+  const stack = [];
+  const components = [];
+  let nextLabel = 0;
+  for (let seed = 0; seed < N2; seed++) {
+    if (!validArr[seed] || labels[seed]) continue;
+    nextLabel++;
+    const cells = [];
+    let heightSum = 0;
+    stack.length = 0;
+    stack.push(seed);
+    while (stack.length && cells.length < maxCellsPerComponent) {
+      const idx = stack.pop();
+      if (labels[idx] || !validArr[idx]) continue;
+      labels[idx] = nextLabel;
+      cells.push(idx);
+      heightSum += hOk[idx];
+      const x2 = idx % rasterSize;
+      const y3 = idx / rasterSize | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x2 + dx, ny = y3 + dy;
+          if (nx < 0 || nx >= rasterSize || ny < 0 || ny >= rasterSize) continue;
+          const nIdx = ny * rasterSize + nx;
+          if (!labels[nIdx] && validArr[nIdx]) stack.push(nIdx);
+        }
+      }
+    }
+    if (cells.length >= minCells) {
+      components.push({ cells, heightSum });
+    }
+  }
+  const out = [];
+  for (const comp of components) {
+    const corners = [];
+    for (const idx of comp.cells) {
+      const x2 = idx % rasterSize;
+      const y3 = idx / rasterSize | 0;
+      const cLon = minLon + (x2 + 0.5) * pxLon;
+      const cLat = maxLat - (y3 + 0.5) * pxLat;
+      corners.push([cLon - halfLon, cLat - halfLat]);
+      corners.push([cLon + halfLon, cLat - halfLat]);
+      corners.push([cLon + halfLon, cLat + halfLat]);
+      corners.push([cLon - halfLon, cLat + halfLat]);
+    }
+    const hull = convexHull(corners);
+    if (hull.length < 3) continue;
+    hull.push([hull[0][0], hull[0][1]]);
+    const avg = comp.heightSum / comp.cells.length;
+    out.push({
+      type: "Feature",
+      geometry: { type: "Polygon", coordinates: [hull] },
+      properties: {
+        render_height: avg,
+        render_min_height: 0
+      }
+    });
+  }
+  return {
+    features: {
+      type: "FeatureCollection",
+      features: out
+    },
+    diagnostics: {
+      cellsKept: keptCells,
+      cellsPerClumpCap: maxCellsPerComponent,
+      heightRangeM: keptCells > 0 ? [Number(hMin.toFixed(1)), Number(hMax.toFixed(1))] : null
+    }
+  };
+}
+function emptyResult() {
+  return {
+    features: {
+      type: "FeatureCollection",
+      features: []
+    },
+    diagnostics: {
+      cellsKept: 0,
+      cellsPerClumpCap: 0,
+      heightRangeM: null
+    }
+  };
+}
+function homeBbox(homeLat, homeLon, radiusMeters, padFactor) {
+  const r2 = Math.max(1, radiusMeters);
+  const dLat = r2 * padFactor / M_PER_DEG_LAT;
+  const dLon = r2 * padFactor / (M_PER_DEG_LAT * Math.cos(homeLat * Math.PI / 180));
+  return {
+    minLat: homeLat - dLat,
+    maxLat: homeLat + dLat,
+    minLon: homeLon - dLon,
+    maxLon: homeLon + dLon
+  };
+}
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const toRad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toRad;
+  const dLon = (lon2 - lon1) * toRad;
+  const a2 = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a2));
+}
+const RASTER_DEFAULTS = {
+  bboxPadFactor: 1.15,
+  minRasterSize: 64,
+  maxRasterSize: 2048
+};
 const WMS_URL = "https://data.geopf.fr/wms-r";
 const LAYER_MNH = "IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
 const FR_BBOX = { minLat: 41, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
-const M_PER_DEG_LAT = 111320;
-const HEIGHT_THRESH_M = 5;
-const HEIGHT_MAX_M = 100;
-const BBOX_PAD_FACTOR = 1.15;
-const TARGET_COMPONENT_AREA_M2 = 80;
-const MIN_COMPONENT_CELLS = 3;
 const franceLidarHd = {
   id: "fr-ign-lidarhd",
   name: "IGN LiDAR HD (France)",
@@ -26304,25 +26485,18 @@ const franceLidarHd = {
     return lat >= FR_BBOX.minLat && lat <= FR_BBOX.maxLat && lon >= FR_BBOX.minLon && lon <= FR_BBOX.maxLon;
   },
   async fetchShadowRegions(opts) {
-    const emptyFeatures = { type: "FeatureCollection", features: [] };
-    const emptyResult = {
-      features: emptyFeatures,
-      diagnostics: {
-        cellsKept: 0,
-        cellsPerClumpCap: 0,
-        heightRangeM: null
-      }
-    };
-    const rasterSize = Math.min(2048, Math.max(64, Math.round(opts.rasterSize)));
-    const r2 = Math.max(1, opts.radiusMeters);
-    const dLat = r2 * BBOX_PAD_FACTOR / M_PER_DEG_LAT;
-    const dLon = r2 * BBOX_PAD_FACTOR / (M_PER_DEG_LAT * Math.cos(opts.homeLat * Math.PI / 180));
-    const minLat = opts.homeLat - dLat;
-    const maxLat = opts.homeLat + dLat;
-    const minLon = opts.homeLon - dLon;
-    const maxLon = opts.homeLon + dLon;
-    if (maxLat < FR_BBOX.minLat || minLat > FR_BBOX.maxLat || maxLon < FR_BBOX.minLon || minLon > FR_BBOX.maxLon) {
-      return emptyResult;
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < FR_BBOX.minLat || bbox.minLat > FR_BBOX.maxLat || bbox.maxLon < FR_BBOX.minLon || bbox.minLon > FR_BBOX.maxLon) {
+      return emptyResult();
     }
     const params = new URLSearchParams({
       SERVICE: "WMS",
@@ -26331,7 +26505,7 @@ const franceLidarHd = {
       LAYERS: LAYER_MNH,
       STYLES: "",
       CRS: "EPSG:4326",
-      BBOX: `${minLat},${minLon},${maxLat},${maxLon}`,
+      BBOX: `${bbox.minLat},${bbox.minLon},${bbox.maxLat},${bbox.maxLon}`,
       WIDTH: String(rasterSize),
       HEIGHT: String(rasterSize),
       FORMAT: "image/x-bil;bits=32"
@@ -26340,138 +26514,3425 @@ const franceLidarHd = {
     try {
       resp = await fetch(`${WMS_URL}?${params.toString()}`, { signal: opts.signal });
     } catch (_2) {
-      return emptyResult;
+      return emptyResult();
     }
-    if (!resp.ok) return emptyResult;
+    if (!resp.ok) return emptyResult();
     let buf;
     try {
       buf = await resp.arrayBuffer();
     } catch (_2) {
-      return emptyResult;
+      return emptyResult();
     }
     const expectedBytes = rasterSize * rasterSize * 4;
-    if (buf.byteLength < expectedBytes) return emptyResult;
+    if (buf.byteLength < expectedBytes) return emptyResult();
     const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
-    const pxLon = (maxLon - minLon) / rasterSize;
-    const pxLat = (maxLat - minLat) / rasterSize;
-    const halfLon = pxLon / 2;
-    const halfLat = pxLat / 2;
-    const pxLatM = pxLat * M_PER_DEG_LAT;
-    const cellAreaM2 = pxLatM * pxLatM;
-    const maxCellsPerComponent = Math.max(4, Math.min(
-      400,
-      Math.round(TARGET_COMPONENT_AREA_M2 / cellAreaM2)
-    ));
-    const cropM = opts.cropRadiusMeters && opts.cropRadiusMeters > 0 ? opts.cropRadiusMeters : null;
-    const N2 = rasterSize * rasterSize;
-    const validArr = new Uint8Array(N2);
-    const hOk = new Float32Array(N2);
-    let keptCells = 0;
-    let hMin = Infinity, hMax = -Infinity;
-    for (let j = 0; j < rasterSize; j++) {
-      const cLat = maxLat - (j + 0.5) * pxLat;
-      for (let i2 = 0; i2 < rasterSize; i2++) {
-        const idx = j * rasterSize + i2;
-        const h2 = heights[idx];
-        if (!isFinite(h2) || h2 < HEIGHT_THRESH_M || h2 > HEIGHT_MAX_M) continue;
-        if (cropM !== null) {
-          const cLon = minLon + (i2 + 0.5) * pxLon;
-          if (haversineMeters(opts.homeLat, opts.homeLon, cLat, cLon) > cropM) {
-            continue;
-          }
-        }
-        validArr[idx] = 1;
-        hOk[idx] = h2;
-        keptCells++;
-        if (h2 < hMin) hMin = h2;
-        if (h2 > hMax) hMax = h2;
-      }
-    }
-    const labels = new Int32Array(N2);
-    const stack = [];
-    const components = [];
-    let nextLabel = 0;
-    for (let seed = 0; seed < N2; seed++) {
-      if (!validArr[seed] || labels[seed]) continue;
-      nextLabel++;
-      const cells = [];
-      let heightSum = 0;
-      stack.length = 0;
-      stack.push(seed);
-      while (stack.length && cells.length < maxCellsPerComponent) {
-        const idx = stack.pop();
-        if (labels[idx] || !validArr[idx]) continue;
-        labels[idx] = nextLabel;
-        cells.push(idx);
-        heightSum += hOk[idx];
-        const x2 = idx % rasterSize;
-        const y3 = idx / rasterSize | 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = x2 + dx, ny = y3 + dy;
-            if (nx < 0 || nx >= rasterSize || ny < 0 || ny >= rasterSize) continue;
-            const nIdx = ny * rasterSize + nx;
-            if (!labels[nIdx] && validArr[nIdx]) stack.push(nIdx);
-          }
-        }
-      }
-      if (cells.length >= MIN_COMPONENT_CELLS) {
-        components.push({ cells, heightSum });
-      }
-    }
-    const out = [];
-    for (const comp of components) {
-      const corners = [];
-      for (const idx of comp.cells) {
-        const x2 = idx % rasterSize;
-        const y3 = idx / rasterSize | 0;
-        const cLon = minLon + (x2 + 0.5) * pxLon;
-        const cLat = maxLat - (y3 + 0.5) * pxLat;
-        corners.push([cLon - halfLon, cLat - halfLat]);
-        corners.push([cLon + halfLon, cLat - halfLat]);
-        corners.push([cLon + halfLon, cLat + halfLat]);
-        corners.push([cLon - halfLon, cLat + halfLat]);
-      }
-      const hull = convexHull(corners);
-      if (hull.length < 3) continue;
-      hull.push([hull[0][0], hull[0][1]]);
-      const avg = comp.heightSum / comp.cells.length;
-      out.push({
-        type: "Feature",
-        geometry: { type: "Polygon", coordinates: [hull] },
-        properties: {
-          render_height: avg,
-          render_min_height: 0
-        }
-      });
-    }
-    return {
-      features: {
-        type: "FeatureCollection",
-        features: out
-      },
-      diagnostics: {
-        cellsKept: keptCells,
-        cellsPerClumpCap: maxCellsPerComponent,
-        heightRangeM: keptCells > 0 ? [
-          Number(hMin.toFixed(1)),
-          Number(hMax.toFixed(1))
-        ] : null
-      }
-    };
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
   }
 };
-const EARTH_RADIUS_M = 63710088e-1;
-function haversineMeters(lat1, lon1, lat2, lon2) {
-  const toRad = Math.PI / 180;
-  const dLat = (lat2 - lat1) * toRad;
-  const dLon = (lon2 - lon1) * toRad;
-  const a2 = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a2));
+function uncurryThis(target) {
+  return (thisArg, ...args) => {
+    return ReflectApply(target, thisArg, args);
+  };
 }
+function uncurryThisGetter(target, key) {
+  return uncurryThis(
+    ReflectGetOwnPropertyDescriptor(
+      target,
+      key
+    ).get
+  );
+}
+const {
+  apply: ReflectApply,
+  getOwnPropertyDescriptor: ReflectGetOwnPropertyDescriptor,
+  getPrototypeOf: ReflectGetPrototypeOf,
+  ownKeys: ReflectOwnKeys
+} = Reflect;
+const {
+  iterator: SymbolIterator,
+  toStringTag: SymbolToStringTag
+} = Symbol;
+const NativeObject = Object;
+const {
+  create: ObjectCreate,
+  defineProperty: ObjectDefineProperty
+} = NativeObject;
+const NativeArray = Array;
+const ArrayPrototype = NativeArray.prototype;
+const NativeArrayPrototypeSymbolIterator = ArrayPrototype[SymbolIterator];
+const ArrayPrototypeSymbolIterator = uncurryThis(NativeArrayPrototypeSymbolIterator);
+const NativeArrayBuffer = ArrayBuffer;
+const ArrayBufferPrototype = NativeArrayBuffer.prototype;
+uncurryThisGetter(ArrayBufferPrototype, "byteLength");
+const NativeSharedArrayBuffer = typeof SharedArrayBuffer !== "undefined" ? SharedArrayBuffer : null;
+NativeSharedArrayBuffer && uncurryThisGetter(NativeSharedArrayBuffer.prototype, "byteLength");
+const TypedArray = ReflectGetPrototypeOf(Uint8Array);
+TypedArray.from;
+const TypedArrayPrototype = TypedArray.prototype;
+TypedArrayPrototype[SymbolIterator];
+uncurryThis(TypedArrayPrototype.keys);
+uncurryThis(
+  TypedArrayPrototype.values
+);
+uncurryThis(
+  TypedArrayPrototype.entries
+);
+uncurryThis(TypedArrayPrototype.set);
+uncurryThis(
+  TypedArrayPrototype.reverse
+);
+uncurryThis(TypedArrayPrototype.fill);
+uncurryThis(
+  TypedArrayPrototype.copyWithin
+);
+uncurryThis(TypedArrayPrototype.sort);
+uncurryThis(TypedArrayPrototype.slice);
+uncurryThis(
+  TypedArrayPrototype.subarray
+);
+uncurryThisGetter(
+  TypedArrayPrototype,
+  "buffer"
+);
+uncurryThisGetter(
+  TypedArrayPrototype,
+  "byteOffset"
+);
+uncurryThisGetter(
+  TypedArrayPrototype,
+  "length"
+);
+uncurryThisGetter(
+  TypedArrayPrototype,
+  SymbolToStringTag
+);
+const NativeUint8Array = Uint8Array;
+const NativeUint16Array = Uint16Array;
+const NativeUint32Array = Uint32Array;
+const NativeFloat32Array = Float32Array;
+const ArrayIteratorPrototype = ReflectGetPrototypeOf([][SymbolIterator]());
+const ArrayIteratorPrototypeNext = uncurryThis(ArrayIteratorPrototype.next);
+const GeneratorPrototypeNext = uncurryThis(function* () {
+}().next);
+const IteratorPrototype = ReflectGetPrototypeOf(ArrayIteratorPrototype);
+const DataViewPrototype = DataView.prototype;
+const DataViewPrototypeGetUint16 = uncurryThis(
+  DataViewPrototype.getUint16
+);
+const NativeWeakMap = WeakMap;
+const WeakMapPrototype = NativeWeakMap.prototype;
+const WeakMapPrototypeGet = uncurryThis(WeakMapPrototype.get);
+const WeakMapPrototypeSet = uncurryThis(WeakMapPrototype.set);
+const arrayIterators = new NativeWeakMap();
+const SafeIteratorPrototype = ObjectCreate(null, {
+  next: {
+    value: function next() {
+      const arrayIterator = WeakMapPrototypeGet(arrayIterators, this);
+      return ArrayIteratorPrototypeNext(arrayIterator);
+    }
+  },
+  [SymbolIterator]: {
+    value: function values() {
+      return this;
+    }
+  }
+});
+function safeIfNeeded(array) {
+  if (array[SymbolIterator] === NativeArrayPrototypeSymbolIterator && ArrayIteratorPrototype.next === ArrayIteratorPrototypeNext) {
+    return array;
+  }
+  const safe = ObjectCreate(SafeIteratorPrototype);
+  WeakMapPrototypeSet(arrayIterators, safe, ArrayPrototypeSymbolIterator(array));
+  return safe;
+}
+const generators = new NativeWeakMap();
+const DummyArrayIteratorPrototype = ObjectCreate(IteratorPrototype, {
+  next: {
+    value: function next2() {
+      const generator = WeakMapPrototypeGet(generators, this);
+      return GeneratorPrototypeNext(generator);
+    },
+    writable: true,
+    configurable: true
+  }
+});
+for (const key of ReflectOwnKeys(ArrayIteratorPrototype)) {
+  if (key === "next") {
+    continue;
+  }
+  ObjectDefineProperty(DummyArrayIteratorPrototype, key, ReflectGetOwnPropertyDescriptor(ArrayIteratorPrototype, key));
+}
+const buffer = new NativeArrayBuffer(4);
+const floatView = new NativeFloat32Array(buffer);
+const uint32View = new NativeUint32Array(buffer);
+const baseTable = new NativeUint16Array(512);
+const shiftTable = new NativeUint8Array(512);
+for (let i2 = 0; i2 < 256; ++i2) {
+  const e2 = i2 - 127;
+  if (e2 < -24) {
+    baseTable[i2] = 0;
+    baseTable[i2 | 256] = 32768;
+    shiftTable[i2] = 24;
+    shiftTable[i2 | 256] = 24;
+  } else if (e2 < -14) {
+    baseTable[i2] = 1024 >> -e2 - 14;
+    baseTable[i2 | 256] = 1024 >> -e2 - 14 | 32768;
+    shiftTable[i2] = -e2 - 1;
+    shiftTable[i2 | 256] = -e2 - 1;
+  } else if (e2 <= 15) {
+    baseTable[i2] = e2 + 15 << 10;
+    baseTable[i2 | 256] = e2 + 15 << 10 | 32768;
+    shiftTable[i2] = 13;
+    shiftTable[i2 | 256] = 13;
+  } else if (e2 < 128) {
+    baseTable[i2] = 31744;
+    baseTable[i2 | 256] = 64512;
+    shiftTable[i2] = 24;
+    shiftTable[i2 | 256] = 24;
+  } else {
+    baseTable[i2] = 31744;
+    baseTable[i2 | 256] = 64512;
+    shiftTable[i2] = 13;
+    shiftTable[i2 | 256] = 13;
+  }
+}
+const mantissaTable = new NativeUint32Array(2048);
+for (let i2 = 1; i2 < 1024; ++i2) {
+  let m2 = i2 << 13;
+  let e2 = 0;
+  while ((m2 & 8388608) === 0) {
+    m2 <<= 1;
+    e2 -= 8388608;
+  }
+  m2 &= -8388609;
+  e2 += 947912704;
+  mantissaTable[i2] = m2 | e2;
+}
+for (let i2 = 1024; i2 < 2048; ++i2) {
+  mantissaTable[i2] = 939524096 + (i2 - 1024 << 13);
+}
+const exponentTable = new NativeUint32Array(64);
+for (let i2 = 1; i2 < 31; ++i2) {
+  exponentTable[i2] = i2 << 23;
+}
+exponentTable[31] = 1199570944;
+exponentTable[32] = 2147483648;
+for (let i2 = 33; i2 < 63; ++i2) {
+  exponentTable[i2] = 2147483648 + (i2 - 32 << 23);
+}
+exponentTable[63] = 3347054592;
+const offsetTable = new NativeUint16Array(64);
+for (let i2 = 1; i2 < 64; ++i2) {
+  if (i2 !== 32) {
+    offsetTable[i2] = 1024;
+  }
+}
+function convertToNumber(float16bits) {
+  const i2 = float16bits >> 10;
+  uint32View[0] = mantissaTable[offsetTable[i2] + (float16bits & 1023)] + exponentTable[i2];
+  return floatView[0];
+}
+function getFloat16(dataView, byteOffset, ...opts) {
+  return convertToNumber(
+    DataViewPrototypeGetUint16(dataView, byteOffset, ...safeIfNeeded(opts))
+  );
+}
+function getAttribute(tag, attributeName, options) {
+  const xml = typeof tag === "object" ? tag.outer : tag;
+  const opening = xml.slice(0, xml.indexOf(">") + 1);
+  const quotechars = ['"', "'"];
+  for (let i2 = 0; i2 < quotechars.length; i2++) {
+    const char = quotechars[i2];
+    const pattern = attributeName + "\\=" + char + "([^" + char + "]*)" + char;
+    const re = new RegExp(pattern);
+    const match = re.exec(opening);
+    if (match) return match[1];
+  }
+}
+function indexOfMatch(xml, pattern, startIndex) {
+  const re = new RegExp(pattern);
+  const match = re.exec(xml.slice(startIndex));
+  if (match) return startIndex + match.index;
+  else return -1;
+}
+function indexOfMatchEnd(xml, pattern, startIndex) {
+  const re = new RegExp(pattern);
+  const match = re.exec(xml.slice(startIndex));
+  if (match) return startIndex + match.index + match[0].length - 1;
+  else return -1;
+}
+function countSubstring(string, substring) {
+  const pattern = new RegExp(substring, "g");
+  const match = string.match(pattern);
+  return match ? match.length : 0;
+}
+function findTagByName(xml, tagName, options) {
+  const debug = options && options.debug || false;
+  const nested = !(options && typeof options.nested === false);
+  const startIndex = options && options.startIndex || 0;
+  if (debug) console.log("[xml-utils] starting findTagByName with", tagName, " and ", options);
+  const start = indexOfMatch(xml, `<${tagName}[ 
+>/]`, startIndex);
+  if (debug) console.log("[xml-utils] start:", start);
+  if (start === -1) return void 0;
+  const afterStart = xml.slice(start + tagName.length);
+  let relativeEnd = indexOfMatchEnd(afterStart, "^[^<]*[ /]>", 0);
+  const selfClosing = relativeEnd !== -1 && afterStart[relativeEnd - 1] === "/";
+  if (debug) console.log("[xml-utils] selfClosing:", selfClosing);
+  if (selfClosing === false) {
+    if (nested) {
+      let startIndex2 = 0;
+      let openings = 1;
+      let closings = 0;
+      while ((relativeEnd = indexOfMatchEnd(afterStart, "[ /]" + tagName + ">", startIndex2)) !== -1) {
+        const clip = afterStart.substring(startIndex2, relativeEnd + 1);
+        openings += countSubstring(clip, "<" + tagName + "[ \n	>]");
+        closings += countSubstring(clip, "</" + tagName + ">");
+        if (closings >= openings) break;
+        startIndex2 = relativeEnd;
+      }
+    } else {
+      relativeEnd = indexOfMatchEnd(afterStart, "[ /]" + tagName + ">", 0);
+    }
+  }
+  const end = start + tagName.length + relativeEnd + 1;
+  if (debug) console.log("[xml-utils] end:", end);
+  if (end === -1) return void 0;
+  const outer = xml.slice(start, end);
+  let inner;
+  if (selfClosing) {
+    inner = null;
+  } else {
+    inner = outer.slice(outer.indexOf(">") + 1, outer.lastIndexOf("<"));
+  }
+  return { inner, outer, start, end };
+}
+function findTagsByName(xml, tagName, options) {
+  const tags2 = [];
+  const debug = false;
+  let startIndex = 0;
+  let tag;
+  while (tag = findTagByName(xml, tagName, { debug, startIndex })) {
+    {
+      startIndex = tag.start + 1 + tagName.length;
+    }
+    tags2.push(tag);
+  }
+  return tags2;
+}
+const fieldTypes = {
+  BYTE: (
+    /** @type {1} */
+    1
+  ),
+  ASCII: (
+    /** @type {2} */
+    2
+  ),
+  SHORT: (
+    /** @type {3} */
+    3
+  ),
+  LONG: (
+    /** @type {4} */
+    4
+  ),
+  RATIONAL: (
+    /** @type {5} */
+    5
+  ),
+  SBYTE: (
+    /** @type {6} */
+    6
+  ),
+  UNDEFINED: (
+    /** @type {7} */
+    7
+  ),
+  SSHORT: (
+    /** @type {8} */
+    8
+  ),
+  SLONG: (
+    /** @type {9} */
+    9
+  ),
+  SRATIONAL: (
+    /** @type {10} */
+    10
+  ),
+  FLOAT: (
+    /** @type {11} */
+    11
+  ),
+  DOUBLE: (
+    /** @type {12} */
+    12
+  ),
+  // IFD offset, suggested by https://owl.phy.queensu.ca/~phil/exiftool/standards.html
+  IFD: (
+    /** @type {13} */
+    13
+  ),
+  // introduced by BigTIFF
+  LONG8: (
+    /** @type {16} */
+    16
+  ),
+  SLONG8: (
+    /** @type {17} */
+    17
+  ),
+  IFD8: (
+    /** @type {18} */
+    18
+  )
+};
+const fieldTypeSizes = (
+  /** @type {const} */
+  {
+    [fieldTypes.BYTE]: 1,
+    [fieldTypes.ASCII]: 1,
+    [fieldTypes.SBYTE]: 1,
+    [fieldTypes.UNDEFINED]: 1,
+    [fieldTypes.SHORT]: 2,
+    [fieldTypes.SSHORT]: 2,
+    [fieldTypes.LONG]: 4,
+    [fieldTypes.SLONG]: 4,
+    [fieldTypes.FLOAT]: 4,
+    [fieldTypes.IFD]: 4,
+    [fieldTypes.RATIONAL]: 8,
+    [fieldTypes.SRATIONAL]: 8,
+    [fieldTypes.DOUBLE]: 8,
+    [fieldTypes.LONG8]: 8,
+    [fieldTypes.SLONG8]: 8,
+    [fieldTypes.IFD8]: 8
+  }
+);
+function getFieldTypeSize(fieldType) {
+  const size = fieldTypeSizes[fieldType];
+  if (size === void 0) {
+    throw new RangeError(`Invalid field type: ${fieldType}`);
+  }
+  return size;
+}
+const tagDictionary = (
+  /** @type {const} */
+  {
+    NewSubfileType: { tag: 254, type: fieldTypes.LONG, eager: true },
+    SubfileType: { tag: 255, type: fieldTypes.SHORT, eager: true },
+    ImageWidth: { tag: 256, type: fieldTypes.SHORT, eager: true },
+    ImageLength: { tag: 257, type: fieldTypes.SHORT, eager: true },
+    BitsPerSample: { tag: 258, type: fieldTypes.SHORT, isArray: true, eager: true },
+    Compression: { tag: 259, type: fieldTypes.SHORT, eager: true },
+    PhotometricInterpretation: { tag: 262, type: fieldTypes.SHORT, eager: true },
+    Threshholding: { tag: 263, type: fieldTypes.SHORT },
+    CellWidth: { tag: 264, type: fieldTypes.SHORT },
+    CellLength: { tag: 265, type: fieldTypes.SHORT },
+    FillOrder: { tag: 266, type: fieldTypes.SHORT },
+    DocumentName: { tag: 269, type: fieldTypes.ASCII },
+    ImageDescription: { tag: 270, type: fieldTypes.ASCII },
+    Make: { tag: 271, type: fieldTypes.ASCII },
+    Model: { tag: 272, type: fieldTypes.ASCII },
+    StripOffsets: { tag: 273, type: fieldTypes.SHORT, isArray: true },
+    Orientation: { tag: 274, type: fieldTypes.SHORT },
+    SamplesPerPixel: { tag: 277, type: fieldTypes.SHORT, eager: true },
+    RowsPerStrip: { tag: 278, type: fieldTypes.SHORT, eager: true },
+    StripByteCounts: { tag: 279, type: fieldTypes.LONG, isArray: true },
+    MinSampleValue: { tag: 280, type: fieldTypes.SHORT, isArray: true },
+    MaxSampleValue: { tag: 281, type: fieldTypes.SHORT, isArray: true },
+    XResolution: { tag: 282, type: fieldTypes.RATIONAL },
+    YResolution: { tag: 283, type: fieldTypes.RATIONAL },
+    PlanarConfiguration: { tag: 284, type: fieldTypes.SHORT, eager: true },
+    PageName: { tag: 285, type: fieldTypes.ASCII },
+    XPosition: { tag: 286, type: fieldTypes.RATIONAL },
+    YPosition: { tag: 287, type: fieldTypes.RATIONAL },
+    FreeOffsets: { tag: 288, type: fieldTypes.LONG },
+    FreeByteCounts: { tag: 289, type: fieldTypes.LONG },
+    GrayResponseUnit: { tag: 290, type: fieldTypes.SHORT },
+    GrayResponseCurve: { tag: 291, type: fieldTypes.SHORT, isArray: true },
+    T4Options: { tag: 292, type: fieldTypes.LONG },
+    T6Options: { tag: 293, type: fieldTypes.LONG },
+    ResolutionUnit: { tag: 296, type: fieldTypes.SHORT },
+    PageNumber: { tag: 297, type: fieldTypes.SHORT, isArray: true },
+    TransferFunction: { tag: 301, type: fieldTypes.SHORT, isArray: true },
+    Software: { tag: 305, type: fieldTypes.ASCII },
+    DateTime: { tag: 306, type: fieldTypes.ASCII },
+    Artist: { tag: 315, type: fieldTypes.ASCII },
+    HostComputer: { tag: 316, type: fieldTypes.ASCII },
+    Predictor: { tag: 317, type: fieldTypes.SHORT },
+    WhitePoint: { tag: 318, type: fieldTypes.RATIONAL, isArray: true },
+    PrimaryChromaticities: { tag: 319, type: fieldTypes.RATIONAL, isArray: true },
+    ColorMap: { tag: 320, type: fieldTypes.SHORT, isArray: true },
+    HalftoneHints: { tag: 321, type: fieldTypes.SHORT, isArray: true },
+    TileWidth: { tag: 322, type: fieldTypes.SHORT, eager: true },
+    TileLength: { tag: 323, type: fieldTypes.SHORT, eager: true },
+    TileOffsets: { tag: 324, type: fieldTypes.LONG, isArray: true },
+    TileByteCounts: { tag: 325, type: fieldTypes.SHORT, isArray: true },
+    InkSet: { tag: 332, type: fieldTypes.SHORT },
+    InkNames: { tag: 333, type: fieldTypes.ASCII },
+    NumberOfInks: { tag: 334, type: fieldTypes.SHORT },
+    DotRange: { tag: 336, type: fieldTypes.BYTE, isArray: true },
+    TargetPrinter: { tag: 337, type: fieldTypes.ASCII },
+    ExtraSamples: { tag: 338, type: fieldTypes.BYTE, isArray: true, eager: true },
+    SampleFormat: { tag: 339, type: fieldTypes.SHORT, isArray: true, eager: true },
+    SMinSampleValue: { tag: 340, isArray: true },
+    SMaxSampleValue: { tag: 341, isArray: true },
+    TransferRange: { tag: 342, type: fieldTypes.SHORT, isArray: true },
+    JPEGProc: { tag: 512, type: fieldTypes.SHORT },
+    JPEGInterchangeFormat: { tag: 513, type: fieldTypes.LONG },
+    JPEGInterchangeFormatLngth: { tag: 514, type: fieldTypes.LONG },
+    JPEGRestartInterval: { tag: 515, type: fieldTypes.SHORT },
+    JPEGLosslessPredictors: { tag: 517, type: fieldTypes.SHORT, isArray: true },
+    JPEGPointTransforms: { tag: 518, type: fieldTypes.SHORT, isArray: true },
+    JPEGQTables: { tag: 519, type: fieldTypes.LONG, isArray: true },
+    JPEGDCTables: { tag: 520, type: fieldTypes.LONG, isArray: true },
+    JPEGACTables: { tag: 521, type: fieldTypes.LONG, isArray: true },
+    YCbCrCoefficients: { tag: 529, type: fieldTypes.RATIONAL, isArray: true },
+    YCbCrSubSampling: { tag: 530, type: fieldTypes.SHORT, isArray: true },
+    YCbCrPositioning: { tag: 531, type: fieldTypes.SHORT },
+    ReferenceBlackWhite: { tag: 532, type: fieldTypes.LONG, isArray: true },
+    Copyright: { tag: 33432, type: fieldTypes.ASCII },
+    BadFaxLines: { tag: 326 },
+    CleanFaxData: { tag: 327 },
+    ClipPath: { tag: 343 },
+    ConsecutiveBadFaxLines: { tag: 328 },
+    Decode: { tag: 433 },
+    DefaultImageColor: { tag: 434 },
+    Indexed: { tag: 346 },
+    JPEGTables: { tag: 347, isArray: true, eager: true },
+    StripRowCounts: { tag: 559, isArray: true },
+    SubIFDs: { tag: 330, isArray: true },
+    XClipPathUnits: { tag: 344 },
+    YClipPathUnits: { tag: 345 },
+    ApertureValue: { tag: 37378 },
+    ColorSpace: { tag: 40961 },
+    DateTimeDigitized: { tag: 36868 },
+    DateTimeOriginal: { tag: 36867 },
+    ExifIFD: { tag: 34665, name: "Exif IFD", type: fieldTypes.LONG },
+    ExifVersion: { tag: 36864 },
+    ExposureTime: { tag: 33434 },
+    FileSource: { tag: 41728 },
+    Flash: { tag: 37385 },
+    FlashpixVersion: { tag: 40960 },
+    FNumber: { tag: 33437 },
+    ImageUniqueID: { tag: 42016 },
+    LightSource: { tag: 37384 },
+    MakerNote: { tag: 37500 },
+    ShutterSpeedValue: { tag: 37377 },
+    UserComment: { tag: 37510 },
+    IPTC: { tag: 33723 },
+    CZ_LSMINFO: { tag: 34412 },
+    ICCProfile: { tag: 34675, name: "ICC Profile" },
+    XMP: { tag: 700 },
+    GDAL_METADATA: { tag: 42112 },
+    GDAL_NODATA: { tag: 42113, type: fieldTypes.ASCII, eager: true },
+    Photoshop: { tag: 34377 },
+    ModelPixelScale: { tag: 33550, type: fieldTypes.DOUBLE, isArray: true, eager: true },
+    ModelTiepoint: { tag: 33922, type: fieldTypes.DOUBLE, isArray: true, eager: true },
+    ModelTransformation: { tag: 34264, type: fieldTypes.DOUBLE, isArray: true, eager: true },
+    GeoKeyDirectory: { tag: 34735, type: fieldTypes.SHORT, isArray: true, eager: true },
+    GeoDoubleParams: { tag: 34736, type: fieldTypes.DOUBLE, isArray: true, eager: true },
+    GeoAsciiParams: { tag: 34737, type: fieldTypes.ASCII, eager: true },
+    LercParameters: { tag: 50674, eager: true }
+  }
+);
+const tags = {};
+const tagDefinitions = {};
+function registerTag(tag, name, type, isArray = false, eager = false) {
+  tags[name] = tag;
+  tagDefinitions[tag] = { tag, name, type: typeof type === "string" ? fieldTypes[type] : type, isArray, eager };
+}
+for (const [key, value] of Object.entries(tagDictionary)) {
+  const entry = (
+    /** @type {TagDictionaryEntry} */
+    value
+  );
+  registerTag(entry.tag, entry.name || key, entry.type, entry.isArray, entry.eager);
+}
+function resolveTag(tagIdentifier) {
+  if (typeof tagIdentifier === "number") {
+    return tagIdentifier;
+  }
+  return tags[tagIdentifier];
+}
+const photometricInterpretations = {
+  WhiteIsZero: 0,
+  BlackIsZero: 1,
+  RGB: 2,
+  Palette: 3,
+  CMYK: 5,
+  YCbCr: 6,
+  CIELab: 8
+};
+const ExtraSamplesValues = {
+  Unspecified: 0
+};
+const LercParameters = {
+  AddCompression: 1
+};
+const LercAddCompression = {
+  None: 0,
+  Deflate: 1,
+  Zstandard: 2
+};
+const geoKeyNames = (
+  /** @type {const} */
+  {
+    1024: "GTModelTypeGeoKey",
+    1025: "GTRasterTypeGeoKey",
+    1026: "GTCitationGeoKey",
+    2048: "GeographicTypeGeoKey",
+    2049: "GeogCitationGeoKey",
+    2050: "GeogGeodeticDatumGeoKey",
+    2051: "GeogPrimeMeridianGeoKey",
+    2052: "GeogLinearUnitsGeoKey",
+    2053: "GeogLinearUnitSizeGeoKey",
+    2054: "GeogAngularUnitsGeoKey",
+    2055: "GeogAngularUnitSizeGeoKey",
+    2056: "GeogEllipsoidGeoKey",
+    2057: "GeogSemiMajorAxisGeoKey",
+    2058: "GeogSemiMinorAxisGeoKey",
+    2059: "GeogInvFlatteningGeoKey",
+    2060: "GeogAzimuthUnitsGeoKey",
+    2061: "GeogPrimeMeridianLongGeoKey",
+    2062: "GeogTOWGS84GeoKey",
+    3072: "ProjectedCSTypeGeoKey",
+    3073: "PCSCitationGeoKey",
+    3074: "ProjectionGeoKey",
+    3075: "ProjCoordTransGeoKey",
+    3076: "ProjLinearUnitsGeoKey",
+    3077: "ProjLinearUnitSizeGeoKey",
+    3078: "ProjStdParallel1GeoKey",
+    3079: "ProjStdParallel2GeoKey",
+    3080: "ProjNatOriginLongGeoKey",
+    3081: "ProjNatOriginLatGeoKey",
+    3082: "ProjFalseEastingGeoKey",
+    3083: "ProjFalseNorthingGeoKey",
+    3084: "ProjFalseOriginLongGeoKey",
+    3085: "ProjFalseOriginLatGeoKey",
+    3086: "ProjFalseOriginEastingGeoKey",
+    3087: "ProjFalseOriginNorthingGeoKey",
+    3088: "ProjCenterLongGeoKey",
+    3089: "ProjCenterLatGeoKey",
+    3090: "ProjCenterEastingGeoKey",
+    3091: "ProjCenterNorthingGeoKey",
+    3092: "ProjScaleAtNatOriginGeoKey",
+    3093: "ProjScaleAtCenterGeoKey",
+    3094: "ProjAzimuthAngleGeoKey",
+    3095: "ProjStraightVertPoleLongGeoKey",
+    3096: "ProjRectifiedGridAngleGeoKey",
+    4096: "VerticalCSTypeGeoKey",
+    4097: "VerticalCitationGeoKey",
+    4098: "VerticalDatumGeoKey",
+    4099: "VerticalUnitsGeoKey"
+  }
+);
+for (const [key, name] of Object.entries(geoKeyNames)) {
+}
+function fromWhiteIsZero(raster, max) {
+  const { width, height } = raster;
+  const rgbRaster = new Uint8Array(width * height * 3);
+  let value;
+  for (let i2 = 0, j = 0; i2 < raster.length; ++i2, j += 3) {
+    value = 256 - raster[i2] / max * 256;
+    rgbRaster[j] = value;
+    rgbRaster[j + 1] = value;
+    rgbRaster[j + 2] = value;
+  }
+  return rgbRaster;
+}
+function fromBlackIsZero(raster, max) {
+  const { width, height } = raster;
+  const rgbRaster = new Uint8Array(width * height * 3);
+  let value;
+  for (let i2 = 0, j = 0; i2 < raster.length; ++i2, j += 3) {
+    value = raster[i2] / max * 256;
+    rgbRaster[j] = value;
+    rgbRaster[j + 1] = value;
+    rgbRaster[j + 2] = value;
+  }
+  return rgbRaster;
+}
+function fromPalette(raster, colorMap) {
+  const { width, height } = raster;
+  const rgbRaster = new Uint8Array(width * height * 3);
+  const greenOffset = colorMap.length / 3;
+  const blueOffset = colorMap.length / 3 * 2;
+  for (let i2 = 0, j = 0; i2 < raster.length; ++i2, j += 3) {
+    const mapIndex = raster[i2];
+    rgbRaster[j] = colorMap[mapIndex] / 65536 * 256;
+    rgbRaster[j + 1] = colorMap[mapIndex + greenOffset] / 65536 * 256;
+    rgbRaster[j + 2] = colorMap[mapIndex + blueOffset] / 65536 * 256;
+  }
+  return rgbRaster;
+}
+function fromCMYK(cmykRaster) {
+  const { width, height } = cmykRaster;
+  const rgbRaster = new Uint8Array(width * height * 3);
+  for (let i2 = 0, j = 0; i2 < cmykRaster.length; i2 += 4, j += 3) {
+    const c2 = cmykRaster[i2];
+    const m2 = cmykRaster[i2 + 1];
+    const y3 = cmykRaster[i2 + 2];
+    const k2 = cmykRaster[i2 + 3];
+    rgbRaster[j] = 255 * ((255 - c2) / 256) * ((255 - k2) / 256);
+    rgbRaster[j + 1] = 255 * ((255 - m2) / 256) * ((255 - k2) / 256);
+    rgbRaster[j + 2] = 255 * ((255 - y3) / 256) * ((255 - k2) / 256);
+  }
+  return rgbRaster;
+}
+function fromYCbCr(yCbCrRaster) {
+  const { width, height } = yCbCrRaster;
+  const rgbRaster = new Uint8ClampedArray(width * height * 3);
+  for (let i2 = 0, j = 0; i2 < yCbCrRaster.length; i2 += 3, j += 3) {
+    const y3 = yCbCrRaster[i2];
+    const cb = yCbCrRaster[i2 + 1];
+    const cr = yCbCrRaster[i2 + 2];
+    rgbRaster[j] = y3 + 1.402 * (cr - 128);
+    rgbRaster[j + 1] = y3 - 0.34414 * (cb - 128) - 0.71414 * (cr - 128);
+    rgbRaster[j + 2] = y3 + 1.772 * (cb - 128);
+  }
+  return rgbRaster;
+}
+const Xn = 0.95047;
+const Yn = 1;
+const Zn = 1.08883;
+function fromCIELab(cieLabRaster) {
+  const { width, height } = cieLabRaster;
+  const rgbRaster = new Uint8Array(width * height * 3);
+  for (let i2 = 0, j = 0; i2 < cieLabRaster.length; i2 += 3, j += 3) {
+    const L2 = cieLabRaster[i2 + 0];
+    const a_ = cieLabRaster[i2 + 1] << 24 >> 24;
+    const b_ = cieLabRaster[i2 + 2] << 24 >> 24;
+    let y3 = (L2 + 16) / 116;
+    let x2 = a_ / 500 + y3;
+    let z2 = y3 - b_ / 200;
+    let r2;
+    let g2;
+    let b2;
+    x2 = Xn * (x2 * x2 * x2 > 8856e-6 ? x2 * x2 * x2 : (x2 - 16 / 116) / 7.787);
+    y3 = Yn * (y3 * y3 * y3 > 8856e-6 ? y3 * y3 * y3 : (y3 - 16 / 116) / 7.787);
+    z2 = Zn * (z2 * z2 * z2 > 8856e-6 ? z2 * z2 * z2 : (z2 - 16 / 116) / 7.787);
+    r2 = x2 * 3.2406 + y3 * -1.5372 + z2 * -0.4986;
+    g2 = x2 * -0.9689 + y3 * 1.8758 + z2 * 0.0415;
+    b2 = x2 * 0.0557 + y3 * -0.204 + z2 * 1.057;
+    r2 = r2 > 31308e-7 ? 1.055 * r2 ** (1 / 2.4) - 0.055 : 12.92 * r2;
+    g2 = g2 > 31308e-7 ? 1.055 * g2 ** (1 / 2.4) - 0.055 : 12.92 * g2;
+    b2 = b2 > 31308e-7 ? 1.055 * b2 ** (1 / 2.4) - 0.055 : 12.92 * b2;
+    rgbRaster[j] = Math.max(0, Math.min(1, r2)) * 255;
+    rgbRaster[j + 1] = Math.max(0, Math.min(1, g2)) * 255;
+    rgbRaster[j + 2] = Math.max(0, Math.min(1, b2)) * 255;
+  }
+  return rgbRaster;
+}
+const registry = /* @__PURE__ */ new Map();
+async function defaultDecoderParameterFn(fileDirectory) {
+  const isTiled = !fileDirectory.hasTag("StripOffsets");
+  return (
+    /** @type {BaseDecoderParameters} */
+    {
+      tileWidth: isTiled ? await fileDirectory.loadValue("TileWidth") : await fileDirectory.loadValue("ImageWidth"),
+      tileHeight: isTiled ? await fileDirectory.loadValue("TileLength") : await fileDirectory.loadValue("RowsPerStrip") || await fileDirectory.loadValue("ImageLength"),
+      planarConfiguration: await fileDirectory.loadValue("PlanarConfiguration"),
+      bitsPerSample: await fileDirectory.loadValue("BitsPerSample"),
+      predictor: await fileDirectory.loadValue("Predictor") || 1
+    }
+  );
+}
+function addDecoder(cases, importFn, decoderParameterFn = defaultDecoderParameterFn, preferWorker_ = true) {
+  if (!Array.isArray(cases)) {
+    cases = [cases];
+  }
+  cases.forEach((c2) => {
+    registry.set(c2, { importFn, decoderParameterFn, preferWorker: preferWorker_ });
+  });
+}
+async function getDecoderParameters(compression, fileDirectory) {
+  if (!registry.has(compression)) {
+    throw new Error(`Unknown compression method identifier: ${compression}`);
+  }
+  const { decoderParameterFn } = (
+    /** @type {RegistryEntry} */
+    registry.get(compression)
+  );
+  return decoderParameterFn(fileDirectory);
+}
+async function getDecoder(compression, decoderParameters) {
+  if (!registry.has(compression)) {
+    throw new Error(`Unknown compression method identifier: ${compression}`);
+  }
+  const { importFn } = (
+    /** @type {RegistryEntry} */
+    registry.get(compression)
+  );
+  const Decoder = await importFn();
+  return new Decoder(decoderParameters);
+}
+const defaultDecoderDefinitions = [
+  // No compression
+  {
+    cases: [void 0, 1],
+    importFn: () => Promise.resolve().then(() => raw).then((m2) => m2.default),
+    preferWorker: false
+  },
+  // LZW
+  {
+    cases: 5,
+    importFn: () => Promise.resolve().then(() => lzw).then((m2) => m2.default)
+  },
+  // Old-style JPEG
+  {
+    cases: 6,
+    importFn: () => {
+      throw new Error("old style JPEG compression is not supported.");
+    }
+  },
+  // JPEG
+  {
+    cases: 7,
+    importFn: () => Promise.resolve().then(() => jpeg).then((m2) => m2.default),
+    /**
+     * @param {import("../imagefiledirectory.js").ImageFileDirectory} fileDirectory
+     */
+    decoderParameterFn: async (fileDirectory) => {
+      return {
+        ...await defaultDecoderParameterFn(fileDirectory),
+        JPEGTables: await fileDirectory.loadValue("JPEGTables")
+      };
+    }
+  },
+  // Deflate / Adobe Deflate
+  {
+    cases: [8, 32946],
+    importFn: () => Promise.resolve().then(() => deflate).then((m2) => m2.default)
+  },
+  // PackBits
+  {
+    cases: 32773,
+    importFn: () => Promise.resolve().then(() => packbits).then((m2) => m2.default)
+  },
+  // LERC
+  {
+    cases: 34887,
+    importFn: () => Promise.resolve().then(() => lerc).then(async (m2) => {
+      await m2.zstd.init();
+      return m2;
+    }).then((m2) => m2.default),
+    /**
+     * @param {import("../imagefiledirectory.js").ImageFileDirectory} fileDirectory
+     */
+    decoderParameterFn: async (fileDirectory) => {
+      return {
+        ...await defaultDecoderParameterFn(fileDirectory),
+        LercParameters: await fileDirectory.loadValue("LercParameters")
+      };
+    }
+  },
+  // zstd
+  {
+    cases: 5e4,
+    importFn: () => Promise.resolve().then(() => zstd$1).then(async (m2) => {
+      await m2.zstd.init();
+      return m2;
+    }).then((m2) => m2.default)
+  },
+  // WebP Images
+  {
+    cases: 50001,
+    importFn: () => Promise.resolve().then(() => webimage).then((m2) => m2.default),
+    /**
+     * @param {import("../imagefiledirectory.js").ImageFileDirectory} fileDirectory
+     */
+    decoderParameterFn: async (fileDirectory) => {
+      return {
+        ...await defaultDecoderParameterFn(fileDirectory),
+        samplesPerPixel: Number(await fileDirectory.loadValue("SamplesPerPixel")) || 4
+      };
+    },
+    preferWorker: false
+  }
+];
+for (const decoderDefinition of defaultDecoderDefinitions) {
+  const { cases, importFn, decoderParameterFn, preferWorker: preferWorker_ } = decoderDefinition;
+  addDecoder(cases, importFn, decoderParameterFn, preferWorker_);
+}
+function copyNewSize(array, width, height, samplesPerPixel = 1) {
+  return new (Object.getPrototypeOf(array)).constructor(width * height * samplesPerPixel);
+}
+function resampleNearest(valueArrays, inWidth, inHeight, outWidth, outHeight) {
+  const relX = inWidth / outWidth;
+  const relY = inHeight / outHeight;
+  return valueArrays.map((array) => {
+    const newArray = copyNewSize(array, outWidth, outHeight);
+    for (let y3 = 0; y3 < outHeight; ++y3) {
+      const cy = Math.min(Math.round(relY * y3), inHeight - 1);
+      for (let x2 = 0; x2 < outWidth; ++x2) {
+        const cx = Math.min(Math.round(relX * x2), inWidth - 1);
+        const value = array[cy * inWidth + cx];
+        newArray[y3 * outWidth + x2] = value;
+      }
+    }
+    return newArray;
+  });
+}
+function lerp(v0, v1, t2) {
+  return (1 - t2) * v0 + t2 * v1;
+}
+function resampleBilinear(valueArrays, inWidth, inHeight, outWidth, outHeight) {
+  const relX = inWidth / outWidth;
+  const relY = inHeight / outHeight;
+  return valueArrays.map((array) => {
+    const newArray = copyNewSize(array, outWidth, outHeight);
+    for (let y3 = 0; y3 < outHeight; ++y3) {
+      const rawY = relY * y3;
+      const yl = Math.floor(rawY);
+      const yh = Math.min(Math.ceil(rawY), inHeight - 1);
+      for (let x2 = 0; x2 < outWidth; ++x2) {
+        const rawX = relX * x2;
+        const tx = rawX % 1;
+        const xl = Math.floor(rawX);
+        const xh = Math.min(Math.ceil(rawX), inWidth - 1);
+        const ll = array[yl * inWidth + xl];
+        const hl = array[yl * inWidth + xh];
+        const lh = array[yh * inWidth + xl];
+        const hh = array[yh * inWidth + xh];
+        const value = lerp(lerp(ll, hl, tx), lerp(lh, hh, tx), rawY % 1);
+        newArray[y3 * outWidth + x2] = value;
+      }
+    }
+    return newArray;
+  });
+}
+function resample(valueArrays, inWidth, inHeight, outWidth, outHeight, method = "nearest") {
+  switch (method.toLowerCase()) {
+    case "nearest":
+      return resampleNearest(valueArrays, inWidth, inHeight, outWidth, outHeight);
+    case "bilinear":
+    case "linear":
+      return resampleBilinear(valueArrays, inWidth, inHeight, outWidth, outHeight);
+    default:
+      throw new Error(`Unsupported resampling method: '${method}'`);
+  }
+}
+function resampleNearestInterleaved(valueArray, inWidth, inHeight, outWidth, outHeight, samples) {
+  const relX = inWidth / outWidth;
+  const relY = inHeight / outHeight;
+  const newArray = copyNewSize(valueArray, outWidth, outHeight, samples);
+  for (let y3 = 0; y3 < outHeight; ++y3) {
+    const cy = Math.min(Math.round(relY * y3), inHeight - 1);
+    for (let x2 = 0; x2 < outWidth; ++x2) {
+      const cx = Math.min(Math.round(relX * x2), inWidth - 1);
+      for (let i2 = 0; i2 < samples; ++i2) {
+        const value = valueArray[cy * inWidth * samples + cx * samples + i2];
+        newArray[y3 * outWidth * samples + x2 * samples + i2] = value;
+      }
+    }
+  }
+  return newArray;
+}
+function resampleBilinearInterleaved(valueArray, inWidth, inHeight, outWidth, outHeight, samples) {
+  const relX = inWidth / outWidth;
+  const relY = inHeight / outHeight;
+  const newArray = copyNewSize(valueArray, outWidth, outHeight, samples);
+  for (let y3 = 0; y3 < outHeight; ++y3) {
+    const rawY = relY * y3;
+    const yl = Math.floor(rawY);
+    const yh = Math.min(Math.ceil(rawY), inHeight - 1);
+    for (let x2 = 0; x2 < outWidth; ++x2) {
+      const rawX = relX * x2;
+      const tx = rawX % 1;
+      const xl = Math.floor(rawX);
+      const xh = Math.min(Math.ceil(rawX), inWidth - 1);
+      for (let i2 = 0; i2 < samples; ++i2) {
+        const ll = valueArray[yl * inWidth * samples + xl * samples + i2];
+        const hl = valueArray[yl * inWidth * samples + xh * samples + i2];
+        const lh = valueArray[yh * inWidth * samples + xl * samples + i2];
+        const hh = valueArray[yh * inWidth * samples + xh * samples + i2];
+        const value = lerp(lerp(ll, hl, tx), lerp(lh, hh, tx), rawY % 1);
+        newArray[y3 * outWidth * samples + x2 * samples + i2] = value;
+      }
+    }
+  }
+  return newArray;
+}
+function resampleInterleaved(valueArray, inWidth, inHeight, outWidth, outHeight, samples, method = "nearest") {
+  switch (method.toLowerCase()) {
+    case "nearest":
+      return resampleNearestInterleaved(valueArray, inWidth, inHeight, outWidth, outHeight, samples);
+    case "bilinear":
+    case "linear":
+      return resampleBilinearInterleaved(valueArray, inWidth, inHeight, outWidth, outHeight, samples);
+    default:
+      throw new Error(`Unsupported resampling method: '${method}'`);
+  }
+}
+function sum(array, start, end) {
+  let s2 = 0;
+  for (let i2 = start; i2 < end; ++i2) {
+    s2 += array[i2];
+  }
+  return s2;
+}
+function arrayForType(format, bitsPerSample, sizeOrData) {
+  let TypedArrayConstructor;
+  switch (format) {
+    case 1:
+      if (bitsPerSample <= 8) {
+        TypedArrayConstructor = Uint8Array;
+      } else if (bitsPerSample <= 16) {
+        TypedArrayConstructor = Uint16Array;
+      } else if (bitsPerSample <= 32) {
+        TypedArrayConstructor = Uint32Array;
+      }
+      break;
+    case 2:
+      if (bitsPerSample === 8) {
+        TypedArrayConstructor = Int8Array;
+      } else if (bitsPerSample === 16) {
+        TypedArrayConstructor = Int16Array;
+      } else if (bitsPerSample === 32) {
+        TypedArrayConstructor = Int32Array;
+      }
+      break;
+    case 3:
+      switch (bitsPerSample) {
+        case 16:
+        case 32:
+          TypedArrayConstructor = Float32Array;
+          break;
+        case 64:
+          TypedArrayConstructor = Float64Array;
+          break;
+      }
+      break;
+  }
+  if (TypedArrayConstructor) {
+    if (typeof sizeOrData === "number") {
+      return new TypedArrayConstructor(sizeOrData);
+    } else if (sizeOrData instanceof ArrayBuffer) {
+      return new TypedArrayConstructor(sizeOrData);
+    }
+  }
+  throw Error("Unsupported data format/bitsPerSample");
+}
+function needsNormalization(format, bitsPerSample) {
+  if ((format === 1 || format === 2) && bitsPerSample <= 32 && bitsPerSample % 8 === 0) {
+    return false;
+  } else if (format === 3 && (bitsPerSample === 16 || bitsPerSample === 32 || bitsPerSample === 64)) {
+    return false;
+  }
+  return true;
+}
+function normalizeArray(inBuffer, format, planarConfiguration, samplesPerPixel, bitsPerSample, tileWidth, tileHeight) {
+  const view = new DataView(inBuffer);
+  const outSize = planarConfiguration === 2 ? tileHeight * tileWidth : tileHeight * tileWidth * samplesPerPixel;
+  const samplesToTransfer = planarConfiguration === 2 ? 1 : samplesPerPixel;
+  const outArray = arrayForType(format, bitsPerSample, outSize);
+  const bitMask = parseInt("1".repeat(bitsPerSample), 2);
+  if (format === 1) {
+    let pixelBitSkip;
+    if (planarConfiguration === 1) {
+      pixelBitSkip = samplesPerPixel * bitsPerSample;
+    } else {
+      pixelBitSkip = bitsPerSample;
+    }
+    let bitsPerLine = tileWidth * pixelBitSkip;
+    if ((bitsPerLine & 7) !== 0) {
+      bitsPerLine = bitsPerLine + 7 & -8;
+    }
+    for (let y3 = 0; y3 < tileHeight; ++y3) {
+      const lineBitOffset = y3 * bitsPerLine;
+      for (let x2 = 0; x2 < tileWidth; ++x2) {
+        const pixelBitOffset = lineBitOffset + x2 * samplesToTransfer * bitsPerSample;
+        for (let i2 = 0; i2 < samplesToTransfer; ++i2) {
+          const bitOffset = pixelBitOffset + i2 * bitsPerSample;
+          const outIndex = (y3 * tileWidth + x2) * samplesToTransfer + i2;
+          const byteOffset = Math.floor(bitOffset / 8);
+          const innerBitOffset = bitOffset % 8;
+          if (innerBitOffset + bitsPerSample <= 8) {
+            outArray[outIndex] = view.getUint8(byteOffset) >> 8 - bitsPerSample - innerBitOffset & bitMask;
+          } else if (innerBitOffset + bitsPerSample <= 16) {
+            outArray[outIndex] = view.getUint16(byteOffset) >> 16 - bitsPerSample - innerBitOffset & bitMask;
+          } else if (innerBitOffset + bitsPerSample <= 24) {
+            const raw2 = view.getUint16(byteOffset) << 8 | view.getUint8(byteOffset + 2);
+            outArray[outIndex] = raw2 >> 24 - bitsPerSample - innerBitOffset & bitMask;
+          } else {
+            outArray[outIndex] = view.getUint32(byteOffset) >> 32 - bitsPerSample - innerBitOffset & bitMask;
+          }
+        }
+      }
+    }
+  }
+  return outArray.buffer;
+}
+class GeoTIFFImage {
+  /**
+   * @constructor
+   * @param {import("./imagefiledirectory.js").ImageFileDirectory} fileDirectory The parsed file directory
+   * @param {Boolean} littleEndian Whether the file is encoded in little or big endian
+   * @param {Boolean} cache Whether or not decoded tiles shall be cached
+   * @param {import('./source/basesource.js').BaseSource} source The datasource to read from
+   */
+  constructor(fileDirectory, littleEndian, cache, source) {
+    this.fileDirectory = fileDirectory;
+    this.littleEndian = littleEndian;
+    this.tiles = cache ? [] : null;
+    this.isTiled = !fileDirectory.hasTag("StripOffsets");
+    const planarConfiguration = fileDirectory.getValue("PlanarConfiguration") ?? 1;
+    if (planarConfiguration !== 1 && planarConfiguration !== 2) {
+      throw new Error("Invalid planar configuration.");
+    }
+    this.planarConfiguration = planarConfiguration;
+    this.source = source;
+  }
+  /**
+   * Returns the associated parsed file directory.
+   * @returns {import("./imagefiledirectory.js").ImageFileDirectory} the parsed file directory
+   */
+  getFileDirectory() {
+    return this.fileDirectory;
+  }
+  /**
+   * Returns the associated parsed geo keys.
+   * @returns {Partial<Record<import('./globals.js').GeoKeyName, *>>|null} the parsed geo keys
+   */
+  getGeoKeys() {
+    return this.fileDirectory.parseGeoKeyDirectory();
+  }
+  /**
+   * Returns the width of the image.
+   * @returns {Number} the width of the image
+   */
+  getWidth() {
+    return this.fileDirectory.getValue("ImageWidth") || 0;
+  }
+  /**
+   * Returns the height of the image.
+   * @returns {Number} the height of the image
+   */
+  getHeight() {
+    return this.fileDirectory.getValue("ImageLength") || 0;
+  }
+  /**
+   * Returns the number of samples per pixel.
+   * @returns {number} the number of samples per pixel
+   */
+  getSamplesPerPixel() {
+    return this.fileDirectory.getValue("SamplesPerPixel") ?? 1;
+  }
+  /**
+   * Returns the width of each tile.
+   * @returns {number} the width of each tile
+   */
+  getTileWidth() {
+    return this.isTiled ? this.fileDirectory.getValue("TileWidth") || 0 : this.getWidth();
+  }
+  /**
+   * Returns the height of each tile.
+   * @returns {number} the height of each tile
+   */
+  getTileHeight() {
+    if (this.isTiled) {
+      return this.fileDirectory.getValue("TileLength") || 0;
+    }
+    const rowsPerStrip = this.fileDirectory.hasTag("RowsPerStrip") && this.fileDirectory.getValue("RowsPerStrip");
+    if (rowsPerStrip) {
+      return Math.min(rowsPerStrip, this.getHeight());
+    }
+    return this.getHeight();
+  }
+  getBlockWidth() {
+    return this.getTileWidth();
+  }
+  /**
+   * @param {number} y
+   * @returns {number}
+   */
+  getBlockHeight(y3) {
+    if (this.isTiled || (y3 + 1) * this.getTileHeight() <= this.getHeight()) {
+      return this.getTileHeight();
+    } else {
+      return this.getHeight() - y3 * this.getTileHeight();
+    }
+  }
+  /**
+   * Calculates the number of bytes for each pixel across all samples. Only full
+   * bytes are supported, an exception is thrown when this is not the case.
+   * @returns {Number} the bytes per pixel
+   */
+  getBytesPerPixel() {
+    let bytes = 0;
+    const bitsPerSample = this.fileDirectory.getValue("BitsPerSample") || [];
+    for (let i2 = 0; i2 < bitsPerSample.length; ++i2) {
+      bytes += this.getSampleByteSize(i2);
+    }
+    return bytes;
+  }
+  /**
+   * @param {number} i
+   * @returns {number}
+   */
+  getSampleByteSize(i2) {
+    const bitsPerSample = this.fileDirectory.getValue("BitsPerSample") || [];
+    if (i2 >= bitsPerSample.length) {
+      throw new RangeError(`Sample index ${i2} is out of range.`);
+    }
+    return Math.ceil(bitsPerSample[i2] / 8);
+  }
+  /**
+   * @param {number} sampleIndex
+   * @returns {(this: DataView, byteOffset: number, littleEndian: boolean) => number}
+   */
+  getReaderForSample(sampleIndex) {
+    const sampleFormat = this.fileDirectory.getValue("SampleFormat");
+    const format = sampleFormat ? sampleFormat[sampleIndex] : 1;
+    const bitsPerSample = (this.fileDirectory.getValue("BitsPerSample") || [])[sampleIndex];
+    switch (format) {
+      case 1:
+        if (bitsPerSample <= 8) {
+          return DataView.prototype.getUint8;
+        } else if (bitsPerSample <= 16) {
+          return DataView.prototype.getUint16;
+        } else if (bitsPerSample <= 32) {
+          return DataView.prototype.getUint32;
+        }
+        break;
+      case 2:
+        if (bitsPerSample <= 8) {
+          return DataView.prototype.getInt8;
+        } else if (bitsPerSample <= 16) {
+          return DataView.prototype.getInt16;
+        } else if (bitsPerSample <= 32) {
+          return DataView.prototype.getInt32;
+        }
+        break;
+      case 3:
+        switch (bitsPerSample) {
+          case 16:
+            return function(offset, littleEndian) {
+              return getFloat16(this, offset, littleEndian);
+            };
+          case 32:
+            return DataView.prototype.getFloat32;
+          case 64:
+            return DataView.prototype.getFloat64;
+        }
+        break;
+    }
+    throw Error("Unsupported data format/bitsPerSample");
+  }
+  getSampleFormat(sampleIndex = 0) {
+    const sampleFormat = this.fileDirectory.getValue("SampleFormat");
+    return sampleFormat ? sampleFormat[sampleIndex] : 1;
+  }
+  getBitsPerSample(sampleIndex = 0) {
+    const bitsPerSample = this.fileDirectory.getValue("BitsPerSample");
+    return bitsPerSample ? bitsPerSample[sampleIndex] : 0;
+  }
+  /**
+   * @param {number} sampleIndex
+   * @param {number|ArrayBufferLike} sizeOrData
+   * @returns {TypedArray}
+   */
+  getArrayForSample(sampleIndex, sizeOrData) {
+    const format = (
+      /** @type {1|2|3} */
+      this.getSampleFormat(sampleIndex)
+    );
+    const bitsPerSample = this.getBitsPerSample(sampleIndex);
+    return arrayForType(format, bitsPerSample, sizeOrData);
+  }
+  /**
+   * Returns the decoded strip or tile.
+   * @param {Number} x the strip or tile x-offset
+   * @param {Number} y the tile y-offset (0 for stripped images)
+   * @param {Number} sample the sample to get for separated samples
+   * @param {DecoderWorker|import("./geotiff.js").BaseDecoder} poolOrDecoder the decoder or decoder pool
+   * @param {AbortSignal} [signal] An AbortSignal that may be signalled if the request is
+   *                               to be aborted
+   * @returns {Promise.<{x: number, y: number, sample: number, data: ArrayBufferLike}>} the decoded strip or tile
+   */
+  async getTileOrStrip(x2, y3, sample, poolOrDecoder, signal) {
+    const numTilesPerRow = Math.ceil(this.getWidth() / this.getTileWidth());
+    const numTilesPerCol = Math.ceil(this.getHeight() / this.getTileHeight());
+    let index;
+    const { tiles } = this;
+    if (this.planarConfiguration === 1) {
+      index = y3 * numTilesPerRow + x2;
+    } else if (this.planarConfiguration === 2) {
+      index = sample * numTilesPerRow * numTilesPerCol + y3 * numTilesPerRow + x2;
+    }
+    if (index === void 0) {
+      throw new Error("Could not determine tile or strip index.");
+    }
+    let offset;
+    let byteCount;
+    if (this.isTiled) {
+      offset = Number(await this.fileDirectory.loadValueIndexed("TileOffsets", index));
+      byteCount = Number(await this.fileDirectory.loadValueIndexed("TileByteCounts", index));
+    } else {
+      offset = Number(await this.fileDirectory.loadValueIndexed("StripOffsets", index));
+      byteCount = Number(await this.fileDirectory.loadValueIndexed("StripByteCounts", index));
+    }
+    if (byteCount === 0) {
+      const nPixels = this.getBlockHeight(y3) * this.getTileWidth();
+      const bytesPerPixel = this.planarConfiguration === 2 ? this.getSampleByteSize(sample) : this.getBytesPerPixel();
+      const data = new ArrayBuffer(nPixels * bytesPerPixel);
+      const view = this.getArrayForSample(sample, data);
+      view.fill(this.getGDALNoData() || 0);
+      return { x: x2, y: y3, sample, data };
+    }
+    const slice = (await this.source.fetch([{ offset, length: byteCount }], signal))[0];
+    let request;
+    if (tiles === null || !tiles[index]) {
+      request = (async () => {
+        let data = await poolOrDecoder.decode(slice);
+        const sampleFormat = (
+          /** @type {1|2|3} */
+          this.getSampleFormat()
+        );
+        const bitsPerSample = this.getBitsPerSample();
+        if (needsNormalization(sampleFormat, bitsPerSample)) {
+          data = normalizeArray(data, sampleFormat, this.planarConfiguration, this.getSamplesPerPixel(), bitsPerSample, this.getTileWidth(), this.getBlockHeight(y3));
+        }
+        return data;
+      })();
+      if (tiles !== null) {
+        tiles[index] = request;
+      }
+    } else {
+      request = tiles[index];
+    }
+    return { x: x2, y: y3, sample, data: await request };
+  }
+  /**
+   * Internal read function.
+   * @private
+   * @param {Array<number>} imageWindow The image window in pixel coordinates
+   * @param {Array<number>} samples The selected samples (0-based indices)
+   * @param {TypedArray|TypedArray[]} valueArrays The array(s) to write into
+   * @param {boolean|undefined} interleave Whether or not to write in an interleaved manner
+   * @param {DecoderWorker|import("./geotiff.js").BaseDecoder} poolOrDecoder the decoder or decoder pool
+   * @param {number} [width] the width of window to be read into
+   * @param {number} [height] the height of window to be read into
+   * @param {string} [resampleMethod] the resampling method to be used when interpolating
+   * @param {AbortSignal} [signal] An AbortSignal that may be signalled if the request is
+   *                               to be aborted
+   * @returns {Promise<ReadRasterResult>}
+   */
+  async _readRaster(imageWindow, samples, valueArrays, interleave, poolOrDecoder, width, height, resampleMethod, signal) {
+    const tileWidth = this.getTileWidth();
+    const tileHeight = this.getTileHeight();
+    const imageWidth = this.getWidth();
+    const imageHeight = this.getHeight();
+    const minXTile = Math.max(Math.floor(imageWindow[0] / tileWidth), 0);
+    const maxXTile = Math.min(Math.ceil(imageWindow[2] / tileWidth), Math.ceil(imageWidth / tileWidth));
+    const minYTile = Math.max(Math.floor(imageWindow[1] / tileHeight), 0);
+    const maxYTile = Math.min(Math.ceil(imageWindow[3] / tileHeight), Math.ceil(imageHeight / tileHeight));
+    const windowWidth = imageWindow[2] - imageWindow[0];
+    let bytesPerPixel = this.getBytesPerPixel();
+    const srcSampleOffsets = [];
+    const sampleReaders = [];
+    for (let i2 = 0; i2 < samples.length; ++i2) {
+      if (this.planarConfiguration === 1) {
+        const bitsPerSample = await this.fileDirectory.loadValue("BitsPerSample");
+        if (typeof bitsPerSample !== "object") {
+          throw new Error("Expected BitsPerSample to be an array or typed array.");
+        }
+        srcSampleOffsets.push(sum(bitsPerSample, 0, samples[i2]) / 8);
+      } else {
+        srcSampleOffsets.push(0);
+      }
+      sampleReaders.push(this.getReaderForSample(samples[i2]));
+    }
+    const promises = [];
+    const { littleEndian } = this;
+    for (let yTile = minYTile; yTile < maxYTile; ++yTile) {
+      for (let xTile = minXTile; xTile < maxXTile; ++xTile) {
+        let getPromise;
+        if (this.planarConfiguration === 1) {
+          getPromise = this.getTileOrStrip(xTile, yTile, 0, poolOrDecoder, signal);
+        }
+        for (let sampleIndex = 0; sampleIndex < samples.length; ++sampleIndex) {
+          const si = sampleIndex;
+          const sample = samples[sampleIndex];
+          if (this.planarConfiguration === 2) {
+            bytesPerPixel = this.getSampleByteSize(sample);
+            getPromise = this.getTileOrStrip(xTile, yTile, sample, poolOrDecoder, signal);
+          }
+          if (!getPromise) {
+            throw new Error("Could not get tile or strip data.");
+          }
+          const promise = getPromise.then((tile) => {
+            const buffer2 = tile.data;
+            const dataView = new DataView(buffer2);
+            const blockHeight = this.getBlockHeight(tile.y);
+            const firstLine = tile.y * tileHeight;
+            const firstCol = tile.x * tileWidth;
+            const lastLine = firstLine + blockHeight;
+            const lastCol = (tile.x + 1) * tileWidth;
+            const reader = sampleReaders[si];
+            const ymax = Math.min(blockHeight, blockHeight - (lastLine - imageWindow[3]), imageHeight - firstLine);
+            const xmax = Math.min(tileWidth, tileWidth - (lastCol - imageWindow[2]), imageWidth - firstCol);
+            for (let y3 = Math.max(0, imageWindow[1] - firstLine); y3 < ymax; ++y3) {
+              for (let x2 = Math.max(0, imageWindow[0] - firstCol); x2 < xmax; ++x2) {
+                const pixelOffset = (y3 * tileWidth + x2) * bytesPerPixel;
+                const value = reader.call(dataView, pixelOffset + srcSampleOffsets[si], littleEndian);
+                let windowCoordinate;
+                if (interleave) {
+                  windowCoordinate = (y3 + firstLine - imageWindow[1]) * windowWidth * samples.length + (x2 + firstCol - imageWindow[0]) * samples.length + si;
+                  valueArrays[windowCoordinate] = value;
+                } else {
+                  windowCoordinate = (y3 + firstLine - imageWindow[1]) * windowWidth + x2 + firstCol - imageWindow[0];
+                  valueArrays[si][windowCoordinate] = value;
+                }
+              }
+            }
+          });
+          promises.push(promise);
+        }
+      }
+    }
+    await Promise.all(promises);
+    if (width && imageWindow[2] - imageWindow[0] !== width || height && imageWindow[3] - imageWindow[1] !== height) {
+      let resampled;
+      if (interleave) {
+        resampled = resampleInterleaved(
+          /** @type {TypedArray} */
+          valueArrays,
+          imageWindow[2] - imageWindow[0],
+          imageWindow[3] - imageWindow[1],
+          /** @type {number} */
+          width,
+          /** @type {number} */
+          height,
+          samples.length,
+          resampleMethod
+        );
+      } else {
+        resampled = resample(
+          /** @type {TypedArray[]} */
+          valueArrays,
+          imageWindow[2] - imageWindow[0],
+          imageWindow[3] - imageWindow[1],
+          /** @type {number} */
+          width,
+          /** @type {number} */
+          height,
+          resampleMethod
+        );
+      }
+      const resampledWithDimensions = (
+        /** @type {ReadRasterResult} */
+        resampled
+      );
+      resampledWithDimensions.width = width ?? imageWindow[2] - imageWindow[0];
+      resampledWithDimensions.height = height ?? imageWindow[3] - imageWindow[1];
+      return resampledWithDimensions;
+    }
+    const valueArraysWithDimensions = (
+      /** @type {ReadRasterResult} */
+      valueArrays
+    );
+    valueArraysWithDimensions.width = width || imageWindow[2] - imageWindow[0];
+    valueArraysWithDimensions.height = height || imageWindow[3] - imageWindow[1];
+    return valueArraysWithDimensions;
+  }
+  /**
+   * @overload
+   * @param {ReadRastersOptions & {interleave: true}} options optional parameters
+   * @returns {Promise<import("./geotiff.js").TypedArrayWithDimensions>} the decoded arrays as a promise
+   */
+  /**
+   * @overload
+   * @param {ReadRastersOptions & {interleave: false}} options optional parameters
+   * @returns {Promise<import("./geotiff.js").TypedArrayArrayWithDimensions>} the decoded arrays as a promise
+   */
+  /**
+   * @overload
+   * @param {ReadRastersOptions & {interleave: boolean}} options optional parameters
+   * @returns {Promise<ReadRasterResult>} the decoded arrays as a promise
+   */
+  /**
+   * @overload
+   * @param {ReadRastersOptions} [options={}] optional parameters
+   * @returns {Promise<import("./geotiff.js").TypedArrayArrayWithDimensions>} the decoded arrays as a promise
+   */
+  /**
+   * Reads raster data from the image. This function reads all selected samples
+   * into separate arrays of the correct type for that sample or into a single
+   * combined array when `interleave` is set. When provided, only a subset
+   * of the raster is read for each sample.
+   *
+   * @param {ReadRastersOptions} [options={}] optional parameters
+   * @returns {Promise<ReadRasterResult>} the decoded arrays as a promise
+   */
+  async readRasters(options = {}) {
+    const { window: wnd, samples = [], pool = null, width, height, resampleMethod, fillValue, signal } = options;
+    const interleave = "interleave" in options && options.interleave;
+    const imageWindow = wnd || [0, 0, this.getWidth(), this.getHeight()];
+    if (imageWindow[0] > imageWindow[2] || imageWindow[1] > imageWindow[3]) {
+      throw new Error("Invalid subsets");
+    }
+    const imageWindowWidth = imageWindow[2] - imageWindow[0];
+    const imageWindowHeight = imageWindow[3] - imageWindow[1];
+    const numPixels = imageWindowWidth * imageWindowHeight;
+    const samplesPerPixel = this.getSamplesPerPixel();
+    if (!samples || !samples.length) {
+      for (let i2 = 0; i2 < samplesPerPixel; ++i2) {
+        samples.push(i2);
+      }
+    } else {
+      for (let i2 = 0; i2 < samples.length; ++i2) {
+        if (samples[i2] >= samplesPerPixel) {
+          return Promise.reject(new RangeError(`Invalid sample index '${samples[i2]}'.`));
+        }
+      }
+    }
+    let valueArrays;
+    if (interleave) {
+      const { fileDirectory } = this;
+      const sampleFormat = fileDirectory.getValue("SampleFormat");
+      const format = sampleFormat ? Math.max.apply(null, Array.from(sampleFormat)) : 1;
+      if (format !== 1 && format !== 2 && format !== 3) {
+        throw new Error("Unsupported sample format for interleaved data. Must be 1, 2, or 3.");
+      }
+      const bitsPerSample_ = fileDirectory.getValue("BitsPerSample");
+      const bitsPerSample = bitsPerSample_ ? Math.max.apply(null, Array.from(bitsPerSample_)) : 8;
+      valueArrays = arrayForType(format, bitsPerSample, numPixels * samples.length);
+      if (fillValue) {
+        if (Array.isArray(fillValue)) {
+          throw new Error("When reading interleaved data, fillValue must be a single number.");
+        }
+        valueArrays.fill(fillValue);
+      }
+    } else {
+      valueArrays = [];
+      for (let i2 = 0; i2 < samples.length; ++i2) {
+        const valueArray = this.getArrayForSample(samples[i2], numPixels);
+        if (Array.isArray(fillValue) && i2 < fillValue.length) {
+          valueArray.fill(fillValue[i2]);
+        } else if (fillValue && !Array.isArray(fillValue)) {
+          valueArray.fill(fillValue);
+        }
+        valueArrays.push(valueArray);
+      }
+    }
+    const compression = this.fileDirectory.getValue("Compression") || 1;
+    const decoderParameters = await getDecoderParameters(compression, this.fileDirectory);
+    const poolOrDecoder = pool ? pool.bindParameters(compression, decoderParameters) : await getDecoder(compression, decoderParameters);
+    const result = await this._readRaster(imageWindow, samples, valueArrays, interleave, poolOrDecoder, width, height, resampleMethod, signal);
+    return result;
+  }
+  /**
+   * @overload
+   * @param {ReadRGBOptions & {interleave: true}} options optional parameters
+   * @returns {Promise<import("./geotiff.js").TypedArrayWithDimensions>} the RGB array as a Promise
+   */
+  /**
+   * @overload
+   * @param {ReadRGBOptions & {interleave: false}} options optional parameters
+   * @returns {Promise<import("./geotiff.js").TypedArrayArrayWithDimensions>} the RGB array as a Promise
+   */
+  /**
+   * @overload
+   * @param {ReadRGBOptions & {interleave: boolean}} options optional parameters
+   * @returns {Promise<ReadRasterResult>} the RGB array as a Promise
+   */
+  /**
+   * @overload
+   * @param {ReadRGBOptions} [options={}] optional parameters
+   * @returns {Promise<import("./geotiff.js").TypedArrayArrayWithDimensions>} the RGB array as a Promise
+   */
+  /**
+   * Reads raster data from the image as RGB.
+   * Colorspaces other than RGB will be transformed to RGB, color maps expanded.
+   * When no other method is applicable, the first sample is used to produce a
+   * grayscale image.
+   * When provided, only a subset of the raster is read for each sample.
+   *
+   * @param {ReadRGBOptions} [options] optional parameters
+   * @returns {Promise<ReadRasterResult>} the RGB array as a Promise
+   */
+  async readRGB(options = {}) {
+    const { window: window2, pool = null, width, height, resampleMethod, enableAlpha = false, signal } = options;
+    const interleave = ("interleave" in options && options.interleave) ?? false;
+    const imageWindow = window2 || [0, 0, this.getWidth(), this.getHeight()];
+    if (imageWindow[0] > imageWindow[2] || imageWindow[1] > imageWindow[3]) {
+      throw new Error("Invalid subsets");
+    }
+    const pi = this.fileDirectory.getValue("PhotometricInterpretation");
+    if (pi === photometricInterpretations.RGB) {
+      let s2 = [0, 1, 2];
+      const extraSamples = this.fileDirectory.getValue("ExtraSamples");
+      if (extraSamples && extraSamples[0] !== ExtraSamplesValues.Unspecified && enableAlpha) {
+        s2 = [];
+        const bitsPerSample = this.fileDirectory.getValue("BitsPerSample") || [];
+        for (let i2 = 0; i2 < bitsPerSample.length; i2 += 1) {
+          s2.push(i2);
+        }
+      }
+      return this.readRasters({
+        window: window2,
+        interleave,
+        samples: s2,
+        pool,
+        width,
+        height,
+        resampleMethod,
+        signal
+      });
+    }
+    let samples;
+    switch (pi) {
+      case photometricInterpretations.WhiteIsZero:
+      case photometricInterpretations.BlackIsZero:
+      case photometricInterpretations.Palette:
+        samples = [0];
+        break;
+      case photometricInterpretations.CMYK:
+        samples = [0, 1, 2, 3];
+        break;
+      case photometricInterpretations.YCbCr:
+      case photometricInterpretations.CIELab:
+        samples = [0, 1, 2];
+        break;
+      default:
+        throw new Error("Invalid or unsupported photometric interpretation.");
+    }
+    const subOptions = {
+      window: imageWindow,
+      /** @type {true} */
+      interleave: true,
+      samples,
+      pool,
+      width,
+      height,
+      resampleMethod,
+      signal
+    };
+    const { fileDirectory } = this;
+    const raster = await this.readRasters(subOptions);
+    const max = 2 ** this.getBitsPerSample(0);
+    let data;
+    switch (pi) {
+      case photometricInterpretations.WhiteIsZero:
+        data = fromWhiteIsZero(raster, max);
+        break;
+      case photometricInterpretations.BlackIsZero:
+        data = fromBlackIsZero(raster, max);
+        break;
+      case photometricInterpretations.Palette:
+        data = fromPalette(
+          raster,
+          /** @type {Uint16Array} */
+          await fileDirectory.loadValue("ColorMap")
+        );
+        break;
+      case photometricInterpretations.CMYK:
+        data = fromCMYK(raster);
+        break;
+      case photometricInterpretations.YCbCr:
+        data = fromYCbCr(raster);
+        break;
+      case photometricInterpretations.CIELab:
+        data = fromCIELab(raster);
+        break;
+      default:
+        throw new Error("Unsupported photometric interpretation.");
+    }
+    if (!interleave) {
+      const red = new Uint8Array(data.length / 3);
+      const green = new Uint8Array(data.length / 3);
+      const blue = new Uint8Array(data.length / 3);
+      for (let i2 = 0, j = 0; i2 < data.length; i2 += 3, ++j) {
+        red[j] = data[i2];
+        green[j] = data[i2 + 1];
+        blue[j] = data[i2 + 2];
+      }
+      data = [red, green, blue];
+    }
+    const dataWithDimensions = (
+      /** @type {import("./geotiff.js").ReadRasterResult} */
+      data
+    );
+    dataWithDimensions.width = raster.width;
+    dataWithDimensions.height = raster.height;
+    return dataWithDimensions;
+  }
+  /**
+   * Returns an array of tiepoints.
+   * @returns {Promise<Array<{i: number, j: number, k: number, x: number, y: number, z: number}>>} the tiepoints
+   */
+  async getTiePoints() {
+    if (!this.fileDirectory.hasTag("ModelTiepoint")) {
+      return [];
+    }
+    const modelTiePoint = await this.fileDirectory.loadValue("ModelTiepoint");
+    if (typeof modelTiePoint !== "object") {
+      throw new Error("Expected ModelTiepoint to be an array or typed array.");
+    }
+    const tiePoints = [];
+    for (let i2 = 0; i2 < modelTiePoint.length; i2 += 6) {
+      tiePoints.push({
+        i: modelTiePoint[i2],
+        j: modelTiePoint[i2 + 1],
+        k: modelTiePoint[i2 + 2],
+        x: modelTiePoint[i2 + 3],
+        y: modelTiePoint[i2 + 4],
+        z: modelTiePoint[i2 + 5]
+      });
+    }
+    return tiePoints;
+  }
+  /**
+   * Returns the parsed GDAL metadata items.
+   *
+   * If sample is passed to null, dataset-level metadata will be returned.
+   * Otherwise only metadata specific to the provided sample will be returned.
+   *
+   * @param {number|null} [sample=null] The sample index.
+   * @returns {Promise<Record<string, unknown>|null>} The GDAL metadata items
+   */
+  async getGDALMetadata(sample = null) {
+    const metadata = {};
+    if (!this.fileDirectory.hasTag("GDAL_METADATA")) {
+      return null;
+    }
+    const string = await this.fileDirectory.loadValue("GDAL_METADATA");
+    let items = findTagsByName(string, "Item");
+    if (sample === null) {
+      items = items.filter((item) => getAttribute(item, "sample") === void 0);
+    } else {
+      items = items.filter((item) => Number(getAttribute(item, "sample")) === sample);
+    }
+    for (let i2 = 0; i2 < items.length; ++i2) {
+      const item = items[i2];
+      metadata[getAttribute(item, "name")] = item.inner;
+    }
+    return metadata;
+  }
+  /**
+   * Returns the GDAL nodata value
+   * @returns {number|null}
+   */
+  getGDALNoData() {
+    const string = this.fileDirectory.hasTag("GDAL_NODATA") && this.fileDirectory.getValue("GDAL_NODATA");
+    if (!string) {
+      return null;
+    }
+    return Number(string.substring(0, string.length - 1));
+  }
+  /**
+   * Returns the image origin as a XYZ-vector. When the image has no affine
+   * transformation, then an exception is thrown.
+   * @returns {Array<number>} The origin as a vector
+   */
+  getOrigin() {
+    const tiePoints = this.fileDirectory.getValue("ModelTiepoint");
+    const modelTransformation = this.fileDirectory.getValue("ModelTransformation");
+    if (tiePoints && tiePoints.length === 6) {
+      return [
+        tiePoints[3],
+        tiePoints[4],
+        tiePoints[5]
+      ];
+    }
+    if (modelTransformation) {
+      return [
+        modelTransformation[3],
+        modelTransformation[7],
+        modelTransformation[11]
+      ];
+    }
+    throw new Error("The image does not have an affine transformation.");
+  }
+  /**
+   * Returns the image resolution as a XYZ-vector. When the image has no affine
+   * transformation, then an exception is thrown.
+   * @param {GeoTIFFImage|null} [referenceImage=null] A reference image to calculate the resolution from
+   *                                             in cases when the current image does not have the
+   *                                             required tags on its own.
+   * @returns {Array<number>} The resolution as a vector
+   */
+  getResolution(referenceImage = null) {
+    const modelPixelScale = this.fileDirectory.getValue("ModelPixelScale");
+    const modelTransformation = this.fileDirectory.getValue("ModelTransformation");
+    if (modelPixelScale) {
+      return [
+        modelPixelScale[0],
+        -modelPixelScale[1],
+        modelPixelScale[2]
+      ];
+    }
+    if (modelTransformation) {
+      if (modelTransformation[1] === 0 && modelTransformation[4] === 0) {
+        return [
+          modelTransformation[0],
+          -modelTransformation[5],
+          modelTransformation[10]
+        ];
+      }
+      return [
+        Math.sqrt(modelTransformation[0] * modelTransformation[0] + modelTransformation[4] * modelTransformation[4]),
+        -Math.sqrt(modelTransformation[1] * modelTransformation[1] + modelTransformation[5] * modelTransformation[5]),
+        modelTransformation[10]
+      ];
+    }
+    if (referenceImage) {
+      const [refResX, refResY, refResZ] = referenceImage.getResolution();
+      return [
+        refResX * referenceImage.getWidth() / this.getWidth(),
+        refResY * referenceImage.getHeight() / this.getHeight(),
+        refResZ * referenceImage.getWidth() / this.getWidth()
+      ];
+    }
+    throw new Error("The image does not have an affine transformation.");
+  }
+  /**
+   * Returns whether or not the pixels of the image depict an area (or point).
+   * @returns {Boolean} Whether the pixels are a point
+   */
+  pixelIsArea() {
+    return this.getGeoKeys()?.GTRasterTypeGeoKey === 1;
+  }
+  /**
+   * Returns the image bounding box as an array of 4 values: min-x, min-y,
+   * max-x and max-y. When the image has no affine transformation, then an
+   * exception is thrown.
+   * @param {boolean} [tilegrid=false] If true return extent for a tilegrid
+   *                                   without adjustment for ModelTransformation.
+   * @returns {Array<number>} The bounding box
+   */
+  getBoundingBox(tilegrid = false) {
+    const height = this.getHeight();
+    const width = this.getWidth();
+    const modelTransformation = this.fileDirectory.getValue("ModelTransformation");
+    if (modelTransformation && !tilegrid) {
+      const [a2, b2, , d2, e2, f2, , h2] = modelTransformation;
+      const corners = [
+        [0, 0],
+        [0, height],
+        [width, 0],
+        [width, height]
+      ];
+      const projected = corners.map(([I2, J]) => [
+        d2 + a2 * I2 + b2 * J,
+        h2 + e2 * I2 + f2 * J
+      ]);
+      const xs = projected.map((pt2) => pt2[0]);
+      const ys = projected.map((pt2) => pt2[1]);
+      return [
+        Math.min(...xs),
+        Math.min(...ys),
+        Math.max(...xs),
+        Math.max(...ys)
+      ];
+    } else {
+      const origin = this.getOrigin();
+      const resolution = this.getResolution();
+      const x1 = origin[0];
+      const y1 = origin[1];
+      const x2 = x1 + resolution[0] * width;
+      const y22 = y1 + resolution[1] * height;
+      return [
+        Math.min(x1, x2),
+        Math.min(y1, y22),
+        Math.max(x1, x2),
+        Math.max(y1, y22)
+      ];
+    }
+  }
+}
+class DataView64 {
+  /**
+   * @param {ArrayBufferLike} arrayBuffer
+   */
+  constructor(arrayBuffer) {
+    this._dataView = new DataView(arrayBuffer);
+  }
+  get buffer() {
+    return this._dataView.buffer;
+  }
+  /**
+   * @param {number} offset
+   * @param {boolean} littleEndian
+   * @returns {number}
+   */
+  getUint64(offset, littleEndian) {
+    const left = this.getUint32(offset, littleEndian);
+    const right = this.getUint32(offset + 4, littleEndian);
+    let combined;
+    if (littleEndian) {
+      combined = left + 2 ** 32 * right;
+      if (!Number.isSafeInteger(combined)) {
+        throw new Error(`${combined} exceeds MAX_SAFE_INTEGER. Precision may be lost. Please report if you get this message to https://github.com/geotiffjs/geotiff.js/issues`);
+      }
+      return combined;
+    }
+    combined = 2 ** 32 * left + right;
+    if (!Number.isSafeInteger(combined)) {
+      throw new Error(`${combined} exceeds MAX_SAFE_INTEGER. Precision may be lost. Please report if you get this message to https://github.com/geotiffjs/geotiff.js/issues`);
+    }
+    return combined;
+  }
+  /**
+   * Adapted from https://stackoverflow.com/a/55338384/8060591
+   * @param {number} offset
+   * @param {boolean} littleEndian
+   * @returns {number}
+   */
+  getInt64(offset, littleEndian) {
+    let value = 0;
+    const isNegative = (this._dataView.getUint8(offset + (littleEndian ? 7 : 0)) & 128) > 0;
+    let carrying = true;
+    for (let i2 = 0; i2 < 8; i2++) {
+      let byte = this._dataView.getUint8(offset + (littleEndian ? i2 : 7 - i2));
+      if (isNegative) {
+        if (carrying) {
+          if (byte !== 0) {
+            byte = ~(byte - 1) & 255;
+            carrying = false;
+          }
+        } else {
+          byte = ~byte & 255;
+        }
+      }
+      value += byte * 256 ** i2;
+    }
+    if (isNegative) {
+      value = -value;
+    }
+    return value;
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  getUint8(offset) {
+    return this._dataView.getUint8(offset);
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  getInt8(offset) {
+    return this._dataView.getInt8(offset);
+  }
+  /**
+   * @param {number} offset
+   * @param {boolean} littleEndian
+   * @returns {number}
+   */
+  getUint16(offset, littleEndian) {
+    return this._dataView.getUint16(offset, littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @param {boolean} littleEndian
+   * @returns {number}
+   */
+  getInt16(offset, littleEndian) {
+    return this._dataView.getInt16(offset, littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @param {boolean} littleEndian
+   * @returns {number}
+   */
+  getUint32(offset, littleEndian) {
+    return this._dataView.getUint32(offset, littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @param {boolean} littleEndian
+   * @returns {number}
+   */
+  getInt32(offset, littleEndian) {
+    return this._dataView.getInt32(offset, littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @param {boolean} littleEndian
+   * @returns {number}
+   */
+  getFloat16(offset, littleEndian) {
+    return getFloat16(this._dataView, offset, littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @param {boolean} littleEndian
+   * @returns {number}
+   */
+  getFloat32(offset, littleEndian) {
+    return this._dataView.getFloat32(offset, littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @param {boolean} littleEndian
+   * @returns {number}
+   */
+  getFloat64(offset, littleEndian) {
+    return this._dataView.getFloat64(offset, littleEndian);
+  }
+}
+class DataSlice {
+  /**
+   * @param {ArrayBufferLike} arrayBuffer
+   * @param {number} sliceOffset
+   * @param {boolean} littleEndian
+   * @param {boolean} bigTiff
+   */
+  constructor(arrayBuffer, sliceOffset, littleEndian, bigTiff) {
+    this._dataView = new DataView(arrayBuffer);
+    this._sliceOffset = sliceOffset;
+    this._littleEndian = littleEndian;
+    this._bigTiff = bigTiff;
+  }
+  get sliceOffset() {
+    return this._sliceOffset;
+  }
+  get sliceTop() {
+    return this._sliceOffset + this.buffer.byteLength;
+  }
+  get littleEndian() {
+    return this._littleEndian;
+  }
+  get bigTiff() {
+    return this._bigTiff;
+  }
+  get buffer() {
+    return this._dataView.buffer;
+  }
+  /**
+   * @param {number} offset
+   * @param {number} length
+   * @returns {boolean}
+   */
+  covers(offset, length) {
+    return this.sliceOffset <= offset && this.sliceTop >= offset + length;
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  readUint8(offset) {
+    return this._dataView.getUint8(offset - this._sliceOffset);
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  readInt8(offset) {
+    return this._dataView.getInt8(offset - this._sliceOffset);
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  readUint16(offset) {
+    return this._dataView.getUint16(offset - this._sliceOffset, this._littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  readInt16(offset) {
+    return this._dataView.getInt16(offset - this._sliceOffset, this._littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  readUint32(offset) {
+    return this._dataView.getUint32(offset - this._sliceOffset, this._littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  readInt32(offset) {
+    return this._dataView.getInt32(offset - this._sliceOffset, this._littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  readFloat32(offset) {
+    return this._dataView.getFloat32(offset - this._sliceOffset, this._littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  readFloat64(offset) {
+    return this._dataView.getFloat64(offset - this._sliceOffset, this._littleEndian);
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  readUint64(offset) {
+    const left = this.readUint32(offset);
+    const right = this.readUint32(offset + 4);
+    let combined;
+    if (this._littleEndian) {
+      combined = left + 2 ** 32 * right;
+      if (!Number.isSafeInteger(combined)) {
+        throw new Error(`${combined} exceeds MAX_SAFE_INTEGER. Precision may be lost. Please report if you get this message to https://github.com/geotiffjs/geotiff.js/issues`);
+      }
+      return combined;
+    }
+    combined = 2 ** 32 * left + right;
+    if (!Number.isSafeInteger(combined)) {
+      throw new Error(`${combined} exceeds MAX_SAFE_INTEGER. Precision may be lost. Please report if you get this message to https://github.com/geotiffjs/geotiff.js/issues`);
+    }
+    return combined;
+  }
+  /**
+   * Adapted from https://stackoverflow.com/a/55338384/8060591
+   * @param {number} offset
+   * @returns {number}
+   */
+  readInt64(offset) {
+    let value = 0;
+    const isNegative = (this._dataView.getUint8(offset + (this._littleEndian ? 7 : 0)) & 128) > 0;
+    let carrying = true;
+    for (let i2 = 0; i2 < 8; i2++) {
+      let byte = this._dataView.getUint8(offset + (this._littleEndian ? i2 : 7 - i2));
+      if (isNegative) {
+        if (carrying) {
+          if (byte !== 0) {
+            byte = ~(byte - 1) & 255;
+            carrying = false;
+          }
+        } else {
+          byte = ~byte & 255;
+        }
+      }
+      value += byte * 256 ** i2;
+    }
+    if (isNegative) {
+      value = -value;
+    }
+    return value;
+  }
+  /**
+   * @param {number} offset
+   * @returns {number}
+   */
+  readOffset(offset) {
+    if (this._bigTiff) {
+      return this.readUint64(offset);
+    }
+    return this.readUint32(offset);
+  }
+}
+class BaseSource {
+  /**
+   * @param {Array<Slice>} slices
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<ArrayBufferLike[]>}
+   */
+  async fetch(slices, signal) {
+    return Promise.all(slices.map(async (slice) => (await this.fetchSlice(slice, signal)).data));
+  }
+  /**
+   * @param {Slice} slice
+   * @param {AbortSignal} [_signal]
+   * @returns {Promise<SliceWithData>}
+   */
+  async fetchSlice(slice, _signal) {
+    throw new Error(`fetching of slice ${slice} not possible, not implemented`);
+  }
+  /**
+   * Returns the filesize if already determined and null otherwise
+   * @returns {number|null}
+   */
+  get fileSize() {
+    return null;
+  }
+  async close() {
+  }
+}
+class AbortError extends Error {
+  constructor(...args) {
+    super(...args);
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, AbortError);
+    }
+    this.name = "AbortError";
+    this.signal = void 0;
+  }
+}
+class ArrayBufferSource extends BaseSource {
+  /**
+   * @param {ArrayBuffer} arrayBuffer
+   */
+  constructor(arrayBuffer) {
+    super();
+    this.arrayBuffer = arrayBuffer;
+  }
+  /**
+   * @param {import('./basesource.js').Slice} slice
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<import('./basesource.js').SliceWithData>}
+   */
+  fetchSlice(slice, signal) {
+    if (signal && signal.aborted) {
+      throw new AbortError("Request aborted");
+    }
+    return Promise.resolve({
+      data: this.arrayBuffer.slice(slice.offset, slice.offset + slice.length),
+      offset: slice.offset,
+      length: slice.length
+    });
+  }
+}
+function makeBufferSource(arrayBuffer) {
+  return new ArrayBufferSource(arrayBuffer);
+}
+function getArrayForSamples(fieldType, count) {
+  switch (fieldType) {
+    case fieldTypes.BYTE:
+    case fieldTypes.ASCII:
+    case fieldTypes.UNDEFINED:
+      return new Uint8Array(count);
+    case fieldTypes.SBYTE:
+      return new Int8Array(count);
+    case fieldTypes.SHORT:
+      return new Uint16Array(count);
+    case fieldTypes.SSHORT:
+      return new Int16Array(count);
+    case fieldTypes.LONG:
+    case fieldTypes.IFD:
+      return new Uint32Array(count);
+    case fieldTypes.SLONG:
+      return new Int32Array(count);
+    case fieldTypes.LONG8:
+    case fieldTypes.IFD8:
+      return new Array(count);
+    case fieldTypes.SLONG8:
+      return new Array(count);
+    case fieldTypes.RATIONAL:
+      return new Uint32Array(count * 2);
+    case fieldTypes.SRATIONAL:
+      return new Int32Array(count * 2);
+    case fieldTypes.FLOAT:
+      return new Float32Array(count);
+    case fieldTypes.DOUBLE:
+      return new Float64Array(count);
+    default:
+      throw new RangeError(`Invalid field type: ${fieldType}`);
+  }
+}
+function getDataSliceReader(dataSlice, fieldType) {
+  switch (fieldType) {
+    case fieldTypes.BYTE:
+    case fieldTypes.ASCII:
+    case fieldTypes.UNDEFINED:
+      return dataSlice.readUint8;
+    case fieldTypes.SBYTE:
+      return dataSlice.readInt8;
+    case fieldTypes.SHORT:
+      return dataSlice.readUint16;
+    case fieldTypes.SSHORT:
+      return dataSlice.readInt16;
+    case fieldTypes.LONG:
+    case fieldTypes.IFD:
+      return dataSlice.readUint32;
+    case fieldTypes.SLONG:
+      return dataSlice.readInt32;
+    case fieldTypes.LONG8:
+    case fieldTypes.IFD8:
+      return dataSlice.readUint64;
+    case fieldTypes.SLONG8:
+      return dataSlice.readInt64;
+    case fieldTypes.RATIONAL:
+      return dataSlice.readUint32;
+    case fieldTypes.SRATIONAL:
+      return dataSlice.readInt32;
+    case fieldTypes.FLOAT:
+      return dataSlice.readFloat32;
+    case fieldTypes.DOUBLE:
+      return dataSlice.readFloat64;
+    default:
+      throw new RangeError(`Invalid field type: ${fieldType}`);
+  }
+}
+function getValues$1(outValues = null, readMethod, dataSlice, fieldType, count, offset, isArray = false) {
+  const fieldTypeLength = getFieldTypeSize(fieldType);
+  const values2 = outValues || getArrayForSamples(fieldType, count);
+  const isRational = fieldType === fieldTypes.RATIONAL || fieldType === fieldTypes.SRATIONAL;
+  if (!isRational) {
+    for (let i2 = 0; i2 < count; ++i2) {
+      values2[i2] = readMethod.call(dataSlice, offset + i2 * fieldTypeLength);
+    }
+  } else {
+    for (let i2 = 0; i2 < count; i2 += 2) {
+      values2[i2] = readMethod.call(dataSlice, offset + i2 * fieldTypeLength);
+      values2[i2 + 1] = readMethod.call(dataSlice, offset + (i2 * fieldTypeLength + 4));
+    }
+  }
+  if (fieldType === fieldTypes.ASCII) {
+    return new TextDecoder("utf-8").decode(
+      /** @type {Uint8Array} */
+      values2
+    );
+  }
+  if (count === 1 && !isArray && !isRational) {
+    return values2[0];
+  }
+  return values2;
+}
+class DeferredArray {
+  /**
+   * Creates a DeferredArray for lazy-loading of large TIFF field arrays.
+   * @param {import("./source/basesource.js").BaseSource} source - Data source for fetching
+   * @param {number} arrayOffset - Byte offset where the array data starts
+   * @param {boolean} littleEndian - Endianness of the data
+   * @param {import('./globals.js').FieldType} fieldType - TIFF field type constant
+   * @param {number} length - Number of elements in the array
+   */
+  constructor(source, arrayOffset, littleEndian, fieldType, length) {
+    this.source = source;
+    this.arrayOffset = arrayOffset;
+    this.littleEndian = littleEndian;
+    this.fieldType = fieldType;
+    this.length = length;
+    this.data = getArrayForSamples(fieldType, length);
+    this.itemSize = getFieldTypeSize(fieldType);
+    this.maskBitmap = new Uint8Array(Math.ceil(length / 8));
+    this.fetchIndexPromises = /* @__PURE__ */ new Map();
+    this.fullFetchPromise = null;
+  }
+  /**
+   * Loads all values in the deferred array at once.
+   * Subsequent calls return the same promise to avoid redundant fetches.
+   * @returns {Promise<import('./geotiff.js').TypedArray|Array<number>>} Promise resolving to the fully loaded array
+   */
+  async loadAll() {
+    if (!this.fullFetchPromise) {
+      this.fullFetchPromise = this.source.fetch([{
+        offset: this.arrayOffset,
+        length: this.itemSize * this.length
+      }]).then((data) => {
+        const dataSlice = new DataSlice(data[0], this.arrayOffset, true, false);
+        const result = getValues$1(this.data, getDataSliceReader(dataSlice, this.fieldType), dataSlice, this.fieldType, this.length, this.arrayOffset, true);
+        this.maskBitmap.fill(255);
+        this.fetchIndexPromises.clear();
+        return result;
+      });
+    }
+    return this.fullFetchPromise;
+  }
+  /**
+   * Loads and returns a single value at the specified index.
+   * If the value is already loaded, returns it immediately. Otherwise, fetches it
+   * from the source. Multiple calls for the same index reuse the same promise.
+   * @param {number} index - Zero-based index of the value to load
+   * @returns {Promise<number|bigint>} Promise resolving to the value at the given index
+   * @throws {RangeError} If index is out of bounds
+   */
+  async get(index) {
+    if (index < 0 || index >= this.data.length) {
+      throw new RangeError(`Index ${index} out of bounds for length ${this.data.length}`);
+    }
+    const byteIndex = Math.floor(index / 8);
+    const bitMask = 1 << index % 8;
+    const offset = this.arrayOffset + index * this.itemSize;
+    if ((this.maskBitmap[byteIndex] & bitMask) === 0) {
+      if (!this.fetchIndexPromises.has(index)) {
+        const fetchPromise = this.source.fetch([{
+          offset,
+          length: this.itemSize
+        }]).then((data) => {
+          const dataSlice = new DataSlice(data[0], this.arrayOffset + index * this.itemSize, true, false);
+          const readMethod = getDataSliceReader(dataSlice, this.fieldType);
+          const value = readMethod.call(dataSlice, offset);
+          this.data[index] = value;
+          this.maskBitmap[byteIndex] |= bitMask;
+          this.fetchIndexPromises.delete(index);
+          return value;
+        });
+        this.fetchIndexPromises.set(index, fetchPromise);
+      }
+      return this.fetchIndexPromises.get(index);
+    }
+    return this.data[index];
+  }
+}
+class ImageFileDirectory {
+  /**
+   * Create an ImageFileDirectory.
+   * @param {Map<string|number, number|string|Array<number|string>>} actualizedFields the file directory,
+   * mapping tag names to values
+   * @param {Map<string|number, Function>} deferredFields the deferred fields, mapping tag names to async functions
+   * @param {Map<string|number, DeferredArray>} deferredArrays the deferred arrays, mapping tag names to
+   * DeferredArray objects
+   * @param {number} nextIFDByteOffset the byte offset to the next IFD
+   */
+  constructor(actualizedFields, deferredFields, deferredArrays, nextIFDByteOffset) {
+    this.actualizedFields = actualizedFields;
+    this.deferredFields = deferredFields;
+    this.deferredFieldsBeingResolved = /* @__PURE__ */ new Map();
+    this.deferredArrays = deferredArrays;
+    this.nextIFDByteOffset = nextIFDByteOffset;
+  }
+  /**
+   * @param {import('./globals.js').TagName|number} tagIdentifier The field tag ID or name
+   * @returns {boolean} whether the field exists (actualized or deferred)
+   */
+  hasTag(tagIdentifier) {
+    const tag = resolveTag(tagIdentifier);
+    return this.actualizedFields.has(tag) || this.deferredFields.has(tag) || this.deferredArrays.has(tag);
+  }
+  /**
+   * Synchronously retrieves the value for a given tag. If it is deferred, an error is thrown.
+   * @template {import('./globals.js').EagerTagName | import('./globals.js').EagerTag} [T=any]
+   * @param {T} tagIdentifier The field tag ID or name
+   * @returns {T extends import('./globals.js').TagName ? (import('./globals.js').TagValue<T> | undefined) : any}
+   * the field value,
+   * or undefined if it does not exist
+   * @throws {Error} If the tag is deferred and requires asynchronous loading
+   */
+  getValue(tagIdentifier) {
+    const tag = resolveTag(tagIdentifier);
+    if (this.deferredFields.has(tag) || this.deferredArrays.has(tag)) {
+      const tagDef = tagDefinitions[tag];
+      const tagName = tagDef?.name || `Tag${tag}`;
+      throw new Error(`Field '${tagName}' (${tag}) is deferred. Use loadValue() to load it asynchronously.`);
+    }
+    if (!this.actualizedFields.has(tag)) {
+      return (
+        /** @type {any} */
+        void 0
+      );
+    }
+    return (
+      /** @type {any} */
+      this.actualizedFields.get(tag)
+    );
+  }
+  /**
+   * Retrieves the value for a given tag. If it is deferred, it will be loaded first.
+   * @template {import('./globals.js').TagName} [T=any]
+   * @param {T|number} tagIdentifier The field tag ID or name
+   * @returns {Promise<T extends import('./globals.js').TagName ? (import('./globals.js').TagValue<T> | undefined) : any>}
+   *   the field value, or undefined if it does not exist
+   */
+  async loadValue(tagIdentifier) {
+    const tag = resolveTag(tagIdentifier);
+    if (this.actualizedFields.has(tag)) {
+      return (
+        /** @type {any} */
+        this.actualizedFields.get(tag)
+      );
+    }
+    if (this.deferredFieldsBeingResolved.has(tag)) {
+      return (
+        /** @type {any} */
+        this.deferredFieldsBeingResolved.get(tag)
+      );
+    }
+    const loaderFn = this.deferredFields.get(tag);
+    if (loaderFn) {
+      this.deferredFields.delete(tag);
+      const valuePromise = (async () => {
+        try {
+          const value = await loaderFn();
+          this.actualizedFields.set(tag, value);
+          return value;
+        } finally {
+          this.deferredFieldsBeingResolved.delete(tag);
+        }
+      })();
+      this.deferredFieldsBeingResolved.set(tag, valuePromise);
+      return (
+        /** @type {any} */
+        valuePromise
+      );
+    }
+    const deferredArray = this.deferredArrays.get(tag);
+    if (deferredArray) {
+      return (
+        /** @type {any} */
+        deferredArray.loadAll()
+      );
+    }
+    return (
+      /** @type {any} */
+      void 0
+    );
+  }
+  /**
+   * Retrieves the value at a given index for a tag that is an array. If it is deferred, it will be loaded first.
+   * @param {number|string} tagIdentifier The field tag ID or name
+   * @param {number} index The index within the array
+   * @returns {Promise<number|string|bigint|undefined>} the field value at the given index, or undefined if it does not exist
+   */
+  async loadValueIndexed(tagIdentifier, index) {
+    const tag = resolveTag(tagIdentifier);
+    if (this.actualizedFields.has(tag)) {
+      const value = this.actualizedFields.get(tag);
+      return (
+        /** @type {any} */
+        value[index]
+      );
+    } else if (this.deferredArrays.has(tag)) {
+      const deferredArray = (
+        /** @type {DeferredArray} */
+        this.deferredArrays.get(tag)
+      );
+      return deferredArray.get(index);
+    } else if (this.hasTag(tag)) {
+      const value = await this.loadValue(tag);
+      if (value && typeof value !== "number") {
+        return value[index];
+      }
+    }
+    return void 0;
+  }
+  /**
+   * Parses the GeoTIFF GeoKeyDirectory tag into a structured object.
+   * The GeoKeyDirectory is a special TIFF tag that contains geographic metadata
+   * in a key-value format as defined by the GeoTIFF specification.
+   * @returns {Partial<Record<import('./globals.js').GeoKeyName, *>>|null} Parsed geo key directory
+   *     mapping key names to values, or null if not present
+   * @throws {Error} If a referenced geo key value cannot be retrieved
+   */
+  parseGeoKeyDirectory() {
+    const rawGeoKeyDirectory = this.getValue("GeoKeyDirectory");
+    if (!rawGeoKeyDirectory) {
+      return null;
+    }
+    const geoKeyDirectory = {};
+    for (let i2 = 4; i2 <= rawGeoKeyDirectory[3] * 4; i2 += 4) {
+      const key = (
+        /** @type {Record<number, import('./globals.js').GeoKeyName>} */
+        geoKeyNames[rawGeoKeyDirectory[i2]]
+      );
+      const location2 = (
+        /** @type {import('./globals.js').EagerTag} */
+        rawGeoKeyDirectory[i2 + 1] || null
+      );
+      const count = rawGeoKeyDirectory[i2 + 2];
+      const offset = rawGeoKeyDirectory[i2 + 3];
+      let value = null;
+      if (!location2) {
+        value = offset;
+      } else {
+        value = this.getValue(location2);
+        if (typeof value === "undefined" || value === null) {
+          throw new Error(`Could not get value of geoKey '${key}'.`);
+        } else if (typeof value === "string") {
+          value = value.substring(offset, offset + count - 1);
+        } else if (value.subarray) {
+          value = value.subarray(offset, offset + count);
+          if (count === 1) {
+            value = value[0];
+          }
+        }
+      }
+      geoKeyDirectory[key] = value;
+    }
+    return geoKeyDirectory;
+  }
+  toObject() {
+    const obj = {};
+    for (const [tag, value] of this.actualizedFields.entries()) {
+      const tagDefinition = typeof tag === "number" ? tagDefinitions[tag] : void 0;
+      const tagName = tagDefinition ? tagDefinition.name : `Tag${tag}`;
+      obj[tagName] = value;
+    }
+    return obj;
+  }
+}
+class ImageFileDirectoryParser {
+  /**
+   * @param {import("./source/basesource.js").BaseSource} source the data source to fetch from
+   * @param {boolean} littleEndian the endianness of the file
+   * @param {boolean} bigTiff whether the file is a BigTIFF
+   * @param {boolean} [eager=false] whether to eagerly fetch deferred fields.
+   *                                 When false (default), tags are loaded lazily on-demand.
+   *                                 When true, all tags are loaded immediately during parsing.
+   */
+  constructor(source, littleEndian, bigTiff, eager = false) {
+    this.source = source;
+    this.littleEndian = littleEndian;
+    this.bigTiff = bigTiff;
+    this.eager = eager;
+  }
+  /**
+   * Helper function to retrieve a DataSlice from the source.
+   * @param {number} offset Byte offset of the slice
+   * @param {number} [length] Length of the slice
+   * @returns {Promise<DataSlice>}
+   */
+  async getSlice(offset, length) {
+    const fallbackLength = this.bigTiff ? 4048 : 1024;
+    return new DataSlice((await this.source.fetch([
+      {
+        offset,
+        length: typeof length !== "undefined" ? length : fallbackLength
+      }
+    ]))[0], offset, this.littleEndian, this.bigTiff);
+  }
+  /**
+   * Instructs to parse an image file directory at the given file offset.
+   * As there is no way to ensure that a location is indeed the start of an IFD,
+   * this function must be called with caution (e.g only using the IFD offsets from
+   * the headers or other IFDs).
+   * @param {number} offset the offset to parse the IFD at
+   * @returns {Promise<ImageFileDirectory>} the parsed IFD
+   */
+  async parseFileDirectoryAt(offset) {
+    const entrySize = this.bigTiff ? 20 : 12;
+    const offsetSize = this.bigTiff ? 8 : 2;
+    let dataSlice = await this.getSlice(offset);
+    const numDirEntries = this.bigTiff ? dataSlice.readUint64(offset) : dataSlice.readUint16(offset);
+    const byteSize = numDirEntries * (entrySize + (this.bigTiff ? 16 : 6));
+    if (!dataSlice.covers(offset, byteSize)) {
+      dataSlice = await this.getSlice(offset, byteSize);
+    }
+    const actualizedFields = /* @__PURE__ */ new Map();
+    const deferredFields = /* @__PURE__ */ new Map();
+    const deferredArrays = /* @__PURE__ */ new Map();
+    let i2 = offset + (this.bigTiff ? 8 : 2);
+    for (let entryCount = 0; entryCount < numDirEntries; i2 += entrySize, ++entryCount) {
+      const fieldTag = dataSlice.readUint16(i2);
+      const fieldType = (
+        /** @type {import('./globals.js').FieldType} */
+        dataSlice.readUint16(i2 + 2)
+      );
+      const typeCount = this.bigTiff ? dataSlice.readUint64(i2 + 4) : dataSlice.readUint32(i2 + 4);
+      let fieldValues = null;
+      let deferredFieldValues = null;
+      let deferredArray = null;
+      const fieldTypeLength = getFieldTypeSize(fieldType);
+      const valueOffset = i2 + (this.bigTiff ? 12 : 8);
+      const isArray = tagDefinitions[fieldTag]?.isArray;
+      const eager = tagDefinitions[fieldTag]?.eager || this.eager;
+      if (fieldTypeLength * typeCount <= (this.bigTiff ? 8 : 4)) {
+        fieldValues = getValues$1(getArrayForSamples(fieldType, typeCount), getDataSliceReader(dataSlice, fieldType), dataSlice, fieldType, typeCount, valueOffset, isArray);
+      } else {
+        const actualOffset = dataSlice.readOffset(valueOffset);
+        const length = getFieldTypeSize(fieldType) * typeCount;
+        if (dataSlice.covers(actualOffset, length)) {
+          fieldValues = getValues$1(getArrayForSamples(fieldType, typeCount), getDataSliceReader(dataSlice, fieldType), dataSlice, fieldType, typeCount, actualOffset, isArray);
+        } else if (eager) {
+          const fieldDataSlice = await this.getSlice(actualOffset, length);
+          fieldValues = getValues$1(getArrayForSamples(fieldType, typeCount), getDataSliceReader(fieldDataSlice, fieldType), fieldDataSlice, fieldType, typeCount, actualOffset, isArray);
+        } else if (isArray) {
+          deferredArray = new DeferredArray(this.source, actualOffset, this.littleEndian, fieldType, typeCount);
+        } else {
+          deferredFieldValues = async () => {
+            const fieldDataSlice = await this.getSlice(actualOffset, length);
+            return getValues$1(getArrayForSamples(fieldType, typeCount), getDataSliceReader(fieldDataSlice, fieldType), fieldDataSlice, fieldType, typeCount, actualOffset, isArray);
+          };
+        }
+      }
+      if (fieldValues !== null) {
+        actualizedFields.set(fieldTag, fieldValues);
+      } else if (deferredFieldValues !== null) {
+        deferredFields.set(fieldTag, deferredFieldValues);
+      } else if (deferredArray !== null) {
+        deferredArrays.set(fieldTag, deferredArray);
+      }
+    }
+    const nextIFDByteOffset = dataSlice.readOffset(offset + offsetSize + entrySize * numDirEntries);
+    return new ImageFileDirectory(actualizedFields, deferredFields, deferredArrays, nextIFDByteOffset);
+  }
+}
+function decodeRowAcc(row, stride) {
+  let length = row.length - stride;
+  let offset = 0;
+  do {
+    for (let i2 = stride; i2 > 0; i2--) {
+      row[offset + stride] += row[offset];
+      offset++;
+    }
+    length -= stride;
+  } while (length > 0);
+}
+function decodeRowFloatingPoint(row, stride, bytesPerSample) {
+  let index = 0;
+  let count = row.length;
+  const wc = count / bytesPerSample;
+  while (count > stride) {
+    for (let i2 = stride; i2 > 0; --i2) {
+      row[index + stride] += row[index];
+      ++index;
+    }
+    count -= stride;
+  }
+  const copy = row.slice();
+  for (let i2 = 0; i2 < wc; ++i2) {
+    for (let b2 = 0; b2 < bytesPerSample; ++b2) {
+      row[bytesPerSample * i2 + b2] = copy[(bytesPerSample - b2 - 1) * wc + i2];
+    }
+  }
+}
+function applyPredictor(block, predictor, width, height, bitsPerSample, planarConfiguration) {
+  if (!predictor || predictor === 1) {
+    return block;
+  }
+  for (let i2 = 0; i2 < bitsPerSample.length; ++i2) {
+    if (bitsPerSample[i2] % 8 !== 0) {
+      throw new Error("When decoding with predictor, only multiple of 8 bits are supported.");
+    }
+    if (bitsPerSample[i2] !== bitsPerSample[0]) {
+      throw new Error("When decoding with predictor, all samples must have the same size.");
+    }
+  }
+  const bytesPerSample = bitsPerSample[0] / 8;
+  const stride = planarConfiguration === 2 ? 1 : bitsPerSample.length;
+  for (let i2 = 0; i2 < height; ++i2) {
+    if (i2 * stride * width * bytesPerSample >= block.byteLength) {
+      break;
+    }
+    let row;
+    if (predictor === 2) {
+      switch (bitsPerSample[0]) {
+        case 8:
+          row = new Uint8Array(block, i2 * stride * width * bytesPerSample, stride * width * bytesPerSample);
+          break;
+        case 16:
+          row = new Uint16Array(block, i2 * stride * width * bytesPerSample, stride * width * bytesPerSample / 2);
+          break;
+        case 32:
+          row = new Uint32Array(block, i2 * stride * width * bytesPerSample, stride * width * bytesPerSample / 4);
+          break;
+        default:
+          throw new Error(`Predictor 2 not allowed with ${bitsPerSample[0]} bits per sample.`);
+      }
+      decodeRowAcc(row, stride);
+    } else if (predictor === 3) {
+      row = new Uint8Array(block, i2 * stride * width * bytesPerSample, stride * width * bytesPerSample);
+      decodeRowFloatingPoint(row, stride, bytesPerSample);
+    }
+  }
+  return block;
+}
+class BaseDecoder {
+  /**
+   * @param {BaseDecoderParameters} parameters
+   */
+  constructor(parameters) {
+    this.parameters = parameters;
+  }
+  /**
+   * @abstract
+   * @param {ArrayBufferLike} _buffer
+   * @returns {Promise<ArrayBufferLike>|ArrayBufferLike}
+   */
+  decodeBlock(_buffer) {
+    throw new Error("decodeBlock not implemented");
+  }
+  /**
+   * @param {ArrayBufferLike} buffer
+   * @returns {Promise<ArrayBufferLike>}
+   */
+  async decode(buffer2) {
+    const decoded = await this.decodeBlock(buffer2);
+    const { tileWidth, tileHeight, predictor, bitsPerSample, planarConfiguration } = this.parameters;
+    if (predictor !== 1) {
+      const isBitsPerSampleArray = Array.isArray(bitsPerSample) || ArrayBuffer.isView(bitsPerSample);
+      const adaptedBitsPerSample = isBitsPerSampleArray ? Array.from(bitsPerSample) : [bitsPerSample];
+      return applyPredictor(decoded, predictor, tileWidth, tileHeight, adaptedBitsPerSample, planarConfiguration);
+    }
+    return decoded;
+  }
+}
+function getValues(dataSlice, fieldType, count, offset) {
+  let values2 = null;
+  let readMethod = null;
+  const fieldTypeLength = getFieldTypeSize(fieldType);
+  switch (fieldType) {
+    case fieldTypes.BYTE:
+    case fieldTypes.ASCII:
+    case fieldTypes.UNDEFINED:
+      values2 = new Uint8Array(count);
+      readMethod = dataSlice.readUint8;
+      break;
+    case fieldTypes.SBYTE:
+      values2 = new Int8Array(count);
+      readMethod = dataSlice.readInt8;
+      break;
+    case fieldTypes.SHORT:
+      values2 = new Uint16Array(count);
+      readMethod = dataSlice.readUint16;
+      break;
+    case fieldTypes.SSHORT:
+      values2 = new Int16Array(count);
+      readMethod = dataSlice.readInt16;
+      break;
+    case fieldTypes.LONG:
+    case fieldTypes.IFD:
+      values2 = new Uint32Array(count);
+      readMethod = dataSlice.readUint32;
+      break;
+    case fieldTypes.SLONG:
+      values2 = new Int32Array(count);
+      readMethod = dataSlice.readInt32;
+      break;
+    case fieldTypes.LONG8:
+    case fieldTypes.IFD8:
+      values2 = new Array(count);
+      readMethod = dataSlice.readUint64;
+      break;
+    case fieldTypes.SLONG8:
+      values2 = new Array(count);
+      readMethod = dataSlice.readInt64;
+      break;
+    case fieldTypes.RATIONAL:
+      values2 = new Uint32Array(count * 2);
+      readMethod = dataSlice.readUint32;
+      break;
+    case fieldTypes.SRATIONAL:
+      values2 = new Int32Array(count * 2);
+      readMethod = dataSlice.readInt32;
+      break;
+    case fieldTypes.FLOAT:
+      values2 = new Float32Array(count);
+      readMethod = dataSlice.readFloat32;
+      break;
+    case fieldTypes.DOUBLE:
+      values2 = new Float64Array(count);
+      readMethod = dataSlice.readFloat64;
+      break;
+  }
+  if (values2 === null || readMethod === null) {
+    throw new RangeError(`Invalid field type: ${fieldType}`);
+  }
+  {
+    for (let i2 = 0; i2 < count; ++i2) {
+      values2[i2] = readMethod.call(dataSlice, offset + i2 * fieldTypeLength);
+    }
+  }
+  {
+    return new TextDecoder("utf-8").decode(
+      /** @type {Uint8Array} */
+      values2
+    );
+  }
+}
+class GeoTIFFImageIndexError extends Error {
+  /**
+   * @param {number} index
+   */
+  constructor(index) {
+    super(`No image at index ${index}`);
+    this.index = index;
+  }
+}
+class GeoTIFFBase {
+  /**
+   * @param {number} [_index=0] the index of the image to return.
+   * @returns {Promise<GeoTIFFImage>} the image at the given index
+   */
+  async getImage(_index = 0) {
+    throw new Error("Not implemented");
+  }
+  /**
+   * @returns {Promise<number>} the number of internal subfile images
+   */
+  async getImageCount() {
+    throw new Error("Not implemented");
+  }
+  /**
+   * @typedef {Object} ReadRastersWindowOptions
+   * @property {number} [resX] desired Y resolution (world units per pixel)
+   * @property {number} [resY] desired X resolution (world units per pixel)
+   * @property {Array<number>} [bbox] the subset to read data from in
+   *     geographical coordinates. Whole image if not specified.
+   */
+  /**
+   * (experimental) Reads raster data from the best fitting image. This function uses
+   * the image with the lowest resolution that is still a higher resolution than the
+   * requested resolution.
+   * When specified, the `bbox` option is translated to the `window` option and the
+   * `resX` and `resY` to `width` and `height` respectively.
+   * Then, the [readRasters]{@link GeoTIFFImage#readRasters} method of the selected
+   * image is called and the result returned.
+   * @see GeoTIFFImage.readRasters
+   * @param {ReadRastersOptions & ReadRastersWindowOptions} options optional parameters
+   * @returns {Promise<ReadRasterResult>} the decoded array(s), with `height` and `width`, as a promise
+   */
+  async readRasters(options = {}) {
+    const { window: imageWindow, width, height } = options;
+    let { resX, resY, bbox } = options;
+    const firstImage = await this.getImage();
+    let usedImage = firstImage;
+    const imageCount = await this.getImageCount();
+    const imgBBox = firstImage.getBoundingBox();
+    if (imageWindow && bbox) {
+      throw new Error('Both "bbox" and "window" passed.');
+    }
+    if (width || height) {
+      if (imageWindow) {
+        const [oX, oY] = firstImage.getOrigin();
+        const [rX, rY] = firstImage.getResolution();
+        bbox = [
+          oX + imageWindow[0] * rX,
+          oY + imageWindow[1] * rY,
+          oX + imageWindow[2] * rX,
+          oY + imageWindow[3] * rY
+        ];
+      }
+      const usedBBox = bbox || imgBBox;
+      if (width) {
+        if (resX) {
+          throw new Error("Both width and resX passed");
+        }
+        resX = (usedBBox[2] - usedBBox[0]) / width;
+      }
+      if (height) {
+        if (resY) {
+          throw new Error("Both width and resY passed");
+        }
+        resY = (usedBBox[3] - usedBBox[1]) / height;
+      }
+    }
+    if (resX || resY) {
+      const allImages = [];
+      for (let i2 = 0; i2 < imageCount; ++i2) {
+        const image = await this.getImage(i2);
+        const subfileType = image.fileDirectory.getValue("SubfileType");
+        const newSubfileType = image.fileDirectory.getValue("NewSubfileType");
+        if (i2 === 0 || subfileType === 2 || (newSubfileType || 0) & 1) {
+          allImages.push(image);
+        }
+      }
+      allImages.sort((a2, b2) => a2.getWidth() - b2.getWidth());
+      for (let i2 = 0; i2 < allImages.length; ++i2) {
+        const image = allImages[i2];
+        const imgResX = (imgBBox[2] - imgBBox[0]) / image.getWidth();
+        const imgResY = (imgBBox[3] - imgBBox[1]) / image.getHeight();
+        usedImage = image;
+        if (resX && resX > imgResX || resY && resY > imgResY) {
+          break;
+        }
+      }
+    }
+    let wnd = imageWindow;
+    if (bbox) {
+      const [oX, oY] = firstImage.getOrigin();
+      const [imageResX, imageResY] = usedImage.getResolution(firstImage);
+      wnd = [
+        Math.round((bbox[0] - oX) / imageResX),
+        Math.round((bbox[1] - oY) / imageResY),
+        Math.round((bbox[2] - oX) / imageResX),
+        Math.round((bbox[3] - oY) / imageResY)
+      ];
+      wnd = [
+        Math.min(wnd[0], wnd[2]),
+        Math.min(wnd[1], wnd[3]),
+        Math.max(wnd[0], wnd[2]),
+        Math.max(wnd[1], wnd[3])
+      ];
+    }
+    return usedImage.readRasters({ ...options, window: wnd });
+  }
+}
+class GeoTIFF extends GeoTIFFBase {
+  /**
+   * @constructor
+   * @param {BaseSource} source The datasource to read from.
+   * @param {boolean} littleEndian Whether the image uses little endian.
+   * @param {boolean} bigTiff Whether the image uses bigTIFF conventions.
+   * @param {number} firstIFDOffset The numeric byte-offset from the start of the image
+   *                                to the first IFD.
+   * @param {GeoTIFFOptions} [options] further options.
+   */
+  constructor(source, littleEndian, bigTiff, firstIFDOffset, options = {}) {
+    super();
+    this.source = source;
+    this.parser = new ImageFileDirectoryParser(source, littleEndian, bigTiff, false);
+    this.littleEndian = littleEndian;
+    this.bigTiff = bigTiff;
+    this.firstIFDOffset = firstIFDOffset;
+    this.cache = options.cache || false;
+    this.ifdRequests = [];
+    this.ghostValues = null;
+  }
+  /**
+   * @param {number} offset
+   * @param {number} [size]
+   * @returns {Promise<DataSlice>}
+   */
+  async getSlice(offset, size) {
+    const fallbackSize = this.bigTiff ? 4048 : 1024;
+    return new DataSlice((await this.source.fetch([{
+      offset,
+      length: typeof size !== "undefined" ? size : fallbackSize
+    }]))[0], offset, this.littleEndian, this.bigTiff);
+  }
+  /**
+   * @param {number} index
+   * @return {Promise<import('./imagefiledirectory.js').ImageFileDirectory>}
+   */
+  async requestIFD(index) {
+    if (this.ifdRequests[index]) {
+      return this.ifdRequests[index];
+    } else if (index === 0) {
+      this.ifdRequests[index] = this.parser.parseFileDirectoryAt(this.firstIFDOffset);
+      return this.ifdRequests[index];
+    } else if (!this.ifdRequests[index - 1]) {
+      try {
+        this.ifdRequests[index - 1] = this.requestIFD(index - 1);
+      } catch (e2) {
+        if (e2 instanceof GeoTIFFImageIndexError) {
+          throw new GeoTIFFImageIndexError(index);
+        }
+        throw e2;
+      }
+    }
+    this.ifdRequests[index] = (async () => {
+      const previousPromise = this.ifdRequests[index - 1];
+      if (!previousPromise) {
+        throw new Error("Previous IFD request missing");
+      }
+      const previousIfd = await previousPromise;
+      if (previousIfd.nextIFDByteOffset === 0) {
+        throw new GeoTIFFImageIndexError(index);
+      }
+      return this.parser.parseFileDirectoryAt(previousIfd.nextIFDByteOffset);
+    })();
+    return this.ifdRequests[index];
+  }
+  /**
+   * Get the n-th internal subfile of an image. By default, the first is returned.
+   *
+   * @param {number} [index=0] the index of the image to return.
+   * @returns {Promise<GeoTIFFImage>} the image at the given index
+   */
+  async getImage(index = 0) {
+    return new GeoTIFFImage(await this.requestIFD(index), this.littleEndian, this.cache, this.source);
+  }
+  /**
+   * Returns the count of the internal subfiles.
+   *
+   * @returns {Promise<number>} the number of internal subfile images
+   */
+  async getImageCount() {
+    let index = 0;
+    let hasNext = true;
+    while (hasNext) {
+      try {
+        await this.requestIFD(index);
+        ++index;
+      } catch (e2) {
+        if (e2 instanceof GeoTIFFImageIndexError) {
+          hasNext = false;
+        } else {
+          throw e2;
+        }
+      }
+    }
+    return index;
+  }
+  /**
+   * Get the values of the COG ghost area as a parsed map.
+   * See https://gdal.org/drivers/raster/cog.html#header-ghost-area for reference
+   * @returns {Promise<Record<string, unknown>|null>} the parsed ghost area or null, if no such area was found
+   */
+  async getGhostValues() {
+    const offset = this.bigTiff ? 16 : 8;
+    if (this.ghostValues !== null) {
+      return this.ghostValues;
+    }
+    const detectionString = "GDAL_STRUCTURAL_METADATA_SIZE=";
+    const heuristicAreaSize = detectionString.length + 100;
+    let slice = await this.getSlice(offset, heuristicAreaSize);
+    if (detectionString === getValues(slice, fieldTypes.ASCII, detectionString.length, offset)) {
+      const valuesString = getValues(slice, fieldTypes.ASCII, heuristicAreaSize, offset);
+      const firstLine = valuesString.split("\n")[0];
+      const metadataSize = Number(firstLine.split("=")[1].split(" ")[0]) + firstLine.length;
+      if (metadataSize > heuristicAreaSize) {
+        slice = await this.getSlice(offset, metadataSize);
+      }
+      const fullString = getValues(slice, fieldTypes.ASCII, metadataSize, offset);
+      const ghostValues = {};
+      fullString.split("\n").filter((line) => line.length > 0).map((line) => line.split("=")).forEach(([key, value]) => {
+        ghostValues[key] = value;
+      });
+      this.ghostValues = ghostValues;
+    }
+    return this.ghostValues;
+  }
+  /**
+   * Parse a (Geo)TIFF file from the given source.
+   *
+   * @param {BaseSource} source The source of data to parse from.
+   * @param {GeoTIFFOptions} [options] Additional options.
+   * @param {AbortSignal} [signal] An AbortSignal that may be signalled if the request is
+   *                               to be aborted
+   */
+  static async fromSource(source, options, signal) {
+    const headerData = (await source.fetch([{ offset: 0, length: 1024 }], signal))[0];
+    const dataView = new DataView64(headerData);
+    const BOM = dataView.getUint16(0, false);
+    let littleEndian;
+    if (BOM === 18761) {
+      littleEndian = true;
+    } else if (BOM === 19789) {
+      littleEndian = false;
+    } else {
+      throw new TypeError("Invalid byte order value.");
+    }
+    const magicNumber = dataView.getUint16(2, littleEndian);
+    let bigTiff;
+    if (magicNumber === 42) {
+      bigTiff = false;
+    } else if (magicNumber === 43) {
+      bigTiff = true;
+      const offsetByteSize = dataView.getUint16(4, littleEndian);
+      if (offsetByteSize !== 8) {
+        throw new Error("Unsupported offset byte-size.");
+      }
+    } else {
+      throw new TypeError("Invalid magic number.");
+    }
+    const firstIFDOffset = bigTiff ? dataView.getUint64(8, littleEndian) : dataView.getUint32(4, littleEndian);
+    return new GeoTIFF(source, littleEndian, bigTiff, firstIFDOffset, options);
+  }
+  /**
+   * Closes the underlying file buffer
+   * N.B. After the GeoTIFF has been completely processed it needs
+   * to be closed but only if it has been constructed from a file.
+   */
+  close() {
+    if (typeof this.source.close === "function") {
+      return this.source.close();
+    }
+    return false;
+  }
+}
+async function fromArrayBuffer(arrayBuffer, signal) {
+  return GeoTIFF.fromSource(makeBufferSource(arrayBuffer), void 0, signal);
+}
+async function fetchFloat32GeoTiff(url, rasterSize, signal) {
+  let resp;
+  try {
+    resp = await fetch(url, { signal });
+  } catch (_2) {
+    return null;
+  }
+  if (!resp.ok) return null;
+  let buf;
+  try {
+    buf = await resp.arrayBuffer();
+  } catch (_2) {
+    return null;
+  }
+  if (buf.byteLength < 200) return null;
+  let tiff;
+  try {
+    tiff = await fromArrayBuffer(buf);
+  } catch (_2) {
+    return null;
+  }
+  let image;
+  try {
+    image = await tiff.getImage();
+  } catch (_2) {
+    return null;
+  }
+  let rasters;
+  try {
+    rasters = await image.readRasters({
+      width: rasterSize,
+      height: rasterSize,
+      interleave: false,
+      samples: [0]
+    });
+  } catch (_2) {
+    return null;
+  }
+  let band;
+  if (Array.isArray(rasters)) {
+    if (rasters.length === 0) return null;
+    band = rasters[0];
+  } else {
+    band = rasters;
+  }
+  if (band instanceof Float32Array) {
+    return band;
+  }
+  const out = new Float32Array(band.length);
+  for (let i2 = 0; i2 < band.length; i2++) {
+    out[i2] = band[i2];
+  }
+  return out;
+}
+function subtractRasters(dsm, dtm) {
+  const N2 = Math.min(dsm.length, dtm.length);
+  const out = new Float32Array(N2);
+  for (let i2 = 0; i2 < N2; i2++) {
+    const d2 = dsm[i2];
+    const g2 = dtm[i2];
+    const dh = d2 - g2;
+    out[i2] = isFinite(dh) && dh >= 0 ? dh : NaN;
+  }
+  return out;
+}
+function maxRasters(a2, b2) {
+  const N2 = Math.min(a2.length, b2.length);
+  const out = new Float32Array(N2);
+  for (let i2 = 0; i2 < N2; i2++) {
+    const av = a2[i2];
+    const bv = b2[i2];
+    const aOk = isFinite(av);
+    const bOk = isFinite(bv);
+    if (aOk && bOk) out[i2] = Math.max(av, bv);
+    else if (aOk) out[i2] = av;
+    else if (bOk) out[i2] = bv;
+    else out[i2] = NaN;
+  }
+  return out;
+}
+const DSM_URL = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-surface-model-last-return-dsm-1m-2022/wms";
+const DTM_URL$1 = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms";
+const DSM_LAYER = "Lidar_Composite_Elevation_LZ_DSM_1m";
+const DTM_LAYER = "Lidar_Composite_Elevation_DTM_1m";
+const UK_BBOX = { minLat: 49.7, maxLat: 56, minLon: -7.2, maxLon: 2.1 };
+const englandLidarComposite = {
+  id: "uk-defra-lidar-composite",
+  name: "Environment Agency LiDAR Composite (England)",
+  covers(lat, lon) {
+    return lat >= UK_BBOX.minLat && lat <= UK_BBOX.maxLat && lon >= UK_BBOX.minLon && lon <= UK_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < UK_BBOX.minLat || bbox.minLat > UK_BBOX.maxLat || bbox.maxLon < UK_BBOX.minLon || bbox.minLon > UK_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const buildUrl = (base, layer) => {
+      const params = new URLSearchParams({
+        SERVICE: "WMS",
+        VERSION: "1.3.0",
+        REQUEST: "GetMap",
+        LAYERS: layer,
+        STYLES: "",
+        CRS: "CRS:84",
+        BBOX: `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`,
+        WIDTH: String(rasterSize),
+        HEIGHT: String(rasterSize),
+        FORMAT: "image/tiff"
+      });
+      return `${base}?${params.toString()}`;
+    };
+    const [dsm, dtm] = await Promise.all([
+      fetchFloat32GeoTiff(buildUrl(DSM_URL, DSM_LAYER), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DTM_URL$1, DTM_LAYER), rasterSize, opts.signal)
+    ]);
+    if (!dsm || !dtm) return emptyResult();
+    const heights = subtractRasters(dsm, dtm);
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
+const WCS_URL$1 = "https://wcs-mds.idee.es/mds";
+const COVERAGE_VEG = "mdsn_v025";
+const COVERAGE_BLD = "mdsn_e025";
+const ES_BBOX = { minLat: 35.8, maxLat: 44, minLon: -9.6, maxLon: 4.4 };
+const spainPnoaLidar = {
+  id: "es-ign-pnoa-mdsn",
+  name: "IGN España PNOA-LiDAR MDSn (Spain)",
+  covers(lat, lon) {
+    return lat >= ES_BBOX.minLat && lat <= ES_BBOX.maxLat && lon >= ES_BBOX.minLon && lon <= ES_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < ES_BBOX.minLat || bbox.minLat > ES_BBOX.maxLat || bbox.maxLon < ES_BBOX.minLon || bbox.minLon > ES_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const buildUrl = (coverage) => {
+      const params = new URLSearchParams({
+        SERVICE: "WCS",
+        VERSION: "2.0.1",
+        REQUEST: "GetCoverage",
+        COVERAGEID: coverage,
+        FORMAT: "image/tiff",
+        SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326",
+        OUTPUTCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
+      });
+      return `${WCS_URL$1}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
+    };
+    const [veg, bld] = await Promise.all([
+      fetchFloat32GeoTiff(buildUrl(COVERAGE_VEG), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(COVERAGE_BLD), rasterSize, opts.signal)
+    ]);
+    if (!veg && !bld) return emptyResult();
+    const heights = veg && bld ? maxRasters(veg, bld) : veg ?? bld;
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
+const WCS_URL = "https://service.pdok.nl/rws/ahn/wcs/v1_0";
+const COVERAGE_DSM = "dsm_05m";
+const COVERAGE_DTM = "dtm_05m";
+const NL_BBOX = { minLat: 50.7, maxLat: 53.8, minLon: 3.1, maxLon: 7.3 };
+const netherlandsAhn4 = {
+  id: "nl-pdok-ahn4",
+  name: "PDOK AHN4 (Netherlands)",
+  covers(lat, lon) {
+    return lat >= NL_BBOX.minLat && lat <= NL_BBOX.maxLat && lon >= NL_BBOX.minLon && lon <= NL_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < NL_BBOX.minLat || bbox.minLat > NL_BBOX.maxLat || bbox.maxLon < NL_BBOX.minLon || bbox.minLon > NL_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const buildUrl = (coverage) => {
+      const params = new URLSearchParams({
+        SERVICE: "WCS",
+        VERSION: "2.0.1",
+        REQUEST: "GetCoverage",
+        COVERAGEID: coverage,
+        FORMAT: "image/tiff",
+        SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326",
+        OUTPUTCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
+      });
+      return `${WCS_URL}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
+    };
+    const [dsm, dtm] = await Promise.all([
+      fetchFloat32GeoTiff(buildUrl(COVERAGE_DSM), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(COVERAGE_DTM), rasterSize, opts.signal)
+    ]);
+    if (!dsm || !dtm) return emptyResult();
+    const heights = subtractRasters(dsm, dtm);
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
+const DTM_URL = "https://hoydedata.no/arcgis/rest/services/DTM/ImageServer/exportImage";
+const DOM_URL = "https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage";
+const NO_BBOX = { minLat: 57.5, maxLat: 81, minLon: 4, maxLon: 33 };
+const norwayKartverketNhm = {
+  id: "no-kartverket-nhm",
+  name: "Kartverket NHM (Norway)",
+  covers(lat, lon) {
+    return lat >= NO_BBOX.minLat && lat <= NO_BBOX.maxLat && lon >= NO_BBOX.minLon && lon <= NO_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < NO_BBOX.minLat || bbox.minLat > NO_BBOX.maxLat || bbox.maxLon < NO_BBOX.minLon || bbox.minLon > NO_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const buildUrl = (base) => {
+      const params = new URLSearchParams({
+        bbox: `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat}`,
+        bboxSR: "4326",
+        imageSR: "4326",
+        size: `${rasterSize},${rasterSize}`,
+        format: "tiff",
+        pixelType: "F32",
+        noData: "-9999",
+        f: "image"
+      });
+      return `${base}?${params.toString()}`;
+    };
+    const [dom, dtm] = await Promise.all([
+      fetchFloat32GeoTiff(buildUrl(DOM_URL), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DTM_URL), rasterSize, opts.signal)
+    ]);
+    if (!dom || !dtm) return emptyResult();
+    const cleanseNoData = (a2) => {
+      for (let i2 = 0; i2 < a2.length; i2++) {
+        if (a2[i2] <= -9e3) a2[i2] = NaN;
+      }
+      return a2;
+    };
+    const heights = subtractRasters(cleanseNoData(dom), cleanseNoData(dtm));
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
 const LIDAR_SOURCES = [
-  franceLidarHd
+  franceLidarHd,
+  englandLidarComposite,
+  spainPnoaLidar,
+  netherlandsAhn4,
+  norwayKartverketNhm
 ];
 function findLidarSource(lat, lon) {
   for (const src of LIDAR_SOURCES) {
@@ -26526,29 +29987,6 @@ const IS_MOBILE = (() => {
   }
   return false;
 })();
-function toColor(v2, fallback) {
-  if (v2 == null) {
-    return fallback;
-  }
-  const s2 = String(v2).trim();
-  if (!s2 || s2 === "null" || s2 === "undefined") {
-    return fallback;
-  }
-  if (/^\d+$/.test(s2)) {
-    const n3 = parseInt(s2, 10);
-    if (n3 >= 0 && n3 <= 16777215) {
-      return "#" + n3.toString(16).padStart(6, "0");
-    }
-  }
-  return s2;
-}
-function toAlpha(v2, fallback) {
-  if (v2 == null) {
-    return fallback;
-  }
-  const n3 = parseFloat(String(v2));
-  return isFinite(n3) ? Math.max(0, Math.min(1, n3)) : fallback;
-}
 function parseHex(v2, fallback) {
   if (v2 == null) {
     return fallback;
@@ -26634,14 +30072,18 @@ const _HeliosEngine = class _HeliosEngine {
     this._buildingsData = null;
     this._buildingsFetchKey = "";
     this._currentCloudPct = 0;
+    this._currentCloudLow = 0;
+    this._currentCloudMid = 0;
+    this._currentCloudHigh = 0;
     this._lidarShadowFeatures = null;
     this._lidarShadowDiagnostics = null;
     this._lidarShadowKey = "";
+    this._detailMode = false;
+    this._postExitCooldownUntil = 0;
     this.homeLat = haCoords[1];
     this.homeLon = haCoords[0];
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
     this.cfg = { ...config };
-    this.apiKey = String(config["maptiler-api-key"] ?? "").trim();
     bumpStat("enginesCreated");
     while (_liveEngines.size >= MAX_LIVE_ENGINES) {
       const oldest = _liveEngines.values().next().value;
@@ -26656,13 +30098,12 @@ const _HeliosEngine = class _HeliosEngine {
     _liveEngines.add(this);
     this._fetchLat = this.homeLat;
     this._fetchLon = this.homeLon;
-    const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
-    const pixelRatio = this.cfg["performance-mode"] === true ? 1 : IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
+    const pixelRatio = this._pixelRatio();
     const styleInfo = this._resolveMapStyle();
     this.map = new maplibregl.Map(
       {
         container,
-        style: `https://api.maptiler.com/maps/${styleInfo.id}/style.json?key=${this.apiKey}`,
+        style: styleInfo.url,
         center: haCoords,
         zoom: 18,
         pitch: 55,
@@ -26714,6 +30155,18 @@ const _HeliosEngine = class _HeliosEngine {
       this._startAutoRotateLoop();
     };
     this.map.on("load", this._mapLoadHandler);
+    this.map.on("styleimagemissing", (e2) => {
+      if (!this.map || !e2?.id || this.map.hasImage(e2.id)) return;
+      try {
+        this.map.addImage(e2.id, {
+          width: 1,
+          height: 1,
+          data: new Uint8Array(4)
+          //RGBA, all zero = transparent
+        });
+      } catch (_2) {
+      }
+    });
     this._mapMoveHandler = () => this.onMapTransform?.();
     this.map.on("move", this._mapMoveHandler);
     const canvas = this.map.getCanvas();
@@ -26734,6 +30187,7 @@ const _HeliosEngine = class _HeliosEngine {
     const onDown = (e2) => {
       if (e2.pointerType === "mouse" && e2.button !== 0) return;
       if (activeId !== null) return;
+      if (this.isUserGestureSuppressed()) return;
       dragRotating = true;
       activeId = e2.pointerId;
       lastPointerX = e2.clientX;
@@ -26792,28 +30246,43 @@ const _HeliosEngine = class _HeliosEngine {
       this._weatherTimer = void 0;
     }
   }
-  //Resolves the active MapTiler style id from `map-style` config.
-  //Three values are accepted:
-  //  'streets' (default) → 'streets-v4', sober urban basemap.
-  //  'topo'              → 'topo-v4'   , topographic basemap with
-  //                                       contour lines and softer
-  //                                       earth tones, better in
-  //                                       hilly / outdoor settings.
-  //  'minimal'           → 'streets-v4' loaded then pruned in
-  //                                       _onStyleLoad to a curated
-  //                                       whitelist of layers, fewer
-  //                                       per-frame draw calls, best
-  //                                       for low-end devices.
+  //Resolves the active OpenFreeMap style URL from `map-style` +
+  //`card-theme`. OpenFreeMap publishes a fixed set of MapLibre
+  //styles at https://tiles.openfreemap.org/styles/<name>:
   //
-  //Anything else falls back to 'streets'. When `card-theme: dark`
-  //is set, the `-dark` variant of the chosen base style is used so
-  //the basemap matches the dark chrome.
+  //  liberty  , full-colour OpenMapTiles look (default streets)
+  //  positron , muted grey, very sober (minimal)
+  //  fiord    , muted dark blue / slate-grey, used as the dark
+  //             variant for both above. Chosen over OFM's `dark`
+  //             style which clamps the background to near-black
+  //             (rgb(12,12,12)) and is too oppressive at the small
+  //             card viewport, Fiord's #45516E reads as "evening"
+  //             without losing the basemap content underneath.
+  //
+  //We resolve to a single URL because OpenFreeMap has no separate
+  //light / dark pair per style, the dark style is its own thing
+  //and replaces both Liberty and Positron when the card chrome is
+  //dark. The user-side mapping is therefore:
+  //
+  //  map-style: streets  + card-theme: light → liberty
+  //  map-style: streets  + card-theme: dark  → fiord
+  //  map-style: minimal  + card-theme: light → positron
+  //  map-style: minimal  + card-theme: dark  → fiord
+  //
+  //All styles use the same vector tile source backing the buildings
+  //fetch in helios-buildings.ts, so a style change keeps the home
+  //and surroundings GeoJSON cache intact.
   _resolveMapStyle() {
-    const raw = String(this.cfg["map-style"] ?? "streets").toLowerCase();
-    if (raw === "satellite") return { id: "hybrid" };
-    const base = raw === "topo" ? "topo-v4" : "streets-v4";
+    const raw2 = String(this.cfg["map-style"] ?? "streets").toLowerCase();
     const isDark = String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
-    return { id: isDark ? `${base}-dark` : base };
+    let styleName;
+    if (isDark) styleName = "fiord";
+    else if (raw2 === "minimal") styleName = "positron";
+    else styleName = "liberty";
+    return {
+      url: `https://tiles.openfreemap.org/styles/${styleName}`,
+      styleName
+    };
   }
   //True when the user picked the curated minimal basemap. The map
   //still loads streets-v4 (we don't ship a hand-built style); the
@@ -26836,18 +30305,16 @@ const _HeliosEngine = class _HeliosEngine {
       }
     }
   }
-  //Performance mode, disables the per-frame heavyweights (terrain
-  //mesh + hillshade) and caps pixelRatio at 1.0. The 3D pitch and
-  //extruded buildings are preserved, so the card still reads as 3D.
-  _performanceMode() {
-    return this.cfg["performance-mode"] === true;
-  }
-  //Terrain DEM maxzoom, 'smooth' (default) at z=12, 'fine' at z=14.
-  //z=14 ~16× more mesh vertices than z=12 per frame, which moves
-  //rotation cost considerably; only useful when the user values
-  //the finer relief over fluidity.
-  _terrainMaxzoom() {
-    return String(this.cfg["terrain-detail"] ?? "smooth").toLowerCase() === "fine" ? 14 : 12;
+  //Resolve the WebGL canvas pixel ratio. '1x' forces 1.0 (cheapest
+  //fragment workload), anything else (including unset) falls back
+  //to the device-native ratio capped at 2 on desktop / 1.25 on
+  //mobile so even retina screens stay within the per-frame budget.
+  _pixelRatio() {
+    if (String(this.cfg["pixel-ratio"] ?? "auto").toLowerCase() === "1x") {
+      return 1;
+    }
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
+    return IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
   }
   //Reads the user-configured shadow precision, normalises any
   //off-spec value to the default and returns one of the canonical
@@ -26866,9 +30333,9 @@ const _HeliosEngine = class _HeliosEngine {
     return this.cfg["shadows-enabled"] !== false;
   }
   _shadowOpacity() {
-    const raw = Number(this.cfg["shadow-opacity"]);
-    if (!Number.isFinite(raw)) return DEFAULT_SHADOW_OPACITY;
-    return Math.max(0, Math.min(1, raw));
+    const raw2 = Number(this.cfg["shadow-opacity"]);
+    if (!Number.isFinite(raw2)) return DEFAULT_SHADOW_OPACITY;
+    return Math.max(0, Math.min(1, raw2));
   }
   //Lat/lon corners of the shadow image source, in [NW, NE, SE, SW]
   //order (the convention MapLibre image sources expect). Sides are
@@ -27057,7 +30524,7 @@ const _HeliosEngine = class _HeliosEngine {
         irradianceSource
       }
     );
-    this._updateCloudCoverDisc(w2.cloudCover);
+    this._updateCloudCoverDisc(w2.cloudCover, w2.cloudLow, w2.cloudMid, w2.cloudHigh);
   }
   _onStyleLoad() {
     if (!this.map) {
@@ -27065,27 +30532,6 @@ const _HeliosEngine = class _HeliosEngine {
     }
     this._mapReady = true;
     this._pruneMinimalStyle();
-    const perfMode = this._performanceMode();
-    if (!this.map.getSource("helios-terrain")) {
-      this.map.addSource(
-        "helios-terrain",
-        {
-          type: "raster-dem",
-          url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${this.apiKey}`,
-          tileSize: 512,
-          maxzoom: this._terrainMaxzoom()
-        }
-      );
-    }
-    if (perfMode) {
-      this.map.setTerrain(null);
-      try {
-        this.map.setPixelRatio(1);
-      } catch (_2) {
-      }
-    } else {
-      this.map.setTerrain({ source: "helios-terrain", exaggeration: 1.2 });
-    }
     this.map.getStyle().layers?.forEach((l2) => {
       if (l2.type === "raster") {
         try {
@@ -27095,7 +30541,6 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     });
-    this._initHillshade();
     this._initNightShade();
     this._initCropMask();
     this._initCloudCoverDisc();
@@ -27108,40 +30553,6 @@ const _HeliosEngine = class _HeliosEngine {
     if (this._homeHourlyData) {
       this._renderForCurrentSelection();
     }
-  }
-  _initHillshade() {
-    if (!this.map) {
-      return;
-    }
-    if (this.map.getLayer("helios-hillshade")) {
-      this.map.removeLayer("helios-hillshade");
-    }
-    if (this._performanceMode()) {
-      return;
-    }
-    const t2 = this._selectedTime ?? /* @__PURE__ */ new Date();
-    const { azimuth } = getSunPosition(t2, this.homeLat, this.homeLon);
-    const col = toColor(this.cfg["topography-color"], "rgba(80,100,160,1)");
-    const exg = toAlpha(this.cfg["topography-alpha"], 0.65);
-    this.map.addLayer(
-      {
-        id: "helios-hillshade",
-        type: "hillshade",
-        source: "helios-terrain",
-        paint: {
-          "hillshade-shadow-color": col,
-          //Non-transparent highlights make sun-facing slopes
-          //pop. Soft warm white at moderate opacity so the
-          //hillshade reads as ambient lighting rather than a
-          //paint-stroke effect.
-          "hillshade-highlight-color": "rgba(255,250,235,0.55)",
-          "hillshade-accent-color": col,
-          "hillshade-illumination-direction": azimuth,
-          "hillshade-illumination-anchor": "map",
-          "hillshade-exaggeration": exg
-        }
-      }
-    );
   }
   //Night-shade overlay
   //
@@ -27401,8 +30812,11 @@ const _HeliosEngine = class _HeliosEngine {
   //reads everywhere identically. CLOUD_DISC_OPACITY (set on the
   //layer's fill-opacity) handles the translucency against the
   //basemap so the disc never fully hides what's underneath.
-  _updateCloudCoverDisc(cloudPct) {
+  _updateCloudCoverDisc(cloudPct, cloudLow = 0, cloudMid = 0, cloudHigh = 0) {
     this._currentCloudPct = Math.max(0, Math.min(100, cloudPct));
+    this._currentCloudLow = Math.max(0, Math.min(100, cloudLow));
+    this._currentCloudMid = Math.max(0, Math.min(100, cloudMid));
+    this._currentCloudHigh = Math.max(0, Math.min(100, cloudHigh));
   }
   //Project the cloud-cover disc + 100 % reference ring into screen
   //space. Returns null when the engine isn't ready yet (the card
@@ -27410,15 +30824,48 @@ const _HeliosEngine = class _HeliosEngine {
   //level offsets around the home and projected with anchor at the
   //home's terrain elevation, so the resulting polygons stay true
   //circles regardless of the terrain mesh underneath.
+  //
+  //The disc is split into three concentric bands sized by the
+  //per-layer cloud percentages: from the centre outward, low →
+  //mid → high. Each band's radial width is proportional to its
+  //layer's share of the total (low + mid + high), so a sky with
+  //mostly high clouds shows a thick outer band and thin inner
+  //ones, and vice versa. The TOTAL disc radius is still driven
+  //by the effective cloud cover (unchanged), so the whole disc
+  //grows / shrinks as the sky thickens.
+  //
+  //Geometrically we return three concentric polygons (rLow,
+  //rMid = rLow + (mid/total) × R, rHigh = R) plus the existing
+  //100 % reference ring. The card stacks them outer-first to
+  //get the band appearance.
   projectCloudScene() {
     if (!this.map || !this._mapReady) return null;
     const pct = this._currentCloudPct;
-    const discR = CLOUD_DISC_RADIUS_M * pct / 100;
+    const cLow = this._currentCloudLow;
+    const cMid = this._currentCloudMid;
+    const cHi = this._currentCloudHigh;
+    const R2 = CLOUD_DISC_RADIUS_M * pct / 100;
+    const total = cLow + cMid + cHi;
+    const rLow = total > 0 ? R2 * (cLow / total) : 0;
+    const rMid = total > 0 ? R2 * ((cLow + cMid) / total) : 0;
+    const rHigh = R2;
     const ringR = CLOUD_DISC_RADIUS_M;
-    const discGeo = buildCirclePolygon(
+    const lowGeo = buildCirclePolygon(
       this.homeLon,
       this.homeLat,
-      discR,
+      rLow,
+      CLOUD_CIRCLE_SEGMENTS
+    );
+    const midGeo = buildCirclePolygon(
+      this.homeLon,
+      this.homeLat,
+      rMid,
+      CLOUD_CIRCLE_SEGMENTS
+    );
+    const highGeo = buildCirclePolygon(
+      this.homeLon,
+      this.homeLat,
+      rHigh,
       CLOUD_CIRCLE_SEGMENTS
     );
     const ringGeo = buildCirclePolygon(
@@ -27427,20 +30874,83 @@ const _HeliosEngine = class _HeliosEngine {
       ringR,
       CLOUD_CIRCLE_SEGMENTS
     );
-    const disc = [];
-    const ring = [];
-    for (const [lon, lat] of discGeo) {
-      const p2 = this._projectScenePoint(lon, lat, 0, { anchorAtHome: true });
-      if (p2) disc.push({ x: p2.x, y: p2.y });
-    }
-    for (const [lon, lat] of ringGeo) {
-      const p2 = this._projectScenePoint(lon, lat, 0, { anchorAtHome: true });
-      if (p2) ring.push({ x: p2.x, y: p2.y });
-    }
-    if (disc.length < 3 && ring.length < 3) return null;
+    const projectGeo = (geo) => {
+      const out = [];
+      for (const [lon, lat] of geo) {
+        const p2 = this._projectScenePoint(lon, lat, 0);
+        if (p2) out.push({ x: p2.x, y: p2.y });
+      }
+      return out;
+    };
+    const discLow = projectGeo(lowGeo);
+    const discMid = projectGeo(midGeo);
+    const discHigh = projectGeo(highGeo);
+    const ring = projectGeo(ringGeo);
+    if (discHigh.length < 3 && ring.length < 3) return null;
     const rgb = this._resolvedCloudRgb();
     const cloudHex = "#" + rgb[0].toString(16).padStart(2, "0") + rgb[1].toString(16).padStart(2, "0") + rgb[2].toString(16).padStart(2, "0");
-    return { disc, ring, cloudHex, cloudPct: pct };
+    return {
+      discLow,
+      discMid,
+      discHigh,
+      ring,
+      cloudHex,
+      cloudPct: pct,
+      cloudLow: cLow,
+      cloudMid: cMid,
+      cloudHigh: cHi
+    };
+  }
+  //Project the home building(s) into screen-space silhouettes.
+  //Each home polygon contributes one entry containing the base
+  //ring (projected at render_min_height) and the top ring
+  //(projected at render_height). The card paints both rings plus
+  //a quad per outer-ring edge into the cloud-disc SVG mask, the
+  //union covers the exact extruded prism in screen space, even
+  //for concave footprints (L, U) where a convex hull would cut
+  //a too-large hole and expose terrain at the inner corners.
+  //
+  //Vertex elevation is queried per-vertex against the live
+  //terrain mesh, matching what MapLibre's fill-extrusion shader
+  //does internally so the silhouette tracks the rendered
+  //extrusion exactly.
+  //
+  //Returns an empty array until the buildings GeoJSON has landed.
+  projectHomeFootprints() {
+    if (!this.map || !this._mapReady) return [];
+    const home = this._buildingsData?.home;
+    if (!home || !home.features.length) return [];
+    const out = [];
+    for (const feat of home.features) {
+      const geom = feat.geometry;
+      if (!geom) continue;
+      const props = feat.properties ?? {};
+      const topH = typeof props["render_height"] === "number" ? props["render_height"] : 0;
+      const baseH = typeof props["render_min_height"] === "number" ? props["render_min_height"] : 0;
+      let polygons = null;
+      if (geom.type === "Polygon") polygons = [geom.coordinates];
+      else if (geom.type === "MultiPolygon") polygons = geom.coordinates;
+      if (!polygons) continue;
+      for (const poly of polygons) {
+        if (!poly.length) continue;
+        const outer = poly[0];
+        if (outer.length < 3) continue;
+        const baseRing = [];
+        const topRing = [];
+        for (const p2 of outer) {
+          const lon = p2[0], lat = p2[1];
+          const pBase = this._projectScenePoint(lon, lat, baseH);
+          const pTop = this._projectScenePoint(lon, lat, topH);
+          if (!pBase || !pTop) continue;
+          baseRing.push({ x: pBase.x, y: pBase.y });
+          topRing.push({ x: pTop.x, y: pTop.y });
+        }
+        if (baseRing.length >= 3 && topRing.length >= 3) {
+          out.push({ base: baseRing, top: topRing });
+        }
+      }
+    }
+    return out;
   }
   //Toggle MapTiler's symbol layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
@@ -27686,32 +31196,6 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     );
-    const homeGlowColor = typeof this.cfg["sun-color"] === "string" && /^#[0-9a-f]{6}$/i.test(this.cfg["sun-color"]) ? this.cfg["sun-color"] : DEFAULT_SUN_COLOR_HEX;
-    this.map.addLayer(
-      {
-        id: "helios-buildings-home-outline-glow",
-        source: "helios-buildings-home-src",
-        type: "line",
-        paint: {
-          "line-color": homeGlowColor,
-          "line-width": 8,
-          "line-blur": 6,
-          "line-opacity": 0.55
-        }
-      }
-    );
-    this.map.addLayer(
-      {
-        id: "helios-buildings-home-outline",
-        source: "helios-buildings-home-src",
-        type: "line",
-        paint: {
-          "line-color": "#000000",
-          "line-width": 3,
-          "line-opacity": 0.9
-        }
-      }
-    );
     this._ensureBuildingsFetched();
     this._ensureLidarFetched();
   }
@@ -27720,10 +31204,6 @@ const _HeliosEngine = class _HeliosEngine {
   //or the configured radius actually changed.
   _ensureBuildingsFetched() {
     if (!this.map) {
-      return;
-    }
-    const apiKey = this.apiKey;
-    if (!apiKey) {
       return;
     }
     const radius = this._buildingRadiusMeters();
@@ -27743,7 +31223,6 @@ const _HeliosEngine = class _HeliosEngine {
         homeLat: this.homeLat,
         radiusMeters: radius,
         clusterRadiusMeters: clusterRadius,
-        apiKey,
         signal: ac.signal
       }
     ).then((result) => {
@@ -27881,40 +31360,6 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     this._lastAtmosphereAlt = altitude;
-    let shadowCol;
-    if (altitude < -6) {
-      shadowCol = "#0a0e1a";
-    } else if (altitude < 0) {
-      const u2 = (altitude + 6) / 6;
-      shadowCol = this._lerpHex("#0a0e1a", "#2a2540", u2);
-    } else if (altitude < 6) {
-      const u2 = altitude / 6;
-      shadowCol = this._lerpHex("#2a2540", "#4a2a1f", u2);
-    } else if (altitude < 20) {
-      const u2 = (altitude - 6) / 14;
-      shadowCol = this._lerpHex("#4a2a1f", "#3a4870", u2);
-    } else {
-      const u2 = Math.min(1, (altitude - 20) / 30);
-      shadowCol = this._lerpHex("#3a4870", "#5064a0", u2);
-    }
-    if (this.map.getLayer("helios-hillshade")) {
-      try {
-        this.map.setPaintProperty("helios-hillshade", "hillshade-illumination-direction", azimuth);
-        const userExg = toAlpha(this.cfg["topography-alpha"], 0.65);
-        let dramaScale;
-        if (altitude < 0) {
-          dramaScale = 0.35;
-        } else if (altitude < 12) {
-          dramaScale = 1 + 0.6 * Math.sin(altitude / 12 * Math.PI);
-        } else {
-          dramaScale = this._lerp(1.2, 0.85, Math.min(1, (altitude - 12) / 40));
-        }
-        const finalExg = Math.min(1, userExg * dramaScale);
-        this.map.setPaintProperty("helios-hillshade", "hillshade-exaggeration", finalExg);
-        this.map.setPaintProperty("helios-hillshade", "hillshade-shadow-color", shadowCol);
-      } catch (_2) {
-      }
-    }
     if (this.map.getLayer("helios-night-shade")) {
       try {
         let nsColor;
@@ -28108,6 +31553,97 @@ const _HeliosEngine = class _HeliosEngine {
       }
     );
   }
+  setDetailMode(on) {
+    if (!this.map || this._detailMode === on) {
+      return;
+    }
+    this._detailMode = on;
+    this._autoRotateLastUserAction = Date.now();
+    this.map.stop();
+    if (on) {
+      try {
+        this.map.setMaxZoom(_HeliosEngine.DETAIL_MODE_ZOOM_TARGET);
+      } catch (_2) {
+      }
+      this._diveCamera(
+        _HeliosEngine.DETAIL_MODE_ZOOM_TARGET,
+        _HeliosEngine.DETAIL_MODE_PITCH_TARGET,
+        +_HeliosEngine.DETAIL_MODE_BEARING_SWEEP,
+        /*targetMode=*/
+        true
+      );
+    } else {
+      this._postExitCooldownUntil = Date.now() + _HeliosEngine.POST_EXIT_COOLDOWN_MS;
+      this._diveCamera(
+        18,
+        55,
+        -_HeliosEngine.DETAIL_MODE_BEARING_SWEEP,
+        /*targetMode=*/
+        false,
+        () => {
+          if (!this._detailMode) {
+            try {
+              this.map?.setMaxZoom(18);
+            } catch (_2) {
+            }
+          }
+        }
+      );
+    }
+  }
+  //True while the post-exit cooldown is active. The card consults
+  //this to gate timeline scrubs; the engine consults it internally
+  //for the canvas drag-rotate. Both surfaces read the same clock so
+  //the suppression window is symmetric across input sources.
+  isUserGestureSuppressed() {
+    return Date.now() < this._postExitCooldownUntil;
+  }
+  //Custom rAF tween over the WHOLE dive so zoom, pitch and bearing
+  //share a single smoothstep curve. A previous chained-easeTo
+  //implementation produced a visible mid-animation hiccup at the
+  //seam between phase 1's deceleration and phase 2's acceleration,
+  //plus a one-frame scheduling gap from the moveend → easeTo
+  //handoff. Driving the camera with jumpTo on every rAF tick
+  //sidesteps both, and bypasses MapLibre's easeTo bearing
+  //normalisation (which would collapse a 270° request to its
+  //shortest -90° equivalent).
+  _diveCamera(targetZoom, targetPitch, bearingSweep, targetMode, onComplete) {
+    if (!this.map) return;
+    if (this._detailDiveRaf !== void 0) {
+      cancelAnimationFrame(this._detailDiveRaf);
+      this._detailDiveRaf = void 0;
+    }
+    const startTime = performance.now();
+    const duration = _HeliosEngine.DETAIL_MODE_TRANSITION_MS;
+    const startZoom = this.map.getZoom();
+    const startPitch = this.map.getPitch();
+    const startBearing = this.map.getBearing();
+    const easeSmoothstep = (t2) => t2 * t2 * (3 - 2 * t2);
+    const tick = (now) => {
+      if (!this.map || this._detailMode !== targetMode) {
+        this._detailDiveRaf = void 0;
+        return;
+      }
+      const u2 = Math.min(1, (now - startTime) / duration);
+      const e2 = easeSmoothstep(u2);
+      this.map.jumpTo({
+        center: [this.homeLon, this.homeLat],
+        zoom: startZoom + (targetZoom - startZoom) * e2,
+        pitch: startPitch + (targetPitch - startPitch) * e2,
+        bearing: startBearing + bearingSweep * e2
+      });
+      if (u2 < 1) {
+        this._detailDiveRaf = requestAnimationFrame(tick);
+      } else {
+        this._detailDiveRaf = void 0;
+        onComplete?.();
+      }
+    };
+    this._detailDiveRaf = requestAnimationFrame(tick);
+  }
+  isDetailMode() {
+    return this._detailMode;
+  }
   //Compute the screen-space layout of the on-map readout chips and
   //the leader lines that tie them to the home / on-ground ring.
   //
@@ -28209,7 +31745,7 @@ const _HeliosEngine = class _HeliosEngine {
   //based on how far they are from the viewer, bigger when close,
   //smaller when far, to give the otherwise flat top-down-ish view
   //a sense of perspective beyond what pitch alone provides.
-  _projectScenePoint(lon, lat, altitudeM, opts) {
+  _projectScenePoint(lon, lat, altitudeM) {
     if (!this.map) {
       return null;
     }
@@ -28217,21 +31753,16 @@ const _HeliosEngine = class _HeliosEngine {
     if (typeof t2?.getMatrixForModel !== "function" || typeof t2?.getProjectionDataForCustomLayer !== "function") {
       return null;
     }
-    const m2 = this.map;
-    const queryLon = opts?.anchorAtHome ? this.homeLon : lon;
-    const queryLat = opts?.anchorAtHome ? this.homeLat : lat;
-    const terrainM = typeof m2.queryTerrainElevation === "function" ? m2.queryTerrainElevation([queryLon, queryLat]) ?? 0 : 0;
-    const totalAlt = altitudeM + terrainM;
-    const modelM = t2.getMatrixForModel([lon, lat], totalAlt);
+    const modelM = t2.getMatrixForModel([lon, lat], altitudeM);
     const projM = t2.getProjectionDataForCustomLayer().mainMatrix;
     const mvp = new Array(16);
     for (let col = 0; col < 4; col++) {
       for (let row = 0; row < 4; row++) {
-        let sum = 0;
+        let sum2 = 0;
         for (let k2 = 0; k2 < 4; k2++) {
-          sum += projM[k2 * 4 + row] * modelM[col * 4 + k2];
+          sum2 += projM[k2 * 4 + row] * modelM[col * 4 + k2];
         }
-        mvp[col * 4 + row] = sum;
+        mvp[col * 4 + row] = sum2;
       }
     }
     const cx = mvp[12];
@@ -28316,18 +31847,13 @@ const _HeliosEngine = class _HeliosEngine {
       cache = { dayStartMs, cloudPctInt, samples };
       this._arcInputsCache = cache;
     }
-    const raw = [];
+    const raw2 = [];
     for (let i2 = 0; i2 < SUN_ARC_SAMPLES; i2++) {
       const s2 = cache.samples[i2];
       if (!s2) continue;
-      const px = this._projectScenePoint(
-        s2.lon,
-        s2.lat,
-        s2.altitudeM,
-        { anchorAtHome: true }
-      );
+      const px = this._projectScenePoint(s2.lon, s2.lat, s2.altitudeM);
       if (!px) continue;
-      raw.push({
+      raw2.push({
         x: px.x,
         y: px.y,
         irradiance: s2.wm2,
@@ -28340,19 +31866,14 @@ const _HeliosEngine = class _HeliosEngine {
     const sunNowWm2 = computeIrradianceWm2(now, this.homeLat, this.homeLon, liveCloud);
     let sunScreen = null;
     if (sunNow3D) {
-      sunScreen = this._projectScenePoint(
-        sunNow3D.lon,
-        sunNow3D.lat,
-        sunNow3D.altitudeM,
-        { anchorAtHome: true }
-      );
+      sunScreen = this._projectScenePoint(sunNow3D.lon, sunNow3D.lat, sunNow3D.altitudeM);
     }
     if (!sunScreen) {
       sunScreen = { ...homeScreen, depth: homeScreen.depth };
     }
     let dMin = Infinity;
     let dMax = -Infinity;
-    for (const p2 of raw) {
+    for (const p2 of raw2) {
       if (p2.depth < dMin) {
         dMin = p2.depth;
       }
@@ -28368,7 +31889,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     const dRange = dMax - dMin || 1;
     const nearnessOf = (d2) => 1 - (d2 - dMin) / dRange;
-    const arc = raw.map((p2) => ({
+    const arc = raw2.map((p2) => ({
       x: p2.x,
       y: p2.y,
       irradiance: p2.irradiance,
@@ -28385,6 +31906,32 @@ const _HeliosEngine = class _HeliosEngine {
       const t01 = (sunNowAlt + 6) / 12;
       return SUN_ARC_NIGHT_OPACITY + (1 - SUN_ARC_NIGHT_OPACITY) * t01;
     })();
+    let sunrise = null;
+    let sunset = null;
+    for (let i2 = 1; i2 < cache.samples.length; i2++) {
+      const prev = cache.samples[i2 - 1];
+      const curr = cache.samples[i2];
+      if (!prev || !curr) continue;
+      const prevBelow = prev.belowHorizon;
+      const currBelow = curr.belowHorizon;
+      if (prevBelow === currBelow) continue;
+      const aPrev = prev.altitudeM;
+      const aCurr = curr.altitudeM;
+      const span = aCurr - aPrev;
+      const t2 = Math.abs(span) < 1e-6 ? 0.5 : -aPrev / span;
+      const tClamped = Math.max(0, Math.min(1, t2));
+      const lerpLon = prev.lon + (curr.lon - prev.lon) * tClamped;
+      const lerpLat = prev.lat + (curr.lat - prev.lat) * tClamped;
+      const px = this._projectScenePoint(lerpLon, lerpLat, 0);
+      if (!px) continue;
+      const pxPrev = this._projectScenePoint(prev.lon, prev.lat, prev.altitudeM);
+      const pxCurr = this._projectScenePoint(curr.lon, curr.lat, curr.altitudeM);
+      const angleRad = pxPrev && pxCurr ? Math.atan2(pxCurr.y - pxPrev.y, pxCurr.x - pxPrev.x) : 0;
+      const time = new Date(dayStartMs + (i2 - 1 + tClamped) * stepMs);
+      const marker = { x: px.x, y: px.y, angleRad, time };
+      if (prevBelow && !currBelow) sunrise = marker;
+      else if (!prevBelow && currBelow) sunset = marker;
+    }
     return {
       arc,
       sun: {
@@ -28395,7 +31942,9 @@ const _HeliosEngine = class _HeliosEngine {
         nearness: nearnessOf(sunScreen.depth)
       },
       home: { x: homeScreen.x, y: homeScreen.y },
-      daylight
+      daylight,
+      sunrise,
+      sunset
     };
   }
   //Convert (date) → 3D point on the imaginary celestial hemisphere
@@ -28545,10 +32094,9 @@ const _HeliosEngine = class _HeliosEngine {
   }
   updateConfig(cfg) {
     bumpStat("updateConfigCalls");
-    const prevStyleId = this._resolveMapStyle().id;
+    const prevStyleUrl = this._resolveMapStyle().url;
     const prevMinimal = this._isMinimalStyle();
-    const prevPerfMode = this._performanceMode();
-    const prevTerrainMax = this._terrainMaxzoom();
+    const prevPixelR = this._pixelRatio();
     const prevRadius = this._buildingRadiusMeters();
     const prevCluster = this._buildingClusterRadiusMeters();
     const prevOpacity = this._buildingOpacity();
@@ -28561,44 +32109,19 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     const nextStyleInfo = this._resolveMapStyle();
-    const nextTerrainMax = this._terrainMaxzoom();
-    const styleNeedsReload = nextStyleInfo.id !== prevStyleId || this._isMinimalStyle() !== prevMinimal || nextTerrainMax !== prevTerrainMax;
+    const styleNeedsReload = nextStyleInfo.url !== prevStyleUrl || this._isMinimalStyle() !== prevMinimal;
     if (styleNeedsReload) {
       bumpStat("styleReloads");
       this._mapReady = false;
-      this.map.setStyle(
-        `https://api.maptiler.com/maps/${nextStyleInfo.id}/style.json?key=${this.apiKey}`
-      );
+      this.map.setStyle(nextStyleInfo.url);
       return;
     }
-    const nextPerfMode = this._performanceMode();
-    if (nextPerfMode !== prevPerfMode) {
-      if (nextPerfMode) {
-        this.map.setTerrain(null);
-        if (this.map.getLayer("helios-hillshade")) {
-          this.map.removeLayer("helios-hillshade");
-        }
-        try {
-          this.map.setPixelRatio(1);
-        } catch (_2) {
-        }
-      } else {
-        this.map.setTerrain({ source: "helios-terrain", exaggeration: 1.2 });
-        this._initHillshade();
-        const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
-        const px = IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
-        try {
-          this.map.setPixelRatio(px);
-        } catch (_2) {
-        }
+    const nextPixelR = this._pixelRatio();
+    if (nextPixelR !== prevPixelR) {
+      try {
+        this.map.setPixelRatio(nextPixelR);
+      } catch (_2) {
       }
-    }
-    if (this.map.getLayer("helios-hillshade")) {
-      const c2 = toColor(this.cfg["topography-color"], "rgba(80,100,160,1)");
-      const a2 = toAlpha(this.cfg["topography-alpha"], 0.65);
-      this.map.setPaintProperty("helios-hillshade", "hillshade-shadow-color", c2);
-      this.map.setPaintProperty("helios-hillshade", "hillshade-accent-color", c2);
-      this.map.setPaintProperty("helios-hillshade", "hillshade-exaggeration", a2);
     }
     this._applyLabelVisibility();
     const nextRadius = this._buildingRadiusMeters();
@@ -28625,10 +32148,6 @@ const _HeliosEngine = class _HeliosEngine {
           }
         }
       }
-    }
-    if (this.map.getLayer("helios-buildings-home-outline-glow")) {
-      const glow = typeof this.cfg["sun-color"] === "string" && /^#[0-9a-f]{6}$/i.test(this.cfg["sun-color"]) ? this.cfg["sun-color"] : DEFAULT_SUN_COLOR_HEX;
-      this.map.setPaintProperty("helios-buildings-home-outline-glow", "line-color", glow);
     }
     const nextPrecision = this._lidarPrecisionLevel();
     if (nextPrecision !== prevPrecision) {
@@ -28680,10 +32199,10 @@ const _HeliosEngine = class _HeliosEngine {
       const dt = Math.max(0, t2 - this._autoRotateLastFrame) / 1e3;
       this._autoRotateLastFrame = t2;
       const sinceUser = Date.now() - this._autoRotateLastUserAction;
-      const autoRotateEnabled = this.cfg["auto-rotate-enabled"] !== false;
-      if (autoRotateEnabled && sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
-        const next = this.map.getBearing() - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
-        this.map.setBearing(next);
+      const autoRotateEnabled = this.cfg["auto-rotate-enabled"] === true;
+      if (autoRotateEnabled && !this._detailMode && sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
+        const next3 = this.map.getBearing() - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
+        this.map.setBearing(next3);
       }
       this._autoRotateRaf = requestAnimationFrame(tick);
     };
@@ -28709,6 +32228,10 @@ const _HeliosEngine = class _HeliosEngine {
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
       this._autoRotateRaf = void 0;
+    }
+    if (this._detailDiveRaf !== void 0) {
+      cancelAnimationFrame(this._detailDiveRaf);
+      this._detailDiveRaf = void 0;
     }
     const canvas = this._bumpInactivityCanvas;
     if (canvas && this._bumpInactivityHandler) {
@@ -28843,6 +32366,11 @@ _HeliosEngine.MINIMAL_KEEP_LAYER_IDS = /* @__PURE__ */ new Set([
   "Pathway",
   "Track"
 ]);
+_HeliosEngine.DETAIL_MODE_ZOOM_TARGET = 19.5;
+_HeliosEngine.DETAIL_MODE_PITCH_TARGET = 80;
+_HeliosEngine.DETAIL_MODE_TRANSITION_MS = 800;
+_HeliosEngine.POST_EXIT_COOLDOWN_MS = 600;
+_HeliosEngine.DETAIL_MODE_BEARING_SWEEP = 0;
 _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC = 1.5;
 _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS = 5e3;
 let HeliosEngine = _HeliosEngine;
@@ -28852,26 +32380,16 @@ const en = {
   placeholder: {
     subtitle: "Solar exposure & cloud coverage"
   },
-  tooltip: {
-    cloudCover: "Cloud cover: {0}%",
-    cloudLow: "Low: {0}%",
-    cloudMid: "Mid: {0}%",
-    cloudHigh: "High: {0}%"
+  detail: {
+    title: "Detailed view",
+    subtitle: "Detailed dashboard coming soon.",
+    exitHint: "Tap anywhere to exit"
   },
   editor: {
-    required: "API key",
-    apiKey: "MapTiler API key",
-    apiKeyHelp: "Required to render the 3D map, hillshade and buildings. The free tier is more than enough.",
-    getKeyAt: "Get your free key at",
-    terrainRelief: "Terrain",
-    terrainReliefHint: "Hillshade overlay rendered under the map. Useful in hilly terrain to read slope orientation against the sun.",
-    hillshadeColor: "Hillshade color *",
-    hillshadeStrength: "Hillshade strength * (0 → 1)",
     mapSection: "Map",
     mapStyle: "Map style *",
     mapStyleHint: "Three basemaps: Streets (sober, urban), Topo (contour lines and earth tones, better in hilly terrain), or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). 3D buildings and labels behave identically on Streets and Topo. The dark variant of the chosen style is used automatically when the card theme is set to dark.",
     mapStyleStreet: "Streets",
-    mapStyleTopo: "Topo",
     cardTheme: "Card theme *",
     cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) and the 3D map basemap between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards.",
     cardThemeLight: "Light",
@@ -28899,6 +32417,8 @@ const en = {
     pvHint: "Optional. When set, a chip appears near the home with the instant production (computed over the last minute) and a dedicated graph is added above the timeline. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).",
     pvEntity: "Production entity",
     pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
+    pvPeakPower: "Peak power (kWp)",
+    pvPeakPowerHelp: "Installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty to hide the forecast; observed production and the daily peak still render.",
     pvColor: "Production color *",
     batterySection: "Home battery",
     batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional; the chip on its side appears as soon as the entity is set.",
@@ -28910,30 +32430,25 @@ const en = {
     buildingsSection: "Surrounding buildings",
     buildingsHint: 'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
     displayRadius: "Display radius *",
-    displayRadiusHint: "Defines the visible area around the home. Anything past this radius is hidden: basemap, relief, neighbouring buildings, shadows. Also drives the LiDAR fetch extent and the projected-shadow clip.",
+    displayRadiusHint: "Defines the visible area around the home. Anything past this radius is hidden: basemap, neighbouring buildings, shadows. Also drives the LiDAR fetch extent and the projected-shadow clip.",
     buildingClusterRadius: "Home cluster radius *",
     buildingOpacity: "Surrounding opacity *",
     buildingColor: "Building color *",
-    performanceMode: "Performance mode *",
-    performanceModeOn: "On",
-    performanceModeOff: "Off",
-    performanceModeHint: "Disables 3D terrain, hillshade and caps pixel density. Useful on low-end devices or for long sessions. Camera pitch and 3D buildings are preserved.",
+    pixelRatio: "Pixel ratio *",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (default) uses your screen's native devicePixelRatio (capped at 2 on desktop, 1.25 on mobile) for crisp rendering. 1x forces the value to 1.0 for the cheapest possible per-frame fragment workload, useful on low-end devices or for long sessions where battery life / heat matters more than crispness.",
     mapStyleMinimal: "Minimal",
-    terrainDetail: "Terrain detail *",
-    terrainDetailSmooth: "Smooth",
-    terrainDetailFine: "Fine",
-    terrainDetailHint: "Smooth (default) samples the DEM every ~20 m and stays fluid on every device. Fine samples every ~5 m for richer relief but ~16× more mesh vertices to project per rotation frame, only worth it on capable desktops.",
-    mapStyleSatellite: "Satellite",
     shadowsSection: "Shading",
     shadowsEnabled: "Show shadows *",
     shadowsEnabledOn: "Shown",
     shadowsEnabledOff: "Hidden",
-    shadowsEnabledHint: "Master toggle for cast ground shadows. When hidden, no shadows are projected at all. When shown, the source picks itself: a LiDAR provider when one covers your location (buildings + vegetation), MapTiler footprints otherwise (buildings only).",
+    shadowsEnabledHint: "Master toggle for cast ground shadows. When hidden, no shadows are projected at all. When shown, the source picks itself: a LiDAR provider when one covers your location (buildings + vegetation), OpenFreeMap building footprints otherwise (buildings only).",
     lidarPrecision: "LiDAR precision *",
     lidarPrecisionLow: "Low",
     lidarPrecisionMedium: "Medium",
     lidarPrecisionHigh: "High",
-    lidarPrecisionHint: "If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat MapTiler footprints and this setting has no effect.",
+    lidarPrecisionHint: "If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat OpenFreeMap building footprints and this setting has no effect.",
     shadowOpacity: "Shadow opacity *",
     shadowOpacityHint: "Opacity of the cast ground shadows."
   }
@@ -28944,26 +32459,16 @@ const fr = {
   placeholder: {
     subtitle: "Exposition solaire & couverture nuageuse"
   },
-  tooltip: {
-    cloudCover: "Couverture nuageuse : {0}%",
-    cloudLow: "Basse : {0}%",
-    cloudMid: "Moyenne : {0}%",
-    cloudHigh: "Haute : {0}%"
+  detail: {
+    title: "Vue détaillée",
+    subtitle: "Tableau de bord détaillé à venir.",
+    exitHint: "Cliquez n'importe où pour quitter"
   },
   editor: {
-    required: "Clé API",
-    apiKey: "Clé API MapTiler",
-    apiKeyHelp: "Indispensable pour afficher la carte 3D, le relief et les bâtiments. Compte gratuit largement suffisant.",
-    getKeyAt: "Récupère ta clé gratuite sur",
-    terrainRelief: "Relief",
-    terrainReliefHint: "Ombrage du relief affiché sous la carte. Utile en zone vallonnée pour comprendre l'orientation des pentes par rapport au soleil.",
-    hillshadeColor: "Couleur de l'ombrage *",
-    hillshadeStrength: "Intensité de l'ombrage * (0 → 1)",
     mapSection: "Carte",
     mapStyle: "Style de la carte *",
     mapStyleHint: "Trois fonds de carte : Rues (sobre, urbain), Topo (lignes de niveau et tons terreux, idéal en zone vallonnée) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). Les bâtiments 3D et les libellés se comportent à l'identique sur Rues et Topo. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
     mapStyleStreet: "Rues",
-    mapStyleTopo: "Topo",
     cardTheme: "Thème de la carte *",
     cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) ainsi que le fond de carte 3D entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre.",
     cardThemeLight: "Clair",
@@ -28991,6 +32496,8 @@ const fr = {
     pvHint: "Optionnel. Si renseigné, une pastille apparaît près de la maison avec la production instantanée (calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
     pvEntity: "Entité de production",
     pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
+    pvPeakPower: "Puissance crête (kWp)",
+    pvPeakPowerHelp: "Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.",
     pvColor: "Couleur de production *",
     batterySection: "Batterie domestique",
     batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles ; la pastille correspondante s'affiche dès que l'entité est renseignée.",
@@ -29002,30 +32509,25 @@ const fr = {
     buildingsSection: "Bâtiments alentour",
     buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
     displayRadius: "Rayon d'affichage *",
-    displayRadiusHint: "Définit la zone visible autour de la maison. Tout ce qui se trouve au-delà de ce rayon est masqué : fond de carte, relief, bâtiments voisins, ombres. Pilote également l'étendue du fetch LiDAR et le clip des ombres projetées.",
+    displayRadiusHint: "Définit la zone visible autour de la maison. Tout ce qui se trouve au-delà de ce rayon est masqué : fond de carte, bâtiments voisins, ombres. Pilote également l'étendue du fetch LiDAR et le clip des ombres projetées.",
     buildingClusterRadius: "Rayon de regroupement maison *",
     buildingOpacity: "Opacité des bâtiments voisins *",
     buildingColor: "Couleur des bâtiments *",
-    performanceMode: "Mode performance *",
-    performanceModeOn: "Activé",
-    performanceModeOff: "Désactivé",
-    performanceModeHint: "Désactive le relief 3D, l'ombrage du relief et limite la densité de pixels. Utile sur appareils bas/moyen de gamme ou pour les longues sessions. Conserve l'inclinaison de caméra et les bâtiments en 3D.",
+    pixelRatio: "Pixel ratio *",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (par défaut) utilise la densité de pixels native de ton écran (plafonnée à 2 sur desktop, 1.25 sur mobile) pour un rendu net. 1x force la valeur à 1.0, le rendu est moins net mais le coût par frame est divisé d'autant : à privilégier sur appareils bas/moyen de gamme ou pour les longues sessions où l'autonomie / la chaleur compte plus que la finesse.",
     mapStyleMinimal: "Minimal",
-    terrainDetail: "Détail du terrain *",
-    terrainDetailSmooth: "Lissé",
-    terrainDetailFine: "Précis",
-    terrainDetailHint: "Lissé (par défaut) échantillonne le relief tous les ~20 m, fluide partout. Précis échantillonne tous les ~5 m pour un relief plus détaillé mais ~16× plus de sommets à projeter à chaque frame de rotation, réservé aux PC desktops puissants.",
-    mapStyleSatellite: "Satellite",
     shadowsSection: "Ombrage",
     shadowsEnabled: "Afficher les ombres *",
     shadowsEnabledOn: "Affichées",
     shadowsEnabledOff: "Masquées",
-    shadowsEnabledHint: "Interrupteur principal des ombres projetées au sol. Si elles sont masquées, aucune ombre n'est calculée. Si elles sont affichées, la source est choisie automatiquement : provider LiDAR quand ta zone est couverte (bâtiments et végétation), empreintes plates MapTiler sinon (bâtiments uniquement).",
+    shadowsEnabledHint: "Interrupteur principal des ombres projetées au sol. Si elles sont masquées, aucune ombre n'est calculée. Si elles sont affichées, la source est choisie automatiquement : provider LiDAR quand ta zone est couverte (bâtiments et végétation), empreintes plates des bâtiments OpenFreeMap sinon (bâtiments uniquement).",
     lidarPrecision: "Précision LiDAR *",
     lidarPrecisionLow: "Basse",
     lidarPrecisionMedium: "Moyenne",
     lidarPrecisionHigh: "Haute",
-    lidarPrecisionHint: "Si ta zone est couverte par un provider LiDAR intégré à Helios, tu bénéficies d'ombres plus réalistes (bâtiments ET végétation). Des décalages peuvent apparaître entre les bâtiments affichés et leurs ombres : les données LiDAR sont enregistrées à un instant donné et ne reflètent pas toujours l'état actuel du terrain. Hors zone LiDAR, les ombres retombent sur les empreintes plates MapTiler et cette option n'a aucun effet.",
+    lidarPrecisionHint: "Si ta zone est couverte par un provider LiDAR intégré à Helios, tu bénéficies d'ombres plus réalistes (bâtiments ET végétation). Des décalages peuvent apparaître entre les bâtiments affichés et leurs ombres : les données LiDAR sont enregistrées à un instant donné et ne reflètent pas toujours l'état actuel du terrain. Hors zone LiDAR, les ombres retombent sur les empreintes plates des bâtiments OpenFreeMap et cette option n'a aucun effet.",
     shadowOpacity: "Opacité des ombres *",
     shadowOpacityHint: "Opacité des ombres projetées au sol."
   }
@@ -29036,26 +32538,16 @@ const de = {
   placeholder: {
     subtitle: "Sonneneinstrahlung & Wolkenbedeckung"
   },
-  tooltip: {
-    cloudCover: "Bewölkung: {0}%",
-    cloudLow: "Niedrig: {0}%",
-    cloudMid: "Mittel: {0}%",
-    cloudHigh: "Hoch: {0}%"
+  detail: {
+    title: "Detailansicht",
+    subtitle: "Detailliertes Dashboard demnächst.",
+    exitHint: "Tippe irgendwo, um zu schließen"
   },
   editor: {
-    required: "API-Schlüssel",
-    apiKey: "MapTiler-API-Schlüssel",
-    apiKeyHelp: "Erforderlich für 3D-Karte, Hangschattierung und Gebäude. Der kostenlose Tarif reicht völlig aus.",
-    getKeyAt: "Hol dir deinen kostenlosen Schlüssel bei",
-    terrainRelief: "Gelände",
-    terrainReliefHint: "Hangschattierung als Overlay unter der Karte. In hügeligem Gelände hilfreich, um die Hangausrichtung gegenüber der Sonne zu lesen.",
-    hillshadeColor: "Schattierungsfarbe *",
-    hillshadeStrength: "Schattierungsstärke * (0 → 1)",
     mapSection: "Karte",
     mapStyle: "Kartenstil *",
     mapStyleHint: "Drei Basiskarten: Straßen (nüchtern, urban), Topo (Höhenlinien und Erdtöne, ideal in hügeligem Gelände) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). 3D-Gebäude und Beschriftungen verhalten sich auf Straßen und Topo identisch. Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
     mapStyleStreet: "Straßen",
-    mapStyleTopo: "Topo",
     cardTheme: "Karten-Thema *",
     cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) sowie die 3D-Grundkarte zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt.",
     cardThemeLight: "Hell",
@@ -29083,6 +32575,8 @@ const de = {
     pvHint: "Optional. Wenn gesetzt, erscheint nahe dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
     pvEntity: "Produktions-Entität",
     pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
+    pvPeakPower: "Spitzenleistung (kWp)",
+    pvPeakPowerHelp: "Installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, um die Prognose auszublenden; gemessene Produktion und Tagesspitze werden weiter angezeigt.",
     pvColor: "Produktionsfarbe *",
     batterySection: "Hausbatterie",
     batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional; der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
@@ -29094,30 +32588,25 @@ const de = {
     buildingsSection: "Umliegende Gebäude",
     buildingsHint: 'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
     displayRadius: "Anzeigeradius *",
-    displayRadiusHint: "Bestimmt den um das Zuhause sichtbaren Bereich. Alles jenseits dieses Radius bleibt verborgen: Grundkarte, Relief, Nachbargebäude, Schatten. Steuert zugleich den LiDAR-Fetch-Bereich und das Clipping der projizierten Schatten.",
+    displayRadiusHint: "Bestimmt den um das Zuhause sichtbaren Bereich. Alles jenseits dieses Radius bleibt verborgen: Grundkarte, Nachbargebäude, Schatten. Steuert zugleich den LiDAR-Fetch-Bereich und das Clipping der projizierten Schatten.",
     buildingClusterRadius: "Cluster-Radius Zuhause *",
     buildingOpacity: "Deckkraft Nachbargebäude *",
     buildingColor: "Gebäudefarbe *",
-    performanceMode: "Performance-Modus *",
-    performanceModeOn: "Ein",
-    performanceModeOff: "Aus",
-    performanceModeHint: "Deaktiviert 3D-Terrain, Hillshade und begrenzt die Pixeldichte. Sinnvoll bei leistungsschwachen Geräten oder langen Sitzungen. Kameraneigung und 3D-Gebäude bleiben erhalten.",
+    pixelRatio: "Pixel-Ratio *",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (Standard) verwendet die native devicePixelRatio des Bildschirms (gedeckelt auf 2 am Desktop, 1.25 mobil) für eine scharfe Darstellung. 1x erzwingt 1.0, weniger scharf, dafür minimale Fragment-Last pro Frame, sinnvoll auf leistungsschwachen Geräten oder bei langen Sitzungen, wenn Akkulaufzeit / Wärme wichtiger sind als Schärfe.",
     mapStyleMinimal: "Minimal",
-    terrainDetail: "Geländedetail *",
-    terrainDetailSmooth: "Geglättet",
-    terrainDetailFine: "Fein",
-    terrainDetailHint: "Geglättet (Standard) tastet das Geländemodell alle ~20 m ab und bleibt auf jedem Gerät flüssig. Fein tastet alle ~5 m für mehr Reliefdetails ab, projiziert aber ~16× mehr Mesh-Vertices pro Rotationsframe, nur auf leistungsfähigen Desktops sinnvoll.",
-    mapStyleSatellite: "Satellit",
     shadowsSection: "Schattierung",
     shadowsEnabled: "Schatten anzeigen *",
     shadowsEnabledOn: "Sichtbar",
     shadowsEnabledOff: "Ausgeblendet",
-    shadowsEnabledHint: "Hauptschalter für die am Boden geworfenen Schatten. Ausgeblendet werden gar keine Schatten berechnet. Sichtbar wählt die Quelle automatisch: ein LiDAR-Provider, wenn er das Gebiet abdeckt (Gebäude und Vegetation), sonst die flachen MapTiler-Grundrisse (nur Gebäude).",
+    shadowsEnabledHint: "Hauptschalter für die am Boden geworfenen Schatten. Ausgeblendet werden gar keine Schatten berechnet. Sichtbar wählt die Quelle automatisch: ein LiDAR-Provider, wenn er das Gebiet abdeckt (Gebäude und Vegetation), sonst die flachen OpenFreeMap-Gebäudegrundrisse (nur Gebäude).",
     lidarPrecision: "LiDAR-Präzision *",
     lidarPrecisionLow: "Niedrig",
     lidarPrecisionMedium: "Mittel",
     lidarPrecisionHigh: "Hoch",
-    lidarPrecisionHint: "Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen MapTiler-Grundrisse, und diese Option bleibt wirkungslos.",
+    lidarPrecisionHint: "Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen OpenFreeMap-Gebäudegrundrisse, und diese Option bleibt wirkungslos.",
     shadowOpacity: "Schatten-Deckkraft *",
     shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten."
   }
@@ -29128,26 +32617,16 @@ const es = {
   placeholder: {
     subtitle: "Exposición solar y cobertura de nubes"
   },
-  tooltip: {
-    cloudCover: "Cobertura de nubes: {0}%",
-    cloudLow: "Baja: {0}%",
-    cloudMid: "Media: {0}%",
-    cloudHigh: "Alta: {0}%"
+  detail: {
+    title: "Vista detallada",
+    subtitle: "Panel detallado próximamente.",
+    exitHint: "Toca en cualquier lugar para salir"
   },
   editor: {
-    required: "Clave API",
-    apiKey: "Clave API de MapTiler",
-    apiKeyHelp: "Imprescindible para mostrar el mapa 3D, el relieve y los edificios. El plan gratuito es más que suficiente.",
-    getKeyAt: "Consigue tu clave gratuita en",
-    terrainRelief: "Relieve",
-    terrainReliefHint: "Sombreado del relieve mostrado bajo el mapa. Útil en zonas montañosas para leer la orientación de las pendientes respecto al sol.",
-    hillshadeColor: "Color del sombreado *",
-    hillshadeStrength: "Intensidad del sombreado * (0 → 1)",
     mapSection: "Mapa",
     mapStyle: "Estilo del mapa *",
     mapStyleHint: "Tres mapas base: Calles (sobrio, urbano), Topo (líneas de nivel y tonos terrosos, ideal en terreno montañoso) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). Los edificios 3D y las etiquetas se comportan igual en Calles y Topo. La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
     mapStyleStreet: "Calles",
-    mapStyleTopo: "Topo",
     cardTheme: "Tema de la tarjeta *",
     cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) y el mapa 3D de fondo entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros.",
     cardThemeLight: "Claro",
@@ -29175,6 +32654,8 @@ const es = {
     pvHint: "Opcional. Si se define, aparece una pastilla cerca de la casa con la producción instantánea (calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
     pvEntity: "Entidad de producción",
     pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
+    pvPeakPower: "Potencia pico (kWp)",
+    pvPeakPowerHelp: "Potencia pico instalada de tu campo en kilovatios-pico. Controla la curva de previsión punteada en el gráfico PV y la saturación del flujo PV → casa. Déjalo vacío para ocultar la previsión; la producción observada y el pico del día siguen mostrándose.",
     pvColor: "Color de producción *",
     batterySection: "Batería doméstica",
     batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales; el chip correspondiente aparece en cuanto la entidad está definida.",
@@ -29186,30 +32667,25 @@ const es = {
     buildingsSection: "Edificios circundantes",
     buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».",
     displayRadius: "Radio de visualización *",
-    displayRadiusHint: "Define el área visible alrededor de la casa. Todo lo que esté más allá de este radio queda oculto: mapa base, relieve, edificios vecinos, sombras. También determina el ámbito del fetch LiDAR y el recorte de las sombras proyectadas.",
+    displayRadiusHint: "Define el área visible alrededor de la casa. Todo lo que esté más allá de este radio queda oculto: mapa base, edificios vecinos, sombras. También determina el ámbito del fetch LiDAR y el recorte de las sombras proyectadas.",
     buildingClusterRadius: "Radio del grupo de la casa *",
     buildingOpacity: "Opacidad de los vecinos *",
     buildingColor: "Color de los edificios *",
-    performanceMode: "Modo rendimiento *",
-    performanceModeOn: "Activado",
-    performanceModeOff: "Desactivado",
-    performanceModeHint: "Desactiva el terreno 3D, el relieve y limita la densidad de píxeles. Útil en dispositivos modestos o para sesiones largas. La inclinación y los edificios 3D se mantienen.",
+    pixelRatio: "Pixel ratio *",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (por defecto) usa la densidad de píxeles nativa de tu pantalla (limitada a 2 en escritorio, 1.25 en móvil) para un renderizado nítido. 1x fuerza el valor a 1.0, menos nítido pero con la carga por frame mínima, ideal en dispositivos modestos o sesiones largas donde la batería / el calor importan más que la nitidez.",
     mapStyleMinimal: "Mínimo",
-    terrainDetail: "Detalle del terreno *",
-    terrainDetailSmooth: "Suave",
-    terrainDetailFine: "Preciso",
-    terrainDetailHint: "Suave (por defecto) muestrea el relieve cada ~20 m y se mantiene fluido en todos los dispositivos. Preciso muestrea cada ~5 m para un relieve más detallado pero ~16× más vértices que proyectar en cada frame de rotación, útil solo en PCs potentes.",
-    mapStyleSatellite: "Satélite",
     shadowsSection: "Sombreado",
     shadowsEnabled: "Mostrar sombras *",
     shadowsEnabledOn: "Mostradas",
     shadowsEnabledOff: "Ocultas",
-    shadowsEnabledHint: "Interruptor principal de las sombras proyectadas en el suelo. Si están ocultas, no se calcula ninguna sombra. Si están mostradas, la fuente se elige sola: un proveedor LiDAR si cubre tu zona (edificios y vegetación), o las huellas planas de MapTiler en caso contrario (solo edificios).",
+    shadowsEnabledHint: "Interruptor principal de las sombras proyectadas en el suelo. Si están ocultas, no se calcula ninguna sombra. Si están mostradas, la fuente se elige sola: un proveedor LiDAR si cubre tu zona (edificios y vegetación), o las huellas planas de los edificios OpenFreeMap en caso contrario (solo edificios).",
     lidarPrecision: "Precisión LiDAR *",
     lidarPrecisionLow: "Baja",
     lidarPrecisionMedium: "Media",
     lidarPrecisionHigh: "Alta",
-    lidarPrecisionHint: "Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de MapTiler y esta opción no tiene efecto.",
+    lidarPrecisionHint: "Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de los edificios OpenFreeMap y esta opción no tiene efecto.",
     shadowOpacity: "Opacidad de las sombras *",
     shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo."
   }
@@ -29220,26 +32696,16 @@ const it = {
   placeholder: {
     subtitle: "Esposizione solare e copertura nuvolosa"
   },
-  tooltip: {
-    cloudCover: "Copertura nuvolosa: {0}%",
-    cloudLow: "Bassa: {0}%",
-    cloudMid: "Media: {0}%",
-    cloudHigh: "Alta: {0}%"
+  detail: {
+    title: "Vista dettagliata",
+    subtitle: "Pannello dettagliato in arrivo.",
+    exitHint: "Tocca un punto qualsiasi per uscire"
   },
   editor: {
-    required: "Chiave API",
-    apiKey: "Chiave API MapTiler",
-    apiKeyHelp: "Indispensabile per mostrare la mappa 3D, il rilievo e gli edifici. Il piano gratuito è più che sufficiente.",
-    getKeyAt: "Ottieni la tua chiave gratuita su",
-    terrainRelief: "Rilievo",
-    terrainReliefHint: "Ombreggiatura del rilievo sotto la mappa. Utile in aree collinari per leggere l'orientamento dei pendii rispetto al sole.",
-    hillshadeColor: "Colore dell'ombreggiatura *",
-    hillshadeStrength: "Intensità dell'ombreggiatura * (0 → 1)",
     mapSection: "Mappa",
     mapStyle: "Stile della mappa *",
     mapStyleHint: "Tre mappe di base: Strade (sobria, urbana), Topo (curve di livello e toni terrosi, ideale in terreno collinare) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). Gli edifici 3D e le etichette si comportano allo stesso modo su Strade e Topo. La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
     mapStyleStreet: "Strade",
-    mapStyleTopo: "Topo",
     cardTheme: "Tema della scheda *",
     cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) e la mappa 3D di sfondo tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri.",
     cardThemeLight: "Chiaro",
@@ -29267,6 +32733,8 @@ const it = {
     pvHint: "Opzionale. Se impostato, una pastiglia appare vicino alla casa con la produzione istantanea (calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
     pvEntity: "Entità di produzione",
     pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
+    pvPeakPower: "Potenza di picco (kWp)",
+    pvPeakPowerHelp: "Potenza di picco installata del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata sul grafico PV e la saturazione del flusso PV → casa. Lascia vuoto per nascondere la previsione; la produzione osservata e il picco del giorno restano visibili.",
     pvColor: "Colore di produzione *",
     batterySection: "Batteria domestica",
     batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali; la pastiglia corrispondente appare appena l'entità è impostata.",
@@ -29278,30 +32746,25 @@ const it = {
     buildingsSection: "Edifici circostanti",
     buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».",
     displayRadius: "Raggio di visualizzazione *",
-    displayRadiusHint: "Definisce l'area visibile attorno alla casa. Tutto ciò che è oltre questo raggio viene nascosto: mappa di base, rilievo, edifici vicini, ombre. Determina anche l'estensione del fetch LiDAR e il taglio delle ombre proiettate.",
+    displayRadiusHint: "Definisce l'area visibile attorno alla casa. Tutto ciò che è oltre questo raggio viene nascosto: mappa di base, edifici vicini, ombre. Determina anche l'estensione del fetch LiDAR e il taglio delle ombre proiettate.",
     buildingClusterRadius: "Raggio del gruppo casa *",
     buildingOpacity: "Opacità degli edifici vicini *",
     buildingColor: "Colore degli edifici *",
-    performanceMode: "Modalità prestazioni *",
-    performanceModeOn: "Attivata",
-    performanceModeOff: "Disattivata",
-    performanceModeHint: "Disattiva il terreno 3D, l'ombreggiatura del rilievo e limita la densità dei pixel. Utile su dispositivi modesti o per sessioni lunghe. L'inclinazione e gli edifici 3D rimangono.",
+    pixelRatio: "Pixel ratio *",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (predefinito) usa la densità di pixel nativa dello schermo (limitata a 2 su desktop, 1.25 su mobile) per un rendering nitido. 1x forza il valore a 1.0, meno nitido ma con il carico per frame minimo, ideale su dispositivi modesti o sessioni lunghe in cui autonomia / calore contano più della nitidezza.",
     mapStyleMinimal: "Minimale",
-    terrainDetail: "Dettaglio del terreno *",
-    terrainDetailSmooth: "Levigato",
-    terrainDetailFine: "Fine",
-    terrainDetailHint: "Levigato (predefinito) campiona il rilievo ogni ~20 m e resta fluido su qualunque dispositivo. Fine campiona ogni ~5 m per un rilievo più dettagliato ma ~16× più vertici da proiettare a ogni frame di rotazione, utile solo su PC desktop potenti.",
-    mapStyleSatellite: "Satellite",
     shadowsSection: "Ombreggiatura",
     shadowsEnabled: "Mostrare le ombre *",
     shadowsEnabledOn: "Visibili",
     shadowsEnabledOff: "Nascoste",
-    shadowsEnabledHint: "Interruttore principale delle ombre proiettate a terra. Se nascoste, non viene calcolata alcuna ombra. Se visibili, la sorgente viene scelta da sola: un provider LiDAR se copre la tua zona (edifici e vegetazione), altrimenti le impronte piatte di MapTiler (solo edifici).",
+    shadowsEnabledHint: "Interruttore principale delle ombre proiettate a terra. Se nascoste, non viene calcolata alcuna ombra. Se visibili, la sorgente viene scelta da sola: un provider LiDAR se copre la tua zona (edifici e vegetazione), altrimenti le impronte piatte degli edifici OpenFreeMap (solo edifici).",
     lidarPrecision: "Precisione LiDAR *",
     lidarPrecisionLow: "Bassa",
     lidarPrecisionMedium: "Media",
     lidarPrecisionHigh: "Alta",
-    lidarPrecisionHint: "Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte MapTiler e questa opzione non ha alcun effetto.",
+    lidarPrecisionHint: "Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte degli edifici OpenFreeMap e questa opzione non ha alcun effetto.",
     shadowOpacity: "Opacità delle ombre *",
     shadowOpacityHint: "Opacità delle ombre proiettate a terra."
   }
@@ -29312,26 +32775,16 @@ const nl = {
   placeholder: {
     subtitle: "Zonexpositie & bewolking"
   },
-  tooltip: {
-    cloudCover: "Bewolking: {0}%",
-    cloudLow: "Laag: {0}%",
-    cloudMid: "Middel: {0}%",
-    cloudHigh: "Hoog: {0}%"
+  detail: {
+    title: "Detailweergave",
+    subtitle: "Gedetailleerd dashboard binnenkort.",
+    exitHint: "Tik ergens om te sluiten"
   },
   editor: {
-    required: "API-sleutel",
-    apiKey: "MapTiler API-sleutel",
-    apiKeyHelp: "Vereist voor de 3D-kaart, het reliëf en de gebouwen. Het gratis abonnement is meer dan voldoende.",
-    getKeyAt: "Haal je gratis sleutel op",
-    terrainRelief: "Reliëf",
-    terrainReliefHint: "Reliëfschaduw onder de kaart. Handig in heuvelachtig gebied om de oriëntatie van hellingen ten opzichte van de zon te lezen.",
-    hillshadeColor: "Schaduwkleur *",
-    hillshadeStrength: "Schaduwsterkte * (0 → 1)",
     mapSection: "Kaart",
     mapStyle: "Kaartstijl *",
     mapStyleHint: "Drie basiskaarten: Straten (sober, stedelijk), Topo (hoogtelijnen en aardse tinten, ideaal in heuvelachtig terrein) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). 3D-gebouwen en labels gedragen zich identiek op Straten en Topo. De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
     mapStyleStreet: "Straten",
-    mapStyleTopo: "Topo",
     cardTheme: "Kaartthema *",
     cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) en de 3D-basemap tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards.",
     cardThemeLight: "Licht",
@@ -29359,6 +32812,8 @@ const nl = {
     pvHint: "Optioneel. Als ingesteld verschijnt bij het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
     pvEntity: "Productie-entiteit",
     pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
+    pvPeakPower: "Piekvermogen (kWp)",
+    pvPeakPowerHelp: "Geïnstalleerd piekvermogen van je panelen in kilowattpiek. Stuurt de gestippelde voorspellingslijn op de PV-grafiek en de stroomverzadiging van de PV → huis-leider. Laat leeg om de voorspelling te verbergen; gemeten productie en de dagelijkse piek blijven zichtbaar.",
     pvColor: "Productiekleur *",
     batterySection: "Thuisbatterij",
     batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel; de bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
@@ -29370,30 +32825,25 @@ const nl = {
     buildingsSection: "Omliggende gebouwen",
     buildingsHint: 'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
     displayRadius: "Weergavestraal *",
-    displayRadiusHint: "Bepaalt het zichtbare gebied rond het huis. Alles buiten deze straal wordt verborgen: basiskaart, reliëf, naburige gebouwen, schaduwen. Stuurt ook de omvang van de LiDAR-fetch en de clip van de geprojecteerde schaduwen aan.",
+    displayRadiusHint: "Bepaalt het zichtbare gebied rond het huis. Alles buiten deze straal wordt verborgen: basiskaart, naburige gebouwen, schaduwen. Stuurt ook de omvang van de LiDAR-fetch en de clip van de geprojecteerde schaduwen aan.",
     buildingClusterRadius: "Cluster-straal huis *",
     buildingOpacity: "Dekking omliggende gebouwen *",
     buildingColor: "Gebouwkleur *",
-    performanceMode: "Prestatiemodus *",
-    performanceModeOn: "Aan",
-    performanceModeOff: "Uit",
-    performanceModeHint: "Schakelt 3D-terrein, reliëfschaduw uit en beperkt de pixeldichtheid. Handig op bescheiden apparaten of voor lange sessies. De camerakanteling en 3D-gebouwen blijven behouden.",
+    pixelRatio: "Pixel ratio *",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (standaard) gebruikt de native devicePixelRatio van je scherm (begrensd op 2 op desktop, 1.25 op mobiel) voor een scherpe rendering. 1x forceert 1.0, minder scherp maar met de minimale fragment-belasting per frame, ideaal op bescheiden apparaten of lange sessies waar batterijduur / warmte zwaarder weegt dan scherpte.",
     mapStyleMinimal: "Minimaal",
-    terrainDetail: "Terrein-detail *",
-    terrainDetailSmooth: "Vloeiend",
-    terrainDetailFine: "Fijn",
-    terrainDetailHint: "Vloeiend (standaard) bemonstert het reliëf elke ~20 m en blijft op elk apparaat soepel. Fijn bemonstert elke ~5 m voor gedetailleerder reliëf, maar ~16× meer mesh-vertices te projecteren per rotatieframe, alleen zinvol op krachtige desktops.",
-    mapStyleSatellite: "Satelliet",
     shadowsSection: "Schaduw",
     shadowsEnabled: "Schaduwen tonen *",
     shadowsEnabledOn: "Zichtbaar",
     shadowsEnabledOff: "Verborgen",
-    shadowsEnabledHint: "Hoofdschakelaar voor de op de grond geprojecteerde schaduwen. Verborgen betekent geen enkele schaduwberekening. Zichtbaar kiest de bron zelf: een LiDAR-provider als die je gebied dekt (gebouwen en vegetatie), anders de platte MapTiler-omtreklijnen (alleen gebouwen).",
+    shadowsEnabledHint: "Hoofdschakelaar voor de op de grond geprojecteerde schaduwen. Verborgen betekent geen enkele schaduwberekening. Zichtbaar kiest de bron zelf: een LiDAR-provider als die je gebied dekt (gebouwen en vegetatie), anders de platte OpenFreeMap-gebouwomtreklijnen (alleen gebouwen).",
     lidarPrecision: "LiDAR-precisie *",
     lidarPrecisionLow: "Laag",
     lidarPrecisionMedium: "Middel",
     lidarPrecisionHigh: "Hoog",
-    lidarPrecisionHint: "Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte MapTiler-omtreklijnen en heeft deze optie geen effect.",
+    lidarPrecisionHint: "Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte OpenFreeMap-gebouwomtreklijnen en heeft deze optie geen effect.",
     shadowOpacity: "Schaduwdekking *",
     shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen."
   }
@@ -29404,26 +32854,16 @@ const pt = {
   placeholder: {
     subtitle: "Exposição solar e cobertura de nuvens"
   },
-  tooltip: {
-    cloudCover: "Cobertura de nuvens: {0}%",
-    cloudLow: "Baixa: {0}%",
-    cloudMid: "Média: {0}%",
-    cloudHigh: "Alta: {0}%"
+  detail: {
+    title: "Vista detalhada",
+    subtitle: "Painel detalhado em breve.",
+    exitHint: "Toca em qualquer lugar para sair"
   },
   editor: {
-    required: "Chave API",
-    apiKey: "Chave API MapTiler",
-    apiKeyHelp: "Indispensável para mostrar o mapa 3D, o relevo e os edifícios. O plano gratuito é mais que suficiente.",
-    getKeyAt: "Obtém a tua chave gratuita em",
-    terrainRelief: "Relevo",
-    terrainReliefHint: "Sombreado do relevo mostrado sob o mapa. Útil em áreas montanhosas para ler a orientação das encostas em relação ao sol.",
-    hillshadeColor: "Cor do sombreado *",
-    hillshadeStrength: "Intensidade do sombreado * (0 → 1)",
     mapSection: "Mapa",
     mapStyle: "Estilo do mapa *",
     mapStyleHint: "Três mapas base: Ruas (sóbrio, urbano), Topo (curvas de nível e tons terrosos, ideal em terreno montanhoso) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). Os edifícios 3D e as etiquetas comportam-se de forma idêntica em Ruas e Topo. A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
     mapStyleStreet: "Ruas",
-    mapStyleTopo: "Topo",
     cardTheme: "Tema do cartão *",
     cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) e o mapa 3D de fundo entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros.",
     cardThemeLight: "Claro",
@@ -29451,6 +32891,8 @@ const pt = {
     pvHint: "Opcional. Quando definido, surge uma pastilha perto da casa com a produção instantânea (calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
     pvEntity: "Entidade de produção",
     pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
+    pvPeakPower: "Potência de pico (kWp)",
+    pvPeakPowerHelp: "Potência de pico instalada do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada no gráfico PV e a saturação do fluxo PV → casa. Deixa vazio para ocultar a previsão; a produção observada e o pico do dia continuam visíveis.",
     pvColor: "Cor de produção *",
     batterySection: "Bateria doméstica",
     batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais; o chip correspondente aparece assim que a entidade é definida.",
@@ -29462,35 +32904,109 @@ const pt = {
     buildingsSection: "Edifícios circundantes",
     buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».",
     displayRadius: "Raio de visualização *",
-    displayRadiusHint: "Define a área visível em torno da casa. Tudo o que estiver para além deste raio fica oculto: mapa base, relevo, edifícios vizinhos, sombras. Também controla o âmbito do fetch LiDAR e o corte das sombras projetadas.",
+    displayRadiusHint: "Define a área visível em torno da casa. Tudo o que estiver para além deste raio fica oculto: mapa base, edifícios vizinhos, sombras. Também controla o âmbito do fetch LiDAR e o corte das sombras projetadas.",
     buildingClusterRadius: "Raio do grupo da casa *",
     buildingOpacity: "Opacidade dos vizinhos *",
     buildingColor: "Cor dos edifícios *",
-    performanceMode: "Modo de desempenho *",
-    performanceModeOn: "Ativado",
-    performanceModeOff: "Desativado",
-    performanceModeHint: "Desativa o terreno 3D, o relevo e limita a densidade de píxeis. Útil em dispositivos modestos ou em sessões longas. A inclinação e os edifícios 3D mantêm-se.",
+    pixelRatio: "Pixel ratio *",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (predefinição) usa a densidade de píxeis nativa do ecrã (limitada a 2 em desktop, 1.25 em mobile) para uma renderização nítida. 1x força o valor a 1.0, menos nítido mas com a carga por frame mínima, ideal em dispositivos modestos ou sessões longas em que a autonomia / o calor pesam mais que a nitidez.",
     mapStyleMinimal: "Mínimo",
-    terrainDetail: "Detalhe do terreno *",
-    terrainDetailSmooth: "Suave",
-    terrainDetailFine: "Preciso",
-    terrainDetailHint: "Suave (predefinição) amostra o relevo a cada ~20 m e mantém-se fluido em qualquer dispositivo. Preciso amostra a cada ~5 m para um relevo mais detalhado mas ~16× mais vértices a projetar por frame de rotação, útil apenas em PCs potentes.",
-    mapStyleSatellite: "Satélite",
     shadowsSection: "Sombreamento",
     shadowsEnabled: "Mostrar sombras *",
     shadowsEnabledOn: "Visíveis",
     shadowsEnabledOff: "Ocultas",
-    shadowsEnabledHint: "Interruptor principal das sombras projetadas no chão. Quando ocultas, nenhuma sombra é calculada. Quando visíveis, a fonte é escolhida automaticamente: um fornecedor LiDAR se cobrir a tua zona (edifícios e vegetação), caso contrário as impressões planas MapTiler (apenas edifícios).",
+    shadowsEnabledHint: "Interruptor principal das sombras projetadas no chão. Quando ocultas, nenhuma sombra é calculada. Quando visíveis, a fonte é escolhida automaticamente: um fornecedor LiDAR se cobrir a tua zona (edifícios e vegetação), caso contrário as impressões planas dos edifícios OpenFreeMap (apenas edifícios).",
     lidarPrecision: "Precisão LiDAR *",
     lidarPrecisionLow: "Baixa",
     lidarPrecisionMedium: "Média",
     lidarPrecisionHigh: "Alta",
-    lidarPrecisionHint: "Se a tua zona é coberta por um fornecedor LiDAR integrado no Helios, beneficias de sombras mais realistas (edifícios E vegetação). Podem aparecer desfasamentos entre os edifícios desenhados e as suas sombras: os dados LiDAR são capturados num instante preciso e nem sempre refletem o estado atual do terreno. Fora da cobertura LiDAR, as sombras voltam às impressões planas MapTiler e esta opção não tem qualquer efeito.",
+    lidarPrecisionHint: "Se a tua zona é coberta por um fornecedor LiDAR integrado no Helios, beneficias de sombras mais realistas (edifícios E vegetação). Podem aparecer desfasamentos entre os edifícios desenhados e as suas sombras: os dados LiDAR são capturados num instante preciso e nem sempre refletem o estado atual do terreno. Fora da cobertura LiDAR, as sombras voltam às impressões planas dos edifícios OpenFreeMap e esta opção não tem qualquer efeito.",
     shadowOpacity: "Opacidade das sombras *",
     shadowOpacityHint: "Opacidade das sombras projetadas no chão."
   }
 };
-const LOCALES = { en, fr, de, es, it, nl, pt };
+const no = {
+  cardName: "HELIOS",
+  cardDescription: "Sanntidsvisualisering av solenergi og skydekke",
+  placeholder: {
+    subtitle: "Soleksponering og skydekke"
+  },
+  detail: {
+    title: "Detaljvisning",
+    subtitle: "Detaljert dashbord kommer snart.",
+    exitHint: "Trykk hvor som helst for å gå ut"
+  },
+  editor: {
+    mapSection: "Kart",
+    mapStyle: "Kartstil *",
+    mapStyleHint: "Tre grunnkart: Gater (nøkternt, urbant), Topo (høydekoter og jordfargetoner, bedre i kupert terreng) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). 3D-bygninger og etiketter oppfører seg likt på Gater og Topo. Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.",
+    mapStyleStreet: "Gater",
+    cardTheme: "Korttema *",
+    cardThemeHint: "Bytter kortets utseende (chips, grafer, knapper, verktøytips, scrub-overlegg) og 3D-grunnkartet mellom et lyst tema (standard, på hvit bakgrunn) og et mørkt tema (på nesten svart bakgrunn) slik at kortet passer rent inn i lyse eller mørke Home Assistant-dashbord.",
+    cardThemeLight: "Lyst",
+    cardThemeDark: "Mørkt",
+    showLabels: "Vis etiketter *",
+    showLabelsHint: "Slår av eller på gatenavn, husnumre, interessepunkter og stedsnavn på grunnkartet.",
+    labelsOn: "Vist",
+    labelsOff: "Skjult",
+    autoRotate: "Automatisk kamerarotasjon *",
+    autoRotateHint: "Etter noen sekunder uten aktivitet roterer kameraet sakte rundt huset (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). Et knip, dra eller hjul pauser den øyeblikkelig, og den fortsetter så snart du slipper.",
+    autoRotateOn: "På",
+    autoRotateOff: "Av",
+    timeline: "Tidslinje",
+    timelineHint: "Format på datoetikettene som vises på tidslinjen og i scrub-chipen.",
+    dateFormat: "Datoformat * (standard: mm-dd)",
+    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Eksempler:",
+    timeFormat: "Klokkeformat *",
+    timeFormat12: "12 t",
+    timeFormat24: "24 t",
+    colors: "Farger",
+    colorsHint: "Én farge per måleverdi, gjenbrukt overalt der den vises. Solfargen maler buen, solskiven og det øvre området på tidslinjen. Skyfargen maler skiven på bakken og det nedre området på tidslinjen.",
+    sunColor: "Solfarge *",
+    cloudColor: "Skyfarge *",
+    pvSection: "Solproduksjon",
+    pvHint: "Valgfri. Når satt vises en chip nær huset med øyeblikkelig produksjon (beregnet over siste minutt), og en dedikert graf legges til over tidslinjen. Aksepterer enten en effektsensor (W/kW) eller en kumulativ energisensor (Wh/kWh).",
+    pvEntity: "Produksjons-entitet",
+    pvEntityHelp: "Velg en sensor for sol-effekt eller -energi (W, kW, Wh, kWh).",
+    pvPeakPower: "Toppeffekt (kWp)",
+    pvPeakPowerHelp: "Installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen i PV-grafen og strømningsmetningen for PV → hus-leaderen. La stå tom for å skjule prognosen; observert produksjon og dagens topp tegnes likevel.",
+    pvColor: "Produksjonsfarge *",
+    batterySection: "Husbatteri",
+    batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie; chipen på sin side vises så snart entiteten er satt.",
+    batterySocEntity: "Ladenivå-entitet",
+    batterySocEntityHelp: 'Velg en sensor for batteriets ladenivå (%, vanligvis med device_class "battery"). Vises som chip til venstre for PV-chipen med live prosent.',
+    batteryPowerEntity: "Effekt-entitet",
+    batteryPowerEntityHelp: "Velg en sensor for batterieffekt (W eller kW). Fortegnskonvensjonen følger entiteten selv; positiv tolkes som lading og vises ordrett på chipen (f.eks. «+3,00 kW» ved lading, «−1,20 kW» ved utlading).",
+    batteryColor: "Batterifarge *",
+    buildingsSection: "Omkringliggende bygninger",
+    buildingsHint: "For å holde kortet flytende i tette urbane områder rendres bare bygninger innenfor konfigurert radius rundt huset i 3D. Selve huset holdes alltid på full opasitet; nabobygninger rendres med konfigurert opasitet for å gi urban kontekst uten å konkurrere med dataovergangene. Klyngeradiusen grupperer tilkoblede uthus (verandaer, garasjer, skur) i «hus»-settet.",
+    displayRadius: "Visningsradius *",
+    displayRadiusHint: "Definerer det synlige området rundt huset. Alt utenfor denne radiusen skjules: grunnkart, nabobygninger, skygger. Styrer også LiDAR-hentingens omfang og klipp av projiserte skygger.",
+    buildingClusterRadius: "Hus-klyngeradius *",
+    buildingOpacity: "Opasitet for nabobygninger *",
+    buildingColor: "Bygningsfarge *",
+    pixelRatio: "Pikselforhold *",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (standard) bruker skjermens native devicePixelRatio (begrenset til 2 på skrivebord, 1,25 på mobil) for skarp rendering. 1x tvinger verdien til 1,0 for det billigste mulige per-frame fragmentarbeidet, nyttig på lavtytende enheter eller for lange økter der batteritid / varme betyr mer enn skarphet.",
+    mapStyleMinimal: "Minimal",
+    shadowsSection: "Skygger",
+    shadowsEnabled: "Vis skygger *",
+    shadowsEnabledOn: "Vist",
+    shadowsEnabledOff: "Skjult",
+    shadowsEnabledHint: "Hovedbryter for projiserte bakkeskygger. Når skjult beregnes ingen skygger i det hele tatt. Når vist velges kilden automatisk: en LiDAR-leverandør når én dekker området ditt (bygninger + vegetasjon), OpenFreeMap-bygningsfotavtrykk ellers (bare bygninger).",
+    lidarPrecision: "LiDAR-presisjon *",
+    lidarPrecisionLow: "Lav",
+    lidarPrecisionMedium: "Middels",
+    lidarPrecisionHigh: "Høy",
+    lidarPrecisionHint: "Hvis huset ligger innenfor en LiDAR-leverandør integrert med Helios (Kartverket NHM for Norge), får du mer realistiske skygger (bygninger OG vegetasjon). Noe forskyvning kan oppstå mellom de viste bygningene og skyggene deres: LiDAR-undersøkelsen er fanget på en gitt dato og gjenspeiler kanskje ikke nåværende tilstand. Utenfor LiDAR-dekning faller skyggene tilbake til de flate OpenFreeMap-bygningsfotavtrykkene, og denne innstillingen har ingen effekt.",
+    shadowOpacity: "Skyggeopasitet *",
+    shadowOpacityHint: "Opasitet for projiserte bakkeskygger."
+  }
+};
+const LOCALES = { en, fr, de, es, it, nl, pt, no };
 const FALLBACK = en;
 function pickTranslations(haLanguage) {
   if (!haLanguage) {
@@ -29548,6 +33064,194 @@ const heliosCardStyles = i$3`
     #map-container.hidden
     {
         display: none;
+    }
+
+
+    /*  Home hitbox, invisible circular click target centred on the
+        home's projected screen position. Sits above every overlay
+        SVG (z 12) but below the detail panel (z 60) so a click
+        always reaches it, regardless of which chip / leader happens
+        to sit underneath at that moment. */
+    .home-hitbox
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        width:  72px;
+        height: 72px;
+        border-radius: 50%;
+        background: transparent;
+        cursor: pointer;
+        pointer-events: auto;
+        z-index: 12;
+    }
+
+    /*  Home hover glow. Same base + top + side-quad polygons as the
+        cloud-disc mask (so it tracks rotation pixel-for-pixel with
+        the building extrusion), painted in the configured sun colour
+        with a CSS drop-shadow bloom. Opacity is the only thing that
+        animates so the fade is GPU-cheap, the geometry comes back
+        every frame from the engine without re-rendering this SVG. */
+    .home-glow-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 11;
+        opacity: 0;
+        transition: opacity 0.18s ease;
+        /* Single soft drop-shadow, the bloom hints "interactive"
+           without overpowering the building underneath. */
+        filter: drop-shadow(0 0 6px var(--helios-sun-color, #f59e0b));
+    }
+    .home-glow-svg.is-hovered { opacity: 0.7; }
+
+    /*  Touch devices have no hover state, mouseenter / mouseleave
+        never fire, so the .is-hovered class is never applied. Show
+        the glow permanently at a softer opacity so the user still
+        gets a visual hint that the home is tappable. The detail-
+        mode fade rule (specificity 0,2,0) wins over this (0,1,0)
+        so the glow still fades out when the dashboard opens. */
+    @media (hover: none)
+    {
+        .home-glow-svg { opacity: 0.45; }
+    }
+    .home-glow-svg .home-glow-shape
+    {
+        fill: var(--helios-sun-color, #f59e0b);
+        fill-opacity: 0.08;
+        stroke: var(--helios-sun-color, #f59e0b);
+        stroke-width: 1;
+        stroke-linejoin: round;
+        pointer-events: none;
+    }
+
+
+    /*  Detail mode, while ha-card carries .detail-active every
+        pre-existing overlay fades out and stops intercepting
+        pointer events. The transition rides at 0.35 s ease so the
+        fade matches the eye-pleasing pacing of the camera ease in
+        the engine (0.8 s total, but the fade should land before the
+        camera settles so the panel can come in clean on top).
+
+        IMPORTANT: the transition declaration sits on the BASE
+        selector, not inside the .detail-active rule. CSS only
+        animates between two states when both states share the
+        transition property, declaring it inside .detail-active
+        only would mean removing the class snaps opacity back to 1
+        with no fade-in. */
+    .cloud-svg,
+    .cloud-leader-svg,
+    .cloud-pct-label,
+    .solar-svg,
+    .solar-pct-label,
+    .solar-horizon-icon,
+    .pv-home-leader-svg,
+    .pv-pct-label,
+    .battery-leader-svg,
+    .battery-pct-label,
+    .home-hitbox,
+    .home-glow-svg,
+    .time-bar,
+    .clock,
+    .live-return-btn,
+    .shadow-busy-chip
+    {
+        transition: opacity 0.35s ease;
+    }
+    ha-card.detail-active .cloud-svg,
+    ha-card.detail-active .cloud-leader-svg,
+    ha-card.detail-active .cloud-pct-label,
+    ha-card.detail-active .solar-svg,
+    ha-card.detail-active .solar-pct-label,
+    ha-card.detail-active .solar-horizon-icon,
+    ha-card.detail-active .pv-home-leader-svg,
+    ha-card.detail-active .pv-pct-label,
+    ha-card.detail-active .battery-leader-svg,
+    ha-card.detail-active .battery-pct-label,
+    ha-card.detail-active .home-hitbox,
+    ha-card.detail-active .home-glow-svg,
+    ha-card.detail-active .time-bar,
+    ha-card.detail-active .clock,
+    ha-card.detail-active .live-return-btn,
+    ha-card.detail-active .shadow-busy-chip
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    /*  Detail panel, takes over the card while detail mode is on.
+        Click anywhere on it exits back to the resting view. The
+        backdrop is a soft scrim so the basemap behind stays
+        readable (the camera is zoomed + tilted underneath) without
+        competing with the panel content. */
+    .detail-panel
+    {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        cursor: pointer;
+        z-index: 60;
+        opacity: 0;
+        animation: detail-panel-fade-in 0.35s ease forwards;
+    }
+    @keyframes detail-panel-fade-in
+    {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    .detail-panel-inner
+    {
+        text-align: center;
+        color: #ffffff;
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        padding: 24px 32px;
+        max-width: 80%;
+        pointer-events: none;
+    }
+
+    .detail-panel-icon
+    {
+        --mdc-icon-size: 56px;
+        color: #ffffff;
+        opacity: 0.85;
+        margin-bottom: 12px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .detail-panel-title
+    {
+        font-size: 1.5rem;
+        font-weight: 300;
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .detail-panel-subtitle
+    {
+        font-size: 0.95rem;
+        opacity: 0.75;
+        margin-bottom: 24px;
+        font-weight: 300;
+    }
+
+    .detail-panel-hint
+    {
+        font-size: 0.8rem;
+        opacity: 0.55;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        font-weight: 300;
     }
 
 
@@ -29664,14 +33368,6 @@ const heliosCardStyles = i$3`
         cursor: grabbing;
     }
 
-    /*  Reserves vertical space for the scrub-time chip so the chart
-        card doesn't jump up/down when scrubbing toggles. */
-    .tb-top-row
-    {
-        position: relative;
-        height: 18px;
-    }
-
     /*  Chart card, bordered white panel hosting the area chart,
         day-label chips on the midline, dotted day separators and
         the live + scrub HTML cursor overlays. */
@@ -29717,16 +33413,7 @@ const heliosCardStyles = i$3`
         opacity: 0.55;
     }
 
-    /*  Daily peak-production highlight, for each natural day in the
-        timeline, a 1-hour-wide vertical band painted in the configured
-        PV colour at low opacity marks the hour where production is
-        (or is predicted to be) highest. Drawn behind the chart area
-        so the curves remain legible on top. */
-    .hc-pv-peak
-    {
-        opacity: 0.18;
-        pointer-events: none;
-    }
+
 
     /*  Faint dotted day separators inside the chart card. */
     .hc-day-sep
@@ -29758,15 +33445,17 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
-    /*  Live cursor, solid black vertical line spanning the chart,
-        with a triangle marker pointing down from the top edge. */
+    /*  Live cursor: thin discreet line spanning the full chart with
+        a small triangle handle at the top. Stays subtle on purpose,
+        the user is in live mode, the cursor is a passive "where now
+        is on the timeline" reference, not a focus target. */
     .tb-cursor-now
     {
         position: absolute;
         top: 0;
         bottom: 0;
         width: 1px;
-        background: rgba(0, 0, 0, 0.55);
+        background: rgba(0, 0, 0, 0.45);
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
@@ -29776,98 +33465,48 @@ const heliosCardStyles = i$3`
     {
         content: '';
         position: absolute;
-        top: 0;
+        top: -1px;
         left: 50%;
         transform: translateX(-50%);
         width: 0;
         height: 0;
-        border-left:   4px solid transparent;
-        border-right:  4px solid transparent;
-        border-top:    5px solid #000000;
+        border-left:   3px solid transparent;
+        border-right:  3px solid transparent;
+        border-top:    4px solid rgba(0, 0, 0, 0.55);
     }
 
-    /*  Scrub cursor, same anatomy, dashed and tinted blue so live
-        and scrubbed positions are unmistakable side by side. */
+    /*  Scrub cursor: prominent solid blue line spanning the full
+        chart, with a wider triangle handle at the top. Now that the
+        scrub-time chip is gone, this cursor IS the primary feedback
+        during a drag, so it has to read instantly without scrutiny.
+        Same blue as the clock-chip scrub theme so the user spatially
+        links the two: drag here, time updates over there. */
     .tb-cursor-sel
     {
         position: absolute;
         top: 0;
         bottom: 0;
-        width: 1px;
-        background:
-            repeating-linear-gradient(
-                to bottom,
-                rgba(31, 111, 235, 0.75) 0,
-                rgba(31, 111, 235, 0.75) 3px,
-                transparent              3px,
-                transparent              6px
-            );
+        width: 2px;
+        background: rgba(31, 111, 235, 0.95);
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
+        box-shadow: 0 0 4px rgba(31, 111, 235, 0.4);
     }
 
     .tb-cursor-sel::after
     {
         content: '';
         position: absolute;
-        top: 0;
+        top: -3px;
         left: 50%;
         transform: translateX(-50%);
         width: 0;
         height: 0;
-        border-left:   4px solid transparent;
-        border-right:  4px solid transparent;
-        border-top:    5px solid #1f6feb;
-    }
-
-    /*  Scrub-time pill, sits in the top row above the chart card
-        when the user has scrubbed away from "now". Tinted in the
-        scrub-cursor blue so the displayed instant is visibly not
-        "now". Anchored at the cursor's X via an inline left
-        percentage, with edge-clamping handled by the inline
-        transform so the pill never bleeds past the card edges.
-        Pointer-transparent so dragging the timeline through it
-        still scrubs, the "back to live" affordance lives in the
-        clock tab above the card, not next to the pill, to keep the
-        timeline's hit area uncontested on mobile. */
-    .tb-sel-label
-    {
-        position: absolute;
-        bottom: 0;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.3px;
-        color: white;
-        background: rgba(31, 111, 235, 0.95);
-        padding: 3px 8px;
-        border-radius: 3px;
-        white-space: nowrap;
-        pointer-events: none;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-        font-variant-numeric: tabular-nums;
-        z-index: 3;
-    }
-
-    /*  Scrub tether, a 6 px vertical hair that drops from the
-        bottom edge of the scrub cluster to the top edge of the
-        chart card, anchored at the cursor's X. Carries the
-        scrub-cursor blue so it reads as continuous with the cursor's
-        downward triangle inside the chart. The tether is rendered
-        as a sibling of the cluster (not a child) and uses the same
-        left-percentage anchor without the cluster's edge-clamping
-        transform, so it always lands directly above the cursor even
-        when the cluster shifts to avoid clipping. */
-    .tb-sel-tether
-    {
-        position: absolute;
-        bottom: -6px;
-        height: 6px;
-        width: 1px;
-        background: rgba(31, 111, 235, 0.95);
-        transform: translateX(-50%);
-        pointer-events: none;
-        z-index: 3;
+        border-left:   6px solid transparent;
+        border-right:  6px solid transparent;
+        border-top:    8px solid rgba(31, 111, 235, 0.95);
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
     /*  Day labels, small white chips overlaying the chart midline.
@@ -29886,6 +33525,7 @@ const heliosCardStyles = i$3`
         transform: translate(-50%, -50%);
         display: inline-flex;
         align-items: center;
+        gap: 4px;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
@@ -29904,6 +33544,28 @@ const heliosCardStyles = i$3`
     .tb-day-label-today
     {
         font-weight: 800;
+    }
+
+    /*  Daily kWh total appended next to the date. Lighter weight +
+        smaller separator dot so the date stays the primary read.
+        Forecast variant (today's remainder + future days) is
+        italicised so the user can tell observation from estimate
+        at a glance, same convention the PV chip uses for predicted
+        values. */
+    .tb-day-label-kwh
+    {
+        font-weight: 500;
+        opacity: 0.75;
+    }
+    .tb-day-label-kwh::before
+    {
+        content: "·";
+        margin-right: 4px;
+        opacity: 0.5;
+    }
+    .tb-day-label-kwh.is-forecast
+    {
+        font-style: italic;
     }
 
     /*  Optional PV graph card stacked above the main chart. Half
@@ -29957,12 +33619,18 @@ const heliosCardStyles = i$3`
         from the card edge so they read as a paired pair anchored
         to the frame, mirroring the timeline's edge margin. */
 
-    /*  Date/time chip, same chip language as the on-map readouts. */
+    /*  Date/time chip, same chip language as the on-map readouts.
+        Explicit height (border-box) so the chip and the back-to-
+        live button next to it share the exact same vertical
+        footprint, no align-items: center shift in the parent flex
+        container. */
     .clock
     {
         display: inline-flex;
         align-items: center;
         gap: 6px;
+        height: 22px;
+        box-sizing: border-box;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
@@ -29982,13 +33650,43 @@ const heliosCardStyles = i$3`
     .clock-date { opacity: 0.75; }
     .clock-time { opacity: 1;    }
 
-    /*  "Back to live" button, top-right rail. Same blue plate as the
-        on-chart scrub cursor and the scrub-time pill, white restore
-        icon centred. Sized to match the clock chip's rendered height
-        (12 px text + 2 px line-height + 4 px padding + 2 px border
-        ≈ 22 px) so the top-left clock and the top-right button read
-        as a balanced paired pair. Square chip so the LiDAR busy chip
-        below stacks cleanly into the same column. */
+    /*  Scrub-mode theme for the clock chip. Same chip flips to a
+        white-on-blue look so it doubles as the "you're not in live
+        mode" signal. The blue matches the timeline scrub cursor so
+        the user spatially links the top-left chip with the timeline
+        marker driving it. The chip's right corners are also squared
+        in scrub mode so it physically fuses with the back-to-live
+        button rendered next to it: same blue plate, shared seam,
+        zero visual gap, the pair reads as one composite control.
+
+        Both selectors are listed so the rule beats the dark-theme
+        override (ha-card.theme-dark .clock, specificity 0,2,1) in
+        both light and dark contexts; without the second selector
+        the dark-theme rule keeps the chip grey when scrubbing. */
+    .clock.is-scrub,
+    ha-card.theme-dark .clock.is-scrub
+    {
+        background: rgba(31, 111, 235, 0.95);
+        color: #ffffff;
+        border-color: rgba(20, 78, 168, 0.95);
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+    .clock.is-scrub .clock-date,
+    ha-card.theme-dark .clock.is-scrub .clock-date { opacity: 0.95; color: #ffffff; }
+    .clock.is-scrub .clock-time,
+    ha-card.theme-dark .clock.is-scrub .clock-time { opacity: 1;    color: #ffffff; }
+
+    /*  "Back to live" button, lives next to the clock chip in the
+        top-left cluster while scrubbing. Square 22 x 22 to match
+        the clock chip height exactly (so the parent flex container
+        doesn't need vertical centering compensation), with the
+        same scrub-blue plate as the on-chart scrub cursor and the
+        clock chip's scrub theme so the cluster reads as one unit.
+        Icon kept small (12 px in a 22 px square = 5 px ring of
+        breathing room) so the chip frame dominates over the
+        glyph, consistent with the chip-language used everywhere
+        else on the card. */
     .live-return-btn
     {
         display: inline-flex;
@@ -29996,11 +33694,17 @@ const heliosCardStyles = i$3`
         justify-content: center;
         width:  22px;
         height: 22px;
+        box-sizing: border-box;
         padding: 0;
         background: rgba(31, 111, 235, 0.95);
         color: white;
         border: 1px solid rgba(20, 78, 168, 0.95);
-        border-radius: 3px;
+        /*  Square left corners + drop the left border so the chip's
+            right border serves as the shared seam, no double 2 px
+            stroke at the join. The pair reads as one continuous
+            blue plate. */
+        border-radius: 0 3px 3px 0;
+        border-left: 0;
         cursor: pointer;
         pointer-events: auto;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -30012,7 +33716,7 @@ const heliosCardStyles = i$3`
 
     .live-return-btn ha-icon
     {
-        --mdc-icon-size: 14px;
+        --mdc-icon-size: 12px;
         color: white;
         display: inline-flex;
         align-items: center;
@@ -30037,14 +33741,26 @@ const heliosCardStyles = i$3`
 
     /*  Top-left rail, mirrors overlay-top-right on the opposite edge
         so the corner overlays sit at matching heights. Hosts the
-        date/time chip; pointer events stay off so the chip never
-        steals interaction from the map underneath. */
+        date/time clock chip plus, when scrubbing, the back-to-live
+        button right next to it (both relate to "where am I in
+        time"). Laid out as a flex row with a small gap. Pointer
+        events are off on the rail by default, the button re-enables
+        them on itself so clicks reach it without the rail stealing
+        unrelated map interactions. */
     .overlay-top-left
     {
         position: absolute;
         top: 8px;
         left: 8px;
         z-index: 5;
+        display: flex;
+        align-items: center;
+        /*  No gap, the clock chip and the back-to-live button (when
+            scrubbing) physically touch so the pair reads as one
+            composite "time + control" widget rather than two
+            independent chips. Border radii are squared on the
+            facing edges below so the seam is invisible. */
+        gap: 0;
         pointer-events: none;
     }
 
@@ -30164,6 +33880,17 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
+    /*  Predicted PV chip, shown when scrubbing into the future. The
+        value comes from the kWp × clear-sky model, not a measured
+        reading, so we semi-transparency the whole chip and rely on
+        the leading "≈" character (set by the card's render) to
+        signal "estimate" textually. */
+    .pv-pct-label.is-predicted
+    {
+        opacity: 0.55;
+        font-style: italic;
+    }
+
     /*  Battery chips (SoC on the left of PV, Power on the right) ,
         same frame as the PV chip, tinted in the user-configured
         battery colour. Shares min-width and centred text with the
@@ -30226,46 +33953,28 @@ const heliosCardStyles = i$3`
         stroke-width: 1.5;
         stroke-opacity: 0.85;
         stroke-linecap: round;
-        stroke-dasharray: 6 5;
         fill: none;
     }
 
-    .pv-home-leader-animated
+    /*  Moving bead, a small filled disc rides the leader at a
+        speed proportional to live production. Same vocabulary as
+        the Home Assistant energy-distribution card. */
+    .pv-home-leader-bead
     {
-        animation: pv-home-leader-flow var(--pv-flow-duration, 30s) linear infinite;
-    }
-
-    @keyframes pv-home-leader-flow
-    {
-        from { stroke-dashoffset: 0;   }
-        to   { stroke-dashoffset: -11; }
-    }
-
-    .pv-home-leader-arrow
-    {
-        opacity: 0.9;
+        opacity: 0.95;
     }
 
 
     /*  Battery leaders.
         Both SoC ↔ PV and PV ↔ Power share the exact same visual
-        vocabulary: dashed L-shaped path with a rounded fillet at
-        the bend (so an arrow riding the path rotates smoothly
-        through the corner instead of snapping).
-        - .battery-leader-line carries the static styling (stroke
-          colour, width, opacity, dash pattern). Used on its own
-          for SoC ↔ PV, the SoC value has no sign so there's no
-          flow direction to animate.
-        - .battery-leader-line-animated layers the flow animation
-          on top: the dashes drift at a speed proportional to |P|
-          (via --battery-flow-duration), exactly like the PV
-          leader's visual language. A small arrow polygon rides
-          the path via SVG <animateMotion>; the
-          .battery-leader-discharging class flips the dash flow
-          direction (CSS animation-direction: reverse) so the
-          dashes move from chip → PV when discharging, and the
-          arrow path is flipped inline by the renderer so the
-          two cues stay in sync. */
+        vocabulary: solid L-shaped path with a rounded fillet at
+        the bend, matching the Home Assistant energy-distribution
+        card. The PV ↔ Power leader carries a small filled bead
+        riding along the path (animateMotion in card.ts) at a
+        speed proportional to |P|; the bead's path is flipped
+        inline by the renderer when discharging so its travel
+        direction matches the energy flow. The SoC leader is
+        static, no bead: SoC is a level, not a flow. */
     .battery-leader-svg
     {
         position: absolute;
@@ -30283,29 +33992,12 @@ const heliosCardStyles = i$3`
         stroke-opacity: 0.85;
         stroke-linecap: round;
         stroke-linejoin: round;
-        stroke-dasharray: 6 5;
         fill: none;
     }
 
-    .battery-leader-line-animated
+    .battery-leader-bead
     {
-        animation: battery-leader-flow var(--battery-flow-duration, 30s) linear infinite;
-    }
-
-    .battery-leader-discharging
-    {
-        animation-direction: reverse;
-    }
-
-    @keyframes battery-leader-flow
-    {
-        from { stroke-dashoffset: 0;   }
-        to   { stroke-dashoffset: -11; }
-    }
-
-    .battery-leader-arrow
-    {
-        opacity: 0.9;
+        opacity: 0.95;
     }
 
     /*  Cloud-cover leader line, black hairline from chip to disc. */
@@ -30345,6 +34037,11 @@ const heliosCardStyles = i$3`
         width: 100%;
         height: 100%;
         pointer-events: none;
+        /* Daylight fade is fed via the --solar-daylight CSS variable
+           (set inline per render, ranges 0..1) instead of an inline
+           opacity, so the .detail-active fade rule below can win
+           cleanly without fighting an inline style. */
+        opacity: var(--solar-daylight, 1);
         transition: opacity 600ms ease-out;
     }
     .solar-svg-back  { z-index: 4; }
@@ -30366,14 +34063,24 @@ const heliosCardStyles = i$3`
         pointer-events: none;
         z-index: 3;
     }
+    /*  Each band is a fully-opaque concentric disc; the outermost
+        (high cloud, dark shade) renders first, then mid (normal
+        shade), then low (light shade) on top. The visual banding
+        comes from each smaller disc covering the centre of the
+        larger one — no SVG mask or clip-path needed. */
     .cloud-svg .cloud-disc
     {
-        pointer-events: auto;
-        cursor: help;
+        pointer-events: none;
     }
-    .cloud-svg .cloud-disc-ring
+    /*  Thin separator outlines drawn on the inner band boundaries
+        (low ↔ mid and mid ↔ high). Stroke-only, no fill so the
+        band colours behind stay untouched. The outermost edge
+        (high ↔ outside) is already painted by .cloud-ring. */
+    .cloud-svg .cloud-band-sep
     {
         fill: none;
+        stroke: rgba(0, 0, 0, 0.35);
+        stroke-width: 0.75;
         pointer-events: none;
     }
     .cloud-svg .cloud-ring
@@ -30389,6 +34096,22 @@ const heliosCardStyles = i$3`
         colour on top. Stroke widths are set inline per segment. */
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
+
+    /*  Sunrise / sunset markers. ha-icon glyphs (mdi:weather-sunset-up
+        / -down) centred on the horizon crossings of the day's solar
+        arc, coloured in the configured sun colour via inline style.
+        The icon shape itself communicates "rising" vs "setting" so
+        no label or rotation is needed. */
+    .solar-horizon-icon
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        --mdc-icon-size: 18px;
+        pointer-events: none;
+        z-index: 6;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+    }
+
 
     /*  Below-horizon segments, round dots at fixed spacing so the
         eye reads "this is happening underground" without colour or
@@ -30425,49 +34148,6 @@ const heliosCardStyles = i$3`
     .solar-svg .solar-ray-arrow
     {
         opacity: 0.85;
-    }
-
-
-    /*  Cloud-cover disc tooltip, floats above the on-ground disc
-        on hover. Position set inline from the engine's onCloudHover
-        event in canvas pixel coordinates. */
-    .cloud-tooltip
-    {
-        position: absolute;
-        transform: translate(12px, -50%);
-        pointer-events: none;
-        z-index: 50;
-        background: rgba(0, 0, 0, 0.78);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        border-radius: 6px;
-        padding: 6px 10px;
-        color: white;
-        font-size: 11px;
-        line-height: 1.4;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
-        white-space: nowrap;
-    }
-
-    /*  Flipped variant, applied when the cursor is in the right
-        half of the card so the tooltip stays inside the bounds. */
-    .cloud-tooltip-flip
-    {
-        transform: translate(calc(-100% - 12px), -50%);
-    }
-
-    .cloud-tooltip-head
-    {
-        font-weight: 700;
-        margin-bottom: 4px;
-    }
-
-    .cloud-tooltip-row
-    {
-        opacity: 0.85;
-        line-height: 1.45;
     }
 
 
@@ -30984,7 +34664,7 @@ HeliosColorPicker = __decorateClass$1([
 let HeliosCardEditor = class extends i {
   constructor() {
     super(...arguments);
-    this._cfg = { "maptiler-api-key": "" };
+    this._cfg = {};
     this._pickerReady = false;
     this._sliderDebounce = /* @__PURE__ */ new Map();
     this._pvEntityFilter = (entity) => {
@@ -31063,12 +34743,26 @@ let HeliosCardEditor = class extends i {
     return pickTranslations(this.hass?.language);
   }
   _update(key, value) {
-    const next = { ...this._cfg, [key]: value };
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next } }));
-    this._cfg = next;
+    const next3 = { ...this._cfg, [key]: value };
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next3 } }));
+    this._cfg = next3;
   }
   _str(key, e2) {
     this._update(key, e2.target.value);
+  }
+  //Free-form numeric field. Empty input clears the option (so the
+  //card falls back to its default behaviour); a valid finite number
+  //is committed as-is. Anything else is ignored, the previous value
+  //stays in place.
+  _numField(key, e2) {
+    const raw2 = e2.target.value.trim();
+    if (raw2 === "") {
+      this._update(key, void 0);
+      return;
+    }
+    const v2 = parseFloat(raw2);
+    if (!isFinite(v2)) return;
+    this._update(key, v2);
   }
   //Slider commit. Updates local state synchronously so the slider
   //thumb tracks the drag, but defers the cross-component
@@ -31090,9 +34784,6 @@ let HeliosCardEditor = class extends i {
     }, HeliosCardEditor.SLIDER_COMMIT_DELAY_MS);
     this._sliderDebounce.set(k2, t2);
   }
-  _bool(key, value) {
-    this._update(key, value);
-  }
   _color(key, e2) {
     this._update(key, e2.detail.value);
   }
@@ -31107,44 +34798,6 @@ let HeliosCardEditor = class extends i {
     return b`
             <div class="editor">
 
-                <div class="section-title">${t2.editor.required}</div>
-                <label class="field">
-                    <span class="label">${t2.editor.apiKey}</span>
-                    <input
-                        type="text"
-                        .value="${c2["maptiler-api-key"] ?? ""}"
-                        placeholder="xxxxxxxxxxxxxxxxxxxxxxxx"
-                        @change="${(e2) => this._str("maptiler-api-key", e2)}"
-                    />
-                </label>
-                <div class="field-help">
-                    ${t2.editor.getKeyAt}
-                    <a href="https://www.maptiler.com/cloud/" target="_blank" rel="noreferrer">maptiler.com</a>
-                </div>
-                <div class="hint">${t2.editor.apiKeyHelp}</div>
-
-                <div class="section-title">${t2.editor.terrainRelief}</div>
-                <label class="field">
-                    <span class="label">${t2.editor.hillshadeColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["topography-color"], "#5064a0")}"
-                        .ariaLabel="${t2.editor.hillshadeColor}"
-                        @value-changed="${(e2) => this._color("topography-color", e2)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t2.editor.hillshadeStrength}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="1" step="0.01"
-                            .value="${String(c2["topography-alpha"] ?? 0.65)}"
-                            @input="${(e2) => this._numSlider("topography-alpha", e2)}"
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c2["topography-alpha"] ?? 0.65), 0.01)}</span>
-                    </div>
-                </label>
-                <div class="hint">${t2.editor.terrainReliefHint}</div>
-
                 <div class="section-title">${t2.editor.mapSection}</div>
                 <label class="field">
                     <span class="label">${t2.editor.mapStyle}</span>
@@ -31154,28 +34807,10 @@ let HeliosCardEditor = class extends i {
                         @change="${(e2) => this._update("map-style", e2.target.value)}"
                     >
                         <option value="streets"   ?selected="${String(c2["map-style"] ?? "streets") === "streets"}">${t2.editor.mapStyleStreet}</option>
-                        <option value="topo"      ?selected="${String(c2["map-style"] ?? "streets") === "topo"}">${t2.editor.mapStyleTopo}</option>
                         <option value="minimal"   ?selected="${String(c2["map-style"] ?? "streets") === "minimal"}">${t2.editor.mapStyleMinimal}</option>
-                        <option value="satellite" ?selected="${String(c2["map-style"] ?? "streets") === "satellite"}">${t2.editor.mapStyleSatellite}</option>
                     </select>
                 </label>
                 <div class="hint">${t2.editor.mapStyleHint}</div>
-                <div class="field">
-                    <span class="label">${t2.editor.terrainDetail}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["terrain-detail"] ?? "smooth") === "smooth" ? "active" : ""}"
-                            @click="${() => this._update("terrain-detail", "smooth")}"
-                        >${t2.editor.terrainDetailSmooth}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["terrain-detail"] ?? "smooth") === "fine" ? "active" : ""}"
-                            @click="${() => this._update("terrain-detail", "fine")}"
-                        >${t2.editor.terrainDetailFine}</button>
-                    </div>
-                </div>
-                <div class="hint">${t2.editor.terrainDetailHint}</div>
                 <div class="field">
                     <span class="label">${t2.editor.cardTheme}</span>
                     <div class="segmented-toggle">
@@ -31213,33 +34848,33 @@ let HeliosCardEditor = class extends i {
                     <div class="segmented-toggle">
                         <button
                             type="button"
-                            class="seg-option ${c2["auto-rotate-enabled"] !== false ? "active" : ""}"
+                            class="seg-option ${c2["auto-rotate-enabled"] === true ? "active" : ""}"
                             @click="${() => this._update("auto-rotate-enabled", true)}"
                         >${t2.editor.autoRotateOn}</button>
                         <button
                             type="button"
-                            class="seg-option ${c2["auto-rotate-enabled"] === false ? "active" : ""}"
+                            class="seg-option ${c2["auto-rotate-enabled"] !== true ? "active" : ""}"
                             @click="${() => this._update("auto-rotate-enabled", false)}"
                         >${t2.editor.autoRotateOff}</button>
                     </div>
                 </div>
                 <div class="hint">${t2.editor.autoRotateHint}</div>
                 <div class="field">
-                    <span class="label">${t2.editor.performanceMode}</span>
+                    <span class="label">${t2.editor.pixelRatio}</span>
                     <div class="segmented-toggle">
                         <button
                             type="button"
-                            class="seg-option ${c2["performance-mode"] !== true ? "active" : ""}"
-                            @click="${() => this._bool("performance-mode", false)}"
-                        >${t2.editor.performanceModeOff}</button>
+                            class="seg-option ${String(c2["pixel-ratio"] ?? "auto").toLowerCase() !== "1x" ? "active" : ""}"
+                            @click="${() => this._update("pixel-ratio", "auto")}"
+                        >${t2.editor.pixelRatioAuto}</button>
                         <button
                             type="button"
-                            class="seg-option ${c2["performance-mode"] === true ? "active" : ""}"
-                            @click="${() => this._bool("performance-mode", true)}"
-                        >${t2.editor.performanceModeOn}</button>
+                            class="seg-option ${String(c2["pixel-ratio"] ?? "auto").toLowerCase() === "1x" ? "active" : ""}"
+                            @click="${() => this._update("pixel-ratio", "1x")}"
+                        >${t2.editor.pixelRatio1x}</button>
                     </div>
                 </div>
-                <div class="hint">${t2.editor.performanceModeHint}</div>
+                <div class="hint">${t2.editor.pixelRatioHint}</div>
 
                 <label class="field">
                     <span class="label">${t2.editor.displayRadius}</span>
@@ -31373,6 +35008,18 @@ let HeliosCardEditor = class extends i {
                     `}
                 </div>
                 <div class="field-help">${t2.editor.pvEntityHelp}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.pvPeakPower}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="6.5"
+                        .value="${c2["pv-peak-kwp"] != null ? String(c2["pv-peak-kwp"]) : ""}"
+                        @change="${(e2) => this._numField("pv-peak-kwp", e2)}"
+                    />
+                </label>
+                <div class="field-help">${t2.editor.pvPeakPowerHelp}</div>
                 <label class="field">
                     <span class="label">${t2.editor.pvColor}</span>
                     <helios-color-picker
@@ -31686,7 +35333,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0"}`,
+      `%c☀ HELIOS%c v${"1.5.0-beta.1"}`,
       labelStyle,
       versionStyle
     );
@@ -31707,7 +35354,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.4.0",
+        version: "1.5.0-beta.1",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -31715,7 +35362,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.4.0"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.5.0-beta.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -31772,13 +35419,6 @@ let HeliosCard = class extends i {
     super(...arguments);
     this._now = /* @__PURE__ */ new Date();
     this._cloudCover = -1;
-    this._cloudLow = -1;
-    this._cloudMid = -1;
-    this._cloudHigh = -1;
-    this._cloudHoverX = 0;
-    this._cloudHoverY = 0;
-    this._cloudHover = false;
-    this._cloudHoverFlip = false;
     this._labelLayout = null;
     this._pvCurrent = null;
     this._pvUnit = "";
@@ -31786,6 +35426,7 @@ let HeliosCard = class extends i {
     this._pvFetchKey = "";
     this._pvFetching = false;
     this._pvHistoryDiagnostics = null;
+    this._pvCalibWiped = false;
     this._pvSampleBuffer = [];
     this._batterySoc = null;
     this._batteryPower = null;
@@ -31796,13 +35437,15 @@ let HeliosCard = class extends i {
     this._batteryFetching = false;
     this._sunScene = null;
     this._cloudScene = null;
+    this._homeSilhouettes = [];
+    this._homeHover = false;
     this._chartSeries = null;
     this._fetching = false;
     this._timeRange = null;
     this._selectedTime = null;
     this._isLiveMode = true;
     this._shadowBusy = false;
-    this._lastApiKey = "";
+    this._detailMode = false;
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
@@ -31811,9 +35454,12 @@ let HeliosCard = class extends i {
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
     this._boundPointerUp = (e2) => this._onTimelinePointerUp(e2);
-    this._pvCalibK = null;
-    this._pvCalibHARead = false;
-    this._pvCalibPendingSave = null;
+    this._onHomeEnter = () => {
+      this._homeHover = true;
+    };
+    this._onHomeLeave = () => {
+      this._homeHover = false;
+    };
   }
   //Cheap stable signature of the visual config, used to skip
   //updateConfig() when nothing the engine cares about has changed.
@@ -31834,19 +35480,18 @@ let HeliosCard = class extends i {
     return document.createElement("helios-card-editor");
   }
   static getStubConfig() {
-    return { "maptiler-api-key": "" };
+    return {};
   }
   //Diagnostic snapshot returned to `window.heliosStats()`. Includes
-  //the live config (with the MapTiler API key redacted so the user
-  //can paste the output publicly), the engine state snapshot when
-  //the engine is up, and a small PV block summarising the most
-  //recent history fetch outcome. JSON-safe, no DOM references, no
-  //PII (engine snapshot already strips the home lat/lon).
+  //the live config, the engine state snapshot when the engine is
+  //up, and a small PV block summarising the most recent history
+  //fetch outcome. JSON-safe, no DOM references, no PII (engine
+  //snapshot already strips the home lat/lon).
   getStatsSnapshot() {
     const cfg = {};
     if (this.config) {
       for (const [k2, v2] of Object.entries(this.config)) {
-        cfg[k2] = k2 === "maptiler-api-key" && typeof v2 === "string" && v2.length > 0 ? `***redacted (${v2.length} chars)***` : v2;
+        cfg[k2] = v2;
       }
     }
     return {
@@ -31856,7 +35501,7 @@ let HeliosCard = class extends i {
         entityConfigured: typeof this.config?.["pv-power-entity"] === "string" && this.config["pv-power-entity"].length > 0,
         unit: this._pvUnit || null,
         lastHistory: this._pvHistoryDiagnostics,
-        calibrationK: this._pvCalibK
+        calibrationK: this._pvCalibK()
       }
     };
   }
@@ -31949,11 +35594,6 @@ let HeliosCard = class extends i {
       this._initDebounceTimer = void 0;
       this._initInflight = false;
     }
-    if (this._pvCalibHAWriteTimer !== void 0) {
-      window.clearTimeout(this._pvCalibHAWriteTimer);
-      this._pvCalibHAWriteTimer = void 0;
-      void this._flushPvCalibToHA();
-    }
     this._engine?.cleanup();
     this._engine = void 0;
   }
@@ -31992,22 +35632,19 @@ let HeliosCard = class extends i {
     if (!this.hass?.config || !this.config) {
       return;
     }
-    const apiKey = String(this.config["maptiler-api-key"] ?? "").trim();
     const coords = this._getHomeCoords();
-    if (!coords || !apiKey) {
-      return;
-    }
+    if (!coords) return;
     const { lat, lon } = coords;
-    if (!this._pvCalibHARead) {
-      void this._reconcilePvCalibWithHA();
+    if (!this._pvCalibWiped) {
+      this._pvCalibWiped = true;
+      this._wipeLegacyPvCalibStorage();
     }
     const homeKey = `${lat.toFixed(5)},${lon.toFixed(5)}`;
-    const identityChanged = apiKey !== this._lastApiKey || homeKey !== this._lastHomeKey;
+    const identityChanged = homeKey !== this._lastHomeKey;
     if (!this._engine || identityChanged) {
       if (this._initInflight) {
         return;
       }
-      this._lastApiKey = apiKey;
       this._lastHomeKey = homeKey;
       this._lastConfigSig = this._computeConfigSig();
       this._initEngine();
@@ -32048,20 +35685,20 @@ let HeliosCard = class extends i {
     const stateObj = this.hass.states?.[entity];
     if (stateObj) {
       const v2 = parseFloat(stateObj.state);
-      const next = isFinite(v2) ? v2 : null;
-      if (next !== this._pvCurrent) {
-        this._pvCurrent = next;
+      const next3 = isFinite(v2) ? v2 : null;
+      if (next3 !== this._pvCurrent) {
+        this._pvCurrent = next3;
       }
       const unit = stateObj.attributes?.unit_of_measurement ?? "";
       if (unit !== this._pvUnit) {
         this._pvUnit = unit;
       }
-      if (next !== null) {
+      if (next3 !== null) {
         const ts = stateObj.last_updated ? new Date(stateObj.last_updated).getTime() : Date.now();
         const buf = this._pvSampleBuffer;
         const last = buf.length > 0 ? buf[buf.length - 1] : null;
         if (!last || ts > last.t) {
-          buf.push({ t: ts, v: next });
+          buf.push({ t: ts, v: next3 });
           const cutoff = Date.now() - 5 * 60 * 1e3;
           while (buf.length > 1 && buf[0].t < cutoff) {
             buf.shift();
@@ -32189,7 +35826,7 @@ let HeliosCard = class extends i {
       });
       const parseSeries = (arr) => {
         const times = [];
-        const values = [];
+        const values2 = [];
         for (const item of arr ?? []) {
           const stateStr = typeof item?.s === "string" ? item.s : typeof item?.state === "string" ? item.state : null;
           if (stateStr === null || stateStr === "unavailable" || stateStr === "unknown" || stateStr === "") {
@@ -32211,9 +35848,9 @@ let HeliosCard = class extends i {
             continue;
           }
           times.push(ts);
-          values.push(v2);
+          values2.push(v2);
         }
-        return { times, values };
+        return { times, values: values2 };
       };
       if (socEntity) {
         const series = parseSeries(result?.[socEntity] ?? []);
@@ -32261,6 +35898,27 @@ let HeliosCard = class extends i {
     }
     return hist.values[idx];
   }
+  //Locale-aware number formatter for the user-facing chips.
+  //Honours the Home Assistant user's language (e.g. `fr-FR` →
+  //`1,29` with a comma decimal, `en-US` → `1.29` with a period)
+  //via Intl.NumberFormat. Falls back to plain .toFixed / round
+  //on the rare browser that lacks Intl (very old WebViews).
+  //
+  //We don't honour hass.locale.number_format here on purpose:
+  //that key exposes user overrides ("comma_decimal", "decimal_
+  //comma", "language_defaults", ...) which would require their
+  //own mapping table; the language tag covers ~99 % of cases
+  //correctly because the browser's CLDR data tracks each
+  //locale's conventions.
+  _formatLocalisedNumber(value, fractionDigits, integer = false) {
+    const locale = this.hass?.locale?.language ?? this.hass?.language ?? void 0;
+    const opts = integer ? { maximumFractionDigits: 0 } : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits };
+    try {
+      return new Intl.NumberFormat(locale, opts).format(value);
+    } catch (_2) {
+      return integer ? Math.round(value).toString() : value.toFixed(fractionDigits);
+    }
+  }
   //Format a signed battery power value for the chip. Mirrors
   //_formatPvValue's W ↔ kW switching but always prefixes a sign so
   //the user can tell charging from discharging at a glance.
@@ -32269,15 +35927,15 @@ let HeliosCard = class extends i {
     const sign = value > 0 ? "+" : value < 0 ? "−" : "";
     const abs = Math.abs(value);
     if (lu === "w" && abs >= 1e3) {
-      return `${sign}${(abs / 1e3).toFixed(2)} kW`;
+      return `${sign}${this._formatLocalisedNumber(abs / 1e3, 2)} kW`;
     }
     if (lu === "w") {
-      return `${sign}${Math.round(abs)} W`;
+      return `${sign}${this._formatLocalisedNumber(abs, 0, true)} W`;
     }
     if (lu === "kw") {
-      return `${sign}${abs.toFixed(2)} kW`;
+      return `${sign}${this._formatLocalisedNumber(abs, 2)} kW`;
     }
-    return `${sign}${abs}${unit ? " " + unit : ""}`;
+    return `${sign}${this._formatLocalisedNumber(abs, 1)}${unit ? " " + unit : ""}`;
   }
   async _fetchPvHistory(entityId, start, end) {
     if (!this.hass?.callWS) {
@@ -32301,7 +35959,7 @@ let HeliosCard = class extends i {
       });
       const arr = (result && result[entityId]) ?? [];
       const times = [];
-      const values = [];
+      const values2 = [];
       let lastTsMs = null;
       for (const item of arr) {
         const sRaw = item?.s ?? item?.state;
@@ -32332,15 +35990,14 @@ let HeliosCard = class extends i {
         }
         lastTsMs = ts.getTime();
         times.push(ts);
-        values.push(v2);
+        values2.push(v2);
       }
-      this._pvHistory = { times, values };
+      this._pvHistory = { times, values: values2 };
       this._pvHistoryDiagnostics = {
         rawEntries: arr.length,
         samples: times.length,
         windowH: Number(((fetchEnd.getTime() - start.getTime()) / 36e5).toFixed(1))
       };
-      this._updatePvCalibration();
     } catch (e2) {
       console.warn("[HELIOS] PV history fetch failed:", e2);
       this._pvHistory = { times: [], values: [] };
@@ -32375,11 +36032,6 @@ let HeliosCard = class extends i {
         this._initInflight = false;
         return;
       }
-      const apiKey = String(this.config["maptiler-api-key"] ?? "").trim();
-      if (!apiKey) {
-        this._initInflight = false;
-        return;
-      }
       const coords = this._getHomeCoords();
       if (!coords) {
         this._initInflight = false;
@@ -32400,20 +36052,15 @@ let HeliosCard = class extends i {
       };
       this._engine.onWeatherUpdate = (data) => {
         this._cloudCover = data.cloudCover;
-        this._cloudLow = data.cloudLow;
-        this._cloudMid = data.cloudMid;
-        this._cloudHigh = data.cloudHigh;
         this._timeRange = data.timeRange;
         this._isLiveMode = data.isLiveTime;
         this._chartSeries = this._engine?.getTimelineSeries() ?? null;
-        this._updatePvCalibration();
         this._refreshOverlays();
       };
       this._engine.onMapTransform = () => {
         this._refreshOverlays();
       };
       this._engine.onContextLost = () => {
-        this._lastApiKey = "";
         this._lastHomeKey = "";
         if (!this._initInflight) this._initEngine();
       };
@@ -32438,6 +36085,7 @@ let HeliosCard = class extends i {
     const t2 = this._selectedTime ?? this._now;
     this._sunScene = this._engine ? this._engine.projectSunScene(t2) : null;
     this._cloudScene = this._engine ? this._engine.projectCloudScene() : null;
+    this._homeSilhouettes = this._engine ? this._engine.projectHomeFootprints() : [];
   }
   //Segments now share one fixed colour (the configured sun
   //colour). Depth perception comes entirely from the per-segment
@@ -32476,6 +36124,9 @@ let HeliosCard = class extends i {
   }
   _onTimelinePointerDown(e2) {
     if (!this._timeRange) {
+      return;
+    }
+    if (this._engine?.isUserGestureSuppressed()) {
       return;
     }
     const track = e2.currentTarget;
@@ -32534,24 +36185,6 @@ let HeliosCard = class extends i {
     this._selectedTime = null;
     this._isLiveMode = true;
     this._engine?.setSelectedTime(null);
-  }
-  //Cloud-disc hover: drive the breakdown tooltip directly off the
-  //SVG polygon's pointer events now that the disc is no longer a
-  //MapLibre layer. Offsets are converted to card-relative pixels
-  //so the tooltip's absolute positioning matches.
-  _onCloudDiscMove(e2) {
-    const card = this.renderRoot.querySelector("ha-card");
-    const rect = card?.getBoundingClientRect();
-    const x2 = rect ? e2.clientX - rect.left : e2.offsetX;
-    const y3 = rect ? e2.clientY - rect.top : e2.offsetY;
-    this._cloudHover = true;
-    this._cloudHoverX = x2;
-    this._cloudHoverY = y3;
-    const w2 = rect?.width ?? 0;
-    this._cloudHoverFlip = w2 > 0 && x2 > w2 / 2;
-  }
-  _onCloudDiscLeave() {
-    this._cloudHover = false;
   }
   //Timeline rendering
   //Build the SVG chart of the chart card: irradiance W/m² as a
@@ -32612,12 +36245,12 @@ let HeliosCard = class extends i {
     const dCursor = new Date(range.start);
     dCursor.setHours(0, 0, 0, 0);
     while (dCursor.getTime() <= endMsAbs) {
-      const next = new Date(dCursor);
-      next.setDate(next.getDate() + 1);
+      const next3 = new Date(dCursor);
+      next3.setDate(next3.getDate() + 1);
       if (dCursor.getTime() > startMsAbs && dCursor.getTime() < endMsAbs) {
         dayXs.push(xOf(dCursor));
       }
-      dCursor.setTime(next.getTime());
+      dCursor.setTime(next3.getTime());
     }
     const hourXs = [];
     const hCursor = new Date(range.start);
@@ -32705,12 +36338,12 @@ let HeliosCard = class extends i {
     const dCursor = new Date(range.start);
     dCursor.setHours(0, 0, 0, 0);
     while (dCursor.getTime() <= endMsAbs) {
-      const next = new Date(dCursor);
-      next.setDate(next.getDate() + 1);
+      const next3 = new Date(dCursor);
+      next3.setDate(next3.getDate() + 1);
       if (dCursor.getTime() > startMs && dCursor.getTime() < endMsAbs) {
         dayXs.push((dCursor.getTime() - startMs) / rangeMs * W);
       }
-      dCursor.setTime(next.getTime());
+      dCursor.setTime(next3.getTime());
     }
     const lu = (this._pvUnit || "").toLowerCase();
     const isCumulativeEnergy = lu === "wh" || lu === "kwh" || lu === "mwh";
@@ -32753,7 +36386,7 @@ let HeliosCard = class extends i {
       if (native === "mw") return 1 / 1e6;
       return 1;
     })();
-    const k2 = this._pvCalibK;
+    const k2 = this._pvCalibK();
     const coords = this._getHomeCoords();
     const lat = coords?.lat;
     const lon = coords?.lon;
@@ -32770,46 +36403,6 @@ let HeliosCard = class extends i {
         if (pct <= 0) continue;
         predictedSamples.push({ t: series.times[i2], v: pct * k2 * nativeFromW });
       }
-    }
-    const HOUR_MS = 36e5;
-    const peakByHour = /* @__PURE__ */ new Map();
-    const observedHourly = this._aggregatePvWattsPerHour();
-    for (const [hourTs, watts] of observedHourly) {
-      if (hourTs < startMs || hourTs >= endMsAbs) continue;
-      peakByHour.set(hourTs, watts);
-    }
-    if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
-      for (let i2 = 0; i2 < series.times.length; i2++) {
-        const tMs = series.times[i2].getTime();
-        const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-        if (hourTs < startMs || hourTs >= endMsAbs) continue;
-        if (peakByHour.has(hourTs)) continue;
-        const pct = computePvPower(series.times[i2], lat, lon, series.cloud[i2] ?? 0);
-        if (pct <= 0) continue;
-        peakByHour.set(hourTs, pct * k2);
-      }
-    }
-    const peakColumns = [];
-    const dayWalker = new Date(range.start);
-    dayWalker.setHours(0, 0, 0, 0);
-    while (dayWalker.getTime() < endMsAbs) {
-      const dayStart = dayWalker.getTime();
-      const dayEnd = dayStart + 24 * HOUR_MS;
-      let peakHourTs = -1;
-      let peakWatts = 0;
-      for (const [hourTs, watts] of peakByHour) {
-        if (hourTs < dayStart || hourTs >= dayEnd) continue;
-        if (watts > peakWatts) {
-          peakHourTs = hourTs;
-          peakWatts = watts;
-        }
-      }
-      if (peakHourTs >= 0 && peakWatts > 10) {
-        const x1 = (peakHourTs - startMs) / rangeMs * W;
-        const x2 = (peakHourTs + HOUR_MS - startMs) / rangeMs * W;
-        peakColumns.push({ x1, x2 });
-      }
-      dayWalker.setDate(dayWalker.getDate() + 1);
     }
     let yMax = 1;
     for (const s2 of samples) {
@@ -32839,14 +36432,6 @@ let HeliosCard = class extends i {
                 viewBox="0 0 ${W} ${H2}"
                 preserveAspectRatio="none"
             >
-                ${peakColumns.map((c2) => w`
-                    <rect
-                        class="hc-pv-peak"
-                        x="${c2.x1.toFixed(2)}" y="0"
-                        width="${(c2.x2 - c2.x1).toFixed(2)}" height="${H2}"
-                        fill="${pvColor}"
-                    ></rect>
-                `)}
                 ${dayXs.map((x2) => w`
                     <line
                         class="hc-day-sep"
@@ -32913,14 +36498,15 @@ let HeliosCard = class extends i {
     const toPct = (d2) => Math.max(0, Math.min(100, (d2.getTime() - start.getTime()) / rangeMs * 100));
     const today0 = new Date(now);
     today0.setHours(0, 0, 0, 0);
+    const dailyKwh = this._computeDailyKwhTotals();
     const labels = [];
     const cursor = new Date(start);
     cursor.setHours(0, 0, 0, 0);
     while (cursor.getTime() <= end.getTime()) {
-      const next = new Date(cursor);
-      next.setDate(next.getDate() + 1);
+      const next3 = new Date(cursor);
+      next3.setDate(next3.getDate() + 1);
       const segStart = Math.max(start.getTime(), cursor.getTime());
-      const segEnd = Math.min(end.getTime(), next.getTime());
+      const segEnd = Math.min(end.getTime(), next3.getTime());
       if (segEnd > segStart) {
         const pStart = toPct(new Date(segStart));
         const pEnd = toPct(new Date(segEnd));
@@ -32930,26 +36516,98 @@ let HeliosCard = class extends i {
         const label = formatDate(cursor, this.config?.["date-format"]);
         const centre = pStart + w2 / 2;
         const labelPct = Math.min(Math.max(centre, 6), 94);
+        const kwh = dailyKwh.get(cursor.getTime());
+        const isForecast = kwh !== void 0 && cursor.getTime() > today0.getTime();
+        const kwhText = kwh !== void 0 && isFinite(kwh) && kwh >= 0.05 ? this._formatLocalisedNumber(kwh, 1) + " kWh" : "";
         labels.push(b`
                     <div
                         class="tb-day-label ${isToday ? "tb-day-label-today" : ""}"
                         style="left:${labelPct}%"
-                    >${label}</div>
+                    >
+                        <span class="tb-day-label-date">${label}</span>
+                        ${kwhText ? b`
+                            <span class="tb-day-label-kwh ${isForecast ? "is-forecast" : ""}">${kwhText}</span>
+                        ` : A}
+                    </div>
                 `);
       }
-      cursor.setTime(next.getTime());
+      cursor.setTime(next3.getTime());
     }
     return b`<div class="tb-day-labels">${labels}</div>`;
   }
-  _formatSelTime(t2) {
-    const dateLabel = formatDate(t2, this.config?.["date-format"]);
-    const is12h = String(this.config?.["time-format"] ?? "24h").toLowerCase() === "12h";
-    const timeLabel = t2.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: is12h ? "h12" : "h23"
-    });
-    return `${dateLabel} · ${timeLabel}`;
+  //Compute kWh-per-day totals over the active timeline range. The
+  //helper integrates two sources:
+  //
+  //  - Past + today-so-far: sum of the observed PV history (from
+  //    `_pvHistory`), respecting the entity's unit (W/kW power
+  //    sensors are integrated by trapezoidal rule; cumulative
+  //    energy sensors are differenced and summed).
+  //  - Today-remainder + future: integration of the kWp × clear-
+  //    sky × cloud model, hour by hour, using the engine's
+  //    weather series.
+  //
+  //Returns a Map keyed by each day's local-midnight ms, with
+  //values in kWh. Days that fall outside the active range or
+  //carry no usable data are omitted.
+  _computeDailyKwhTotals() {
+    const out = /* @__PURE__ */ new Map();
+    if (!this._timeRange) return out;
+    const { start, end } = this._timeRange;
+    const startMs = start.getTime();
+    const endMsAbs = end.getTime();
+    const dayKey = (ms) => {
+      const d2 = new Date(ms);
+      d2.setHours(0, 0, 0, 0);
+      return d2.getTime();
+    };
+    const hist = this._pvHistory;
+    if (hist && hist.times.length >= 2) {
+      const unit = (this._pvUnit || "").toLowerCase();
+      const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
+      if (isCumulativeEnergy) {
+        for (let i2 = 1; i2 < hist.times.length; i2++) {
+          const tMs = hist.times[i2].getTime();
+          if (tMs < startMs || tMs > endMsAbs) continue;
+          const dv = hist.values[i2] - hist.values[i2 - 1];
+          if (!isFinite(dv) || dv < 0) continue;
+          const kwh = unit === "mwh" ? dv * 1e3 : unit === "wh" ? dv / 1e3 : dv;
+          const k22 = dayKey(tMs);
+          out.set(k22, (out.get(k22) ?? 0) + kwh);
+        }
+      } else {
+        for (let i2 = 1; i2 < hist.times.length; i2++) {
+          const tCurrMs = hist.times[i2].getTime();
+          if (tCurrMs < startMs || tCurrMs > endMsAbs) continue;
+          const tPrevMs = hist.times[i2 - 1].getTime();
+          const dtH = (tCurrMs - tPrevMs) / 36e5;
+          if (dtH <= 0 || dtH > 6) continue;
+          const wPrev = this._pvNormalizeToWatts(hist.values[i2 - 1], this._pvUnit);
+          const wCurr = this._pvNormalizeToWatts(hist.values[i2], this._pvUnit);
+          if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+          const kwh = (wPrev + wCurr) / 2 * dtH / 1e3;
+          const k22 = dayKey(tCurrMs);
+          out.set(k22, (out.get(k22) ?? 0) + kwh);
+        }
+      }
+    }
+    const k2 = this._pvCalibK();
+    const series = this._chartSeries;
+    const coords = this._getHomeCoords();
+    if (k2 !== null && k2 > 0 && series && coords) {
+      const nowMs = Date.now();
+      for (let i2 = 0; i2 < series.times.length; i2++) {
+        const tMs = series.times[i2].getTime();
+        if (tMs < startMs || tMs > endMsAbs) continue;
+        if (tMs < nowMs) continue;
+        const cloud = series.cloud[i2] ?? 0;
+        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud);
+        if (pct <= 0) continue;
+        const kwh = pct * k2 / 1e3;
+        const dk = dayKey(tMs);
+        out.set(dk, (out.get(dk) ?? 0) + kwh);
+      }
+    }
+    return out;
   }
   //Compute the production rate at an arbitrary historical time
   //(used when the user scrubs the timeline into the past). For
@@ -33114,199 +36772,53 @@ let HeliosCard = class extends i {
     if (lu === "w") return value;
     return 0;
   }
-  _pvCalibStorageKey() {
-    const coords = this._getHomeCoords();
-    if (!coords) return null;
-    return `helios-pv-calib:${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
+  //Manual PV peak power.
+  //
+  //The user enters their installed array's peak power (kWp) in the
+  //card editor. We convert that to a calibration scalar k (W per
+  //percent of STC) by k = kWp * 1000 / 100 = kWp * 10, then
+  //multiply by the clear-sky percentage to draw the dotted forecast
+  //line on the PV chart. No history scan, no auto-fit, no rolling
+  //buffer, the user knows their install best.
+  //
+  //Returns null when `pv-peak-kwp` is unset or invalid; callers
+  //then skip the prediction line and the peak-of-day highlights
+  //for future days.
+  _pvCalibK() {
+    const raw2 = this.config?.["pv-peak-kwp"];
+    const kwp = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+    if (!isFinite(kwp) || kwp <= 0) return null;
+    return kwp * 10;
   }
-  //Synchronous read from localStorage cache. Used at boot so the
-  //first chart render already has whatever data we have locally;
-  //HA reconciliation lands a few hundred ms later.
-  _loadPvCalibSamples() {
-    const key = this._pvCalibStorageKey();
-    if (!key) return [];
+  _wipeLegacyPvCalibStorage() {
     try {
-      const raw = window.localStorage?.getItem(key);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
-      return parsed.filter((e2) => typeof e2.t === "number" && e2.t >= cutoff && typeof e2.o === "number" && isFinite(e2.o) && typeof e2.p === "number" && isFinite(e2.p));
-    } catch (_2) {
-      return [];
-    }
-  }
-  //Save to localStorage immediately + schedule a debounced HA
-  //write. Two destinations because they each cover a different
-  //failure mode: localStorage gives us instant boot, HA gives us
-  //device-portability + backup safety.
-  _savePvCalibSamples(samples) {
-    const key = this._pvCalibStorageKey();
-    if (!key) return;
-    try {
-      window.localStorage?.setItem(key, JSON.stringify(samples));
-    } catch (_2) {
-    }
-    this._pvCalibPendingSave = samples;
-    if (this._pvCalibHAWriteTimer === void 0) {
-      this._pvCalibHAWriteTimer = window.setTimeout(
-        () => this._flushPvCalibToHA(),
-        HeliosCard.PV_CALIB_HA_WRITE_MS
-      );
-    }
-  }
-  //Push the latest buffer to HA via frontend/set_user_data.
-  //frontend/get_user_data + frontend/set_user_data accept arbitrary
-  //string keys and store on the server under the current HA user's
-  //profile (.storage/frontend.user_data_{user_id}). Per-user means
-  //multi-account HA installs keep their calibrations separate,
-  //which is the right default when different people may have
-  //different PV setups.
-  async _flushPvCalibToHA() {
-    this._pvCalibHAWriteTimer = void 0;
-    const samples = this._pvCalibPendingSave;
-    const key = this._pvCalibStorageKey();
-    this._pvCalibPendingSave = null;
-    if (!samples || !key) return;
-    if (!this.hass?.callWS) return;
-    try {
-      await this.hass.callWS({
-        type: "frontend/set_user_data",
-        key,
-        value: samples
-      });
-    } catch (_2) {
-    }
-  }
-  //Pull the buffer from HA, merge with the local cache (HA wins
-  //on conflict, it's the source of truth), recompute k. Called
-  //once when hass becomes available; subsequent updates flow
-  //through _updatePvCalibration / _savePvCalibSamples.
-  async _reconcilePvCalibWithHA() {
-    if (this._pvCalibHARead) return;
-    if (!this.hass?.callWS) return;
-    const key = this._pvCalibStorageKey();
-    if (!key) return;
-    this._pvCalibHARead = true;
-    try {
-      const result = await this.hass.callWS({
-        type: "frontend/get_user_data",
-        key
-      });
-      const remote = Array.isArray(result?.value) ? result.value.filter((e2) => typeof e2?.t === "number" && typeof e2?.o === "number" && isFinite(e2.o) && typeof e2?.p === "number" && isFinite(e2.p)) : [];
-      const local = this._loadPvCalibSamples();
-      const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
-      const byTs = /* @__PURE__ */ new Map();
-      for (const e2 of local) {
-        if (e2.t >= cutoff) byTs.set(e2.t, e2);
+      if (window.localStorage?.getItem(HeliosCard.PV_CALIB_WIPE_FLAG_KEY) === "1") {
+        return;
       }
-      for (const e2 of remote) {
-        if (e2.t >= cutoff) byTs.set(e2.t, e2);
-      }
-      const merged = Array.from(byTs.values()).sort((a2, b2) => a2.t - b2.t);
-      try {
-        const sKey = this._pvCalibStorageKey();
-        if (sKey) window.localStorage?.setItem(sKey, JSON.stringify(merged));
-      } catch (_2) {
-      }
-      this._pvCalibK = this._calibrateK(merged);
-      this.requestUpdate();
     } catch (_2) {
-    }
-  }
-  _aggregatePvWattsPerHour() {
-    const hist = this._pvHistory;
-    if (!hist || hist.times.length === 0) return /* @__PURE__ */ new Map();
-    const unit = this._pvUnit ?? "";
-    const cached = this._aggregatePvCache;
-    if (cached && cached.hist === hist && cached.unit === unit) {
-      return cached.out;
-    }
-    const out = /* @__PURE__ */ new Map();
-    const lu = unit.toLowerCase();
-    const isCumulativeEnergy = lu === "wh" || lu === "kwh" || lu === "mwh";
-    let times = hist.times;
-    let values = hist.values;
-    if (isCumulativeEnergy && times.length >= 2) {
-      const dTimes = [];
-      const dValues = [];
-      for (let i2 = 1; i2 < times.length; i2++) {
-        const dtH = (times[i2].getTime() - times[i2 - 1].getTime()) / 36e5;
-        if (dtH <= 0 || dtH > 6) continue;
-        const dv = values[i2] - values[i2 - 1];
-        if (dv < 0) continue;
-        dTimes.push(times[i2]);
-        dValues.push(dv / dtH);
-      }
-      times = dTimes;
-      values = dValues;
-    }
-    const sums = /* @__PURE__ */ new Map();
-    const counts = /* @__PURE__ */ new Map();
-    for (let i2 = 0; i2 < times.length; i2++) {
-      const ts = times[i2].getTime();
-      const v2 = values[i2];
-      if (!isFinite(v2)) continue;
-      const w2 = this._pvNormalizeToWatts(v2, unit);
-      const hourTs = Math.floor(ts / 36e5) * 36e5;
-      sums.set(hourTs, (sums.get(hourTs) ?? 0) + w2);
-      counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
-    }
-    for (const [hourTs, sum] of sums) {
-      const c2 = counts.get(hourTs) ?? 1;
-      out.set(hourTs, sum / c2);
-    }
-    this._aggregatePvCache = { hist, unit, out };
-    return out;
-  }
-  //Refresh the per-hour calibration buffer from the current
-  //_pvHistory and _chartSeries, merge with the persisted buffer,
-  //prune old entries, save, and recompute k. Called whenever either
-  //input changes.
-  _updatePvCalibration() {
-    const coords = this._getHomeCoords();
-    if (!coords) return;
-    const { lat, lon } = coords;
-    const series = this._chartSeries;
-    if (!series || series.times.length === 0) return;
-    const buckets = this._aggregatePvWattsPerHour();
-    if (buckets.size === 0) {
-      this._pvCalibK = this._calibrateK(this._loadPvCalibSamples());
       return;
     }
-    const cloudByHour = /* @__PURE__ */ new Map();
-    for (let i2 = 0; i2 < series.times.length; i2++) {
-      const hourTs = Math.floor(series.times[i2].getTime() / 36e5) * 36e5;
-      cloudByHour.set(hourTs, series.cloud[i2] ?? 0);
+    try {
+      const ls = window.localStorage;
+      if (ls) {
+        const stale = [];
+        for (let i2 = 0; i2 < ls.length; i2++) {
+          const k2 = ls.key(i2);
+          if (k2 && k2.startsWith("helios-pv-calib:") && k2 !== HeliosCard.PV_CALIB_WIPE_FLAG_KEY) {
+            stale.push(k2);
+          }
+        }
+        for (const k2 of stale) ls.removeItem(k2);
+        ls.setItem(HeliosCard.PV_CALIB_WIPE_FLAG_KEY, "1");
+      }
+    } catch (_2) {
     }
-    const existing = this._loadPvCalibSamples();
-    const byTs = /* @__PURE__ */ new Map();
-    for (const s2 of existing) byTs.set(s2.t, s2);
-    for (const [hourTs, observedW] of buckets) {
-      const cloud = cloudByHour.get(hourTs);
-      if (cloud === void 0) continue;
-      const tCentered = new Date(hourTs + 30 * 6e4);
-      const predictedPct = computePvPower(tCentered, lat, lon, cloud);
-      if (predictedPct < 1) continue;
-      if (observedW < 5) continue;
-      byTs.set(hourTs, { t: hourTs, o: observedW, p: predictedPct });
+    const coords = this._getHomeCoords();
+    if (coords && this.hass?.callWS) {
+      const haKey = `helios-pv-calib:${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
+      this.hass.callWS({ type: "frontend/set_user_data", key: haKey, value: null }).catch(() => {
+      });
     }
-    const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
-    const merged = Array.from(byTs.values()).filter((e2) => e2.t >= cutoff).sort((a2, b2) => a2.t - b2.t);
-    this._savePvCalibSamples(merged);
-    this._pvCalibK = this._calibrateK(merged);
-  }
-  _calibrateK(samples) {
-    if (samples.length < HeliosCard.PV_CALIB_MIN_SAMPLES) return null;
-    let sumXY = 0, sumXX = 0;
-    for (const s2 of samples) {
-      sumXY += s2.o * s2.p;
-      sumXX += s2.p * s2.p;
-    }
-    if (sumXX <= 0) return null;
-    const k2 = sumXY / sumXX;
-    if (!isFinite(k2) || k2 <= 0 || k2 > 1e3) return null;
-    return k2;
   }
   //Map a "rate" magnitude to an animation duration in seconds.
   //  rate <= 0           → 30 s        (paused, night / no production)
@@ -33337,31 +36849,29 @@ let HeliosCard = class extends i {
     const u2 = (unit || "").trim();
     const lu = u2.toLowerCase();
     if (lu === "w" && Math.abs(value) >= 1e3) {
-      return `${(value / 1e3).toFixed(2)} kW`;
+      return `${this._formatLocalisedNumber(value / 1e3, 2)} kW`;
     }
     if (lu === "w") {
-      return `${Math.round(value)} W`;
+      return `${this._formatLocalisedNumber(value, 0, true)} W`;
     }
     if (lu === "kw") {
-      return `${value.toFixed(2)} kW`;
+      return `${this._formatLocalisedNumber(value, 2)} kW`;
     }
     if (lu === "wh") {
       if (Math.abs(value) >= 1e3) {
-        return `${(value / 1e3).toFixed(1)} kWh`;
+        return `${this._formatLocalisedNumber(value / 1e3, 1)} kWh`;
       }
-      return `${Math.round(value)} Wh`;
+      return `${this._formatLocalisedNumber(value, 0, true)} Wh`;
     }
     if (lu === "kwh" || lu === "mwh") {
-      return `${value.toFixed(1)} ${u2}`;
+      return `${this._formatLocalisedNumber(value, 1)} ${u2}`;
     }
-    const formatted = Math.abs(value) >= 100 ? Math.round(value).toString() : value.toFixed(1);
+    const formatted = Math.abs(value) >= 100 ? this._formatLocalisedNumber(value, 0, true) : this._formatLocalisedNumber(value, 1);
     return u2 ? `${formatted} ${u2}` : formatted;
   }
   //Render
   render() {
-    const t2 = pickTranslations(this.hass?.language);
-    const apiKey = String(this.config?.["maptiler-api-key"] ?? "").trim();
-    const hasApiKey = apiKey.length > 0;
+    const hasApiKey = this._getHomeCoords() !== null;
     const displayDate = !this._isLiveMode && this._selectedTime ? this._selectedTime : this._now;
     const displayDateLabel = formatDate(displayDate, this.config?.["date-format"]);
     const is12h = String(this.config?.["time-format"] ?? "24h").toLowerCase() === "12h";
@@ -33371,12 +36881,7 @@ let HeliosCard = class extends i {
       second: "2-digit",
       hourCycle: is12h ? "h12" : "h23"
     });
-    const showCloudTooltip = this._cloudHover && this._cloudCover >= 0;
     const cloudPctRound = Math.max(0, Math.round(this._cloudCover));
-    const cloudHeadLine = t2.tooltip.cloudCover.replace("{0}", String(cloudPctRound));
-    const cloudLowLine = t2.tooltip.cloudLow.replace("{0}", String(Math.round(Math.max(0, this._cloudLow))));
-    const cloudMidLine = t2.tooltip.cloudMid.replace("{0}", String(Math.round(Math.max(0, this._cloudMid))));
-    const cloudHighLine = t2.tooltip.cloudHigh.replace("{0}", String(Math.round(Math.max(0, this._cloudHigh))));
     const layout = this._labelLayout;
     const showLabel = hasApiKey && layout !== null && this._cloudCover >= 0;
     const pvEntityId = String(this.config?.["pv-power-entity"] ?? "").trim();
@@ -33384,10 +36889,36 @@ let HeliosCard = class extends i {
     const pvScrubbing = !this._isLiveMode && this._selectedTime !== null;
     const pvScrubFuture = pvScrubbing && this._selectedTime.getTime() > Date.now() + 6e4;
     const pvRate = pvEntityId !== "" && layout !== null ? pvScrubbing ? this._pvRateAtTime(this._selectedTime) : this._pvCurrent !== null ? this._currentPvRate() : null : null;
-    const showPvLabel = hasApiKey && layout !== null && pvEntityId !== "" && !pvScrubFuture && pvRate !== null;
-    const pvDisplayValue = showPvLabel ? this._formatPvValue(pvRate.value, pvRate.unit) : "";
+    let pvPredictedRate = null;
+    if (pvScrubFuture && pvEntityId !== "" && layout !== null) {
+      const k2 = this._pvCalibK();
+      const coords = this._getHomeCoords();
+      const series = this._chartSeries;
+      if (k2 !== null && coords && series && series.times.length > 0) {
+        const targetMs = this._selectedTime.getTime();
+        let best = 0;
+        let bestDiff = Math.abs(series.times[0].getTime() - targetMs);
+        for (let i2 = 1; i2 < series.times.length; i2++) {
+          const d2 = Math.abs(series.times[i2].getTime() - targetMs);
+          if (d2 < bestDiff) {
+            bestDiff = d2;
+            best = i2;
+          }
+        }
+        const cloud = series.cloud[best] ?? 0;
+        const pct = computePvPower(this._selectedTime, coords.lat, coords.lon, cloud);
+        if (pct > 0) {
+          pvPredictedRate = { value: pct * k2, unit: "W" };
+        }
+      }
+    }
+    const isPvPredicted = pvScrubFuture && pvPredictedRate !== null;
+    const pvActiveRate = isPvPredicted ? pvPredictedRate : pvRate;
+    const showPvLabel = hasApiKey && layout !== null && pvEntityId !== "" && pvActiveRate !== null && (!pvScrubFuture || isPvPredicted);
+    const pvDisplayValue = showPvLabel ? (isPvPredicted ? "≈ " : "") + this._formatPvValue(pvActiveRate.value, pvActiveRate.unit) : "";
     const pvWattsNow = pvRate !== null ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit) : 0;
-    const pvPeakRefW = this._pvCalibK !== null && this._pvCalibK > 0 ? this._pvCalibK * 100 : 5e3;
+    const pvCalibKVal = this._pvCalibK();
+    const pvPeakRefW = pvCalibKVal !== null && pvCalibKVal > 0 ? pvCalibKVal * 100 : 5e3;
     const pvFlowDuration = HeliosCard._flowDuration(pvWattsNow, pvPeakRefW, 0.5);
     const pvIdle = !(pvWattsNow > 0);
     const batterySocEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
@@ -33475,7 +37006,7 @@ let HeliosCard = class extends i {
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
     const showPlaceholder = !hasApiKey || this._isInEditorPreview;
     return b`
-            <ha-card class="${cardThemeClass} ${showPlaceholder ? "placeholder-mode" : ""}">
+            <ha-card class="${cardThemeClass} ${showPlaceholder ? "placeholder-mode" : ""} ${this._detailMode ? "detail-active" : ""}">
 
                 ${showPlaceholder ? this._renderPlaceholder() : A}
 
@@ -33486,37 +37017,6 @@ let HeliosCard = class extends i {
                         class="time-bar"
                         @pointerdown="${this._onTimelinePointerDown}"
                     >
-                        <!--  Top row: scrub-time cluster (icon-only
-                              "back to live" button + scrub-time pill)
-                              shown above the chart card with a small
-                              breathing gap and a thin tether hair down
-                              to the chart's top edge. The cluster
-                              anchors at the cursor's X with edge-aware
-                              clamping; the tether anchors at the same
-                              X without clamping so it always lands
-                              directly above the cursor.  -->
-                        <div class="tb-top-row">
-                            ${!this._isLiveMode && this._selectedTime ? (() => {
-      const { start, end } = this._timeRange;
-      const rangeMs = end.getTime() - start.getTime();
-      const selPct = Math.max(0, Math.min(
-        100,
-        (this._selectedTime.getTime() - start.getTime()) / rangeMs * 100
-      ));
-      const xform = selPct < 8 ? "translateX(0)" : selPct > 92 ? "translateX(-100%)" : "translateX(-50%)";
-      return b`
-                                    <div
-                                        class="tb-sel-label"
-                                        style="left:${selPct}%; transform:${xform}"
-                                    >${this._formatSelTime(this._selectedTime)}</div>
-                                    <div
-                                        class="tb-sel-tether"
-                                        style="left:${selPct}%"
-                                    ></div>
-                                `;
-    })() : A}
-                        </div>
-
                         <!--  Optional PV production graph, only
                               rendered when the user has set the
                               pv-power-entity config. Same chip
@@ -33558,8 +37058,35 @@ let HeliosCard = class extends i {
                       it. When both are visible they stack vertically;
                       when only one is visible the column still sits at
                       the same 8 px edge margin as the clock and timeline.  -->
-                ${hasApiKey && (!this._isLiveMode || this._shadowBusy) ? b`
+                <!--  Top-right column carries only the LiDAR shadow
+                      busy chip; the back-to-live button lives next
+                      to the clock (top-left) since both relate to
+                      "where am I in time".  -->
+                ${hasApiKey && this._shadowBusy ? b`
                     <div class="overlay-top-right">
+                        <div
+                            class="shadow-busy-chip"
+                            title="LiDAR"
+                            aria-label="LiDAR"
+                        >
+                            <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
+                        </div>
+                    </div>
+                ` : A}
+
+                <!--  Top-left cluster: clock chip showing the active
+                      timeline instant + (in scrub mode) a back-to-
+                      live button right beside it. The clock takes a
+                      blue / white "is-scrub" theme when scrubbing
+                      so the same chip doubles as the mode signal,
+                      no separate scrub-time chip needed lower on
+                      the card.  -->
+                ${hasApiKey ? b`
+                    <div class="overlay-top-left">
+                        <div class="clock ${!this._isLiveMode ? "is-scrub" : ""}">
+                            <span class="clock-date">${displayDateLabel}</span>
+                            <span class="clock-time">${displayTimeLabel}</span>
+                        </div>
                         ${!this._isLiveMode ? b`
                             <button
                                 class="live-return-btn"
@@ -33569,48 +37096,96 @@ let HeliosCard = class extends i {
                                 <ha-icon icon="mdi:restore"></ha-icon>
                             </button>
                         ` : A}
-                        ${this._shadowBusy ? b`
-                            <div
-                                class="shadow-busy-chip"
-                                title="LiDAR"
-                                aria-label="LiDAR"
-                            >
-                                <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
-                            </div>
-                        ` : A}
-                    </div>
-                ` : A}
-
-                ${hasApiKey ? b`
-                    <div class="overlay-top-left">
-                        <div class="clock">
-                            <span class="clock-date">${displayDateLabel}</span>
-                            <span class="clock-time">${displayTimeLabel}</span>
-                        </div>
                     </div>
                 ` : A}
 
                 ${hasApiKey && this._cloudScene ? (() => {
       const cs = this._cloudScene;
-      const discPts = cs.disc.length >= 3 ? cs.disc.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
+      const lowPts = cs.discLow.length >= 3 ? cs.discLow.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
+      const midPts = cs.discMid.length >= 3 ? cs.discMid.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
+      const highPts = cs.discHigh.length >= 3 ? cs.discHigh.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
       const ringPts = cs.ring.length >= 3 ? cs.ring.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
+      const cloudLight = this._lerpHexToward(cs.cloudHex, "#ffffff", 0.55);
+      const cloudDark = this._lerpHexToward(cs.cloudHex, "#000000", 0.4);
+      const silhouettes = this._homeSilhouettes;
+      const maskId = "helios-cloud-home-mask";
       return b`
                         <svg class="cloud-svg">
+                            <defs>
+                                <mask id="${maskId}" maskUnits="userSpaceOnUse">
+                                    <rect x="0" y="0" width="100%" height="100%" fill="white" />
+                                    ${silhouettes.map((sil) => {
+        const N2 = Math.min(sil.base.length, sil.top.length);
+        if (N2 < 3) return A;
+        const basePts = sil.base.map((p2) => `${p2.x},${p2.y}`).join(" ");
+        const topPts = sil.top.map((p2) => `${p2.x},${p2.y}`).join(" ");
+        const walls = [];
+        for (let i2 = 0; i2 < N2; i2++) {
+          const j = (i2 + 1) % N2;
+          walls.push(
+            `${sil.base[i2].x},${sil.base[i2].y} ${sil.base[j].x},${sil.base[j].y} ${sil.top[j].x},${sil.top[j].y} ${sil.top[i2].x},${sil.top[i2].y}`
+          );
+        }
+        return w`
+                                            <polygon points="${basePts}" fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
+                                            <polygon points="${topPts}"  fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
+                                            ${walls.map((w$1) => w`
+                                                <polygon points="${w$1}" fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
+                                            `)}
+                                        `;
+      })}
+                                </mask>
+                            </defs>
                             ${ringPts ? w`
                                 <polygon class="cloud-ring" points="${ringPts}" />
                             ` : A}
-                            ${discPts ? w`
-                                <polygon
-                                    class="cloud-disc"
-                                    points="${discPts}"
-                                    fill="${cs.cloudHex}"
-                                    fill-opacity="0.25"
-                                    stroke="${cs.cloudHex}"
-                                    stroke-width="2"
-                                    @mousemove="${this._onCloudDiscMove}"
-                                    @mouseleave="${this._onCloudDiscLeave}"
-                                />
-                            ` : A}
+                            <g mask="url(#${maskId})">
+                                ${highPts ? w`
+                                    <polygon
+                                        class="cloud-disc cloud-disc-high"
+                                        points="${highPts}"
+                                        fill="${cloudDark}"
+                                        fill-opacity="0.5"
+                                    />
+                                ` : A}
+                                ${midPts ? w`
+                                    <polygon
+                                        class="cloud-disc cloud-disc-mid"
+                                        points="${midPts}"
+                                        fill="${cs.cloudHex}"
+                                        fill-opacity="0.5"
+                                    />
+                                ` : A}
+                                ${lowPts ? w`
+                                    <polygon
+                                        class="cloud-disc cloud-disc-low"
+                                        points="${lowPts}"
+                                        fill="${cloudLight}"
+                                        fill-opacity="0.5"
+                                    />
+                                ` : A}
+                                <!--  Thin separator outlines on the band
+                                      boundaries. The reference ring at
+                                      100 % already paints the outermost
+                                      edge, so we only need the two inner
+                                      separators (mid ↔ high and low ↔
+                                      mid). Stroke-only, no fill, drawn
+                                      on top so the boundary reads
+                                      cleanly without flattening the
+                                      band colours behind them.  -->
+                                ${highPts ? w`
+                                    <polygon
+                                        class="cloud-band-sep"
+                                        points="${highPts}"
+                                    />
+                                ` : A}
+                                ${midPts ? w`
+                                    <polygon
+                                        class="cloud-band-sep"
+                                        points="${midPts}"
+                                    />
+                                ` : A}
+                            </g>
                         </svg>
                     `;
     })() : A}
@@ -33625,7 +37200,7 @@ let HeliosCard = class extends i {
                 ${showSun && arcSegmentsBack.length > 0 ? b`
                     <svg
                         class="solar-svg solar-svg-back"
-                        style="opacity:${sunScene.daylight}"
+                        style="--solar-daylight:${sunScene.daylight}"
                     >
                         ${arcSegmentsBack.map((s2) => w`
                             <line
@@ -33672,18 +37247,6 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
-                ${showCloudTooltip ? b`
-                    <div
-                        class="cloud-tooltip ${this._cloudHoverFlip ? "cloud-tooltip-flip" : ""}"
-                        style="left:${this._cloudHoverX}px; top:${this._cloudHoverY}px"
-                    >
-                        <div class="cloud-tooltip-head">${cloudHeadLine}</div>
-                        <div class="cloud-tooltip-row">${cloudLowLine}</div>
-                        <div class="cloud-tooltip-row">${cloudMidLine}</div>
-                        <div class="cloud-tooltip-row">${cloudHighLine}</div>
-                    </div>
-                ` : A}
-
                 <!--  PV → home animated leader. Vertical dashed line
                       from the PV chip's bottom edge down to the home
                       marker, painted in the configured PV colour and
@@ -33696,44 +37259,70 @@ let HeliosCard = class extends i {
                 ${showPvLabel ? b`
                     <svg class="pv-home-leader-svg">
                         <line
-                            class="pv-home-leader-line ${pvIdle ? "" : "pv-home-leader-animated"}"
-                            style="--pv-leader-color:${pvColor}; --pv-flow-duration:${pvFlowDuration}s"
+                            class="pv-home-leader-line"
+                            style="--pv-leader-color:${pvColor}"
                             x1="${layout.pvLabel.x}"
                             y1="${layout.pvLabel.y + PV_HALF_HEIGHT_PX}"
                             x2="${layout.home.x}"
                             y2="${layout.home.y}"
                         ></line>
                         ${!pvIdle ? w`
-                            <polygon
-                                class="pv-home-leader-arrow"
-                                points="-2,-4 4,0 -2,4"
+                            <!--  Moving bead, a small filled disc rides
+                                  the leader from the PV chip to the
+                                  home, at a speed proportional to live
+                                  production (same vocabulary as the
+                                  Home Assistant energy-distribution
+                                  card). No rotate="auto" needed since
+                                  a disc has no orientation.  -->
+                            <circle
+                                class="pv-home-leader-bead"
+                                r="4"
                                 fill="${pvColor}"
                             >
                                 <animateMotion
                                     dur="${pvFlowDuration}s"
                                     repeatCount="indefinite"
-                                    rotate="auto"
                                     path="M ${layout.pvLabel.x},${layout.pvLabel.y + PV_HALF_HEIGHT_PX} L ${layout.home.x},${layout.home.y}"
                                 ></animateMotion>
-                            </polygon>
+                            </circle>
                         ` : A}
                         <!--  Anchor bead at the home end of the leader,
                               same colour as the line so the two read
-                              as one continuous element. Marks where
-                              the produced energy lands.  -->
+                              as one continuous element. Sized slightly
+                              larger than the moving bead (r 5 vs 4)
+                              so the destination reads as the "target"
+                              rather than another in-flight particle.
+                              When production is non-zero we synchronise
+                              an SVG <animate> pulse on the r attribute
+                              with the bead's animateMotion cycle: the
+                              anchor swells from r 5 to r 9 during the
+                              last ~15 % of the cycle (i.e. as the bead
+                              approaches) and snaps back at the cycle
+                              boundary. Visual effect, the anchor
+                              "absorbs" each incoming bead.  -->
                         <circle
                             class="pv-home-leader-anchor"
                             cx="${layout.home.x}"
                             cy="${layout.home.y}"
-                            r="3"
+                            r="5"
                             fill="${pvColor}"
-                        ></circle>
+                        >
+                            ${!pvIdle ? w`
+                                <animate
+                                    attributeName="r"
+                                    values="5;5;9;5"
+                                    keyTimes="0;0.80;0.97;1"
+                                    dur="${pvFlowDuration}s"
+                                    repeatCount="indefinite"
+                                ></animate>
+                            ` : A}
+                        </circle>
                     </svg>
                 ` : A}
 
                 ${showPvLabel ? b`
                     <div
-                        class="pv-pct-label"
+                        class="pv-pct-label ${isPvPredicted ? "is-predicted" : ""}"
                         style="left:${layout.pvLabel.x}px; top:${layout.pvLabel.y}px; --pv-leader-color:${pvColor}"
                     >
                         <ha-icon icon="mdi:solar-power-variant"></ha-icon>
@@ -33744,14 +37333,9 @@ let HeliosCard = class extends i {
                 ${showSocChip || showPowerChip ? b`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV, static, dashed, inverted-L
-                            path with a rounded corner (matching
-                            the PV ↔ Power leader's vocabulary
-                            exactly minus the flow animation).
-                            Vertical leg drops from PV's bottom
-                            edge slightly left of centre, horizontal
-                            leg then runs left to the SoC chip. No
-                            animation: SoC has no flow direction.
+                            SoC ↔ PV, solid, inverted-L path with a
+                            rounded corner. No animation: SoC is a
+                            level, not a flow direction.
                         -->
                         ${showSocChip ? w`
                             <path
@@ -33761,45 +37345,33 @@ let HeliosCard = class extends i {
                             ></path>
                         ` : A}
                         <!--
-                            PV ↔ Power, animated, dashed L with
-                            an arrow tracking the sign of the live
-                            power. Vertical leg drops from PV's
-                            bottom edge slightly right of centre,
-                            horizontal leg then runs right to the
-                            Power chip.
-                            Charging (P > 0) → arrow PV → Power.
-                            Discharging (P < 0) → arrow Power → PV
-                            (the path class modifier flips the
-                            dash flow too).
+                            PV ↔ Power, solid L-shaped path with a
+                            small filled bead riding along it at a
+                            speed proportional to |P|. The bead's
+                            animateMotion path is flipped inline by
+                            the renderer when discharging so the
+                            travel direction matches the energy flow
+                            (PV → Power when charging, Power → PV
+                            when discharging).
                         -->
                         ${showPowerChip ? w`
                             <path
-                                class="battery-leader-line ${batteryIdle ? "" : "battery-leader-line-animated"} ${batteryCharging ? "" : "battery-leader-discharging"}"
-                                style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
+                                class="battery-leader-line"
+                                style="--battery-leader-color:${batteryColor}"
                                 d="${powerLeaderPath}"
                             ></path>
                             ${!batteryIdle ? w`
-                                <!--
-                                    Polygon is centroid-centred at (0,0):
-                                    the centroid of (-2,-4), (4,0), (-2,4)
-                                    is (0,0), so animateMotion pivots the
-                                    arrow about its visual mass rather
-                                    than its tip. Through the L's fillet
-                                    the arrow stays balanced on the path
-                                    instead of swinging off it.
-                                -->
-                                <polygon
-                                    class="battery-leader-arrow"
-                                    points="-2,-4 4,0 -2,4"
+                                <circle
+                                    class="battery-leader-bead"
+                                    r="4"
                                     fill="${batteryColor}"
                                 >
                                     <animateMotion
                                         dur="${batteryFlowDuration}s"
                                         repeatCount="indefinite"
-                                        rotate="auto"
                                         path="${powerArrowPath}"
                                     ></animateMotion>
-                                </polygon>
+                                </circle>
                             ` : A}
                         ` : A}
                     </svg>
@@ -33832,7 +37404,7 @@ let HeliosCard = class extends i {
                 ${showSun && arcSegmentsFront.length > 0 ? b`
                     <svg
                         class="solar-svg solar-svg-front"
-                        style="opacity:${sunScene.daylight}"
+                        style="--solar-daylight:${sunScene.daylight}"
                     >
                         ${arcSegmentsFront.map((s2) => w`
                             <line
@@ -33933,6 +37505,102 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
+                <!--  Sunrise / sunset markers. ha-icon glyphs centred
+                      on the horizon crossings of the day's solar arc,
+                      coloured in the configured sun colour. The icon
+                      shape itself signals the meaning (sun rising /
+                      setting) so no label or rotation is needed.
+                      Skipped on polar days where the sun never
+                      crosses the horizon.  -->
+                ${showSun && sunScene.sunrise ? b`
+                    <ha-icon
+                        class="solar-horizon-icon solar-horizon-sunrise"
+                        icon="mdi:weather-sunset-up"
+                        style="left:${sunScene.sunrise.x}px; top:${sunScene.sunrise.y}px; color:${sunColor}"
+                    ></ha-icon>
+                ` : A}
+                ${showSun && sunScene.sunset ? b`
+                    <ha-icon
+                        class="solar-horizon-icon solar-horizon-sunset"
+                        icon="mdi:weather-sunset-down"
+                        style="left:${sunScene.sunset.x}px; top:${sunScene.sunset.y}px; color:${sunColor}"
+                    ></ha-icon>
+                ` : A}
+
+                <!--  Home hover glow, sun-coloured halo around the
+                      projected home silhouette. Reuses the same base
+                      ring + top ring + side quads as the cloud-disc
+                      mask (so it tracks rotation and matches the
+                      extrusion exactly), painted as fill + stroke in
+                      the configured sun colour with a CSS drop-
+                      shadow filter for the bloom. The opacity is
+                      flipped via a class so the appearance / fade is
+                      a pure CSS transition, no per-frame work.  -->
+                ${hasApiKey && this._homeSilhouettes.length > 0 && !this._detailMode ? (() => {
+      const sunColor2 = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
+      return b`
+                        <svg class="home-glow-svg ${this._homeHover ? "is-hovered" : ""}"
+                             style="--helios-sun-color:${sunColor2}">
+                            ${this._homeSilhouettes.map((sil) => {
+        const N2 = Math.min(sil.base.length, sil.top.length);
+        if (N2 < 3) return A;
+        const basePts = sil.base.map((p2) => `${p2.x},${p2.y}`).join(" ");
+        const topPts = sil.top.map((p2) => `${p2.x},${p2.y}`).join(" ");
+        const walls = [];
+        for (let i2 = 0; i2 < N2; i2++) {
+          const j = (i2 + 1) % N2;
+          walls.push(
+            `${sil.base[i2].x},${sil.base[i2].y} ${sil.base[j].x},${sil.base[j].y} ${sil.top[j].x},${sil.top[j].y} ${sil.top[i2].x},${sil.top[i2].y}`
+          );
+        }
+        return w`
+                                    <polygon class="home-glow-shape" points="${basePts}" />
+                                    <polygon class="home-glow-shape" points="${topPts}"  />
+                                    ${walls.map((w$1) => w`
+                                        <polygon class="home-glow-shape" points="${w$1}" />
+                                    `)}
+                                `;
+      })}
+                        </svg>
+                    `;
+    })() : A}
+
+                <!--  Home hitbox, an invisible circular click target
+                      centred on the home's projected screen position.
+                      Visible (interactive) only when the map layout is
+                      ready AND we're not already in detail mode.
+                      Clicking it eases the camera into the detail
+                      pose and triggers the dashboard overlay.  -->
+                ${hasApiKey && layout !== null && !this._detailMode ? b`
+                    <div
+                        class="home-hitbox"
+                        style="left:${layout.home.x}px; top:${layout.home.y}px"
+                        @click="${this._onHomeClick}"
+                        @mouseenter="${this._onHomeEnter}"
+                        @mouseleave="${this._onHomeLeave}"
+                    ></div>
+                ` : A}
+
+                <!--  Detail dashboard overlay, takes over the card
+                      while _detailMode is on. Click anywhere on the
+                      panel exits back to the resting view. The CSS
+                      class .detail-active on ha-card fades out every
+                      pre-existing overlay so the panel reads as the
+                      sole content while open.  -->
+                ${this._detailMode ? b`
+                    <div
+                        class="detail-panel"
+                        @click="${this._onExitDetail}"
+                    >
+                        <div class="detail-panel-inner">
+                            <ha-icon class="detail-panel-icon" icon="mdi:home-analytics"></ha-icon>
+                            <div class="detail-panel-title">${pickTranslations(this.hass?.language).detail.title}</div>
+                            <div class="detail-panel-subtitle">${pickTranslations(this.hass?.language).detail.subtitle}</div>
+                            <div class="detail-panel-hint">${pickTranslations(this.hass?.language).detail.exitHint}</div>
+                        </div>
+                    </div>
+                ` : A}
+
             </ha-card>
         `;
   }
@@ -33949,6 +37617,46 @@ let HeliosCard = class extends i {
     const b2 = Math.round(parseInt(hex.slice(5, 7), 16) * f2);
     const h2 = (n3) => n3.toString(16).padStart(2, "0");
     return `#${h2(r2)}${h2(g2)}${h2(b2)}`;
+  }
+  //Linear blend between two #rrggbb hex colours. `t` = 0 returns
+  //`a` unchanged, `t` = 1 returns `b`. Used by the cloud disc to
+  //derive the light (low) and dark (high) band shades from the
+  //configured cloud colour without needing a second / third
+  //config key.
+  _lerpHexToward(a2, b2, t2) {
+    const u2 = Math.max(0, Math.min(1, t2));
+    const ar = parseInt(a2.slice(1, 3), 16);
+    const ag = parseInt(a2.slice(3, 5), 16);
+    const ab = parseInt(a2.slice(5, 7), 16);
+    const br = parseInt(b2.slice(1, 3), 16);
+    const bg = parseInt(b2.slice(3, 5), 16);
+    const bb = parseInt(b2.slice(5, 7), 16);
+    const r2 = Math.round(ar + (br - ar) * u2);
+    const g2 = Math.round(ag + (bg - ag) * u2);
+    const bl = Math.round(ab + (bb - ab) * u2);
+    const h2 = (n3) => n3.toString(16).padStart(2, "0");
+    return `#${h2(r2)}${h2(g2)}${h2(bl)}`;
+  }
+  //Detail-mode toggles. Driven by the home click (off → on) and a
+  //click anywhere on the detail panel (on → off). The engine
+  //handles the eased camera transition; we just flip the state
+  //and let the CSS .detail-active class fade out the overlays.
+  _onHomeClick(e2) {
+    e2.stopPropagation();
+    if (this._detailMode) {
+      return;
+    }
+    this._homeHover = false;
+    this._detailMode = true;
+    this._engine?.setDetailMode(true);
+  }
+  _onExitDetail(e2) {
+    e2.stopPropagation();
+    if (!this._detailMode) {
+      return;
+    }
+    this._detailMode = false;
+    this._engine?.setDetailMode(false);
   }
   //Placeholder (no API key configured)
   _renderPlaceholder() {
@@ -34046,8 +37754,6 @@ HeliosCard.SUN_RIM_WIDTH = 1.5;
 HeliosCard.SUN_FILL_OPACITY_BG = 0.2;
 HeliosCard.NIGHT_STROKE_FACTOR = 0.5;
 HeliosCard._VISUAL_CONFIG_KEYS = [
-  "topography-color",
-  "topography-alpha",
   "show-labels",
   "sun-color",
   "cloud-color",
@@ -34056,8 +37762,8 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   "pv-color",
   "pv-power-entity",
   //map-style triggers a MapLibre setStyle(), the engine reloads
-  //terrain, hillshade, cloud disc, buildings and labels on the
-  //resulting `style.load`.
+  //the cloud disc, buildings and labels on the resulting
+  //`style.load`.
   "map-style",
   "battery-soc-entity",
   "battery-power-entity",
@@ -34071,13 +37777,10 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   "building-cluster-radius",
   "building-opacity",
   "building-color",
-  "performance-mode",
-  "terrain-detail"
+  "pixel-ratio"
 ];
 HeliosCard.INIT_DEBOUNCE_MS = 500;
-HeliosCard.PV_CALIB_TTL_MS = 14 * 24 * 36e5;
-HeliosCard.PV_CALIB_MIN_SAMPLES = 20;
-HeliosCard.PV_CALIB_HA_WRITE_MS = 6e4;
+HeliosCard.PV_CALIB_WIPE_FLAG_KEY = "helios-pv-calib:wiped-v1";
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([
   n2({ attribute: false })
@@ -34094,27 +37797,6 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_cloudCover", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_cloudLow", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_cloudMid", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_cloudHigh", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_cloudHoverX", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_cloudHoverY", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_cloudHover", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_cloudHoverFlip", 2);
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_labelLayout", 2);
@@ -34150,6 +37832,12 @@ __decorateClass([
 ], HeliosCard.prototype, "_cloudScene", 2);
 __decorateClass([
   r()
+], HeliosCard.prototype, "_homeSilhouettes", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_homeHover", 2);
+__decorateClass([
+  r()
 ], HeliosCard.prototype, "_chartSeries", 2);
 __decorateClass([
   r()
@@ -34166,9 +37854,5545 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_shadowBusy", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_detailMode", 2);
 HeliosCard = __decorateClass([
   t("helios-card")
 ], HeliosCard);
+class RawDecoder extends BaseDecoder {
+  /** @param {ArrayBuffer} buffer */
+  decodeBlock(buffer2) {
+    return buffer2;
+  }
+}
+const raw = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  default: RawDecoder
+}, Symbol.toStringTag, { value: "Module" }));
+const MIN_BITS = 9;
+const CLEAR_CODE = 256;
+const EOI_CODE = 257;
+const MAX_BYTELENGTH = 12;
+function getByte(array, position, length) {
+  const d2 = position % 8;
+  const a2 = Math.floor(position / 8);
+  const de2 = 8 - d2;
+  const ef = position + length - (a2 + 1) * 8;
+  let fg = 8 * (a2 + 2) - (position + length);
+  const dg = (a2 + 2) * 8 - position;
+  fg = Math.max(0, fg);
+  if (a2 >= array.length) {
+    console.warn("ran off the end of the buffer before finding EOI_CODE (end on input code)");
+    return EOI_CODE;
+  }
+  let chunk1 = array[a2] & 2 ** (8 - d2) - 1;
+  chunk1 <<= length - de2;
+  let chunks = chunk1;
+  if (a2 + 1 < array.length) {
+    let chunk2 = array[a2 + 1] >>> fg;
+    chunk2 <<= Math.max(0, length - dg);
+    chunks += chunk2;
+  }
+  if (ef > 8 && a2 + 2 < array.length) {
+    const hi = (a2 + 3) * 8 - (position + length);
+    const chunk3 = array[a2 + 2] >>> hi;
+    chunks += chunk3;
+  }
+  return chunks;
+}
+function appendReversed(dest, source) {
+  for (let i2 = source.length - 1; i2 >= 0; i2--) {
+    dest.push(source[i2]);
+  }
+  return dest;
+}
+function decompress(input) {
+  const dictionaryIndex = new Uint16Array(4093);
+  const dictionaryChar = new Uint8Array(4093);
+  for (let i2 = 0; i2 <= 257; i2++) {
+    dictionaryIndex[i2] = 4096;
+    dictionaryChar[i2] = i2;
+  }
+  let dictionaryLength = 258;
+  let byteLength = MIN_BITS;
+  let position = 0;
+  function initDictionary() {
+    dictionaryLength = 258;
+    byteLength = MIN_BITS;
+  }
+  function getNext(array2) {
+    const byte = getByte(array2, position, byteLength);
+    position += byteLength;
+    return byte;
+  }
+  function addToDictionary(i2, c2) {
+    dictionaryChar[dictionaryLength] = c2;
+    dictionaryIndex[dictionaryLength] = i2;
+    dictionaryLength++;
+    return dictionaryLength - 1;
+  }
+  function getDictionaryReversed(n3) {
+    const rev = [];
+    for (let i2 = n3; i2 !== 4096; i2 = dictionaryIndex[i2]) {
+      rev.push(dictionaryChar[i2]);
+    }
+    return rev;
+  }
+  const result = [];
+  initDictionary();
+  const array = new Uint8Array(input);
+  let code = getNext(array);
+  let oldCode;
+  while (code !== EOI_CODE) {
+    if (code === CLEAR_CODE) {
+      initDictionary();
+      code = getNext(array);
+      while (code === CLEAR_CODE) {
+        code = getNext(array);
+      }
+      if (code === EOI_CODE) {
+        break;
+      } else if (code > CLEAR_CODE) {
+        throw new Error(`corrupted code at scanline ${code}`);
+      } else {
+        const val = getDictionaryReversed(code);
+        appendReversed(result, val);
+        oldCode = code;
+      }
+    } else if (code < dictionaryLength) {
+      const val = getDictionaryReversed(code);
+      appendReversed(result, val);
+      if (oldCode !== void 0) {
+        addToDictionary(oldCode, val[val.length - 1]);
+      }
+      oldCode = code;
+    } else {
+      if (oldCode === void 0) {
+        throw new Error(`Invalid LZW code: ${code} with no previous code`);
+      }
+      const oldVal = getDictionaryReversed(oldCode);
+      if (!oldVal) {
+        throw new Error(`Bogus entry. Not in dictionary, ${oldCode} / ${dictionaryLength}, position: ${position}`);
+      }
+      appendReversed(result, oldVal);
+      result.push(oldVal[oldVal.length - 1]);
+      addToDictionary(oldCode, oldVal[oldVal.length - 1]);
+      oldCode = code;
+    }
+    if (dictionaryLength + 1 >= 2 ** byteLength) {
+      if (byteLength === MAX_BYTELENGTH) {
+        oldCode = void 0;
+      } else {
+        byteLength++;
+      }
+    }
+    code = getNext(array);
+  }
+  return new Uint8Array(result);
+}
+class LZWDecoder extends BaseDecoder {
+  /** @param {ArrayBuffer} buffer */
+  decodeBlock(buffer2) {
+    return decompress(buffer2).buffer;
+  }
+}
+const lzw = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  default: LZWDecoder
+}, Symbol.toStringTag, { value: "Module" }));
+const dctZigZag = new Int32Array([
+  0,
+  1,
+  8,
+  16,
+  9,
+  2,
+  3,
+  10,
+  17,
+  24,
+  32,
+  25,
+  18,
+  11,
+  4,
+  5,
+  12,
+  19,
+  26,
+  33,
+  40,
+  48,
+  41,
+  34,
+  27,
+  20,
+  13,
+  6,
+  7,
+  14,
+  21,
+  28,
+  35,
+  42,
+  49,
+  56,
+  57,
+  50,
+  43,
+  36,
+  29,
+  22,
+  15,
+  23,
+  30,
+  37,
+  44,
+  51,
+  58,
+  59,
+  52,
+  45,
+  38,
+  31,
+  39,
+  46,
+  53,
+  60,
+  61,
+  54,
+  47,
+  55,
+  62,
+  63
+]);
+const dctCos1 = 4017;
+const dctSin1 = 799;
+const dctCos3 = 3406;
+const dctSin3 = 2276;
+const dctCos6 = 1567;
+const dctSin6 = 3784;
+const dctSqrt2 = 5793;
+const dctSqrt1d2 = 2896;
+function buildHuffmanTable(codeLengths, values2) {
+  let k2 = 0;
+  const code = [];
+  let length = 16;
+  while (length > 0 && !codeLengths[length - 1]) {
+    --length;
+  }
+  code.push({ children: [], index: 0 });
+  let p2 = code[0];
+  let q;
+  for (let i2 = 0; i2 < length; i2++) {
+    for (let j = 0; j < codeLengths[i2]; j++) {
+      p2 = code.pop();
+      if (!p2) {
+        throw new Error("buildHuffmanTable: codeLength mismatch");
+      }
+      p2.children[p2.index] = values2[k2];
+      while (p2.index > 0) {
+        p2 = code.pop();
+        if (!p2) {
+          throw new Error("buildHuffmanTable: codeLength mismatch");
+        }
+      }
+      p2.index++;
+      code.push(p2);
+      while (code.length <= i2) {
+        code.push(q = { children: [], index: 0 });
+        p2.children[p2.index] = q.children;
+        p2 = q;
+      }
+      k2++;
+    }
+    if (i2 + 1 < length) {
+      code.push(q = { children: [], index: 0 });
+      p2.children[p2.index] = q.children;
+      p2 = q;
+    }
+  }
+  return code[0].children;
+}
+function decodeScan(data, initialOffset, frame, components, resetInterval, spectralStart, spectralEnd, successivePrev, successive) {
+  const { mcusPerLine, progressive } = frame;
+  if (components.length > 1 && (mcusPerLine === void 0 || frame.mcusPerColumn === void 0)) {
+    throw new Error("Missing MCU dimensions");
+  }
+  if (components.length === 1 && (components[0].blocksPerLine === void 0 || components[0].blocksPerColumn === void 0)) {
+    throw new Error("Missing block dimensions");
+  }
+  const startOffset = initialOffset;
+  let offset = initialOffset;
+  let bitsData = 0;
+  let bitsCount = 0;
+  function readBit() {
+    if (bitsCount > 0) {
+      bitsCount--;
+      return bitsData >> bitsCount & 1;
+    }
+    bitsData = data[offset++];
+    if (bitsData === 255) {
+      const nextByte = data[offset++];
+      if (nextByte) {
+        throw new Error(`unexpected marker: ${(bitsData << 8 | nextByte).toString(16)}`);
+      }
+    }
+    bitsCount = 7;
+    return bitsData >>> 7;
+  }
+  function decodeHuffman(tree) {
+    if (!tree) {
+      throw new Error("Huffman table not found");
+    }
+    let node = tree;
+    let bit;
+    while ((bit = readBit()) !== null) {
+      const next3 = node[bit];
+      if (typeof next3 === "number") {
+        return next3;
+      }
+      if (typeof next3 !== "object") {
+        throw new Error("invalid huffman sequence");
+      }
+      node = next3;
+    }
+    return null;
+  }
+  function receive(initialLength) {
+    let length = initialLength;
+    let n4 = 0;
+    while (length > 0) {
+      const bit = readBit();
+      if (bit === null) {
+        return void 0;
+      }
+      n4 = n4 << 1 | bit;
+      --length;
+    }
+    return n4;
+  }
+  function receiveAndExtend(length) {
+    const n4 = receive(length);
+    if (n4 === void 0) {
+      return void 0;
+    }
+    if (n4 >= 1 << length - 1) {
+      return n4;
+    }
+    return n4 + (-1 << length) + 1;
+  }
+  function decodeBaseline(component2, zz) {
+    const t2 = decodeHuffman(component2.huffmanTableDC);
+    if (t2 === null) {
+      throw new Error("Huffman error");
+    }
+    const diff = t2 === 0 ? 0 : receiveAndExtend(t2);
+    if (diff === void 0) {
+      throw new Error("Unexpected end of stream");
+    }
+    if (component2.pred === void 0) {
+      component2.pred = 0;
+    }
+    component2.pred += diff;
+    zz[0] = component2.pred;
+    let k3 = 1;
+    while (k3 < 64) {
+      const rs = decodeHuffman(component2.huffmanTableAC);
+      if (rs === null) {
+        throw new Error("Unexpected end of data in AC coefficient decoding");
+      }
+      const s2 = rs & 15;
+      const r2 = rs >> 4;
+      if (s2 === 0) {
+        if (r2 < 15) {
+          break;
+        }
+        k3 += 16;
+      } else {
+        k3 += r2;
+        const z2 = dctZigZag[k3];
+        const val = receiveAndExtend(s2);
+        if (val === void 0) {
+          throw new Error("Unexpected end of stream");
+        }
+        zz[z2] = val;
+        k3++;
+      }
+    }
+  }
+  function decodeDCFirst(component2, zz) {
+    const t2 = decodeHuffman(component2.huffmanTableDC);
+    if (t2 === null) {
+      throw new Error("Huffman error");
+    }
+    const value = receiveAndExtend(t2);
+    if (value === void 0) {
+      throw new Error("Unexpected end of data in DC coefficient decoding");
+    }
+    const diff = t2 === 0 ? 0 : value << successive;
+    if (component2.pred === void 0) {
+      component2.pred = 0;
+    }
+    component2.pred += diff;
+    zz[0] = component2.pred;
+  }
+  function decodeDCSuccessive(_2, zz) {
+    const bit = readBit();
+    if (bit === null) {
+      throw new Error("Unexpected end of data in DC coefficient decoding");
+    }
+    zz[0] |= bit << successive;
+  }
+  let eobrun = 0;
+  function decodeACFirst(component2, zz) {
+    if (eobrun > 0) {
+      eobrun--;
+      return;
+    }
+    let k3 = spectralStart;
+    const e2 = spectralEnd;
+    while (k3 <= e2) {
+      const rs = decodeHuffman(component2.huffmanTableAC);
+      if (rs === null) {
+        throw new Error("Unexpected end of data in AC coefficient decoding");
+      }
+      const s2 = rs & 15;
+      const r2 = rs >> 4;
+      if (s2 === 0) {
+        if (r2 < 15) {
+          const value = receive(r2);
+          if (value === void 0) {
+            throw new Error("Unexpected end of data in AC coefficient decoding");
+          }
+          eobrun = value + (1 << r2) - 1;
+          break;
+        }
+        k3 += 16;
+      } else {
+        k3 += r2;
+        const z2 = dctZigZag[k3];
+        const value = receiveAndExtend(s2);
+        if (value === void 0) {
+          throw new Error("Unexpected end of data in AC coefficient decoding");
+        }
+        zz[z2] = value * (1 << successive);
+        k3++;
+      }
+    }
+  }
+  let successiveACState = 0;
+  let successiveACNextValue;
+  function decodeACSuccessive(component2, zz) {
+    let k3 = spectralStart;
+    const e2 = spectralEnd;
+    let r2 = 0;
+    while (k3 <= e2) {
+      const z2 = dctZigZag[k3];
+      const direction = zz[z2] < 0 ? -1 : 1;
+      switch (successiveACState) {
+        case 0: {
+          const rs = decodeHuffman(component2.huffmanTableAC);
+          if (rs === null) {
+            throw new Error("Unexpected end of data in AC coefficient decoding");
+          }
+          const s2 = rs & 15;
+          r2 = rs >> 4;
+          if (s2 === 0) {
+            if (r2 < 15) {
+              const value = receive(r2);
+              if (value === void 0) {
+                throw new Error("Unexpected end of data in AC coefficient decoding");
+              }
+              eobrun = value + (1 << r2);
+              successiveACState = 4;
+            } else {
+              r2 = 16;
+              successiveACState = 1;
+            }
+          } else {
+            if (s2 !== 1) {
+              throw new Error("invalid ACn encoding");
+            }
+            const nextVal = receiveAndExtend(s2);
+            if (nextVal === void 0) {
+              throw new Error("Unexpected end of data in AC coefficient decoding");
+            }
+            successiveACNextValue = nextVal;
+            successiveACState = r2 ? 2 : 3;
+          }
+          continue;
+        }
+        case 1:
+        case 2:
+          if (zz[z2]) {
+            const bit = readBit();
+            if (bit === null) {
+              throw new Error("Unexpected end of data in AC coefficient decoding");
+            }
+            zz[z2] += (bit << successive) * direction;
+          } else {
+            r2--;
+            if (r2 === 0) {
+              successiveACState = successiveACState === 2 ? 3 : 0;
+            }
+          }
+          break;
+        case 3:
+          if (zz[z2]) {
+            const bit = readBit();
+            if (bit === null) {
+              throw new Error("Unexpected end of data in AC coefficient decoding");
+            }
+            zz[z2] += (bit << successive) * direction;
+          } else {
+            zz[z2] = successiveACNextValue << successive;
+            successiveACState = 0;
+          }
+          break;
+        case 4:
+          if (zz[z2]) {
+            const bit = readBit();
+            if (bit === null) {
+              throw new Error("Unexpected end of data in AC coefficient decoding");
+            }
+            zz[z2] += (bit << successive) * direction;
+          }
+          break;
+      }
+      k3++;
+    }
+    if (successiveACState === 4) {
+      eobrun--;
+      if (eobrun === 0) {
+        successiveACState = 0;
+      }
+    }
+  }
+  function decodeMcu(component2, decodeFunction, mcu2, row, col) {
+    const mcuRow = mcu2 / mcusPerLine | 0;
+    const mcuCol = mcu2 % mcusPerLine;
+    const blockRow = mcuRow * component2.v + row;
+    const blockCol = mcuCol * component2.h + col;
+    if (!component2.blocks) {
+      throw new Error("Missing blocks");
+    }
+    decodeFunction(component2, component2.blocks[blockRow][blockCol]);
+  }
+  function decodeBlock(component2, decodeFunction, mcu2) {
+    const blockRow = mcu2 / component2.blocksPerLine | 0;
+    const blockCol = mcu2 % component2.blocksPerLine;
+    if (!component2.blocks) {
+      throw new Error("Missing blocks");
+    }
+    decodeFunction(component2, component2.blocks[blockRow][blockCol]);
+  }
+  const componentsLength = components.length;
+  let component;
+  let i2;
+  let j;
+  let k2;
+  let n3;
+  let decodeFn;
+  if (progressive) {
+    if (spectralStart === 0) {
+      decodeFn = successivePrev === 0 ? decodeDCFirst : decodeDCSuccessive;
+    } else {
+      decodeFn = successivePrev === 0 ? decodeACFirst : decodeACSuccessive;
+    }
+  } else {
+    decodeFn = decodeBaseline;
+  }
+  let mcu = 0;
+  let marker;
+  let mcuExpected;
+  if (componentsLength === 1) {
+    mcuExpected = components[0].blocksPerLine * components[0].blocksPerColumn;
+  } else {
+    mcuExpected = mcusPerLine * frame.mcusPerColumn;
+  }
+  const usedResetInterval = resetInterval || mcuExpected;
+  while (mcu < mcuExpected) {
+    for (i2 = 0; i2 < componentsLength; i2++) {
+      components[i2].pred = 0;
+    }
+    eobrun = 0;
+    if (componentsLength === 1) {
+      component = components[0];
+      for (n3 = 0; n3 < usedResetInterval; n3++) {
+        decodeBlock(component, decodeFn, mcu);
+        mcu++;
+      }
+    } else {
+      for (n3 = 0; n3 < usedResetInterval; n3++) {
+        for (i2 = 0; i2 < componentsLength; i2++) {
+          component = components[i2];
+          const { h: h2, v: v2 } = component;
+          for (j = 0; j < v2; j++) {
+            for (k2 = 0; k2 < h2; k2++) {
+              decodeMcu(component, decodeFn, mcu, j, k2);
+            }
+          }
+        }
+        mcu++;
+        if (mcu === mcuExpected) {
+          break;
+        }
+      }
+    }
+    bitsCount = 0;
+    marker = data[offset] << 8 | data[offset + 1];
+    if (marker < 65280) {
+      throw new Error("marker was not found");
+    }
+    if (marker >= 65488 && marker <= 65495) {
+      offset += 2;
+    } else {
+      break;
+    }
+  }
+  return offset - startOffset;
+}
+function buildComponentData(component) {
+  const lines = [];
+  const { blocksPerLine, blocksPerColumn } = component;
+  if (!blocksPerLine || !blocksPerColumn || !component.blocks) {
+    throw new Error("Missing component data");
+  }
+  const samplesPerLine = blocksPerLine << 3;
+  const R2 = new Int32Array(64);
+  const r2 = new Uint8Array(64);
+  function quantizeAndInverse(zz, dataOut, dataIn) {
+    const qt = component.quantizationTable;
+    if (!qt) {
+      throw new Error("No quantization table found");
+    }
+    let v0;
+    let v1;
+    let v2;
+    let v3;
+    let v4;
+    let v5;
+    let v6;
+    let v7;
+    let t2;
+    const p2 = dataIn;
+    let i2;
+    for (i2 = 0; i2 < 64; i2++) {
+      p2[i2] = zz[i2] * qt[i2];
+    }
+    for (i2 = 0; i2 < 8; ++i2) {
+      const row = 8 * i2;
+      if (p2[1 + row] === 0 && p2[2 + row] === 0 && p2[3 + row] === 0 && p2[4 + row] === 0 && p2[5 + row] === 0 && p2[6 + row] === 0 && p2[7 + row] === 0) {
+        t2 = dctSqrt2 * p2[0 + row] + 512 >> 10;
+        p2[0 + row] = t2;
+        p2[1 + row] = t2;
+        p2[2 + row] = t2;
+        p2[3 + row] = t2;
+        p2[4 + row] = t2;
+        p2[5 + row] = t2;
+        p2[6 + row] = t2;
+        p2[7 + row] = t2;
+        continue;
+      }
+      v0 = dctSqrt2 * p2[0 + row] + 128 >> 8;
+      v1 = dctSqrt2 * p2[4 + row] + 128 >> 8;
+      v2 = p2[2 + row];
+      v3 = p2[6 + row];
+      v4 = dctSqrt1d2 * (p2[1 + row] - p2[7 + row]) + 128 >> 8;
+      v7 = dctSqrt1d2 * (p2[1 + row] + p2[7 + row]) + 128 >> 8;
+      v5 = p2[3 + row] << 4;
+      v6 = p2[5 + row] << 4;
+      t2 = v0 - v1 + 1 >> 1;
+      v0 = v0 + v1 + 1 >> 1;
+      v1 = t2;
+      t2 = v2 * dctSin6 + v3 * dctCos6 + 128 >> 8;
+      v2 = v2 * dctCos6 - v3 * dctSin6 + 128 >> 8;
+      v3 = t2;
+      t2 = v4 - v6 + 1 >> 1;
+      v4 = v4 + v6 + 1 >> 1;
+      v6 = t2;
+      t2 = v7 + v5 + 1 >> 1;
+      v5 = v7 - v5 + 1 >> 1;
+      v7 = t2;
+      t2 = v0 - v3 + 1 >> 1;
+      v0 = v0 + v3 + 1 >> 1;
+      v3 = t2;
+      t2 = v1 - v2 + 1 >> 1;
+      v1 = v1 + v2 + 1 >> 1;
+      v2 = t2;
+      t2 = v4 * dctSin3 + v7 * dctCos3 + 2048 >> 12;
+      v4 = v4 * dctCos3 - v7 * dctSin3 + 2048 >> 12;
+      v7 = t2;
+      t2 = v5 * dctSin1 + v6 * dctCos1 + 2048 >> 12;
+      v5 = v5 * dctCos1 - v6 * dctSin1 + 2048 >> 12;
+      v6 = t2;
+      p2[0 + row] = v0 + v7;
+      p2[7 + row] = v0 - v7;
+      p2[1 + row] = v1 + v6;
+      p2[6 + row] = v1 - v6;
+      p2[2 + row] = v2 + v5;
+      p2[5 + row] = v2 - v5;
+      p2[3 + row] = v3 + v4;
+      p2[4 + row] = v3 - v4;
+    }
+    for (i2 = 0; i2 < 8; ++i2) {
+      const col = i2;
+      if (p2[1 * 8 + col] === 0 && p2[2 * 8 + col] === 0 && p2[3 * 8 + col] === 0 && p2[4 * 8 + col] === 0 && p2[5 * 8 + col] === 0 && p2[6 * 8 + col] === 0 && p2[7 * 8 + col] === 0) {
+        t2 = dctSqrt2 * dataIn[i2 + 0] + 8192 >> 14;
+        p2[0 * 8 + col] = t2;
+        p2[1 * 8 + col] = t2;
+        p2[2 * 8 + col] = t2;
+        p2[3 * 8 + col] = t2;
+        p2[4 * 8 + col] = t2;
+        p2[5 * 8 + col] = t2;
+        p2[6 * 8 + col] = t2;
+        p2[7 * 8 + col] = t2;
+        continue;
+      }
+      v0 = dctSqrt2 * p2[0 * 8 + col] + 2048 >> 12;
+      v1 = dctSqrt2 * p2[4 * 8 + col] + 2048 >> 12;
+      v2 = p2[2 * 8 + col];
+      v3 = p2[6 * 8 + col];
+      v4 = dctSqrt1d2 * (p2[1 * 8 + col] - p2[7 * 8 + col]) + 2048 >> 12;
+      v7 = dctSqrt1d2 * (p2[1 * 8 + col] + p2[7 * 8 + col]) + 2048 >> 12;
+      v5 = p2[3 * 8 + col];
+      v6 = p2[5 * 8 + col];
+      t2 = v0 - v1 + 1 >> 1;
+      v0 = v0 + v1 + 1 >> 1;
+      v1 = t2;
+      t2 = v2 * dctSin6 + v3 * dctCos6 + 2048 >> 12;
+      v2 = v2 * dctCos6 - v3 * dctSin6 + 2048 >> 12;
+      v3 = t2;
+      t2 = v4 - v6 + 1 >> 1;
+      v4 = v4 + v6 + 1 >> 1;
+      v6 = t2;
+      t2 = v7 + v5 + 1 >> 1;
+      v5 = v7 - v5 + 1 >> 1;
+      v7 = t2;
+      t2 = v0 - v3 + 1 >> 1;
+      v0 = v0 + v3 + 1 >> 1;
+      v3 = t2;
+      t2 = v1 - v2 + 1 >> 1;
+      v1 = v1 + v2 + 1 >> 1;
+      v2 = t2;
+      t2 = v4 * dctSin3 + v7 * dctCos3 + 2048 >> 12;
+      v4 = v4 * dctCos3 - v7 * dctSin3 + 2048 >> 12;
+      v7 = t2;
+      t2 = v5 * dctSin1 + v6 * dctCos1 + 2048 >> 12;
+      v5 = v5 * dctCos1 - v6 * dctSin1 + 2048 >> 12;
+      v6 = t2;
+      p2[0 * 8 + col] = v0 + v7;
+      p2[7 * 8 + col] = v0 - v7;
+      p2[1 * 8 + col] = v1 + v6;
+      p2[6 * 8 + col] = v1 - v6;
+      p2[2 * 8 + col] = v2 + v5;
+      p2[5 * 8 + col] = v2 - v5;
+      p2[3 * 8 + col] = v3 + v4;
+      p2[4 * 8 + col] = v3 - v4;
+    }
+    for (i2 = 0; i2 < 64; ++i2) {
+      const sample = 128 + (p2[i2] + 8 >> 4);
+      if (sample < 0) {
+        dataOut[i2] = 0;
+      } else if (sample > 255) {
+        dataOut[i2] = 255;
+      } else {
+        dataOut[i2] = sample;
+      }
+    }
+  }
+  for (let blockRow = 0; blockRow < blocksPerColumn; blockRow++) {
+    const scanLine = blockRow << 3;
+    for (let i2 = 0; i2 < 8; i2++) {
+      lines.push(new Uint8Array(samplesPerLine));
+    }
+    for (let blockCol = 0; blockCol < blocksPerLine; blockCol++) {
+      quantizeAndInverse(component.blocks[blockRow][blockCol], r2, R2);
+      let offset = 0;
+      const sample = blockCol << 3;
+      for (let j = 0; j < 8; j++) {
+        const line = lines[scanLine + j];
+        for (let i2 = 0; i2 < 8; i2++) {
+          line[sample + i2] = r2[offset++];
+        }
+      }
+    }
+  }
+  return lines;
+}
+class JpegStreamReader {
+  constructor() {
+    this.jfif = null;
+    this.adobe = null;
+    this.resetInterval = 0;
+    this.quantizationTables = [];
+    this.huffmanTablesAC = [];
+    this.huffmanTablesDC = [];
+    this.frames = [];
+  }
+  resetFrames() {
+    this.frames = [];
+  }
+  /** @param {Uint8Array} data */
+  parse(data) {
+    let offset = 0;
+    function readUint16() {
+      const value = data[offset] << 8 | data[offset + 1];
+      offset += 2;
+      return value;
+    }
+    function readDataBlock() {
+      const length = readUint16();
+      const array = data.subarray(offset, offset + length - 2);
+      offset += array.length;
+      return array;
+    }
+    function prepareComponents(frame) {
+      let maxH = 0;
+      let maxV = 0;
+      let component;
+      let componentId;
+      for (componentId in frame.components) {
+        if (frame.components.hasOwnProperty(componentId)) {
+          component = frame.components[componentId];
+          if (maxH < component.h) {
+            maxH = component.h;
+          }
+          if (maxV < component.v) {
+            maxV = component.v;
+          }
+        }
+      }
+      const mcusPerLine = Math.ceil(frame.samplesPerLine / 8 / maxH);
+      const mcusPerColumn = Math.ceil(frame.scanLines / 8 / maxV);
+      for (componentId in frame.components) {
+        if (frame.components.hasOwnProperty(componentId)) {
+          component = frame.components[componentId];
+          const blocksPerLine = Math.ceil(Math.ceil(frame.samplesPerLine / 8) * component.h / maxH);
+          const blocksPerColumn = Math.ceil(Math.ceil(frame.scanLines / 8) * component.v / maxV);
+          const blocksPerLineForMcu = mcusPerLine * component.h;
+          const blocksPerColumnForMcu = mcusPerColumn * component.v;
+          const blocks = [];
+          for (let i2 = 0; i2 < blocksPerColumnForMcu; i2++) {
+            const row = [];
+            for (let j = 0; j < blocksPerLineForMcu; j++) {
+              row.push(new Int32Array(64));
+            }
+            blocks.push(row);
+          }
+          component.blocksPerLine = blocksPerLine;
+          component.blocksPerColumn = blocksPerColumn;
+          component.blocks = blocks;
+        }
+      }
+      frame.maxH = maxH;
+      frame.maxV = maxV;
+      frame.mcusPerLine = mcusPerLine;
+      frame.mcusPerColumn = mcusPerColumn;
+    }
+    let fileMarker = readUint16();
+    if (fileMarker !== 65496) {
+      throw new Error("SOI not found");
+    }
+    fileMarker = readUint16();
+    while (fileMarker !== 65497) {
+      switch (fileMarker) {
+        case 65280:
+          break;
+        case 65504:
+        case 65505:
+        case 65506:
+        case 65507:
+        case 65508:
+        case 65509:
+        case 65510:
+        case 65511:
+        case 65512:
+        case 65513:
+        case 65514:
+        case 65515:
+        case 65516:
+        case 65517:
+        case 65518:
+        case 65519:
+        case 65534: {
+          const appData = readDataBlock();
+          if (fileMarker === 65504) {
+            if (appData[0] === 74 && appData[1] === 70 && appData[2] === 73 && appData[3] === 70 && appData[4] === 0) {
+              this.jfif = {
+                version: { major: appData[5], minor: appData[6] },
+                densityUnits: appData[7],
+                xDensity: appData[8] << 8 | appData[9],
+                yDensity: appData[10] << 8 | appData[11],
+                thumbWidth: appData[12],
+                thumbHeight: appData[13],
+                thumbData: appData.subarray(14, 14 + 3 * appData[12] * appData[13])
+              };
+            }
+          }
+          if (fileMarker === 65518) {
+            if (appData[0] === 65 && appData[1] === 100 && appData[2] === 111 && appData[3] === 98 && appData[4] === 101 && appData[5] === 0) {
+              this.adobe = {
+                version: appData[6],
+                flags0: appData[7] << 8 | appData[8],
+                flags1: appData[9] << 8 | appData[10],
+                transformCode: appData[11]
+              };
+            }
+          }
+          break;
+        }
+        case 65499: {
+          const quantizationTablesLength = readUint16();
+          const quantizationTablesEnd = quantizationTablesLength + offset - 2;
+          while (offset < quantizationTablesEnd) {
+            const quantizationTableSpec = data[offset++];
+            const tableData = new Int32Array(64);
+            if (quantizationTableSpec >> 4 === 0) {
+              for (let j = 0; j < 64; j++) {
+                const z2 = dctZigZag[j];
+                tableData[z2] = data[offset++];
+              }
+            } else if (quantizationTableSpec >> 4 === 1) {
+              for (let j = 0; j < 64; j++) {
+                const z2 = dctZigZag[j];
+                tableData[z2] = readUint16();
+              }
+            } else {
+              throw new Error("DQT: invalid table spec");
+            }
+            this.quantizationTables[quantizationTableSpec & 15] = tableData;
+          }
+          break;
+        }
+        case 65472:
+        case 65473:
+        case 65474: {
+          readUint16();
+          const frame = {
+            extended: fileMarker === 65473,
+            progressive: fileMarker === 65474,
+            precision: data[offset++],
+            scanLines: readUint16(),
+            samplesPerLine: readUint16(),
+            /** @type {Object.<string, JpegComponent>} */
+            components: {},
+            /** @type {number[]} */
+            componentsOrder: [],
+            maxH: 0,
+            maxV: 0,
+            mcusPerLine: 0,
+            mcusPerColumn: 0
+          };
+          const componentsCount = data[offset++];
+          let componentId;
+          for (let i2 = 0; i2 < componentsCount; i2++) {
+            componentId = data[offset];
+            const h2 = data[offset + 1] >> 4;
+            const v2 = data[offset + 1] & 15;
+            const qId = data[offset + 2];
+            frame.componentsOrder.push(componentId);
+            frame.components[componentId] = {
+              h: h2,
+              v: v2,
+              quantizationIdx: qId,
+              blocksPerLine: 0,
+              blocksPerColumn: 0,
+              blocks: []
+            };
+            offset += 3;
+          }
+          prepareComponents(frame);
+          this.frames.push(frame);
+          break;
+        }
+        case 65476: {
+          const huffmanLength = readUint16();
+          for (let i2 = 2; i2 < huffmanLength; ) {
+            const huffmanTableSpec = data[offset++];
+            const codeLengths = new Uint8Array(16);
+            let codeLengthSum = 0;
+            for (let j = 0; j < 16; j++, offset++) {
+              codeLengths[j] = data[offset];
+              codeLengthSum += codeLengths[j];
+            }
+            const huffmanValues = new Uint8Array(codeLengthSum);
+            for (let j = 0; j < codeLengthSum; j++, offset++) {
+              huffmanValues[j] = data[offset];
+            }
+            i2 += 17 + codeLengthSum;
+            if (huffmanTableSpec >> 4 === 0) {
+              this.huffmanTablesDC[huffmanTableSpec & 15] = buildHuffmanTable(codeLengths, huffmanValues);
+            } else {
+              this.huffmanTablesAC[huffmanTableSpec & 15] = buildHuffmanTable(codeLengths, huffmanValues);
+            }
+          }
+          break;
+        }
+        case 65501:
+          readUint16();
+          this.resetInterval = readUint16();
+          break;
+        case 65498: {
+          readUint16();
+          const selectorsCount = data[offset++];
+          const components = [];
+          const frame = this.frames[0];
+          for (let i2 = 0; i2 < selectorsCount; i2++) {
+            const component = frame.components[data[offset++]];
+            const tableSpec = data[offset++];
+            component.huffmanTableDC = this.huffmanTablesDC[tableSpec >> 4];
+            component.huffmanTableAC = this.huffmanTablesAC[tableSpec & 15];
+            components.push(component);
+          }
+          const spectralStart = data[offset++];
+          const spectralEnd = data[offset++];
+          const successiveApproximation = data[offset++];
+          const processed = decodeScan(data, offset, frame, components, this.resetInterval, spectralStart, spectralEnd, successiveApproximation >> 4, successiveApproximation & 15);
+          offset += processed;
+          break;
+        }
+        case 65535:
+          if (data[offset] !== 255) {
+            offset--;
+          }
+          break;
+        default:
+          if (data[offset - 3] === 255 && data[offset - 2] >= 192 && data[offset - 2] <= 254) {
+            offset -= 3;
+            break;
+          }
+          throw new Error(`unknown JPEG marker ${fileMarker.toString(16)}`);
+      }
+      fileMarker = readUint16();
+    }
+  }
+  getResult() {
+    const { frames } = this;
+    if (this.frames.length === 0) {
+      throw new Error("no frames were decoded");
+    } else if (this.frames.length > 1) {
+      console.warn("more than one frame is not supported");
+    }
+    for (let i2 = 0; i2 < this.frames.length; i2++) {
+      const cp = this.frames[i2].components;
+      for (const j of Object.keys(cp)) {
+        const qIdx = cp[j].quantizationIdx;
+        if (typeof qIdx === "number") {
+          cp[j].quantizationTable = this.quantizationTables[qIdx];
+          delete cp[j].quantizationIdx;
+        }
+      }
+    }
+    const frame = frames[0];
+    if (!frame.maxH || !frame.maxV) {
+      throw new Error("Invalid frame dimensions");
+    }
+    const { components, componentsOrder } = frame;
+    const outComponents = [];
+    const width = frame.samplesPerLine;
+    const height = frame.scanLines;
+    for (let i2 = 0; i2 < componentsOrder.length; i2++) {
+      const component = components[componentsOrder[i2]];
+      outComponents.push({
+        lines: buildComponentData(component),
+        scaleX: component.h / frame.maxH,
+        scaleY: component.v / frame.maxV
+      });
+    }
+    const out = new Uint8Array(width * height * outComponents.length);
+    let oi = 0;
+    for (let y3 = 0; y3 < height; ++y3) {
+      for (let x2 = 0; x2 < width; ++x2) {
+        for (let i2 = 0; i2 < outComponents.length; ++i2) {
+          const component = outComponents[i2];
+          out[oi] = component.lines[0 | y3 * component.scaleY][0 | x2 * component.scaleX];
+          ++oi;
+        }
+      }
+    }
+    return out;
+  }
+}
+class JpegDecoder extends BaseDecoder {
+  /**
+   * @param {import('./basedecoder.js').BaseDecoderParameters & { JPEGTables?: Uint8Array }} parameters
+   */
+  constructor(parameters) {
+    super(parameters);
+    this.reader = new JpegStreamReader();
+    if (parameters.JPEGTables) {
+      this.reader.parse(parameters.JPEGTables);
+    }
+  }
+  /** @param {ArrayBuffer} buffer */
+  decodeBlock(buffer2) {
+    this.reader.resetFrames();
+    this.reader.parse(new Uint8Array(buffer2));
+    return this.reader.getResult().buffer;
+  }
+}
+const jpeg = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  default: JpegDecoder
+}, Symbol.toStringTag, { value: "Module" }));
+function zero$1(buf) {
+  let len = buf.length;
+  while (--len >= 0) {
+    buf[len] = 0;
+  }
+}
+const MIN_MATCH$1 = 3;
+const MAX_MATCH$1 = 258;
+const LENGTH_CODES$1 = 29;
+const LITERALS$1 = 256;
+const L_CODES$1 = LITERALS$1 + 1 + LENGTH_CODES$1;
+const D_CODES$1 = 30;
+const DIST_CODE_LEN = 512;
+const static_ltree = new Array((L_CODES$1 + 2) * 2);
+zero$1(static_ltree);
+const static_dtree = new Array(D_CODES$1 * 2);
+zero$1(static_dtree);
+const _dist_code = new Array(DIST_CODE_LEN);
+zero$1(_dist_code);
+const _length_code = new Array(MAX_MATCH$1 - MIN_MATCH$1 + 1);
+zero$1(_length_code);
+const base_length = new Array(LENGTH_CODES$1);
+zero$1(base_length);
+const base_dist = new Array(D_CODES$1);
+zero$1(base_dist);
+const adler32 = (adler, buf, len, pos) => {
+  let s1 = adler & 65535 | 0, s2 = adler >>> 16 & 65535 | 0, n3 = 0;
+  while (len !== 0) {
+    n3 = len > 2e3 ? 2e3 : len;
+    len -= n3;
+    do {
+      s1 = s1 + buf[pos++] | 0;
+      s2 = s2 + s1 | 0;
+    } while (--n3);
+    s1 %= 65521;
+    s2 %= 65521;
+  }
+  return s1 | s2 << 16 | 0;
+};
+var adler32_1 = adler32;
+const makeTable = () => {
+  let c2, table = [];
+  for (var n3 = 0; n3 < 256; n3++) {
+    c2 = n3;
+    for (var k2 = 0; k2 < 8; k2++) {
+      c2 = c2 & 1 ? 3988292384 ^ c2 >>> 1 : c2 >>> 1;
+    }
+    table[n3] = c2;
+  }
+  return table;
+};
+const crcTable = new Uint32Array(makeTable());
+const crc32 = (crc, buf, len, pos) => {
+  const t2 = crcTable;
+  const end = pos + len;
+  crc ^= -1;
+  for (let i2 = pos; i2 < end; i2++) {
+    crc = crc >>> 8 ^ t2[(crc ^ buf[i2]) & 255];
+  }
+  return crc ^ -1;
+};
+var crc32_1 = crc32;
+var messages = {
+  2: "need dictionary",
+  /* Z_NEED_DICT       2  */
+  1: "stream end",
+  /* Z_STREAM_END      1  */
+  0: "",
+  /* Z_OK              0  */
+  "-1": "file error",
+  /* Z_ERRNO         (-1) */
+  "-2": "stream error",
+  /* Z_STREAM_ERROR  (-2) */
+  "-3": "data error",
+  /* Z_DATA_ERROR    (-3) */
+  "-4": "insufficient memory",
+  /* Z_MEM_ERROR     (-4) */
+  "-5": "buffer error",
+  /* Z_BUF_ERROR     (-5) */
+  "-6": "incompatible version"
+  /* Z_VERSION_ERROR (-6) */
+};
+var constants$2 = {
+  /* Allowed flush values; see deflate() and inflate() below for details */
+  Z_NO_FLUSH: 0,
+  Z_FINISH: 4,
+  Z_BLOCK: 5,
+  Z_TREES: 6,
+  /* Return codes for the compression/decompression functions. Negative values
+  * are errors, positive values are used for special but normal events.
+  */
+  Z_OK: 0,
+  Z_STREAM_END: 1,
+  Z_NEED_DICT: 2,
+  Z_STREAM_ERROR: -2,
+  Z_DATA_ERROR: -3,
+  Z_MEM_ERROR: -4,
+  Z_BUF_ERROR: -5,
+  /* The deflate compression method */
+  Z_DEFLATED: 8
+  //Z_NULL:                 null // Use -1 or null inline, depending on var type
+};
+const _has = (obj, key) => {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+};
+var assign = function(obj) {
+  const sources = Array.prototype.slice.call(arguments, 1);
+  while (sources.length) {
+    const source = sources.shift();
+    if (!source) {
+      continue;
+    }
+    if (typeof source !== "object") {
+      throw new TypeError(source + "must be non-object");
+    }
+    for (const p2 in source) {
+      if (_has(source, p2)) {
+        obj[p2] = source[p2];
+      }
+    }
+  }
+  return obj;
+};
+var flattenChunks = (chunks) => {
+  let len = 0;
+  for (let i2 = 0, l2 = chunks.length; i2 < l2; i2++) {
+    len += chunks[i2].length;
+  }
+  const result = new Uint8Array(len);
+  for (let i2 = 0, pos = 0, l2 = chunks.length; i2 < l2; i2++) {
+    let chunk = chunks[i2];
+    result.set(chunk, pos);
+    pos += chunk.length;
+  }
+  return result;
+};
+var common = {
+  assign,
+  flattenChunks
+};
+let STR_APPLY_UIA_OK = true;
+try {
+  String.fromCharCode.apply(null, new Uint8Array(1));
+} catch (__) {
+  STR_APPLY_UIA_OK = false;
+}
+const _utf8len = new Uint8Array(256);
+for (let q = 0; q < 256; q++) {
+  _utf8len[q] = q >= 252 ? 6 : q >= 248 ? 5 : q >= 240 ? 4 : q >= 224 ? 3 : q >= 192 ? 2 : 1;
+}
+_utf8len[254] = _utf8len[254] = 1;
+var string2buf = (str) => {
+  if (typeof TextEncoder === "function" && TextEncoder.prototype.encode) {
+    return new TextEncoder().encode(str);
+  }
+  let buf, c2, c22, m_pos, i2, str_len = str.length, buf_len = 0;
+  for (m_pos = 0; m_pos < str_len; m_pos++) {
+    c2 = str.charCodeAt(m_pos);
+    if ((c2 & 64512) === 55296 && m_pos + 1 < str_len) {
+      c22 = str.charCodeAt(m_pos + 1);
+      if ((c22 & 64512) === 56320) {
+        c2 = 65536 + (c2 - 55296 << 10) + (c22 - 56320);
+        m_pos++;
+      }
+    }
+    buf_len += c2 < 128 ? 1 : c2 < 2048 ? 2 : c2 < 65536 ? 3 : 4;
+  }
+  buf = new Uint8Array(buf_len);
+  for (i2 = 0, m_pos = 0; i2 < buf_len; m_pos++) {
+    c2 = str.charCodeAt(m_pos);
+    if ((c2 & 64512) === 55296 && m_pos + 1 < str_len) {
+      c22 = str.charCodeAt(m_pos + 1);
+      if ((c22 & 64512) === 56320) {
+        c2 = 65536 + (c2 - 55296 << 10) + (c22 - 56320);
+        m_pos++;
+      }
+    }
+    if (c2 < 128) {
+      buf[i2++] = c2;
+    } else if (c2 < 2048) {
+      buf[i2++] = 192 | c2 >>> 6;
+      buf[i2++] = 128 | c2 & 63;
+    } else if (c2 < 65536) {
+      buf[i2++] = 224 | c2 >>> 12;
+      buf[i2++] = 128 | c2 >>> 6 & 63;
+      buf[i2++] = 128 | c2 & 63;
+    } else {
+      buf[i2++] = 240 | c2 >>> 18;
+      buf[i2++] = 128 | c2 >>> 12 & 63;
+      buf[i2++] = 128 | c2 >>> 6 & 63;
+      buf[i2++] = 128 | c2 & 63;
+    }
+  }
+  return buf;
+};
+const buf2binstring = (buf, len) => {
+  if (len < 65534) {
+    if (buf.subarray && STR_APPLY_UIA_OK) {
+      return String.fromCharCode.apply(null, buf.length === len ? buf : buf.subarray(0, len));
+    }
+  }
+  let result = "";
+  for (let i2 = 0; i2 < len; i2++) {
+    result += String.fromCharCode(buf[i2]);
+  }
+  return result;
+};
+var buf2string = (buf, max) => {
+  const len = max || buf.length;
+  if (typeof TextDecoder === "function" && TextDecoder.prototype.decode) {
+    return new TextDecoder().decode(buf.subarray(0, max));
+  }
+  let i2, out;
+  const utf16buf = new Array(len * 2);
+  for (out = 0, i2 = 0; i2 < len; ) {
+    let c2 = buf[i2++];
+    if (c2 < 128) {
+      utf16buf[out++] = c2;
+      continue;
+    }
+    let c_len = _utf8len[c2];
+    if (c_len > 4) {
+      utf16buf[out++] = 65533;
+      i2 += c_len - 1;
+      continue;
+    }
+    c2 &= c_len === 2 ? 31 : c_len === 3 ? 15 : 7;
+    while (c_len > 1 && i2 < len) {
+      c2 = c2 << 6 | buf[i2++] & 63;
+      c_len--;
+    }
+    if (c_len > 1) {
+      utf16buf[out++] = 65533;
+      continue;
+    }
+    if (c2 < 65536) {
+      utf16buf[out++] = c2;
+    } else {
+      c2 -= 65536;
+      utf16buf[out++] = 55296 | c2 >> 10 & 1023;
+      utf16buf[out++] = 56320 | c2 & 1023;
+    }
+  }
+  return buf2binstring(utf16buf, out);
+};
+var utf8border = (buf, max) => {
+  max = max || buf.length;
+  if (max > buf.length) {
+    max = buf.length;
+  }
+  let pos = max - 1;
+  while (pos >= 0 && (buf[pos] & 192) === 128) {
+    pos--;
+  }
+  if (pos < 0) {
+    return max;
+  }
+  if (pos === 0) {
+    return max;
+  }
+  return pos + _utf8len[buf[pos]] > max ? pos : max;
+};
+var strings = {
+  string2buf,
+  buf2string,
+  utf8border
+};
+function ZStream() {
+  this.input = null;
+  this.next_in = 0;
+  this.avail_in = 0;
+  this.total_in = 0;
+  this.output = null;
+  this.next_out = 0;
+  this.avail_out = 0;
+  this.total_out = 0;
+  this.msg = "";
+  this.state = null;
+  this.data_type = 2;
+  this.adler = 0;
+}
+var zstream = ZStream;
+const BAD$1 = 16209;
+const TYPE$1 = 16191;
+var inffast = function inflate_fast(strm, start) {
+  let _in;
+  let last;
+  let _out;
+  let beg;
+  let end;
+  let dmax;
+  let wsize;
+  let whave;
+  let wnext;
+  let s_window;
+  let hold;
+  let bits;
+  let lcode;
+  let dcode;
+  let lmask;
+  let dmask;
+  let here;
+  let op;
+  let len;
+  let dist;
+  let from;
+  let from_source;
+  let input, output;
+  const state = strm.state;
+  _in = strm.next_in;
+  input = strm.input;
+  last = _in + (strm.avail_in - 5);
+  _out = strm.next_out;
+  output = strm.output;
+  beg = _out - (start - strm.avail_out);
+  end = _out + (strm.avail_out - 257);
+  dmax = state.dmax;
+  wsize = state.wsize;
+  whave = state.whave;
+  wnext = state.wnext;
+  s_window = state.window;
+  hold = state.hold;
+  bits = state.bits;
+  lcode = state.lencode;
+  dcode = state.distcode;
+  lmask = (1 << state.lenbits) - 1;
+  dmask = (1 << state.distbits) - 1;
+  top:
+    do {
+      if (bits < 15) {
+        hold += input[_in++] << bits;
+        bits += 8;
+        hold += input[_in++] << bits;
+        bits += 8;
+      }
+      here = lcode[hold & lmask];
+      dolen:
+        for (; ; ) {
+          op = here >>> 24;
+          hold >>>= op;
+          bits -= op;
+          op = here >>> 16 & 255;
+          if (op === 0) {
+            output[_out++] = here & 65535;
+          } else if (op & 16) {
+            len = here & 65535;
+            op &= 15;
+            if (op) {
+              if (bits < op) {
+                hold += input[_in++] << bits;
+                bits += 8;
+              }
+              len += hold & (1 << op) - 1;
+              hold >>>= op;
+              bits -= op;
+            }
+            if (bits < 15) {
+              hold += input[_in++] << bits;
+              bits += 8;
+              hold += input[_in++] << bits;
+              bits += 8;
+            }
+            here = dcode[hold & dmask];
+            dodist:
+              for (; ; ) {
+                op = here >>> 24;
+                hold >>>= op;
+                bits -= op;
+                op = here >>> 16 & 255;
+                if (op & 16) {
+                  dist = here & 65535;
+                  op &= 15;
+                  if (bits < op) {
+                    hold += input[_in++] << bits;
+                    bits += 8;
+                    if (bits < op) {
+                      hold += input[_in++] << bits;
+                      bits += 8;
+                    }
+                  }
+                  dist += hold & (1 << op) - 1;
+                  if (dist > dmax) {
+                    strm.msg = "invalid distance too far back";
+                    state.mode = BAD$1;
+                    break top;
+                  }
+                  hold >>>= op;
+                  bits -= op;
+                  op = _out - beg;
+                  if (dist > op) {
+                    op = dist - op;
+                    if (op > whave) {
+                      if (state.sane) {
+                        strm.msg = "invalid distance too far back";
+                        state.mode = BAD$1;
+                        break top;
+                      }
+                    }
+                    from = 0;
+                    from_source = s_window;
+                    if (wnext === 0) {
+                      from += wsize - op;
+                      if (op < len) {
+                        len -= op;
+                        do {
+                          output[_out++] = s_window[from++];
+                        } while (--op);
+                        from = _out - dist;
+                        from_source = output;
+                      }
+                    } else if (wnext < op) {
+                      from += wsize + wnext - op;
+                      op -= wnext;
+                      if (op < len) {
+                        len -= op;
+                        do {
+                          output[_out++] = s_window[from++];
+                        } while (--op);
+                        from = 0;
+                        if (wnext < len) {
+                          op = wnext;
+                          len -= op;
+                          do {
+                            output[_out++] = s_window[from++];
+                          } while (--op);
+                          from = _out - dist;
+                          from_source = output;
+                        }
+                      }
+                    } else {
+                      from += wnext - op;
+                      if (op < len) {
+                        len -= op;
+                        do {
+                          output[_out++] = s_window[from++];
+                        } while (--op);
+                        from = _out - dist;
+                        from_source = output;
+                      }
+                    }
+                    while (len > 2) {
+                      output[_out++] = from_source[from++];
+                      output[_out++] = from_source[from++];
+                      output[_out++] = from_source[from++];
+                      len -= 3;
+                    }
+                    if (len) {
+                      output[_out++] = from_source[from++];
+                      if (len > 1) {
+                        output[_out++] = from_source[from++];
+                      }
+                    }
+                  } else {
+                    from = _out - dist;
+                    do {
+                      output[_out++] = output[from++];
+                      output[_out++] = output[from++];
+                      output[_out++] = output[from++];
+                      len -= 3;
+                    } while (len > 2);
+                    if (len) {
+                      output[_out++] = output[from++];
+                      if (len > 1) {
+                        output[_out++] = output[from++];
+                      }
+                    }
+                  }
+                } else if ((op & 64) === 0) {
+                  here = dcode[(here & 65535) + (hold & (1 << op) - 1)];
+                  continue dodist;
+                } else {
+                  strm.msg = "invalid distance code";
+                  state.mode = BAD$1;
+                  break top;
+                }
+                break;
+              }
+          } else if ((op & 64) === 0) {
+            here = lcode[(here & 65535) + (hold & (1 << op) - 1)];
+            continue dolen;
+          } else if (op & 32) {
+            state.mode = TYPE$1;
+            break top;
+          } else {
+            strm.msg = "invalid literal/length code";
+            state.mode = BAD$1;
+            break top;
+          }
+          break;
+        }
+    } while (_in < last && _out < end);
+  len = bits >> 3;
+  _in -= len;
+  bits -= len << 3;
+  hold &= (1 << bits) - 1;
+  strm.next_in = _in;
+  strm.next_out = _out;
+  strm.avail_in = _in < last ? 5 + (last - _in) : 5 - (_in - last);
+  strm.avail_out = _out < end ? 257 + (end - _out) : 257 - (_out - end);
+  state.hold = hold;
+  state.bits = bits;
+  return;
+};
+const MAXBITS = 15;
+const ENOUGH_LENS$1 = 852;
+const ENOUGH_DISTS$1 = 592;
+const CODES$1 = 0;
+const LENS$1 = 1;
+const DISTS$1 = 2;
+const lbase = new Uint16Array([
+  /* Length codes 257..285 base */
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  13,
+  15,
+  17,
+  19,
+  23,
+  27,
+  31,
+  35,
+  43,
+  51,
+  59,
+  67,
+  83,
+  99,
+  115,
+  131,
+  163,
+  195,
+  227,
+  258,
+  0,
+  0
+]);
+const lext = new Uint8Array([
+  /* Length codes 257..285 extra */
+  16,
+  16,
+  16,
+  16,
+  16,
+  16,
+  16,
+  16,
+  17,
+  17,
+  17,
+  17,
+  18,
+  18,
+  18,
+  18,
+  19,
+  19,
+  19,
+  19,
+  20,
+  20,
+  20,
+  20,
+  21,
+  21,
+  21,
+  21,
+  16,
+  72,
+  78
+]);
+const dbase = new Uint16Array([
+  /* Distance codes 0..29 base */
+  1,
+  2,
+  3,
+  4,
+  5,
+  7,
+  9,
+  13,
+  17,
+  25,
+  33,
+  49,
+  65,
+  97,
+  129,
+  193,
+  257,
+  385,
+  513,
+  769,
+  1025,
+  1537,
+  2049,
+  3073,
+  4097,
+  6145,
+  8193,
+  12289,
+  16385,
+  24577,
+  0,
+  0
+]);
+const dext = new Uint8Array([
+  /* Distance codes 0..29 extra */
+  16,
+  16,
+  16,
+  16,
+  17,
+  17,
+  18,
+  18,
+  19,
+  19,
+  20,
+  20,
+  21,
+  21,
+  22,
+  22,
+  23,
+  23,
+  24,
+  24,
+  25,
+  25,
+  26,
+  26,
+  27,
+  27,
+  28,
+  28,
+  29,
+  29,
+  64,
+  64
+]);
+const inflate_table = (type, lens, lens_index, codes, table, table_index, work, opts) => {
+  const bits = opts.bits;
+  let len = 0;
+  let sym = 0;
+  let min = 0, max = 0;
+  let root = 0;
+  let curr = 0;
+  let drop = 0;
+  let left = 0;
+  let used = 0;
+  let huff = 0;
+  let incr;
+  let fill;
+  let low;
+  let mask;
+  let next3;
+  let base = null;
+  let match;
+  const count = new Uint16Array(MAXBITS + 1);
+  const offs = new Uint16Array(MAXBITS + 1);
+  let extra = null;
+  let here_bits, here_op, here_val;
+  for (len = 0; len <= MAXBITS; len++) {
+    count[len] = 0;
+  }
+  for (sym = 0; sym < codes; sym++) {
+    count[lens[lens_index + sym]]++;
+  }
+  root = bits;
+  for (max = MAXBITS; max >= 1; max--) {
+    if (count[max] !== 0) {
+      break;
+    }
+  }
+  if (root > max) {
+    root = max;
+  }
+  if (max === 0) {
+    table[table_index++] = 1 << 24 | 64 << 16 | 0;
+    table[table_index++] = 1 << 24 | 64 << 16 | 0;
+    opts.bits = 1;
+    return 0;
+  }
+  for (min = 1; min < max; min++) {
+    if (count[min] !== 0) {
+      break;
+    }
+  }
+  if (root < min) {
+    root = min;
+  }
+  left = 1;
+  for (len = 1; len <= MAXBITS; len++) {
+    left <<= 1;
+    left -= count[len];
+    if (left < 0) {
+      return -1;
+    }
+  }
+  if (left > 0 && (type === CODES$1 || max !== 1)) {
+    return -1;
+  }
+  offs[1] = 0;
+  for (len = 1; len < MAXBITS; len++) {
+    offs[len + 1] = offs[len] + count[len];
+  }
+  for (sym = 0; sym < codes; sym++) {
+    if (lens[lens_index + sym] !== 0) {
+      work[offs[lens[lens_index + sym]]++] = sym;
+    }
+  }
+  if (type === CODES$1) {
+    base = extra = work;
+    match = 20;
+  } else if (type === LENS$1) {
+    base = lbase;
+    extra = lext;
+    match = 257;
+  } else {
+    base = dbase;
+    extra = dext;
+    match = 0;
+  }
+  huff = 0;
+  sym = 0;
+  len = min;
+  next3 = table_index;
+  curr = root;
+  drop = 0;
+  low = -1;
+  used = 1 << root;
+  mask = used - 1;
+  if (type === LENS$1 && used > ENOUGH_LENS$1 || type === DISTS$1 && used > ENOUGH_DISTS$1) {
+    return 1;
+  }
+  for (; ; ) {
+    here_bits = len - drop;
+    if (work[sym] + 1 < match) {
+      here_op = 0;
+      here_val = work[sym];
+    } else if (work[sym] >= match) {
+      here_op = extra[work[sym] - match];
+      here_val = base[work[sym] - match];
+    } else {
+      here_op = 32 + 64;
+      here_val = 0;
+    }
+    incr = 1 << len - drop;
+    fill = 1 << curr;
+    min = fill;
+    do {
+      fill -= incr;
+      table[next3 + (huff >> drop) + fill] = here_bits << 24 | here_op << 16 | here_val | 0;
+    } while (fill !== 0);
+    incr = 1 << len - 1;
+    while (huff & incr) {
+      incr >>= 1;
+    }
+    if (incr !== 0) {
+      huff &= incr - 1;
+      huff += incr;
+    } else {
+      huff = 0;
+    }
+    sym++;
+    if (--count[len] === 0) {
+      if (len === max) {
+        break;
+      }
+      len = lens[lens_index + work[sym]];
+    }
+    if (len > root && (huff & mask) !== low) {
+      if (drop === 0) {
+        drop = root;
+      }
+      next3 += min;
+      curr = len - drop;
+      left = 1 << curr;
+      while (curr + drop < max) {
+        left -= count[curr + drop];
+        if (left <= 0) {
+          break;
+        }
+        curr++;
+        left <<= 1;
+      }
+      used += 1 << curr;
+      if (type === LENS$1 && used > ENOUGH_LENS$1 || type === DISTS$1 && used > ENOUGH_DISTS$1) {
+        return 1;
+      }
+      low = huff & mask;
+      table[low] = root << 24 | curr << 16 | next3 - table_index | 0;
+    }
+  }
+  if (huff !== 0) {
+    table[next3 + huff] = len - drop << 24 | 64 << 16 | 0;
+  }
+  opts.bits = root;
+  return 0;
+};
+var inftrees = inflate_table;
+const CODES = 0;
+const LENS = 1;
+const DISTS = 2;
+const {
+  Z_FINISH: Z_FINISH$1,
+  Z_BLOCK,
+  Z_TREES,
+  Z_OK: Z_OK$1,
+  Z_STREAM_END: Z_STREAM_END$1,
+  Z_NEED_DICT: Z_NEED_DICT$1,
+  Z_STREAM_ERROR: Z_STREAM_ERROR$1,
+  Z_DATA_ERROR: Z_DATA_ERROR$1,
+  Z_MEM_ERROR: Z_MEM_ERROR$1,
+  Z_BUF_ERROR,
+  Z_DEFLATED
+} = constants$2;
+const HEAD = 16180;
+const FLAGS = 16181;
+const TIME = 16182;
+const OS = 16183;
+const EXLEN = 16184;
+const EXTRA = 16185;
+const NAME = 16186;
+const COMMENT = 16187;
+const HCRC = 16188;
+const DICTID = 16189;
+const DICT = 16190;
+const TYPE = 16191;
+const TYPEDO = 16192;
+const STORED = 16193;
+const COPY_ = 16194;
+const COPY = 16195;
+const TABLE = 16196;
+const LENLENS = 16197;
+const CODELENS = 16198;
+const LEN_ = 16199;
+const LEN = 16200;
+const LENEXT = 16201;
+const DIST = 16202;
+const DISTEXT = 16203;
+const MATCH = 16204;
+const LIT = 16205;
+const CHECK = 16206;
+const LENGTH = 16207;
+const DONE = 16208;
+const BAD = 16209;
+const MEM = 16210;
+const SYNC = 16211;
+const ENOUGH_LENS = 852;
+const ENOUGH_DISTS = 592;
+const MAX_WBITS = 15;
+const DEF_WBITS = MAX_WBITS;
+const zswap32 = (q) => {
+  return (q >>> 24 & 255) + (q >>> 8 & 65280) + ((q & 65280) << 8) + ((q & 255) << 24);
+};
+function InflateState() {
+  this.strm = null;
+  this.mode = 0;
+  this.last = false;
+  this.wrap = 0;
+  this.havedict = false;
+  this.flags = 0;
+  this.dmax = 0;
+  this.check = 0;
+  this.total = 0;
+  this.head = null;
+  this.wbits = 0;
+  this.wsize = 0;
+  this.whave = 0;
+  this.wnext = 0;
+  this.window = null;
+  this.hold = 0;
+  this.bits = 0;
+  this.length = 0;
+  this.offset = 0;
+  this.extra = 0;
+  this.lencode = null;
+  this.distcode = null;
+  this.lenbits = 0;
+  this.distbits = 0;
+  this.ncode = 0;
+  this.nlen = 0;
+  this.ndist = 0;
+  this.have = 0;
+  this.next = null;
+  this.lens = new Uint16Array(320);
+  this.work = new Uint16Array(288);
+  this.lendyn = null;
+  this.distdyn = null;
+  this.sane = 0;
+  this.back = 0;
+  this.was = 0;
+}
+const inflateStateCheck = (strm) => {
+  if (!strm) {
+    return 1;
+  }
+  const state = strm.state;
+  if (!state || state.strm !== strm || state.mode < HEAD || state.mode > SYNC) {
+    return 1;
+  }
+  return 0;
+};
+const inflateResetKeep = (strm) => {
+  if (inflateStateCheck(strm)) {
+    return Z_STREAM_ERROR$1;
+  }
+  const state = strm.state;
+  strm.total_in = strm.total_out = state.total = 0;
+  strm.msg = "";
+  if (state.wrap) {
+    strm.adler = state.wrap & 1;
+  }
+  state.mode = HEAD;
+  state.last = 0;
+  state.havedict = 0;
+  state.flags = -1;
+  state.dmax = 32768;
+  state.head = null;
+  state.hold = 0;
+  state.bits = 0;
+  state.lencode = state.lendyn = new Int32Array(ENOUGH_LENS);
+  state.distcode = state.distdyn = new Int32Array(ENOUGH_DISTS);
+  state.sane = 1;
+  state.back = -1;
+  return Z_OK$1;
+};
+const inflateReset = (strm) => {
+  if (inflateStateCheck(strm)) {
+    return Z_STREAM_ERROR$1;
+  }
+  const state = strm.state;
+  state.wsize = 0;
+  state.whave = 0;
+  state.wnext = 0;
+  return inflateResetKeep(strm);
+};
+const inflateReset2 = (strm, windowBits) => {
+  let wrap;
+  if (inflateStateCheck(strm)) {
+    return Z_STREAM_ERROR$1;
+  }
+  const state = strm.state;
+  if (windowBits < 0) {
+    wrap = 0;
+    windowBits = -windowBits;
+  } else {
+    wrap = (windowBits >> 4) + 5;
+    if (windowBits < 48) {
+      windowBits &= 15;
+    }
+  }
+  if (windowBits && (windowBits < 8 || windowBits > 15)) {
+    return Z_STREAM_ERROR$1;
+  }
+  if (state.window !== null && state.wbits !== windowBits) {
+    state.window = null;
+  }
+  state.wrap = wrap;
+  state.wbits = windowBits;
+  return inflateReset(strm);
+};
+const inflateInit2 = (strm, windowBits) => {
+  if (!strm) {
+    return Z_STREAM_ERROR$1;
+  }
+  const state = new InflateState();
+  strm.state = state;
+  state.strm = strm;
+  state.window = null;
+  state.mode = HEAD;
+  const ret = inflateReset2(strm, windowBits);
+  if (ret !== Z_OK$1) {
+    strm.state = null;
+  }
+  return ret;
+};
+const inflateInit = (strm) => {
+  return inflateInit2(strm, DEF_WBITS);
+};
+let virgin = true;
+let lenfix, distfix;
+const fixedtables = (state) => {
+  if (virgin) {
+    lenfix = new Int32Array(512);
+    distfix = new Int32Array(32);
+    let sym = 0;
+    while (sym < 144) {
+      state.lens[sym++] = 8;
+    }
+    while (sym < 256) {
+      state.lens[sym++] = 9;
+    }
+    while (sym < 280) {
+      state.lens[sym++] = 7;
+    }
+    while (sym < 288) {
+      state.lens[sym++] = 8;
+    }
+    inftrees(LENS, state.lens, 0, 288, lenfix, 0, state.work, { bits: 9 });
+    sym = 0;
+    while (sym < 32) {
+      state.lens[sym++] = 5;
+    }
+    inftrees(DISTS, state.lens, 0, 32, distfix, 0, state.work, { bits: 5 });
+    virgin = false;
+  }
+  state.lencode = lenfix;
+  state.lenbits = 9;
+  state.distcode = distfix;
+  state.distbits = 5;
+};
+const updatewindow = (strm, src, end, copy) => {
+  let dist;
+  const state = strm.state;
+  if (state.window === null) {
+    state.wsize = 1 << state.wbits;
+    state.wnext = 0;
+    state.whave = 0;
+    state.window = new Uint8Array(state.wsize);
+  }
+  if (copy >= state.wsize) {
+    state.window.set(src.subarray(end - state.wsize, end), 0);
+    state.wnext = 0;
+    state.whave = state.wsize;
+  } else {
+    dist = state.wsize - state.wnext;
+    if (dist > copy) {
+      dist = copy;
+    }
+    state.window.set(src.subarray(end - copy, end - copy + dist), state.wnext);
+    copy -= dist;
+    if (copy) {
+      state.window.set(src.subarray(end - copy, end), 0);
+      state.wnext = copy;
+      state.whave = state.wsize;
+    } else {
+      state.wnext += dist;
+      if (state.wnext === state.wsize) {
+        state.wnext = 0;
+      }
+      if (state.whave < state.wsize) {
+        state.whave += dist;
+      }
+    }
+  }
+  return 0;
+};
+const inflate$2 = (strm, flush) => {
+  let state;
+  let input, output;
+  let next3;
+  let put;
+  let have, left;
+  let hold;
+  let bits;
+  let _in, _out;
+  let copy;
+  let from;
+  let from_source;
+  let here = 0;
+  let here_bits, here_op, here_val;
+  let last_bits, last_op, last_val;
+  let len;
+  let ret;
+  const hbuf = new Uint8Array(4);
+  let opts;
+  let n3;
+  const order = (
+    /* permutation of code lengths */
+    new Uint8Array([16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15])
+  );
+  if (inflateStateCheck(strm) || !strm.output || !strm.input && strm.avail_in !== 0) {
+    return Z_STREAM_ERROR$1;
+  }
+  state = strm.state;
+  if (state.mode === TYPE) {
+    state.mode = TYPEDO;
+  }
+  put = strm.next_out;
+  output = strm.output;
+  left = strm.avail_out;
+  next3 = strm.next_in;
+  input = strm.input;
+  have = strm.avail_in;
+  hold = state.hold;
+  bits = state.bits;
+  _in = have;
+  _out = left;
+  ret = Z_OK$1;
+  inf_leave:
+    for (; ; ) {
+      switch (state.mode) {
+        case HEAD:
+          if (state.wrap === 0) {
+            state.mode = TYPEDO;
+            break;
+          }
+          while (bits < 16) {
+            if (have === 0) {
+              break inf_leave;
+            }
+            have--;
+            hold += input[next3++] << bits;
+            bits += 8;
+          }
+          if (state.wrap & 2 && hold === 35615) {
+            if (state.wbits === 0) {
+              state.wbits = 15;
+            }
+            state.check = 0;
+            hbuf[0] = hold & 255;
+            hbuf[1] = hold >>> 8 & 255;
+            state.check = crc32_1(state.check, hbuf, 2, 0);
+            hold = 0;
+            bits = 0;
+            state.mode = FLAGS;
+            break;
+          }
+          if (state.head) {
+            state.head.done = false;
+          }
+          if (!(state.wrap & 1) || /* check if zlib header allowed */
+          (((hold & 255) << 8) + (hold >> 8)) % 31) {
+            strm.msg = "incorrect header check";
+            state.mode = BAD;
+            break;
+          }
+          if ((hold & 15) !== Z_DEFLATED) {
+            strm.msg = "unknown compression method";
+            state.mode = BAD;
+            break;
+          }
+          hold >>>= 4;
+          bits -= 4;
+          len = (hold & 15) + 8;
+          if (state.wbits === 0) {
+            state.wbits = len;
+          }
+          if (len > 15 || len > state.wbits) {
+            strm.msg = "invalid window size";
+            state.mode = BAD;
+            break;
+          }
+          state.dmax = 1 << state.wbits;
+          state.flags = 0;
+          strm.adler = state.check = 1;
+          state.mode = hold & 512 ? DICTID : TYPE;
+          hold = 0;
+          bits = 0;
+          break;
+        case FLAGS:
+          while (bits < 16) {
+            if (have === 0) {
+              break inf_leave;
+            }
+            have--;
+            hold += input[next3++] << bits;
+            bits += 8;
+          }
+          state.flags = hold;
+          if ((state.flags & 255) !== Z_DEFLATED) {
+            strm.msg = "unknown compression method";
+            state.mode = BAD;
+            break;
+          }
+          if (state.flags & 57344) {
+            strm.msg = "unknown header flags set";
+            state.mode = BAD;
+            break;
+          }
+          if (state.head) {
+            state.head.text = hold >> 8 & 1;
+          }
+          if (state.flags & 512 && state.wrap & 4) {
+            hbuf[0] = hold & 255;
+            hbuf[1] = hold >>> 8 & 255;
+            state.check = crc32_1(state.check, hbuf, 2, 0);
+          }
+          hold = 0;
+          bits = 0;
+          state.mode = TIME;
+        case TIME:
+          while (bits < 32) {
+            if (have === 0) {
+              break inf_leave;
+            }
+            have--;
+            hold += input[next3++] << bits;
+            bits += 8;
+          }
+          if (state.head) {
+            state.head.time = hold;
+          }
+          if (state.flags & 512 && state.wrap & 4) {
+            hbuf[0] = hold & 255;
+            hbuf[1] = hold >>> 8 & 255;
+            hbuf[2] = hold >>> 16 & 255;
+            hbuf[3] = hold >>> 24 & 255;
+            state.check = crc32_1(state.check, hbuf, 4, 0);
+          }
+          hold = 0;
+          bits = 0;
+          state.mode = OS;
+        case OS:
+          while (bits < 16) {
+            if (have === 0) {
+              break inf_leave;
+            }
+            have--;
+            hold += input[next3++] << bits;
+            bits += 8;
+          }
+          if (state.head) {
+            state.head.xflags = hold & 255;
+            state.head.os = hold >> 8;
+          }
+          if (state.flags & 512 && state.wrap & 4) {
+            hbuf[0] = hold & 255;
+            hbuf[1] = hold >>> 8 & 255;
+            state.check = crc32_1(state.check, hbuf, 2, 0);
+          }
+          hold = 0;
+          bits = 0;
+          state.mode = EXLEN;
+        case EXLEN:
+          if (state.flags & 1024) {
+            while (bits < 16) {
+              if (have === 0) {
+                break inf_leave;
+              }
+              have--;
+              hold += input[next3++] << bits;
+              bits += 8;
+            }
+            state.length = hold;
+            if (state.head) {
+              state.head.extra_len = hold;
+            }
+            if (state.flags & 512 && state.wrap & 4) {
+              hbuf[0] = hold & 255;
+              hbuf[1] = hold >>> 8 & 255;
+              state.check = crc32_1(state.check, hbuf, 2, 0);
+            }
+            hold = 0;
+            bits = 0;
+          } else if (state.head) {
+            state.head.extra = null;
+          }
+          state.mode = EXTRA;
+        case EXTRA:
+          if (state.flags & 1024) {
+            copy = state.length;
+            if (copy > have) {
+              copy = have;
+            }
+            if (copy) {
+              if (state.head) {
+                len = state.head.extra_len - state.length;
+                if (!state.head.extra) {
+                  state.head.extra = new Uint8Array(state.head.extra_len);
+                }
+                state.head.extra.set(
+                  input.subarray(
+                    next3,
+                    // extra field is limited to 65536 bytes
+                    // - no need for additional size check
+                    next3 + copy
+                  ),
+                  /*len + copy > state.head.extra_max - len ? state.head.extra_max : copy,*/
+                  len
+                );
+              }
+              if (state.flags & 512 && state.wrap & 4) {
+                state.check = crc32_1(state.check, input, copy, next3);
+              }
+              have -= copy;
+              next3 += copy;
+              state.length -= copy;
+            }
+            if (state.length) {
+              break inf_leave;
+            }
+          }
+          state.length = 0;
+          state.mode = NAME;
+        case NAME:
+          if (state.flags & 2048) {
+            if (have === 0) {
+              break inf_leave;
+            }
+            copy = 0;
+            do {
+              len = input[next3 + copy++];
+              if (state.head && len && state.length < 65536) {
+                state.head.name += String.fromCharCode(len);
+              }
+            } while (len && copy < have);
+            if (state.flags & 512 && state.wrap & 4) {
+              state.check = crc32_1(state.check, input, copy, next3);
+            }
+            have -= copy;
+            next3 += copy;
+            if (len) {
+              break inf_leave;
+            }
+          } else if (state.head) {
+            state.head.name = null;
+          }
+          state.length = 0;
+          state.mode = COMMENT;
+        case COMMENT:
+          if (state.flags & 4096) {
+            if (have === 0) {
+              break inf_leave;
+            }
+            copy = 0;
+            do {
+              len = input[next3 + copy++];
+              if (state.head && len && state.length < 65536) {
+                state.head.comment += String.fromCharCode(len);
+              }
+            } while (len && copy < have);
+            if (state.flags & 512 && state.wrap & 4) {
+              state.check = crc32_1(state.check, input, copy, next3);
+            }
+            have -= copy;
+            next3 += copy;
+            if (len) {
+              break inf_leave;
+            }
+          } else if (state.head) {
+            state.head.comment = null;
+          }
+          state.mode = HCRC;
+        case HCRC:
+          if (state.flags & 512) {
+            while (bits < 16) {
+              if (have === 0) {
+                break inf_leave;
+              }
+              have--;
+              hold += input[next3++] << bits;
+              bits += 8;
+            }
+            if (state.wrap & 4 && hold !== (state.check & 65535)) {
+              strm.msg = "header crc mismatch";
+              state.mode = BAD;
+              break;
+            }
+            hold = 0;
+            bits = 0;
+          }
+          if (state.head) {
+            state.head.hcrc = state.flags >> 9 & 1;
+            state.head.done = true;
+          }
+          strm.adler = state.check = 0;
+          state.mode = TYPE;
+          break;
+        case DICTID:
+          while (bits < 32) {
+            if (have === 0) {
+              break inf_leave;
+            }
+            have--;
+            hold += input[next3++] << bits;
+            bits += 8;
+          }
+          strm.adler = state.check = zswap32(hold);
+          hold = 0;
+          bits = 0;
+          state.mode = DICT;
+        case DICT:
+          if (state.havedict === 0) {
+            strm.next_out = put;
+            strm.avail_out = left;
+            strm.next_in = next3;
+            strm.avail_in = have;
+            state.hold = hold;
+            state.bits = bits;
+            return Z_NEED_DICT$1;
+          }
+          strm.adler = state.check = 1;
+          state.mode = TYPE;
+        case TYPE:
+          if (flush === Z_BLOCK || flush === Z_TREES) {
+            break inf_leave;
+          }
+        case TYPEDO:
+          if (state.last) {
+            hold >>>= bits & 7;
+            bits -= bits & 7;
+            state.mode = CHECK;
+            break;
+          }
+          while (bits < 3) {
+            if (have === 0) {
+              break inf_leave;
+            }
+            have--;
+            hold += input[next3++] << bits;
+            bits += 8;
+          }
+          state.last = hold & 1;
+          hold >>>= 1;
+          bits -= 1;
+          switch (hold & 3) {
+            case 0:
+              state.mode = STORED;
+              break;
+            case 1:
+              fixedtables(state);
+              state.mode = LEN_;
+              if (flush === Z_TREES) {
+                hold >>>= 2;
+                bits -= 2;
+                break inf_leave;
+              }
+              break;
+            case 2:
+              state.mode = TABLE;
+              break;
+            case 3:
+              strm.msg = "invalid block type";
+              state.mode = BAD;
+          }
+          hold >>>= 2;
+          bits -= 2;
+          break;
+        case STORED:
+          hold >>>= bits & 7;
+          bits -= bits & 7;
+          while (bits < 32) {
+            if (have === 0) {
+              break inf_leave;
+            }
+            have--;
+            hold += input[next3++] << bits;
+            bits += 8;
+          }
+          if ((hold & 65535) !== (hold >>> 16 ^ 65535)) {
+            strm.msg = "invalid stored block lengths";
+            state.mode = BAD;
+            break;
+          }
+          state.length = hold & 65535;
+          hold = 0;
+          bits = 0;
+          state.mode = COPY_;
+          if (flush === Z_TREES) {
+            break inf_leave;
+          }
+        case COPY_:
+          state.mode = COPY;
+        case COPY:
+          copy = state.length;
+          if (copy) {
+            if (copy > have) {
+              copy = have;
+            }
+            if (copy > left) {
+              copy = left;
+            }
+            if (copy === 0) {
+              break inf_leave;
+            }
+            output.set(input.subarray(next3, next3 + copy), put);
+            have -= copy;
+            next3 += copy;
+            left -= copy;
+            put += copy;
+            state.length -= copy;
+            break;
+          }
+          state.mode = TYPE;
+          break;
+        case TABLE:
+          while (bits < 14) {
+            if (have === 0) {
+              break inf_leave;
+            }
+            have--;
+            hold += input[next3++] << bits;
+            bits += 8;
+          }
+          state.nlen = (hold & 31) + 257;
+          hold >>>= 5;
+          bits -= 5;
+          state.ndist = (hold & 31) + 1;
+          hold >>>= 5;
+          bits -= 5;
+          state.ncode = (hold & 15) + 4;
+          hold >>>= 4;
+          bits -= 4;
+          if (state.nlen > 286 || state.ndist > 30) {
+            strm.msg = "too many length or distance symbols";
+            state.mode = BAD;
+            break;
+          }
+          state.have = 0;
+          state.mode = LENLENS;
+        case LENLENS:
+          while (state.have < state.ncode) {
+            while (bits < 3) {
+              if (have === 0) {
+                break inf_leave;
+              }
+              have--;
+              hold += input[next3++] << bits;
+              bits += 8;
+            }
+            state.lens[order[state.have++]] = hold & 7;
+            hold >>>= 3;
+            bits -= 3;
+          }
+          while (state.have < 19) {
+            state.lens[order[state.have++]] = 0;
+          }
+          state.lencode = state.lendyn;
+          state.lenbits = 7;
+          opts = { bits: state.lenbits };
+          ret = inftrees(CODES, state.lens, 0, 19, state.lencode, 0, state.work, opts);
+          state.lenbits = opts.bits;
+          if (ret) {
+            strm.msg = "invalid code lengths set";
+            state.mode = BAD;
+            break;
+          }
+          state.have = 0;
+          state.mode = CODELENS;
+        case CODELENS:
+          while (state.have < state.nlen + state.ndist) {
+            for (; ; ) {
+              here = state.lencode[hold & (1 << state.lenbits) - 1];
+              here_bits = here >>> 24;
+              here_op = here >>> 16 & 255;
+              here_val = here & 65535;
+              if (here_bits <= bits) {
+                break;
+              }
+              if (have === 0) {
+                break inf_leave;
+              }
+              have--;
+              hold += input[next3++] << bits;
+              bits += 8;
+            }
+            if (here_val < 16) {
+              hold >>>= here_bits;
+              bits -= here_bits;
+              state.lens[state.have++] = here_val;
+            } else {
+              if (here_val === 16) {
+                n3 = here_bits + 2;
+                while (bits < n3) {
+                  if (have === 0) {
+                    break inf_leave;
+                  }
+                  have--;
+                  hold += input[next3++] << bits;
+                  bits += 8;
+                }
+                hold >>>= here_bits;
+                bits -= here_bits;
+                if (state.have === 0) {
+                  strm.msg = "invalid bit length repeat";
+                  state.mode = BAD;
+                  break;
+                }
+                len = state.lens[state.have - 1];
+                copy = 3 + (hold & 3);
+                hold >>>= 2;
+                bits -= 2;
+              } else if (here_val === 17) {
+                n3 = here_bits + 3;
+                while (bits < n3) {
+                  if (have === 0) {
+                    break inf_leave;
+                  }
+                  have--;
+                  hold += input[next3++] << bits;
+                  bits += 8;
+                }
+                hold >>>= here_bits;
+                bits -= here_bits;
+                len = 0;
+                copy = 3 + (hold & 7);
+                hold >>>= 3;
+                bits -= 3;
+              } else {
+                n3 = here_bits + 7;
+                while (bits < n3) {
+                  if (have === 0) {
+                    break inf_leave;
+                  }
+                  have--;
+                  hold += input[next3++] << bits;
+                  bits += 8;
+                }
+                hold >>>= here_bits;
+                bits -= here_bits;
+                len = 0;
+                copy = 11 + (hold & 127);
+                hold >>>= 7;
+                bits -= 7;
+              }
+              if (state.have + copy > state.nlen + state.ndist) {
+                strm.msg = "invalid bit length repeat";
+                state.mode = BAD;
+                break;
+              }
+              while (copy--) {
+                state.lens[state.have++] = len;
+              }
+            }
+          }
+          if (state.mode === BAD) {
+            break;
+          }
+          if (state.lens[256] === 0) {
+            strm.msg = "invalid code -- missing end-of-block";
+            state.mode = BAD;
+            break;
+          }
+          state.lenbits = 9;
+          opts = { bits: state.lenbits };
+          ret = inftrees(LENS, state.lens, 0, state.nlen, state.lencode, 0, state.work, opts);
+          state.lenbits = opts.bits;
+          if (ret) {
+            strm.msg = "invalid literal/lengths set";
+            state.mode = BAD;
+            break;
+          }
+          state.distbits = 6;
+          state.distcode = state.distdyn;
+          opts = { bits: state.distbits };
+          ret = inftrees(DISTS, state.lens, state.nlen, state.ndist, state.distcode, 0, state.work, opts);
+          state.distbits = opts.bits;
+          if (ret) {
+            strm.msg = "invalid distances set";
+            state.mode = BAD;
+            break;
+          }
+          state.mode = LEN_;
+          if (flush === Z_TREES) {
+            break inf_leave;
+          }
+        case LEN_:
+          state.mode = LEN;
+        case LEN:
+          if (have >= 6 && left >= 258) {
+            strm.next_out = put;
+            strm.avail_out = left;
+            strm.next_in = next3;
+            strm.avail_in = have;
+            state.hold = hold;
+            state.bits = bits;
+            inffast(strm, _out);
+            put = strm.next_out;
+            output = strm.output;
+            left = strm.avail_out;
+            next3 = strm.next_in;
+            input = strm.input;
+            have = strm.avail_in;
+            hold = state.hold;
+            bits = state.bits;
+            if (state.mode === TYPE) {
+              state.back = -1;
+            }
+            break;
+          }
+          state.back = 0;
+          for (; ; ) {
+            here = state.lencode[hold & (1 << state.lenbits) - 1];
+            here_bits = here >>> 24;
+            here_op = here >>> 16 & 255;
+            here_val = here & 65535;
+            if (here_bits <= bits) {
+              break;
+            }
+            if (have === 0) {
+              break inf_leave;
+            }
+            have--;
+            hold += input[next3++] << bits;
+            bits += 8;
+          }
+          if (here_op && (here_op & 240) === 0) {
+            last_bits = here_bits;
+            last_op = here_op;
+            last_val = here_val;
+            for (; ; ) {
+              here = state.lencode[last_val + ((hold & (1 << last_bits + last_op) - 1) >> last_bits)];
+              here_bits = here >>> 24;
+              here_op = here >>> 16 & 255;
+              here_val = here & 65535;
+              if (last_bits + here_bits <= bits) {
+                break;
+              }
+              if (have === 0) {
+                break inf_leave;
+              }
+              have--;
+              hold += input[next3++] << bits;
+              bits += 8;
+            }
+            hold >>>= last_bits;
+            bits -= last_bits;
+            state.back += last_bits;
+          }
+          hold >>>= here_bits;
+          bits -= here_bits;
+          state.back += here_bits;
+          state.length = here_val;
+          if (here_op === 0) {
+            state.mode = LIT;
+            break;
+          }
+          if (here_op & 32) {
+            state.back = -1;
+            state.mode = TYPE;
+            break;
+          }
+          if (here_op & 64) {
+            strm.msg = "invalid literal/length code";
+            state.mode = BAD;
+            break;
+          }
+          state.extra = here_op & 15;
+          state.mode = LENEXT;
+        case LENEXT:
+          if (state.extra) {
+            n3 = state.extra;
+            while (bits < n3) {
+              if (have === 0) {
+                break inf_leave;
+              }
+              have--;
+              hold += input[next3++] << bits;
+              bits += 8;
+            }
+            state.length += hold & (1 << state.extra) - 1;
+            hold >>>= state.extra;
+            bits -= state.extra;
+            state.back += state.extra;
+          }
+          state.was = state.length;
+          state.mode = DIST;
+        case DIST:
+          for (; ; ) {
+            here = state.distcode[hold & (1 << state.distbits) - 1];
+            here_bits = here >>> 24;
+            here_op = here >>> 16 & 255;
+            here_val = here & 65535;
+            if (here_bits <= bits) {
+              break;
+            }
+            if (have === 0) {
+              break inf_leave;
+            }
+            have--;
+            hold += input[next3++] << bits;
+            bits += 8;
+          }
+          if ((here_op & 240) === 0) {
+            last_bits = here_bits;
+            last_op = here_op;
+            last_val = here_val;
+            for (; ; ) {
+              here = state.distcode[last_val + ((hold & (1 << last_bits + last_op) - 1) >> last_bits)];
+              here_bits = here >>> 24;
+              here_op = here >>> 16 & 255;
+              here_val = here & 65535;
+              if (last_bits + here_bits <= bits) {
+                break;
+              }
+              if (have === 0) {
+                break inf_leave;
+              }
+              have--;
+              hold += input[next3++] << bits;
+              bits += 8;
+            }
+            hold >>>= last_bits;
+            bits -= last_bits;
+            state.back += last_bits;
+          }
+          hold >>>= here_bits;
+          bits -= here_bits;
+          state.back += here_bits;
+          if (here_op & 64) {
+            strm.msg = "invalid distance code";
+            state.mode = BAD;
+            break;
+          }
+          state.offset = here_val;
+          state.extra = here_op & 15;
+          state.mode = DISTEXT;
+        case DISTEXT:
+          if (state.extra) {
+            n3 = state.extra;
+            while (bits < n3) {
+              if (have === 0) {
+                break inf_leave;
+              }
+              have--;
+              hold += input[next3++] << bits;
+              bits += 8;
+            }
+            state.offset += hold & (1 << state.extra) - 1;
+            hold >>>= state.extra;
+            bits -= state.extra;
+            state.back += state.extra;
+          }
+          if (state.offset > state.dmax) {
+            strm.msg = "invalid distance too far back";
+            state.mode = BAD;
+            break;
+          }
+          state.mode = MATCH;
+        case MATCH:
+          if (left === 0) {
+            break inf_leave;
+          }
+          copy = _out - left;
+          if (state.offset > copy) {
+            copy = state.offset - copy;
+            if (copy > state.whave) {
+              if (state.sane) {
+                strm.msg = "invalid distance too far back";
+                state.mode = BAD;
+                break;
+              }
+            }
+            if (copy > state.wnext) {
+              copy -= state.wnext;
+              from = state.wsize - copy;
+            } else {
+              from = state.wnext - copy;
+            }
+            if (copy > state.length) {
+              copy = state.length;
+            }
+            from_source = state.window;
+          } else {
+            from_source = output;
+            from = put - state.offset;
+            copy = state.length;
+          }
+          if (copy > left) {
+            copy = left;
+          }
+          left -= copy;
+          state.length -= copy;
+          do {
+            output[put++] = from_source[from++];
+          } while (--copy);
+          if (state.length === 0) {
+            state.mode = LEN;
+          }
+          break;
+        case LIT:
+          if (left === 0) {
+            break inf_leave;
+          }
+          output[put++] = state.length;
+          left--;
+          state.mode = LEN;
+          break;
+        case CHECK:
+          if (state.wrap) {
+            while (bits < 32) {
+              if (have === 0) {
+                break inf_leave;
+              }
+              have--;
+              hold |= input[next3++] << bits;
+              bits += 8;
+            }
+            _out -= left;
+            strm.total_out += _out;
+            state.total += _out;
+            if (state.wrap & 4 && _out) {
+              strm.adler = state.check = /*UPDATE_CHECK(state.check, put - _out, _out);*/
+              state.flags ? crc32_1(state.check, output, _out, put - _out) : adler32_1(state.check, output, _out, put - _out);
+            }
+            _out = left;
+            if (state.wrap & 4 && (state.flags ? hold : zswap32(hold)) !== state.check) {
+              strm.msg = "incorrect data check";
+              state.mode = BAD;
+              break;
+            }
+            hold = 0;
+            bits = 0;
+          }
+          state.mode = LENGTH;
+        case LENGTH:
+          if (state.wrap && state.flags) {
+            while (bits < 32) {
+              if (have === 0) {
+                break inf_leave;
+              }
+              have--;
+              hold += input[next3++] << bits;
+              bits += 8;
+            }
+            if (state.wrap & 4 && hold !== (state.total & 4294967295)) {
+              strm.msg = "incorrect length check";
+              state.mode = BAD;
+              break;
+            }
+            hold = 0;
+            bits = 0;
+          }
+          state.mode = DONE;
+        case DONE:
+          ret = Z_STREAM_END$1;
+          break inf_leave;
+        case BAD:
+          ret = Z_DATA_ERROR$1;
+          break inf_leave;
+        case MEM:
+          return Z_MEM_ERROR$1;
+        case SYNC:
+        default:
+          return Z_STREAM_ERROR$1;
+      }
+    }
+  strm.next_out = put;
+  strm.avail_out = left;
+  strm.next_in = next3;
+  strm.avail_in = have;
+  state.hold = hold;
+  state.bits = bits;
+  if (state.wsize || _out !== strm.avail_out && state.mode < BAD && (state.mode < CHECK || flush !== Z_FINISH$1)) {
+    if (updatewindow(strm, strm.output, strm.next_out, _out - strm.avail_out)) ;
+  }
+  _in -= strm.avail_in;
+  _out -= strm.avail_out;
+  strm.total_in += _in;
+  strm.total_out += _out;
+  state.total += _out;
+  if (state.wrap & 4 && _out) {
+    strm.adler = state.check = /*UPDATE_CHECK(state.check, strm.next_out - _out, _out);*/
+    state.flags ? crc32_1(state.check, output, _out, strm.next_out - _out) : adler32_1(state.check, output, _out, strm.next_out - _out);
+  }
+  strm.data_type = state.bits + (state.last ? 64 : 0) + (state.mode === TYPE ? 128 : 0) + (state.mode === LEN_ || state.mode === COPY_ ? 256 : 0);
+  if ((_in === 0 && _out === 0 || flush === Z_FINISH$1) && ret === Z_OK$1) {
+    ret = Z_BUF_ERROR;
+  }
+  return ret;
+};
+const inflateEnd = (strm) => {
+  if (inflateStateCheck(strm)) {
+    return Z_STREAM_ERROR$1;
+  }
+  let state = strm.state;
+  if (state.window) {
+    state.window = null;
+  }
+  strm.state = null;
+  return Z_OK$1;
+};
+const inflateGetHeader = (strm, head) => {
+  if (inflateStateCheck(strm)) {
+    return Z_STREAM_ERROR$1;
+  }
+  const state = strm.state;
+  if ((state.wrap & 2) === 0) {
+    return Z_STREAM_ERROR$1;
+  }
+  state.head = head;
+  head.done = false;
+  return Z_OK$1;
+};
+const inflateSetDictionary = (strm, dictionary) => {
+  const dictLength = dictionary.length;
+  let state;
+  let dictid;
+  let ret;
+  if (inflateStateCheck(strm)) {
+    return Z_STREAM_ERROR$1;
+  }
+  state = strm.state;
+  if (state.wrap !== 0 && state.mode !== DICT) {
+    return Z_STREAM_ERROR$1;
+  }
+  if (state.mode === DICT) {
+    dictid = 1;
+    dictid = adler32_1(dictid, dictionary, dictLength, 0);
+    if (dictid !== state.check) {
+      return Z_DATA_ERROR$1;
+    }
+  }
+  ret = updatewindow(strm, dictionary, dictLength, dictLength);
+  if (ret) {
+    state.mode = MEM;
+    return Z_MEM_ERROR$1;
+  }
+  state.havedict = 1;
+  return Z_OK$1;
+};
+var inflateReset_1 = inflateReset;
+var inflateReset2_1 = inflateReset2;
+var inflateResetKeep_1 = inflateResetKeep;
+var inflateInit_1 = inflateInit;
+var inflateInit2_1 = inflateInit2;
+var inflate_2$1 = inflate$2;
+var inflateEnd_1 = inflateEnd;
+var inflateGetHeader_1 = inflateGetHeader;
+var inflateSetDictionary_1 = inflateSetDictionary;
+var inflateInfo = "pako inflate (from Nodeca project)";
+var inflate_1$2 = {
+  inflateReset: inflateReset_1,
+  inflateReset2: inflateReset2_1,
+  inflateResetKeep: inflateResetKeep_1,
+  inflateInit: inflateInit_1,
+  inflateInit2: inflateInit2_1,
+  inflate: inflate_2$1,
+  inflateEnd: inflateEnd_1,
+  inflateGetHeader: inflateGetHeader_1,
+  inflateSetDictionary: inflateSetDictionary_1,
+  inflateInfo
+};
+function GZheader() {
+  this.text = 0;
+  this.time = 0;
+  this.xflags = 0;
+  this.os = 0;
+  this.extra = null;
+  this.extra_len = 0;
+  this.name = "";
+  this.comment = "";
+  this.hcrc = 0;
+  this.done = false;
+}
+var gzheader = GZheader;
+const toString = Object.prototype.toString;
+const {
+  Z_NO_FLUSH,
+  Z_FINISH,
+  Z_OK,
+  Z_STREAM_END,
+  Z_NEED_DICT,
+  Z_STREAM_ERROR,
+  Z_DATA_ERROR,
+  Z_MEM_ERROR
+} = constants$2;
+function Inflate$1(options) {
+  this.options = common.assign({
+    chunkSize: 1024 * 64,
+    windowBits: 15,
+    to: ""
+  }, options || {});
+  const opt = this.options;
+  if (opt.raw && opt.windowBits >= 0 && opt.windowBits < 16) {
+    opt.windowBits = -opt.windowBits;
+    if (opt.windowBits === 0) {
+      opt.windowBits = -15;
+    }
+  }
+  if (opt.windowBits >= 0 && opt.windowBits < 16 && !(options && options.windowBits)) {
+    opt.windowBits += 32;
+  }
+  if (opt.windowBits > 15 && opt.windowBits < 48) {
+    if ((opt.windowBits & 15) === 0) {
+      opt.windowBits |= 15;
+    }
+  }
+  this.err = 0;
+  this.msg = "";
+  this.ended = false;
+  this.chunks = [];
+  this.strm = new zstream();
+  this.strm.avail_out = 0;
+  let status = inflate_1$2.inflateInit2(
+    this.strm,
+    opt.windowBits
+  );
+  if (status !== Z_OK) {
+    throw new Error(messages[status]);
+  }
+  this.header = new gzheader();
+  inflate_1$2.inflateGetHeader(this.strm, this.header);
+  if (opt.dictionary) {
+    if (typeof opt.dictionary === "string") {
+      opt.dictionary = strings.string2buf(opt.dictionary);
+    } else if (toString.call(opt.dictionary) === "[object ArrayBuffer]") {
+      opt.dictionary = new Uint8Array(opt.dictionary);
+    }
+    if (opt.raw) {
+      status = inflate_1$2.inflateSetDictionary(this.strm, opt.dictionary);
+      if (status !== Z_OK) {
+        throw new Error(messages[status]);
+      }
+    }
+  }
+}
+Inflate$1.prototype.push = function(data, flush_mode) {
+  const strm = this.strm;
+  const chunkSize = this.options.chunkSize;
+  const dictionary = this.options.dictionary;
+  let status, _flush_mode, last_avail_out;
+  if (this.ended) return false;
+  if (flush_mode === ~~flush_mode) _flush_mode = flush_mode;
+  else _flush_mode = flush_mode === true ? Z_FINISH : Z_NO_FLUSH;
+  if (toString.call(data) === "[object ArrayBuffer]") {
+    strm.input = new Uint8Array(data);
+  } else {
+    strm.input = data;
+  }
+  strm.next_in = 0;
+  strm.avail_in = strm.input.length;
+  for (; ; ) {
+    if (strm.avail_out === 0) {
+      strm.output = new Uint8Array(chunkSize);
+      strm.next_out = 0;
+      strm.avail_out = chunkSize;
+    }
+    status = inflate_1$2.inflate(strm, _flush_mode);
+    if (status === Z_NEED_DICT && dictionary) {
+      status = inflate_1$2.inflateSetDictionary(strm, dictionary);
+      if (status === Z_OK) {
+        status = inflate_1$2.inflate(strm, _flush_mode);
+      } else if (status === Z_DATA_ERROR) {
+        status = Z_NEED_DICT;
+      }
+    }
+    while (strm.avail_in > 0 && status === Z_STREAM_END && strm.state.wrap > 0 && data[strm.next_in] !== 0) {
+      inflate_1$2.inflateReset(strm);
+      status = inflate_1$2.inflate(strm, _flush_mode);
+    }
+    switch (status) {
+      case Z_STREAM_ERROR:
+      case Z_DATA_ERROR:
+      case Z_NEED_DICT:
+      case Z_MEM_ERROR:
+        this.onEnd(status);
+        this.ended = true;
+        return false;
+    }
+    last_avail_out = strm.avail_out;
+    if (strm.next_out) {
+      if (strm.avail_out === 0 || status === Z_STREAM_END) {
+        if (this.options.to === "string") {
+          let next_out_utf8 = strings.utf8border(strm.output, strm.next_out);
+          let tail = strm.next_out - next_out_utf8;
+          let utf8str = strings.buf2string(strm.output, next_out_utf8);
+          strm.next_out = tail;
+          strm.avail_out = chunkSize - tail;
+          if (tail) strm.output.set(strm.output.subarray(next_out_utf8, next_out_utf8 + tail), 0);
+          this.onData(utf8str);
+        } else {
+          this.onData(strm.output.length === strm.next_out ? strm.output : strm.output.subarray(0, strm.next_out));
+        }
+      }
+    }
+    if (status === Z_OK && last_avail_out === 0) continue;
+    if (status === Z_STREAM_END) {
+      status = inflate_1$2.inflateEnd(this.strm);
+      this.onEnd(status);
+      this.ended = true;
+      return true;
+    }
+    if (strm.avail_in === 0) break;
+  }
+  return true;
+};
+Inflate$1.prototype.onData = function(chunk) {
+  this.chunks.push(chunk);
+};
+Inflate$1.prototype.onEnd = function(status) {
+  if (status === Z_OK) {
+    if (this.options.to === "string") {
+      this.result = this.chunks.join("");
+    } else {
+      this.result = common.flattenChunks(this.chunks);
+    }
+  }
+  this.chunks = [];
+  this.err = status;
+  this.msg = this.strm.msg;
+};
+function inflate$1(input, options) {
+  const inflator = new Inflate$1(options);
+  inflator.push(input);
+  if (inflator.err) throw inflator.msg || messages[inflator.err];
+  return inflator.result;
+}
+var inflate_2 = inflate$1;
+var inflate_1$1 = {
+  inflate: inflate_2
+};
+const { inflate } = inflate_1$1;
+var inflate_1 = inflate;
+class DeflateDecoder extends BaseDecoder {
+  /** @param {ArrayBuffer} buffer */
+  decodeBlock(buffer2) {
+    return inflate_1(new Uint8Array(buffer2)).buffer;
+  }
+}
+const deflate = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  default: DeflateDecoder
+}, Symbol.toStringTag, { value: "Module" }));
+class PackbitsDecoder extends BaseDecoder {
+  /** @param {ArrayBuffer} buffer */
+  decodeBlock(buffer2) {
+    const dataView = new DataView(buffer2);
+    const out = [];
+    for (let i2 = 0; i2 < buffer2.byteLength; ++i2) {
+      let header = dataView.getInt8(i2);
+      if (header < 0) {
+        const next3 = dataView.getUint8(i2 + 1);
+        header = -header;
+        for (let j = 0; j <= header; ++j) {
+          out.push(next3);
+        }
+        i2 += 1;
+      } else {
+        for (let j = 0; j <= header; ++j) {
+          out.push(dataView.getUint8(i2 + j + 1));
+        }
+        i2 += header + 1;
+      }
+    }
+    return new Uint8Array(out).buffer;
+  }
+}
+const packbits = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  default: PackbitsDecoder
+}, Symbol.toStringTag, { value: "Module" }));
+var LercDecode = { exports: {} };
+(function(module) {
+  /* Copyright 2015-2021 Esri. Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 @preserve */
+  (function() {
+    var LercDecode2 = function() {
+      var CntZImage = {};
+      CntZImage.defaultNoDataValue = -34027999387901484e22;
+      CntZImage.decode = function(input, options) {
+        options = options || {};
+        var skipMask = options.encodedMaskData || options.encodedMaskData === null;
+        var parsedData = parse(input, options.inputOffset || 0, skipMask);
+        var noDataValue = options.noDataValue !== null ? options.noDataValue : CntZImage.defaultNoDataValue;
+        var uncompressedData = uncompressPixelValues(
+          parsedData,
+          options.pixelType || Float32Array,
+          options.encodedMaskData,
+          noDataValue,
+          options.returnMask
+        );
+        var result = {
+          width: parsedData.width,
+          height: parsedData.height,
+          pixelData: uncompressedData.resultPixels,
+          minValue: uncompressedData.minValue,
+          maxValue: parsedData.pixels.maxValue,
+          noDataValue
+        };
+        if (uncompressedData.resultMask) {
+          result.maskData = uncompressedData.resultMask;
+        }
+        if (options.returnEncodedMask && parsedData.mask) {
+          result.encodedMaskData = parsedData.mask.bitset ? parsedData.mask.bitset : null;
+        }
+        if (options.returnFileInfo) {
+          result.fileInfo = formatFileInfo(parsedData);
+          if (options.computeUsedBitDepths) {
+            result.fileInfo.bitDepths = computeUsedBitDepths(parsedData);
+          }
+        }
+        return result;
+      };
+      var uncompressPixelValues = function(data, TypedArrayClass, maskBitset, noDataValue, storeDecodedMask) {
+        var blockIdx = 0;
+        var numX = data.pixels.numBlocksX;
+        var numY = data.pixels.numBlocksY;
+        var blockWidth = Math.floor(data.width / numX);
+        var blockHeight = Math.floor(data.height / numY);
+        var scale = 2 * data.maxZError;
+        var minValue = Number.MAX_VALUE, currentValue;
+        maskBitset = maskBitset || (data.mask ? data.mask.bitset : null);
+        var resultPixels, resultMask;
+        resultPixels = new TypedArrayClass(data.width * data.height);
+        if (storeDecodedMask && maskBitset) {
+          resultMask = new Uint8Array(data.width * data.height);
+        }
+        var blockDataBuffer = new Float32Array(blockWidth * blockHeight);
+        var xx, yy;
+        for (var y3 = 0; y3 <= numY; y3++) {
+          var thisBlockHeight = y3 !== numY ? blockHeight : data.height % numY;
+          if (thisBlockHeight === 0) {
+            continue;
+          }
+          for (var x2 = 0; x2 <= numX; x2++) {
+            var thisBlockWidth = x2 !== numX ? blockWidth : data.width % numX;
+            if (thisBlockWidth === 0) {
+              continue;
+            }
+            var outPtr = y3 * data.width * blockHeight + x2 * blockWidth;
+            var outStride = data.width - thisBlockWidth;
+            var block = data.pixels.blocks[blockIdx];
+            var blockData, blockPtr, constValue;
+            if (block.encoding < 2) {
+              if (block.encoding === 0) {
+                blockData = block.rawData;
+              } else {
+                unstuff(block.stuffedData, block.bitsPerPixel, block.numValidPixels, block.offset, scale, blockDataBuffer, data.pixels.maxValue);
+                blockData = blockDataBuffer;
+              }
+              blockPtr = 0;
+            } else if (block.encoding === 2) {
+              constValue = 0;
+            } else {
+              constValue = block.offset;
+            }
+            var maskByte;
+            if (maskBitset) {
+              for (yy = 0; yy < thisBlockHeight; yy++) {
+                if (outPtr & 7) {
+                  maskByte = maskBitset[outPtr >> 3];
+                  maskByte <<= outPtr & 7;
+                }
+                for (xx = 0; xx < thisBlockWidth; xx++) {
+                  if (!(outPtr & 7)) {
+                    maskByte = maskBitset[outPtr >> 3];
+                  }
+                  if (maskByte & 128) {
+                    if (resultMask) {
+                      resultMask[outPtr] = 1;
+                    }
+                    currentValue = block.encoding < 2 ? blockData[blockPtr++] : constValue;
+                    minValue = minValue > currentValue ? currentValue : minValue;
+                    resultPixels[outPtr++] = currentValue;
+                  } else {
+                    if (resultMask) {
+                      resultMask[outPtr] = 0;
+                    }
+                    resultPixels[outPtr++] = noDataValue;
+                  }
+                  maskByte <<= 1;
+                }
+                outPtr += outStride;
+              }
+            } else {
+              if (block.encoding < 2) {
+                for (yy = 0; yy < thisBlockHeight; yy++) {
+                  for (xx = 0; xx < thisBlockWidth; xx++) {
+                    currentValue = blockData[blockPtr++];
+                    minValue = minValue > currentValue ? currentValue : minValue;
+                    resultPixels[outPtr++] = currentValue;
+                  }
+                  outPtr += outStride;
+                }
+              } else {
+                minValue = minValue > constValue ? constValue : minValue;
+                for (yy = 0; yy < thisBlockHeight; yy++) {
+                  for (xx = 0; xx < thisBlockWidth; xx++) {
+                    resultPixels[outPtr++] = constValue;
+                  }
+                  outPtr += outStride;
+                }
+              }
+            }
+            if (block.encoding === 1 && blockPtr !== block.numValidPixels) {
+              throw "Block and Mask do not match";
+            }
+            blockIdx++;
+          }
+        }
+        return {
+          resultPixels,
+          resultMask,
+          minValue
+        };
+      };
+      var formatFileInfo = function(data) {
+        return {
+          "fileIdentifierString": data.fileIdentifierString,
+          "fileVersion": data.fileVersion,
+          "imageType": data.imageType,
+          "height": data.height,
+          "width": data.width,
+          "maxZError": data.maxZError,
+          "eofOffset": data.eofOffset,
+          "mask": data.mask ? {
+            "numBlocksX": data.mask.numBlocksX,
+            "numBlocksY": data.mask.numBlocksY,
+            "numBytes": data.mask.numBytes,
+            "maxValue": data.mask.maxValue
+          } : null,
+          "pixels": {
+            "numBlocksX": data.pixels.numBlocksX,
+            "numBlocksY": data.pixels.numBlocksY,
+            "numBytes": data.pixels.numBytes,
+            "maxValue": data.pixels.maxValue,
+            "noDataValue": data.noDataValue
+          }
+        };
+      };
+      var computeUsedBitDepths = function(data) {
+        var numBlocks = data.pixels.numBlocksX * data.pixels.numBlocksY;
+        var bitDepths = {};
+        for (var i2 = 0; i2 < numBlocks; i2++) {
+          var block = data.pixels.blocks[i2];
+          if (block.encoding === 0) {
+            bitDepths.float32 = true;
+          } else if (block.encoding === 1) {
+            bitDepths[block.bitsPerPixel] = true;
+          } else {
+            bitDepths[0] = true;
+          }
+        }
+        return Object.keys(bitDepths);
+      };
+      var parse = function(input, fp, skipMask) {
+        var data = {};
+        var fileIdView = new Uint8Array(input, fp, 10);
+        data.fileIdentifierString = String.fromCharCode.apply(null, fileIdView);
+        if (data.fileIdentifierString.trim() !== "CntZImage") {
+          throw "Unexpected file identifier string: " + data.fileIdentifierString;
+        }
+        fp += 10;
+        var view = new DataView(input, fp, 24);
+        data.fileVersion = view.getInt32(0, true);
+        data.imageType = view.getInt32(4, true);
+        data.height = view.getUint32(8, true);
+        data.width = view.getUint32(12, true);
+        data.maxZError = view.getFloat64(16, true);
+        fp += 24;
+        if (!skipMask) {
+          view = new DataView(input, fp, 16);
+          data.mask = {};
+          data.mask.numBlocksY = view.getUint32(0, true);
+          data.mask.numBlocksX = view.getUint32(4, true);
+          data.mask.numBytes = view.getUint32(8, true);
+          data.mask.maxValue = view.getFloat32(12, true);
+          fp += 16;
+          if (data.mask.numBytes > 0) {
+            var bitset = new Uint8Array(Math.ceil(data.width * data.height / 8));
+            view = new DataView(input, fp, data.mask.numBytes);
+            var cnt = view.getInt16(0, true);
+            var ip = 2, op = 0;
+            do {
+              if (cnt > 0) {
+                while (cnt--) {
+                  bitset[op++] = view.getUint8(ip++);
+                }
+              } else {
+                var val = view.getUint8(ip++);
+                cnt = -cnt;
+                while (cnt--) {
+                  bitset[op++] = val;
+                }
+              }
+              cnt = view.getInt16(ip, true);
+              ip += 2;
+            } while (ip < data.mask.numBytes);
+            if (cnt !== -32768 || op < bitset.length) {
+              throw "Unexpected end of mask RLE encoding";
+            }
+            data.mask.bitset = bitset;
+            fp += data.mask.numBytes;
+          } else if ((data.mask.numBytes | data.mask.numBlocksY | data.mask.maxValue) === 0) {
+            data.mask.bitset = new Uint8Array(Math.ceil(data.width * data.height / 8));
+          }
+        }
+        view = new DataView(input, fp, 16);
+        data.pixels = {};
+        data.pixels.numBlocksY = view.getUint32(0, true);
+        data.pixels.numBlocksX = view.getUint32(4, true);
+        data.pixels.numBytes = view.getUint32(8, true);
+        data.pixels.maxValue = view.getFloat32(12, true);
+        fp += 16;
+        var numBlocksX = data.pixels.numBlocksX;
+        var numBlocksY = data.pixels.numBlocksY;
+        var actualNumBlocksX = numBlocksX + (data.width % numBlocksX > 0 ? 1 : 0);
+        var actualNumBlocksY = numBlocksY + (data.height % numBlocksY > 0 ? 1 : 0);
+        data.pixels.blocks = new Array(actualNumBlocksX * actualNumBlocksY);
+        var blockI = 0;
+        for (var blockY = 0; blockY < actualNumBlocksY; blockY++) {
+          for (var blockX = 0; blockX < actualNumBlocksX; blockX++) {
+            var size = 0;
+            var bytesLeft = input.byteLength - fp;
+            view = new DataView(input, fp, Math.min(10, bytesLeft));
+            var block = {};
+            data.pixels.blocks[blockI++] = block;
+            var headerByte = view.getUint8(0);
+            size++;
+            block.encoding = headerByte & 63;
+            if (block.encoding > 3) {
+              throw "Invalid block encoding (" + block.encoding + ")";
+            }
+            if (block.encoding === 2) {
+              fp++;
+              continue;
+            }
+            if (headerByte !== 0 && headerByte !== 2) {
+              headerByte >>= 6;
+              block.offsetType = headerByte;
+              if (headerByte === 2) {
+                block.offset = view.getInt8(1);
+                size++;
+              } else if (headerByte === 1) {
+                block.offset = view.getInt16(1, true);
+                size += 2;
+              } else if (headerByte === 0) {
+                block.offset = view.getFloat32(1, true);
+                size += 4;
+              } else {
+                throw "Invalid block offset type";
+              }
+              if (block.encoding === 1) {
+                headerByte = view.getUint8(size);
+                size++;
+                block.bitsPerPixel = headerByte & 63;
+                headerByte >>= 6;
+                block.numValidPixelsType = headerByte;
+                if (headerByte === 2) {
+                  block.numValidPixels = view.getUint8(size);
+                  size++;
+                } else if (headerByte === 1) {
+                  block.numValidPixels = view.getUint16(size, true);
+                  size += 2;
+                } else if (headerByte === 0) {
+                  block.numValidPixels = view.getUint32(size, true);
+                  size += 4;
+                } else {
+                  throw "Invalid valid pixel count type";
+                }
+              }
+            }
+            fp += size;
+            if (block.encoding === 3) {
+              continue;
+            }
+            var arrayBuf, store8;
+            if (block.encoding === 0) {
+              var numPixels = (data.pixels.numBytes - 1) / 4;
+              if (numPixels !== Math.floor(numPixels)) {
+                throw "uncompressed block has invalid length";
+              }
+              arrayBuf = new ArrayBuffer(numPixels * 4);
+              store8 = new Uint8Array(arrayBuf);
+              store8.set(new Uint8Array(input, fp, numPixels * 4));
+              var rawData = new Float32Array(arrayBuf);
+              block.rawData = rawData;
+              fp += numPixels * 4;
+            } else if (block.encoding === 1) {
+              var dataBytes = Math.ceil(block.numValidPixels * block.bitsPerPixel / 8);
+              var dataWords = Math.ceil(dataBytes / 4);
+              arrayBuf = new ArrayBuffer(dataWords * 4);
+              store8 = new Uint8Array(arrayBuf);
+              store8.set(new Uint8Array(input, fp, dataBytes));
+              block.stuffedData = new Uint32Array(arrayBuf);
+              fp += dataBytes;
+            }
+          }
+        }
+        data.eofOffset = fp;
+        return data;
+      };
+      var unstuff = function(src, bitsPerPixel, numPixels, offset, scale, dest, maxValue) {
+        var bitMask = (1 << bitsPerPixel) - 1;
+        var i2 = 0, o2;
+        var bitsLeft = 0;
+        var n3, buffer2;
+        var nmax = Math.ceil((maxValue - offset) / scale);
+        var numInvalidTailBytes = src.length * 4 - Math.ceil(bitsPerPixel * numPixels / 8);
+        src[src.length - 1] <<= 8 * numInvalidTailBytes;
+        for (o2 = 0; o2 < numPixels; o2++) {
+          if (bitsLeft === 0) {
+            buffer2 = src[i2++];
+            bitsLeft = 32;
+          }
+          if (bitsLeft >= bitsPerPixel) {
+            n3 = buffer2 >>> bitsLeft - bitsPerPixel & bitMask;
+            bitsLeft -= bitsPerPixel;
+          } else {
+            var missingBits = bitsPerPixel - bitsLeft;
+            n3 = (buffer2 & bitMask) << missingBits & bitMask;
+            buffer2 = src[i2++];
+            bitsLeft = 32 - missingBits;
+            n3 += buffer2 >>> bitsLeft;
+          }
+          dest[o2] = n3 < nmax ? offset + n3 * scale : maxValue;
+        }
+        return dest;
+      };
+      return CntZImage;
+    }();
+    var Lerc2Decode = /* @__PURE__ */ function() {
+      var BitStuffer = {
+        //methods ending with 2 are for the new byte order used by Lerc2.3 and above.
+        //originalUnstuff is used to unpack Huffman code table. code is duplicated to unstuffx for performance reasons.
+        unstuff: function(src, dest, bitsPerPixel, numPixels, lutArr, offset, scale, maxValue) {
+          var bitMask = (1 << bitsPerPixel) - 1;
+          var i2 = 0, o2;
+          var bitsLeft = 0;
+          var n3, buffer2, missingBits, nmax;
+          var numInvalidTailBytes = src.length * 4 - Math.ceil(bitsPerPixel * numPixels / 8);
+          src[src.length - 1] <<= 8 * numInvalidTailBytes;
+          if (lutArr) {
+            for (o2 = 0; o2 < numPixels; o2++) {
+              if (bitsLeft === 0) {
+                buffer2 = src[i2++];
+                bitsLeft = 32;
+              }
+              if (bitsLeft >= bitsPerPixel) {
+                n3 = buffer2 >>> bitsLeft - bitsPerPixel & bitMask;
+                bitsLeft -= bitsPerPixel;
+              } else {
+                missingBits = bitsPerPixel - bitsLeft;
+                n3 = (buffer2 & bitMask) << missingBits & bitMask;
+                buffer2 = src[i2++];
+                bitsLeft = 32 - missingBits;
+                n3 += buffer2 >>> bitsLeft;
+              }
+              dest[o2] = lutArr[n3];
+            }
+          } else {
+            nmax = Math.ceil((maxValue - offset) / scale);
+            for (o2 = 0; o2 < numPixels; o2++) {
+              if (bitsLeft === 0) {
+                buffer2 = src[i2++];
+                bitsLeft = 32;
+              }
+              if (bitsLeft >= bitsPerPixel) {
+                n3 = buffer2 >>> bitsLeft - bitsPerPixel & bitMask;
+                bitsLeft -= bitsPerPixel;
+              } else {
+                missingBits = bitsPerPixel - bitsLeft;
+                n3 = (buffer2 & bitMask) << missingBits & bitMask;
+                buffer2 = src[i2++];
+                bitsLeft = 32 - missingBits;
+                n3 += buffer2 >>> bitsLeft;
+              }
+              dest[o2] = n3 < nmax ? offset + n3 * scale : maxValue;
+            }
+          }
+        },
+        unstuffLUT: function(src, bitsPerPixel, numPixels, offset, scale, maxValue) {
+          var bitMask = (1 << bitsPerPixel) - 1;
+          var i2 = 0, o2 = 0, missingBits = 0, bitsLeft = 0, n3 = 0;
+          var buffer2;
+          var dest = [];
+          var numInvalidTailBytes = src.length * 4 - Math.ceil(bitsPerPixel * numPixels / 8);
+          src[src.length - 1] <<= 8 * numInvalidTailBytes;
+          var nmax = Math.ceil((maxValue - offset) / scale);
+          for (o2 = 0; o2 < numPixels; o2++) {
+            if (bitsLeft === 0) {
+              buffer2 = src[i2++];
+              bitsLeft = 32;
+            }
+            if (bitsLeft >= bitsPerPixel) {
+              n3 = buffer2 >>> bitsLeft - bitsPerPixel & bitMask;
+              bitsLeft -= bitsPerPixel;
+            } else {
+              missingBits = bitsPerPixel - bitsLeft;
+              n3 = (buffer2 & bitMask) << missingBits & bitMask;
+              buffer2 = src[i2++];
+              bitsLeft = 32 - missingBits;
+              n3 += buffer2 >>> bitsLeft;
+            }
+            dest[o2] = n3 < nmax ? offset + n3 * scale : maxValue;
+          }
+          dest.unshift(offset);
+          return dest;
+        },
+        unstuff2: function(src, dest, bitsPerPixel, numPixels, lutArr, offset, scale, maxValue) {
+          var bitMask = (1 << bitsPerPixel) - 1;
+          var i2 = 0, o2;
+          var bitsLeft = 0, bitPos = 0;
+          var n3, buffer2, missingBits;
+          if (lutArr) {
+            for (o2 = 0; o2 < numPixels; o2++) {
+              if (bitsLeft === 0) {
+                buffer2 = src[i2++];
+                bitsLeft = 32;
+                bitPos = 0;
+              }
+              if (bitsLeft >= bitsPerPixel) {
+                n3 = buffer2 >>> bitPos & bitMask;
+                bitsLeft -= bitsPerPixel;
+                bitPos += bitsPerPixel;
+              } else {
+                missingBits = bitsPerPixel - bitsLeft;
+                n3 = buffer2 >>> bitPos & bitMask;
+                buffer2 = src[i2++];
+                bitsLeft = 32 - missingBits;
+                n3 |= (buffer2 & (1 << missingBits) - 1) << bitsPerPixel - missingBits;
+                bitPos = missingBits;
+              }
+              dest[o2] = lutArr[n3];
+            }
+          } else {
+            var nmax = Math.ceil((maxValue - offset) / scale);
+            for (o2 = 0; o2 < numPixels; o2++) {
+              if (bitsLeft === 0) {
+                buffer2 = src[i2++];
+                bitsLeft = 32;
+                bitPos = 0;
+              }
+              if (bitsLeft >= bitsPerPixel) {
+                n3 = buffer2 >>> bitPos & bitMask;
+                bitsLeft -= bitsPerPixel;
+                bitPos += bitsPerPixel;
+              } else {
+                missingBits = bitsPerPixel - bitsLeft;
+                n3 = buffer2 >>> bitPos & bitMask;
+                buffer2 = src[i2++];
+                bitsLeft = 32 - missingBits;
+                n3 |= (buffer2 & (1 << missingBits) - 1) << bitsPerPixel - missingBits;
+                bitPos = missingBits;
+              }
+              dest[o2] = n3 < nmax ? offset + n3 * scale : maxValue;
+            }
+          }
+          return dest;
+        },
+        unstuffLUT2: function(src, bitsPerPixel, numPixels, offset, scale, maxValue) {
+          var bitMask = (1 << bitsPerPixel) - 1;
+          var i2 = 0, o2 = 0, missingBits = 0, bitsLeft = 0, n3 = 0, bitPos = 0;
+          var buffer2;
+          var dest = [];
+          var nmax = Math.ceil((maxValue - offset) / scale);
+          for (o2 = 0; o2 < numPixels; o2++) {
+            if (bitsLeft === 0) {
+              buffer2 = src[i2++];
+              bitsLeft = 32;
+              bitPos = 0;
+            }
+            if (bitsLeft >= bitsPerPixel) {
+              n3 = buffer2 >>> bitPos & bitMask;
+              bitsLeft -= bitsPerPixel;
+              bitPos += bitsPerPixel;
+            } else {
+              missingBits = bitsPerPixel - bitsLeft;
+              n3 = buffer2 >>> bitPos & bitMask;
+              buffer2 = src[i2++];
+              bitsLeft = 32 - missingBits;
+              n3 |= (buffer2 & (1 << missingBits) - 1) << bitsPerPixel - missingBits;
+              bitPos = missingBits;
+            }
+            dest[o2] = n3 < nmax ? offset + n3 * scale : maxValue;
+          }
+          dest.unshift(offset);
+          return dest;
+        },
+        originalUnstuff: function(src, dest, bitsPerPixel, numPixels) {
+          var bitMask = (1 << bitsPerPixel) - 1;
+          var i2 = 0, o2;
+          var bitsLeft = 0;
+          var n3, buffer2, missingBits;
+          var numInvalidTailBytes = src.length * 4 - Math.ceil(bitsPerPixel * numPixels / 8);
+          src[src.length - 1] <<= 8 * numInvalidTailBytes;
+          for (o2 = 0; o2 < numPixels; o2++) {
+            if (bitsLeft === 0) {
+              buffer2 = src[i2++];
+              bitsLeft = 32;
+            }
+            if (bitsLeft >= bitsPerPixel) {
+              n3 = buffer2 >>> bitsLeft - bitsPerPixel & bitMask;
+              bitsLeft -= bitsPerPixel;
+            } else {
+              missingBits = bitsPerPixel - bitsLeft;
+              n3 = (buffer2 & bitMask) << missingBits & bitMask;
+              buffer2 = src[i2++];
+              bitsLeft = 32 - missingBits;
+              n3 += buffer2 >>> bitsLeft;
+            }
+            dest[o2] = n3;
+          }
+          return dest;
+        },
+        originalUnstuff2: function(src, dest, bitsPerPixel, numPixels) {
+          var bitMask = (1 << bitsPerPixel) - 1;
+          var i2 = 0, o2;
+          var bitsLeft = 0, bitPos = 0;
+          var n3, buffer2, missingBits;
+          for (o2 = 0; o2 < numPixels; o2++) {
+            if (bitsLeft === 0) {
+              buffer2 = src[i2++];
+              bitsLeft = 32;
+              bitPos = 0;
+            }
+            if (bitsLeft >= bitsPerPixel) {
+              n3 = buffer2 >>> bitPos & bitMask;
+              bitsLeft -= bitsPerPixel;
+              bitPos += bitsPerPixel;
+            } else {
+              missingBits = bitsPerPixel - bitsLeft;
+              n3 = buffer2 >>> bitPos & bitMask;
+              buffer2 = src[i2++];
+              bitsLeft = 32 - missingBits;
+              n3 |= (buffer2 & (1 << missingBits) - 1) << bitsPerPixel - missingBits;
+              bitPos = missingBits;
+            }
+            dest[o2] = n3;
+          }
+          return dest;
+        }
+      };
+      var Lerc2Helpers = {
+        HUFFMAN_LUT_BITS_MAX: 12,
+        //use 2^12 lut, treat it like constant
+        computeChecksumFletcher32: function(input) {
+          var sum1 = 65535, sum2 = 65535;
+          var len = input.length;
+          var words = Math.floor(len / 2);
+          var i2 = 0;
+          while (words) {
+            var tlen = words >= 359 ? 359 : words;
+            words -= tlen;
+            do {
+              sum1 += input[i2++] << 8;
+              sum2 += sum1 += input[i2++];
+            } while (--tlen);
+            sum1 = (sum1 & 65535) + (sum1 >>> 16);
+            sum2 = (sum2 & 65535) + (sum2 >>> 16);
+          }
+          if (len & 1) {
+            sum2 += sum1 += input[i2] << 8;
+          }
+          sum1 = (sum1 & 65535) + (sum1 >>> 16);
+          sum2 = (sum2 & 65535) + (sum2 >>> 16);
+          return (sum2 << 16 | sum1) >>> 0;
+        },
+        readHeaderInfo: function(input, data) {
+          var ptr = data.ptr;
+          var fileIdView = new Uint8Array(input, ptr, 6);
+          var headerInfo = {};
+          headerInfo.fileIdentifierString = String.fromCharCode.apply(null, fileIdView);
+          if (headerInfo.fileIdentifierString.lastIndexOf("Lerc2", 0) !== 0) {
+            throw "Unexpected file identifier string (expect Lerc2 ): " + headerInfo.fileIdentifierString;
+          }
+          ptr += 6;
+          var view = new DataView(input, ptr, 8);
+          var fileVersion = view.getInt32(0, true);
+          headerInfo.fileVersion = fileVersion;
+          ptr += 4;
+          if (fileVersion >= 3) {
+            headerInfo.checksum = view.getUint32(4, true);
+            ptr += 4;
+          }
+          view = new DataView(input, ptr, 12);
+          headerInfo.height = view.getUint32(0, true);
+          headerInfo.width = view.getUint32(4, true);
+          ptr += 8;
+          if (fileVersion >= 4) {
+            headerInfo.numDims = view.getUint32(8, true);
+            ptr += 4;
+          } else {
+            headerInfo.numDims = 1;
+          }
+          view = new DataView(input, ptr, 40);
+          headerInfo.numValidPixel = view.getUint32(0, true);
+          headerInfo.microBlockSize = view.getInt32(4, true);
+          headerInfo.blobSize = view.getInt32(8, true);
+          headerInfo.imageType = view.getInt32(12, true);
+          headerInfo.maxZError = view.getFloat64(16, true);
+          headerInfo.zMin = view.getFloat64(24, true);
+          headerInfo.zMax = view.getFloat64(32, true);
+          ptr += 40;
+          data.headerInfo = headerInfo;
+          data.ptr = ptr;
+          var checksum, keyLength;
+          if (fileVersion >= 3) {
+            keyLength = fileVersion >= 4 ? 52 : 48;
+            checksum = this.computeChecksumFletcher32(new Uint8Array(input, ptr - keyLength, headerInfo.blobSize - 14));
+            if (checksum !== headerInfo.checksum) {
+              throw "Checksum failed.";
+            }
+          }
+          return true;
+        },
+        checkMinMaxRanges: function(input, data) {
+          var headerInfo = data.headerInfo;
+          var OutPixelTypeArray = this.getDataTypeArray(headerInfo.imageType);
+          var rangeBytes = headerInfo.numDims * this.getDataTypeSize(headerInfo.imageType);
+          var minValues = this.readSubArray(input, data.ptr, OutPixelTypeArray, rangeBytes);
+          var maxValues = this.readSubArray(input, data.ptr + rangeBytes, OutPixelTypeArray, rangeBytes);
+          data.ptr += 2 * rangeBytes;
+          var i2, equal = true;
+          for (i2 = 0; i2 < headerInfo.numDims; i2++) {
+            if (minValues[i2] !== maxValues[i2]) {
+              equal = false;
+              break;
+            }
+          }
+          headerInfo.minValues = minValues;
+          headerInfo.maxValues = maxValues;
+          return equal;
+        },
+        readSubArray: function(input, ptr, OutPixelTypeArray, numBytes) {
+          var rawData;
+          if (OutPixelTypeArray === Uint8Array) {
+            rawData = new Uint8Array(input, ptr, numBytes);
+          } else {
+            var arrayBuf = new ArrayBuffer(numBytes);
+            var store8 = new Uint8Array(arrayBuf);
+            store8.set(new Uint8Array(input, ptr, numBytes));
+            rawData = new OutPixelTypeArray(arrayBuf);
+          }
+          return rawData;
+        },
+        readMask: function(input, data) {
+          var ptr = data.ptr;
+          var headerInfo = data.headerInfo;
+          var numPixels = headerInfo.width * headerInfo.height;
+          var numValidPixel = headerInfo.numValidPixel;
+          var view = new DataView(input, ptr, 4);
+          var mask = {};
+          mask.numBytes = view.getUint32(0, true);
+          ptr += 4;
+          if ((0 === numValidPixel || numPixels === numValidPixel) && 0 !== mask.numBytes) {
+            throw "invalid mask";
+          }
+          var bitset, resultMask;
+          if (numValidPixel === 0) {
+            bitset = new Uint8Array(Math.ceil(numPixels / 8));
+            mask.bitset = bitset;
+            resultMask = new Uint8Array(numPixels);
+            data.pixels.resultMask = resultMask;
+            ptr += mask.numBytes;
+          } else if (mask.numBytes > 0) {
+            bitset = new Uint8Array(Math.ceil(numPixels / 8));
+            view = new DataView(input, ptr, mask.numBytes);
+            var cnt = view.getInt16(0, true);
+            var ip = 2, op = 0, val = 0;
+            do {
+              if (cnt > 0) {
+                while (cnt--) {
+                  bitset[op++] = view.getUint8(ip++);
+                }
+              } else {
+                val = view.getUint8(ip++);
+                cnt = -cnt;
+                while (cnt--) {
+                  bitset[op++] = val;
+                }
+              }
+              cnt = view.getInt16(ip, true);
+              ip += 2;
+            } while (ip < mask.numBytes);
+            if (cnt !== -32768 || op < bitset.length) {
+              throw "Unexpected end of mask RLE encoding";
+            }
+            resultMask = new Uint8Array(numPixels);
+            var mb = 0, k2 = 0;
+            for (k2 = 0; k2 < numPixels; k2++) {
+              if (k2 & 7) {
+                mb = bitset[k2 >> 3];
+                mb <<= k2 & 7;
+              } else {
+                mb = bitset[k2 >> 3];
+              }
+              if (mb & 128) {
+                resultMask[k2] = 1;
+              }
+            }
+            data.pixels.resultMask = resultMask;
+            mask.bitset = bitset;
+            ptr += mask.numBytes;
+          }
+          data.ptr = ptr;
+          data.mask = mask;
+          return true;
+        },
+        readDataOneSweep: function(input, data, OutPixelTypeArray, useBSQForOutputDim) {
+          var ptr = data.ptr;
+          var headerInfo = data.headerInfo;
+          var numDims = headerInfo.numDims;
+          var numPixels = headerInfo.width * headerInfo.height;
+          var imageType = headerInfo.imageType;
+          var numBytes = headerInfo.numValidPixel * Lerc2Helpers.getDataTypeSize(imageType) * numDims;
+          var rawData;
+          var mask = data.pixels.resultMask;
+          if (OutPixelTypeArray === Uint8Array) {
+            rawData = new Uint8Array(input, ptr, numBytes);
+          } else {
+            var arrayBuf = new ArrayBuffer(numBytes);
+            var store8 = new Uint8Array(arrayBuf);
+            store8.set(new Uint8Array(input, ptr, numBytes));
+            rawData = new OutPixelTypeArray(arrayBuf);
+          }
+          if (rawData.length === numPixels * numDims) {
+            if (useBSQForOutputDim) {
+              data.pixels.resultPixels = Lerc2Helpers.swapDimensionOrder(rawData, numPixels, numDims, OutPixelTypeArray, true);
+            } else {
+              data.pixels.resultPixels = rawData;
+            }
+          } else {
+            data.pixels.resultPixels = new OutPixelTypeArray(numPixels * numDims);
+            var z2 = 0, k2 = 0, i2 = 0, nStart = 0;
+            if (numDims > 1) {
+              if (useBSQForOutputDim) {
+                for (k2 = 0; k2 < numPixels; k2++) {
+                  if (mask[k2]) {
+                    nStart = k2;
+                    for (i2 = 0; i2 < numDims; i2++, nStart += numPixels) {
+                      data.pixels.resultPixels[nStart] = rawData[z2++];
+                    }
+                  }
+                }
+              } else {
+                for (k2 = 0; k2 < numPixels; k2++) {
+                  if (mask[k2]) {
+                    nStart = k2 * numDims;
+                    for (i2 = 0; i2 < numDims; i2++) {
+                      data.pixels.resultPixels[nStart + i2] = rawData[z2++];
+                    }
+                  }
+                }
+              }
+            } else {
+              for (k2 = 0; k2 < numPixels; k2++) {
+                if (mask[k2]) {
+                  data.pixels.resultPixels[k2] = rawData[z2++];
+                }
+              }
+            }
+          }
+          ptr += numBytes;
+          data.ptr = ptr;
+          return true;
+        },
+        readHuffmanTree: function(input, data) {
+          var BITS_MAX = this.HUFFMAN_LUT_BITS_MAX;
+          var view = new DataView(input, data.ptr, 16);
+          data.ptr += 16;
+          var version = view.getInt32(0, true);
+          if (version < 2) {
+            throw "unsupported Huffman version";
+          }
+          var size = view.getInt32(4, true);
+          var i0 = view.getInt32(8, true);
+          var i1 = view.getInt32(12, true);
+          if (i0 >= i1) {
+            return false;
+          }
+          var blockDataBuffer = new Uint32Array(i1 - i0);
+          Lerc2Helpers.decodeBits(input, data, blockDataBuffer);
+          var codeTable = [];
+          var i2, j, k2, len;
+          for (i2 = i0; i2 < i1; i2++) {
+            j = i2 - (i2 < size ? 0 : size);
+            codeTable[j] = { first: blockDataBuffer[i2 - i0], second: null };
+          }
+          var dataBytes = input.byteLength - data.ptr;
+          var dataWords = Math.ceil(dataBytes / 4);
+          var arrayBuf = new ArrayBuffer(dataWords * 4);
+          var store8 = new Uint8Array(arrayBuf);
+          store8.set(new Uint8Array(input, data.ptr, dataBytes));
+          var stuffedData = new Uint32Array(arrayBuf);
+          var bitPos = 0, word, srcPtr = 0;
+          word = stuffedData[0];
+          for (i2 = i0; i2 < i1; i2++) {
+            j = i2 - (i2 < size ? 0 : size);
+            len = codeTable[j].first;
+            if (len > 0) {
+              codeTable[j].second = word << bitPos >>> 32 - len;
+              if (32 - bitPos >= len) {
+                bitPos += len;
+                if (bitPos === 32) {
+                  bitPos = 0;
+                  srcPtr++;
+                  word = stuffedData[srcPtr];
+                }
+              } else {
+                bitPos += len - 32;
+                srcPtr++;
+                word = stuffedData[srcPtr];
+                codeTable[j].second |= word >>> 32 - bitPos;
+              }
+            }
+          }
+          var numBitsLUT = 0, numBitsLUTQick = 0;
+          var tree = new TreeNode();
+          for (i2 = 0; i2 < codeTable.length; i2++) {
+            if (codeTable[i2] !== void 0) {
+              numBitsLUT = Math.max(numBitsLUT, codeTable[i2].first);
+            }
+          }
+          if (numBitsLUT >= BITS_MAX) {
+            numBitsLUTQick = BITS_MAX;
+          } else {
+            numBitsLUTQick = numBitsLUT;
+          }
+          var decodeLut = [], entry, code, numEntries, jj, currentBit, node;
+          for (i2 = i0; i2 < i1; i2++) {
+            j = i2 - (i2 < size ? 0 : size);
+            len = codeTable[j].first;
+            if (len > 0) {
+              entry = [len, j];
+              if (len <= numBitsLUTQick) {
+                code = codeTable[j].second << numBitsLUTQick - len;
+                numEntries = 1 << numBitsLUTQick - len;
+                for (k2 = 0; k2 < numEntries; k2++) {
+                  decodeLut[code | k2] = entry;
+                }
+              } else {
+                code = codeTable[j].second;
+                node = tree;
+                for (jj = len - 1; jj >= 0; jj--) {
+                  currentBit = code >>> jj & 1;
+                  if (currentBit) {
+                    if (!node.right) {
+                      node.right = new TreeNode();
+                    }
+                    node = node.right;
+                  } else {
+                    if (!node.left) {
+                      node.left = new TreeNode();
+                    }
+                    node = node.left;
+                  }
+                  if (jj === 0 && !node.val) {
+                    node.val = entry[1];
+                  }
+                }
+              }
+            }
+          }
+          return {
+            decodeLut,
+            numBitsLUTQick,
+            numBitsLUT,
+            tree,
+            stuffedData,
+            srcPtr,
+            bitPos
+          };
+        },
+        readHuffman: function(input, data, OutPixelTypeArray, useBSQForOutputDim) {
+          var headerInfo = data.headerInfo;
+          var numDims = headerInfo.numDims;
+          var height = data.headerInfo.height;
+          var width = data.headerInfo.width;
+          var numPixels = width * height;
+          var huffmanInfo = this.readHuffmanTree(input, data);
+          var decodeLut = huffmanInfo.decodeLut;
+          var tree = huffmanInfo.tree;
+          var stuffedData = huffmanInfo.stuffedData;
+          var srcPtr = huffmanInfo.srcPtr;
+          var bitPos = huffmanInfo.bitPos;
+          var numBitsLUTQick = huffmanInfo.numBitsLUTQick;
+          var numBitsLUT = huffmanInfo.numBitsLUT;
+          var offset = data.headerInfo.imageType === 0 ? 128 : 0;
+          var node, val, delta, mask = data.pixels.resultMask, valTmp, valTmpQuick, currentBit;
+          var i2, j, k2, ii;
+          var prevVal = 0;
+          if (bitPos > 0) {
+            srcPtr++;
+            bitPos = 0;
+          }
+          var word = stuffedData[srcPtr];
+          var deltaEncode = data.encodeMode === 1;
+          var resultPixelsAllDim = new OutPixelTypeArray(numPixels * numDims);
+          var resultPixels = resultPixelsAllDim;
+          var iDim;
+          if (numDims < 2 || deltaEncode) {
+            for (iDim = 0; iDim < numDims; iDim++) {
+              if (numDims > 1) {
+                resultPixels = new OutPixelTypeArray(resultPixelsAllDim.buffer, numPixels * iDim, numPixels);
+                prevVal = 0;
+              }
+              if (data.headerInfo.numValidPixel === width * height) {
+                for (k2 = 0, i2 = 0; i2 < height; i2++) {
+                  for (j = 0; j < width; j++, k2++) {
+                    val = 0;
+                    valTmp = word << bitPos >>> 32 - numBitsLUTQick;
+                    valTmpQuick = valTmp;
+                    if (32 - bitPos < numBitsLUTQick) {
+                      valTmp |= stuffedData[srcPtr + 1] >>> 64 - bitPos - numBitsLUTQick;
+                      valTmpQuick = valTmp;
+                    }
+                    if (decodeLut[valTmpQuick]) {
+                      val = decodeLut[valTmpQuick][1];
+                      bitPos += decodeLut[valTmpQuick][0];
+                    } else {
+                      valTmp = word << bitPos >>> 32 - numBitsLUT;
+                      valTmpQuick = valTmp;
+                      if (32 - bitPos < numBitsLUT) {
+                        valTmp |= stuffedData[srcPtr + 1] >>> 64 - bitPos - numBitsLUT;
+                        valTmpQuick = valTmp;
+                      }
+                      node = tree;
+                      for (ii = 0; ii < numBitsLUT; ii++) {
+                        currentBit = valTmp >>> numBitsLUT - ii - 1 & 1;
+                        node = currentBit ? node.right : node.left;
+                        if (!(node.left || node.right)) {
+                          val = node.val;
+                          bitPos = bitPos + ii + 1;
+                          break;
+                        }
+                      }
+                    }
+                    if (bitPos >= 32) {
+                      bitPos -= 32;
+                      srcPtr++;
+                      word = stuffedData[srcPtr];
+                    }
+                    delta = val - offset;
+                    if (deltaEncode) {
+                      if (j > 0) {
+                        delta += prevVal;
+                      } else if (i2 > 0) {
+                        delta += resultPixels[k2 - width];
+                      } else {
+                        delta += prevVal;
+                      }
+                      delta &= 255;
+                      resultPixels[k2] = delta;
+                      prevVal = delta;
+                    } else {
+                      resultPixels[k2] = delta;
+                    }
+                  }
+                }
+              } else {
+                for (k2 = 0, i2 = 0; i2 < height; i2++) {
+                  for (j = 0; j < width; j++, k2++) {
+                    if (mask[k2]) {
+                      val = 0;
+                      valTmp = word << bitPos >>> 32 - numBitsLUTQick;
+                      valTmpQuick = valTmp;
+                      if (32 - bitPos < numBitsLUTQick) {
+                        valTmp |= stuffedData[srcPtr + 1] >>> 64 - bitPos - numBitsLUTQick;
+                        valTmpQuick = valTmp;
+                      }
+                      if (decodeLut[valTmpQuick]) {
+                        val = decodeLut[valTmpQuick][1];
+                        bitPos += decodeLut[valTmpQuick][0];
+                      } else {
+                        valTmp = word << bitPos >>> 32 - numBitsLUT;
+                        valTmpQuick = valTmp;
+                        if (32 - bitPos < numBitsLUT) {
+                          valTmp |= stuffedData[srcPtr + 1] >>> 64 - bitPos - numBitsLUT;
+                          valTmpQuick = valTmp;
+                        }
+                        node = tree;
+                        for (ii = 0; ii < numBitsLUT; ii++) {
+                          currentBit = valTmp >>> numBitsLUT - ii - 1 & 1;
+                          node = currentBit ? node.right : node.left;
+                          if (!(node.left || node.right)) {
+                            val = node.val;
+                            bitPos = bitPos + ii + 1;
+                            break;
+                          }
+                        }
+                      }
+                      if (bitPos >= 32) {
+                        bitPos -= 32;
+                        srcPtr++;
+                        word = stuffedData[srcPtr];
+                      }
+                      delta = val - offset;
+                      if (deltaEncode) {
+                        if (j > 0 && mask[k2 - 1]) {
+                          delta += prevVal;
+                        } else if (i2 > 0 && mask[k2 - width]) {
+                          delta += resultPixels[k2 - width];
+                        } else {
+                          delta += prevVal;
+                        }
+                        delta &= 255;
+                        resultPixels[k2] = delta;
+                        prevVal = delta;
+                      } else {
+                        resultPixels[k2] = delta;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } else {
+            for (k2 = 0, i2 = 0; i2 < height; i2++) {
+              for (j = 0; j < width; j++) {
+                k2 = i2 * width + j;
+                if (!mask || mask[k2]) {
+                  for (iDim = 0; iDim < numDims; iDim++, k2 += numPixels) {
+                    val = 0;
+                    valTmp = word << bitPos >>> 32 - numBitsLUTQick;
+                    valTmpQuick = valTmp;
+                    if (32 - bitPos < numBitsLUTQick) {
+                      valTmp |= stuffedData[srcPtr + 1] >>> 64 - bitPos - numBitsLUTQick;
+                      valTmpQuick = valTmp;
+                    }
+                    if (decodeLut[valTmpQuick]) {
+                      val = decodeLut[valTmpQuick][1];
+                      bitPos += decodeLut[valTmpQuick][0];
+                    } else {
+                      valTmp = word << bitPos >>> 32 - numBitsLUT;
+                      valTmpQuick = valTmp;
+                      if (32 - bitPos < numBitsLUT) {
+                        valTmp |= stuffedData[srcPtr + 1] >>> 64 - bitPos - numBitsLUT;
+                        valTmpQuick = valTmp;
+                      }
+                      node = tree;
+                      for (ii = 0; ii < numBitsLUT; ii++) {
+                        currentBit = valTmp >>> numBitsLUT - ii - 1 & 1;
+                        node = currentBit ? node.right : node.left;
+                        if (!(node.left || node.right)) {
+                          val = node.val;
+                          bitPos = bitPos + ii + 1;
+                          break;
+                        }
+                      }
+                    }
+                    if (bitPos >= 32) {
+                      bitPos -= 32;
+                      srcPtr++;
+                      word = stuffedData[srcPtr];
+                    }
+                    delta = val - offset;
+                    resultPixels[k2] = delta;
+                  }
+                }
+              }
+            }
+          }
+          data.ptr = data.ptr + (srcPtr + 1) * 4 + (bitPos > 0 ? 4 : 0);
+          data.pixels.resultPixels = resultPixelsAllDim;
+          if (numDims > 1 && !useBSQForOutputDim) {
+            data.pixels.resultPixels = Lerc2Helpers.swapDimensionOrder(resultPixelsAllDim, numPixels, numDims, OutPixelTypeArray);
+          }
+        },
+        decodeBits: function(input, data, blockDataBuffer, offset, iDim) {
+          {
+            var headerInfo = data.headerInfo;
+            var fileVersion = headerInfo.fileVersion;
+            var blockPtr = 0;
+            var viewByteLength = input.byteLength - data.ptr >= 5 ? 5 : input.byteLength - data.ptr;
+            var view = new DataView(input, data.ptr, viewByteLength);
+            var headerByte = view.getUint8(0);
+            blockPtr++;
+            var bits67 = headerByte >> 6;
+            var n3 = bits67 === 0 ? 4 : 3 - bits67;
+            var doLut = (headerByte & 32) > 0 ? true : false;
+            var numBits = headerByte & 31;
+            var numElements = 0;
+            if (n3 === 1) {
+              numElements = view.getUint8(blockPtr);
+              blockPtr++;
+            } else if (n3 === 2) {
+              numElements = view.getUint16(blockPtr, true);
+              blockPtr += 2;
+            } else if (n3 === 4) {
+              numElements = view.getUint32(blockPtr, true);
+              blockPtr += 4;
+            } else {
+              throw "Invalid valid pixel count type";
+            }
+            var scale = 2 * headerInfo.maxZError;
+            var stuffedData, arrayBuf, store8, dataBytes, dataWords;
+            var lutArr, lutData, lutBytes, bitsPerPixel;
+            var zMax = headerInfo.numDims > 1 ? headerInfo.maxValues[iDim] : headerInfo.zMax;
+            if (doLut) {
+              data.counter.lut++;
+              lutBytes = view.getUint8(blockPtr);
+              blockPtr++;
+              dataBytes = Math.ceil((lutBytes - 1) * numBits / 8);
+              dataWords = Math.ceil(dataBytes / 4);
+              arrayBuf = new ArrayBuffer(dataWords * 4);
+              store8 = new Uint8Array(arrayBuf);
+              data.ptr += blockPtr;
+              store8.set(new Uint8Array(input, data.ptr, dataBytes));
+              lutData = new Uint32Array(arrayBuf);
+              data.ptr += dataBytes;
+              bitsPerPixel = 0;
+              while (lutBytes - 1 >>> bitsPerPixel) {
+                bitsPerPixel++;
+              }
+              dataBytes = Math.ceil(numElements * bitsPerPixel / 8);
+              dataWords = Math.ceil(dataBytes / 4);
+              arrayBuf = new ArrayBuffer(dataWords * 4);
+              store8 = new Uint8Array(arrayBuf);
+              store8.set(new Uint8Array(input, data.ptr, dataBytes));
+              stuffedData = new Uint32Array(arrayBuf);
+              data.ptr += dataBytes;
+              if (fileVersion >= 3) {
+                lutArr = BitStuffer.unstuffLUT2(lutData, numBits, lutBytes - 1, offset, scale, zMax);
+              } else {
+                lutArr = BitStuffer.unstuffLUT(lutData, numBits, lutBytes - 1, offset, scale, zMax);
+              }
+              if (fileVersion >= 3) {
+                BitStuffer.unstuff2(stuffedData, blockDataBuffer, bitsPerPixel, numElements, lutArr);
+              } else {
+                BitStuffer.unstuff(stuffedData, blockDataBuffer, bitsPerPixel, numElements, lutArr);
+              }
+            } else {
+              data.counter.bitstuffer++;
+              bitsPerPixel = numBits;
+              data.ptr += blockPtr;
+              if (bitsPerPixel > 0) {
+                dataBytes = Math.ceil(numElements * bitsPerPixel / 8);
+                dataWords = Math.ceil(dataBytes / 4);
+                arrayBuf = new ArrayBuffer(dataWords * 4);
+                store8 = new Uint8Array(arrayBuf);
+                store8.set(new Uint8Array(input, data.ptr, dataBytes));
+                stuffedData = new Uint32Array(arrayBuf);
+                data.ptr += dataBytes;
+                if (fileVersion >= 3) {
+                  if (offset == null) {
+                    BitStuffer.originalUnstuff2(stuffedData, blockDataBuffer, bitsPerPixel, numElements);
+                  } else {
+                    BitStuffer.unstuff2(stuffedData, blockDataBuffer, bitsPerPixel, numElements, false, offset, scale, zMax);
+                  }
+                } else {
+                  if (offset == null) {
+                    BitStuffer.originalUnstuff(stuffedData, blockDataBuffer, bitsPerPixel, numElements);
+                  } else {
+                    BitStuffer.unstuff(stuffedData, blockDataBuffer, bitsPerPixel, numElements, false, offset, scale, zMax);
+                  }
+                }
+              }
+            }
+          }
+        },
+        readTiles: function(input, data, OutPixelTypeArray, useBSQForOutputDim) {
+          var headerInfo = data.headerInfo;
+          var width = headerInfo.width;
+          var height = headerInfo.height;
+          var numPixels = width * height;
+          var microBlockSize = headerInfo.microBlockSize;
+          var imageType = headerInfo.imageType;
+          var dataTypeSize = Lerc2Helpers.getDataTypeSize(imageType);
+          var numBlocksX = Math.ceil(width / microBlockSize);
+          var numBlocksY = Math.ceil(height / microBlockSize);
+          data.pixels.numBlocksY = numBlocksY;
+          data.pixels.numBlocksX = numBlocksX;
+          data.pixels.ptr = 0;
+          var row = 0, col = 0, blockY = 0, blockX = 0, thisBlockHeight = 0, thisBlockWidth = 0, bytesLeft = 0, headerByte = 0, bits67 = 0, testCode = 0, outPtr = 0, outStride = 0, numBytes = 0, bytesleft = 0, z2 = 0, blockPtr = 0;
+          var view, block, arrayBuf, store8, rawData;
+          var blockEncoding;
+          var blockDataBuffer = new OutPixelTypeArray(microBlockSize * microBlockSize);
+          var lastBlockHeight = height % microBlockSize || microBlockSize;
+          var lastBlockWidth = width % microBlockSize || microBlockSize;
+          var offsetType, offset;
+          var numDims = headerInfo.numDims, iDim;
+          var mask = data.pixels.resultMask;
+          var resultPixels = data.pixels.resultPixels;
+          var fileVersion = headerInfo.fileVersion;
+          var fileVersionCheckNum = fileVersion >= 5 ? 14 : 15;
+          var isDiffEncoding;
+          var zMax = headerInfo.zMax;
+          var resultPixelsPrevDim;
+          for (blockY = 0; blockY < numBlocksY; blockY++) {
+            thisBlockHeight = blockY !== numBlocksY - 1 ? microBlockSize : lastBlockHeight;
+            for (blockX = 0; blockX < numBlocksX; blockX++) {
+              thisBlockWidth = blockX !== numBlocksX - 1 ? microBlockSize : lastBlockWidth;
+              outPtr = blockY * width * microBlockSize + blockX * microBlockSize;
+              outStride = width - thisBlockWidth;
+              for (iDim = 0; iDim < numDims; iDim++) {
+                if (numDims > 1) {
+                  resultPixelsPrevDim = resultPixels;
+                  outPtr = blockY * width * microBlockSize + blockX * microBlockSize;
+                  resultPixels = new OutPixelTypeArray(data.pixels.resultPixels.buffer, numPixels * iDim * dataTypeSize, numPixels);
+                  zMax = headerInfo.maxValues[iDim];
+                } else {
+                  resultPixelsPrevDim = null;
+                }
+                bytesLeft = input.byteLength - data.ptr;
+                view = new DataView(input, data.ptr, Math.min(10, bytesLeft));
+                block = {};
+                blockPtr = 0;
+                headerByte = view.getUint8(0);
+                blockPtr++;
+                isDiffEncoding = headerInfo.fileVersion >= 5 ? headerByte & 4 : 0;
+                bits67 = headerByte >> 6 & 255;
+                testCode = headerByte >> 2 & fileVersionCheckNum;
+                if (testCode !== (blockX * microBlockSize >> 3 & fileVersionCheckNum)) {
+                  throw "integrity issue";
+                }
+                if (isDiffEncoding && iDim === 0) {
+                  throw "integrity issue";
+                }
+                blockEncoding = headerByte & 3;
+                if (blockEncoding > 3) {
+                  data.ptr += blockPtr;
+                  throw "Invalid block encoding (" + blockEncoding + ")";
+                } else if (blockEncoding === 2) {
+                  if (isDiffEncoding) {
+                    if (mask) {
+                      for (row = 0; row < thisBlockHeight; row++) {
+                        for (col = 0; col < thisBlockWidth; col++) {
+                          if (mask[outPtr]) {
+                            resultPixels[outPtr] = resultPixelsPrevDim[outPtr];
+                          }
+                          outPtr++;
+                        }
+                      }
+                    } else {
+                      for (row = 0; row < thisBlockHeight; row++) {
+                        for (col = 0; col < thisBlockWidth; col++) {
+                          resultPixels[outPtr] = resultPixelsPrevDim[outPtr];
+                          outPtr++;
+                        }
+                      }
+                    }
+                  }
+                  data.counter.constant++;
+                  data.ptr += blockPtr;
+                  continue;
+                } else if (blockEncoding === 0) {
+                  if (isDiffEncoding) {
+                    throw "integrity issue";
+                  }
+                  data.counter.uncompressed++;
+                  data.ptr += blockPtr;
+                  numBytes = thisBlockHeight * thisBlockWidth * dataTypeSize;
+                  bytesleft = input.byteLength - data.ptr;
+                  numBytes = numBytes < bytesleft ? numBytes : bytesleft;
+                  arrayBuf = new ArrayBuffer(numBytes % dataTypeSize === 0 ? numBytes : numBytes + dataTypeSize - numBytes % dataTypeSize);
+                  store8 = new Uint8Array(arrayBuf);
+                  store8.set(new Uint8Array(input, data.ptr, numBytes));
+                  rawData = new OutPixelTypeArray(arrayBuf);
+                  z2 = 0;
+                  if (mask) {
+                    for (row = 0; row < thisBlockHeight; row++) {
+                      for (col = 0; col < thisBlockWidth; col++) {
+                        if (mask[outPtr]) {
+                          resultPixels[outPtr] = rawData[z2++];
+                        }
+                        outPtr++;
+                      }
+                      outPtr += outStride;
+                    }
+                  } else {
+                    for (row = 0; row < thisBlockHeight; row++) {
+                      for (col = 0; col < thisBlockWidth; col++) {
+                        resultPixels[outPtr++] = rawData[z2++];
+                      }
+                      outPtr += outStride;
+                    }
+                  }
+                  data.ptr += z2 * dataTypeSize;
+                } else {
+                  offsetType = Lerc2Helpers.getDataTypeUsed(isDiffEncoding && imageType < 6 ? 4 : imageType, bits67);
+                  offset = Lerc2Helpers.getOnePixel(block, blockPtr, offsetType, view);
+                  blockPtr += Lerc2Helpers.getDataTypeSize(offsetType);
+                  if (blockEncoding === 3) {
+                    data.ptr += blockPtr;
+                    data.counter.constantoffset++;
+                    if (mask) {
+                      for (row = 0; row < thisBlockHeight; row++) {
+                        for (col = 0; col < thisBlockWidth; col++) {
+                          if (mask[outPtr]) {
+                            resultPixels[outPtr] = isDiffEncoding ? Math.min(zMax, resultPixelsPrevDim[outPtr] + offset) : offset;
+                          }
+                          outPtr++;
+                        }
+                        outPtr += outStride;
+                      }
+                    } else {
+                      for (row = 0; row < thisBlockHeight; row++) {
+                        for (col = 0; col < thisBlockWidth; col++) {
+                          resultPixels[outPtr] = isDiffEncoding ? Math.min(zMax, resultPixelsPrevDim[outPtr] + offset) : offset;
+                          outPtr++;
+                        }
+                        outPtr += outStride;
+                      }
+                    }
+                  } else {
+                    data.ptr += blockPtr;
+                    Lerc2Helpers.decodeBits(input, data, blockDataBuffer, offset, iDim);
+                    blockPtr = 0;
+                    if (isDiffEncoding) {
+                      if (mask) {
+                        for (row = 0; row < thisBlockHeight; row++) {
+                          for (col = 0; col < thisBlockWidth; col++) {
+                            if (mask[outPtr]) {
+                              resultPixels[outPtr] = blockDataBuffer[blockPtr++] + resultPixelsPrevDim[outPtr];
+                            }
+                            outPtr++;
+                          }
+                          outPtr += outStride;
+                        }
+                      } else {
+                        for (row = 0; row < thisBlockHeight; row++) {
+                          for (col = 0; col < thisBlockWidth; col++) {
+                            resultPixels[outPtr] = blockDataBuffer[blockPtr++] + resultPixelsPrevDim[outPtr];
+                            outPtr++;
+                          }
+                          outPtr += outStride;
+                        }
+                      }
+                    } else if (mask) {
+                      for (row = 0; row < thisBlockHeight; row++) {
+                        for (col = 0; col < thisBlockWidth; col++) {
+                          if (mask[outPtr]) {
+                            resultPixels[outPtr] = blockDataBuffer[blockPtr++];
+                          }
+                          outPtr++;
+                        }
+                        outPtr += outStride;
+                      }
+                    } else {
+                      for (row = 0; row < thisBlockHeight; row++) {
+                        for (col = 0; col < thisBlockWidth; col++) {
+                          resultPixels[outPtr++] = blockDataBuffer[blockPtr++];
+                        }
+                        outPtr += outStride;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if (numDims > 1 && !useBSQForOutputDim) {
+            data.pixels.resultPixels = Lerc2Helpers.swapDimensionOrder(data.pixels.resultPixels, numPixels, numDims, OutPixelTypeArray);
+          }
+        },
+        /*****************
+        *  private methods (helper methods)
+        *****************/
+        formatFileInfo: function(data) {
+          return {
+            "fileIdentifierString": data.headerInfo.fileIdentifierString,
+            "fileVersion": data.headerInfo.fileVersion,
+            "imageType": data.headerInfo.imageType,
+            "height": data.headerInfo.height,
+            "width": data.headerInfo.width,
+            "numValidPixel": data.headerInfo.numValidPixel,
+            "microBlockSize": data.headerInfo.microBlockSize,
+            "blobSize": data.headerInfo.blobSize,
+            "maxZError": data.headerInfo.maxZError,
+            "pixelType": Lerc2Helpers.getPixelType(data.headerInfo.imageType),
+            "eofOffset": data.eofOffset,
+            "mask": data.mask ? {
+              "numBytes": data.mask.numBytes
+            } : null,
+            "pixels": {
+              "numBlocksX": data.pixels.numBlocksX,
+              "numBlocksY": data.pixels.numBlocksY,
+              //"numBytes": data.pixels.numBytes,
+              "maxValue": data.headerInfo.zMax,
+              "minValue": data.headerInfo.zMin,
+              "noDataValue": data.noDataValue
+            }
+          };
+        },
+        constructConstantSurface: function(data, useBSQForOutputDim) {
+          var val = data.headerInfo.zMax;
+          var valMin = data.headerInfo.zMin;
+          var maxValues = data.headerInfo.maxValues;
+          var numDims = data.headerInfo.numDims;
+          var numPixels = data.headerInfo.height * data.headerInfo.width;
+          var i2 = 0, k2 = 0, nStart = 0;
+          var mask = data.pixels.resultMask;
+          var resultPixels = data.pixels.resultPixels;
+          if (mask) {
+            if (numDims > 1) {
+              if (useBSQForOutputDim) {
+                for (i2 = 0; i2 < numDims; i2++) {
+                  nStart = i2 * numPixels;
+                  val = maxValues[i2];
+                  for (k2 = 0; k2 < numPixels; k2++) {
+                    if (mask[k2]) {
+                      resultPixels[nStart + k2] = val;
+                    }
+                  }
+                }
+              } else {
+                for (k2 = 0; k2 < numPixels; k2++) {
+                  if (mask[k2]) {
+                    nStart = k2 * numDims;
+                    for (i2 = 0; i2 < numDims; i2++) {
+                      resultPixels[nStart + numDims] = maxValues[i2];
+                    }
+                  }
+                }
+              }
+            } else {
+              for (k2 = 0; k2 < numPixels; k2++) {
+                if (mask[k2]) {
+                  resultPixels[k2] = val;
+                }
+              }
+            }
+          } else {
+            if (numDims > 1 && valMin !== val) {
+              if (useBSQForOutputDim) {
+                for (i2 = 0; i2 < numDims; i2++) {
+                  nStart = i2 * numPixels;
+                  val = maxValues[i2];
+                  for (k2 = 0; k2 < numPixels; k2++) {
+                    resultPixels[nStart + k2] = val;
+                  }
+                }
+              } else {
+                for (k2 = 0; k2 < numPixels; k2++) {
+                  nStart = k2 * numDims;
+                  for (i2 = 0; i2 < numDims; i2++) {
+                    resultPixels[nStart + i2] = maxValues[i2];
+                  }
+                }
+              }
+            } else {
+              for (k2 = 0; k2 < numPixels * numDims; k2++) {
+                resultPixels[k2] = val;
+              }
+            }
+          }
+          return;
+        },
+        getDataTypeArray: function(t2) {
+          var tp;
+          switch (t2) {
+            case 0:
+              tp = Int8Array;
+              break;
+            case 1:
+              tp = Uint8Array;
+              break;
+            case 2:
+              tp = Int16Array;
+              break;
+            case 3:
+              tp = Uint16Array;
+              break;
+            case 4:
+              tp = Int32Array;
+              break;
+            case 5:
+              tp = Uint32Array;
+              break;
+            case 6:
+              tp = Float32Array;
+              break;
+            case 7:
+              tp = Float64Array;
+              break;
+            default:
+              tp = Float32Array;
+          }
+          return tp;
+        },
+        getPixelType: function(t2) {
+          var tp;
+          switch (t2) {
+            case 0:
+              tp = "S8";
+              break;
+            case 1:
+              tp = "U8";
+              break;
+            case 2:
+              tp = "S16";
+              break;
+            case 3:
+              tp = "U16";
+              break;
+            case 4:
+              tp = "S32";
+              break;
+            case 5:
+              tp = "U32";
+              break;
+            case 6:
+              tp = "F32";
+              break;
+            case 7:
+              tp = "F64";
+              break;
+            default:
+              tp = "F32";
+          }
+          return tp;
+        },
+        isValidPixelValue: function(t2, val) {
+          if (val == null) {
+            return false;
+          }
+          var isValid;
+          switch (t2) {
+            case 0:
+              isValid = val >= -128 && val <= 127;
+              break;
+            case 1:
+              isValid = val >= 0 && val <= 255;
+              break;
+            case 2:
+              isValid = val >= -32768 && val <= 32767;
+              break;
+            case 3:
+              isValid = val >= 0 && val <= 65536;
+              break;
+            case 4:
+              isValid = val >= -2147483648 && val <= 2147483647;
+              break;
+            case 5:
+              isValid = val >= 0 && val <= 4294967296;
+              break;
+            case 6:
+              isValid = val >= -34027999387901484e22 && val <= 34027999387901484e22;
+              break;
+            case 7:
+              isValid = val >= -17976931348623157e292 && val <= 17976931348623157e292;
+              break;
+            default:
+              isValid = false;
+          }
+          return isValid;
+        },
+        getDataTypeSize: function(t2) {
+          var s2 = 0;
+          switch (t2) {
+            case 0:
+            case 1:
+              s2 = 1;
+              break;
+            case 2:
+            case 3:
+              s2 = 2;
+              break;
+            case 4:
+            case 5:
+            case 6:
+              s2 = 4;
+              break;
+            case 7:
+              s2 = 8;
+              break;
+            default:
+              s2 = t2;
+          }
+          return s2;
+        },
+        getDataTypeUsed: function(dt, tc) {
+          var t2 = dt;
+          switch (dt) {
+            case 2:
+            case 4:
+              t2 = dt - tc;
+              break;
+            case 3:
+            case 5:
+              t2 = dt - 2 * tc;
+              break;
+            case 6:
+              if (0 === tc) {
+                t2 = dt;
+              } else if (1 === tc) {
+                t2 = 2;
+              } else {
+                t2 = 1;
+              }
+              break;
+            case 7:
+              if (0 === tc) {
+                t2 = dt;
+              } else {
+                t2 = dt - 2 * tc + 1;
+              }
+              break;
+            default:
+              t2 = dt;
+              break;
+          }
+          return t2;
+        },
+        getOnePixel: function(block, blockPtr, offsetType, view) {
+          var temp = 0;
+          switch (offsetType) {
+            case 0:
+              temp = view.getInt8(blockPtr);
+              break;
+            case 1:
+              temp = view.getUint8(blockPtr);
+              break;
+            case 2:
+              temp = view.getInt16(blockPtr, true);
+              break;
+            case 3:
+              temp = view.getUint16(blockPtr, true);
+              break;
+            case 4:
+              temp = view.getInt32(blockPtr, true);
+              break;
+            case 5:
+              temp = view.getUInt32(blockPtr, true);
+              break;
+            case 6:
+              temp = view.getFloat32(blockPtr, true);
+              break;
+            case 7:
+              temp = view.getFloat64(blockPtr, true);
+              break;
+            default:
+              throw "the decoder does not understand this pixel type";
+          }
+          return temp;
+        },
+        swapDimensionOrder: function(pixels, numPixels, numDims, OutPixelTypeArray, inputIsBIP) {
+          var i2 = 0, j = 0, iDim = 0, temp = 0, swap = pixels;
+          if (numDims > 1) {
+            swap = new OutPixelTypeArray(numPixels * numDims);
+            if (inputIsBIP) {
+              for (i2 = 0; i2 < numPixels; i2++) {
+                temp = i2;
+                for (iDim = 0; iDim < numDims; iDim++, temp += numPixels) {
+                  swap[temp] = pixels[j++];
+                }
+              }
+            } else {
+              for (i2 = 0; i2 < numPixels; i2++) {
+                temp = i2;
+                for (iDim = 0; iDim < numDims; iDim++, temp += numPixels) {
+                  swap[j++] = pixels[temp];
+                }
+              }
+            }
+          }
+          return swap;
+        }
+      };
+      var TreeNode = function(val, left, right) {
+        this.val = val;
+        this.left = left;
+        this.right = right;
+      };
+      var Lerc2Decode2 = {
+        /*
+        * ********removed options compared to LERC1. We can bring some of them back if needed.
+         * removed pixel type. LERC2 is typed and doesn't require user to give pixel type
+         * changed encodedMaskData to maskData. LERC2 's js version make it faster to use maskData directly.
+         * removed returnMask. mask is used by LERC2 internally and is cost free. In case of user input mask, it's returned as well and has neglible cost.
+         * removed nodatavalue. Because LERC2 pixels are typed, nodatavalue will sacrify a useful value for many types (8bit, 16bit) etc,
+         *       user has to be knowledgable enough about raster and their data to avoid usability issues. so nodata value is simply removed now.
+         *       We can add it back later if their's a clear requirement.
+         * removed encodedMask. This option was not implemented in LercDecode. It can be done after decoding (less efficient)
+         * removed computeUsedBitDepths.
+         *
+         *
+         * response changes compared to LERC1
+         * 1. encodedMaskData is not available
+         * 2. noDataValue is optional (returns only if user's noDataValue is with in the valid data type range)
+         * 3. maskData is always available
+        */
+        /*****************
+        *  public properties
+        ******************/
+        //HUFFMAN_LUT_BITS_MAX: 12, //use 2^12 lut, not configurable
+        /*****************
+        *  public methods
+        *****************/
+        /**
+         * Decode a LERC2 byte stream and return an object containing the pixel data and optional metadata.
+         *
+         * @param {ArrayBuffer} input The LERC input byte stream
+         * @param {object} [options] options Decoding options
+         * @param {number} [options.inputOffset] The number of bytes to skip in the input byte stream. A valid LERC file is expected at that position
+         * @param {boolean} [options.returnFileInfo] If true, the return value will have a fileInfo property that contains metadata obtained from the LERC headers and the decoding process
+         * @param {boolean} [options.returnPixelInterleavedDims]  If true, returned dimensions are pixel-interleaved, a.k.a [p1_dim0, p1_dim1, p1_dimn, p2_dim0...], default is [p1_dim0, p2_dim0, ..., p1_dim1, p2_dim1...]
+         */
+        decode: function(input, options) {
+          options = options || {};
+          var noDataValue = options.noDataValue;
+          var i2 = 0, data = {};
+          data.ptr = options.inputOffset || 0;
+          data.pixels = {};
+          if (!Lerc2Helpers.readHeaderInfo(input, data)) {
+            return;
+          }
+          var headerInfo = data.headerInfo;
+          var fileVersion = headerInfo.fileVersion;
+          var OutPixelTypeArray = Lerc2Helpers.getDataTypeArray(headerInfo.imageType);
+          if (fileVersion > 5) {
+            throw "unsupported lerc version 2." + fileVersion;
+          }
+          Lerc2Helpers.readMask(input, data);
+          if (headerInfo.numValidPixel !== headerInfo.width * headerInfo.height && !data.pixels.resultMask) {
+            data.pixels.resultMask = options.maskData;
+          }
+          var numPixels = headerInfo.width * headerInfo.height;
+          data.pixels.resultPixels = new OutPixelTypeArray(numPixels * headerInfo.numDims);
+          data.counter = {
+            onesweep: 0,
+            uncompressed: 0,
+            lut: 0,
+            bitstuffer: 0,
+            constant: 0,
+            constantoffset: 0
+          };
+          var useBSQForOutputDim = !options.returnPixelInterleavedDims;
+          if (headerInfo.numValidPixel !== 0) {
+            if (headerInfo.zMax === headerInfo.zMin) {
+              Lerc2Helpers.constructConstantSurface(data, useBSQForOutputDim);
+            } else if (fileVersion >= 4 && Lerc2Helpers.checkMinMaxRanges(input, data)) {
+              Lerc2Helpers.constructConstantSurface(data, useBSQForOutputDim);
+            } else {
+              var view = new DataView(input, data.ptr, 2);
+              var bReadDataOneSweep = view.getUint8(0);
+              data.ptr++;
+              if (bReadDataOneSweep) {
+                Lerc2Helpers.readDataOneSweep(input, data, OutPixelTypeArray, useBSQForOutputDim);
+              } else {
+                if (fileVersion > 1 && headerInfo.imageType <= 1 && Math.abs(headerInfo.maxZError - 0.5) < 1e-5) {
+                  var flagHuffman = view.getUint8(1);
+                  data.ptr++;
+                  data.encodeMode = flagHuffman;
+                  if (flagHuffman > 2 || fileVersion < 4 && flagHuffman > 1) {
+                    throw "Invalid Huffman flag " + flagHuffman;
+                  }
+                  if (flagHuffman) {
+                    Lerc2Helpers.readHuffman(input, data, OutPixelTypeArray, useBSQForOutputDim);
+                  } else {
+                    Lerc2Helpers.readTiles(input, data, OutPixelTypeArray, useBSQForOutputDim);
+                  }
+                } else {
+                  Lerc2Helpers.readTiles(input, data, OutPixelTypeArray, useBSQForOutputDim);
+                }
+              }
+            }
+          }
+          data.eofOffset = data.ptr;
+          var diff;
+          if (options.inputOffset) {
+            diff = data.headerInfo.blobSize + options.inputOffset - data.ptr;
+            if (Math.abs(diff) >= 1) {
+              data.eofOffset = options.inputOffset + data.headerInfo.blobSize;
+            }
+          } else {
+            diff = data.headerInfo.blobSize - data.ptr;
+            if (Math.abs(diff) >= 1) {
+              data.eofOffset = data.headerInfo.blobSize;
+            }
+          }
+          var result = {
+            width: headerInfo.width,
+            height: headerInfo.height,
+            pixelData: data.pixels.resultPixels,
+            minValue: headerInfo.zMin,
+            maxValue: headerInfo.zMax,
+            validPixelCount: headerInfo.numValidPixel,
+            dimCount: headerInfo.numDims,
+            dimStats: {
+              minValues: headerInfo.minValues,
+              maxValues: headerInfo.maxValues
+            },
+            maskData: data.pixels.resultMask
+            //noDataValue: noDataValue
+          };
+          if (data.pixels.resultMask && Lerc2Helpers.isValidPixelValue(headerInfo.imageType, noDataValue)) {
+            var mask = data.pixels.resultMask;
+            for (i2 = 0; i2 < numPixels; i2++) {
+              if (!mask[i2]) {
+                result.pixelData[i2] = noDataValue;
+              }
+            }
+            result.noDataValue = noDataValue;
+          }
+          data.noDataValue = noDataValue;
+          if (options.returnFileInfo) {
+            result.fileInfo = Lerc2Helpers.formatFileInfo(data);
+          }
+          return result;
+        },
+        getBandCount: function(input) {
+          var count = 0;
+          var i2 = 0;
+          var temp = {};
+          temp.ptr = 0;
+          temp.pixels = {};
+          while (i2 < input.byteLength - 58) {
+            Lerc2Helpers.readHeaderInfo(input, temp);
+            i2 += temp.headerInfo.blobSize;
+            count++;
+            temp.ptr = i2;
+          }
+          return count;
+        }
+      };
+      return Lerc2Decode2;
+    }();
+    var isPlatformLittleEndian = function() {
+      var a2 = new ArrayBuffer(4);
+      var b2 = new Uint8Array(a2);
+      var c2 = new Uint32Array(a2);
+      c2[0] = 1;
+      return b2[0] === 1;
+    }();
+    var Lerc2 = {
+      /************wrapper**********************************************/
+      /**
+       * A wrapper for decoding both LERC1 and LERC2 byte streams capable of handling multiband pixel blocks for various pixel types.
+       *
+       * @alias module:Lerc
+       * @param {ArrayBuffer} input The LERC input byte stream
+       * @param {object} [options] The decoding options below are optional.
+       * @param {number} [options.inputOffset] The number of bytes to skip in the input byte stream. A valid Lerc file is expected at that position.
+       * @param {string} [options.pixelType] (LERC1 only) Default value is F32. Valid pixel types for input are U8/S8/S16/U16/S32/U32/F32.
+       * @param {number} [options.noDataValue] (LERC1 only). It is recommended to use the returned mask instead of setting this value.
+       * @param {boolean} [options.returnPixelInterleavedDims] (nDim LERC2 only) If true, returned dimensions are pixel-interleaved, a.k.a [p1_dim0, p1_dim1, p1_dimn, p2_dim0...], default is [p1_dim0, p2_dim0, ..., p1_dim1, p2_dim1...]
+       * @returns {{width, height, pixels, pixelType, mask, statistics}}
+         * @property {number} width Width of decoded image.
+         * @property {number} height Height of decoded image.
+         * @property {array} pixels [band1, band2, …] Each band is a typed array of width*height.
+         * @property {string} pixelType The type of pixels represented in the output.
+         * @property {mask} mask Typed array with a size of width*height, or null if all pixels are valid.
+         * @property {array} statistics [statistics_band1, statistics_band2, …] Each element is a statistics object representing min and max values
+      **/
+      decode: function(encodedData, options) {
+        if (!isPlatformLittleEndian) {
+          throw "Big endian system is not supported.";
+        }
+        options = options || {};
+        var inputOffset = options.inputOffset || 0;
+        var fileIdView = new Uint8Array(encodedData, inputOffset, 10);
+        var fileIdentifierString = String.fromCharCode.apply(null, fileIdView);
+        var lerc2, majorVersion;
+        if (fileIdentifierString.trim() === "CntZImage") {
+          lerc2 = LercDecode2;
+          majorVersion = 1;
+        } else if (fileIdentifierString.substring(0, 5) === "Lerc2") {
+          lerc2 = Lerc2Decode;
+          majorVersion = 2;
+        } else {
+          throw "Unexpected file identifier string: " + fileIdentifierString;
+        }
+        var iPlane = 0, eof = encodedData.byteLength - 10, encodedMaskData, bandMasks = [], bandMask, maskData;
+        var decodedPixelBlock = {
+          width: 0,
+          height: 0,
+          pixels: [],
+          pixelType: options.pixelType,
+          mask: null,
+          statistics: []
+        };
+        var uniqueBandMaskCount = 0;
+        while (inputOffset < eof) {
+          var result = lerc2.decode(encodedData, {
+            inputOffset,
+            //for both lerc1 and lerc2
+            encodedMaskData,
+            //lerc1 only
+            maskData,
+            //lerc2 only
+            returnMask: iPlane === 0 ? true : false,
+            //lerc1 only
+            returnEncodedMask: iPlane === 0 ? true : false,
+            //lerc1 only
+            returnFileInfo: true,
+            //for both lerc1 and lerc2
+            returnPixelInterleavedDims: options.returnPixelInterleavedDims,
+            //for ndim lerc2 only
+            pixelType: options.pixelType || null,
+            //lerc1 only
+            noDataValue: options.noDataValue || null
+            //lerc1 only
+          });
+          inputOffset = result.fileInfo.eofOffset;
+          maskData = result.maskData;
+          if (iPlane === 0) {
+            encodedMaskData = result.encodedMaskData;
+            decodedPixelBlock.width = result.width;
+            decodedPixelBlock.height = result.height;
+            decodedPixelBlock.dimCount = result.dimCount || 1;
+            decodedPixelBlock.pixelType = result.pixelType || result.fileInfo.pixelType;
+            decodedPixelBlock.mask = maskData;
+          }
+          if (majorVersion > 1) {
+            if (maskData) {
+              bandMasks.push(maskData);
+            }
+            if (result.fileInfo.mask && result.fileInfo.mask.numBytes > 0) {
+              uniqueBandMaskCount++;
+            }
+          }
+          iPlane++;
+          decodedPixelBlock.pixels.push(result.pixelData);
+          decodedPixelBlock.statistics.push({
+            minValue: result.minValue,
+            maxValue: result.maxValue,
+            noDataValue: result.noDataValue,
+            dimStats: result.dimStats
+          });
+        }
+        var i2, j, numPixels;
+        if (majorVersion > 1 && uniqueBandMaskCount > 1) {
+          numPixels = decodedPixelBlock.width * decodedPixelBlock.height;
+          decodedPixelBlock.bandMasks = bandMasks;
+          maskData = new Uint8Array(numPixels);
+          maskData.set(bandMasks[0]);
+          for (i2 = 1; i2 < bandMasks.length; i2++) {
+            bandMask = bandMasks[i2];
+            for (j = 0; j < numPixels; j++) {
+              maskData[j] = maskData[j] & bandMask[j];
+            }
+          }
+          decodedPixelBlock.maskData = maskData;
+        }
+        return decodedPixelBlock;
+      }
+    };
+    if (module.exports) {
+      module.exports = Lerc2;
+    } else {
+      this.Lerc = Lerc2;
+    }
+  })();
+})(LercDecode);
+var LercDecodeExports = LercDecode.exports;
+const Lerc = /* @__PURE__ */ getDefaultExportFromCjs(LercDecodeExports);
+let init$1;
+let instance$1;
+let heap$1;
+const IMPORT_OBJECT$1 = {
+  env: {
+    emscripten_notify_memory_growth: (_2) => {
+      heap$1 = new Uint8Array(instance$1.exports.memory.buffer);
+    }
+  }
+};
+let ZSTDDecoder$1 = class ZSTDDecoder {
+  init() {
+    if (init$1) return init$1;
+    if (typeof fetch !== "undefined") {
+      init$1 = fetch(`data:application/wasm;base64,${wasm$1}`).then((response) => response.arrayBuffer()).then((arrayBuffer) => WebAssembly.instantiate(arrayBuffer, IMPORT_OBJECT$1)).then(this._init);
+    } else {
+      init$1 = WebAssembly.instantiate(Buffer.from(wasm$1, "base64"), IMPORT_OBJECT$1).then(this._init);
+    }
+    return init$1;
+  }
+  _init(result) {
+    instance$1 = result.instance;
+    IMPORT_OBJECT$1.env.emscripten_notify_memory_growth(0);
+  }
+  decode(array, uncompressedSize = 0) {
+    if (!instance$1) throw new Error("ZSTDDecoder: Await .init() before decoding.");
+    const compressedSize = array.byteLength;
+    const compressedPtr = instance$1.exports.malloc(compressedSize);
+    heap$1.set(array, compressedPtr);
+    uncompressedSize = uncompressedSize || Number(instance$1.exports.ZSTD_findDecompressedSize(compressedPtr, compressedSize));
+    const uncompressedPtr = instance$1.exports.malloc(uncompressedSize);
+    const actualSize = instance$1.exports.ZSTD_decompress(uncompressedPtr, uncompressedSize, compressedPtr, compressedSize);
+    const dec = heap$1.slice(uncompressedPtr, uncompressedPtr + actualSize);
+    instance$1.exports.free(compressedPtr);
+    instance$1.exports.free(uncompressedPtr);
+    return dec;
+  }
+};
+const wasm$1 = "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AikACDcACCAHIDo3AAAgEUEZSA0BIARBGGohBANAIAIpABAhOiAEIAIpABg3AAggBCA6NwAAIAIpACAhOiAEIAIpACg3ABggBCA6NwAQIAJBIGohAiAEQSBqIgQgCkkNAAsMAQsCQAJAIAUoAswCIhEgBUHgAWogJUEHcUEMbGoiDygCACICaiIHIBxLDQAgCSAPKAIEIgogAmoiBmogG0sNACAGQSBqIBQgCWtNDQELIAUgDygCCDYCoAEgBSAPKQIANwOYASAJIBQgBUGYAWogBUHMAmogHCALIBcgIhAgIQYMAQsgAiAJaiEEIA8oAgghFSARKQAAITogCSARKQAINwAIIAkgOjcAAAJAIAJBEUkNACARKQAQITogCSARKQAYNwAYIAkgOjcAECACQRBrQRFIDQAgEUEQaiECIAlBIGohEgNAIAIpABAhOiASIAIpABg3AAggEiA6NwAAIAIpACAhOiASIAIpACg3ABggEiA6NwAQIAJBIGohAiASQSBqIhIgBEkNAAsLIAQgFWshAiAFIAc2AswCIAQgC2sgFUkEQCAVIAQgF2tLDQwgIiAiIAIgC2siD2oiByAKak8EQCAKRQ0CIAQgByAK/AoAAAwCC0EAIA9rIgIEQCAEIAcgAvwKAAALIAogD2ohCiAEIA9rIQQgCyECCyAVQRBPBEAgAikAACE6IAQgAikACDcACCAEIDo3AAAgCkERSA0BIAQgCmohByAEQRBqIQQDQCACKQAQITogBCACKQAYNwAIIAQgOjcAACACKQAgITogBCACKQAoNwAYIAQgOjcAECACQSBqIQIgBEEgaiIEIAdJDQALDAELAkAgFUEHTQRAIAQgAi0AADoAACAEIAItAAE6AAEgBCACLQACOgACIAQgAi0AAzoAAyAEIAIgFUECdCIHQeAaaigCAGoiAigAADYABCACIAdBgBtqKAIAayECDAELIAQgAikAADcAAAsgCkEJSQ0AIAQgCmohDyAEQQhqIgcgAkEIaiICa0EPTARAA0AgByACKQAANwAAIAJBCGohAiAHQQhqIgcgD0kNAAwCCwALIAIpAAAhOiAHIAIpAAg3AAggByA6NwAAIApBGUgNACAEQRhqIQQDQCACKQAQITogBCACKQAYNwAIIAQgOjcAACACKQAgITogBCACKQAoNwAYIAQgOjcAECACQSBqIQIgBEEgaiIEIA9JDQALCyAGQYh/SwRAIAYhAwwLCyAFQeABaiAlQQdxQQxsaiICIA02AgggAiAMNgIEIAIgEDYCAAsgBiAJaiEJICVBAWohJSAQIC1qIAxqIS0MAQsLIAUoArABIAUoArQBRw0HIAUoAqwBQSBHDQcgDiAoayEQA0ACQCAOIBBMBEBBACECA0AgAkEDRg0CIDIgAkECdCIDaiADICZqKAIANgIAIAJBAWohAgwACwALIAVB4AFqIBBBB3FBDGxqIQoCfwJAIAgoAoTsAUECRgRAIAUoAswCIg8gCigCACIEaiIHIAgoAoDsASICSwRAIAIgD0cEQCACIA9rIgIgFCAJa0sNCyAJIA8gAhAfIAogBCACayIENgIAIAIgCWohCQsgBSAWNgLMAiAIQQA2AoTsAQJAAkACQCAEQYCABEoNACAJIAooAgQiDSAEaiIGaiAbSw0AIAZBIGogFCAJa00NAQsgBSAKKAIINgJQIAUgCikCADcDSCAJIBQgBUHIAGogBUHMAmogGSALIBcgIhAgIQYMAQsgBCAWaiEHIAQgCWohDCAKKAIIIQogFikAACE6IAkgFikACDcACCAJIDo3AAACQCAEQRFJDQAgHikAACE6IAkgHikACDcAGCAJIDo3ABAgBEEQa0ERSA0AIAlBIGohAiAeIQQDQCAEKQAQITogAiAEKQAYNwAIIAIgOjcAACAEKQAgITogAiAEKQAoNwAYIAIgOjcAECAEQSBqIQQgAkEgaiICIAxJDQALCyAMIAprIQIgBSAHNgLMAiAMIAtrIApJBEAgCiAMIBdrSw0PICIgIiACIAtrIgdqIgQgDWpPBEAgDUUNAiAMIAQgDfwKAAAMAgtBACAHayICBEAgDCAEIAL8CgAACyAHIA1qIQ0gDCAHayEMIAshAgsgCkEQTwRAIAIpAAAhOiAMIAIpAAg3AAggDCA6NwAAIA1BEUgNASAMIA1qIQcgDEEQaiEEA0AgAikAECE6IAQgAikAGDcACCAEIDo3AAAgAikAICE6IAQgAikAKDcAGCAEIDo3ABAgAkEgaiECIARBIGoiBCAHSQ0ACwwBCwJAIApBB00EQCAMIAItAAA6AAAgDCACLQABOgABIAwgAi0AAjoAAiAMIAItAAM6AAMgDCACIApBAnQiBEHgGmooAgBqIgIoAAA2AAQgAiAEQYAbaigCAGshAgwBCyAMIAIpAAA3AAALIA1BCUkNACAMIA1qIQcgDEEIaiIEIAJBCGoiAmtBD0wEQANAIAQgAikAADcAACACQQhqIQIgBEEIaiIEIAdJDQAMAgsACyACKQAAITogBCACKQAINwAIIAQgOjcAACANQRlIDQAgDEEYaiEEA0AgAikAECE6IAQgAikAGDcACCAEIDo3AAAgAikAICE6IAQgAikAKDcAGCAEIDo3ABAgAkEgaiECIARBIGoiBCAHSQ0ACwsgBkGJf08EQCAGIQMMDgsgGSEcIAYgCWoMAwsgB0EgayECAkACQCAHIBxLDQAgCSAKKAIEIhIgBGoiDGogAksNACAMQSBqIBQgCWtNDQELIAUgCigCCDYCYCAFIAopAgA3A1ggCSAUIAIgBUHYAGogBUHMAmogHCALIBcgIhAhIQwMAgsgBCAJaiEGIAooAgghCiAPKQAAITogCSAPKQAINwAIIAkgOjcAAAJAIARBEUkNACAPKQAQITogCSAPKQAYNwAYIAkgOjcAECAEQRBrQRFIDQAgD0EQaiECIAlBIGohBANAIAIpABAhOiAEIAIpABg3AAggBCA6NwAAIAIpACAhOiAEIAIpACg3ABggBCA6NwAQIAJBIGohAiAEQSBqIgQgBkkNAAsLIAYgCmshAiAFIAc2AswCIAYgC2sgCkkEQCAKIAYgF2tLDQ0gIiAiIAIgC2siB2oiBCASak8EQCASRQ0DIAYgBCAS/AoAAAwDC0EAIAdrIgIEQCAGIAQgAvwKAAALIAcgEmohEiAGIAdrIQYgCyECCyAKQRBPBEAgAikAACE6IAYgAikACDcACCAGIDo3AAAgEkERSA0CIAYgEmohByAGQRBqIQQDQCACKQAQITogBCACKQAYNwAIIAQgOjcAACACKQAgITogBCACKQAoNwAYIAQgOjcAECACQSBqIQIgBEEgaiIEIAdJDQALDAILAkAgCkEHTQRAIAYgAi0AADoAACAGIAItAAE6AAEgBiACLQACOgACIAYgAi0AAzoAAyAGIAIgCkECdCIEQeAaaigCAGoiAigAADYABCACIARBgBtqKAIAayECDAELIAYgAikAADcAAAsgEkEJSQ0BIAYgEmohByAGQQhqIgQgAkEIaiICa0EPTARAA0AgBCACKQAANwAAIAJBCGohAiAE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";
+const zstd$2 = new ZSTDDecoder$1();
+class LercDecoder extends BaseDecoder {
+  /**
+   * @param {ArrayBufferLike} buffer
+   * @returns {ArrayBufferLike}
+   */
+  decodeBlock(buffer2) {
+    const params = (
+      /** @type {LercDecoderParameters} */
+      this.parameters
+    );
+    const addCompression = params.LercParameters?.[LercParameters.AddCompression];
+    let decoded = buffer2;
+    switch (addCompression) {
+      case LercAddCompression.None:
+        break;
+      case LercAddCompression.Deflate:
+        decoded = inflate_1(new Uint8Array(decoded)).buffer;
+        break;
+      case LercAddCompression.Zstandard:
+        decoded = zstd$2.decode(new Uint8Array(decoded)).buffer;
+        break;
+      default:
+        throw new Error(`Unsupported LERC additional compression method identifier: ${addCompression}`);
+    }
+    const lercResult = Lerc.decode(decoded, { returnPixelInterleavedDims: this.parameters.planarConfiguration === 1 });
+    const lercData = lercResult.pixels[0];
+    return lercData.buffer;
+  }
+}
+const lerc = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  default: LercDecoder,
+  zstd: zstd$2
+}, Symbol.toStringTag, { value: "Module" }));
+let init;
+let instance;
+let heap;
+let heapView;
+const IMPORT_OBJECT = {
+  env: {
+    emscripten_notify_memory_growth: (_2) => {
+      heap = new Uint8Array(instance.exports.memory.buffer);
+      heapView = new DataView(heap.buffer);
+    }
+  }
+};
+class ZSTDDecoder2 {
+  init() {
+    if (init) return init;
+    if (typeof fetch !== "undefined") {
+      init = fetch(`data:application/wasm;base64,${wasm}`).then((response) => response.arrayBuffer()).then((arrayBuffer) => WebAssembly.instantiate(arrayBuffer, IMPORT_OBJECT)).then(this._init);
+    } else {
+      init = WebAssembly.instantiate(Buffer.from(wasm, "base64"), IMPORT_OBJECT).then(this._init);
+    }
+    return init;
+  }
+  _init(result) {
+    instance = result.instance;
+    IMPORT_OBJECT.env.emscripten_notify_memory_growth(0);
+  }
+  decode(array, uncompressedSize = 0) {
+    if (!instance) throw new Error("ZSTDDecoder: Await .init() before decoding.");
+    const compressedSize = array.byteLength;
+    const compressedPtr = instance.exports.malloc(compressedSize);
+    heap.set(array, compressedPtr);
+    if (uncompressedSize === 0) {
+      uncompressedSize = Number(instance.exports.ZSTD_findDecompressedSize(compressedPtr, compressedSize));
+    }
+    if (uncompressedSize === -1) {
+      instance.exports.free(compressedPtr);
+      const parts = [];
+      for (const out of this.decodeStreaming([array])) {
+        parts.push(out);
+      }
+      if (parts.length === 1) {
+        return parts[0];
+      }
+      const fullByteLength = parts.reduce((acc, arr) => acc + arr.byteLength, 0);
+      const result = new Uint8Array(fullByteLength);
+      let offset = 0;
+      for (const part of parts) {
+        result.set(part, offset);
+        offset += part.byteLength;
+      }
+      return result;
+    }
+    const uncompressedPtr = instance.exports.malloc(uncompressedSize);
+    const actualSize = instance.exports.ZSTD_decompress(uncompressedPtr, uncompressedSize, compressedPtr, compressedSize);
+    const dec = heap.slice(uncompressedPtr, uncompressedPtr + actualSize);
+    instance.exports.free(compressedPtr);
+    instance.exports.free(uncompressedPtr);
+    return dec;
+  }
+  *decodeStreaming(arrays) {
+    if (!instance) throw new Error("ZSTDDecoder: Await .init() before decoding.");
+    const buffInSize = instance.exports.ZSTD_DStreamInSize();
+    const buffIn = instance.exports.malloc(buffInSize);
+    const buffOutSize = instance.exports.ZSTD_DStreamOutSize();
+    const buffOut = instance.exports.malloc(buffOutSize);
+    const dctxPtr = instance.exports.ZSTD_createDCtx();
+    const sizeOfPointer = 4;
+    const sizeOfSizeT = 4;
+    const inputPtr = instance.exports.malloc(sizeOfPointer + sizeOfSizeT * 2);
+    const outputPtr = instance.exports.malloc(sizeOfPointer + sizeOfSizeT * 2);
+    let lastRet = 0;
+    for (const array of arrays) {
+      const compressedPtr = instance.exports.malloc(array.byteLength);
+      heap.set(array, compressedPtr);
+      heapView.setInt32(inputPtr, compressedPtr, true);
+      heapView.setInt32(inputPtr + sizeOfPointer, array.byteLength, true);
+      heapView.setInt32(inputPtr + sizeOfPointer + sizeOfSizeT, 0, true);
+      while (heapView.getUint32(inputPtr + sizeOfPointer + sizeOfSizeT, true) < heapView.getUint32(inputPtr + sizeOfPointer, true)) {
+        heapView.setInt32(outputPtr, buffOut, true);
+        heapView.setInt32(outputPtr + sizeOfPointer, buffOutSize, true);
+        heapView.setInt32(outputPtr + sizeOfPointer + sizeOfSizeT, 0, true);
+        lastRet = instance.exports.ZSTD_decompressStream(dctxPtr, outputPtr, inputPtr);
+        const outputPos = heapView.getUint32(outputPtr + sizeOfPointer + sizeOfSizeT, true);
+        yield heap.slice(buffOut, buffOut + outputPos);
+      }
+      instance.exports.free(compressedPtr);
+    }
+    instance.exports.ZSTD_freeDCtx(dctxPtr);
+    instance.exports.free(buffIn);
+    instance.exports.free(buffOut);
+    instance.exports.free(inputPtr);
+    instance.exports.free(outputPtr);
+    if (lastRet !== 0) {
+      throw new Error("Incomplete stream, more data expected.");
+    }
+  }
+}
+const wasm = "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QQhyIQBBACEDA0AgACADTQ0DIANBQGshAwwACwALQWwhCiAOIA5B/ABqIA5B+ABqIAUgBhAGIgJBiH9LDQEgDigCeCIDIARLDQEgACAOIA4oAnwgByAIIAMgDRAlIAEgADYCACACIQoMAQtBbCEKCyAOQYABaiQAIAoLcAEEfyAAQgA3AgAgAgRAIAFBCmohBiABKAIEIQRBACECQQAhAQNAIAEgBHZFBEAgAiAGIAFBA3RqLQAAIgUgAiAFSxshAiABQQFqIQEgAyAFQRZLaiEDDAELCyAAIAI2AgQgACADQQggBGt0NgIACwuuAQEEfyABIAIoAgQiAyABKAIEaiIENgIEIAAgA0ECdEGwGWooAgAgASgCAEEAIARrdnE2AgACQCAEQSFPBEAgAUGwGjYCCAwBCyABKAIIIgMgASgCEE8EQCABEAwMAQsgAyABKAIMIgVGDQAgASADIAMgBWsgBEEDdiIGIAMgBmsgBUkbIgNrIgU2AgggASAEIANBA3RrNgIEIAEgBSgAADYCAAsgACACQQhqNgIEC40CAgN/AX4gACACaiEEAkACQCACQQhOBEAgACABayICQXlIDQELA0AgACAETw0CIAAgAS0AADoAACAAQQFqIQAgAUEBaiEBDAALAAsCQAJAIAJBb0sNACAAIARBIGsiAksNACABKQAAIQYgACABKQAINwAIIAAgBjcAACACIABrIgVBEU4EQCAAQRBqIQAgASEDA0AgAykAECEGIAAgAykAGDcACCAAIAY3AAAgAykAICEGIAAgAykAKDcAGCAAIAY3ABAgA0EgaiEDIABBIGoiACACSQ0ACwsgASAFaiEBDAELIAAhAgsDQCACIARPDQEgAiABLQAAOgAAIAJBAWohAiABQQFqIQEMAAsACwvfAQEGf0G6fyEKAkAgAigCBCIIIAIoAgAiCWoiDSABIABrSw0AQWwhCiAJIAQgAygCACILa0sNACAAIAlqIgQgAigCCCIMayECIAAgAUEgayIBIAsgCUEAEDMgAyAJIAtqNgIAAkACQCAEIAVrIAxPBEAgAiEFDAELIAwgBCAGa0sNAiAHIAcgAiAFayIDaiICIAhqTwRAIAhFDQIgBCACIAj8CgAADAILQQAgA2siAARAIAQgAiAA/AoAAAsgAyAIaiEIIAQgA2shBAsgBCABIAUgCEEBEDML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";
+const zstd = new ZSTDDecoder2();
+class ZstdDecoder extends BaseDecoder {
+  /** @param {ArrayBuffer} buffer */
+  decodeBlock(buffer2) {
+    return (
+      /** @type {ArrayBuffer} */
+      zstd.decode(new Uint8Array(buffer2)).buffer
+    );
+  }
+}
+const zstd$1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  default: ZstdDecoder,
+  zstd
+}, Symbol.toStringTag, { value: "Module" }));
+class WebImageDecoder extends BaseDecoder {
+  /**
+   * @param {import('./basedecoder.js').BaseDecoderParameters} parameters
+   */
+  constructor(parameters) {
+    super(parameters);
+    if (typeof createImageBitmap === "undefined") {
+      throw new Error("Cannot decode WebImage as `createImageBitmap` is not available");
+    } else if (typeof document === "undefined" && typeof OffscreenCanvas === "undefined") {
+      throw new Error("Cannot decode WebImage as neither `document` nor `OffscreenCanvas` is not available");
+    }
+  }
+  /** @param {ArrayBuffer} buffer */
+  async decodeBlock(buffer2) {
+    const blob = new Blob([buffer2]);
+    const imageBitmap = await createImageBitmap(blob);
+    let canvas;
+    if (typeof document !== "undefined") {
+      canvas = document.createElement("canvas");
+      canvas.width = imageBitmap.width;
+      canvas.height = imageBitmap.height;
+    } else {
+      canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
+    }
+    const ctx = (
+      /** @type {CanvasRenderingContext2D} */
+      canvas.getContext("2d")
+    );
+    ctx.drawImage(imageBitmap, 0, 0);
+    const imageData = ctx.getImageData(0, 0, imageBitmap.width, imageBitmap.height).data;
+    const samplesPerPixel = this.parameters.samplesPerPixel || 4;
+    if (samplesPerPixel === 4) {
+      return imageData.buffer;
+    } else if (samplesPerPixel === 3) {
+      const rgb = new Uint8ClampedArray(imageBitmap.width * imageBitmap.height * 3);
+      for (let i2 = 0, j = 0; i2 < rgb.length; i2 += 3, j += 4) {
+        rgb[i2] = imageData[j];
+        rgb[i2 + 1] = imageData[j + 1];
+        rgb[i2 + 2] = imageData[j + 2];
+      }
+      return rgb.buffer;
+    } else {
+      throw new Error(`Unsupported SamplesPerPixel value: ${samplesPerPixel}`);
+    }
+  }
+}
+const webimage = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  default: WebImageDecoder
+}, Symbol.toStringTag, { value: "Module" }));
 export {
   HeliosCard
 };

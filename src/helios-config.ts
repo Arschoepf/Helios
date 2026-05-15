@@ -313,7 +313,7 @@ export class HeliosColorPicker extends LitElement
 export class HeliosCardEditor extends LitElement
 {
     @property({ attribute: false }) public hass?: any;
-    @state()                        private _cfg: HeliosConfig = { 'maptiler-api-key': '' };
+    @state()                        private _cfg: HeliosConfig = {};
     @state()                        private _pickerReady = false;
 
     //Per-key debounce timers for slider inputs. Sliders fire @input
@@ -414,6 +414,23 @@ export class HeliosCardEditor extends LitElement
         this._update(key, (e.target as HTMLInputElement).value);
     }
 
+    //Free-form numeric field. Empty input clears the option (so the
+    //card falls back to its default behaviour); a valid finite number
+    //is committed as-is. Anything else is ignored, the previous value
+    //stays in place.
+    private _numField(key: keyof HeliosConfig, e: Event): void
+    {
+        const raw = (e.target as HTMLInputElement).value.trim();
+        if (raw === '')
+        {
+            this._update(key, undefined);
+            return;
+        }
+        const v = parseFloat(raw);
+        if (!isFinite(v)) return;
+        this._update(key, v);
+    }
+
     //Slider commit. Updates local state synchronously so the slider
     //thumb tracks the drag, but defers the cross-component
     //`config-changed` event by SLIDER_COMMIT_DELAY_MS so the engine
@@ -436,11 +453,6 @@ export class HeliosCardEditor extends LitElement
                 { detail: { config: this._cfg } }));
         }, HeliosCardEditor.SLIDER_COMMIT_DELAY_MS);
         this._sliderDebounce.set(k, t);
-    }
-
-    private _bool(key: keyof HeliosConfig, value: boolean): void
-    {
-        this._update(key, value);
     }
 
     private _color(key: keyof HeliosConfig, e: CustomEvent): void
@@ -502,44 +514,6 @@ export class HeliosCardEditor extends LitElement
         return html`
             <div class="editor">
 
-                <div class="section-title">${t.editor.required}</div>
-                <label class="field">
-                    <span class="label">${t.editor.apiKey}</span>
-                    <input
-                        type="text"
-                        .value="${c['maptiler-api-key'] ?? ''}"
-                        placeholder="xxxxxxxxxxxxxxxxxxxxxxxx"
-                        @change="${(e: Event) => this._str('maptiler-api-key', e)}"
-                    />
-                </label>
-                <div class="field-help">
-                    ${t.editor.getKeyAt}
-                    <a href="https://www.maptiler.com/cloud/" target="_blank" rel="noreferrer">maptiler.com</a>
-                </div>
-                <div class="hint">${t.editor.apiKeyHelp}</div>
-
-                <div class="section-title">${t.editor.terrainRelief}</div>
-                <label class="field">
-                    <span class="label">${t.editor.hillshadeColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c['topography-color'], '#5064a0')}"
-                        .ariaLabel="${t.editor.hillshadeColor}"
-                        @value-changed="${(e: CustomEvent) => this._color('topography-color', e)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t.editor.hillshadeStrength}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="1" step="0.01"
-                            .value="${String(c['topography-alpha'] ?? 0.65)}"
-                            @input="${(e: Event) => this._numSlider('topography-alpha', e)}"
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['topography-alpha'] ?? 0.65), 0.01)}</span>
-                    </div>
-                </label>
-                <div class="hint">${t.editor.terrainReliefHint}</div>
-
                 <div class="section-title">${t.editor.mapSection}</div>
                 <label class="field">
                     <span class="label">${t.editor.mapStyle}</span>
@@ -549,28 +523,10 @@ export class HeliosCardEditor extends LitElement
                         @change="${(e: Event) => this._update('map-style', (e.target as HTMLSelectElement).value)}"
                     >
                         <option value="streets"   ?selected="${(String(c['map-style'] ?? 'streets')) === 'streets'}">${t.editor.mapStyleStreet}</option>
-                        <option value="topo"      ?selected="${(String(c['map-style'] ?? 'streets')) === 'topo'}">${t.editor.mapStyleTopo}</option>
                         <option value="minimal"   ?selected="${(String(c['map-style'] ?? 'streets')) === 'minimal'}">${t.editor.mapStyleMinimal}</option>
-                        <option value="satellite" ?selected="${(String(c['map-style'] ?? 'streets')) === 'satellite'}">${t.editor.mapStyleSatellite}</option>
                     </select>
                 </label>
                 <div class="hint">${t.editor.mapStyleHint}</div>
-                <div class="field">
-                    <span class="label">${t.editor.terrainDetail}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['terrain-detail'] ?? 'smooth')) === 'smooth' ? 'active' : ''}"
-                            @click="${() => this._update('terrain-detail', 'smooth')}"
-                        >${t.editor.terrainDetailSmooth}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['terrain-detail'] ?? 'smooth')) === 'fine' ? 'active' : ''}"
-                            @click="${() => this._update('terrain-detail', 'fine')}"
-                        >${t.editor.terrainDetailFine}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.terrainDetailHint}</div>
                 <div class="field">
                     <span class="label">${t.editor.cardTheme}</span>
                     <div class="segmented-toggle">
@@ -608,33 +564,33 @@ export class HeliosCardEditor extends LitElement
                     <div class="segmented-toggle">
                         <button
                             type="button"
-                            class="seg-option ${(c['auto-rotate-enabled'] !== false) ? 'active' : ''}"
+                            class="seg-option ${(c['auto-rotate-enabled'] === true) ? 'active' : ''}"
                             @click="${() => this._update('auto-rotate-enabled', true)}"
                         >${t.editor.autoRotateOn}</button>
                         <button
                             type="button"
-                            class="seg-option ${(c['auto-rotate-enabled'] === false) ? 'active' : ''}"
+                            class="seg-option ${(c['auto-rotate-enabled'] !== true) ? 'active' : ''}"
                             @click="${() => this._update('auto-rotate-enabled', false)}"
                         >${t.editor.autoRotateOff}</button>
                     </div>
                 </div>
                 <div class="hint">${t.editor.autoRotateHint}</div>
                 <div class="field">
-                    <span class="label">${t.editor.performanceMode}</span>
+                    <span class="label">${t.editor.pixelRatio}</span>
                     <div class="segmented-toggle">
                         <button
                             type="button"
-                            class="seg-option ${(c['performance-mode'] !== true) ? 'active' : ''}"
-                            @click="${() => this._bool('performance-mode', false)}"
-                        >${t.editor.performanceModeOff}</button>
+                            class="seg-option ${(String(c['pixel-ratio'] ?? 'auto')).toLowerCase() !== '1x' ? 'active' : ''}"
+                            @click="${() => this._update('pixel-ratio', 'auto')}"
+                        >${t.editor.pixelRatioAuto}</button>
                         <button
                             type="button"
-                            class="seg-option ${(c['performance-mode'] === true) ? 'active' : ''}"
-                            @click="${() => this._bool('performance-mode', true)}"
-                        >${t.editor.performanceModeOn}</button>
+                            class="seg-option ${(String(c['pixel-ratio'] ?? 'auto')).toLowerCase() === '1x' ? 'active' : ''}"
+                            @click="${() => this._update('pixel-ratio', '1x')}"
+                        >${t.editor.pixelRatio1x}</button>
                     </div>
                 </div>
-                <div class="hint">${t.editor.performanceModeHint}</div>
+                <div class="hint">${t.editor.pixelRatioHint}</div>
 
                 <label class="field">
                     <span class="label">${t.editor.displayRadius}</span>
@@ -768,6 +724,18 @@ export class HeliosCardEditor extends LitElement
                     `}
                 </div>
                 <div class="field-help">${t.editor.pvEntityHelp}</div>
+                <label class="field">
+                    <span class="label">${t.editor.pvPeakPower}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="6.5"
+                        .value="${c['pv-peak-kwp'] != null ? String(c['pv-peak-kwp']) : ''}"
+                        @change="${(e: Event) => this._numField('pv-peak-kwp', e)}"
+                    />
+                </label>
+                <div class="field-help">${t.editor.pvPeakPowerHelp}</div>
                 <label class="field">
                     <span class="label">${t.editor.pvColor}</span>
                     <helios-color-picker

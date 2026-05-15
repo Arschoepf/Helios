@@ -7,7 +7,7 @@
 
 **HELIOS** is a custom [Home Assistant](https://www.home-assistant.io/) Lovelace card that visualises solar conditions at your home in real time.
 
-It pulls weather forecasts from **Open-Meteo** (no key needed), reads the optional production sensor of your photovoltaic install from your HA states, and stitches them together onto an interactive 3D map powered by **MapLibre GL** and **MapTiler**. The whole map, sun arc, sun disc, incidence ray, cloud cover, building extrusions and cast shadows, terrain hillshade, irradiance graph, PV graph, reflects the timeline cursor; scrub it 2 days into the past or 2 days into the future and watch every layer follow.
+It pulls weather forecasts from **Open-Meteo** (no key needed), reads the optional production sensor of your photovoltaic install from your HA states, and stitches them together onto an interactive 3D map powered by **MapLibre GL** with vector tiles served by **[OpenFreeMap](https://openfreemap.org/)** (free, no key, no signup). The whole map, sun arc, sun disc, incidence ray, cloud cover, building extrusions and cast shadows, irradiance graph, PV graph, reflects the timeline cursor; scrub it 2 days into the past or 2 days into the future and watch every layer follow.
 
 ---
 
@@ -19,7 +19,7 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 * **Cloud cover disc**, translucent disc on the ground, scaled by live cloud-cover %, outlined in the configured cloud colour. A fixed black ring marks the 100 % reference. Hover for the low/mid/high breakdown.
 * **PV production chip** *(optional)*, pin above the home, shows the **instantaneous** production in W/kW. Cumulative-energy sensors (kWh) are differentiated automatically over a rolling 60 s window.
 * **PV → home animated leader**, a vertical dashed line in the configured PV colour from the production chip down to a small anchor bead on the home; dashes flow toward the home at a speed proportional to current production over your theoretical peak (learned from the auto-calibration buffer, or 5 kW fallback while it warms up). Static and arrow-less when production is zero.
-* **Auto-calibrating PV prediction** *(optional)*, when a PV entity is configured, the card learns the user's installation by ratio-matching its Haurwitz / Kasten-Czeplak prediction against the live sensor. Daily peak-production columns highlight each day's maximum on the PV chart. The calibration buffer is persisted server-side via Home Assistant's `frontend/user_data` and survives cache wipes, device switches and dashboard restarts.
+* **PV production overlay + forecast** *(optional)*, when a PV entity is configured, the card surfaces the current production as a chip below the home and a dedicated graph above the timeline. If you also enter your installation's peak power (kWp) in the editor, a dotted forecast line based on the Haurwitz / Kasten-Czeplak clear-sky model + live cloud cover overlays the past observation, and the chip switches to a predicted value (italicised, prefixed `≈`) when scrubbing into the future.
 * **Home battery overlay** *(optional)*, two independent chips flank the PV chip on the same horizontal axis: State of Charge on the left, signed instantaneous power on the right. Each chip is connected to PV by a short static dotted L-leader. Either entity is independently optional; the corresponding chip only renders when its entity is set.
 * **Sun-coloured home halo**, a soft glow underneath the home outline so the focal building reads at a glance even on a busy basemap. Halo colour tracks the configured sun colour.
 * **Auto-rotation**, when the user is idle, the camera slowly orbits the home in the opposite direction to the sun's apparent motion (~1°/s). Any pinch / drag pauses it instantly and it resumes after a few seconds of stillness.
@@ -49,7 +49,6 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 6. Add the card to your dashboard:
    ```yaml
    type: custom:helios-card
-   maptiler-api-key: YOUR_KEY_HERE
    ```
 
 ### Manual installation
@@ -66,33 +65,28 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 
 ## Configuration
 
-A free MapTiler API key is required: <https://www.maptiler.com/cloud/>. The free tier is more than enough for this card, Open-Meteo doesn't need a key at all.
+No API key required. The basemap is served by [OpenFreeMap](https://openfreemap.org/) (free, no signup, no rate limits) and weather comes from Open-Meteo (also free, no key).
 
 The visual editor exposes every option. Minimal config:
 
 ```yaml
 type: custom:helios-card
-maptiler-api-key: YOUR_KEY_HERE
 ```
 
 Every option below is editable visually:
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `maptiler-api-key` | string | - | Required. |
-| `map-style` | `'streets' \| 'topo' \| 'minimal'` | `'streets'` | Basemap style. `streets` is a sober vector basemap suited to dense urban areas; `topo` is a topographic basemap with contour lines, better in hilly / outdoor settings; `minimal` loads streets and prunes every non-essential layer (POI symbols, place names, country labels, road shields) for a stripped basemap that's cheaper to render. The dark variant of streets / topo is used automatically when `card-theme` is `'dark'`. |
-| `card-theme` | `'light' \| 'dark'` | `'light'` | Card chrome skin, chips, charts, buttons, tooltips, the scrub overlay AND the 3D map basemap (via the MapTiler `*-dark` variants) flip between a light surface (white plate) and a dark surface (near-black `#191a1b` plate), so the card sits cleanly inside light or dark Home Assistant dashboards. |
-| `performance-mode` | boolean | `false` | Drops the per-frame heavyweights for low-end devices: 3D terrain mesh disabled (flat ground, pitch preserved), hillshade hidden, canvas pixel ratio forced to 1.0. The 3D buildings keep their extrusion, so the card still reads as 3D. Recovers 3–5× FPS on Safari fullscreen / mid-range mobile. |
-| `terrain-detail` | `'smooth' \| 'fine'` | `'smooth'` | DEM sampling step. `smooth` keeps the terrain mesh low-poly (cheap to render, invisible at typical zoom); `fine` raises the DEM `maxzoom` for users in dramatic relief who want the mesh to follow detailed topography. |
+| `map-style` | `'streets' \| 'minimal'` | `'streets'` | Basemap style. `streets` resolves to OpenFreeMap's [Liberty](https://tiles.openfreemap.org/styles/liberty) (full-colour OpenMapTiles look); `minimal` resolves to [Positron](https://tiles.openfreemap.org/styles/positron) (muted grey, very sober). Both flip to OpenFreeMap's [Dark](https://tiles.openfreemap.org/styles/dark) when `card-theme` is `'dark'`. |
+| `card-theme` | `'light' \| 'dark'` | `'light'` | Card chrome skin (chips, charts, buttons, tooltips, scrub overlay) AND the 3D map basemap flip between a light surface (white plate) and a dark surface (near-black `#191a1b` plate), so the card sits cleanly inside light or dark Home Assistant dashboards. |
+| `pixel-ratio` | `'auto' \| '1x'` | `'auto'` | WebGL canvas pixel density. `auto` uses the device's native devicePixelRatio (capped at 2 on desktop, 1.25 on mobile). `1x` forces 1.0, the cheapest per-frame fragment workload, useful on low-end devices or for long sessions where battery / heat matters more than crispness. |
 | `auto-rotate-enabled` | boolean | `true` | When `true`, the camera orbits the home slowly during idle. Any pinch / drag / wheel pauses it for 5 s and it resumes from the user's bearing. Disable on low-power devices or if the constant motion is distracting. |
-| `topography-color` | hex | `#5064a0` | Hillshade tint. |
-| `topography-alpha` | 0–1 | `0.65` | Hillshade strength. On `topo`, the basemap already carries some baked-in shading, lower this if the cumulative effect feels too heavy. |
-| `show-labels` | boolean | `true` | Show MapTiler street names, building numbers, POIs and place names on the basemap. |
+| `show-labels` | boolean | `true` | Show street names, building numbers, POIs and place names on the basemap. |
 | `building-radius` | meters | `100` | Distance around the home within which surrounding buildings are rendered in 3D. Buildings outside the radius are not drawn, the perf win in dense urban areas. Range: 20–1000 m. |
 | `building-cluster-radius` | meters | `0` | Distance around the home within which every building joins the home group at full opacity. Use this to attach verandas, garages and sheds to the main house. Range: 0–100 m. |
 | `building-opacity` | 0–1 | `0.25` | Opacity of the surrounding buildings. The home (and its cluster) always stays at full opacity so it reads as the focal point. |
 | `building-color` | hex | `#d2d2d7` | Base colour for every rendered building, modulated by sun altitude across the day. |
-| `shadows-enabled` | boolean | `true` | Master toggle for cast ground shadows. When `false`, no shadows are projected. When `true`, the source is picked automatically: a LiDAR provider when one covers the home (buildings AND vegetation), MapTiler footprints otherwise (buildings only). All shadows are clipped to the building visibility radius for consistency with the rendered surroundings. **LiDAR coverage is currently France-only; see [LiDAR coverage](#lidar-coverage).** |
+| `shadows-enabled` | boolean | `true` | Master toggle for cast ground shadows. When `false`, no shadows are projected. When `true`, the source is picked automatically: a LiDAR provider when one covers the home (buildings AND vegetation), OpenFreeMap building footprints otherwise (buildings only). All shadows are clipped to the building visibility radius for consistency with the rendered surroundings. See [LiDAR coverage](#lidar-coverage). |
 | `lidar-precision` | `'low' \| 'medium' \| 'high'` | `'medium'` | LiDAR raster size when a provider covers the home. Higher = finer shadow contours but a bigger payload. `low` 256², `medium` 512², `high` 1024² (close to IGN native sampling). No effect out of coverage. |
 | `shadow-opacity` | 0–1 | `0.32` | Opacity of the cast ground shadows. |
 | `sun-color` | hex | `#EF9F27` | Sun disc + arc + timeline irradiance area. |
@@ -127,17 +121,28 @@ Full algorithm + architecture details: see [ARCHITECTURE.md](./ARCHITECTURE.md).
 When `shadows-enabled` is on, HELIOS picks between two shadow sources automatically:
 
 * **LiDAR**, only when a provider covers your home. With LiDAR, cast shadows reflect real **buildings AND vegetation** (trees, hedges, etc.) captured by aerial scans.
-* **MapTiler footprints**, everywhere else. Buildings only, no vegetation.
+* **OpenFreeMap building footprints**, everywhere else. Buildings only, no vegetation.
 
 LiDAR coverage today:
 
-| Country | Provider | Coverage |
-| :--- | :--- | :--- |
-| France | **IGN LiDAR HD** | Metropolitan France + Corsica |
+| Country | Provider | Coverage | Format | Note |
+| :--- | :--- | :--- | :--- | :--- |
+| France | **IGN LiDAR HD** | Metropolitan France + Corsica | BIL float32 | Pre-computed nDSM, single fetch |
+| England | **Environment Agency LiDAR Composite** | ~99% of England | GeoTIFF float32 | Two fetches (DSM + DTM), subtracted client-side |
+| Spain | **IGN España PNOA-LiDAR (MDSn)** | Peninsular Spain + Balearics | GeoTIFF float32 | Two coverages (vegetation + buildings), merged via MAX. Canarias not covered |
+| Netherlands | **PDOK AHN4** | Mainland NL | GeoTIFF float32 | Two coverages (DSM + DTM), subtracted client-side. Caribbean Netherlands not covered |
+| Norway | **Kartverket NHM** | Mainland Norway + Svalbard | GeoTIFF float32 (ArcGIS) | Two services (DOM + DTM), subtracted client-side |
 
-I'm actively working on adding more providers as national open-data APIs become available. If your country publishes a usable LiDAR HD endpoint and you'd like to see it integrated, open an issue, the provider plug-in shape is documented in [ARCHITECTURE.md](./ARCHITECTURE.md) (`helios-lidar.ts` interface + `./helios-lidar/` registry).
+Other national LiDAR programmes were probed and not yet integrated:
 
-Out of coverage the card still renders shadows from MapTiler footprints, so the visual works worldwide, the LiDAR layer is a precision upgrade where available.
+* **Wales (Natural Resources Wales)** , per-tile ZIP downloads only, no live raster query endpoint.
+* **Switzerland (swisstopo)** , published WMS only carries pre-rendered PNG hillshade, not raw heights. Raw `swissALTI3D` rasters are downloadable as files only.
+* **Slovakia (ZBGIS)** , DMR (terrain) is available as GeoTIFF, but DMP (surface) is only published as cached PNG visualisations.
+* **Denmark (Datafordeler DHM)** , WCS GeoTIFF exists but requires a per-user API key / OAuth signup, integration parked until that friction is reduced.
+
+If your country publishes a usable LiDAR HD endpoint (raw float heights via WMS or WCS, CORS-friendly, no per-user authentication) and you'd like to see it integrated, open an issue. The provider plug-in shape is documented in [ARCHITECTURE.md](./ARCHITECTURE.md) (`helios-lidar.ts` interface + `./helios-lidar/providers/` registry).
+
+Out of coverage the card still renders shadows from OpenFreeMap building footprints, so the visual works worldwide, the LiDAR layer is a precision upgrade where available.
 
 ---
 
@@ -146,7 +151,8 @@ Out of coverage the card still renders shadows from MapTiler footprints, so the 
 | Component | Technology |
 | :--- | :--- |
 | **Frontend** | [Lit](https://lit.dev/) 3, TypeScript |
-| **Mapping** | [MapLibre GL JS](https://maplibre.org/) 5 + [MapTiler](https://www.maptiler.com/) tiles |
+| **Mapping** | [MapLibre GL JS](https://maplibre.org/) 5 + [OpenFreeMap](https://openfreemap.org/) vector tiles (free, no key, OpenMapTiles schema) |
+| **GeoTIFF** | [geotiff.js](https://github.com/geotiffjs/geotiff.js) for parsing the Float32 LiDAR rasters from UK / ES / NL / NO providers |
 | **Weather data** | [Open-Meteo API](https://open-meteo.com/) (free, no key) |
 | **Solar math** | NOAA-validated (mean altitude error 0.30°, mean azimuth error 0.36°) |
 | **Build** | Vite 5 |
@@ -173,10 +179,25 @@ Source layout:
 | `src/helios-buildings.ts`   | Self-sourced building tile fetch + radius / cluster filter |
 | `src/helios-shadows.ts`     | Ground-projected shadow polygons (flat-opacity raster pipeline) |
 | `src/helios-lidar.ts`       | `LidarSource` interface + provider registry |
-| `src/helios-lidar/`         | Country-specific LiDAR providers (today: `helios-lidar-fr.ts`) |
+| `src/helios-lidar/helios-lidar-pipeline.ts` | Shared height-raster → shadow-polygon pipeline (flood fill + convex hull) |
+| `src/helios-lidar/helios-lidar-geotiff.ts`  | Float32 GeoTIFF fetch + decode + DSM-DTM math helpers |
+| `src/helios-lidar/providers/` | One file per country (`helios-lidar-fr.ts`, `-uk`, `-es`, `-nl`, `-no`) |
 | `src/helios-sun.ts`         | Solar position + Haurwitz / Kasten-Czeplak math |
 | `src/helios-weather.ts`     | Open-Meteo multi-model fetch + cache |
-| `src/i18n/`                 | 7-locale strict-typed translations |
+| `src/i18n/`                 | 8-locale strict-typed translations (en/fr/de/es/it/nl/pt/no) |
+
+---
+
+## Credits & data sources
+
+HELIOS depends on several open data services. None require an account or API key.
+
+* **[OpenFreeMap](https://openfreemap.org/)** — free vector basemap tiles + styles (Liberty, Positron, Dark) built from OpenStreetMap data via the OpenMapTiles schema. The buildings, labels and the basemap itself all come from here. Big thank you to the OpenFreeMap project for hosting a public, no-key, no-rate-limit instance — without it, HELIOS would still be hostage to a paid map provider.
+* **[OpenStreetMap](https://www.openstreetmap.org/copyright)** — the underlying map data behind every OpenFreeMap tile. © OpenStreetMap contributors.
+* **[Open-Meteo](https://open-meteo.com/)** — weather forecasts (cloud cover, irradiance, etc.). Free, no key, multi-model fusion under the hood.
+* **National LiDAR providers** — IGN (France), Environment Agency (England), IGN España (Spain), PDOK (Netherlands), Kartverket (Norway). See [LiDAR coverage](#lidar-coverage) for the per-country credits.
+* **[MapLibre GL JS](https://maplibre.org/)** — the WebGL map engine that draws every frame.
+* **[geotiff.js](https://github.com/geotiffjs/geotiff.js)** — GeoTIFF Float32 decoder used by the UK / ES / NL / NO LiDAR providers.
 
 ---
 

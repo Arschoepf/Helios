@@ -1,6 +1,6 @@
 //Self-sourced building footprints around the home.
 //
-//Rendering buildings through MapTiler's full vector basemap as a
+//Rendering buildings through OpenFreeMap's full vector basemap as a
 //single fill-extrusion layer forces MapLibre to draw every building
 //in the viewport at every frame. In dense urban areas that's
 //several thousand extrusions per frame, visible jank on mobile and
@@ -10,11 +10,11 @@
 //clipped per tile, so a building that spans two tiles renders as
 //two features with independently-evaluated paint properties.
 //
-//The fix is architectural: we fetch the MapTiler v3 vector tiles
-//ourselves once at startup (only the 1–4 tiles that cover the radius
-//around the home), decode them with @mapbox/vector-tile, filter
-//features by distance, identify the polygon(s) that make up the
-//home, and emit TWO GeoJSON FeatureCollections that the engine
+//The fix is architectural: we fetch the OpenFreeMap planet vector
+//tiles ourselves once at startup (only the 1–4 tiles that cover
+//the radius around the home), decode them with @mapbox/vector-tile,
+//filter features by distance, identify the polygon(s) that make up
+//the home, and emit TWO GeoJSON FeatureCollections that the engine
 //feeds into two distinct fill-extrusion layers:
 //
 //  - helios-buildings-home          : home polygon(s) at full opacity
@@ -23,7 +23,13 @@
 //Tiles are fetched once per (home, radius, cluster) tuple: the home
 //doesn't move during a session, so there is no listener on pan/zoom.
 //Style reloads (theme switches) reuse the cached GeoJSON without
-//re-hitting the MapTiler API.
+//re-hitting OpenFreeMap.
+//
+//OpenFreeMap exposes the OpenMapTiles schema, which carries the
+//`building` source-layer with `render_height` and
+//`render_min_height` properties, identical to what MapTiler v3
+//ships, so the parsing pipeline is unchanged from the historical
+//MapTiler-backed version.
 
 import { VectorTile } from '@mapbox/vector-tile';
 import Pbf from 'pbf';
@@ -45,10 +51,10 @@ export interface FetchBuildingsOptions
     //attached verandas / outbuildings to read as one with the main
     //house. 0 = legacy single-polygon home behaviour.
     clusterRadiusMeters?: number;
-    apiKey:               string;
-    //Tile zoom level to fetch. MapTiler v3 carries the `building`
-    //source-layer with `render_height` from z=14 onwards. z=14 keeps
-    //the tile count to 1 (rarely 2) for radii under ~500 m, which is
+    //Tile zoom level to fetch. OpenMapTiles (the schema OpenFreeMap
+    //serves) carries the `building` source-layer with `render_height`
+    //from z=13 upward, capped at z=14 for the planet tileset. z=14
+    //keeps the tile count to 1 (rarely 2) for radii under ~500 m,
     //the smallest network footprint while still giving us proper
     //extrusion heights.
     zoom?:                number;
@@ -161,6 +167,46 @@ function representativePoint(geom: GeoJSON.Geometry): [number, number] | null
     return [sx / ring.length, sy / ring.length];
 }
 
+//----------------------------------------------------------------- ofm tile template
+
+//OpenFreeMap publishes its planet vector tiles under a versioned
+//snapshot path that rotates every few weeks. The TileJSON at
+///planet exposes the current snapshot's tile URL template; we fetch
+//it once per page lifetime and cache the result so subsequent
+//building pulls (radius / cluster changes) skip the round-trip.
+const OFM_TILEJSON_URL = 'https://tiles.openfreemap.org/planet';
+let _ofmTileTemplate:        string | null = null;
+let _ofmTileTemplateInflight: Promise<string | null> | null = null;
+
+async function getOpenFreeMapTileTemplate(signal?: AbortSignal): Promise<string | null>
+{
+    if (_ofmTileTemplate) return _ofmTileTemplate;
+    if (_ofmTileTemplateInflight) return _ofmTileTemplateInflight;
+
+    _ofmTileTemplateInflight = (async (): Promise<string | null> =>
+    {
+        try
+        {
+            const resp = await fetch(OFM_TILEJSON_URL, { signal });
+            if (!resp.ok) return null;
+            const tj   = await resp.json() as { tiles?: string[] };
+            const url  = Array.isArray(tj.tiles) && tj.tiles.length > 0 ? tj.tiles[0] : null;
+            if (!url) return null;
+            _ofmTileTemplate = url;
+            return url;
+        }
+        catch (_)
+        {
+            return null;
+        }
+        finally
+        {
+            _ofmTileTemplateInflight = null;
+        }
+    })();
+    return _ofmTileTemplateInflight;
+}
+
 //----------------------------------------------------------------- main
 
 export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Promise<BuildingsResult>
@@ -207,10 +253,26 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
         throw new Error(`[HELIOS] fetchBuildingsAroundHome: ${tilesToFetch.length} tiles requested, radius/zoom misconfigured`);
     }
 
+    //Resolve the OpenFreeMap tile URL template once (cached for the
+    //page lifetime). The TileJSON returns a versioned snapshot path
+    //(.../planet/<YYYYMMDD_NNNNNN_pt>/{z}/{x}/{y}.pbf), and OFM
+    //rotates that snapshot every few weeks; hitting the TileJSON at
+    //runtime keeps us pointed at whatever the current snapshot is
+    //without hard-coding a date that will rot.
+    const tileTemplate = await getOpenFreeMapTileTemplate(opts.signal);
+    if (!tileTemplate)
+    {
+        return { home: { type: 'FeatureCollection', features: [] },
+                 surroundings: { type: 'FeatureCollection', features: [] } };
+    }
+
     const features: GeoJSON.Feature[] = [];
     await Promise.all(tilesToFetch.map(async ({ x, y }) =>
     {
-        const url = `https://api.maptiler.com/tiles/v3/${z}/${x}/${y}.pbf?key=${opts.apiKey}`;
+        const url = tileTemplate
+            .replace('{z}', String(z))
+            .replace('{x}', String(x))
+            .replace('{y}', String(y));
         let resp: Response;
         try
         {
@@ -271,14 +333,14 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
             if (!geojson.geometry) continue;
 
             //Split MultiPolygons into independent Polygon features.
-            //MapTiler's v3 vector-tile encoder groups multiple
+            //OpenMapTiles' vector-tile encoder groups multiple
             //unrelated buildings into a single MultiPolygon feature
-            //(observed: 24 sub-polygons in one rural French tile).
-            //Without splitting, home detection would capture the
-            //whole MultiPolygon and render every grouped building at
-            //full opacity. Genuine multi-part buildings (L-shaped,
-            //multi-wing) render identically because every part shares
-            //the same `render_height`.
+            //(observed: 24 sub-polygons in one rural tile). Without
+            //splitting, home detection would capture the whole
+            //MultiPolygon and render every grouped building at full
+            //opacity. Genuine multi-part buildings (L-shaped, multi-
+            //wing) render identically because every part shares the
+            //same `render_height`.
             if (geojson.geometry.type === 'Polygon')
             {
                 features.push(geojson);

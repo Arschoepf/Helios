@@ -24,29 +24,22 @@ export interface Translations
         subtitle: string;
     };
 
-    tooltip:
+    //Detail dashboard, opened by clicking the home. The camera eases
+    //in (zoom + pitch) and a full-card overlay takes over while the
+    //pre-existing HUD fades out.
+    detail:
     {
-        cloudCover:  string;     //"Cloud cover: {0}%"
-        cloudLow:    string;     //"Low: {0}%"
-        cloudMid:    string;     //"Mid: {0}%"
-        cloudHigh:   string;     //"High: {0}%"
+        title:     string;       //"Detailed view" / "Vue détaillée"
+        subtitle:  string;       //placeholder body line
+        exitHint:  string;       //"Click anywhere to exit"
     };
 
     editor:
     {
-        required:                 string;
-        apiKey:                   string;
-        apiKeyHelp:               string;
-        getKeyAt:                 string;
-        terrainRelief:            string;
-        terrainReliefHint:        string;
-        hillshadeColor:           string;
-        hillshadeStrength:        string;
         mapSection:               string;
         mapStyle:                 string;
         mapStyleHint:             string;
         mapStyleStreet:           string;
-        mapStyleTopo:             string;
         cardTheme:                string;
         cardThemeHint:            string;
         cardThemeLight:           string;
@@ -79,6 +72,12 @@ export interface Translations
         pvHint:                   string;
         pvEntity:                 string;
         pvEntityHelp:             string;
+        //Manual peak-power input (kWp). When set, drives the dotted
+        //prediction line on the PV chart and the PV→home leader's
+        //flow saturation. Optional; without it the card uses live
+        //observation only.
+        pvPeakPower:              string;
+        pvPeakPowerHelp:          string;
         pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;
@@ -104,27 +103,21 @@ export interface Translations
         buildingClusterRadius:    string;
         buildingOpacity:          string;
         buildingColor:            string;
-        //Performance mode disables the heavy per-frame work (terrain
-        //mesh, hillshade, full pixelRatio) for low-end devices.
-        performanceMode:          string;
-        performanceModeOn:        string;
-        performanceModeOff:       string;
-        performanceModeHint:      string;
+        //Pixel-ratio toggle replacing the old performance-mode
+        //switch. 'Auto' uses the device's devicePixelRatio capped at
+        //2 / 1.25 (desktop / mobile). '1x' forces 1.0 for the
+        //cheapest per-frame fragment workload.
+        pixelRatio:               string;
+        pixelRatioAuto:           string;
+        pixelRatio1x:             string;
+        pixelRatioHint:           string;
         //Third map-style segment: a curated minimal basemap (no POIs,
         //no place labels, no road shields) for low-end devices.
         mapStyleMinimal:          string;
-        //Terrain mesh density, 'smooth' (default, fluid) vs 'fine'
-        //(more relief detail, heavier rotation cost).
-        terrainDetail:            string;
-        terrainDetailSmooth:      string;
-        terrainDetailFine:        string;
-        terrainDetailHint:        string;
-        //Fourth map-style segment: real satellite imagery, useful for
-        //verifying cast shadows against ground truth.
-        mapStyleSatellite:        string;
         //Section grouping every shadow-related option.
         shadowsSection:           string;
-        //Master shadow toggle (LiDAR if available, MapTiler otherwise).
+        //Master shadow toggle (LiDAR if available, OpenFreeMap
+        //building footprints otherwise).
         shadowsEnabled:           string;
         shadowsEnabledOn:         string;
         shadowsEnabledOff:        string;
@@ -150,8 +143,9 @@ import { es } from './locales/es';
 import { it } from './locales/it';
 import { nl } from './locales/nl';
 import { pt } from './locales/pt';
+import { no } from './locales/no';
 
-const LOCALES: Record<string, Translations> = { en, fr, de, es, it, nl, pt };
+const LOCALES: Record<string, Translations> = { en, fr, de, es, it, nl, pt, no };
 
 const FALLBACK: Translations = en;
 

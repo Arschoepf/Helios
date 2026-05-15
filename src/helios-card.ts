@@ -91,8 +91,9 @@ const _liveCards = new Set<HeliosCard>();
 //a JSON-safe snapshot AND prints a grouped, human-readable dump to the
 //console. The dump includes the build version, the lifecycle counters
 //tracked by the engine, and one section per card (config + engine
-//state). The MapTiler API key is redacted before output so users can
-//paste the result publicly when filing an issue. Re-invoking from
+//state). All config values are JSON-safe and OK to paste publicly
+//when filing an issue (no API keys are stored, the basemap is
+//OpenFreeMap which needs none). Re-invoking from
 //the console refreshes the snapshot.
 {
     interface HeliosWin extends Window
@@ -234,20 +235,6 @@ export class HeliosCard extends LitElement
     @state() private _now             = new Date();
     //Cloud-cover values shown in the on-ground disc hover popup.
     @state() private _cloudCover      = -1;
-    @state() private _cloudLow        = -1;
-    @state() private _cloudMid        = -1;
-    @state() private _cloudHigh       = -1;
-    //Hover state for the on-ground cloud-cover disc. The engine emits
-    //pointer events on the disc layer; the card mirrors them here so
-    //the render path stays declarative.
-    @state() private _cloudHoverX     = 0;
-    @state() private _cloudHoverY     = 0;
-    @state() private _cloudHover      = false;
-    //True when the cursor sits in the right half of the card.
-    //Tooltip then anchors to the LEFT of the cursor instead of
-    //the default right offset, so it can't overflow past the
-    //card edge.
-    @state() private _cloudHoverFlip  = false;
     //Screen-space layout of the always-visible labels and leader lines,
     //recomputed via engine.projectHomeLabelLayout() on every map
     //transform. null while the map is still loading.
@@ -274,6 +261,11 @@ export class HeliosCard extends LitElement
     //`window.heliosStats()`. Replaces what we used to print as
     //`[HELIOS] PV history sensor.xxx: N raw -> M samples over H h`.
     private _pvHistoryDiagnostics: { rawEntries: number; samples: number; windowH: number } | null = null;
+    //Idempotency flag for the one-time wipe of legacy PV calibration
+    //buffers (see _wipeLegacyPvCalibStorage). Per-instance so we
+    //attempt the cleanup at most once per card mount; the persisted
+    //flag in localStorage protects across reloads.
+    private _pvCalibWiped = false;
     //Rolling buffer of state samples. For cumulative-energy sensors
     //this gives a "last minute" instantaneous rate, fresher than the
     //historical fetch which only refreshes per timeline range.
@@ -311,6 +303,8 @@ export class HeliosCard extends LitElement
         sun:      { x: number; y: number; irradiance: number; altitude: number; nearness: number };
         home:     { x: number; y: number };
         daylight: number;
+        sunrise:  { x: number; y: number; angleRad: number; time: Date } | null;
+        sunset:   { x: number; y: number; angleRad: number; time: Date } | null;
     } | null = null;
     //Screen-space layout of the cloud-cover disc + 100 % reference
     //ring, projected through engine.projectCloudScene() on every map
@@ -320,11 +314,31 @@ export class HeliosCard extends LitElement
     //the sun arc, anchored at the home's terrain elevation so it
     //stays a true circle whatever the ground does beneath it.
     @state() private _cloudScene: {
-        disc:     Array<{ x: number; y: number }>;
-        ring:     Array<{ x: number; y: number }>;
-        cloudHex: string;
-        cloudPct: number;
+        discLow:    Array<{ x: number; y: number }>;
+        discMid:    Array<{ x: number; y: number }>;
+        discHigh:   Array<{ x: number; y: number }>;
+        ring:       Array<{ x: number; y: number }>;
+        cloudHex:   string;
+        cloudPct:   number;
+        cloudLow:   number;
+        cloudMid:   number;
+        cloudHigh:  number;
     } | null = null;
+    //Per-polygon silhouettes of the home building(s) in screen
+    //space: each entry has the projected base ring and the
+    //projected top ring of one home polygon. The card paints
+    //both rings plus a quad per outer-ring edge into the cloud-
+    //disc SVG mask, the union covers the exact extruded prism
+    //even for concave footprints. Re-projected on every map
+    //transform so rotation tracks.
+    @state() private _homeSilhouettes: Array<{
+        base: Array<{ x: number; y: number }>;
+        top:  Array<{ x: number; y: number }>;
+    }> = [];
+    //Hover state on the home hitbox. Drives a sun-coloured glow halo
+    //around the home silhouette so the user reads the focal building
+    //as interactive before clicking.
+    @state() private _homeHover = false;
     @state() private _chartSeries: {
         times:      Date[];
         irradiance: number[];
@@ -339,19 +353,24 @@ export class HeliosCard extends LitElement
     //Drives the spinner chip pinned top-right of the map so the user
     //knows the shadow layer they're about to see is still computing.
     @state() private _shadowBusy    = false;
+    //True while the home is "focused": the existing overlay HUD is
+    //hidden, the camera is eased to a closer / more pitched pose,
+    //and a detail dashboard panel takes over. Toggled by clicking
+    //the home hitbox (off → on) or clicking anywhere on the panel
+    //(on → off). Engine.setDetailMode drives the camera lerp;
+    //CSS class .detail-active on ha-card fades out every overlay.
+    @state() private _detailMode    = false;
 
     private _timer?:           number;
-    private _lastApiKey        = '';
     private _lastHomeKey       = '';
     private _lastConfigSig     = '';
     private _initInflight      = false;
 
     //Visual config keys that the engine reacts to via updateConfig().
-    //Anything outside this list (notably maptiler-api-key, which is
-    //an identity input) is irrelevant for live updates.
+    //Anything outside this list (e.g. home coords, which is an
+    //identity input handled separately) is irrelevant for live
+    //updates.
     private static readonly _VISUAL_CONFIG_KEYS = [
-        'topography-color',
-        'topography-alpha',
         'show-labels',
         'sun-color',
         'cloud-color',
@@ -360,8 +379,8 @@ export class HeliosCard extends LitElement
         'pv-color',
         'pv-power-entity',
         //map-style triggers a MapLibre setStyle(), the engine reloads
-        //terrain, hillshade, cloud disc, buildings and labels on the
-        //resulting `style.load`.
+        //the cloud disc, buildings and labels on the resulting
+        //`style.load`.
         'map-style',
         'battery-soc-entity',
         'battery-power-entity',
@@ -375,8 +394,7 @@ export class HeliosCard extends LitElement
         'building-cluster-radius',
         'building-opacity',
         'building-color',
-        'performance-mode',
-        'terrain-detail'
+        'pixel-ratio'
     ] as const;
 
     //Cheap stable signature of the visual config, used to skip
@@ -411,15 +429,14 @@ export class HeliosCard extends LitElement
 
     static getStubConfig(): HeliosConfig
     {
-        return { 'maptiler-api-key': '' };
+        return {};
     }
 
     //Diagnostic snapshot returned to `window.heliosStats()`. Includes
-    //the live config (with the MapTiler API key redacted so the user
-    //can paste the output publicly), the engine state snapshot when
-    //the engine is up, and a small PV block summarising the most
-    //recent history fetch outcome. JSON-safe, no DOM references, no
-    //PII (engine snapshot already strips the home lat/lon).
+    //the live config, the engine state snapshot when the engine is
+    //up, and a small PV block summarising the most recent history
+    //fetch outcome. JSON-safe, no DOM references, no PII (engine
+    //snapshot already strips the home lat/lon).
     public getStatsSnapshot(): {
         config: Record<string, unknown>;
         engine: Record<string, unknown> | null;
@@ -431,9 +448,7 @@ export class HeliosCard extends LitElement
         {
             for (const [k, v] of Object.entries(this.config))
             {
-                cfg[k] = (k === 'maptiler-api-key' && typeof v === 'string' && v.length > 0)
-                    ? `***redacted (${v.length} chars)***`
-                    : v;
+                cfg[k] = v;
             }
         }
         return {
@@ -445,7 +460,7 @@ export class HeliosCard extends LitElement
                     && (this.config['pv-power-entity'] as string).length > 0,
                 unit:             this._pvUnit || null,
                 lastHistory:      this._pvHistoryDiagnostics,
-                calibrationK:     this._pvCalibK
+                calibrationK:     this._pvCalibK()
             }
         };
     }
@@ -584,15 +599,6 @@ export class HeliosCard extends LitElement
             this._initDebounceTimer = undefined;
             this._initInflight      = false;
         }
-        //Flush any pending PV-calibration HA write synchronously
-        //(best-effort) so we don't lose the most recent samples to
-        //a stale timer that will never fire after disconnect.
-        if (this._pvCalibHAWriteTimer !== undefined)
-        {
-            window.clearTimeout(this._pvCalibHAWriteTimer);
-            this._pvCalibHAWriteTimer = undefined;
-            void this._flushPvCalibToHA();
-        }
         this._engine?.cleanup();
         this._engine = undefined;
     }
@@ -660,30 +666,22 @@ export class HeliosCard extends LitElement
             return;
         }
 
-        const apiKey  = String(this.config['maptiler-api-key'] ?? '').trim();
-        const coords  = this._getHomeCoords();
-
-        if (!coords || !apiKey)
-        {
-            return;
-        }
+        const coords = this._getHomeCoords();
+        if (!coords) return;
 
         const { lat, lon } = coords;
 
-        //First time hass is available, reconcile the local PV
-        //calibration cache with HA's frontend/user_data storage so
-        //we pull in any samples accumulated on another device
-        //(or recover from a localStorage wipe).
-        if (!this._pvCalibHARead)
+        //One-time wipe of the obsolete auto-calibration buffer left
+        //by older releases (localStorage + HA frontend.user_data).
+        //Idempotent via a flag in localStorage.
+        if (!this._pvCalibWiped)
         {
-            void this._reconcilePvCalibWithHA();
+            this._pvCalibWiped = true;
+            this._wipeLegacyPvCalibStorage();
         }
 
         const homeKey  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
-
-        const identityChanged =
-            apiKey   !== this._lastApiKey ||
-            homeKey  !== this._lastHomeKey;
+        const identityChanged = homeKey !== this._lastHomeKey;
 
         if (!this._engine || identityChanged)
         {
@@ -691,7 +689,6 @@ export class HeliosCard extends LitElement
             {
                 return;
             }
-            this._lastApiKey    = apiKey;
             this._lastHomeKey   = homeKey;
             this._lastConfigSig = this._computeConfigSig();
             this._initEngine();
@@ -1061,6 +1058,36 @@ export class HeliosCard extends LitElement
         return hist.values[idx];
     }
 
+    //Locale-aware number formatter for the user-facing chips.
+    //Honours the Home Assistant user's language (e.g. `fr-FR` →
+    //`1,29` with a comma decimal, `en-US` → `1.29` with a period)
+    //via Intl.NumberFormat. Falls back to plain .toFixed / round
+    //on the rare browser that lacks Intl (very old WebViews).
+    //
+    //We don't honour hass.locale.number_format here on purpose:
+    //that key exposes user overrides ("comma_decimal", "decimal_
+    //comma", "language_defaults", ...) which would require their
+    //own mapping table; the language tag covers ~99 % of cases
+    //correctly because the browser's CLDR data tracks each
+    //locale's conventions.
+    private _formatLocalisedNumber(value: number, fractionDigits: number, integer = false): string
+    {
+        const locale = (this.hass?.locale?.language as string | undefined)
+            ?? (this.hass?.language as string | undefined)
+            ?? undefined;
+        const opts: Intl.NumberFormatOptions = integer
+            ? { maximumFractionDigits: 0 }
+            : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits };
+        try
+        {
+            return new Intl.NumberFormat(locale, opts).format(value);
+        }
+        catch (_)
+        {
+            return integer ? Math.round(value).toString() : value.toFixed(fractionDigits);
+        }
+    }
+
     //Format a signed battery power value for the chip. Mirrors
     //_formatPvValue's W ↔ kW switching but always prefixes a sign so
     //the user can tell charging from discharging at a glance.
@@ -1072,19 +1099,21 @@ export class HeliosCard extends LitElement
 
         if (lu === 'w' && abs >= 1000)
         {
-            return `${sign}${(abs / 1000).toFixed(2)} kW`;
+            return `${sign}${this._formatLocalisedNumber(abs / 1000, 2)} kW`;
         }
         if (lu === 'w')
         {
-            return `${sign}${Math.round(abs)} W`;
+            return `${sign}${this._formatLocalisedNumber(abs, 0, true)} W`;
         }
         if (lu === 'kw')
         {
-            return `${sign}${abs.toFixed(2)} kW`;
+            return `${sign}${this._formatLocalisedNumber(abs, 2)} kW`;
         }
-        //Unknown unit, pass through verbatim so the user still
-        //sees the configured entity's value with its own unit.
-        return `${sign}${abs}${unit ? ' ' + unit : ''}`;
+        //Unknown unit, format the value with one decimal of
+        //precision and keep the configured entity's own unit
+        //string. Still locale-aware so the decimal mark matches
+        //the rest of the card.
+        return `${sign}${this._formatLocalisedNumber(abs, 1)}${unit ? ' ' + unit : ''}`;
     }
 
     private async _fetchPvHistory(entityId: string, start: Date, end: Date): Promise<void>
@@ -1206,10 +1235,6 @@ export class HeliosCard extends LitElement
                 samples:    times.length,
                 windowH:    Number(((fetchEnd.getTime() - start.getTime()) / 3_600_000).toFixed(1))
             };
-            //Refresh the calibration buffer with the new history slice.
-            //Safe to call when _homeHourlyData isn't ready yet, the
-            //helper bails out and tries again next time.
-            this._updatePvCalibration();
         }
         catch (e)
         {
@@ -1291,12 +1316,6 @@ export class HeliosCard extends LitElement
                 this._initInflight = false;
                 return;
             }
-            const apiKey = String(this.config['maptiler-api-key'] ?? '').trim();
-            if (!apiKey)
-            {
-                this._initInflight = false;
-                return;
-            }
             const coords = this._getHomeCoords();
             if (!coords)
             {
@@ -1333,19 +1352,18 @@ export class HeliosCard extends LitElement
             };
             this._engine.onWeatherUpdate = data =>
             {
+                //Per-layer cloud breakdown is now owned by the
+                //engine — it stashes low / mid / high alongside the
+                //effective coverage and projectCloudScene reads them
+                //back to size the three concentric bands. The card
+                //only needs the aggregate for the cloud chip label.
                 this._cloudCover         = data.cloudCover;
-                this._cloudLow           = data.cloudLow;
-                this._cloudMid           = data.cloudMid;
-                this._cloudHigh          = data.cloudHigh;
                 this._timeRange          = data.timeRange;
                 this._isLiveMode         = data.isLiveTime;
                 //Pull the hourly series the chart canvas plots. Same
                 //cadence as the gradients above, since both consume
                 //the engine's hourly data refresh.
                 this._chartSeries        = this._engine?.getTimelineSeries() ?? null;
-                //Fresh hourly cloud data, refresh the PV calibration
-                //fit so the prediction line follows the latest weather.
-                this._updatePvCalibration();
                 //First weather update is also our cue to ask the
                 //engine for the initial label layout, by this point
                 //the map has loaded its style and the projection
@@ -1367,12 +1385,10 @@ export class HeliosCard extends LitElement
             //hook from its webglcontextlost listener; we tear down
             //the dead engine and re-init from scratch on the next
             //animation frame so the user never sees a stuck black
-            //canvas. The _lastApiKey / _lastHomeKey are reset so
-            //the identity-change branch of updated() takes the
-            //re-init path.
+            //canvas. _lastHomeKey is reset so the identity-change
+            //branch of updated() takes the re-init path.
             this._engine.onContextLost = () =>
             {
-                this._lastApiKey  = '';
                 this._lastHomeKey = '';
                 if (!this._initInflight) this._initEngine();
             };
@@ -1407,8 +1423,9 @@ export class HeliosCard extends LitElement
         this._labelLayout = layout;
 
         const t = this._selectedTime ?? this._now;
-        this._sunScene   = this._engine ? this._engine.projectSunScene(t) : null;
-        this._cloudScene = this._engine ? this._engine.projectCloudScene() : null;
+        this._sunScene        = this._engine ? this._engine.projectSunScene(t)   : null;
+        this._cloudScene      = this._engine ? this._engine.projectCloudScene()  : null;
+        this._homeSilhouettes = this._engine ? this._engine.projectHomeFootprints() : [];
     }
 
     //Segments now share one fixed colour (the configured sun
@@ -1475,6 +1492,13 @@ export class HeliosCard extends LitElement
     private _onTimelinePointerDown(e: PointerEvent): void
     {
         if (!this._timeRange)
+        {
+            return;
+        }
+        //Swallow scrubs during the post-exit cooldown so the click
+        //that dismissed the dashboard panel can't bleed into an
+        //immediate scrub on the timeline behind it.
+        if (this._engine?.isUserGestureSuppressed())
         {
             return;
         }
@@ -1556,32 +1580,6 @@ export class HeliosCard extends LitElement
         this._isLiveMode   = true;
         this._engine?.setSelectedTime(null);
     }
-
-    //Cloud-disc hover: drive the breakdown tooltip directly off the
-    //SVG polygon's pointer events now that the disc is no longer a
-    //MapLibre layer. Offsets are converted to card-relative pixels
-    //so the tooltip's absolute positioning matches.
-    private _onCloudDiscMove(e: MouseEvent): void
-    {
-        const card = this.renderRoot.querySelector('ha-card') as HTMLElement | null;
-        const rect = card?.getBoundingClientRect();
-        const x = rect ? e.clientX - rect.left : e.offsetX;
-        const y = rect ? e.clientY - rect.top  : e.offsetY;
-        this._cloudHover    = true;
-        this._cloudHoverX   = x;
-        this._cloudHoverY   = y;
-        //Pin the tooltip to the LEFT of the cursor when the cursor
-        //sits in the right half of the card, so the floating
-        //breakdown never overflows past the card edge.
-        const w = rect?.width ?? 0;
-        this._cloudHoverFlip = w > 0 && x > w / 2;
-    }
-
-    private _onCloudDiscLeave(): void
-    {
-        this._cloudHover = false;
-    }
-
 
     //Timeline rendering
 
@@ -1882,11 +1880,11 @@ export class HeliosCard extends LitElement
             return 1;
         })();
 
-        //Predicted PV for hours from "now" forward, uses the live
-        //calibration scalar (W per percent of STC) learned from past
-        //samples. Skipped silently when there aren't enough samples
-        //yet to trust the fit (see _calibrateK / PV_CALIB_MIN_SAMPLES).
-        const k = this._pvCalibK;
+        //Predicted PV for hours from "now" forward, scales the
+        //clear-sky percentage by the user-configured peak power
+        //(kWp -> W per percent of STC). Skipped silently when the
+        //peak power isn't set in the editor.
+        const k = this._pvCalibK();
         const coords = this._getHomeCoords();
         const lat = coords?.lat;
         const lon = coords?.lon;
@@ -1905,67 +1903,6 @@ export class HeliosCard extends LitElement
                 if (pct <= 0) continue;
                 predictedSamples.push({ t: series.times[i], v: pct * k * nativeFromW });
             }
-        }
-
-        //Per-day peak-production highlight columns.
-        //
-        //For every natural day touched by the timeline, find the
-        //hourly bucket with the highest production and render a
-        //thin vertical band at that hour in the PV colour at low
-        //opacity. Observed PV beats prediction when both exist
-        //(real measurement is more trustworthy than the
-        //extrapolated curve), so today's column tracks the actual
-        //peak as the day unfolds; future days fall back to
-        //predicted-only since no observation exists yet.
-        const HOUR_MS = 3_600_000;
-        const peakByHour = new Map<number, number>();
-        const observedHourly = this._aggregatePvWattsPerHour();
-        for (const [hourTs, watts] of observedHourly)
-        {
-            if (hourTs < startMs || hourTs >= endMsAbs) continue;
-            peakByHour.set(hourTs, watts);
-        }
-        if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
-        {
-            for (let i = 0; i < series.times.length; i++)
-            {
-                const tMs    = series.times[i].getTime();
-                const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-                if (hourTs < startMs || hourTs >= endMsAbs) continue;
-                if (peakByHour.has(hourTs))                 continue;
-                const pct = computePvPower(series.times[i], lat, lon, series.cloud[i] ?? 0);
-                if (pct <= 0) continue;
-                peakByHour.set(hourTs, pct * k);
-            }
-        }
-        const peakColumns: Array<{ x1: number; x2: number }> = [];
-        const dayWalker = new Date(range.start);
-        dayWalker.setHours(0, 0, 0, 0);
-        while (dayWalker.getTime() < endMsAbs)
-        {
-            const dayStart = dayWalker.getTime();
-            const dayEnd   = dayStart + 24 * HOUR_MS;
-            let peakHourTs = -1;
-            let peakWatts  = 0;
-            for (const [hourTs, watts] of peakByHour)
-            {
-                if (hourTs < dayStart || hourTs >= dayEnd) continue;
-                if (watts > peakWatts)
-                {
-                    peakHourTs = hourTs;
-                    peakWatts  = watts;
-                }
-            }
-            //Skip days with no meaningful production (~ all-dark or
-            //panels offline), a zero-height column would still be
-            //rendered but it's just visual noise.
-            if (peakHourTs >= 0 && peakWatts > 10)
-            {
-                const x1 = ((peakHourTs - startMs)            / rangeMs) * W;
-                const x2 = ((peakHourTs + HOUR_MS - startMs)  / rangeMs) * W;
-                peakColumns.push({ x1, x2 });
-            }
-            dayWalker.setDate(dayWalker.getDate() + 1);
         }
 
         //Auto-scale: the Y axis maps 0 to the bottom edge and the
@@ -2009,14 +1946,6 @@ export class HeliosCard extends LitElement
                 viewBox="0 0 ${W} ${H}"
                 preserveAspectRatio="none"
             >
-                ${peakColumns.map(c => svg`
-                    <rect
-                        class="hc-pv-peak"
-                        x="${c.x1.toFixed(2)}" y="0"
-                        width="${(c.x2 - c.x1).toFixed(2)}" height="${H}"
-                        fill="${pvColor}"
-                    ></rect>
-                `)}
                 ${dayXs.map(x => svg`
                     <line
                         class="hc-day-sep"
@@ -2097,6 +2026,13 @@ export class HeliosCard extends LitElement
         const today0 = new Date(now);
         today0.setHours(0, 0, 0, 0);
 
+        //Pre-compute the daily kWh totals once per render (cheap; the
+        //helper itself caches the observed bucketing). Past + today-
+        //so-far is integrated from the actual PV history; today-
+        //remainder + future days come from the kWp × clear-sky
+        //model. The map is keyed by the day's local-midnight ms.
+        const dailyKwh = this._computeDailyKwhTotals();
+
         const labels: TemplateResult[] = [];
         const cursor = new Date(start);
         cursor.setHours(0, 0, 0, 0);
@@ -2121,11 +2057,26 @@ export class HeliosCard extends LitElement
                 const centre   = pStart + w / 2;
                 const labelPct = Math.min(Math.max(centre, 6), 94);
 
+                const kwh   = dailyKwh.get(cursor.getTime());
+                //Forecast days (future + today's not-yet-produced
+                //share) are flagged so the chip styling can hint
+                //"this is an estimate" with a touch of italic. Past
+                //days are always concrete.
+                const isForecast = kwh !== undefined && cursor.getTime() > today0.getTime();
+                const kwhText = (kwh !== undefined && isFinite(kwh) && kwh >= 0.05)
+                    ? this._formatLocalisedNumber(kwh, 1) + ' kWh'
+                    : '';
+
                 labels.push(html`
                     <div
                         class="tb-day-label ${isToday ? 'tb-day-label-today' : ''}"
                         style="left:${labelPct}%"
-                    >${label}</div>
+                    >
+                        <span class="tb-day-label-date">${label}</span>
+                        ${kwhText ? html`
+                            <span class="tb-day-label-kwh ${isForecast ? 'is-forecast' : ''}">${kwhText}</span>
+                        ` : nothing}
+                    </div>
                 `);
             }
 
@@ -2135,20 +2086,113 @@ export class HeliosCard extends LitElement
         return html`<div class="tb-day-labels">${labels}</div>`;
     }
 
-    private _formatSelTime(t: Date): string
+    //Compute kWh-per-day totals over the active timeline range. The
+    //helper integrates two sources:
+    //
+    //  - Past + today-so-far: sum of the observed PV history (from
+    //    `_pvHistory`), respecting the entity's unit (W/kW power
+    //    sensors are integrated by trapezoidal rule; cumulative
+    //    energy sensors are differenced and summed).
+    //  - Today-remainder + future: integration of the kWp × clear-
+    //    sky × cloud model, hour by hour, using the engine's
+    //    weather series.
+    //
+    //Returns a Map keyed by each day's local-midnight ms, with
+    //values in kWh. Days that fall outside the active range or
+    //carry no usable data are omitted.
+    private _computeDailyKwhTotals(): Map<number, number>
     {
-        const dateLabel = formatDate(t, this.config?.['date-format']);
-        const is12h = String(this.config?.['time-format'] ?? '24h').toLowerCase() === '12h';
-        //hourCycle is more authoritative than hour12, some browser /
-        //locale combinations silently ignore hour12: true and keep the
-        //locale's preferred format (typically 24h for fr-FR), which
-        //is the bug the user was hitting on the scrub chip.
-        const timeLabel = t.toLocaleTimeString([], {
-            hour:      '2-digit',
-            minute:    '2-digit',
-            hourCycle: is12h ? 'h12' : 'h23'
-        } as Intl.DateTimeFormatOptions);
-        return `${dateLabel} · ${timeLabel}`;
+        const out = new Map<number, number>();
+        if (!this._timeRange) return out;
+        const { start, end } = this._timeRange;
+        const startMs  = start.getTime();
+        const endMsAbs = end.getTime();
+
+        const dayKey = (ms: number): number =>
+        {
+            const d = new Date(ms);
+            d.setHours(0, 0, 0, 0);
+            return d.getTime();
+        };
+
+        //Pass 1: past + today-so-far from the observed history.
+        const hist = this._pvHistory;
+        if (hist && hist.times.length >= 2)
+        {
+            const unit = (this._pvUnit || '').toLowerCase();
+            const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+
+            if (isCumulativeEnergy)
+            {
+                //Cumulative energy sensor: difference consecutive
+                //samples and sum the deltas per day. Counter resets
+                //(dv < 0) are dropped, same convention the chart uses.
+                for (let i = 1; i < hist.times.length; i++)
+                {
+                    const tMs = hist.times[i].getTime();
+                    if (tMs < startMs || tMs > endMsAbs) continue;
+                    const dv = hist.values[i] - hist.values[i - 1];
+                    if (!isFinite(dv) || dv < 0) continue;
+                    const kwh = unit === 'mwh' ? dv * 1000
+                              : unit === 'wh'  ? dv / 1000
+                              : dv;
+                    const k = dayKey(tMs);
+                    out.set(k, (out.get(k) ?? 0) + kwh);
+                }
+            }
+            else
+            {
+                //Power sensor: trapezoidal integration of the
+                //instantaneous reading over each consecutive pair.
+                //Skip gaps > 6 h (likely sensor outage, integrating
+                //across them would invent energy).
+                for (let i = 1; i < hist.times.length; i++)
+                {
+                    const tCurrMs = hist.times[i].getTime();
+                    if (tCurrMs < startMs || tCurrMs > endMsAbs) continue;
+                    const tPrevMs = hist.times[i - 1].getTime();
+                    const dtH = (tCurrMs - tPrevMs) / 3_600_000;
+                    if (dtH <= 0 || dtH > 6) continue;
+                    const wPrev = this._pvNormalizeToWatts(hist.values[i - 1], this._pvUnit);
+                    const wCurr = this._pvNormalizeToWatts(hist.values[i],     this._pvUnit);
+                    if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+                    const kwh = ((wPrev + wCurr) / 2) * dtH / 1000;
+                    const k = dayKey(tCurrMs);
+                    out.set(k, (out.get(k) ?? 0) + kwh);
+                }
+            }
+        }
+
+        //Pass 2: future + today-remainder from the forecast model.
+        //Skipped silently when peak power is unset (no model, no
+        //forecast, only past observation contributes).
+        const k        = this._pvCalibK();   //W per percent of STC
+        const series   = this._chartSeries;
+        const coords   = this._getHomeCoords();
+        if (k !== null && k > 0 && series && coords)
+        {
+            //Index hourly forecast samples by hour-floor ms so we
+            //can integrate them by 1-hour rectangles per day. The
+            //series timestamps are already at hour boundaries from
+            //the engine's resampling.
+            const nowMs    = Date.now();
+            for (let i = 0; i < series.times.length; i++)
+            {
+                const tMs   = series.times[i].getTime();
+                if (tMs < startMs || tMs > endMsAbs) continue;
+                if (tMs < nowMs) continue;   //past covered by Pass 1
+                const cloud = series.cloud[i] ?? 0;
+                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud);
+                if (pct <= 0) continue;
+                //pct × k = watts at this hour midpoint × 1h = Wh.
+                //Divide by 1000 to land in kWh.
+                const kwh = (pct * k) / 1000;
+                const dk = dayKey(tMs);
+                out.set(dk, (out.get(dk) ?? 0) + kwh);
+            }
+        }
+
+        return out;
     }
 
     //Compute the production rate at an arbitrary historical time
@@ -2432,312 +2476,71 @@ export class HeliosCard extends LitElement
     }
 
 
-    //PV auto-calibration, maintains a rolling 14-day buffer of
-    //(observedWatts, predictedNormalized) pairs aggregated per hour,
-    //then fits a single scalar k via least squares so that
-    //  observed ≈ k · predictedNormalized
+    //Manual PV peak power.
     //
-    //Storage layout:
-    //  - SOURCE OF TRUTH: HA `frontend/set_user_data` (server-side,
-    //    survives cache wipes / device switches / restarts, included
-    //    in HA backups, per-user). Written debounced every 60 s so we
-    //    don't hammer the WebSocket.
-    //  - LOCAL CACHE: `window.localStorage`, read synchronously at
-    //    boot for an instant first render, then reconciled with HA
-    //    as soon as the WS connection is up.
+    //The user enters their installed array's peak power (kWp) in the
+    //card editor. We convert that to a calibration scalar k (W per
+    //percent of STC) by k = kWp * 1000 / 100 = kWp * 10, then
+    //multiply by the clear-sky percentage to draw the dotted forecast
+    //line on the PV chart. No history scan, no auto-fit, no rolling
+    //buffer, the user knows their install best.
     //
-    //Once enough samples have accumulated (PV_CALIB_MIN_SAMPLES),
-    //k is multiplied by future predicted-normalised values to draw
-    //a forecast line on the PV chart. The user never has to enter
-    //a "peak power", the card learns the mapping from their own
-    //history and adapts to seasonal drift via the rolling window.
-    private static readonly PV_CALIB_TTL_MS         = 14 * 24 * 3_600_000;
-    private static readonly PV_CALIB_MIN_SAMPLES    = 20;
-    private static readonly PV_CALIB_HA_WRITE_MS    = 60_000;
-
-    private _pvCalibK: number | null = null;
-    private _pvCalibHARead = false;
-    private _pvCalibHAWriteTimer?: number;
-    private _pvCalibPendingSave: Array<{ t: number; o: number; p: number }> | null = null;
-
-    private _pvCalibStorageKey(): string | null
+    //Returns null when `pv-peak-kwp` is unset or invalid; callers
+    //then skip the prediction line and the peak-of-day highlights
+    //for future days.
+    private _pvCalibK(): number | null
     {
-        const coords = this._getHomeCoords();
-        if (!coords) return null;
-        return `helios-pv-calib:${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
+        const raw = this.config?.['pv-peak-kwp'];
+        const kwp = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+        if (!isFinite(kwp) || kwp <= 0) return null;
+        return kwp * 10;
     }
 
-    //Synchronous read from localStorage cache. Used at boot so the
-    //first chart render already has whatever data we have locally;
-    //HA reconciliation lands a few hundred ms later.
-    private _loadPvCalibSamples(): Array<{ t: number; o: number; p: number }>
+    //One-time cleanup of the obsolete auto-calibration buffers (an
+    //earlier release maintained a rolling 14-day fit in localStorage
+    //and HA's frontend.user_data). Runs at boot, idempotent thanks
+    //to the cleanup-flag key. Safe to keep forever, drops a few
+    //bytes per coords pair we ever wrote samples for.
+    private static readonly PV_CALIB_WIPE_FLAG_KEY = 'helios-pv-calib:wiped-v1';
+
+    private _wipeLegacyPvCalibStorage(): void
     {
-        const key = this._pvCalibStorageKey();
-        if (!key) return [];
         try
         {
-            const raw = window.localStorage?.getItem(key);
-            if (!raw) return [];
-            const parsed = JSON.parse(raw) as Array<{ t: number; o: number; p: number }>;
-            if (!Array.isArray(parsed)) return [];
-            const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
-            return parsed.filter(e => typeof e.t === 'number' && e.t >= cutoff
-                                     && typeof e.o === 'number' && isFinite(e.o)
-                                     && typeof e.p === 'number' && isFinite(e.p));
+            if (window.localStorage?.getItem(HeliosCard.PV_CALIB_WIPE_FLAG_KEY) === '1')
+            {
+                return;
+            }
         }
-        catch (_) { return []; }
-    }
+        catch (_) { return; }
 
-    //Save to localStorage immediately + schedule a debounced HA
-    //write. Two destinations because they each cover a different
-    //failure mode: localStorage gives us instant boot, HA gives us
-    //device-portability + backup safety.
-    private _savePvCalibSamples(samples: Array<{ t: number; o: number; p: number }>): void
-    {
-        const key = this._pvCalibStorageKey();
-        if (!key) return;
-        try { window.localStorage?.setItem(key, JSON.stringify(samples)); }
+        try
+        {
+            const ls = window.localStorage;
+            if (ls)
+            {
+                const stale: string[] = [];
+                for (let i = 0; i < ls.length; i++)
+                {
+                    const k = ls.key(i);
+                    if (k && k.startsWith('helios-pv-calib:') && k !== HeliosCard.PV_CALIB_WIPE_FLAG_KEY)
+                    {
+                        stale.push(k);
+                    }
+                }
+                for (const k of stale) ls.removeItem(k);
+                ls.setItem(HeliosCard.PV_CALIB_WIPE_FLAG_KEY, '1');
+            }
+        }
         catch (_) {}
 
-        //Debounced HA write.
-        this._pvCalibPendingSave = samples;
-        if (this._pvCalibHAWriteTimer === undefined)
-        {
-            this._pvCalibHAWriteTimer = window.setTimeout(
-                () => this._flushPvCalibToHA(),
-                HeliosCard.PV_CALIB_HA_WRITE_MS
-            );
-        }
-    }
-
-    //Push the latest buffer to HA via frontend/set_user_data.
-    //frontend/get_user_data + frontend/set_user_data accept arbitrary
-    //string keys and store on the server under the current HA user's
-    //profile (.storage/frontend.user_data_{user_id}). Per-user means
-    //multi-account HA installs keep their calibrations separate,
-    //which is the right default when different people may have
-    //different PV setups.
-    private async _flushPvCalibToHA(): Promise<void>
-    {
-        this._pvCalibHAWriteTimer = undefined;
-        const samples = this._pvCalibPendingSave;
-        const key     = this._pvCalibStorageKey();
-        this._pvCalibPendingSave = null;
-        if (!samples || !key) return;
-        if (!this.hass?.callWS) return;
-        try
-        {
-            await this.hass.callWS({
-                type:  'frontend/set_user_data',
-                key,
-                value: samples
-            });
-        }
-        catch (_) {}
-    }
-
-    //Pull the buffer from HA, merge with the local cache (HA wins
-    //on conflict, it's the source of truth), recompute k. Called
-    //once when hass becomes available; subsequent updates flow
-    //through _updatePvCalibration / _savePvCalibSamples.
-    private async _reconcilePvCalibWithHA(): Promise<void>
-    {
-        if (this._pvCalibHARead)            return;
-        if (!this.hass?.callWS)             return;
-        const key = this._pvCalibStorageKey();
-        if (!key)                           return;
-        this._pvCalibHARead = true;
-
-        try
-        {
-            const result = await this.hass.callWS({
-                type: 'frontend/get_user_data',
-                key
-            }) as { value?: unknown };
-
-            const remote = Array.isArray(result?.value)
-                ? (result.value as Array<{ t: number; o: number; p: number }>)
-                    .filter(e => typeof e?.t === 'number'
-                              && typeof e?.o === 'number' && isFinite(e.o)
-                              && typeof e?.p === 'number' && isFinite(e.p))
-                : [];
-
-            const local  = this._loadPvCalibSamples();
-            const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
-            //Merge by hour-bucket timestamp; HA wins on conflict.
-            const byTs = new Map<number, { t: number; o: number; p: number }>();
-            for (const e of local)  { if (e.t >= cutoff) byTs.set(e.t, e); }
-            for (const e of remote) { if (e.t >= cutoff) byTs.set(e.t, e); }
-            const merged = Array.from(byTs.values()).sort((a, b) => a.t - b.t);
-
-            //Persist the merged view back to localStorage (instant
-            //read next boot) but DON'T trigger a fresh HA write ,
-            //HA already has these samples.
-            try
-            {
-                const sKey = this._pvCalibStorageKey();
-                if (sKey) window.localStorage?.setItem(sKey, JSON.stringify(merged));
-            }
-            catch (_) {}
-
-            this._pvCalibK = this._calibrateK(merged);
-            //Force a re-render so the PV chart picks up the newly
-            //available prediction line if the threshold is crossed.
-            this.requestUpdate();
-        }
-        catch (_)
-        {
-            //HA unreachable or schema error, keep using the local
-            //cache. The next reconcile attempt happens at the next
-            //card init.
-        }
-    }
-
-    //Bucket the raw PV history into one (avg-watts) value per local
-    //hour, handling cumulative-energy sensors via the same
-    //differentiation logic the chart renderer uses.
-    //Memoized aggregation of the PV history by hour bucket. The
-    //result is invariant for a given (history reference, unit) pair,
-    //but the PV chart re-renders on every Lit cycle (clock tick).
-    //Cache keyed on the history reference + unit; cleared by garbage
-    //collection when the history is replaced.
-    private _aggregatePvCache?: {
-        hist: { times: Date[]; values: number[] };
-        unit: string;
-        out:  Map<number, number>;
-    };
-
-    private _aggregatePvWattsPerHour(): Map<number, number>
-    {
-        const hist = this._pvHistory;
-        if (!hist || hist.times.length === 0) return new Map();
-        const unit = this._pvUnit ?? '';
-
-        const cached = this._aggregatePvCache;
-        if (cached && cached.hist === hist && cached.unit === unit)
-        {
-            return cached.out;
-        }
-
-        const out  = new Map<number, number>();
-        const lu = unit.toLowerCase();
-        const isCumulativeEnergy = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
-
-        let times:  Date[]   = hist.times;
-        let values: number[] = hist.values;
-        if (isCumulativeEnergy && times.length >= 2)
-        {
-            const dTimes:  Date[]   = [];
-            const dValues: number[] = [];
-            for (let i = 1; i < times.length; i++)
-            {
-                const dtH = (times[i].getTime() - times[i - 1].getTime()) / 3_600_000;
-                if (dtH <= 0 || dtH > 6) continue;
-                const dv = values[i] - values[i - 1];
-                if (dv < 0) continue;
-                dTimes.push(times[i]);
-                dValues.push(dv / dtH);
-            }
-            times  = dTimes;
-            values = dValues;
-        }
-
-        //Sum + count per hour bucket, then divide.
-        const sums   = new Map<number, number>();
-        const counts = new Map<number, number>();
-        for (let i = 0; i < times.length; i++)
-        {
-            const ts = times[i].getTime();
-            const v  = values[i];
-            if (!isFinite(v)) continue;
-            const w = this._pvNormalizeToWatts(v, unit);
-            //Floor to the hour boundary.
-            const hourTs = Math.floor(ts / 3_600_000) * 3_600_000;
-            sums.set  (hourTs, (sums.get(hourTs)   ?? 0) + w);
-            counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
-        }
-        for (const [hourTs, sum] of sums)
-        {
-            const c = counts.get(hourTs) ?? 1;
-            out.set(hourTs, sum / c);
-        }
-
-        this._aggregatePvCache = { hist, unit, out };
-        return out;
-    }
-
-    //Refresh the per-hour calibration buffer from the current
-    //_pvHistory and _chartSeries, merge with the persisted buffer,
-    //prune old entries, save, and recompute k. Called whenever either
-    //input changes.
-    private _updatePvCalibration(): void
-    {
         const coords = this._getHomeCoords();
-        if (!coords) return;
-        const { lat, lon } = coords;
-        const series = this._chartSeries;
-        if (!series || series.times.length === 0) return;
-
-        const buckets = this._aggregatePvWattsPerHour();
-        if (buckets.size === 0)
+        if (coords && this.hass?.callWS)
         {
-            //Nothing to learn from this pass, recompute k from
-            //whatever's still in localStorage so we don't lose it.
-            this._pvCalibK = this._calibrateK(this._loadPvCalibSamples());
-            return;
+            const haKey = `helios-pv-calib:${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
+            this.hass.callWS({ type: 'frontend/set_user_data', key: haKey, value: null })
+                .catch(() => {});
         }
-
-        //Index hourly weather by hour-floor timestamp for O(1) lookup.
-        const cloudByHour = new Map<number, number>();
-        for (let i = 0; i < series.times.length; i++)
-        {
-            const hourTs = Math.floor(series.times[i].getTime() / 3_600_000) * 3_600_000;
-            cloudByHour.set(hourTs, series.cloud[i] ?? 0);
-        }
-
-        const existing = this._loadPvCalibSamples();
-        const byTs     = new Map<number, { t: number; o: number; p: number }>();
-        for (const s of existing) byTs.set(s.t, s);
-
-        for (const [hourTs, observedW] of buckets)
-        {
-            const cloud = cloudByHour.get(hourTs);
-            if (cloud === undefined) continue;
-            const tCentered = new Date(hourTs + 30 * 60_000);   //hour midpoint
-            const predictedPct = computePvPower(tCentered, lat, lon, cloud);
-            //Skip entries where there's no signal to learn from.
-            if (predictedPct < 1)   continue;      //nighttime or near
-            if (observedW    < 5)   continue;      //panels offline / pre-dawn noise
-            byTs.set(hourTs, { t: hourTs, o: observedW, p: predictedPct });
-        }
-
-        //Prune old entries again before saving.
-        const cutoff = Date.now() - HeliosCard.PV_CALIB_TTL_MS;
-        const merged = Array.from(byTs.values())
-            .filter(e => e.t >= cutoff)
-            .sort((a, b) => a.t - b.t);
-
-        this._savePvCalibSamples(merged);
-        this._pvCalibK = this._calibrateK(merged);
-    }
-
-    private _calibrateK(samples: Array<{ t: number; o: number; p: number }>): number | null
-    {
-        if (samples.length < HeliosCard.PV_CALIB_MIN_SAMPLES) return null;
-        let sumXY = 0, sumXX = 0;
-        for (const s of samples)
-        {
-            sumXY += s.o * s.p;
-            sumXX += s.p * s.p;
-        }
-        if (sumXX <= 0) return null;
-        const k = sumXY / sumXX;
-        //Sanity: a residential install peaks around 1 kW per kWp at
-        //full sun. computePvPower saturates at 100, so a typical k
-        //sits in [5, 250] (W per percent of STC). Reject anything
-        //wildly outside, bad data or a misconfigured entity.
-        if (!isFinite(k) || k <= 0 || k > 1000) return null;
-        return k;
     }
 
     //Map a "rate" magnitude to an animation duration in seconds.
@@ -2775,31 +2578,33 @@ export class HeliosCard extends LitElement
 
         if (lu === 'w' && Math.abs(value) >= 1000)
         {
-            return `${(value / 1000).toFixed(2)} kW`;
+            return `${this._formatLocalisedNumber(value / 1000, 2)} kW`;
         }
         if (lu === 'w')
         {
-            return `${Math.round(value)} W`;
+            return `${this._formatLocalisedNumber(value, 0, true)} W`;
         }
         if (lu === 'kw')
         {
-            return `${value.toFixed(2)} kW`;
+            return `${this._formatLocalisedNumber(value, 2)} kW`;
         }
         if (lu === 'wh')
         {
             if (Math.abs(value) >= 1000)
             {
-                return `${(value / 1000).toFixed(1)} kWh`;
+                return `${this._formatLocalisedNumber(value / 1000, 1)} kWh`;
             }
-            return `${Math.round(value)} Wh`;
+            return `${this._formatLocalisedNumber(value, 0, true)} Wh`;
         }
         if (lu === 'kwh' || lu === 'mwh')
         {
-            return `${value.toFixed(1)} ${u}`;
+            return `${this._formatLocalisedNumber(value, 1)} ${u}`;
         }
         //Fallback for arbitrary units, keep one decimal of precision
         //and let the entity's own unit string carry through.
-        const formatted = Math.abs(value) >= 100 ? Math.round(value).toString() : value.toFixed(1);
+        const formatted = Math.abs(value) >= 100
+            ? this._formatLocalisedNumber(value, 0, true)
+            : this._formatLocalisedNumber(value, 1);
         return u ? `${formatted} ${u}` : formatted;
     }
 
@@ -2808,10 +2613,14 @@ export class HeliosCard extends LitElement
 
     protected render(): TemplateResult
     {
-        const t = pickTranslations(this.hass?.language);
-
-        const apiKey    = String(this.config?.['maptiler-api-key'] ?? '').trim();
-        const hasApiKey = apiKey.length > 0;
+        //We used to gate the whole render on a configured MapTiler API
+        //key. Since v1.4.1 we ship with OpenFreeMap as the basemap,
+        //which needs no key, so the precondition is now just "we have
+        //home coordinates and we're not stuck inside a dashboard
+        //editor preview". Kept under the same `hasApiKey` name so the
+        //sea of `${hasApiKey ? html\`...\` : nothing}` calls below
+        //read the same; only the meaning of the flag changed.
+        const hasApiKey = this._getHomeCoords() !== null;
 
 
         //Date+time shown bottom-right: tracks the timeline cursor.
@@ -2834,17 +2643,11 @@ export class HeliosCard extends LitElement
             hourCycle: is12h ? 'h12' : 'h23'
         } as Intl.DateTimeFormatOptions);
 
-        //Cloud-cover hover tooltip, shown above the on-ground disc
-        //when the cursor enters its layer (engine emits onCloudHover).
-        //Two-line content: total coverage on top, low/mid/high bands
-        //below. The tooltip is positioned at (cloudHoverX, cloudHoverY)
-        //which the engine reports in canvas pixel coordinates.
-        const showCloudTooltip = this._cloudHover && this._cloudCover >= 0;
+        //The on-ground disc now self-encodes the low/mid/high
+        //breakdown via three concentric bands (proportional radial
+        //widths, three shades of the cloud colour), so the hover
+        //tooltip we used to surface for the same data is gone.
         const cloudPctRound    = Math.max(0, Math.round(this._cloudCover));
-        const cloudHeadLine    = t.tooltip.cloudCover.replace('{0}', String(cloudPctRound));
-        const cloudLowLine     = t.tooltip.cloudLow .replace('{0}', String(Math.round(Math.max(0, this._cloudLow))));
-        const cloudMidLine     = t.tooltip.cloudMid .replace('{0}', String(Math.round(Math.max(0, this._cloudMid))));
-        const cloudHighLine    = t.tooltip.cloudHigh.replace('{0}', String(Math.round(Math.max(0, this._cloudHigh))));
 
         //Always-visible cloud-cover percentage label, overlaid in HTML
         //above the home marker, with an SVG leader line tying it to
@@ -2889,30 +2692,66 @@ export class HeliosCard extends LitElement
                 : (this._pvCurrent !== null ? this._currentPvRate() : null))
             : null;
 
+        //Predicted PV at the scrub instant when scrubbing into the
+        //future. Uses the same kWp × computePvPower(t, lat, lon, cloud)
+        //path the chart's dotted forecast line uses. Falls back to
+        //null when peak power is unset or no weather is available
+        //yet, in which case the chip stays hidden as before.
+        let pvPredictedRate: { value: number; unit: string } | null = null;
+        if (pvScrubFuture && pvEntityId !== '' && layout !== null)
+        {
+            const k      = this._pvCalibK();
+            const coords = this._getHomeCoords();
+            const series = this._chartSeries;
+            if (k !== null && coords && series && series.times.length > 0)
+            {
+                //Pick the series sample closest to _selectedTime.
+                const targetMs = this._selectedTime!.getTime();
+                let best = 0;
+                let bestDiff = Math.abs(series.times[0].getTime() - targetMs);
+                for (let i = 1; i < series.times.length; i++)
+                {
+                    const d = Math.abs(series.times[i].getTime() - targetMs);
+                    if (d < bestDiff) { bestDiff = d; best = i; }
+                }
+                const cloud = series.cloud[best] ?? 0;
+                const pct   = computePvPower(this._selectedTime!, coords.lat, coords.lon, cloud);
+                if (pct > 0)
+                {
+                    //k is W per percent of STC, so pct × k is watts.
+                    pvPredictedRate = { value: pct * k, unit: 'W' };
+                }
+            }
+        }
+
+        const isPvPredicted = pvScrubFuture && pvPredictedRate !== null;
+        const pvActiveRate  = isPvPredicted ? pvPredictedRate : pvRate;
+
         const showPvLabel = hasApiKey
             && layout !== null
             && pvEntityId !== ''
-            && !pvScrubFuture
-            && pvRate !== null;
+            && pvActiveRate !== null
+            && (!pvScrubFuture || isPvPredicted);
 
         const pvDisplayValue = showPvLabel
-            ? this._formatPvValue(pvRate!.value, pvRate!.unit)
+            ? (isPvPredicted ? '≈ ' : '') + this._formatPvValue(pvActiveRate!.value, pvActiveRate!.unit)
             : '';
 
         //PV → home animated leader. Same vocabulary as the existing
         //battery leaders (dashed line + arrow), painted in the
         //configured PV colour. Speed is normalised against the user's
-        //own theoretical peak: when the calibration scalar k is known
-        //(W per percent of STC), the peak is 100 × k and the flow
-        //saturates exactly there; without calibration we fall back to
-        //a 5 kW reference matching the battery leader's saturation so
-        //the visual cadence reads consistently. Idle (no flow, no
-        //arrow) when current production is zero or negative.
+        //configured peak power (kWp -> W), so the flow saturates
+        //exactly at the install's nameplate. Without a configured
+        //peak we fall back to a 5 kW reference matching the battery
+        //leader's saturation so the visual cadence stays consistent.
+        //Idle (no flow, no arrow) when current production is zero or
+        //negative.
         const pvWattsNow = (pvRate !== null)
             ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit)
             : 0;
-        const pvPeakRefW = (this._pvCalibK !== null && this._pvCalibK > 0)
-            ? this._pvCalibK * 100
+        const pvCalibKVal = this._pvCalibK();
+        const pvPeakRefW  = (pvCalibKVal !== null && pvCalibKVal > 0)
+            ? pvCalibKVal * 100
             : 5000;
         const pvFlowDuration = HeliosCard._flowDuration(pvWattsNow, pvPeakRefW, 0.5);
         const pvIdle         = !(pvWattsNow > 0);
@@ -3176,15 +3015,16 @@ export class HeliosCard extends LitElement
         const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';
 
         //showPlaceholder collapses two cases that share the same
-        //render: (a) the user hasn't provided a MapTiler API key
-        //yet, (b) the card is rendered inside HA's dashboard editor
+        //render: (a) HA hasn't published home coordinates yet (the
+        //card is in a fresh dashboard before the location is set),
+        //(b) the card is rendered inside HA's dashboard editor
         //preview, where we deliberately skip the WebGL engine to
         //avoid context exhaustion. Both fall back to the same
         //illustrated placeholder.
         const showPlaceholder = !hasApiKey || this._isInEditorPreview;
 
         return html`
-            <ha-card class="${cardThemeClass} ${showPlaceholder ? 'placeholder-mode' : ''}">
+            <ha-card class="${cardThemeClass} ${showPlaceholder ? 'placeholder-mode' : ''} ${this._detailMode ? 'detail-active' : ''}">
 
                 ${showPlaceholder ? this._renderPlaceholder() : nothing}
 
@@ -3195,37 +3035,6 @@ export class HeliosCard extends LitElement
                         class="time-bar"
                         @pointerdown="${this._onTimelinePointerDown}"
                     >
-                        <!--  Top row: scrub-time cluster (icon-only
-                              "back to live" button + scrub-time pill)
-                              shown above the chart card with a small
-                              breathing gap and a thin tether hair down
-                              to the chart's top edge. The cluster
-                              anchors at the cursor's X with edge-aware
-                              clamping; the tether anchors at the same
-                              X without clamping so it always lands
-                              directly above the cursor.  -->
-                        <div class="tb-top-row">
-                            ${(!this._isLiveMode && this._selectedTime) ? (() => {
-                                const { start, end } = this._timeRange!;
-                                const rangeMs = end.getTime() - start.getTime();
-                                const selPct  = Math.max(0, Math.min(100,
-                                    (this._selectedTime!.getTime() - start.getTime()) / rangeMs * 100));
-                                const xform   = selPct < 8
-                                    ? 'translateX(0)'
-                                    : (selPct > 92 ? 'translateX(-100%)' : 'translateX(-50%)');
-                                return html`
-                                    <div
-                                        class="tb-sel-label"
-                                        style="left:${selPct}%; transform:${xform}"
-                                    >${this._formatSelTime(this._selectedTime!)}</div>
-                                    <div
-                                        class="tb-sel-tether"
-                                        style="left:${selPct}%"
-                                    ></div>
-                                `;
-                            })() : nothing}
-                        </div>
-
                         <!--  Optional PV production graph, only
                               rendered when the user has set the
                               pv-power-entity config. Same chip
@@ -3267,8 +3076,35 @@ export class HeliosCard extends LitElement
                       it. When both are visible they stack vertically;
                       when only one is visible the column still sits at
                       the same 8 px edge margin as the clock and timeline.  -->
-                ${hasApiKey && (!this._isLiveMode || this._shadowBusy) ? html`
+                <!--  Top-right column carries only the LiDAR shadow
+                      busy chip; the back-to-live button lives next
+                      to the clock (top-left) since both relate to
+                      "where am I in time".  -->
+                ${hasApiKey && this._shadowBusy ? html`
                     <div class="overlay-top-right">
+                        <div
+                            class="shadow-busy-chip"
+                            title="LiDAR"
+                            aria-label="LiDAR"
+                        >
+                            <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
+                        </div>
+                    </div>
+                ` : nothing}
+
+                <!--  Top-left cluster: clock chip showing the active
+                      timeline instant + (in scrub mode) a back-to-
+                      live button right beside it. The clock takes a
+                      blue / white "is-scrub" theme when scrubbing
+                      so the same chip doubles as the mode signal,
+                      no separate scrub-time chip needed lower on
+                      the card.  -->
+                ${hasApiKey ? html`
+                    <div class="overlay-top-left">
+                        <div class="clock ${!this._isLiveMode ? 'is-scrub' : ''}">
+                            <span class="clock-date">${displayDateLabel}</span>
+                            <span class="clock-time">${displayTimeLabel}</span>
+                        </div>
                         ${!this._isLiveMode ? html`
                             <button
                                 class="live-return-btn"
@@ -3278,24 +3114,6 @@ export class HeliosCard extends LitElement
                                 <ha-icon icon="mdi:restore"></ha-icon>
                             </button>
                         ` : nothing}
-                        ${this._shadowBusy ? html`
-                            <div
-                                class="shadow-busy-chip"
-                                title="LiDAR"
-                                aria-label="LiDAR"
-                            >
-                                <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
-                            </div>
-                        ` : nothing}
-                    </div>
-                ` : nothing}
-
-                ${hasApiKey ? html`
-                    <div class="overlay-top-left">
-                        <div class="clock">
-                            <span class="clock-date">${displayDateLabel}</span>
-                            <span class="clock-time">${displayTimeLabel}</span>
-                        </div>
                     </div>
                 ` : nothing}
 
@@ -3304,33 +3122,124 @@ export class HeliosCard extends LitElement
                     //screen-space points come from the engine via
                     //projectCloudScene() (anchor-at-home), so the
                     //rendered shape stays a true circle whatever the
-                    //terrain mesh does underneath. The disc is the
-                    //only interactive piece: hover opens the
-                    //low/mid/high breakdown tooltip handled below.
-                    const cs       = this._cloudScene!;
-                    const discPts  = cs.disc.length >= 3
-                        ? cs.disc.map(p => `${p.x},${p.y}`).join(' ')
-                        : '';
-                    const ringPts  = cs.ring.length >= 3
-                        ? cs.ring.map(p => `${p.x},${p.y}`).join(' ')
-                        : '';
+                    //terrain mesh does underneath.
+                    //
+                    //The disc is split into three concentric bands
+                    //sized by each layer's share of (low+mid+high)
+                    //and shaded with three derivatives of the
+                    //configured cloud colour: light (low, innermost),
+                    //normal (mid), dark (high, outermost). We stack
+                    //outer → inner so each smaller polygon visually
+                    //"covers" the centre of the larger one to create
+                    //the band appearance — no SVG mask / clip needed.
+                    const cs        = this._cloudScene!;
+                    const lowPts    = cs.discLow.length  >= 3 ? cs.discLow .map(p => `${p.x},${p.y}`).join(' ') : '';
+                    const midPts    = cs.discMid.length  >= 3 ? cs.discMid .map(p => `${p.x},${p.y}`).join(' ') : '';
+                    const highPts   = cs.discHigh.length >= 3 ? cs.discHigh.map(p => `${p.x},${p.y}`).join(' ') : '';
+                    const ringPts   = cs.ring.length     >= 3 ? cs.ring    .map(p => `${p.x},${p.y}`).join(' ') : '';
+                    //Light (low) and dark (high) shades: lerp the
+                    //cloud hex toward white / black. Mid uses the
+                    //configured cloud colour as-is.
+                    const cloudLight = this._lerpHexToward(cs.cloudHex, '#ffffff', 0.55);
+                    const cloudDark  = this._lerpHexToward(cs.cloudHex, '#000000', 0.40);
+                    //SVG mask: white background = cloud visible
+                    //everywhere, black home silhouettes punch a hole
+                    //so the actual MapLibre extrusion (walls, roof,
+                    //outline glow) shows through. Re-projected each
+                    //transform via projectHomeFootprints so the cut-
+                    //out tracks rotation. Empty array until the
+                    //buildings GeoJSON has landed; the mask then
+                    //degrades to "all visible" and the disc covers
+                    //the home as before.
+                    const silhouettes = this._homeSilhouettes;
+                    const maskId = 'helios-cloud-home-mask';
                     return html`
                         <svg class="cloud-svg">
+                            <defs>
+                                <mask id="${maskId}" maskUnits="userSpaceOnUse">
+                                    <rect x="0" y="0" width="100%" height="100%" fill="white" />
+                                    ${silhouettes.map(sil => {
+                                        const N = Math.min(sil.base.length, sil.top.length);
+                                        if (N < 3) return nothing;
+                                        const basePts = sil.base.map(p => `${p.x},${p.y}`).join(' ');
+                                        const topPts  = sil.top .map(p => `${p.x},${p.y}`).join(' ');
+                                        const walls   = [];
+                                        for (let i = 0; i < N; i++)
+                                        {
+                                            const j = (i + 1) % N;
+                                            walls.push(
+                                                `${sil.base[i].x},${sil.base[i].y} ` +
+                                                `${sil.base[j].x},${sil.base[j].y} ` +
+                                                `${sil.top [j].x},${sil.top [j].y} ` +
+                                                `${sil.top [i].x},${sil.top [i].y}`
+                                            );
+                                        }
+                                        //Tiny 1 px stroke pads the mask
+                                        //outward by half a pixel so SVG
+                                        //sub-pixel anti-aliasing on the
+                                        //silhouette edge can never leave
+                                        //a visible cloud sliver. Just
+                                        //breathing room, no visible halo.
+                                        return svg`
+                                            <polygon points="${basePts}" fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
+                                            <polygon points="${topPts}"  fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
+                                            ${walls.map(w => svg`
+                                                <polygon points="${w}" fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
+                                            `)}
+                                        `;
+                                    })}
+                                </mask>
+                            </defs>
                             ${ringPts ? svg`
                                 <polygon class="cloud-ring" points="${ringPts}" />
                             ` : nothing}
-                            ${discPts ? svg`
-                                <polygon
-                                    class="cloud-disc"
-                                    points="${discPts}"
-                                    fill="${cs.cloudHex}"
-                                    fill-opacity="0.25"
-                                    stroke="${cs.cloudHex}"
-                                    stroke-width="2"
-                                    @mousemove="${this._onCloudDiscMove}"
-                                    @mouseleave="${this._onCloudDiscLeave}"
-                                />
-                            ` : nothing}
+                            <g mask="url(#${maskId})">
+                                ${highPts ? svg`
+                                    <polygon
+                                        class="cloud-disc cloud-disc-high"
+                                        points="${highPts}"
+                                        fill="${cloudDark}"
+                                        fill-opacity="0.5"
+                                    />
+                                ` : nothing}
+                                ${midPts ? svg`
+                                    <polygon
+                                        class="cloud-disc cloud-disc-mid"
+                                        points="${midPts}"
+                                        fill="${cs.cloudHex}"
+                                        fill-opacity="0.5"
+                                    />
+                                ` : nothing}
+                                ${lowPts ? svg`
+                                    <polygon
+                                        class="cloud-disc cloud-disc-low"
+                                        points="${lowPts}"
+                                        fill="${cloudLight}"
+                                        fill-opacity="0.5"
+                                    />
+                                ` : nothing}
+                                <!--  Thin separator outlines on the band
+                                      boundaries. The reference ring at
+                                      100 % already paints the outermost
+                                      edge, so we only need the two inner
+                                      separators (mid ↔ high and low ↔
+                                      mid). Stroke-only, no fill, drawn
+                                      on top so the boundary reads
+                                      cleanly without flattening the
+                                      band colours behind them.  -->
+                                ${highPts ? svg`
+                                    <polygon
+                                        class="cloud-band-sep"
+                                        points="${highPts}"
+                                    />
+                                ` : nothing}
+                                ${midPts ? svg`
+                                    <polygon
+                                        class="cloud-band-sep"
+                                        points="${midPts}"
+                                    />
+                                ` : nothing}
+                            </g>
                         </svg>
                     `;
                 })() : nothing}
@@ -3345,7 +3254,7 @@ export class HeliosCard extends LitElement
                 ${showSun && arcSegmentsBack.length > 0 ? html`
                     <svg
                         class="solar-svg solar-svg-back"
-                        style="opacity:${sunScene!.daylight}"
+                        style="--solar-daylight:${sunScene!.daylight}"
                     >
                         ${arcSegmentsBack.map(s => svg`
                             <line
@@ -3406,18 +3315,6 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                ${showCloudTooltip ? html`
-                    <div
-                        class="cloud-tooltip ${this._cloudHoverFlip ? 'cloud-tooltip-flip' : ''}"
-                        style="left:${this._cloudHoverX}px; top:${this._cloudHoverY}px"
-                    >
-                        <div class="cloud-tooltip-head">${cloudHeadLine}</div>
-                        <div class="cloud-tooltip-row">${cloudLowLine}</div>
-                        <div class="cloud-tooltip-row">${cloudMidLine}</div>
-                        <div class="cloud-tooltip-row">${cloudHighLine}</div>
-                    </div>
-                ` : nothing}
-
                 <!--  PV → home animated leader. Vertical dashed line
                       from the PV chip's bottom edge down to the home
                       marker, painted in the configured PV colour and
@@ -3430,44 +3327,70 @@ export class HeliosCard extends LitElement
                 ${showPvLabel ? html`
                     <svg class="pv-home-leader-svg">
                         <line
-                            class="pv-home-leader-line ${pvIdle ? '' : 'pv-home-leader-animated'}"
-                            style="--pv-leader-color:${pvColor}; --pv-flow-duration:${pvFlowDuration}s"
+                            class="pv-home-leader-line"
+                            style="--pv-leader-color:${pvColor}"
                             x1="${layout!.pvLabel.x}"
                             y1="${layout!.pvLabel.y + PV_HALF_HEIGHT_PX}"
                             x2="${layout!.home.x}"
                             y2="${layout!.home.y}"
                         ></line>
                         ${!pvIdle ? svg`
-                            <polygon
-                                class="pv-home-leader-arrow"
-                                points="-2,-4 4,0 -2,4"
+                            <!--  Moving bead, a small filled disc rides
+                                  the leader from the PV chip to the
+                                  home, at a speed proportional to live
+                                  production (same vocabulary as the
+                                  Home Assistant energy-distribution
+                                  card). No rotate="auto" needed since
+                                  a disc has no orientation.  -->
+                            <circle
+                                class="pv-home-leader-bead"
+                                r="4"
                                 fill="${pvColor}"
                             >
                                 <animateMotion
                                     dur="${pvFlowDuration}s"
                                     repeatCount="indefinite"
-                                    rotate="auto"
                                     path="M ${layout!.pvLabel.x},${layout!.pvLabel.y + PV_HALF_HEIGHT_PX} L ${layout!.home.x},${layout!.home.y}"
                                 ></animateMotion>
-                            </polygon>
+                            </circle>
                         ` : nothing}
                         <!--  Anchor bead at the home end of the leader,
                               same colour as the line so the two read
-                              as one continuous element. Marks where
-                              the produced energy lands.  -->
+                              as one continuous element. Sized slightly
+                              larger than the moving bead (r 5 vs 4)
+                              so the destination reads as the "target"
+                              rather than another in-flight particle.
+                              When production is non-zero we synchronise
+                              an SVG <animate> pulse on the r attribute
+                              with the bead's animateMotion cycle: the
+                              anchor swells from r 5 to r 9 during the
+                              last ~15 % of the cycle (i.e. as the bead
+                              approaches) and snaps back at the cycle
+                              boundary. Visual effect, the anchor
+                              "absorbs" each incoming bead.  -->
                         <circle
                             class="pv-home-leader-anchor"
                             cx="${layout!.home.x}"
                             cy="${layout!.home.y}"
-                            r="3"
+                            r="5"
                             fill="${pvColor}"
-                        ></circle>
+                        >
+                            ${!pvIdle ? svg`
+                                <animate
+                                    attributeName="r"
+                                    values="5;5;9;5"
+                                    keyTimes="0;0.80;0.97;1"
+                                    dur="${pvFlowDuration}s"
+                                    repeatCount="indefinite"
+                                ></animate>
+                            ` : nothing}
+                        </circle>
                     </svg>
                 ` : nothing}
 
                 ${showPvLabel ? html`
                     <div
-                        class="pv-pct-label"
+                        class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''}"
                         style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}"
                     >
                         <ha-icon icon="mdi:solar-power-variant"></ha-icon>
@@ -3478,14 +3401,9 @@ export class HeliosCard extends LitElement
                 ${(showSocChip || showPowerChip) ? html`
                     <svg class="battery-leader-svg">
                         <!--
-                            SoC ↔ PV, static, dashed, inverted-L
-                            path with a rounded corner (matching
-                            the PV ↔ Power leader's vocabulary
-                            exactly minus the flow animation).
-                            Vertical leg drops from PV's bottom
-                            edge slightly left of centre, horizontal
-                            leg then runs left to the SoC chip. No
-                            animation: SoC has no flow direction.
+                            SoC ↔ PV, solid, inverted-L path with a
+                            rounded corner. No animation: SoC is a
+                            level, not a flow direction.
                         -->
                         ${showSocChip ? svg`
                             <path
@@ -3495,45 +3413,33 @@ export class HeliosCard extends LitElement
                             ></path>
                         ` : nothing}
                         <!--
-                            PV ↔ Power, animated, dashed L with
-                            an arrow tracking the sign of the live
-                            power. Vertical leg drops from PV's
-                            bottom edge slightly right of centre,
-                            horizontal leg then runs right to the
-                            Power chip.
-                            Charging (P > 0) → arrow PV → Power.
-                            Discharging (P < 0) → arrow Power → PV
-                            (the path class modifier flips the
-                            dash flow too).
+                            PV ↔ Power, solid L-shaped path with a
+                            small filled bead riding along it at a
+                            speed proportional to |P|. The bead's
+                            animateMotion path is flipped inline by
+                            the renderer when discharging so the
+                            travel direction matches the energy flow
+                            (PV → Power when charging, Power → PV
+                            when discharging).
                         -->
                         ${showPowerChip ? svg`
                             <path
-                                class="battery-leader-line ${batteryIdle ? '' : 'battery-leader-line-animated'} ${batteryCharging ? '' : 'battery-leader-discharging'}"
-                                style="--battery-leader-color:${batteryColor}; --battery-flow-duration:${batteryFlowDuration}s"
+                                class="battery-leader-line"
+                                style="--battery-leader-color:${batteryColor}"
                                 d="${powerLeaderPath}"
                             ></path>
                             ${!batteryIdle ? svg`
-                                <!--
-                                    Polygon is centroid-centred at (0,0):
-                                    the centroid of (-2,-4), (4,0), (-2,4)
-                                    is (0,0), so animateMotion pivots the
-                                    arrow about its visual mass rather
-                                    than its tip. Through the L's fillet
-                                    the arrow stays balanced on the path
-                                    instead of swinging off it.
-                                -->
-                                <polygon
-                                    class="battery-leader-arrow"
-                                    points="-2,-4 4,0 -2,4"
+                                <circle
+                                    class="battery-leader-bead"
+                                    r="4"
                                     fill="${batteryColor}"
                                 >
                                     <animateMotion
                                         dur="${batteryFlowDuration}s"
                                         repeatCount="indefinite"
-                                        rotate="auto"
                                         path="${powerArrowPath}"
                                     ></animateMotion>
-                                </polygon>
+                                </circle>
                             ` : nothing}
                         ` : nothing}
                     </svg>
@@ -3566,7 +3472,7 @@ export class HeliosCard extends LitElement
                 ${showSun && arcSegmentsFront.length > 0 ? html`
                     <svg
                         class="solar-svg solar-svg-front"
-                        style="opacity:${sunScene!.daylight}"
+                        style="--solar-daylight:${sunScene!.daylight}"
                     >
                         ${arcSegmentsFront.map(s => svg`
                             <line
@@ -3702,6 +3608,106 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
+                <!--  Sunrise / sunset markers. ha-icon glyphs centred
+                      on the horizon crossings of the day's solar arc,
+                      coloured in the configured sun colour. The icon
+                      shape itself signals the meaning (sun rising /
+                      setting) so no label or rotation is needed.
+                      Skipped on polar days where the sun never
+                      crosses the horizon.  -->
+                ${showSun && sunScene!.sunrise ? html`
+                    <ha-icon
+                        class="solar-horizon-icon solar-horizon-sunrise"
+                        icon="mdi:weather-sunset-up"
+                        style="left:${sunScene!.sunrise.x}px; top:${sunScene!.sunrise.y}px; color:${sunColor}"
+                    ></ha-icon>
+                ` : nothing}
+                ${showSun && sunScene!.sunset ? html`
+                    <ha-icon
+                        class="solar-horizon-icon solar-horizon-sunset"
+                        icon="mdi:weather-sunset-down"
+                        style="left:${sunScene!.sunset.x}px; top:${sunScene!.sunset.y}px; color:${sunColor}"
+                    ></ha-icon>
+                ` : nothing}
+
+                <!--  Home hover glow, sun-coloured halo around the
+                      projected home silhouette. Reuses the same base
+                      ring + top ring + side quads as the cloud-disc
+                      mask (so it tracks rotation and matches the
+                      extrusion exactly), painted as fill + stroke in
+                      the configured sun colour with a CSS drop-
+                      shadow filter for the bloom. The opacity is
+                      flipped via a class so the appearance / fade is
+                      a pure CSS transition, no per-frame work.  -->
+                ${hasApiKey && this._homeSilhouettes.length > 0 && !this._detailMode ? (() => {
+                    const sunColor = cfgHex(this.config?.['sun-color'], DEFAULT_SUN_COLOR_HEX);
+                    return html`
+                        <svg class="home-glow-svg ${this._homeHover ? 'is-hovered' : ''}"
+                             style="--helios-sun-color:${sunColor}">
+                            ${this._homeSilhouettes.map(sil => {
+                                const N = Math.min(sil.base.length, sil.top.length);
+                                if (N < 3) return nothing;
+                                const basePts = sil.base.map(p => `${p.x},${p.y}`).join(' ');
+                                const topPts  = sil.top .map(p => `${p.x},${p.y}`).join(' ');
+                                const walls   = [];
+                                for (let i = 0; i < N; i++)
+                                {
+                                    const j = (i + 1) % N;
+                                    walls.push(
+                                        `${sil.base[i].x},${sil.base[i].y} ` +
+                                        `${sil.base[j].x},${sil.base[j].y} ` +
+                                        `${sil.top [j].x},${sil.top [j].y} ` +
+                                        `${sil.top [i].x},${sil.top [i].y}`
+                                    );
+                                }
+                                return svg`
+                                    <polygon class="home-glow-shape" points="${basePts}" />
+                                    <polygon class="home-glow-shape" points="${topPts}"  />
+                                    ${walls.map(w => svg`
+                                        <polygon class="home-glow-shape" points="${w}" />
+                                    `)}
+                                `;
+                            })}
+                        </svg>
+                    `;
+                })() : nothing}
+
+                <!--  Home hitbox, an invisible circular click target
+                      centred on the home's projected screen position.
+                      Visible (interactive) only when the map layout is
+                      ready AND we're not already in detail mode.
+                      Clicking it eases the camera into the detail
+                      pose and triggers the dashboard overlay.  -->
+                ${hasApiKey && layout !== null && !this._detailMode ? html`
+                    <div
+                        class="home-hitbox"
+                        style="left:${layout!.home.x}px; top:${layout!.home.y}px"
+                        @click="${this._onHomeClick}"
+                        @mouseenter="${this._onHomeEnter}"
+                        @mouseleave="${this._onHomeLeave}"
+                    ></div>
+                ` : nothing}
+
+                <!--  Detail dashboard overlay, takes over the card
+                      while _detailMode is on. Click anywhere on the
+                      panel exits back to the resting view. The CSS
+                      class .detail-active on ha-card fades out every
+                      pre-existing overlay so the panel reads as the
+                      sole content while open.  -->
+                ${this._detailMode ? html`
+                    <div
+                        class="detail-panel"
+                        @click="${this._onExitDetail}"
+                    >
+                        <div class="detail-panel-inner">
+                            <ha-icon class="detail-panel-icon" icon="mdi:home-analytics"></ha-icon>
+                            <div class="detail-panel-title">${pickTranslations(this.hass?.language).detail.title}</div>
+                            <div class="detail-panel-subtitle">${pickTranslations(this.hass?.language).detail.subtitle}</div>
+                            <div class="detail-panel-hint">${pickTranslations(this.hass?.language).detail.exitHint}</div>
+                        </div>
+                    </div>
+                ` : nothing}
+
             </ha-card>
         `;
     }
@@ -3722,6 +3728,69 @@ export class HeliosCard extends LitElement
         return `#${h(r)}${h(g)}${h(b)}`;
     }
 
+    //Linear blend between two #rrggbb hex colours. `t` = 0 returns
+    //`a` unchanged, `t` = 1 returns `b`. Used by the cloud disc to
+    //derive the light (low) and dark (high) band shades from the
+    //configured cloud colour without needing a second / third
+    //config key.
+    private _lerpHexToward(a: string, b: string, t: number): string
+    {
+        const u = Math.max(0, Math.min(1, t));
+        const ar = parseInt(a.slice(1, 3), 16);
+        const ag = parseInt(a.slice(3, 5), 16);
+        const ab = parseInt(a.slice(5, 7), 16);
+        const br = parseInt(b.slice(1, 3), 16);
+        const bg = parseInt(b.slice(3, 5), 16);
+        const bb = parseInt(b.slice(5, 7), 16);
+        const r = Math.round(ar + (br - ar) * u);
+        const g = Math.round(ag + (bg - ag) * u);
+        const bl = Math.round(ab + (bb - ab) * u);
+        const h = (n: number) => n.toString(16).padStart(2, '0');
+        return `#${h(r)}${h(g)}${h(bl)}`;
+    }
+
+    //Detail-mode toggles. Driven by the home click (off → on) and a
+    //click anywhere on the detail panel (on → off). The engine
+    //handles the eased camera transition; we just flip the state
+    //and let the CSS .detail-active class fade out the overlays.
+    private _onHomeClick(e: Event): void
+    {
+        //Stop propagation so the underlying map doesn't also process
+        //the click as a pan / drag start, and so a nested layer
+        //(e.g. the placeholder) doesn't double-handle it.
+        e.stopPropagation();
+        if (this._detailMode) { return; }
+        //Clear the hover flag immediately, the hitbox un-renders
+        //once detail mode opens so mouseleave never fires; without
+        //this the glow would flash back on as soon as the user
+        //exits detail mode and the hitbox re-appears.
+        this._homeHover  = false;
+        this._detailMode = true;
+        this._engine?.setDetailMode(true);
+    }
+
+    private _onExitDetail(e: Event): void
+    {
+        e.stopPropagation();
+        if (!this._detailMode) { return; }
+        this._detailMode = false;
+        this._engine?.setDetailMode(false);
+    }
+
+    //Hover handlers on the home hitbox. Toggle the sun-coloured
+    //glow halo around the home silhouette so the focal building
+    //reads as interactive before the user clicks. Cleared on exit
+    //so the glow doesn't get stuck on if the cursor leaves while
+    //the detail overlay is fading in.
+    private _onHomeEnter = (): void =>
+    {
+        this._homeHover = true;
+    };
+    private _onHomeLeave = (): void =>
+    {
+        this._homeHover = false;
+    };
+
     //Placeholder (no API key configured)
 
     private _renderPlaceholder(): TemplateResult
@@ -3733,8 +3802,10 @@ export class HeliosCard extends LitElement
         //sun is positioned at t = 0.75 along the arc Bezier
         //(M 50,230 Q 215,60 360,230 → (286, 166)) so it visually
         //rides ON the curve rather than floating above it. The
-        //MapTiler key prompt is documented in the README, it does
-        //not belong on the thumbnail.
+        //placeholder is now only rendered while HA has not yet
+        //published home coordinates, or inside HA's dashboard
+        //editor preview where the engine is intentionally not
+        //instantiated.
         return html`
             <div class="placeholder">
 

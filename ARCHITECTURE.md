@@ -6,6 +6,16 @@ conditions at a home in real time: sun arc, irradiance, cloud cover,
 home-battery state, all stitched onto a 3D MapLibre map centred on
 the home and reflected in a scrubbable 5-day timeline.
 
+The 3D basemap and the building footprints come from
+**[OpenFreeMap](https://openfreemap.org/)** (free vector tiles built
+from OpenStreetMap data via the OpenMapTiles schema, no API key, no
+signup, no rate limit). Weather forecasts come from
+**[Open-Meteo](https://open-meteo.com/)** (also free, no key). LiDAR
+shadow data comes from national open-data programmes credited
+per-country in the LiDAR section below. None of these services
+require an account, so HELIOS ships and runs without any user
+configuration of credentials.
+
 ---
 
 ## Changelog
@@ -167,15 +177,39 @@ hourly aggregation is memoised against the history reference.
 `lidarPrecision*`, `shadowOpacity*`, `mapStyleMinimal`,
 `mapStyleSatellite`, `terrainDetail*`. All 7 locales updated.
 
-**LiDAR coverage.** Only **IGN HD over metropolitan France + Corsica**
-in this release. Adding a country is a single-file drop under
-`./helios-lidar/`: implement the `LidarSource` interface from
-`helios-lidar.ts` and register the provider in `LIDAR_SOURCES`. The
-`findLidarSource(lat, lon)` resolver returns the first matching
+**LiDAR coverage.** Five providers wired in v1.4.1: IGN HD (France),
+Environment Agency LiDAR Composite (England), IGN España PNOA-LiDAR
+MDSn (Spain), PDOK AHN4 (Netherlands), Kartverket NHM (Norway).
+Adding a country is a single-file drop under
+`./helios-lidar/providers/`: implement the `LidarSource` interface
+from `helios-lidar.ts` and register the provider in `LIDAR_SOURCES`.
+The `findLidarSource(lat, lon)` resolver returns the first matching
 provider, or `null` for an out-of-coverage home, in which case the
-engine falls back to MapTiler footprints automatically. Additional
-providers are tracked separately as national open-data APIs become
-available.
+engine falls back to MapTiler footprints automatically.
+
+The shared post-processing (flood-fill on cells above a height
+threshold + size cap + convex hull) lives in
+`./helios-lidar/helios-lidar-pipeline.ts`. Each provider only owns
+the upstream-specific fetch logic: France serves a single nDSM
+raster as BIL float32, the others (UK / NL / NO) need two GeoTIFF
+fetches (DSM + DTM) and a per-pixel subtraction, Spain merges two
+pre-normalised coverages (vegetation + buildings) via element-wise
+MAX. The GeoTIFF fetch + decode + math helpers are factored into
+`./helios-lidar/helios-lidar-geotiff.ts`, backed by the `geotiff`
+package (~120 KB gzipped, includes lazy-loaded codecs for pako /
+zstd / lerc / jpeg / lzw all inlined into the single `helios.js`
+bundle via Vite `inlineDynamicImports`).
+
+Providers probed and not yet integrated:
+
+* **Wales** (NRW), per-tile ZIP downloads only, no live raster query.
+* **Switzerland** (swisstopo), WMS only carries pre-rendered PNG
+  hillshade; raw `swissALTI3D` rasters are downloadable as files
+  only.
+* **Slovakia** (ZBGIS), DMR (terrain) is GeoTIFF, but DMP (surface)
+  is only published as cached PNG visualisation.
+* **Denmark** (Datafordeler DHM), WCS GeoTIFF exists but requires a
+  per-user API key / OAuth signup.
 
 ### v1.3.0, Auto-calibrating PV, terrain detail, mobile rotation, stability
 
@@ -419,7 +453,7 @@ First public release. Core feature set:
 - Cloud-cover ground disc scaled by live cloud %.
 - 5-day scrubbable timeline (2 past + today + 2 forecast),
   dual-area chart of irradiance and cloud cover.
-- MapTiler 3D basemap with configurable hillshade.
+- OpenFreeMap 3D vector basemap (no API key, no signup, OpenMapTiles schema).
 - Open-Meteo multi-model weather fetch with regional model
   selection and median fusion.
 - 7-locale i18n.
@@ -504,13 +538,20 @@ Helios/
 │   ├── helios-buildings.ts         Self-sourced building tile fetch + radius/cluster filter
 │   ├── helios-shadows.ts           Ground-projected shadow polygons (single flat-opacity layer)
 │   ├── helios-lidar.ts             LidarSource interface + provider registry
-│   ├── helios-lidar/               Country-specific LiDAR providers
-│   │   └── helios-lidar-fr.ts      IGN HD (metropolitan France + Corsica) WMS pipeline
+│   ├── helios-lidar/
+│   │   ├── helios-lidar-pipeline.ts  Shared flood-fill + convex-hull pipeline
+│   │   ├── helios-lidar-geotiff.ts   Float32 GeoTIFF fetch + DSM-DTM math
+│   │   └── providers/              One file per country
+│   │       ├── helios-lidar-fr.ts  IGN HD (metropolitan France + Corsica), BIL float32
+│   │       ├── helios-lidar-uk.ts  Defra LiDAR Composite (England), GeoTIFF DSM + DTM
+│   │       ├── helios-lidar-es.ts  IGN España PNOA-LiDAR MDSn (peninsular Spain), GeoTIFF
+│   │       ├── helios-lidar-nl.ts  PDOK AHN4 (Netherlands), GeoTIFF DSM + DTM
+│   │       └── helios-lidar-no.ts  Kartverket NHM (Norway + Svalbard), ArcGIS Float32 GeoTIFF
 │   ├── helios-sun.ts               Solar position + Haurwitz / Kasten-Czeplak math
 │   ├── helios-weather.ts           Open-Meteo fetch + multi-model fusion + cache
 │   └── i18n/
 │       ├── index.ts                Resolver + Translations interface
-│       └── locales/                en, fr, de, es, it, nl, pt
+│       └── locales/                en, fr, de, es, it, nl, pt, no
 ├── hacs.json                       HACS manifest
 ├── package.json
 ├── tsconfig.json
@@ -531,17 +572,20 @@ Each `src/helios-*.ts` file has a clearly bounded responsibility:
   `<helios-color-picker>` (custom palette + hex picker that
   side-steps the iOS Safari `<input type="color">` crash inside
   HA's nested Shadow DOM), plus `cfgHex` / `formatDate` helpers.
-* **helios-engine.ts**, MapLibre setup, hillshade and night-
-  shade layers, building extrusions, cloud-cover disc, screen-
-  space projections (sun arc, sun disc, incidence ray, label
+* **helios-engine.ts**, MapLibre setup, night-shade layer,
+  building extrusions, cloud-cover disc, screen-space projections
+  (sun arc, sun disc, incidence ray, sunrise / sunset rings, label
   positions). Holds the public API consumed by the card
   (`onWeatherUpdate`, `projectSunScene`, `setSelectedTime`,
-  `getTimelineSeries`, etc.).
-* **helios-buildings.ts**, pure module: fetches MapTiler v3
-  vector tiles around the home, decodes them with
-  `@mapbox/vector-tile`, splits MultiPolygons, filters features
-  by haversine distance, identifies the home cluster. Returns
-  two GeoJSON `FeatureCollection`s consumed by the engine.
+  `getTimelineSeries`, etc.). Resolves the basemap to one of the
+  OpenFreeMap styles (Liberty / Positron / Dark) at init based on
+  `map-style` + `card-theme`, no API key required.
+* **helios-buildings.ts**, pure module: fetches OpenFreeMap planet
+  vector tiles around the home (snapshot URL resolved once via the
+  `/planet` TileJSON, cached for the page lifetime), decodes them
+  with `@mapbox/vector-tile`, splits MultiPolygons, filters
+  features by haversine distance, identifies the home cluster.
+  Returns two GeoJSON `FeatureCollection`s consumed by the engine.
 * **helios-shadows.ts**, `projectExtrusionShadows` takes a building
   / region FeatureCollection plus the current sun position and
   returns a FeatureCollection of single flat-opacity ground shadow
@@ -551,14 +595,30 @@ Each `src/helios-*.ts` file has a clearly bounded responsibility:
   the rendered surroundings.
 * **helios-lidar.ts**, `LidarSource` interface + `LIDAR_SOURCES`
   provider registry + `findLidarSource(lat, lon)` resolver. Adding
-  a country means dropping a new file under `./helios-lidar/`.
-* **helios-lidar/helios-lidar-fr.ts**, IGN LiDAR HD pipeline for
-  metropolitan France + Corsica. One WMS round-trip on
-  `IGNF_LIDAR-HD_MNH_*` (`image/x-bil;bits=32`), size-capped
-  8-connected flood fill on above-threshold cells (clump cap ~80 m²
-  physical), one convex-hull Polygon per clump with `render_height
-  = mean(clump cells)`. Output feeds `projectExtrusionShadows`
-  exactly like the MapTiler footprint path.
+  a country means dropping a new file under
+  `./helios-lidar/providers/`.
+* **helios-lidar/helios-lidar-pipeline.ts**, the shared post-
+  processing every provider routes through: classify cells above a
+  height threshold (with optional circular crop), size-capped
+  8-connected flood fill so dense forests decompose into many small
+  clumps, one convex hull per clump emitted as a `Polygon` feature
+  with `render_height` set to the clump's mean height. Identical
+  output shape to OpenFreeMap building footprints so the rest of
+  the engine doesn't care which side fed the polygons.
+* **helios-lidar/helios-lidar-geotiff.ts**, `fetchFloat32GeoTiff`
+  for the WMS / WCS / ArcGIS endpoints that serve `image/tiff`
+  (everyone except IGN's BIL fast path) plus `subtractRasters`
+  (DSM minus DTM → height-above-ground) and `maxRasters` (used by
+  Spain to merge vegetation and building MDSn coverages). The
+  `geotiff` package is the only third-party dependency added for
+  LiDAR support; its lazy-loaded codecs (pako, zstd, lerc, jpeg,
+  lzw) are inlined into the single-file bundle by Vite
+  `inlineDynamicImports`.
+* **helios-lidar/providers/helios-lidar-fr.ts**, IGN LiDAR HD
+  pipeline for metropolitan France + Corsica. One WMS round-trip
+  on `IGNF_LIDAR-HD_MNH_*` (`image/x-bil;bits=32`), feeds the
+  shared pipeline, output passes `projectExtrusionShadows` exactly
+  like the OpenFreeMap footprint path.
 * **helios-sun.ts**, `getSunPosition`, `computePvPower`,
   `computeIrradianceWm2`. Pure functions; no DOM, no map.
 * **helios-weather.ts**, `fetchHomePointData` and friends:
@@ -621,9 +681,15 @@ now" reading instead of a misleading lifetime total. Power sensors
 
 ### Building radius + home cluster
 
-At engine init, `helios-buildings.ts` fetches the MapTiler v3
+At engine init, `helios-buildings.ts` fetches OpenFreeMap planet
 vector tile(s) covering a bbox around the home (1–4 tiles at z=14).
-Each tile's `building` source-layer is decoded; MultiPolygon
+The tile URL template is resolved once at startup from the public
+TileJSON at `https://tiles.openfreemap.org/planet`; OpenFreeMap
+rotates the underlying snapshot path every few weeks, so caching
+the template per page lifetime keeps us pointed at whatever
+snapshot is current. Each tile's `building` source-layer is
+decoded (same OpenMapTiles schema MapTiler v3 ships, so
+`render_height` and `render_min_height` are present); MultiPolygon
 features are split into independent Polygon features. Then each
 feature is classified:
 
@@ -673,9 +739,9 @@ fetch, scaling with the wooded area covered rather than the raster
 resolution.
 
 Those polygons feed `projectExtrusionShadows` exactly like the
-MapTiler footprints when no provider covers the home. The result
-is then clipped to the building visibility disc (see Shadow
-clipping below).
+OpenFreeMap building footprints do when no provider covers the
+home. The result is then clipped to the building visibility disc
+(see Shadow clipping below).
 
 ### Shadow clipping
 
@@ -693,12 +759,13 @@ clipped to the same circle as the rendered surroundings.
 
 ```yaml
 type: custom:helios-card
-maptiler-api-key: YOUR_KEY_HERE     # required
 ```
 
-See the full option table in [README.md](./README.md). Every field
-is editable visually; numeric options are sliders so out-of-range
-values can't be entered.
+No keys, no signup. The basemap comes from OpenFreeMap (free vector
+tiles) and weather from Open-Meteo (free, no key). See the full
+option table in [README.md](./README.md). Every field is editable
+visually; numeric options are sliders so out-of-range values can't
+be entered.
 
 ---
 
@@ -714,15 +781,14 @@ Runs against every `<helios-card>` currently mounted on the page and
 returns a JSON-safe snapshot AND prints a grouped console dump. Each
 card section contains:
 
-- **config**, the live `setConfig` payload with the MapTiler API key
-  redacted (length kept so the user can confirm a key is set without
-  exposing it).
+- **config**, the live `setConfig` payload (JSON-safe and OK to
+  paste publicly, no API keys are ever stored).
 - **engine**, the engine's own snapshot: home lat/lon, resolved
   LiDAR provider (or `null` when out of coverage), shadow source
-  (`disabled` / `lidar` / `maptiler` / `pending`), shadow opacity and
-  LiDAR clump count, building footprints count, weather samples,
-  active timeline range, cache state for the per-day sun arc and
-  the last shadow signature.
+  (`disabled` / `lidar` / `openfreemap` / `pending`), shadow
+  opacity and LiDAR clump count, building footprints count,
+  weather samples, active timeline range, cache state for the
+  per-day sun arc and the last shadow signature.
 
 A `lifecycle` block aggregates module-level counters maintained by
 the engine (`window.__heliosStats`): engines created vs cleaned up,
@@ -777,16 +843,20 @@ To publish a release:
   solstices because of the simplified declination formula.
   Acceptable for the visual hillshade direction; if higher precision
   is ever needed, swap in a NOAA-SPA implementation.
-* **MapTiler key required**, the free MapTiler tier (100 k tile
-  loads / month) is more than enough for a typical Helios install,
-  but every dashboard load and rotation cycle does consume tile
-  quota. Open-Meteo doesn't need a key.
-* **LiDAR coverage**, only metropolitan France + Corsica today
-  (IGN HD). Out-of-coverage homes fall back to MapTiler footprints
-  (buildings only, no vegetation), so the visual works worldwide
-  but trees / hedges do not cast shadows outside France. Additional
-  providers are on the roadmap as national open-data APIs become
-  available.
+* **OpenFreeMap availability**, the basemap, glyphs, sprites and
+  building tiles all come from OpenFreeMap's public CDN. There's no
+  per-user rate limit, but the project is run by a single
+  organisation; if their CDN goes down, the basemap stops loading
+  for everyone. No commercial SLA is offered. As of v1.4.1 this is
+  the only third-party hard dependency for the map to render.
+* **LiDAR coverage**, five providers integrated as of v1.4.1
+  (France IGN HD, England Defra, Spain IGN, Netherlands PDOK,
+  Norway Kartverket). Out-of-coverage homes fall back to
+  OpenFreeMap building footprints (buildings only, no vegetation),
+  so the visual works worldwide but trees / hedges only cast
+  shadows in covered countries. Additional providers are on the
+  roadmap as national open-data APIs become available with a
+  CORS-friendly raw raster endpoint.
 * **WebGL contexts on long-lived dashboards**, browsers cap
   concurrent WebGL contexts at 8–16. Helios releases its context
   cleanly on every re-init via `WEBGL_lose_context`, but if you

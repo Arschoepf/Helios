@@ -11,7 +11,8 @@
 //above the height threshold, and emits one convex-hull Polygon per
 //capped clump with `render_height` set to the clump's mean cell
 //height. Those polygons feed projectExtrusionShadows() exactly like
-//the MapTiler footprints do when LiDAR is unavailable. Capping the
+//the OpenFreeMap building footprints do when LiDAR is unavailable.
+//Capping the
 //clump area keeps a dense forest from collapsing into one giant
 //blanket shadow while preserving the organic, non-grid-aligned
 //shape of a convex hull.
@@ -74,12 +75,24 @@ export interface LidarShadowFetchOptions
     signal?:                  AbortSignal;
 }
 
-import { franceLidarHd } from './helios-lidar/helios-lidar-fr';
+import { franceLidarHd }       from './helios-lidar/providers/helios-lidar-fr';
+import { englandLidarComposite } from './helios-lidar/providers/helios-lidar-uk';
+import { spainPnoaLidar }       from './helios-lidar/providers/helios-lidar-es';
+import { netherlandsAhn4 }      from './helios-lidar/providers/helios-lidar-nl';
+import { norwayKartverketNhm }  from './helios-lidar/providers/helios-lidar-no';
 
-//Registered providers, ordered by preference. The first one that
-//covers the home wins. Currently France only.
+//Registered providers, ordered by preference. The first provider
+//whose covers() probe accepts the home position wins. Bbox checks
+//are non-overlapping today (one country per provider) but the
+//ordering is conservative: France first because that's the only
+//provider with a single-fetch normalised raster (BIL float32, no
+//GeoTIFF parse, no DSM-DTM subtraction round-trip).
 export const LIDAR_SOURCES: LidarSource[] = [
-    franceLidarHd
+    franceLidarHd,
+    englandLidarComposite,
+    spainPnoaLidar,
+    netherlandsAhn4,
+    norwayKartverketNhm
 ];
 
 export function findLidarSource(lat: number, lon: number): LidarSource | null
