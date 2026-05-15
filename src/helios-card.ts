@@ -258,7 +258,6 @@ export class HeliosCard extends LitElement
         batteryPowerLabel: { x: number; y: number };
         ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
-        bearing:           number;
     } | null = null;
     //Photovoltaic production state, populated when `pv-power-entity`
     //is configured. Live value from hass.states + historical series
@@ -3268,29 +3267,8 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                <!--  Compass needle, top-left. No bezel, no graduations:
-                      just a double-arrow with N (red) up / S (grey)
-                      down, laid flat on the same tilted plane as the
-                      map (pitch 55°) so it reads as if it's resting
-                      on the ground. The inner spin element counter-
-                      rotates by -bearing so the red half always points
-                      at true north regardless of the user's rotation.  -->
-                ${hasApiKey && layout ? html`
-                    <div class="overlay-top-left">
-                        <div class="compass-needle" aria-label="Compass">
-                            <div
-                                class="compass-needle-spin"
-                                style="transform: rotate(${-layout.bearing}deg)"
-                            >
-                                <div class="compass-needle-n"></div>
-                                <div class="compass-needle-s"></div>
-                            </div>
-                        </div>
-                    </div>
-                ` : nothing}
-
                 ${hasApiKey ? html`
-                    <div class="overlay-top-center">
+                    <div class="overlay-top-left">
                         <div class="clock">
                             <span class="clock-date">${displayDateLabel}</span>
                             <span class="clock-time">${displayTimeLabel}</span>
@@ -3561,7 +3539,16 @@ export class HeliosCard extends LitElement
                             </polygon>
                         ` : nothing}
                         ${(() => {
-                            //Sun disc, three concentric layers:
+                            //Sun disc, four concentric layers, painted
+                            //in render order (back to front):
+                            //  0. Halo, soft glow whose radius (3 ×
+                            //     disc) and opacity (irradianceRatio ×
+                            //     0.55) both scale with irradiance, so
+                            //     a clear-sky noon sun radiates a
+                            //     visible aura while a cloudy or low-
+                            //     altitude sun stays compact. Blurred
+                            //     via CSS filter so the edges feather
+                            //     gently into the basemap.
                             //  1. Background fill (configured colour at
                             //     SUN_FILL_OPACITY_BG) so the empty disc
                             //     reads as faintly tinted glass.
@@ -3579,7 +3566,21 @@ export class HeliosCard extends LitElement
                             const r = HeliosCard.SUN_R_FAR
                                     + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene!.sun.nearness;
                             const rInner = r * sunFillRatio;
+                            //Halo proportional to live irradiance,
+                            //saturating at 1000 W/m² (clear-sky noon).
+                            //Same square-root mapping as sunFillRatio so
+                            //a 50 % reading visually halves the AREA of
+                            //the glow rather than its radius.
+                            const haloR     = r * 3;
+                            const haloAlpha = sunFillRatio * 0.55;
                             return svg`
+                                <circle
+                                    class="solar-sun-halo"
+                                    cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"
+                                    r="${haloR}"
+                                    fill="${sunColor}"
+                                    fill-opacity="${haloAlpha}"
+                                ></circle>
                                 <circle
                                     class="solar-sun-bg"
                                     cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}"

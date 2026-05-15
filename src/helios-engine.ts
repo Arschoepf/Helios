@@ -469,7 +469,7 @@ const CLOUD_CIRCLE_SEGMENTS     = 128;
 //(minus the battery vertical offset); the PV chip is mirrored
 //below the shelf. Adjusting this single constant slides the whole
 //cluster up or down without disturbing its internal geometry.
-const PV_CHIP_OFFSET_PX         = 105;
+const PV_CHIP_OFFSET_PX         = 65;
 
 
 //Solar-arc parameters. The arc traces the sun's full 24h
@@ -2899,7 +2899,6 @@ export class HeliosEngine
         batteryPowerLabel: { x: number; y: number };
         ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
-        bearing:           number;
     } | null
     {
         if (!this.map)
@@ -2961,7 +2960,7 @@ export class HeliosEngine
         //    PV chip's TOP edge upward to the shelf, then horizontally
         //    to the SoC / Power chip.
         const BATTERY_CHIP_X_OFFSET_PX = 80;
-        const BATTERY_CHIP_Y_OFFSET_PX = 40;
+        const BATTERY_CHIP_Y_OFFSET_PX = 20;
         const shelfY = home.y - PV_CHIP_OFFSET_PX + BATTERY_CHIP_Y_OFFSET_PX;
         const pvX    = home.x;
         const pvY    = shelfY + BATTERY_CHIP_Y_OFFSET_PX;
@@ -2972,12 +2971,7 @@ export class HeliosEngine
             batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
             batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
             ringEdge:          { x: ringEdgeX,                      y: ringEdgeY   },
-            home:              { x: home.x,                         y: home.y      },
-            //Current camera bearing in degrees clockwise from true
-            //north, as MapLibre reports it. The card uses this to
-            //counter-rotate the corner compass so its N marker keeps
-            //pointing at true north regardless of the user's spin.
-            bearing:           m.getBearing()
+            home:              { x: home.x,                         y: home.y      }
         };
     }
 

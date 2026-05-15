@@ -26595,7 +26595,7 @@ function buildCirclePolygon(centerLon, centerLat, radiusMetres, segments = 64) {
 }
 const CLOUD_DISC_RADIUS_M = 30;
 const CLOUD_CIRCLE_SEGMENTS = 128;
-const PV_CHIP_OFFSET_PX = 105;
+const PV_CHIP_OFFSET_PX = 65;
 const SUN_ARC_RADIUS_M = 40;
 const SUN_ARC_SAMPLES = 96;
 const SUN_ARC_NIGHT_OPACITY = 0.25;
@@ -28169,7 +28169,7 @@ const _HeliosEngine = class _HeliosEngine {
     const cloudLabelX = ringEdgeX + radDX / radLen * CLOUD_CHIP_NUDGE_PX;
     const cloudLabelY = ringEdgeY + radDY / radLen * CLOUD_CHIP_NUDGE_PX;
     const BATTERY_CHIP_X_OFFSET_PX = 80;
-    const BATTERY_CHIP_Y_OFFSET_PX = 40;
+    const BATTERY_CHIP_Y_OFFSET_PX = 20;
     const shelfY = home.y - PV_CHIP_OFFSET_PX + BATTERY_CHIP_Y_OFFSET_PX;
     const pvX = home.x;
     const pvY = shelfY + BATTERY_CHIP_Y_OFFSET_PX;
@@ -28179,12 +28179,7 @@ const _HeliosEngine = class _HeliosEngine {
       batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       ringEdge: { x: ringEdgeX, y: ringEdgeY },
-      home: { x: home.x, y: home.y },
-      //Current camera bearing in degrees clockwise from true
-      //north, as MapLibre reports it. The card uses this to
-      //counter-rotate the corner compass so its N marker keeps
-      //pointing at true north regardless of the user's spin.
-      bearing: m2.getBearing()
+      home: { x: home.x, y: home.y }
     };
   }
   //Project a 3D point (longitude, latitude, altitude_m) into
@@ -29957,28 +29952,10 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Top corner overlays. Date/time chip on the right; "back to
-        live" chip on the left when scrubbed. */
-
-    /*  Top-row overlay, the clock centres horizontally above the
-        card, with an optional "back to live" tab hanging from its
-        bottom-centre when the user has scrubbed away from now. The
-        wrapper is a vertical flex column so the tab stacks under
-        the clock automatically; both elements share the same X
-        anchor (the column's centre = the card's centre). */
-    .overlay-top-center
-    {
-        position: absolute;
-        /*  Matches the timeline's bottom: 8px so the clock and the
-            timeline sit at symmetric distance from the card edges. */
-        top: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 5;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
+    /*  Top corner overlays. Date/time chip on the left; back-to-live
+        + LiDAR busy chip column on the right. Both rails sit 8 px
+        from the card edge so they read as a paired pair anchored
+        to the frame, mirroring the timeline's edge margin. */
 
     /*  Date/time chip, same chip language as the on-map readouts. */
     .clock
@@ -30007,18 +29984,18 @@ const heliosCardStyles = i$3`
 
     /*  "Back to live" button, top-right rail. Same blue plate as the
         on-chart scrub cursor and the scrub-time pill, white restore
-        icon centred. 28 × 28 px square chip matching the LiDAR busy
-        chip's footprint so the two stack into a clean vertical column
-        when both are visible. Mobile-friendly tap target, pointer
-        events on so the button stays clickable even though its parent
-        rail has events off. */
+        icon centred. Sized to match the clock chip's rendered height
+        (12 px text + 2 px line-height + 4 px padding + 2 px border
+        ≈ 22 px) so the top-left clock and the top-right button read
+        as a balanced paired pair. Square chip so the LiDAR busy chip
+        below stacks cleanly into the same column. */
     .live-return-btn
     {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width:  28px;
-        height: 28px;
+        width:  22px;
+        height: 22px;
         padding: 0;
         background: rgba(31, 111, 235, 0.95);
         color: white;
@@ -30035,7 +30012,7 @@ const heliosCardStyles = i$3`
 
     .live-return-btn ha-icon
     {
-        --mdc-icon-size: 18px;
+        --mdc-icon-size: 14px;
         color: white;
         display: inline-flex;
         align-items: center;
@@ -30058,8 +30035,10 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
-    /*  Compass anchor, mirrors overlay-top-right on the opposite edge
-        so the corner overlays sit at matching heights. */
+    /*  Top-left rail, mirrors overlay-top-right on the opposite edge
+        so the corner overlays sit at matching heights. Hosts the
+        date/time chip; pointer events stay off so the chip never
+        steals interaction from the map underneath. */
     .overlay-top-left
     {
         position: absolute;
@@ -30069,84 +30048,6 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
-    /*  Compass needle, no bezel. The outer container sets up the 3D
-        perspective + the same 55° pitch the MapLibre camera uses, so
-        the needle reads as if it's resting on the tilted ground plane.
-        The pitch value is hardcoded to match HeliosEngine's fixed
-        pitch: if that ever becomes user-configurable, expose it via
-        projectHomeLabelLayout and drive this transform from the layout. */
-    .compass-needle
-    {
-        width:  44px;
-        height: 44px;
-        perspective: 200px;
-        pointer-events: none;
-    }
-
-    /*  Spin layer, counter-rotates around the ground-plane normal by
-        the negated map bearing so the red N half always points at
-        true north. preserve-3d propagates the parent's perspective to
-        the children, otherwise the rotateX would collapse back to 2D
-        and the foreshortening cue would vanish. */
-    .compass-needle-spin
-    {
-        width:  100%;
-        height: 100%;
-        position: relative;
-        transform-style: preserve-3d;
-        transition: transform 120ms linear;
-    }
-
-    /*  Tilt wrapper baked into both halves, applied via the shared
-        transform on each triangle. We tilt INSIDE the spinning frame
-        so the needle stays laid on the ground plane regardless of
-        bearing, instead of being a static plane the needle paints on
-        top of (which would look like a 2D arrow that yaws but never
-        lays down). */
-    .compass-needle-n,
-    .compass-needle-s
-    {
-        position: absolute;
-        left: 50%;
-        width: 14px;
-        margin-left: -7px;
-        height: 22px;
-        backface-visibility: hidden;
-    }
-
-    /*  Red half, points UP toward N. clip-path carves the triangle so
-        we can paint a top-to-bottom gradient (a CSS border triangle
-        would be a single colour). Two gradients stacked: a lateral
-        light-to-dark sweep mimics a faceted needle catching light from
-        the upper-left, the linear vertical gradient brightens the tip
-        to suggest a sharp metal edge. The element is then laid back
-        with rotateX(55deg) so it appears to rest on the basemap. */
-    .compass-needle-n
-    {
-        top: 0;
-        background:
-            linear-gradient(95deg, rgba(255, 255, 255, 0.18) 0%, transparent 35%, rgba(0, 0, 0, 0.35) 100%),
-            linear-gradient(to bottom, #ff5e5e 0%, #c91313 70%, #7a0a0a 100%);
-        clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
-        transform: translateZ(0.5px) rotateX(55deg);
-        transform-origin: 50% 100%;
-        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
-    }
-
-    /*  Grey half, points DOWN toward S. Symmetric to the N half but
-        flipped, with a muted gunmetal palette so the eye locks on the
-        red side as the canonical direction marker. */
-    .compass-needle-s
-    {
-        top: 22px;
-        background:
-            linear-gradient(95deg, rgba(255, 255, 255, 0.15) 0%, transparent 40%, rgba(0, 0, 0, 0.40) 100%),
-            linear-gradient(to top, #4a4f57 0%, #2a2e34 70%, #18191c 100%);
-        clip-path: polygon(50% 100%, 100% 0%, 0% 0%);
-        transform: translateZ(0.5px) rotateX(55deg);
-        transform-origin: 50% 0%;
-        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
-    }
 
     /*  Passive 28 px square chip used as a "LiDAR shadow computing"
         indicator. Same visual language as the date/time clock (white
@@ -30404,6 +30305,15 @@ const heliosCardStyles = i$3`
     }
     .solar-svg-back  { z-index: 4; }
     .solar-svg-front { z-index: 7; }
+
+    /*  Sun halo, the outermost layer of the disc IIFE. The fill is
+        the configured sun colour at an irradiance-driven opacity;
+        the blur softens the edge into a glow that feathers gently
+        into the basemap. Kept at 8 px regardless of sun radius: a
+        constant absolute blur reads as a believable atmospheric
+        scatter, scaling it with the disc would either smear the
+        glow at high zoom or make it look hard at low zoom. */
+    .solar-sun-halo { filter: blur(8px); }
 
     /*  Cloud-cover overlay. Two polygons (the filled disc sized by
         the live cloud %, the fixed 100 % reference ring outline)
@@ -31741,7 +31651,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.4.0-beta.37"}`,
+      `%c☀ HELIOS%c v${"1.4.0-beta.38"}`,
       labelStyle,
       versionStyle
     );
@@ -31762,7 +31672,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.4.0-beta.37",
+        version: "1.4.0-beta.38",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -31770,7 +31680,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.4.0-beta.37"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.4.0-beta.38"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -33632,29 +33542,8 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
-                <!--  Compass needle, top-left. No bezel, no graduations:
-                      just a double-arrow with N (red) up / S (grey)
-                      down, laid flat on the same tilted plane as the
-                      map (pitch 55°) so it reads as if it's resting
-                      on the ground. The inner spin element counter-
-                      rotates by -bearing so the red half always points
-                      at true north regardless of the user's rotation.  -->
-                ${hasApiKey && layout ? b`
-                    <div class="overlay-top-left">
-                        <div class="compass-needle" aria-label="Compass">
-                            <div
-                                class="compass-needle-spin"
-                                style="transform: rotate(${-layout.bearing}deg)"
-                            >
-                                <div class="compass-needle-n"></div>
-                                <div class="compass-needle-s"></div>
-                            </div>
-                        </div>
-                    </div>
-                ` : A}
-
                 ${hasApiKey ? b`
-                    <div class="overlay-top-center">
+                    <div class="overlay-top-left">
                         <div class="clock">
                             <span class="clock-date">${displayDateLabel}</span>
                             <span class="clock-time">${displayTimeLabel}</span>
@@ -33900,7 +33789,16 @@ let HeliosCard = class extends i {
                         ${(() => {
       const r2 = HeliosCard.SUN_R_FAR + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene.sun.nearness;
       const rInner = r2 * sunFillRatio;
+      const haloR = r2 * 3;
+      const haloAlpha = sunFillRatio * 0.55;
       return w`
+                                <circle
+                                    class="solar-sun-halo"
+                                    cx="${sunScene.sun.x}" cy="${sunScene.sun.y}"
+                                    r="${haloR}"
+                                    fill="${sunColor}"
+                                    fill-opacity="${haloAlpha}"
+                                ></circle>
                                 <circle
                                     class="solar-sun-bg"
                                     cx="${sunScene.sun.x}" cy="${sunScene.sun.y}"

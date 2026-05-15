@@ -461,28 +461,10 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Top corner overlays. Date/time chip on the right; "back to
-        live" chip on the left when scrubbed. */
-
-    /*  Top-row overlay, the clock centres horizontally above the
-        card, with an optional "back to live" tab hanging from its
-        bottom-centre when the user has scrubbed away from now. The
-        wrapper is a vertical flex column so the tab stacks under
-        the clock automatically; both elements share the same X
-        anchor (the column's centre = the card's centre). */
-    .overlay-top-center
-    {
-        position: absolute;
-        /*  Matches the timeline's bottom: 8px so the clock and the
-            timeline sit at symmetric distance from the card edges. */
-        top: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 5;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
+    /*  Top corner overlays. Date/time chip on the left; back-to-live
+        + LiDAR busy chip column on the right. Both rails sit 8 px
+        from the card edge so they read as a paired pair anchored
+        to the frame, mirroring the timeline's edge margin. */
 
     /*  Date/time chip, same chip language as the on-map readouts. */
     .clock
@@ -511,18 +493,18 @@ export const heliosCardStyles = css`
 
     /*  "Back to live" button, top-right rail. Same blue plate as the
         on-chart scrub cursor and the scrub-time pill, white restore
-        icon centred. 28 × 28 px square chip matching the LiDAR busy
-        chip's footprint so the two stack into a clean vertical column
-        when both are visible. Mobile-friendly tap target, pointer
-        events on so the button stays clickable even though its parent
-        rail has events off. */
+        icon centred. Sized to match the clock chip's rendered height
+        (12 px text + 2 px line-height + 4 px padding + 2 px border
+        ≈ 22 px) so the top-left clock and the top-right button read
+        as a balanced paired pair. Square chip so the LiDAR busy chip
+        below stacks cleanly into the same column. */
     .live-return-btn
     {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width:  28px;
-        height: 28px;
+        width:  22px;
+        height: 22px;
         padding: 0;
         background: rgba(31, 111, 235, 0.95);
         color: white;
@@ -539,7 +521,7 @@ export const heliosCardStyles = css`
 
     .live-return-btn ha-icon
     {
-        --mdc-icon-size: 18px;
+        --mdc-icon-size: 14px;
         color: white;
         display: inline-flex;
         align-items: center;
@@ -562,8 +544,10 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Compass anchor, mirrors overlay-top-right on the opposite edge
-        so the corner overlays sit at matching heights. */
+    /*  Top-left rail, mirrors overlay-top-right on the opposite edge
+        so the corner overlays sit at matching heights. Hosts the
+        date/time chip; pointer events stay off so the chip never
+        steals interaction from the map underneath. */
     .overlay-top-left
     {
         position: absolute;
@@ -573,84 +557,6 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Compass needle, no bezel. The outer container sets up the 3D
-        perspective + the same 55° pitch the MapLibre camera uses, so
-        the needle reads as if it's resting on the tilted ground plane.
-        The pitch value is hardcoded to match HeliosEngine's fixed
-        pitch: if that ever becomes user-configurable, expose it via
-        projectHomeLabelLayout and drive this transform from the layout. */
-    .compass-needle
-    {
-        width:  44px;
-        height: 44px;
-        perspective: 200px;
-        pointer-events: none;
-    }
-
-    /*  Spin layer, counter-rotates around the ground-plane normal by
-        the negated map bearing so the red N half always points at
-        true north. preserve-3d propagates the parent's perspective to
-        the children, otherwise the rotateX would collapse back to 2D
-        and the foreshortening cue would vanish. */
-    .compass-needle-spin
-    {
-        width:  100%;
-        height: 100%;
-        position: relative;
-        transform-style: preserve-3d;
-        transition: transform 120ms linear;
-    }
-
-    /*  Tilt wrapper baked into both halves, applied via the shared
-        transform on each triangle. We tilt INSIDE the spinning frame
-        so the needle stays laid on the ground plane regardless of
-        bearing, instead of being a static plane the needle paints on
-        top of (which would look like a 2D arrow that yaws but never
-        lays down). */
-    .compass-needle-n,
-    .compass-needle-s
-    {
-        position: absolute;
-        left: 50%;
-        width: 14px;
-        margin-left: -7px;
-        height: 22px;
-        backface-visibility: hidden;
-    }
-
-    /*  Red half, points UP toward N. clip-path carves the triangle so
-        we can paint a top-to-bottom gradient (a CSS border triangle
-        would be a single colour). Two gradients stacked: a lateral
-        light-to-dark sweep mimics a faceted needle catching light from
-        the upper-left, the linear vertical gradient brightens the tip
-        to suggest a sharp metal edge. The element is then laid back
-        with rotateX(55deg) so it appears to rest on the basemap. */
-    .compass-needle-n
-    {
-        top: 0;
-        background:
-            linear-gradient(95deg, rgba(255, 255, 255, 0.18) 0%, transparent 35%, rgba(0, 0, 0, 0.35) 100%),
-            linear-gradient(to bottom, #ff5e5e 0%, #c91313 70%, #7a0a0a 100%);
-        clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
-        transform: translateZ(0.5px) rotateX(55deg);
-        transform-origin: 50% 100%;
-        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
-    }
-
-    /*  Grey half, points DOWN toward S. Symmetric to the N half but
-        flipped, with a muted gunmetal palette so the eye locks on the
-        red side as the canonical direction marker. */
-    .compass-needle-s
-    {
-        top: 22px;
-        background:
-            linear-gradient(95deg, rgba(255, 255, 255, 0.15) 0%, transparent 40%, rgba(0, 0, 0, 0.40) 100%),
-            linear-gradient(to top, #4a4f57 0%, #2a2e34 70%, #18191c 100%);
-        clip-path: polygon(50% 100%, 100% 0%, 0% 0%);
-        transform: translateZ(0.5px) rotateX(55deg);
-        transform-origin: 50% 0%;
-        filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
-    }
 
     /*  Passive 28 px square chip used as a "LiDAR shadow computing"
         indicator. Same visual language as the date/time clock (white
@@ -908,6 +814,15 @@ export const heliosCardStyles = css`
     }
     .solar-svg-back  { z-index: 4; }
     .solar-svg-front { z-index: 7; }
+
+    /*  Sun halo, the outermost layer of the disc IIFE. The fill is
+        the configured sun colour at an irradiance-driven opacity;
+        the blur softens the edge into a glow that feathers gently
+        into the basemap. Kept at 8 px regardless of sun radius: a
+        constant absolute blur reads as a believable atmospheric
+        scatter, scaling it with the disc would either smear the
+        glow at high zoom or make it look hard at low zoom. */
+    .solar-sun-halo { filter: blur(8px); }
 
     /*  Cloud-cover overlay. Two polygons (the filled disc sized by
         the live cloud %, the fixed 100 % reference ring outline)
