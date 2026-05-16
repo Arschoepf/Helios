@@ -104,6 +104,14 @@ export const de: Translations = {
         lidarPrecisionHigh:    'Hoch',
         lidarPrecisionHint:    'Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen OpenFreeMap-Gebäudegrundrisse, und diese Option bleibt wirkungslos.',
         shadowOpacity:         'Schatten-Deckkraft *',
-        shadowOpacityHint:     'Deckkraft der am Boden geworfenen Schatten.'
+        shadowOpacityHint:     'Deckkraft der am Boden geworfenen Schatten.',
+        localLidarSection:     'Erweitert — Lokales LiDAR (BYO)',
+        localLidarHint:        'Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb der Bounding-Box ersetzt diese Quelle jeden nationalen Anbieter; außerhalb greift die normale Fallback-Kette.',
+        localLidarEnabled:     'Lokale Daten verwenden',
+        localLidarUrl:         'GeoTIFF-URL',
+        localLidarMinLat:      'Min. Breitengrad',
+        localLidarMaxLat:      'Max. Breitengrad',
+        localLidarMinLon:      'Min. Längengrad',
+        localLidarMaxLon:      'Max. Längengrad'
     }
 };

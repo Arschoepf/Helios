@@ -29700,6 +29700,70 @@ function subtractRasters(dsm, dtm) {
   }
   return out;
 }
+async function fetchFloat32GeoTiffWithNoData(url, rasterSize, signal) {
+  let resp;
+  try {
+    resp = await fetch(url, { signal });
+  } catch (_2) {
+    return null;
+  }
+  if (!resp.ok) return null;
+  let buf;
+  try {
+    buf = await resp.arrayBuffer();
+  } catch (_2) {
+    return null;
+  }
+  if (buf.byteLength < 200) return null;
+  let tiff;
+  try {
+    tiff = await fromArrayBuffer(buf);
+  } catch (_2) {
+    return null;
+  }
+  let image;
+  try {
+    image = await tiff.getImage();
+  } catch (_2) {
+    return null;
+  }
+  let noData = null;
+  try {
+    const anyImg = image;
+    if (typeof anyImg.getGDALNoData === "function") {
+      const raw2 = anyImg.getGDALNoData();
+      noData = typeof raw2 === "number" && Number.isFinite(raw2) ? raw2 : null;
+    }
+  } catch (_2) {
+    noData = null;
+  }
+  let rasters;
+  try {
+    rasters = await image.readRasters({
+      width: rasterSize,
+      height: rasterSize,
+      interleave: false,
+      samples: [0]
+    });
+  } catch (_2) {
+    return null;
+  }
+  let band;
+  if (Array.isArray(rasters)) {
+    if (rasters.length === 0) return null;
+    band = rasters[0];
+  } else {
+    band = rasters;
+  }
+  let data;
+  if (band instanceof Float32Array) {
+    data = band;
+  } else {
+    data = new Float32Array(band.length);
+    for (let i2 = 0; i2 < band.length; i2++) data[i2] = band[i2];
+  }
+  return { data, noData };
+}
 function maxRasters(a2, b2) {
   const N2 = Math.min(a2.length, b2.length);
   const out = new Float32Array(N2);
@@ -29941,6 +30005,62 @@ const norwayKartverketNhm = {
     });
   }
 };
+function normaliseLocalNdsmRaster(band, noData) {
+  const hasNoData = noData !== null && Number.isFinite(noData);
+  for (let i2 = 0; i2 < band.length; i2++) {
+    const v2 = band[i2];
+    if (hasNoData && v2 === noData) {
+      band[i2] = NaN;
+      continue;
+    }
+    if (!Number.isFinite(v2)) {
+      band[i2] = NaN;
+      continue;
+    }
+    if (v2 < 0) {
+      band[i2] = 0;
+      continue;
+    }
+  }
+  return band;
+}
+function createLocalNdsmSource(cfg) {
+  const { url, minLat, maxLat, minLon, maxLon } = cfg;
+  return {
+    id: "local-ndsm",
+    name: "Local nDSM GeoTIFF",
+    covers(lat, lon) {
+      return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
+    },
+    async fetchShadowRegions(opts) {
+      const rasterSize = Math.min(
+        RASTER_DEFAULTS.maxRasterSize,
+        Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+      );
+      let band;
+      let noData;
+      try {
+        const r2 = await fetchFloat32GeoTiffWithNoData(url, rasterSize, opts.signal);
+        band = r2 ? r2.data : null;
+        noData = r2 ? r2.noData : null;
+      } catch (_2) {
+        return emptyResult();
+      }
+      if (!band || band.length < rasterSize * rasterSize) return emptyResult();
+      normaliseLocalNdsmRaster(band, noData);
+      return processHeightRaster(band, {
+        rasterSize,
+        minLat,
+        maxLat,
+        minLon,
+        maxLon,
+        homeLat: opts.homeLat,
+        homeLon: opts.homeLon,
+        cropRadiusMeters: opts.cropRadiusMeters
+      });
+    }
+  };
+}
 const LIDAR_SOURCES = [
   franceLidarHd,
   englandLidarComposite,
@@ -29953,6 +30073,51 @@ function findLidarSource(lat, lon) {
     if (src.covers(lat, lon)) return src;
   }
   return null;
+}
+function validateLocalNdsmConfig(cfg) {
+  if (!cfg) return null;
+  if (cfg["lidar-local-ndsm-enabled"] !== true) return null;
+  const rawUrl = cfg["lidar-local-ndsm-url"];
+  if (typeof rawUrl !== "string") return null;
+  const url = rawUrl.trim();
+  if (url.length === 0) return null;
+  const minLat = numFromCfg(cfg["lidar-local-ndsm-min-lat"]);
+  const maxLat = numFromCfg(cfg["lidar-local-ndsm-max-lat"]);
+  const minLon = numFromCfg(cfg["lidar-local-ndsm-min-lon"]);
+  const maxLon = numFromCfg(cfg["lidar-local-ndsm-max-lon"]);
+  if (minLat === null || maxLat === null || minLon === null || maxLon === null) return null;
+  if (minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90) return null;
+  if (minLon < -180 || minLon > 180 || maxLon < -180 || maxLon > 180) return null;
+  if (!(minLat < maxLat)) return null;
+  if (!(minLon < maxLon)) return null;
+  return { url, minLat, maxLat, minLon, maxLon };
+}
+function numFromCfg(v2) {
+  if (typeof v2 === "number" && Number.isFinite(v2)) return v2;
+  if (typeof v2 === "string") {
+    const s2 = v2.trim();
+    if (s2.length === 0) return null;
+    const n3 = Number(s2);
+    return Number.isFinite(n3) ? n3 : null;
+  }
+  return null;
+}
+let _warnedInvalidLocalNdsm = false;
+function resolveLidarSource(lat, lon, cfg) {
+  const localCfg = validateLocalNdsmConfig(cfg);
+  if (cfg && cfg["lidar-local-ndsm-enabled"] === true && localCfg === null) {
+    if (!_warnedInvalidLocalNdsm) {
+      _warnedInvalidLocalNdsm = true;
+      console.warn(
+        "[HELIOS] lidar-local-ndsm-enabled is true but the local nDSM config is incomplete or invalid; falling back to public LiDAR providers and the OpenFreeMap building-footprint mask. Required keys: lidar-local-ndsm-url plus the four lidar-local-ndsm-{min,max}-{lat,lon} bbox values in EPSG:4326."
+      );
+    }
+  }
+  if (localCfg) {
+    const local = createLocalNdsmSource(localCfg);
+    if (local.covers(lat, lon)) return local;
+  }
+  return findLidarSource(lat, lon);
 }
 const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
@@ -31265,7 +31430,7 @@ const _HeliosEngine = class _HeliosEngine {
   //    MapTiler footprints (or to no shadows if disabled).
   _ensureLidarFetched() {
     if (!this.map) return;
-    const provider = findLidarSource(this.homeLat, this.homeLon);
+    const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
     if (!provider || !this._shadowsEnabled()) {
       this._lidarShadowFeatures = null;
       this._lidarShadowDiagnostics = null;
@@ -32050,7 +32215,7 @@ const _HeliosEngine = class _HeliosEngine {
   //hemisphere is kept, the sun-arc orientation depends on it), and
   //the API key never leaves the card-level snapshot anyway.
   getStatsSnapshot() {
-    const provider = findLidarSource(this.homeLat, this.homeLon);
+    const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
     const shadowsOn = this._shadowsEnabled();
     const lidarFeatures = this._lidarShadowFeatures;
     const buildingsFootprints = this._buildingsData ? {
@@ -32410,6 +32575,10 @@ const en = {
     batteryDischarged: "discharged"
   },
   editor: {
+    locationSection: "Location",
+    homeLatitude: "Home latitude *",
+    homeLongitude: "Home longitude *",
+    locationHint: "Override the home address used as the card's center. Leave both fields empty to use Home Assistant's configured home. The override is only applied when BOTH fields are set to valid coordinates; partial or out-of-range values silently fall back to the HA default.",
     mapSection: "Map",
     mapStyle: "Map style *",
     mapStyleHint: "Three basemaps: Streets (sober, urban), Topo (contour lines and earth tones, better in hilly terrain), or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). 3D buildings and labels behave identically on Streets and Topo. The dark variant of the chosen style is used automatically when the card theme is set to dark.",
@@ -32482,7 +32651,15 @@ const en = {
     lidarPrecisionHigh: "High",
     lidarPrecisionHint: "If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat OpenFreeMap building footprints and this setting has no effect.",
     shadowOpacity: "Shadow opacity *",
-    shadowOpacityHint: "Opacity of the cast ground shadows."
+    shadowOpacityHint: "Opacity of the cast ground shadows.",
+    localLidarSection: "Advanced — Local LiDAR (BYO)",
+    localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the bounding box this source replaces any national provider; outside, the regular fallback chain applies.",
+    localLidarEnabled: "Use local data",
+    localLidarUrl: "GeoTIFF URL",
+    localLidarMinLat: "Min latitude",
+    localLidarMaxLat: "Max latitude",
+    localLidarMinLon: "Min longitude",
+    localLidarMaxLon: "Max longitude"
   }
 };
 const fr = {
@@ -32507,6 +32684,10 @@ const fr = {
     batteryDischarged: "déchargé"
   },
   editor: {
+    locationSection: "Localisation",
+    homeLatitude: "Latitude du domicile *",
+    homeLongitude: "Longitude du domicile *",
+    locationHint: "Remplace l'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides ; toute valeur partielle ou hors plage est ignorée silencieusement.",
     mapSection: "Carte",
     mapStyle: "Style de la carte *",
     mapStyleHint: "Trois fonds de carte : Rues (sobre, urbain), Topo (lignes de niveau et tons terreux, idéal en zone vallonnée) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). Les bâtiments 3D et les libellés se comportent à l'identique sur Rues et Topo. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
@@ -32579,7 +32760,15 @@ const fr = {
     lidarPrecisionHigh: "Haute",
     lidarPrecisionHint: "Si ta zone est couverte par un provider LiDAR intégré à Helios, tu bénéficies d'ombres plus réalistes (bâtiments ET végétation). Des décalages peuvent apparaître entre les bâtiments affichés et leurs ombres : les données LiDAR sont enregistrées à un instant donné et ne reflètent pas toujours l'état actuel du terrain. Hors zone LiDAR, les ombres retombent sur les empreintes plates des bâtiments OpenFreeMap et cette option n'a aucun effet.",
     shadowOpacity: "Opacité des ombres *",
-    shadowOpacityHint: "Opacité des ombres projetées au sol."
+    shadowOpacityHint: "Opacité des ombres projetées au sol.",
+    localLidarSection: "Avancé — LiDAR local (BYO)",
+    localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la bbox cette source remplace tout fournisseur national ; à l'extérieur, la chaîne de repli habituelle s'applique.",
+    localLidarEnabled: "Utiliser les données locales",
+    localLidarUrl: "URL du GeoTIFF",
+    localLidarMinLat: "Latitude min",
+    localLidarMaxLat: "Latitude max",
+    localLidarMinLon: "Longitude min",
+    localLidarMaxLon: "Longitude max"
   }
 };
 const de = {
@@ -32604,6 +32793,10 @@ const de = {
     batteryDischarged: "entladen"
   },
   editor: {
+    locationSection: "Standort",
+    homeLatitude: "Breitengrad des Zuhauses *",
+    homeLongitude: "Längengrad des Zuhauses *",
+    locationHint: "Überschreibt die Heimadresse, die als Mittelpunkt der Karte verwendet wird. Beide Felder leer lassen, um die in Home Assistant konfigurierte Adresse zu nutzen. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten; unvollständige oder ungültige Werte werden ignoriert.",
     mapSection: "Karte",
     mapStyle: "Kartenstil *",
     mapStyleHint: "Drei Basiskarten: Straßen (nüchtern, urban), Topo (Höhenlinien und Erdtöne, ideal in hügeligem Gelände) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). 3D-Gebäude und Beschriftungen verhalten sich auf Straßen und Topo identisch. Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
@@ -32676,7 +32869,15 @@ const de = {
     lidarPrecisionHigh: "Hoch",
     lidarPrecisionHint: "Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen OpenFreeMap-Gebäudegrundrisse, und diese Option bleibt wirkungslos.",
     shadowOpacity: "Schatten-Deckkraft *",
-    shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten."
+    shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
+    localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
+    localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb der Bounding-Box ersetzt diese Quelle jeden nationalen Anbieter; außerhalb greift die normale Fallback-Kette.",
+    localLidarEnabled: "Lokale Daten verwenden",
+    localLidarUrl: "GeoTIFF-URL",
+    localLidarMinLat: "Min. Breitengrad",
+    localLidarMaxLat: "Max. Breitengrad",
+    localLidarMinLon: "Min. Längengrad",
+    localLidarMaxLon: "Max. Längengrad"
   }
 };
 const es = {
@@ -32701,6 +32902,10 @@ const es = {
     batteryDischarged: "descargado"
   },
   editor: {
+    locationSection: "Ubicación",
+    homeLatitude: "Latitud del hogar *",
+    homeLongitude: "Longitud del hogar *",
+    locationHint: "Anula la dirección del hogar usada como centro de la tarjeta. Deja ambos campos vacíos para usar el hogar configurado en Home Assistant. La anulación se aplica solo cuando AMBOS campos contienen coordenadas válidas; los valores parciales o fuera de rango se ignoran silenciosamente.",
     mapSection: "Mapa",
     mapStyle: "Estilo del mapa *",
     mapStyleHint: "Tres mapas base: Calles (sobrio, urbano), Topo (líneas de nivel y tonos terrosos, ideal en terreno montañoso) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). Los edificios 3D y las etiquetas se comportan igual en Calles y Topo. La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
@@ -32773,7 +32978,15 @@ const es = {
     lidarPrecisionHigh: "Alta",
     lidarPrecisionHint: "Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de los edificios OpenFreeMap y esta opción no tiene efecto.",
     shadowOpacity: "Opacidad de las sombras *",
-    shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo."
+    shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
+    localLidarSection: "Avanzado — LiDAR local (BYO)",
+    localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del bounding box esta fuente reemplaza cualquier proveedor nacional; fuera, se aplica la cadena de respaldo habitual.",
+    localLidarEnabled: "Usar datos locales",
+    localLidarUrl: "URL del GeoTIFF",
+    localLidarMinLat: "Latitud mín.",
+    localLidarMaxLat: "Latitud máx.",
+    localLidarMinLon: "Longitud mín.",
+    localLidarMaxLon: "Longitud máx."
   }
 };
 const it = {
@@ -32798,6 +33011,10 @@ const it = {
     batteryDischarged: "scaricato"
   },
   editor: {
+    locationSection: "Posizione",
+    homeLatitude: "Latitudine di casa *",
+    homeLongitude: "Longitudine di casa *",
+    locationHint: "Sovrascrive l'indirizzo di casa usato come centro della scheda. Lascia entrambi i campi vuoti per usare l'indirizzo configurato in Home Assistant. La sovrascrittura è applicata solo quando ENTRAMBI i campi contengono coordinate valide; valori parziali o fuori intervallo vengono ignorati silenziosamente.",
     mapSection: "Mappa",
     mapStyle: "Stile della mappa *",
     mapStyleHint: "Tre mappe di base: Strade (sobria, urbana), Topo (curve di livello e toni terrosi, ideale in terreno collinare) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). Gli edifici 3D e le etichette si comportano allo stesso modo su Strade e Topo. La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
@@ -32870,7 +33087,15 @@ const it = {
     lidarPrecisionHigh: "Alta",
     lidarPrecisionHint: "Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte degli edifici OpenFreeMap e questa opzione non ha alcun effetto.",
     shadowOpacity: "Opacità delle ombre *",
-    shadowOpacityHint: "Opacità delle ombre proiettate a terra."
+    shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
+    localLidarSection: "Avanzato — LiDAR locale (BYO)",
+    localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. Dentro la bounding box questa sorgente sostituisce qualsiasi provider nazionale; fuori, si applica la consueta catena di fallback.",
+    localLidarEnabled: "Usa dati locali",
+    localLidarUrl: "URL del GeoTIFF",
+    localLidarMinLat: "Latitudine min",
+    localLidarMaxLat: "Latitudine max",
+    localLidarMinLon: "Longitudine min",
+    localLidarMaxLon: "Longitudine max"
   }
 };
 const nl = {
@@ -32895,6 +33120,10 @@ const nl = {
     batteryDischarged: "ontladen"
   },
   editor: {
+    locationSection: "Locatie",
+    homeLatitude: "Breedtegraad woning *",
+    homeLongitude: "Lengtegraad woning *",
+    locationHint: "Overschrijft het thuisadres dat als middelpunt van de kaart wordt gebruikt. Laat beide velden leeg om het in Home Assistant geconfigureerde adres te gebruiken. De override geldt alleen wanneer BEIDE velden geldige coördinaten bevatten; gedeeltelijke of ongeldige waarden worden stilzwijgend genegeerd.",
     mapSection: "Kaart",
     mapStyle: "Kaartstijl *",
     mapStyleHint: "Drie basiskaarten: Straten (sober, stedelijk), Topo (hoogtelijnen en aardse tinten, ideaal in heuvelachtig terrein) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). 3D-gebouwen en labels gedragen zich identiek op Straten en Topo. De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
@@ -32967,7 +33196,15 @@ const nl = {
     lidarPrecisionHigh: "Hoog",
     lidarPrecisionHint: "Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte OpenFreeMap-gebouwomtreklijnen en heeft deze optie geen effect.",
     shadowOpacity: "Schaduwdekking *",
-    shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen."
+    shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
+    localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
+    localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen de bounding box vervangt deze bron elke nationale leverancier; daarbuiten geldt de gebruikelijke fallback-keten.",
+    localLidarEnabled: "Lokale data gebruiken",
+    localLidarUrl: "GeoTIFF-URL",
+    localLidarMinLat: "Min. breedtegraad",
+    localLidarMaxLat: "Max. breedtegraad",
+    localLidarMinLon: "Min. lengtegraad",
+    localLidarMaxLon: "Max. lengtegraad"
   }
 };
 const pt = {
@@ -32992,6 +33229,10 @@ const pt = {
     batteryDischarged: "descarregado"
   },
   editor: {
+    locationSection: "Localização",
+    homeLatitude: "Latitude de casa *",
+    homeLongitude: "Longitude de casa *",
+    locationHint: "Substitui o endereço de casa usado como centro do cartão. Deixe ambos os campos vazios para usar o endereço configurado no Home Assistant. A substituição só é aplicada quando AMBOS os campos contêm coordenadas válidas; valores parciais ou fora do intervalo são ignorados silenciosamente.",
     mapSection: "Mapa",
     mapStyle: "Estilo do mapa *",
     mapStyleHint: "Três mapas base: Ruas (sóbrio, urbano), Topo (curvas de nível e tons terrosos, ideal em terreno montanhoso) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). Os edifícios 3D e as etiquetas comportam-se de forma idêntica em Ruas e Topo. A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
@@ -33064,7 +33305,15 @@ const pt = {
     lidarPrecisionHigh: "Alta",
     lidarPrecisionHint: "Se a tua zona é coberta por um fornecedor LiDAR integrado no Helios, beneficias de sombras mais realistas (edifícios E vegetação). Podem aparecer desfasamentos entre os edifícios desenhados e as suas sombras: os dados LiDAR são capturados num instante preciso e nem sempre refletem o estado atual do terreno. Fora da cobertura LiDAR, as sombras voltam às impressões planas dos edifícios OpenFreeMap e esta opção não tem qualquer efeito.",
     shadowOpacity: "Opacidade das sombras *",
-    shadowOpacityHint: "Opacidade das sombras projetadas no chão."
+    shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
+    localLidarSection: "Avançado — LiDAR local (BYO)",
+    localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da bounding box esta fonte substitui qualquer fornecedor nacional; fora, aplica-se a cadeia de fallback habitual.",
+    localLidarEnabled: "Usar dados locais",
+    localLidarUrl: "URL do GeoTIFF",
+    localLidarMinLat: "Latitude mín.",
+    localLidarMaxLat: "Latitude máx.",
+    localLidarMinLon: "Longitude mín.",
+    localLidarMaxLon: "Longitude máx."
   }
 };
 const no = {
@@ -33089,6 +33338,10 @@ const no = {
     batteryDischarged: "utladet"
   },
   editor: {
+    locationSection: "Sted",
+    homeLatitude: "Hjemmets breddegrad *",
+    homeLongitude: "Hjemmets lengdegrad *",
+    locationHint: "Overstyrer hjemmeadressen som brukes som kortets sentrum. La begge feltene være tomme for å bruke hjemmet som er konfigurert i Home Assistant. Overstyringen brukes kun når BEGGE feltene har gyldige koordinater; ufullstendige eller ugyldige verdier ignoreres stille.",
     mapSection: "Kart",
     mapStyle: "Kartstil *",
     mapStyleHint: "Tre grunnkart: Gater (nøkternt, urbant), Topo (høydekoter og jordfargetoner, bedre i kupert terreng) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). 3D-bygninger og etiketter oppfører seg likt på Gater og Topo. Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.",
@@ -33161,7 +33414,15 @@ const no = {
     lidarPrecisionHigh: "Høy",
     lidarPrecisionHint: "Hvis huset ligger innenfor en LiDAR-leverandør integrert med Helios (Kartverket NHM for Norge), får du mer realistiske skygger (bygninger OG vegetasjon). Noe forskyvning kan oppstå mellom de viste bygningene og skyggene deres: LiDAR-undersøkelsen er fanget på en gitt dato og gjenspeiler kanskje ikke nåværende tilstand. Utenfor LiDAR-dekning faller skyggene tilbake til de flate OpenFreeMap-bygningsfotavtrykkene, og denne innstillingen har ingen effekt.",
     shadowOpacity: "Skyggeopasitet *",
-    shadowOpacityHint: "Opasitet for projiserte bakkeskygger."
+    shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
+    localLidarSection: "Avansert — Lokal LiDAR (BYO)",
+    localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor avgrensningsboksen erstatter denne kilden enhver nasjonal leverandør; utenfor gjelder vanlig fallback-kjede.",
+    localLidarEnabled: "Bruk lokale data",
+    localLidarUrl: "GeoTIFF-URL",
+    localLidarMinLat: "Min breddegrad",
+    localLidarMaxLat: "Maks breddegrad",
+    localLidarMinLon: "Min lengdegrad",
+    localLidarMaxLon: "Maks lengdegrad"
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt, no };
@@ -35348,8 +35609,39 @@ let HeliosCardEditor = class extends i {
   render() {
     const c2 = this._cfg;
     const t2 = this._t();
+    const haLat = this.hass?.config?.latitude;
+    const haLon = this.hass?.config?.longitude;
+    const latPlaceholder = typeof haLat === "number" && isFinite(haLat) ? String(haLat) : "52.379";
+    const lonPlaceholder = typeof haLon === "number" && isFinite(haLon) ? String(haLon) : "4.900";
     return b`
             <div class="editor">
+
+                <div class="section-title">${t2.editor.locationSection}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.homeLatitude}</span>
+                    <input
+                        type="number"
+                        min="-90"
+                        max="90"
+                        step="any"
+                        placeholder="${latPlaceholder}"
+                        .value="${c2["home-latitude"] != null ? String(c2["home-latitude"]) : ""}"
+                        @change="${(e2) => this._numField("home-latitude", e2)}"
+                    />
+                </label>
+                <label class="field">
+                    <span class="label">${t2.editor.homeLongitude}</span>
+                    <input
+                        type="number"
+                        min="-180"
+                        max="180"
+                        step="any"
+                        placeholder="${lonPlaceholder}"
+                        .value="${c2["home-longitude"] != null ? String(c2["home-longitude"]) : ""}"
+                        @change="${(e2) => this._numField("home-longitude", e2)}"
+                    />
+                </label>
+                <div class="hint">${t2.editor.locationHint}</div>
 
                 <div class="section-title">${t2.editor.mapSection}</div>
                 <label class="field">
@@ -35708,6 +36000,83 @@ let HeliosCardEditor = class extends i {
                 </div>
                 <div class="hint">${t2.editor.timelineHint}</div>
 
+                <details class="advanced-section">
+                    <summary class="section-title section-title-collapse">${t2.editor.localLidarSection}</summary>
+                    <div class="hint">${t2.editor.localLidarHint}</div>
+                    <div class="field">
+                        <span class="label">${t2.editor.localLidarEnabled}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${c2["lidar-local-ndsm-enabled"] === true ? "active" : ""}"
+                                @click="${() => this._update("lidar-local-ndsm-enabled", true)}"
+                            >${t2.editor.autoRotateOn}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${c2["lidar-local-ndsm-enabled"] !== true ? "active" : ""}"
+                                @click="${() => this._update("lidar-local-ndsm-enabled", false)}"
+                            >${t2.editor.autoRotateOff}</button>
+                        </div>
+                    </div>
+                    <div class="field field-block">
+                        <span class="label">${t2.editor.localLidarUrl}</span>
+                        <input
+                            type="text"
+                            .value="${String(c2["lidar-local-ndsm-url"] ?? "")}"
+                            placeholder="/local/community/Helios/lidar/home-ndsm.tif"
+                            @change="${(e2) => this._str("lidar-local-ndsm-url", e2)}"
+                        />
+                    </div>
+                    <label class="field">
+                        <span class="label">${t2.editor.localLidarMinLat}</span>
+                        <input
+                            type="number"
+                            min="-90"
+                            max="90"
+                            step="any"
+                            placeholder="-33.900000"
+                            .value="${c2["lidar-local-ndsm-min-lat"] != null ? String(c2["lidar-local-ndsm-min-lat"]) : ""}"
+                            @change="${(e2) => this._numField("lidar-local-ndsm-min-lat", e2)}"
+                        />
+                    </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.localLidarMaxLat}</span>
+                        <input
+                            type="number"
+                            min="-90"
+                            max="90"
+                            step="any"
+                            placeholder="-33.890000"
+                            .value="${c2["lidar-local-ndsm-max-lat"] != null ? String(c2["lidar-local-ndsm-max-lat"]) : ""}"
+                            @change="${(e2) => this._numField("lidar-local-ndsm-max-lat", e2)}"
+                        />
+                    </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.localLidarMinLon}</span>
+                        <input
+                            type="number"
+                            min="-180"
+                            max="180"
+                            step="any"
+                            placeholder="151.200000"
+                            .value="${c2["lidar-local-ndsm-min-lon"] != null ? String(c2["lidar-local-ndsm-min-lon"]) : ""}"
+                            @change="${(e2) => this._numField("lidar-local-ndsm-min-lon", e2)}"
+                        />
+                    </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.localLidarMaxLon}</span>
+                        <input
+                            type="number"
+                            min="-180"
+                            max="180"
+                            step="any"
+                            placeholder="151.210000"
+                            .value="${c2["lidar-local-ndsm-max-lon"] != null ? String(c2["lidar-local-ndsm-max-lon"]) : ""}"
+                            @change="${(e2) => this._numField("lidar-local-ndsm-max-lon", e2)}"
+                        />
+                    </label>
+                </details>
+
             </div>
         `;
   }
@@ -35732,6 +36101,44 @@ HeliosCardEditor.styles = i$3`
             margin-top: 10px;
             padding-bottom: 4px;
             border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        }
+
+        /*  Collapsible "advanced" section. Uses native <details>/<summary>
+            so the open/closed state needs no JS plumbing and survives
+            keyboard navigation for free. The default disclosure triangle
+            is replaced by a custom chevron via ::before so the summary
+            row visually matches a regular .section-title heading with a
+            single rotating glyph that signals expandability.            */
+        details.advanced-section
+        {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        details.advanced-section > summary
+        {
+            list-style: none;
+            cursor: pointer;
+            user-select: none;
+        }
+        details.advanced-section > summary::-webkit-details-marker { display: none; }
+        details.advanced-section > summary.section-title-collapse
+        {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        details.advanced-section > summary.section-title-collapse::before
+        {
+            content: '▸';
+            display: inline-block;
+            font-size: 10px;
+            line-height: 1;
+            transition: transform 120ms ease-out;
+        }
+        details.advanced-section[open] > summary.section-title-collapse::before
+        {
+            transform: rotate(90deg);
         }
 
         .field-help
@@ -35928,7 +36335,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.1"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.2"}`,
       labelStyle,
       versionStyle
     );
@@ -35949,7 +36356,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.1",
+        version: "1.6.0-alpha.2",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -35957,7 +36364,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -36100,12 +36507,16 @@ let HeliosCard = class extends i {
   //Diagnostic snapshot returned to `window.heliosStats()`. Includes
   //the live config, the engine state snapshot when the engine is
   //up, and a small PV block summarising the most recent history
-  //fetch outcome. JSON-safe, no DOM references, no PII (engine
-  //snapshot already strips the home lat/lon).
+  //fetch outcome. JSON-safe, no DOM references, no PII: the engine
+  //snapshot strips its own hass.config-sourced lat/lon, and the loop
+  //below additionally omits the `home-latitude` / `home-longitude`
+  //card-config override so user-supplied home coordinates never leak
+  //into the diagnostics output either.
   getStatsSnapshot() {
     const cfg = {};
     if (this.config) {
       for (const [k2, v2] of Object.entries(this.config)) {
+        if (k2 === "home-latitude" || k2 === "home-longitude") continue;
         cfg[k2] = v2;
       }
     }
@@ -36124,25 +36535,65 @@ let HeliosCard = class extends i {
   //debug helpers. Clears the cached home key so the next `updated()`
   //pass sees `identityChanged` and re-inits the engine against the
   //new coordinates, then schedules a re-render to trigger that pass.
+  //
+  //The visual editor does NOT route through here when the user edits
+  //`home-latitude` / `home-longitude`: it dispatches `config-changed`,
+  //HA calls `setConfig()`, Lit re-renders, and `updated()` notices
+  //that `_getHomeCoords()` now resolves to a different key. The
+  //engine re-init falls out of that natural identity-drift path.
   invalidateLocation() {
     this._lastHomeKey = "";
     this.requestUpdate();
   }
-  //Resolves the home coordinates. Reads the debug override on
-  //`window.__heliosLocationOverride` first (set via the global
-  //`setHeliosLocation` helper), then falls back to HA's configured
-  //home at hass.config.{latitude,longitude}. Returns null only when
-  //neither source has a usable pair.
+  //Resolves the home coordinates. Three-tier precedence, in order:
+  //  1. `window.__heliosLocationOverride` , the debug helper set via
+  //     the global `setHeliosLocation()` console function. Highest
+  //     priority so a developer can always force a location regardless
+  //     of card config.
+  //  2. The card config keys `home-latitude` / `home-longitude`.
+  //     Applied only when BOTH parse as numbers (or numeric strings)
+  //     that are finite and in valid range (lat -90..90, lon
+  //     -180..180). Anything else , including missing, partial, the
+  //     empty string, booleans or arrays which `Number()` would
+  //     happily coerce to 0 , is silently rejected so a half-edited
+  //     YAML never warps the card to {0,0}.
+  //  3. Home Assistant's configured home at
+  //     hass.config.{latitude,longitude}.
+  //Returns null only when none of the three has a usable pair.
   _getHomeCoords() {
     const w2 = window;
     const o2 = w2.__heliosLocationOverride;
     if (o2 && typeof o2.lat === "number" && typeof o2.lon === "number" && isFinite(o2.lat) && isFinite(o2.lon)) {
       return { lat: o2.lat, lon: o2.lon };
     }
+    const cfgLat = this._parseConfigCoord(this.config?.["home-latitude"]);
+    const cfgLon = this._parseConfigCoord(this.config?.["home-longitude"]);
+    if (cfgLat !== null && cfgLon !== null && cfgLat >= -90 && cfgLat <= 90 && cfgLon >= -180 && cfgLon <= 180) {
+      return { lat: cfgLat, lon: cfgLon };
+    }
     const lat = this.hass?.config?.latitude;
     const lon = this.hass?.config?.longitude;
     if (typeof lat !== "number" || typeof lon !== "number") return null;
     return { lat, lon };
+  }
+  //Defensive parser for `home-latitude` / `home-longitude` raw values
+  //coming out of the card config. The config is typed `unknown`, so
+  //bare `Number()` is unsafe: `Number('')`, `Number(false)`, `Number([])`,
+  //`Number(null)` all return 0, which is a finite, in-range latitude
+  //(Atlantic Ocean off the Gulf of Guinea) and would silently win the
+  //range check in `_getHomeCoords`. Accept numbers as-is and parse
+  //strings that look like a decimal number; reject everything else.
+  _parseConfigCoord(raw2) {
+    if (typeof raw2 === "number") {
+      return isFinite(raw2) ? raw2 : null;
+    }
+    if (typeof raw2 === "string") {
+      const trimmed = raw2.trim();
+      if (trimmed === "") return null;
+      const n3 = Number(trimmed);
+      return isFinite(n3) ? n3 : null;
+    }
+    return null;
   }
   //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
   getCardSize() {
@@ -38975,7 +39426,16 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   "building-cluster-radius",
   "building-opacity",
   "building-color",
-  "pixel-ratio"
+  "pixel-ratio",
+  //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must
+  //invalidate the engine sig so the shadow pipeline reruns
+  //against the new provider config (toggle, URL or bbox).
+  "lidar-local-ndsm-enabled",
+  "lidar-local-ndsm-url",
+  "lidar-local-ndsm-min-lat",
+  "lidar-local-ndsm-max-lat",
+  "lidar-local-ndsm-min-lon",
+  "lidar-local-ndsm-max-lon"
 ];
 HeliosCard.INIT_DEBOUNCE_MS = 500;
 HeliosCard.PV_CALIB_WIPE_FLAG_KEY = "helios-pv-calib:wiped-v1";

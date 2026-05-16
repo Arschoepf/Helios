@@ -104,6 +104,14 @@ export const nl: Translations = {
         lidarPrecisionHigh:    'Hoog',
         lidarPrecisionHint:    'Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte OpenFreeMap-gebouwomtreklijnen en heeft deze optie geen effect.',
         shadowOpacity:         'Schaduwdekking *',
-        shadowOpacityHint:     'Dekking van de op de grond geprojecteerde schaduwen.'
+        shadowOpacityHint:     'Dekking van de op de grond geprojecteerde schaduwen.',
+        localLidarSection:     'Geavanceerd — Lokale LiDAR (BYO)',
+        localLidarHint:        'Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio\'s die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen de bounding box vervangt deze bron elke nationale leverancier; daarbuiten geldt de gebruikelijke fallback-keten.',
+        localLidarEnabled:     'Lokale data gebruiken',
+        localLidarUrl:         'GeoTIFF-URL',
+        localLidarMinLat:      'Min. breedtegraad',
+        localLidarMaxLat:      'Max. breedtegraad',
+        localLidarMinLon:      'Min. lengtegraad',
+        localLidarMaxLon:      'Max. lengtegraad'
     }
 };

@@ -91,6 +91,12 @@ Every option below is editable visually:
 | `shadows-enabled` | boolean | `true` | Master toggle for cast ground shadows. When `false`, no shadows are projected. When `true`, the source is picked automatically: a LiDAR provider when one covers the home (buildings AND vegetation), OpenFreeMap building footprints otherwise (buildings only). All shadows are clipped to the building visibility radius for consistency with the rendered surroundings. See [LiDAR coverage](#lidar-coverage). |
 | `lidar-precision` | `'low' \| 'medium' \| 'high'` | `'medium'` | LiDAR raster size when a provider covers the home. Higher = finer shadow contours but a bigger payload. `low` 256², `medium` 512², `high` 1024² (close to IGN native sampling). No effect out of coverage. |
 | `shadow-opacity` | 0–1 | `0.32` | Opacity of the cast ground shadows. |
+| `lidar-local-ndsm-enabled` | boolean | `false` | Optional. Master opt-in for the BYO local nDSM provider. When `true` AND every key below validates, Helios uses your own GeoTIFF as the shadow source inside the configured bbox, taking precedence over any national provider that would otherwise match. See [LiDAR coverage](#lidar-coverage). |
+| `lidar-local-ndsm-url` | string | - | Browser-reachable URL of your nDSM GeoTIFF / COG. Same-origin `/local/community/Helios/lidar/…tif` is the recommended host path. The raster must be an nDSM (height-above-ground, in metres) prepared offline, not a raw DSM/DTM. |
+| `lidar-local-ndsm-min-lat` | number | - | Southern edge of the raster's geographic extent, EPSG:4326 degrees. Required when the provider is enabled. |
+| `lidar-local-ndsm-max-lat` | number | - | Northern edge, EPSG:4326 degrees. Required when the provider is enabled. |
+| `lidar-local-ndsm-min-lon` | number | - | Western edge, EPSG:4326 degrees. Required when the provider is enabled. |
+| `lidar-local-ndsm-max-lon` | number | - | Eastern edge, EPSG:4326 degrees. Required when the provider is enabled. |
 | `sun-color` | hex | `#EF9F27` | Sun disc + arc + timeline irradiance area. |
 | `cloud-color` | hex | `#5A8DC4` | On-ground disc + timeline cloud area. |
 | `pv-power-entity` | entity_id | - | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |
@@ -152,6 +158,16 @@ If your country publishes a usable LiDAR HD endpoint (raw float heights via WMS 
 
 Out of coverage the card still renders shadows from OpenFreeMap building footprints, so the visual works worldwide, the LiDAR layer is a precision upgrade where available.
 
+### Bring your own LiDAR (advanced)
+
+If your region isn't covered by any of the public providers above but you have access to raw LiDAR data (e.g. via a national open-data portal), you can prepare a small nDSM GeoTIFF offline and have Helios use it as its shadow source within a bounding box you define.
+
+The card config exposes a `lidar-local-ndsm-*` family (visible in the editor's collapsed "Advanced — Local LiDAR (BYO)" section, hidden by default). When the toggle is on AND the URL + the 4 bounding-box keys all validate, this source takes precedence over any public provider that would otherwise match inside the bbox. Outside the bbox, the regular fallback chain (public providers → OpenFreeMap footprints) applies unchanged.
+
+What "nDSM" means: a normalised Digital Surface Model = DSM (top of canopy / rooftops) − DTM (bare earth), so each pixel holds height-above-ground in metres. A bare-earth DTM or a raw DSM is *not* a valid input — preparation has to happen offline (typically a few minutes in QGIS / GDAL / WhiteboxTools from the raw point cloud or the published DSM + DTM rasters). Host the resulting GeoTIFF anywhere your browser can fetch it (the recommended path is `/config/www/community/Helios/lidar/foo.tif`, exposed as `/local/community/Helios/lidar/foo.tif`).
+
+The BYO local nDSM provider was contributed by [@jourdant](https://github.com/jourdant) in [PR #5](https://github.com/ReikanYsora/Helios/pull/5), with the original idea credited to [@stephenwq](https://github.com/stephenwq). Initial use case: NSW Australia (raster prepared from the [NSW elevation portal](https://elevation.fsdf.org.au/)), where no national provider plug-in exists in Helios yet.
+
 ---
 
 ## Technical stack
@@ -206,6 +222,15 @@ HELIOS depends on several open data services. None require an account or API key
 * **National LiDAR providers** — IGN (France), Environment Agency (England), IGN España (Spain), PDOK (Netherlands), Kartverket (Norway). See [LiDAR coverage](#lidar-coverage) for the per-country credits.
 * **[MapLibre GL JS](https://maplibre.org/)** — the WebGL map engine that draws every frame.
 * **[geotiff.js](https://github.com/geotiffjs/geotiff.js)** — GeoTIFF Float32 decoder used by the UK / ES / NL / NO LiDAR providers.
+
+---
+
+## Contributors
+
+External contributors who have shaped the card beyond the core author:
+
+* **[@jourdant](https://github.com/jourdant)** — generic BYO local nDSM LiDAR provider ([PR #5](https://github.com/ReikanYsora/Helios/pull/5)), idea credited to [@stephenwq](https://github.com/stephenwq). Unlocks shadows in any region with raw LiDAR data available offline, initial use case NSW Australia.
+* **[@i6media](https://github.com/i6media)** (Frank Boon) — optional `home-latitude` / `home-longitude` overrides ([PR #9](https://github.com/ReikanYsora/Helios/pull/9)). Useful for shared HA installs, holiday / parents' homes, mobile setups, or multiple cards on one dashboard each visualising a different place.
 
 ---
 

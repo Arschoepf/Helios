@@ -398,7 +398,16 @@ export class HeliosCard extends LitElement
         'building-cluster-radius',
         'building-opacity',
         'building-color',
-        'pixel-ratio'
+        'pixel-ratio',
+        //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must
+        //invalidate the engine sig so the shadow pipeline reruns
+        //against the new provider config (toggle, URL or bbox).
+        'lidar-local-ndsm-enabled',
+        'lidar-local-ndsm-url',
+        'lidar-local-ndsm-min-lat',
+        'lidar-local-ndsm-max-lat',
+        'lidar-local-ndsm-min-lon',
+        'lidar-local-ndsm-max-lon'
     ] as const;
 
     //Cheap stable signature of the visual config, used to skip

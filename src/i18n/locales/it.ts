@@ -104,6 +104,14 @@ export const it: Translations = {
         lidarPrecisionHigh:    'Alta',
         lidarPrecisionHint:    'Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte degli edifici OpenFreeMap e questa opzione non ha alcun effetto.',
         shadowOpacity:         'Opacità delle ombre *',
-        shadowOpacityHint:     'Opacità delle ombre proiettate a terra.'
+        shadowOpacityHint:     'Opacità delle ombre proiettate a terra.',
+        localLidarSection:     'Avanzato — LiDAR locale (BYO)',
+        localLidarHint:        'Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. Dentro la bounding box questa sorgente sostituisce qualsiasi provider nazionale; fuori, si applica la consueta catena di fallback.',
+        localLidarEnabled:     'Usa dati locali',
+        localLidarUrl:         'URL del GeoTIFF',
+        localLidarMinLat:      'Latitudine min',
+        localLidarMaxLat:      'Latitudine max',
+        localLidarMinLon:      'Longitudine min',
+        localLidarMaxLon:      'Longitudine max'
     }
 };

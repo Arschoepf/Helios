@@ -183,6 +183,18 @@ export interface Translations
         //Opacity of the cast ground shadows, 0..1 slider in the editor.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
+        //Collapsible advanced section that lets a power user point
+        //Helios at their own nDSM GeoTIFF for shadow data. Hidden by
+        //default behind a <details>/<summary> toggle so the editor
+        //stays simple for the 99% of users who never need it.
+        localLidarSection:        string;
+        localLidarHint:           string;
+        localLidarEnabled:        string;
+        localLidarUrl:            string;
+        localLidarMinLat:         string;
+        localLidarMaxLat:         string;
+        localLidarMinLon:         string;
+        localLidarMaxLon:         string;
     };
 }
 

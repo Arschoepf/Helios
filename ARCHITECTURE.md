@@ -1,4 +1,4 @@
-# HELIOS, v1.5.1
+# HELIOS, v1.6.0-alpha.2
 
 HELIOS is a Home Assistant Lovelace custom card that visualises solar
 conditions at a home in real time: sun arc, irradiance, cloud cover,
@@ -15,6 +15,16 @@ shadow data comes from national open-data programmes credited
 per-country in the LiDAR section below. None of these services
 require an account, so HELIOS ships and runs without any user
 configuration of credentials.
+
+External contributors who have shaped surfaces of the card beyond the
+core author:
+
+* **[@jourdant](https://github.com/jourdant)** , generic BYO local
+  nDSM LiDAR provider in v1.6.0-alpha.2 (PR #5), idea credited to
+  [@stephenwq](https://github.com/stephenwq).
+* **[@i6media](https://github.com/i6media)** (Frank Boon) , optional
+  `home-latitude` / `home-longitude` overrides in v1.6.0-alpha.1
+  (PR #9).
 
 ---
 
@@ -709,6 +719,7 @@ Helios/
 │   ├── helios-lidar/
 │   │   ├── helios-lidar-pipeline.ts  Shared flood-fill + convex-hull pipeline
 │   │   ├── helios-lidar-geotiff.ts   Float32 GeoTIFF fetch + DSM-DTM math
+│   │   ├── helios-lidar-local-ndsm.ts  Generic BYO nDSM provider built on demand from card config
 │   │   └── providers/              One file per country
 │   │       ├── helios-lidar-fr.ts  IGN HD (metropolitan France + Corsica), BIL float32
 │   │       ├── helios-lidar-uk.ts  Defra LiDAR Composite (England), GeoTIFF DSM + DTM
@@ -782,6 +793,21 @@ Each `src/helios-*.ts` file has a clearly bounded responsibility:
   LiDAR support; its lazy-loaded codecs (pako, zstd, lerc, jpeg,
   lzw) are inlined into the single-file bundle by Vite
   `inlineDynamicImports`.
+* **helios-lidar/helios-lidar-local-ndsm.ts**, generic BYO nDSM
+  provider built on demand from card config (not registered in
+  `LIDAR_SOURCES`). Sibling `validateLocalNdsmConfig()` +
+  `resolveLidarSource()` helpers in `helios-lidar.ts` validate the
+  six `lidar-local-ndsm-*` keys, instantiate a per-config
+  `LidarSource`, and prefer it over any public provider that would
+  otherwise match inside the configured bounding box. Geotiff
+  decoding uses `fetchFloat32GeoTiffWithNoData()` (a sibling of
+  `fetchFloat32GeoTiff()` that also returns the GDAL_NODATA
+  sentinel so nodata cells can be mapped to NaN before the shared
+  pipeline runs). Contributed by [@jourdant](https://github.com/jourdant)
+  in PR #5, with the original idea credited to
+  [@stephenwq](https://github.com/stephenwq). Unlocks coverage in
+  any region with raw LiDAR data available offline (initial use
+  case: NSW Australia).
 * **helios-lidar/providers/helios-lidar-fr.ts**, IGN LiDAR HD
   pipeline for metropolitan France + Corsica. One WMS round-trip
   on `IGNF_LIDAR-HD_MNH_*` (`image/x-bil;bits=32`), feeds the

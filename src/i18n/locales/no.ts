@@ -113,6 +113,14 @@ export const no: Translations = {
         lidarPrecisionHigh:    'Høy',
         lidarPrecisionHint:    'Hvis huset ligger innenfor en LiDAR-leverandør integrert med Helios (Kartverket NHM for Norge), får du mer realistiske skygger (bygninger OG vegetasjon). Noe forskyvning kan oppstå mellom de viste bygningene og skyggene deres: LiDAR-undersøkelsen er fanget på en gitt dato og gjenspeiler kanskje ikke nåværende tilstand. Utenfor LiDAR-dekning faller skyggene tilbake til de flate OpenFreeMap-bygningsfotavtrykkene, og denne innstillingen har ingen effekt.',
         shadowOpacity:         'Skyggeopasitet *',
-        shadowOpacityHint:     'Opasitet for projiserte bakkeskygger.'
+        shadowOpacityHint:     'Opasitet for projiserte bakkeskygger.',
+        localLidarSection:     'Avansert — Lokal LiDAR (BYO)',
+        localLidarHint:        'Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor avgrensningsboksen erstatter denne kilden enhver nasjonal leverandør; utenfor gjelder vanlig fallback-kjede.',
+        localLidarEnabled:     'Bruk lokale data',
+        localLidarUrl:         'GeoTIFF-URL',
+        localLidarMinLat:      'Min breddegrad',
+        localLidarMaxLat:      'Maks breddegrad',
+        localLidarMinLon:      'Min lengdegrad',
+        localLidarMaxLon:      'Maks lengdegrad'
     }
 };

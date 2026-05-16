@@ -4,7 +4,7 @@ import { getSunPosition, computePvPower, computeIrradianceWm2 } from './helios-s
 import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './helios-weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildings';
 import { projectExtrusionShadows } from './helios-shadows';
-import { findLidarSource } from './helios-lidar';
+import { resolveLidarSource } from './helios-lidar';
 
 //Public types
 
@@ -146,6 +146,38 @@ export interface HeliosConfig
     'lidar-precision'?:       unknown;
     //Opacity of the cast ground shadow layer, 0..1. Default 0.32.
     'shadow-opacity'?:         unknown;
+    //Optional generic local nDSM (normalised Digital Surface Model)
+    //GeoTIFF LiDAR provider. Lets a user point Helios at a single
+    //browser-accessible Float32 GeoTIFF/COG containing height above
+    //ground in metres, prepared offline. The provider is generic:
+    //it carries no region-specific behaviour and is selected only
+    //when explicitly enabled, fully configured, and covering the
+    //home. When unset or disabled, Helios falls back to the public
+    //provider chain and the OpenFreeMap building-footprint mask
+    //exactly as before.
+    //  lidar-local-ndsm-enabled : boolean, default false. Master
+    //                             opt-in for this provider.
+    //  lidar-local-ndsm-url     : string, optional. Browser-reachable
+    //                             URL of the nDSM GeoTIFF (same-origin
+    //                             /local/... is the recommended path).
+    //  lidar-local-ndsm-min-lat : number, optional. Southern edge of
+    //                             the raster's geographic extent in
+    //                             EPSG:4326 degrees.
+    //  lidar-local-ndsm-max-lat : number, optional. Northern edge.
+    //  lidar-local-ndsm-min-lon : number, optional. Western edge.
+    //  lidar-local-ndsm-max-lon : number, optional. Eastern edge.
+    //The four bbox keys describe the raster's geographic frame at
+    //runtime. They drive both the cheap covers(lat, lon) gate and
+    //the RasterGeo extent passed to processHeightRaster() once the
+    //file is decoded. Invalid or incomplete local-provider config
+    //disables only the local provider instance; the rest of the
+    //card config remains valid.
+    'lidar-local-ndsm-enabled'? : unknown;
+    'lidar-local-ndsm-url'?     : unknown;
+    'lidar-local-ndsm-min-lat'? : unknown;
+    'lidar-local-ndsm-max-lat'? : unknown;
+    'lidar-local-ndsm-min-lon'? : unknown;
+    'lidar-local-ndsm-max-lon'? : unknown;
     //Optional override for the home location. When BOTH home-latitude
     //(-90..90) and home-longitude (-180..180) parse as finite numbers
     //in range, they are used as the home coordinates instead of
@@ -184,6 +216,12 @@ export const LIDAR_PRECISION_RASTER: Record<LidarPrecisionLevel, number> = {
 //Default opacity of the ground shadow layer when the user has not set
 //the `shadow-opacity` config option.
 export const DEFAULT_SHADOW_OPACITY = 0.32;
+
+//Default opt-in for the generic local-nDSM LiDAR provider. Exported
+//so the visual editor can render the matching toggle default. The
+//provider stays disabled until the user flips this AND supplies the
+//URL + bbox in the editor / YAML.
+export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 
 
 //Single ground-shadow layer, rendered as an image source rather
@@ -2384,7 +2422,7 @@ export class HeliosEngine
     {
         if (!this.map) return;
 
-        const provider = findLidarSource(this.homeLat, this.homeLon);
+        const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
         if (!provider || !this._shadowsEnabled())
         {
             this._lidarShadowFeatures    = null;
@@ -3657,7 +3695,7 @@ export class HeliosEngine
     //the API key never leaves the card-level snapshot anyway.
     public getStatsSnapshot(): Record<string, unknown>
     {
-        const provider = findLidarSource(this.homeLat, this.homeLon);
+        const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
         const shadowsOn = this._shadowsEnabled();
         const lidarFeatures = this._lidarShadowFeatures;
         const buildingsFootprints = this._buildingsData

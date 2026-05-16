@@ -910,6 +910,83 @@ export class HeliosCardEditor extends LitElement
                 </div>
                 <div class="hint">${t.editor.timelineHint}</div>
 
+                <details class="advanced-section">
+                    <summary class="section-title section-title-collapse">${t.editor.localLidarSection}</summary>
+                    <div class="hint">${t.editor.localLidarHint}</div>
+                    <div class="field">
+                        <span class="label">${t.editor.localLidarEnabled}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${c['lidar-local-ndsm-enabled'] === true ? 'active' : ''}"
+                                @click="${() => this._update('lidar-local-ndsm-enabled', true)}"
+                            >${t.editor.autoRotateOn}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${c['lidar-local-ndsm-enabled'] !== true ? 'active' : ''}"
+                                @click="${() => this._update('lidar-local-ndsm-enabled', false)}"
+                            >${t.editor.autoRotateOff}</button>
+                        </div>
+                    </div>
+                    <div class="field field-block">
+                        <span class="label">${t.editor.localLidarUrl}</span>
+                        <input
+                            type="text"
+                            .value="${String(c['lidar-local-ndsm-url'] ?? '')}"
+                            placeholder="/local/community/Helios/lidar/home-ndsm.tif"
+                            @change="${(e: Event) => this._str('lidar-local-ndsm-url', e)}"
+                        />
+                    </div>
+                    <label class="field">
+                        <span class="label">${t.editor.localLidarMinLat}</span>
+                        <input
+                            type="number"
+                            min="-90"
+                            max="90"
+                            step="any"
+                            placeholder="-33.900000"
+                            .value="${c['lidar-local-ndsm-min-lat'] != null ? String(c['lidar-local-ndsm-min-lat']) : ''}"
+                            @change="${(e: Event) => this._numField('lidar-local-ndsm-min-lat', e)}"
+                        />
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.localLidarMaxLat}</span>
+                        <input
+                            type="number"
+                            min="-90"
+                            max="90"
+                            step="any"
+                            placeholder="-33.890000"
+                            .value="${c['lidar-local-ndsm-max-lat'] != null ? String(c['lidar-local-ndsm-max-lat']) : ''}"
+                            @change="${(e: Event) => this._numField('lidar-local-ndsm-max-lat', e)}"
+                        />
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.localLidarMinLon}</span>
+                        <input
+                            type="number"
+                            min="-180"
+                            max="180"
+                            step="any"
+                            placeholder="151.200000"
+                            .value="${c['lidar-local-ndsm-min-lon'] != null ? String(c['lidar-local-ndsm-min-lon']) : ''}"
+                            @change="${(e: Event) => this._numField('lidar-local-ndsm-min-lon', e)}"
+                        />
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.localLidarMaxLon}</span>
+                        <input
+                            type="number"
+                            min="-180"
+                            max="180"
+                            step="any"
+                            placeholder="151.210000"
+                            .value="${c['lidar-local-ndsm-max-lon'] != null ? String(c['lidar-local-ndsm-max-lon']) : ''}"
+                            @change="${(e: Event) => this._numField('lidar-local-ndsm-max-lon', e)}"
+                        />
+                    </label>
+                </details>
+
             </div>
         `;
     }
@@ -933,6 +1010,44 @@ export class HeliosCardEditor extends LitElement
             margin-top: 10px;
             padding-bottom: 4px;
             border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        }
+
+        /*  Collapsible "advanced" section. Uses native <details>/<summary>
+            so the open/closed state needs no JS plumbing and survives
+            keyboard navigation for free. The default disclosure triangle
+            is replaced by a custom chevron via ::before so the summary
+            row visually matches a regular .section-title heading with a
+            single rotating glyph that signals expandability.            */
+        details.advanced-section
+        {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        details.advanced-section > summary
+        {
+            list-style: none;
+            cursor: pointer;
+            user-select: none;
+        }
+        details.advanced-section > summary::-webkit-details-marker { display: none; }
+        details.advanced-section > summary.section-title-collapse
+        {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        details.advanced-section > summary.section-title-collapse::before
+        {
+            content: '▸';
+            display: inline-block;
+            font-size: 10px;
+            line-height: 1;
+            transition: transform 120ms ease-out;
+        }
+        details.advanced-section[open] > summary.section-title-collapse::before
+        {
+            transform: rotate(90deg);
         }
 
         .field-help

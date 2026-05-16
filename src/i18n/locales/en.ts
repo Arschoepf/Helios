@@ -114,6 +114,14 @@ export const en: Translations = {
         lidarPrecisionHigh:    'High',
         lidarPrecisionHint:    'If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat OpenFreeMap building footprints and this setting has no effect.',
         shadowOpacity:         'Shadow opacity *',
-        shadowOpacityHint:     'Opacity of the cast ground shadows.'
+        shadowOpacityHint:     'Opacity of the cast ground shadows.',
+        localLidarSection:     'Advanced — Local LiDAR (BYO)',
+        localLidarHint:        'Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the bounding box this source replaces any national provider; outside, the regular fallback chain applies.',
+        localLidarEnabled:     'Use local data',
+        localLidarUrl:         'GeoTIFF URL',
+        localLidarMinLat:      'Min latitude',
+        localLidarMaxLat:      'Max latitude',
+        localLidarMinLon:      'Min longitude',
+        localLidarMaxLon:      'Max longitude'
     }
 };

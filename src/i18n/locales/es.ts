@@ -104,6 +104,14 @@ export const es: Translations = {
         lidarPrecisionHigh:    'Alta',
         lidarPrecisionHint:    'Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de los edificios OpenFreeMap y esta opción no tiene efecto.',
         shadowOpacity:         'Opacidad de las sombras *',
-        shadowOpacityHint:     'Opacidad de las sombras proyectadas en el suelo.'
+        shadowOpacityHint:     'Opacidad de las sombras proyectadas en el suelo.',
+        localLidarSection:     'Avanzado — LiDAR local (BYO)',
+        localLidarHint:        'Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del bounding box esta fuente reemplaza cualquier proveedor nacional; fuera, se aplica la cadena de respaldo habitual.',
+        localLidarEnabled:     'Usar datos locales',
+        localLidarUrl:         'URL del GeoTIFF',
+        localLidarMinLat:      'Latitud mín.',
+        localLidarMaxLat:      'Latitud máx.',
+        localLidarMinLon:      'Longitud mín.',
+        localLidarMaxLon:      'Longitud máx.'
     }
 };
