@@ -409,7 +409,10 @@ export const heliosCardStyles = css`
         background: rgba(0, 0, 0, 0.05);
         border: 1px solid rgba(0, 0, 0, 0.12);
         border-radius: 4px;
-        overflow: hidden;
+        /*  No overflow:hidden, the SVG fills the frame exactly with
+            no visual bleed and the tooltip needs to be free to
+            extend beyond the chart edges (otherwise it gets clipped
+            when the cursor sits on either end of the curve).        */
     }
     ha-card.theme-dark .dash-today-chart
     {

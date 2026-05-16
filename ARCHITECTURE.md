@@ -1,4 +1,4 @@
-# HELIOS, v1.5.0
+# HELIOS, v1.5.1
 
 HELIOS is a Home Assistant Lovelace custom card that visualises solar
 conditions at a home in real time: sun arc, irradiance, cloud cover,
@@ -21,6 +21,78 @@ configuration of credentials.
 ## Changelog
 
 Each entry consolidates everything between two stable releases.
+
+### v1.5.1, tilted-panel forecast, today cumulative chart, dashboard polish
+
+Hotfix-flavoured iteration on top of v1.5.0. Focused on the issues
+1.5.0's new users surfaced in the first 24 hours after release: an
+over-optimistic forecast for non-horizontal installs, a dashboard /
+timeline mismatch on the projected kWh, and visual polish on the new
+detail panel.
+
+**Tilted-panel forecast.** `computePvPower` gains an optional `panel`
+argument carrying `tiltDeg` and `azimuthDeg`. When tilt is greater
+than zero, the function switches from the horizontal-panel fast path
+to a Liu-Jordan isotropic transposition: GHI is split into direct
+(cos-of-incidence transposed via `R_b = cos θi / cos z`) and diffuse
+(`(1 + cos β) / 2`) components plus a 20 % albedo ground-reflection
+term. Two new editor config keys, `pv-tilt` (0..90 degrees) and
+`pv-azimuth` (0..360, clockwise from north, 180 = south), feed the
+helper `_pvPanelOrientation()` on the card side; defaults keep the
+horizontal-panel behaviour bit-for-bit unchanged. Closes #3. A user
+with vertical balcony panels was seeing 4.7 kWh predicted against
+1.1 kWh measured. With `pv-tilt: 90` + `pv-azimuth: 180`, the
+prediction lands in the realistic range and tracks reality through
+the day.
+
+**Dashboard / timeline forecast alignment.** The "Aujourd'hui" card
+was displaying a forecast figure that drifted from the value shown on
+the timeline above. Two root causes: (a) the cumulative-energy unit
+(`kWh`) was not handled by `_pvNormalizeToWatts`, which silently
+returned 0 after differentiation, zero-ing the observed contribution
+in `_computeTodayHourly`; (b) the dashboard's forecast was integrated
+via hourly bins while the timeline used the raw `_computeDailyKwhTotals`
+path. Both fixed: the cumulative-energy path now goes straight to
+watts via `value * 1000` after differentiation, and the dashboard
+reads today's forecast directly from `_computeDailyKwhTotals` so the
+two surfaces are guaranteed to agree.
+
+**Today cumulative chart.** The right half of the "Aujourd'hui" card,
+previously empty, now hosts a sparkline of the day's running kWh.
+Past portion is drawn from raw history (cumulative-energy sensors get
+a baseline-subtracted reading per sample; power sensors are
+integrated by trapezoidal rule); future portion extends with the
+hourly forecast bins, the boundary cleanly stitched at "now". A dot
+sits on every full hour and a hover line + travelling dot reveal a
+tooltip showing the exact cumulative kWh at the cursor's minute.
+Gated by a CSS container query on the section (`min-width: 380px`)
+so the chart only appears when the card has room to render it
+readably; below that, the layout falls back to the previous two-
+column shape.
+
+**"Pas encore produit" status + skeleton placeholder.** Two new UI
+states for the produced figure in the "Aujourd'hui" card: a
+shimmering skeleton replaces the value while the PV history fetch is
+in flight (so transient "0,0 kWh" stops reading as fact), and a
+small italic line ("production pas encore démarrée" / "production
+hasn't started yet" / 8 locales) sits under the value when produced
+is effectively zero and the forecast still expects a peak later in
+the day.
+
+**Battery cap double-edge fix.** The battery icon in the detail
+dashboard had a visible double stroke at the seam between the cap
+and the cell shell. Caused by two `<rect>` elements sharing their
+edge with `rx`-rounded corners pulling in the cap's bottom slightly,
+exposing the shell's top stroke alongside. Replaced by a single open
+`<path>` for the cap (top + two sides, no bottom edge) so the shell's
+top edge becomes the only stroke at the seam.
+
+**1 px border on travelling beads.** The animated discs that ride
+the PV → home and battery ↔ PV leader lines now carry a 1 px stroke
+(theme-aware: white on light, near-black on dark) with `paint-order:
+stroke fill` so they keep contrast against the map basemap, the
+home chip, and any background that happens to share their fill
+colour.
 
 ### v1.5.0, OpenFreeMap migration, manual PV peak, detail dashboard, multi-country LiDAR
 

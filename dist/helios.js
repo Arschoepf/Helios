@@ -33542,7 +33542,10 @@ const heliosCardStyles = i$3`
         background: rgba(0, 0, 0, 0.05);
         border: 1px solid rgba(0, 0, 0, 0.12);
         border-radius: 4px;
-        overflow: hidden;
+        /*  No overflow:hidden, the SVG fills the frame exactly with
+            no visual bleed and the tooltip needs to be free to
+            extend beyond the chart edges (otherwise it gets clipped
+            when the cursor sits on either end of the curve).        */
     }
     ha-card.theme-dark .dash-today-chart
     {
@@ -35877,7 +35880,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.5.1-beta.1"}`,
+      `%c☀ HELIOS%c v${"1.5.1"}`,
       labelStyle,
       versionStyle
     );
@@ -35898,7 +35901,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.5.1-beta.1",
+        version: "1.5.1",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -35906,7 +35909,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.5.1-beta.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.5.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
