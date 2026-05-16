@@ -32454,6 +32454,10 @@ const en = {
     batterySocEntityHelp: 'Pick a battery State of Charge sensor (%, usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
     batteryPowerEntity: "Power entity",
     batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
+    batteryPowerInvert: "Battery power sign",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Inverted",
+    batteryPowerInvertHelp: "Default (Standard): the battery entity already reports charging as positive and discharging as negative. Pick Inverted when your entity does the opposite (some GivEnergy / GivTCP setups), Helios will flip the value once at ingest so the chip readout, the leader arrow and the daily charged / discharged totals keep their meaning.",
     batteryColor: "Battery color *",
     buildingsSection: "Surrounding buildings",
     buildingsHint: 'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
@@ -32547,6 +32551,10 @@ const fr = {
     batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (%, typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
     batteryPowerEntity: "Entité de puissance",
     batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
+    batteryPowerInvert: "Signe de la puissance batterie",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Inversé",
+    batteryPowerInvertHelp: "Par défaut (Standard) : ton capteur batterie rapporte déjà la charge en positif et la décharge en négatif. Passe sur Inversé si ton capteur fait l'inverse (certaines installations GivEnergy / GivTCP), Helios inverse alors la valeur une fois à la lecture pour que la pastille, la flèche du leader et les totaux journaliers charge / décharge gardent leur sens.",
     batteryColor: "Couleur batterie *",
     buildingsSection: "Bâtiments alentour",
     buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
@@ -32640,6 +32648,10 @@ const de = {
     batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (%, typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
     batteryPowerEntity: "Leistungs-Entität",
     batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
+    batteryPowerInvert: "Vorzeichen der Batterieleistung",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Invertiert",
+    batteryPowerInvertHelp: "Standardmäßig meldet die Batterie-Entität das Laden als positiv und das Entladen als negativ. Wähle Invertiert, wenn deine Entität es umgekehrt macht (einige GivEnergy- / GivTCP-Setups). Helios dreht den Wert dann einmal beim Einlesen um, damit Chip-Anzeige, Flusspfeil und tägliche Lade- / Entladesummen ihre Bedeutung behalten.",
     batteryColor: "Batteriefarbe *",
     buildingsSection: "Umliegende Gebäude",
     buildingsHint: 'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
@@ -32733,6 +32745,10 @@ const es = {
     batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (%, típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
     batteryPowerEntity: "Entidad de potencia",
     batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
+    batteryPowerInvert: "Signo de la potencia de la batería",
+    batteryPowerInvertStandard: "Estándar",
+    batteryPowerInvertInverted: "Invertido",
+    batteryPowerInvertHelp: "Por defecto (Estándar) tu entidad de batería ya informa la carga como positivo y la descarga como negativo. Cambia a Invertido si tu entidad hace lo contrario (algunas instalaciones GivEnergy / GivTCP), Helios invertirá el valor una vez en la lectura para que la pastilla, la flecha del flujo y los totales diarios de carga / descarga conserven su significado.",
     batteryColor: "Color batería *",
     buildingsSection: "Edificios circundantes",
     buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».",
@@ -32826,6 +32842,10 @@ const it = {
     batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (%, tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
     batteryPowerEntity: "Entità di potenza",
     batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
+    batteryPowerInvert: "Segno della potenza della batteria",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Invertito",
+    batteryPowerInvertHelp: "Per impostazione predefinita (Standard) la tua entità batteria riporta la carica come positivo e la scarica come negativo. Scegli Invertito se la tua entità fa l'opposto (alcuni setup GivEnergy / GivTCP), Helios invertirà il valore una volta in lettura così che la pastiglia, la freccia del flusso e i totali giornalieri di carica / scarica mantengano il loro significato.",
     batteryColor: "Colore batteria *",
     buildingsSection: "Edifici circostanti",
     buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».",
@@ -32919,6 +32939,10 @@ const nl = {
     batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (%, meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
     batteryPowerEntity: "Vermogen-entiteit",
     batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
+    batteryPowerInvert: "Teken van het batterijvermogen",
+    batteryPowerInvertStandard: "Standaard",
+    batteryPowerInvertInverted: "Omgekeerd",
+    batteryPowerInvertHelp: "Standaard rapporteert je batterij-entiteit het laden als positief en het ontladen als negatief. Kies Omgekeerd als jouw entiteit het andersom doet (sommige GivEnergy- / GivTCP-installaties). Helios draait de waarde dan eenmalig om bij het inlezen, zodat de chip, de stroompijl en de dagelijkse laad- / ontlaadtotalen hun betekenis behouden.",
     batteryColor: "Batterijkleur *",
     buildingsSection: "Omliggende gebouwen",
     buildingsHint: 'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
@@ -33012,6 +33036,10 @@ const pt = {
     batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (%, normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
     batteryPowerEntity: "Entidade de potência",
     batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
+    batteryPowerInvert: "Sinal da potência da bateria",
+    batteryPowerInvertStandard: "Padrão",
+    batteryPowerInvertInverted: "Invertido",
+    batteryPowerInvertHelp: "Por predefinição (Padrão) a tua entidade de bateria reporta a carga como positivo e a descarga como negativo. Escolhe Invertido se a tua entidade faz o oposto (alguns setups GivEnergy / GivTCP), o Helios inverte então o valor uma vez na leitura para que a pastilha, a seta do fluxo e os totais diários de carga / descarga mantenham o sentido.",
     batteryColor: "Cor da bateria *",
     buildingsSection: "Edifícios circundantes",
     buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».",
@@ -33105,6 +33133,10 @@ const no = {
     batterySocEntityHelp: 'Velg en sensor for batteriets ladenivå (%, vanligvis med device_class "battery"). Vises som chip til venstre for PV-chipen med live prosent.',
     batteryPowerEntity: "Effekt-entitet",
     batteryPowerEntityHelp: "Velg en sensor for batterieffekt (W eller kW). Fortegnskonvensjonen følger entiteten selv; positiv tolkes som lading og vises ordrett på chipen (f.eks. «+3,00 kW» ved lading, «−1,20 kW» ved utlading).",
+    batteryPowerInvert: "Fortegn på batterieffekt",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Invertert",
+    batteryPowerInvertHelp: "Som standard rapporterer batteri-enheten lading som positivt og utlading som negativt. Velg Invertert hvis enheten din gjør motsatt (noen GivEnergy- / GivTCP-oppsett). Helios snur da verdien én gang ved innlesing, slik at chipen, strømpilen og daglige lade- / utladesummer beholder betydningen sin.",
     batteryColor: "Batterifarge *",
     buildingsSection: "Omkringliggende bygninger",
     buildingsHint: "For å holde kortet flytende i tette urbane områder rendres bare bygninger innenfor konfigurert radius rundt huset i 3D. Selve huset holdes alltid på full opasitet; nabobygninger rendres med konfigurert opasitet for å gi urban kontekst uten å konkurrere med dataovergangene. Klyngeradiusen grupperer tilkoblede uthus (verandaer, garasjer, skur) i «hus»-settet.",
@@ -35620,6 +35652,22 @@ let HeliosCardEditor = class extends i {
                     `}
                 </div>
                 <div class="field-help">${t2.editor.batteryPowerEntityHelp}</div>
+                <div class="field">
+                    <span class="label">${t2.editor.batteryPowerInvert}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${c2["battery-power-invert"] !== true ? "active" : ""}"
+                            @click="${() => this._update("battery-power-invert", false)}"
+                        >${t2.editor.batteryPowerInvertStandard}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${c2["battery-power-invert"] === true ? "active" : ""}"
+                            @click="${() => this._update("battery-power-invert", true)}"
+                        >${t2.editor.batteryPowerInvertInverted}</button>
+                    </div>
+                </div>
+                <div class="field-help">${t2.editor.batteryPowerInvertHelp}</div>
                 <label class="field">
                     <span class="label">${t2.editor.batteryColor}</span>
                     <helios-color-picker
@@ -35880,7 +35928,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.5.1"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.1"}`,
       labelStyle,
       versionStyle
     );
@@ -35901,7 +35949,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.5.1",
+        version: "1.6.0-alpha.1",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -35909,7 +35957,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.5.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -36322,7 +36370,7 @@ let HeliosCard = class extends i {
       const so = this.hass.states?.[powerEntity];
       const v2 = so ? parseFloat(so.state) : NaN;
       if (isFinite(v2)) {
-        nextPower = v2;
+        nextPower = this._batteryPowerInvert() ? -v2 : v2;
         nextUnit = so.attributes?.unit_of_measurement ?? "";
       }
     }
@@ -36346,7 +36394,7 @@ let HeliosCard = class extends i {
       return;
     }
     const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
-    const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}`;
+    const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}@inv=${this._batteryPowerInvert() ? 1 : 0}`;
     if (fetchKey === this._batteryFetchKey) {
       return;
     }
@@ -36427,7 +36475,11 @@ let HeliosCard = class extends i {
         this._batterySocHistory = null;
       }
       if (powerEntity) {
-        this._batteryPowerHistory = parseSeries(result?.[powerEntity] ?? []);
+        const series = parseSeries(result?.[powerEntity] ?? []);
+        if (this._batteryPowerInvert()) {
+          series.values = series.values.map((v2) => -v2);
+        }
+        this._batteryPowerHistory = series;
       } else {
         this._batteryPowerHistory = null;
       }
@@ -37356,6 +37408,14 @@ let HeliosCard = class extends i {
     const kwp = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
     if (!isFinite(kwp) || kwp <= 0) return null;
     return kwp * 10;
+  }
+  //True when the user has opted to invert the battery power sign.
+  //Applied once at ingest (live + history) so every downstream
+  //consumer (chip readout, flow arrow direction, charged /
+  //discharged sums) keeps its "positive = charging" assumption
+  //without an inline ternary at each call site.
+  _batteryPowerInvert() {
+    return this.config?.["battery-power-invert"] === true;
   }
   //Panel orientation derived from the editor config. Returns
   //undefined when no tilt is set, which keeps the prediction model

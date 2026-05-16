@@ -857,10 +857,15 @@ export class HeliosCard extends LitElement
         }
 
         //Power, keep the sign (positive = charging, negative =
-        //discharging) verbatim from the entity. Unit is captured so
-        //the chip renderer can format kW vs W; we don't normalise
-        //here because the entity's own unit IS the source of truth
-        //(some BMS expose W, others kW).
+        //discharging) verbatim from the entity unless the user has
+        //opted into `battery-power-invert`, in which case we flip
+        //the sign once at ingest so every downstream sign-aware site
+        //(chip readout, leader arrow direction, charged /
+        //discharged totals) reads the same convention regardless of
+        //how the underlying entity is wired. Unit is captured so the
+        //chip renderer can format kW vs W; we don't normalise here
+        //because the entity's own unit IS the source of truth (some
+        //BMS expose W, others kW).
         let nextPower: number | null = null;
         let nextUnit:  string        = '';
         if (powerEntity)
@@ -869,7 +874,7 @@ export class HeliosCard extends LitElement
             const v  = so ? parseFloat(so.state) : NaN;
             if (isFinite(v))
             {
-                nextPower = v;
+                nextPower = this._batteryPowerInvert() ? -v : v;
                 nextUnit  = so.attributes?.unit_of_measurement ?? '';
             }
         }
@@ -901,7 +906,11 @@ export class HeliosCard extends LitElement
             return;
         }
         const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
-        const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}`;
+        //Invert flag is part of the fetch key so a mid-session
+        //toggle (user flips the editor switch) invalidates the
+        //cached history and triggers a refetch that reapplies the
+        //new sign convention at parse time.
+        const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}@inv=${this._batteryPowerInvert() ? 1 : 0}`;
         if (fetchKey === this._batteryFetchKey)
         {
             return;
@@ -1011,7 +1020,17 @@ export class HeliosCard extends LitElement
             }
             if (powerEntity)
             {
-                this._batteryPowerHistory = parseSeries(result?.[powerEntity] ?? []);
+                const series = parseSeries(result?.[powerEntity] ?? []);
+                //Apply the user's invert preference once at parse
+                //time, identical to the live ingest path, so every
+                //chart / sum that consumes _batteryPowerHistory
+                //sees "positive = charging" regardless of the
+                //source entity's convention.
+                if (this._batteryPowerInvert())
+                {
+                    series.values = series.values.map(v => -v);
+                }
+                this._batteryPowerHistory = series;
             }
             else
             {
@@ -2498,6 +2517,16 @@ export class HeliosCard extends LitElement
         const kwp = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
         if (!isFinite(kwp) || kwp <= 0) return null;
         return kwp * 10;
+    }
+
+    //True when the user has opted to invert the battery power sign.
+    //Applied once at ingest (live + history) so every downstream
+    //consumer (chip readout, flow arrow direction, charged /
+    //discharged sums) keeps its "positive = charging" assumption
+    //without an inline ternary at each call site.
+    private _batteryPowerInvert(): boolean
+    {
+        return this.config?.['battery-power-invert'] === true;
     }
 
     //Panel orientation derived from the editor config. Returns

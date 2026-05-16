@@ -75,6 +75,13 @@ export interface HeliosConfig
     //                         flow arrow). Defaults to a vivid purple.
     'battery-soc-entity'?:    unknown;
     'battery-power-entity'?:  unknown;
+    //Optional. When true, the live and historical battery power
+    //readings are multiplied by -1 before being stored. Use this
+    //when the upstream entity reports charging as negative and
+    //discharging as positive (some GivEnergy / GivTCP setups), so
+    //Helios's internal "positive = charging" convention keeps
+    //holding without a template sensor in front. Default false.
+    'battery-power-invert'?:  unknown;
     'battery-color'?:         unknown;
     'date-format'?:           unknown;
     //'12h' | '24h'. Default: '24h'. Picks between locale-

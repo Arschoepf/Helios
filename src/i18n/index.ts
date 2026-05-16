@@ -118,6 +118,15 @@ export interface Translations
         batterySocEntityHelp:     string;
         batteryPowerEntity:       string;
         batteryPowerEntityHelp:   string;
+        //Battery power sign-convention toggle. When the user's
+        //entity reports charging as negative (some GivEnergy /
+        //GivTCP setups), the inverted option flips the value once
+        //at ingest so the rest of the card stays on the
+        //"positive = charging" convention.
+        batteryPowerInvert:         string;
+        batteryPowerInvertStandard: string;
+        batteryPowerInvertInverted: string;
+        batteryPowerInvertHelp:     string;
         batteryColor:             string;
         //Display radius (m) around the home: everything outside this
         //disc is hidden by an opaque crop mask, regardless of what

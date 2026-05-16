@@ -815,6 +815,22 @@ export class HeliosCardEditor extends LitElement
                     `}
                 </div>
                 <div class="field-help">${t.editor.batteryPowerEntityHelp}</div>
+                <div class="field">
+                    <span class="label">${t.editor.batteryPowerInvert}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['battery-power-invert'] !== true) ? 'active' : ''}"
+                            @click="${() => this._update('battery-power-invert', false)}"
+                        >${t.editor.batteryPowerInvertStandard}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['battery-power-invert'] === true) ? 'active' : ''}"
+                            @click="${() => this._update('battery-power-invert', true)}"
+                        >${t.editor.batteryPowerInvertInverted}</button>
+                    </div>
+                </div>
+                <div class="field-help">${t.editor.batteryPowerInvertHelp}</div>
                 <label class="field">
                     <span class="label">${t.editor.batteryColor}</span>
                     <helios-color-picker
