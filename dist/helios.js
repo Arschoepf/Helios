@@ -24554,7 +24554,7 @@ function getSunPosition(date, lat, lon) {
   _sunCacheValue = result;
   return result;
 }
-function computePvPower(date, lat, lon, cloudCoverPct) {
+function computePvPower(date, lat, lon, cloudCoverPct, panel) {
   const sun = getSunPosition(date, lat, lon);
   const alt = sun.altitude;
   if (alt <= 0) return 0;
@@ -24564,7 +24564,21 @@ function computePvPower(date, lat, lon, cloudCoverPct) {
   const cc = Math.max(0, Math.min(100, cloudCoverPct)) / 100;
   const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
   const ghiEff = ghiClear * kCloud;
-  return Math.max(0, Math.min(100, ghiEff / 1e3 * 100));
+  if (!panel || panel.tiltDeg <= 0) {
+    return Math.max(0, Math.min(100, ghiEff / 1e3 * 100));
+  }
+  const beta = panel.tiltDeg * D2;
+  const dAz = (sun.azimuth - panel.azimuthDeg) * D2;
+  const altR = alt * D2;
+  const cosTheta = Math.sin(altR) * Math.cos(beta) + Math.cos(altR) * Math.sin(beta) * Math.cos(dAz);
+  const directFraction = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
+  const diffuseFraction = 1 - directFraction;
+  const Rb = cosTheta > 0 ? Math.max(0, cosTheta) / Math.max(0.087, cosZ) : 0;
+  const directPoa = ghiEff * directFraction * Rb;
+  const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
+  const groundPoa = ghiEff * 0.2 * (1 - Math.cos(beta)) / 2;
+  const poaEff = directPoa + diffusePoa + groundPoa;
+  return Math.max(0, Math.min(100, poaEff / 1e3 * 100));
 }
 function computeIrradianceWm2(date, lat, lon, cloudCoverPct) {
   const sun = getSunPosition(date, lat, lon);
@@ -32388,6 +32402,7 @@ const en = {
     todayProduced: "produced",
     todayForecast: "forecast",
     todayPeak: "peak",
+    todayNotStartedYet: "production hasn't started yet",
     tomorrowLabel: "Tomorrow",
     tomorrowPeak: "peak expected around",
     batteryLabel: "Battery",
@@ -32428,6 +32443,10 @@ const en = {
     pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
     pvPeakPower: "Peak power (kWp)",
     pvPeakPowerHelp: "Installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty to hide the forecast; observed production and the daily peak still render.",
+    pvTilt: "Panel tilt (°)",
+    pvTiltHelp: "Tilt angle of your panels from horizontal, 0 for a flat install and 90 for a fully vertical install such as a balcony. Leave empty or set to 0 to keep the original flat-panel forecast. Combined with the azimuth, it powers a Liu-Jordan transposition that projects the predicted irradiance onto the panel plane, fixing the overshoot seen on steeply pitched roofs and balcony setups.",
+    pvAzimuth: "Panel azimuth (°)",
+    pvAzimuthHelp: "Compass bearing your panels face, clockwise from north: 0 = north, 90 = east, 180 = south, 270 = west. Defaults to 180 (south-facing) when tilt is set. Only used when tilt is greater than 0.",
     pvColor: "Production color *",
     batterySection: "Home battery",
     batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional; the chip on its side appears as soon as the entity is set.",
@@ -32476,6 +32495,7 @@ const fr = {
     todayProduced: "produit",
     todayForecast: "prévu",
     todayPeak: "pic",
+    todayNotStartedYet: "production pas encore démarrée",
     tomorrowLabel: "Demain",
     tomorrowPeak: "pic prévu vers",
     batteryLabel: "Batterie",
@@ -32516,6 +32536,10 @@ const fr = {
     pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
     pvPeakPower: "Puissance crête (kWp)",
     pvPeakPowerHelp: "Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.",
+    pvTilt: "Inclinaison des panneaux (°)",
+    pvTiltHelp: "Angle d'inclinaison de tes panneaux par rapport à l'horizontale, 0 pour une installation à plat et 90 pour une installation verticale (par exemple en balcon). Laisser vide ou à 0 conserve la prévision panneaux à plat d'origine. Combiné à l'azimut, ce réglage active une transposition Liu-Jordan qui projette l'irradiance prévue sur le plan des panneaux et corrige la surestimation visible sur les toits pentus et les installations balcon.",
+    pvAzimuth: "Azimut des panneaux (°)",
+    pvAzimuthHelp: "Orientation à la boussole vers laquelle tes panneaux sont tournés, sens horaire depuis le nord : 0 = nord, 90 = est, 180 = sud, 270 = ouest. Par défaut 180 (plein sud) quand une inclinaison est définie. Utilisé uniquement quand l'inclinaison est supérieure à 0.",
     pvColor: "Couleur de production *",
     batterySection: "Batterie domestique",
     batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles ; la pastille correspondante s'affiche dès que l'entité est renseignée.",
@@ -32564,6 +32588,7 @@ const de = {
     todayProduced: "erzeugt",
     todayForecast: "Prognose",
     todayPeak: "Spitze",
+    todayNotStartedYet: "Erzeugung noch nicht gestartet",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "Spitze erwartet gegen",
     batteryLabel: "Batterie",
@@ -32604,6 +32629,10 @@ const de = {
     pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
     pvPeakPower: "Spitzenleistung (kWp)",
     pvPeakPowerHelp: "Installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, um die Prognose auszublenden; gemessene Produktion und Tagesspitze werden weiter angezeigt.",
+    pvTilt: "Neigung der Module (°)",
+    pvTiltHelp: "Neigungswinkel deiner Module gegenüber der Horizontalen: 0 für eine flache Installation, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Leer lassen oder auf 0 setzen, um die ursprüngliche Flachdach-Prognose beizubehalten. Zusammen mit dem Azimut treibt der Wert eine Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert und so die deutliche Überschätzung auf Steildächern und Balkonanlagen korrigiert.",
+    pvAzimuth: "Azimut der Module (°)",
+    pvAzimuthHelp: "Kompassrichtung, in die deine Module zeigen, im Uhrzeigersinn ab Norden: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen. Standardmäßig 180 (Süd), wenn eine Neigung gesetzt ist. Wird nur verwendet, wenn die Neigung größer als 0 ist.",
     pvColor: "Produktionsfarbe *",
     batterySection: "Hausbatterie",
     batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional; der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
@@ -32652,6 +32681,7 @@ const es = {
     todayProduced: "producido",
     todayForecast: "previsto",
     todayPeak: "pico",
+    todayNotStartedYet: "producción aún no iniciada",
     tomorrowLabel: "Mañana",
     tomorrowPeak: "pico previsto sobre las",
     batteryLabel: "Batería",
@@ -32692,6 +32722,10 @@ const es = {
     pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
     pvPeakPower: "Potencia pico (kWp)",
     pvPeakPowerHelp: "Potencia pico instalada de tu campo en kilovatios-pico. Controla la curva de previsión punteada en el gráfico PV y la saturación del flujo PV → casa. Déjalo vacío para ocultar la previsión; la producción observada y el pico del día siguen mostrándose.",
+    pvTilt: "Inclinación de los paneles (°)",
+    pvTiltHelp: "Ángulo de inclinación de tus paneles respecto a la horizontal: 0 para una instalación plana y 90 para una completamente vertical (por ejemplo, balcón). Déjalo vacío o en 0 para mantener la previsión original de panel plano. Combinado con el azimut, activa una transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel y corrige la sobreestimación visible en tejados muy inclinados e instalaciones en balcón.",
+    pvAzimuth: "Azimut de los paneles (°)",
+    pvAzimuthHelp: "Orientación brújula a la que apuntan tus paneles, en sentido horario desde el norte: 0 = norte, 90 = este, 180 = sur, 270 = oeste. Por defecto 180 (sur) cuando hay inclinación. Solo se usa cuando la inclinación es mayor que 0.",
     pvColor: "Color de producción *",
     batterySection: "Batería doméstica",
     batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales; el chip correspondiente aparece en cuanto la entidad está definida.",
@@ -32740,6 +32774,7 @@ const it = {
     todayProduced: "prodotto",
     todayForecast: "previsto",
     todayPeak: "picco",
+    todayNotStartedYet: "produzione non ancora iniziata",
     tomorrowLabel: "Domani",
     tomorrowPeak: "picco previsto verso le",
     batteryLabel: "Batteria",
@@ -32780,6 +32815,10 @@ const it = {
     pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
     pvPeakPower: "Potenza di picco (kWp)",
     pvPeakPowerHelp: "Potenza di picco installata del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata sul grafico PV e la saturazione del flusso PV → casa. Lascia vuoto per nascondere la previsione; la produzione osservata e il picco del giorno restano visibili.",
+    pvTilt: "Inclinazione dei pannelli (°)",
+    pvTiltHelp: "Angolo di inclinazione dei tuoi pannelli rispetto all'orizzontale: 0 per un'installazione piana e 90 per una verticale (per esempio balcone). Lascia vuoto o imposta 0 per mantenere la previsione originale a pannello piano. Combinato con l'azimut, guida una trasposizione Liu-Jordan che proietta l'irradianza prevista sul piano del pannello e corregge la sovrastima visibile su tetti molto inclinati e installazioni a balcone.",
+    pvAzimuth: "Azimut dei pannelli (°)",
+    pvAzimuthHelp: "Orientamento bussola verso cui sono rivolti i tuoi pannelli, in senso orario da nord: 0 = nord, 90 = est, 180 = sud, 270 = ovest. Predefinito 180 (sud) quando è impostata un'inclinazione. Usato solo quando l'inclinazione è maggiore di 0.",
     pvColor: "Colore di produzione *",
     batterySection: "Batteria domestica",
     batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali; la pastiglia corrispondente appare appena l'entità è impostata.",
@@ -32828,6 +32867,7 @@ const nl = {
     todayProduced: "opgewekt",
     todayForecast: "verwacht",
     todayPeak: "piek",
+    todayNotStartedYet: "opwekking nog niet begonnen",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "piek verwacht rond",
     batteryLabel: "Batterij",
@@ -32868,6 +32908,10 @@ const nl = {
     pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
     pvPeakPower: "Piekvermogen (kWp)",
     pvPeakPowerHelp: "Geïnstalleerd piekvermogen van je panelen in kilowattpiek. Stuurt de gestippelde voorspellingslijn op de PV-grafiek en de stroomverzadiging van de PV → huis-leider. Laat leeg om de voorspelling te verbergen; gemeten productie en de dagelijkse piek blijven zichtbaar.",
+    pvTilt: "Hellingshoek panelen (°)",
+    pvTiltHelp: "Hellingshoek van je panelen ten opzichte van het horizontale vlak: 0 voor een platte opstelling, 90 voor volledig verticaal (bijvoorbeeld balkon). Laat leeg of zet op 0 om de oorspronkelijke vlakke prognose te behouden. Samen met de azimut stuurt deze instelling een Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert en zo de overschatting op steile daken en balkoninstallaties corrigeert.",
+    pvAzimuth: "Azimut panelen (°)",
+    pvAzimuthHelp: "Kompasrichting waarnaar je panelen wijzen, met de wijzers van de klok mee vanaf het noorden: 0 = noord, 90 = oost, 180 = zuid, 270 = west. Standaard 180 (pal zuid) wanneer een helling is ingesteld. Alleen actief wanneer de helling groter is dan 0.",
     pvColor: "Productiekleur *",
     batterySection: "Thuisbatterij",
     batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel; de bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
@@ -32916,6 +32960,7 @@ const pt = {
     todayProduced: "produzido",
     todayForecast: "previsto",
     todayPeak: "pico",
+    todayNotStartedYet: "produção ainda não iniciada",
     tomorrowLabel: "Amanhã",
     tomorrowPeak: "pico previsto por volta das",
     batteryLabel: "Bateria",
@@ -32956,6 +33001,10 @@ const pt = {
     pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
     pvPeakPower: "Potência de pico (kWp)",
     pvPeakPowerHelp: "Potência de pico instalada do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada no gráfico PV e a saturação do fluxo PV → casa. Deixa vazio para ocultar a previsão; a produção observada e o pico do dia continuam visíveis.",
+    pvTilt: "Inclinação dos painéis (°)",
+    pvTiltHelp: "Ângulo de inclinação dos teus painéis em relação à horizontal: 0 para uma instalação plana, 90 para totalmente vertical (por exemplo, varanda). Deixa vazio ou em 0 para manter a previsão original de painel plano. Combinado com o azimute, este valor aciona uma transposição Liu-Jordan que projeta a irradiância prevista sobre o plano do painel e corrige a sobreavaliação visível em telhados muito inclinados e instalações de varanda.",
+    pvAzimuth: "Azimute dos painéis (°)",
+    pvAzimuthHelp: "Orientação na bússola para onde os teus painéis apontam, no sentido horário a partir do norte: 0 = norte, 90 = este, 180 = sul, 270 = oeste. Predefinido 180 (sul) quando há uma inclinação. Só é usado quando a inclinação é superior a 0.",
     pvColor: "Cor de produção *",
     batterySection: "Bateria doméstica",
     batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais; o chip correspondente aparece assim que a entidade é definida.",
@@ -33004,6 +33053,7 @@ const no = {
     todayProduced: "produsert",
     todayForecast: "estimert",
     todayPeak: "topp",
+    todayNotStartedYet: "produksjon ikke startet ennå",
     tomorrowLabel: "I morgen",
     tomorrowPeak: "topp ventet rundt",
     batteryLabel: "Batteri",
@@ -33044,6 +33094,10 @@ const no = {
     pvEntityHelp: "Velg en sensor for sol-effekt eller -energi (W, kW, Wh, kWh).",
     pvPeakPower: "Toppeffekt (kWp)",
     pvPeakPowerHelp: "Installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen i PV-grafen og strømningsmetningen for PV → hus-leaderen. La stå tom for å skjule prognosen; observert produksjon og dagens topp tegnes likevel.",
+    pvTilt: "Helningsvinkel for panelene (°)",
+    pvTiltHelp: "Helningsvinkelen til panelene dine i forhold til vannrett: 0 for flat installasjon, 90 for helt vertikalt (for eksempel balkong). La feltet stå tomt eller sett 0 for å beholde den opprinnelige prognosen for flat plassering. Sammen med azimuten driver verdien en Liu-Jordan-transposisjon som projiserer forventet stråling på panelets plan, og retter overestimeringen som er synlig på bratte tak og balkonganlegg.",
+    pvAzimuth: "Azimut for panelene (°)",
+    pvAzimuthHelp: "Kompassretningen panelene peker mot, med klokken fra nord: 0 = nord, 90 = øst, 180 = sør, 270 = vest. Standardverdi 180 (sør) når helning er angitt. Brukes bare når helningen er større enn 0.",
     pvColor: "Produksjonsfarge *",
     batterySection: "Husbatteri",
     batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie; chipen på sin side vises så snart entiteten er satt.",
@@ -33422,6 +33476,15 @@ const heliosCardStyles = i$3`
 
     /*  Section: today                                                  */
 
+    /*  Container queries: the cumulative chart is rendered only when   */
+    /*  the section is wide enough to read comfortably (>= 380px).     */
+    /*  Below that, the chart is hidden via display:none and the       */
+    /*  side stack reclaims the layout space.                          */
+    .dash-section.dash-today
+    {
+        container-type: inline-size;
+        container-name: dash-today;
+    }
     .dash-today-body
     {
         display: flex;
@@ -33439,8 +33502,8 @@ const heliosCardStyles = i$3`
         display: flex;
         flex-direction: column;
         gap: 4px;
-        flex: 1;
         min-width: 0;
+        flex: 0 0 auto;
     }
     .dash-today-line
     {
@@ -33462,6 +33525,157 @@ const heliosCardStyles = i$3`
         opacity: 0.55;
     }
     .dash-today-forecast .dash-line-value { font-style: italic; }
+
+    /*  Cumulative production sparkline. Hidden on narrow cards via    */
+    /*  the container query so we never display a squashed graph.      */
+    /*  Sits to the right of the side stack, takes the remaining       */
+    /*  horizontal space, and has its own slightly darker panel +      */
+    /*  hairline border so it reads as a distinct chart frame.         */
+    .dash-today-chart
+    {
+        display: none;
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        height: 60px;
+        align-self: stretch;
+        background: rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    ha-card.theme-dark .dash-today-chart
+    {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    @container dash-today (min-width: 380px)
+    {
+        .dash-today-chart
+        {
+            display: block;
+        }
+    }
+    .dash-today-chart-svg
+    {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    .dash-today-chart-past
+    {
+        fill: none;
+        stroke-width: 1.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0.95;
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-today-chart-future
+    {
+        fill: none;
+        stroke-width: 1.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 3 2;
+        opacity: 0.7;
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-today-chart-dot
+    {
+        opacity: 0.9;
+    }
+    .dash-today-chart-hover-line
+    {
+        stroke: rgba(0, 0, 0, 0.45);
+        stroke-width: 1;
+        stroke-dasharray: 2 2;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .dash-today-chart-hover-line
+    {
+        stroke: rgba(255, 255, 255, 0.45);
+    }
+    .dash-today-chart-hover-dot
+    {
+        stroke: #ffffff;
+        stroke-width: 1;
+        paint-order: stroke fill;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .dash-today-chart-hover-dot
+    {
+        stroke: #191a1b;
+    }
+    .dash-today-chart-tooltip
+    {
+        position: absolute;
+        top: 4px;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.78);
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        white-space: nowrap;
+        pointer-events: none;
+        font-variant-numeric: tabular-nums;
+    }
+    ha-card.theme-dark .dash-today-chart-tooltip
+    {
+        background: rgba(255, 255, 255, 0.92);
+        color: #111111;
+    }
+
+    /*  Status line under the produced value when the day's            */
+    /*  production hasn't started yet (produced ~ 0, peak still in     */
+    /*  the future). Discreet, small, italic, full row.                */
+    .dash-today-status
+    {
+        font-size: 11px;
+        opacity: 0.6;
+        font-style: italic;
+        margin-top: 4px;
+    }
+
+    /*  Skeleton placeholder shown in place of the produced value      */
+    /*  while the HA history fetch is in flight. Same footprint as     */
+    /*  ".dash-stat-value" so layout stays stable when the data        */
+    /*  arrives. The shimmer pulse is purely cosmetic.                 */
+    .dash-stat-skeleton
+    {
+        display: inline-block;
+        width: 88px;
+        height: 28px;
+        border-radius: 4px;
+        background: linear-gradient(
+            90deg,
+            rgba(0, 0, 0, 0.08) 0%,
+            rgba(0, 0, 0, 0.18) 50%,
+            rgba(0, 0, 0, 0.08) 100%
+        );
+        background-size: 200% 100%;
+        animation: dash-skeleton-pulse 1.4s ease-in-out infinite;
+        vertical-align: middle;
+    }
+    ha-card.theme-dark .dash-stat-skeleton
+    {
+        background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.06) 0%,
+            rgba(255, 255, 255, 0.18) 50%,
+            rgba(255, 255, 255, 0.06) 100%
+        );
+        background-size: 200% 100%;
+    }
+    @keyframes dash-skeleton-pulse
+    {
+        0%   { background-position: 100% 0; }
+        100% { background-position: -100% 0; }
+    }
 
     /*  Section: tomorrow                                               */
 
@@ -34248,6 +34462,15 @@ const heliosCardStyles = i$3`
     .pv-home-leader-bead
     {
         opacity: 0.95;
+        stroke: #ffffff;
+        stroke-width: 1;
+        stroke-opacity: 0.85;
+        paint-order: stroke fill;
+    }
+    ha-card.theme-dark .pv-home-leader-bead
+    {
+        stroke: #191a1b;
+        stroke-opacity: 0.95;
     }
 
 
@@ -34284,6 +34507,15 @@ const heliosCardStyles = i$3`
     .battery-leader-bead
     {
         opacity: 0.95;
+        stroke: #ffffff;
+        stroke-width: 1;
+        stroke-opacity: 0.85;
+        paint-order: stroke fill;
+    }
+    ha-card.theme-dark .battery-leader-bead
+    {
+        stroke: #191a1b;
+        stroke-opacity: 0.95;
     }
 
     /*  Cloud-cover leader line, black hairline from chip to disc. */
@@ -35307,6 +35539,32 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="field-help">${t2.editor.pvPeakPowerHelp}</div>
                 <label class="field">
+                    <span class="label">${t2.editor.pvTilt}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        max="90"
+                        step="1"
+                        placeholder="0"
+                        .value="${c2["pv-tilt"] != null ? String(c2["pv-tilt"]) : ""}"
+                        @change="${(e2) => this._numField("pv-tilt", e2)}"
+                    />
+                </label>
+                <div class="field-help">${t2.editor.pvTiltHelp}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.pvAzimuth}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        max="360"
+                        step="1"
+                        placeholder="180"
+                        .value="${c2["pv-azimuth"] != null ? String(c2["pv-azimuth"]) : ""}"
+                        @change="${(e2) => this._numField("pv-azimuth", e2)}"
+                    />
+                </label>
+                <div class="field-help">${t2.editor.pvAzimuthHelp}</div>
+                <label class="field">
                     <span class="label">${t2.editor.pvColor}</span>
                     <helios-color-picker
                         .value="${cfgHex(c2["pv-color"], DEFAULT_PV_COLOR_HEX)}"
@@ -35619,7 +35877,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.5.0"}`,
+      `%c☀ HELIOS%c v${"1.5.1-beta.1"}`,
       labelStyle,
       versionStyle
     );
@@ -35640,7 +35898,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.5.0",
+        version: "1.5.1-beta.1",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -35648,7 +35906,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.5.0"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.5.1-beta.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -35725,6 +35983,7 @@ let HeliosCard = class extends i {
     this._cloudScene = null;
     this._homeSilhouettes = [];
     this._homeHover = false;
+    this._dashChartHoverTs = null;
     this._chartSeries = null;
     this._fetching = false;
     this._timeRange = null;
@@ -35740,6 +35999,24 @@ let HeliosCard = class extends i {
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
     this._boundPointerUp = (e2) => this._onTimelinePointerUp(e2);
+    this._onDashChartPointerMove = (e2) => {
+      const svg2 = e2.currentTarget;
+      if (!svg2) return;
+      const rect = svg2.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const W = 240, PAD_X = 4;
+      const fracPx = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
+      const xLogical = fracPx * W;
+      const today0 = /* @__PURE__ */ new Date();
+      today0.setHours(0, 0, 0, 0);
+      const startMs = today0.getTime();
+      const endMs = startMs + 24 * 36e5;
+      const tFrac = (xLogical - PAD_X) / (W - 2 * PAD_X);
+      this._dashChartHoverTs = startMs + Math.max(0, Math.min(1, tFrac)) * (endMs - startMs);
+    };
+    this._onDashChartPointerLeave = () => {
+      this._dashChartHoverTs = null;
+    };
     this._instanceId = `h${Math.floor(Math.random() * 1e9).toString(36)}`;
     this._onHomeEnter = () => {
       this._homeHover = true;
@@ -36686,7 +36963,7 @@ let HeliosCard = class extends i {
         if (tMs < nowMs) continue;
         if (tMs < startMs) continue;
         if (tMs > endMsAbs) continue;
-        const pct = computePvPower(series.times[i2], lat, lon, series.cloud[i2] ?? 0);
+        const pct = computePvPower(series.times[i2], lat, lon, series.cloud[i2] ?? 0, this._pvPanelOrientation());
         if (pct <= 0) continue;
         predictedSamples.push({ t: series.times[i2], v: pct * k2 * nativeFromW });
       }
@@ -36887,7 +37164,7 @@ let HeliosCard = class extends i {
         if (tMs < startMs || tMs > endMsAbs) continue;
         if (tMs < nowMs) continue;
         const cloud = series.cloud[i2] ?? 0;
-        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud);
+        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
         if (pct <= 0) continue;
         const kwh = pct * k2 / 1e3;
         const dk = dayKey(tMs);
@@ -37077,6 +37354,23 @@ let HeliosCard = class extends i {
     if (!isFinite(kwp) || kwp <= 0) return null;
     return kwp * 10;
   }
+  //Panel orientation derived from the editor config. Returns
+  //undefined when no tilt is set, which keeps the prediction model
+  //on the original horizontal-panel fast path. Setting tilt > 0
+  //enables the tilt/azimuth transposition in computePvPower so
+  //balcony / steeply-pitched roof installs stop seeing a flat-roof
+  //forecast that's wildly optimistic.
+  _pvPanelOrientation() {
+    const rawTilt = this.config?.["pv-tilt"];
+    const tilt = typeof rawTilt === "number" ? rawTilt : parseFloat(String(rawTilt ?? ""));
+    if (!isFinite(tilt) || tilt <= 0) return void 0;
+    const rawAz = this.config?.["pv-azimuth"];
+    const az = typeof rawAz === "number" ? rawAz : parseFloat(String(rawAz ?? ""));
+    return {
+      tiltDeg: Math.max(0, Math.min(90, tilt)),
+      azimuthDeg: isFinite(az) ? (az % 360 + 360) % 360 : 180
+    };
+  }
   _wipeLegacyPvCalibStorage() {
     try {
       if (window.localStorage?.getItem(HeliosCard.PV_CALIB_WIPE_FLAG_KEY) === "1") {
@@ -37193,7 +37487,7 @@ let HeliosCard = class extends i {
           }
         }
         const cloud = series.cloud[best] ?? 0;
-        const pct = computePvPower(this._selectedTime, coords.lat, coords.lon, cloud);
+        const pct = computePvPower(this._selectedTime, coords.lat, coords.lon, cloud, this._pvPanelOrientation());
         if (pct > 0) {
           pvPredictedRate = { value: pct * k2, unit: "W" };
         }
@@ -38009,7 +38303,7 @@ let HeliosCard = class extends i {
       for (let i2 = 0; i2 < times.length; i2++) {
         const tMs = times[i2].getTime();
         if (tMs < startMs || tMs >= endMs) continue;
-        const w2 = this._pvNormalizeToWatts(values2[i2], this._pvUnit);
+        const w2 = isCumulativeEnergy ? values2[i2] * 1e3 : this._pvNormalizeToWatts(values2[i2], this._pvUnit);
         if (!isFinite(w2)) continue;
         const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
         sums.set(hourTs, (sums.get(hourTs) ?? 0) + w2);
@@ -38031,7 +38325,7 @@ let HeliosCard = class extends i {
         const tMs = series.times[i2].getTime();
         if (tMs < startMs || tMs >= endMs) continue;
         const cloud = series.cloud[i2] ?? 0;
-        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud);
+        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
         if (pct < 0) continue;
         const watts = pct * k2;
         const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
@@ -38062,6 +38356,102 @@ let HeliosCard = class extends i {
     }
     return { bins, peakHourTs, peakW, producedKwh, forecastKwh };
   }
+  //Time-ordered cumulative production samples for today's chart.
+  //Past portion comes from the raw PV history (cumulative-energy
+  //sensors: subtract the day's baseline; power sensors: trapezoidal
+  //integration), future portion extends with the hourly forecast
+  //model. Hour marks are interpolated at every full hour so the
+  //chart can render a dot per hour without snapping the curve.
+  _computeTodayCumulative() {
+    const HOUR_MS = 36e5;
+    const today0 = /* @__PURE__ */ new Date();
+    today0.setHours(0, 0, 0, 0);
+    const startMs = today0.getTime();
+    const endMs = startMs + 24 * HOUR_MS;
+    const nowMs = Date.now();
+    const samples = [];
+    samples.push({ tMs: startMs, kwh: 0 });
+    let cumKwh = 0;
+    let pastEndMs = startMs;
+    const hist = this._pvHistory;
+    if (hist && hist.times.length > 0) {
+      const unit = (this._pvUnit || "").toLowerCase();
+      const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
+      const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
+      let baseline = null;
+      let prevT = null;
+      let prevW = null;
+      for (let i2 = 0; i2 < hist.times.length; i2++) {
+        const tMs = hist.times[i2].getTime();
+        if (tMs < startMs || tMs >= endMs) continue;
+        if (isCumulativeEnergy) {
+          const v2 = hist.values[i2] * energyFactor;
+          if (baseline === null) baseline = v2;
+          const kwh = Math.max(0, v2 - baseline);
+          samples.push({ tMs, kwh });
+          cumKwh = kwh;
+        } else {
+          const w2 = this._pvNormalizeToWatts(hist.values[i2], this._pvUnit);
+          if (!isFinite(w2)) continue;
+          if (prevT !== null && prevW !== null) {
+            const dh = (tMs - prevT) / HOUR_MS;
+            if (dh > 0 && dh <= 6) {
+              cumKwh += (prevW + w2) / 2 / 1e3 * dh;
+            }
+          }
+          samples.push({ tMs, kwh: cumKwh });
+          prevT = tMs;
+          prevW = w2;
+        }
+        pastEndMs = tMs;
+      }
+    }
+    if (pastEndMs < nowMs && nowMs < endMs) {
+      samples.push({ tMs: nowMs, kwh: cumKwh });
+      pastEndMs = nowMs;
+    }
+    const k2 = this._pvCalibK();
+    const series = this._chartSeries;
+    const coords = this._getHomeCoords();
+    if (k2 !== null && k2 > 0 && series && coords) {
+      for (let i2 = 0; i2 < series.times.length; i2++) {
+        const tMs = series.times[i2].getTime();
+        if (tMs < startMs || tMs >= endMs) continue;
+        const binStart = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+        const binEnd = binStart + HOUR_MS;
+        if (binEnd <= nowMs) continue;
+        const cloud = series.cloud[i2] ?? 0;
+        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+        if (pct < 0) continue;
+        const futureStart = Math.max(binStart, nowMs);
+        const fraction = Math.min(1, (binEnd - futureStart) / HOUR_MS);
+        cumKwh += pct * k2 / 1e3 * fraction;
+        samples.push({ tMs: binEnd, kwh: cumKwh });
+      }
+    }
+    const lookup = (t2) => {
+      if (samples.length === 0) return 0;
+      if (t2 <= samples[0].tMs) return samples[0].kwh;
+      if (t2 >= samples[samples.length - 1].tMs) return samples[samples.length - 1].kwh;
+      let lo = 0, hi = samples.length - 1;
+      while (lo < hi - 1) {
+        const mid = lo + hi >> 1;
+        if (samples[mid].tMs <= t2) lo = mid;
+        else hi = mid;
+      }
+      const a2 = samples[lo], b2 = samples[hi];
+      if (b2.tMs === a2.tMs) return a2.kwh;
+      return a2.kwh + (t2 - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
+    };
+    const hourMarks = [];
+    for (let h2 = 0; h2 <= 24; h2++) {
+      const tMs = startMs + h2 * HOUR_MS;
+      hourMarks.push({ tMs, kwh: lookup(tMs) });
+    }
+    let maxKwh = 0;
+    for (const s2 of samples) if (s2.kwh > maxKwh) maxKwh = s2.kwh;
+    return { samples, hourMarks, pastEndMs, maxKwh };
+  }
   _renderDashTodaySection(t2, pvColor, sunColor) {
     const data = this._computeTodayHourly();
     const HOUR_MS = 36e5;
@@ -38071,8 +38461,16 @@ let HeliosCard = class extends i {
       hourCycle: "h23"
     }) : "";
     const peakValueLabel = this._formatPvWatts(data.peakW);
-    const showForecast = data.forecastKwh > data.producedKwh + 0.05;
+    const today0 = /* @__PURE__ */ new Date();
+    today0.setHours(0, 0, 0, 0);
+    const todayMs = today0.getTime();
+    const dailyKwh = this._computeDailyKwhTotals();
+    const forecastKwh = dailyKwh.get(todayMs) ?? data.forecastKwh;
+    const showForecast = forecastKwh > data.producedKwh + 0.05;
     const showPeak = data.peakHourTs !== null && data.peakW > 50;
+    const pvConfigured = String(this.config?.["pv-power-entity"] ?? "").trim() !== "";
+    const historyLoading = pvConfigured && this._pvHistory === null;
+    const notStartedYet = !historyLoading && data.producedKwh < 0.05 && data.peakHourTs !== null && data.peakHourTs > Date.now();
     return b`
             <section class="dash-section dash-card dash-today">
                 <header class="dash-card-header">
@@ -38081,14 +38479,18 @@ let HeliosCard = class extends i {
                 </header>
                 <div class="dash-today-body">
                     <div class="dash-today-produced" style="color:${pvColor}">
-                        <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
-                        <span class="dash-stat-unit">kWh</span>
+                        ${historyLoading ? b`
+                            <span class="dash-stat-skeleton" aria-hidden="true"></span>
+                        ` : b`
+                            <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
+                            <span class="dash-stat-unit">kWh</span>
+                        `}
                     </div>
                     <div class="dash-today-side">
                         ${showForecast ? b`
                             <div class="dash-today-line dash-today-forecast">
                                 <span class="dash-line-arrow">→</span>
-                                <span class="dash-line-value">${this._formatLocalisedNumber(data.forecastKwh, 1)} kWh</span>
+                                <span class="dash-line-value">${this._formatLocalisedNumber(forecastKwh, 1)} kWh</span>
                                 <span class="dash-line-label">${t2.detail.todayForecast}</span>
                             </div>
                         ` : A}
@@ -38100,8 +38502,117 @@ let HeliosCard = class extends i {
                             </div>
                         ` : A}
                     </div>
+                    ${historyLoading ? A : this._renderDashTodayChart(pvColor)}
                 </div>
+                ${notStartedYet ? b`
+                    <div class="dash-today-status">${t2.detail.todayNotStartedYet}</div>
+                ` : A}
             </section>
+        `;
+  }
+  //Cumulative production sparkline for the today card. Hidden via
+  //a container query when the card isn't wide enough to render the
+  //curve without squashing it (see helios-card-css.ts). When the
+  //user hovers, a vertical guideline + travelling dot reveal a
+  //tooltip showing the cumulative kWh at that exact minute.
+  _renderDashTodayChart(pvColor) {
+    const cum = this._computeTodayCumulative();
+    if (cum.maxKwh < 0.05) return A;
+    const HOUR_MS = 36e5;
+    const today0 = /* @__PURE__ */ new Date();
+    today0.setHours(0, 0, 0, 0);
+    const startMs = today0.getTime();
+    const endMs = startMs + 24 * HOUR_MS;
+    const W = 240, H2 = 60;
+    const PAD_X = 4, PAD_T = 4, PAD_B = 6;
+    const yMax = Math.max(cum.maxKwh, 0.1) * 1.05;
+    const xFor = (t2) => PAD_X + (t2 - startMs) / (endMs - startMs) * (W - 2 * PAD_X);
+    const yFor = (kwh) => H2 - PAD_B - kwh / yMax * (H2 - PAD_T - PAD_B);
+    const buildPath = (pts) => {
+      if (pts.length < 2) return "";
+      return "M " + pts.map(
+        (p2) => `${xFor(p2.tMs).toFixed(2)} ${yFor(p2.kwh).toFixed(2)}`
+      ).join(" L ");
+    };
+    const pastSamples = cum.samples.filter((s2) => s2.tMs <= cum.pastEndMs);
+    const futureSamples = cum.samples.filter((s2) => s2.tMs >= cum.pastEndMs);
+    const pastPath = buildPath(pastSamples);
+    const futurePath = buildPath(futureSamples);
+    const hoverTs = this._dashChartHoverTs;
+    let hoverKwh = null;
+    let hoverX = 0;
+    let hoverFracX = 0;
+    let hoverTimeLabel = "";
+    if (hoverTs !== null && hoverTs >= startMs && hoverTs < endMs) {
+      const samples = cum.samples;
+      if (samples.length > 0) {
+        if (hoverTs <= samples[0].tMs) {
+          hoverKwh = samples[0].kwh;
+        } else if (hoverTs >= samples[samples.length - 1].tMs) {
+          hoverKwh = samples[samples.length - 1].kwh;
+        } else {
+          let lo = 0, hi = samples.length - 1;
+          while (lo < hi - 1) {
+            const mid = lo + hi >> 1;
+            if (samples[mid].tMs <= hoverTs) lo = mid;
+            else hi = mid;
+          }
+          const a2 = samples[lo], b2 = samples[hi];
+          hoverKwh = a2.tMs === b2.tMs ? a2.kwh : a2.kwh + (hoverTs - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
+        }
+        hoverX = xFor(hoverTs);
+        hoverFracX = hoverX / W * 100;
+        hoverTimeLabel = new Date(hoverTs).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23"
+        });
+      }
+    }
+    return b`
+            <div class="dash-today-chart">
+                <svg class="dash-today-chart-svg"
+                     viewBox="0 0 ${W} ${H2}"
+                     preserveAspectRatio="none"
+                     @pointermove="${this._onDashChartPointerMove}"
+                     @pointerleave="${this._onDashChartPointerLeave}"
+                >
+                    ${pastPath !== "" ? w`
+                        <path class="dash-today-chart-past"
+                              d="${pastPath}"
+                              stroke="${pvColor}"/>
+                    ` : A}
+                    ${futurePath !== "" ? w`
+                        <path class="dash-today-chart-future"
+                              d="${futurePath}"
+                              stroke="${pvColor}"/>
+                    ` : A}
+                    ${cum.hourMarks.map((m2) => w`
+                        <circle class="dash-today-chart-dot"
+                                cx="${xFor(m2.tMs).toFixed(2)}"
+                                cy="${yFor(m2.kwh).toFixed(2)}"
+                                r="1.4"
+                                fill="${pvColor}"/>
+                    `)}
+                    ${hoverKwh !== null ? w`
+                        <line class="dash-today-chart-hover-line"
+                              x1="${hoverX.toFixed(2)}" x2="${hoverX.toFixed(2)}"
+                              y1="${PAD_T}" y2="${H2 - PAD_B}"/>
+                        <circle class="dash-today-chart-hover-dot"
+                                cx="${hoverX.toFixed(2)}"
+                                cy="${yFor(hoverKwh).toFixed(2)}"
+                                r="2.2"
+                                fill="${pvColor}"/>
+                    ` : A}
+                </svg>
+                ${hoverKwh !== null ? b`
+                    <div class="dash-today-chart-tooltip"
+                         style="left: ${hoverFracX.toFixed(2)}%;"
+                    >
+                        ${hoverTimeLabel} · ${this._formatLocalisedNumber(hoverKwh, 1)} kWh
+                    </div>
+                ` : A}
+            </div>
         `;
   }
   //Helper: format a wattage value as a short label (W or kW).
@@ -38130,7 +38641,7 @@ let HeliosCard = class extends i {
         const tMs = series.times[i2].getTime();
         if (tMs < tomorrowMs || tMs >= endMs) continue;
         const cloud = series.cloud[i2] ?? 0;
-        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud);
+        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
         if (pct > 0 && k2 !== null) {
           const watts = pct * k2;
           totalKwh += watts / 1e3;
@@ -38231,9 +38742,22 @@ let HeliosCard = class extends i {
                                 <stop offset="100%" stop-color="${batteryColor}" stop-opacity="0.6"/>
                             </linearGradient>
                         </defs>
-                        <rect class="dash-batt-cap"
-                              x="${(W - capW) / 2}" y="${cellY - capH}"
-                              width="${capW}" height="${capH}" rx="1.5"/>
+                        ${(() => {
+      const capLx = (W - capW) / 2;
+      const capRx = (W + capW) / 2;
+      const capTy = cellY - capH;
+      const capBy = cellY;
+      const r2 = 1.5;
+      const capPath = [
+        `M ${capLx} ${capBy}`,
+        `L ${capLx} ${capTy + r2}`,
+        `Q ${capLx} ${capTy} ${capLx + r2} ${capTy}`,
+        `L ${capRx - r2} ${capTy}`,
+        `Q ${capRx} ${capTy} ${capRx} ${capTy + r2}`,
+        `L ${capRx} ${capBy}`
+      ].join(" ");
+      return w`<path class="dash-batt-cap" d="${capPath}"/>`;
+    })()}
                         <rect class="dash-batt-shell"
                               x="${cellX}" y="${cellY}"
                               width="${cellW}" height="${cellH}" rx="3"/>
@@ -38447,6 +38971,9 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_homeHover", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_dashChartHoverTs", 2);
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_chartSeries", 2);

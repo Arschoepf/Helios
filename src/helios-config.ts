@@ -737,6 +737,32 @@ export class HeliosCardEditor extends LitElement
                 </label>
                 <div class="field-help">${t.editor.pvPeakPowerHelp}</div>
                 <label class="field">
+                    <span class="label">${t.editor.pvTilt}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        max="90"
+                        step="1"
+                        placeholder="0"
+                        .value="${c['pv-tilt'] != null ? String(c['pv-tilt']) : ''}"
+                        @change="${(e: Event) => this._numField('pv-tilt', e)}"
+                    />
+                </label>
+                <div class="field-help">${t.editor.pvTiltHelp}</div>
+                <label class="field">
+                    <span class="label">${t.editor.pvAzimuth}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        max="360"
+                        step="1"
+                        placeholder="180"
+                        .value="${c['pv-azimuth'] != null ? String(c['pv-azimuth']) : ''}"
+                        @change="${(e: Event) => this._numField('pv-azimuth', e)}"
+                    />
+                </label>
+                <div class="field-help">${t.editor.pvAzimuthHelp}</div>
+                <label class="field">
                     <span class="label">${t.editor.pvColor}</span>
                     <helios-color-picker
                         .value="${cfgHex(c['pv-color'], DEFAULT_PV_COLOR_HEX)}"

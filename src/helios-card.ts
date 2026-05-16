@@ -339,6 +339,10 @@ export class HeliosCard extends LitElement
     //around the home silhouette so the user reads the focal building
     //as interactive before clicking.
     @state() private _homeHover = false;
+    //Hover state for the today-cumulative chart in the dashboard. ms
+    //epoch of the cursor position on the X axis; null when the pointer
+    //is outside the chart or the chart isn't shown.
+    @state() private _dashChartHoverTs: number | null = null;
     @state() private _chartSeries: {
         times:      Date[];
         irradiance: number[];
@@ -1899,7 +1903,7 @@ export class HeliosCard extends LitElement
                 if (tMs <  nowMs)   continue;             //future only
                 if (tMs <  startMs) continue;
                 if (tMs >  endMsAbs) continue;
-                const pct = computePvPower(series.times[i], lat, lon, series.cloud[i] ?? 0);
+                const pct = computePvPower(series.times[i], lat, lon, series.cloud[i] ?? 0, this._pvPanelOrientation());
                 if (pct <= 0) continue;
                 predictedSamples.push({ t: series.times[i], v: pct * k * nativeFromW });
             }
@@ -2182,7 +2186,7 @@ export class HeliosCard extends LitElement
                 if (tMs < startMs || tMs > endMsAbs) continue;
                 if (tMs < nowMs) continue;   //past covered by Pass 1
                 const cloud = series.cloud[i] ?? 0;
-                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud);
+                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
                 if (pct <= 0) continue;
                 //pct × k = watts at this hour midpoint × 1h = Wh.
                 //Divide by 1000 to land in kWh.
@@ -2496,6 +2500,25 @@ export class HeliosCard extends LitElement
         return kwp * 10;
     }
 
+    //Panel orientation derived from the editor config. Returns
+    //undefined when no tilt is set, which keeps the prediction model
+    //on the original horizontal-panel fast path. Setting tilt > 0
+    //enables the tilt/azimuth transposition in computePvPower so
+    //balcony / steeply-pitched roof installs stop seeing a flat-roof
+    //forecast that's wildly optimistic.
+    private _pvPanelOrientation(): { tiltDeg: number; azimuthDeg: number } | undefined
+    {
+        const rawTilt = this.config?.['pv-tilt'];
+        const tilt = typeof rawTilt === 'number' ? rawTilt : parseFloat(String(rawTilt ?? ''));
+        if (!isFinite(tilt) || tilt <= 0) return undefined;
+        const rawAz = this.config?.['pv-azimuth'];
+        const az = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
+        return {
+            tiltDeg:    Math.max(0, Math.min(90, tilt)),
+            azimuthDeg: isFinite(az) ? ((az % 360) + 360) % 360 : 180
+        };
+    }
+
     //One-time cleanup of the obsolete auto-calibration buffers (an
     //earlier release maintained a rolling 14-day fit in localStorage
     //and HA's frontend.user_data). Runs at boot, idempotent thanks
@@ -2715,7 +2738,7 @@ export class HeliosCard extends LitElement
                     if (d < bestDiff) { bestDiff = d; best = i; }
                 }
                 const cloud = series.cloud[best] ?? 0;
-                const pct   = computePvPower(this._selectedTime!, coords.lat, coords.lon, cloud);
+                const pct   = computePvPower(this._selectedTime!, coords.lat, coords.lon, cloud, this._pvPanelOrientation());
                 if (pct > 0)
                 {
                     //k is W per percent of STC, so pct × k is watts.
@@ -3870,7 +3893,15 @@ export class HeliosCard extends LitElement
             {
                 const tMs = times[i].getTime();
                 if (tMs < startMs || tMs >= endMs) continue;
-                const w = this._pvNormalizeToWatts(values[i], this._pvUnit);
+                //After differentiation the values are average power in
+                //kW (kWh/hour), so go straight to watts. The original
+                //unit ('kWh' / 'MWh' / 'Wh') isn't handled by
+                //_pvNormalizeToWatts and would silently return 0,
+                //which would zero out producedKwh and over-count
+                //forecastKwh by skipping the observed contribution.
+                const w = isCumulativeEnergy
+                    ? values[i] * 1000
+                    : this._pvNormalizeToWatts(values[i], this._pvUnit);
                 if (!isFinite(w)) continue;
                 const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
                 sums  .set(hourTs, (sums  .get(hourTs) ?? 0) + w);
@@ -3900,7 +3931,7 @@ export class HeliosCard extends LitElement
                 const tMs = series.times[i].getTime();
                 if (tMs < startMs || tMs >= endMs) continue;
                 const cloud = series.cloud[i] ?? 0;
-                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud);
+                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
                 if (pct < 0) continue;
                 const watts = pct * k;
                 const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
@@ -3949,6 +3980,147 @@ export class HeliosCard extends LitElement
         return { bins, peakHourTs, peakW, producedKwh, forecastKwh };
     }
 
+    //Time-ordered cumulative production samples for today's chart.
+    //Past portion comes from the raw PV history (cumulative-energy
+    //sensors: subtract the day's baseline; power sensors: trapezoidal
+    //integration), future portion extends with the hourly forecast
+    //model. Hour marks are interpolated at every full hour so the
+    //chart can render a dot per hour without snapping the curve.
+    private _computeTodayCumulative(): {
+        samples:   Array<{ tMs: number; kwh: number }>;
+        hourMarks: Array<{ tMs: number; kwh: number }>;
+        pastEndMs: number;
+        maxKwh:    number;
+    }
+    {
+        const HOUR_MS = 3_600_000;
+        const today0 = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const startMs = today0.getTime();
+        const endMs   = startMs + 24 * HOUR_MS;
+        const nowMs   = Date.now();
+
+        const samples: Array<{ tMs: number; kwh: number }> = [];
+        samples.push({ tMs: startMs, kwh: 0 });
+
+        let cumKwh    = 0;
+        let pastEndMs = startMs;
+
+        //Past: integrate observed history. Cumulative-energy sensors
+        //get a baseline-subtracted reading per sample; power sensors
+        //get trapezoidal integration over consecutive pairs.
+        const hist = this._pvHistory;
+        if (hist && hist.times.length > 0)
+        {
+            const unit = (this._pvUnit || '').toLowerCase();
+            const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+            const energyFactor = unit === 'wh' ? 1 / 1000
+                               : unit === 'mwh' ? 1000
+                               : 1;
+            let baseline: number | null = null;
+            let prevT:    number | null = null;
+            let prevW:    number | null = null;
+
+            for (let i = 0; i < hist.times.length; i++)
+            {
+                const tMs = hist.times[i].getTime();
+                if (tMs < startMs || tMs >= endMs) continue;
+
+                if (isCumulativeEnergy)
+                {
+                    const v = hist.values[i] * energyFactor;
+                    if (baseline === null) baseline = v;
+                    const kwh = Math.max(0, v - baseline);
+                    samples.push({ tMs, kwh });
+                    cumKwh = kwh;
+                }
+                else
+                {
+                    const w = this._pvNormalizeToWatts(hist.values[i], this._pvUnit);
+                    if (!isFinite(w)) continue;
+                    if (prevT !== null && prevW !== null)
+                    {
+                        const dh = (tMs - prevT) / HOUR_MS;
+                        if (dh > 0 && dh <= 6)
+                        {
+                            cumKwh += ((prevW + w) / 2) / 1000 * dh;
+                        }
+                    }
+                    samples.push({ tMs, kwh: cumKwh });
+                    prevT = tMs;
+                    prevW = w;
+                }
+                pastEndMs = tMs;
+            }
+        }
+
+        //Anchor at "now" so the solid past line ends precisely at the
+        //present moment, instead of stopping at the last sample which
+        //could be a minute or two stale.
+        if (pastEndMs < nowMs && nowMs < endMs)
+        {
+            samples.push({ tMs: nowMs, kwh: cumKwh });
+            pastEndMs = nowMs;
+        }
+
+        //Future: cumulate hourly forecast. Each hour contributes its
+        //full bin amount, except the bin straddling "now" which only
+        //contributes its remaining fraction so the boundary stitches
+        //cleanly with the past curve.
+        const k      = this._pvCalibK();
+        const series = this._chartSeries;
+        const coords = this._getHomeCoords();
+        if (k !== null && k > 0 && series && coords)
+        {
+            for (let i = 0; i < series.times.length; i++)
+            {
+                const tMs = series.times[i].getTime();
+                if (tMs < startMs || tMs >= endMs) continue;
+                const binStart = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+                const binEnd   = binStart + HOUR_MS;
+                if (binEnd <= nowMs) continue;
+                const cloud = series.cloud[i] ?? 0;
+                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+                if (pct < 0) continue;
+                const futureStart = Math.max(binStart, nowMs);
+                const fraction    = Math.min(1, (binEnd - futureStart) / HOUR_MS);
+                cumKwh += (pct * k) / 1000 * fraction;
+                samples.push({ tMs: binEnd, kwh: cumKwh });
+            }
+        }
+
+        //Linearly interpolate the cumulative kWh at every full hour
+        //so each dot lands exactly on the curve. Done in one pass via
+        //a binary search since `samples` is time-ordered.
+        const lookup = (t: number): number =>
+        {
+            if (samples.length === 0)                          return 0;
+            if (t <= samples[0].tMs)                           return samples[0].kwh;
+            if (t >= samples[samples.length - 1].tMs)          return samples[samples.length - 1].kwh;
+            let lo = 0, hi = samples.length - 1;
+            while (lo < hi - 1)
+            {
+                const mid = (lo + hi) >> 1;
+                if (samples[mid].tMs <= t) lo = mid; else hi = mid;
+            }
+            const a = samples[lo], b = samples[hi];
+            if (b.tMs === a.tMs) return a.kwh;
+            return a.kwh + ((t - a.tMs) / (b.tMs - a.tMs)) * (b.kwh - a.kwh);
+        };
+
+        const hourMarks: Array<{ tMs: number; kwh: number }> = [];
+        for (let h = 0; h <= 24; h++)
+        {
+            const tMs = startMs + h * HOUR_MS;
+            hourMarks.push({ tMs, kwh: lookup(tMs) });
+        }
+
+        let maxKwh = 0;
+        for (const s of samples) if (s.kwh > maxKwh) maxKwh = s.kwh;
+
+        return { samples, hourMarks, pastEndMs, maxKwh };
+    }
+
     private _renderDashTodaySection(
         t:        ReturnType<typeof pickTranslations>,
         pvColor:  string,
@@ -3964,8 +4136,40 @@ export class HeliosCard extends LitElement
             })
             : '';
         const peakValueLabel = this._formatPvWatts(data.peakW);
-        const showForecast   = data.forecastKwh > data.producedKwh + 0.05;
+
+        //Align the forecast number with the one the timeline shows so
+        //both views agree. The hourly-bin aggregation used by
+        //_computeTodayHourly is fine for the peak chart but loses
+        //sub-hour granularity; _computeDailyKwhTotals integrates raw
+        //history + per-hour forecast the same way the timeline does,
+        //so reading today's bucket from it guarantees a single number
+        //across both surfaces.
+        const today0 = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const todayMs   = today0.getTime();
+        const dailyKwh  = this._computeDailyKwhTotals();
+        const forecastKwh = dailyKwh.get(todayMs) ?? data.forecastKwh;
+
+        const showForecast   = forecastKwh > data.producedKwh + 0.05;
         const showPeak       = data.peakHourTs !== null && data.peakW > 50;
+
+        //Distinguish "no data yet" from "no production yet". When a PV
+        //entity is configured and the history hasn't returned yet,
+        //show a skeleton in place of the produced value, so users
+        //don't read a transient 0,0 kWh as fact. Once the fetch lands
+        //(empty or not), we fall back to rendering the number.
+        const pvConfigured = String(this.config?.['pv-power-entity'] ?? '').trim() !== '';
+        const historyLoading = pvConfigured && this._pvHistory === null;
+
+        //"Not started yet" hint: produced is effectively zero but the
+        //forecast knows a peak is still ahead. Avoids the confusing
+        //"0,0 kWh / 12,1 kWh PRÉVU" reading by spelling out that the
+        //counter is idle, not broken.
+        const notStartedYet =
+            !historyLoading
+         && data.producedKwh < 0.05
+         && data.peakHourTs !== null
+         && data.peakHourTs > Date.now();
 
         return html`
             <section class="dash-section dash-card dash-today">
@@ -3975,14 +4179,18 @@ export class HeliosCard extends LitElement
                 </header>
                 <div class="dash-today-body">
                     <div class="dash-today-produced" style="color:${pvColor}">
-                        <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
-                        <span class="dash-stat-unit">kWh</span>
+                        ${historyLoading ? html`
+                            <span class="dash-stat-skeleton" aria-hidden="true"></span>
+                        ` : html`
+                            <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
+                            <span class="dash-stat-unit">kWh</span>
+                        `}
                     </div>
                     <div class="dash-today-side">
                         ${showForecast ? html`
                             <div class="dash-today-line dash-today-forecast">
                                 <span class="dash-line-arrow">→</span>
-                                <span class="dash-line-value">${this._formatLocalisedNumber(data.forecastKwh, 1)} kWh</span>
+                                <span class="dash-line-value">${this._formatLocalisedNumber(forecastKwh, 1)} kWh</span>
                                 <span class="dash-line-label">${t.detail.todayForecast}</span>
                             </div>
                         ` : nothing}
@@ -3994,10 +4202,164 @@ export class HeliosCard extends LitElement
                             </div>
                         ` : nothing}
                     </div>
+                    ${historyLoading ? nothing : this._renderDashTodayChart(pvColor)}
                 </div>
+                ${notStartedYet ? html`
+                    <div class="dash-today-status">${t.detail.todayNotStartedYet}</div>
+                ` : nothing}
             </section>
         `;
     }
+
+    //Cumulative production sparkline for the today card. Hidden via
+    //a container query when the card isn't wide enough to render the
+    //curve without squashing it (see helios-card-css.ts). When the
+    //user hovers, a vertical guideline + travelling dot reveal a
+    //tooltip showing the cumulative kWh at that exact minute.
+    private _renderDashTodayChart(pvColor: string): TemplateResult | typeof nothing
+    {
+        const cum = this._computeTodayCumulative();
+        if (cum.maxKwh < 0.05) return nothing;
+
+        const HOUR_MS  = 3_600_000;
+        const today0   = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const startMs  = today0.getTime();
+        const endMs    = startMs + 24 * HOUR_MS;
+
+        const W = 240, H = 60;
+        const PAD_X = 4, PAD_T = 4, PAD_B = 6;
+        const yMax  = Math.max(cum.maxKwh, 0.1) * 1.05;
+
+        const xFor = (t: number): number =>
+            PAD_X + ((t - startMs) / (endMs - startMs)) * (W - 2 * PAD_X);
+        const yFor = (kwh: number): number =>
+            H - PAD_B - (kwh / yMax) * (H - PAD_T - PAD_B);
+
+        const buildPath = (pts: Array<{ tMs: number; kwh: number }>): string =>
+        {
+            if (pts.length < 2) return '';
+            return 'M ' + pts.map(p =>
+                `${xFor(p.tMs).toFixed(2)} ${yFor(p.kwh).toFixed(2)}`
+            ).join(' L ');
+        };
+
+        const pastSamples   = cum.samples.filter(s => s.tMs <= cum.pastEndMs);
+        const futureSamples = cum.samples.filter(s => s.tMs >= cum.pastEndMs);
+        const pastPath      = buildPath(pastSamples);
+        const futurePath    = buildPath(futureSamples);
+
+        //Hover lookup: interpolate cumulative kWh at the cursor's
+        //time. Same binary search as _computeTodayCumulative so the
+        //tooltip lines up exactly with the curve.
+        const hoverTs = this._dashChartHoverTs;
+        let hoverKwh:        number | null = null;
+        let hoverX:          number        = 0;
+        let hoverFracX:      number        = 0;
+        let hoverTimeLabel:  string        = '';
+        if (hoverTs !== null && hoverTs >= startMs && hoverTs < endMs)
+        {
+            const samples = cum.samples;
+            if (samples.length > 0)
+            {
+                if (hoverTs <= samples[0].tMs)
+                {
+                    hoverKwh = samples[0].kwh;
+                }
+                else if (hoverTs >= samples[samples.length - 1].tMs)
+                {
+                    hoverKwh = samples[samples.length - 1].kwh;
+                }
+                else
+                {
+                    let lo = 0, hi = samples.length - 1;
+                    while (lo < hi - 1)
+                    {
+                        const mid = (lo + hi) >> 1;
+                        if (samples[mid].tMs <= hoverTs) lo = mid; else hi = mid;
+                    }
+                    const a = samples[lo], b = samples[hi];
+                    hoverKwh = a.tMs === b.tMs
+                        ? a.kwh
+                        : a.kwh + ((hoverTs - a.tMs) / (b.tMs - a.tMs)) * (b.kwh - a.kwh);
+                }
+                hoverX         = xFor(hoverTs);
+                hoverFracX     = (hoverX / W) * 100;
+                hoverTimeLabel = new Date(hoverTs).toLocaleTimeString([], {
+                    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+                });
+            }
+        }
+
+        return html`
+            <div class="dash-today-chart">
+                <svg class="dash-today-chart-svg"
+                     viewBox="0 0 ${W} ${H}"
+                     preserveAspectRatio="none"
+                     @pointermove="${this._onDashChartPointerMove}"
+                     @pointerleave="${this._onDashChartPointerLeave}"
+                >
+                    ${pastPath !== '' ? svg`
+                        <path class="dash-today-chart-past"
+                              d="${pastPath}"
+                              stroke="${pvColor}"/>
+                    ` : nothing}
+                    ${futurePath !== '' ? svg`
+                        <path class="dash-today-chart-future"
+                              d="${futurePath}"
+                              stroke="${pvColor}"/>
+                    ` : nothing}
+                    ${cum.hourMarks.map(m => svg`
+                        <circle class="dash-today-chart-dot"
+                                cx="${xFor(m.tMs).toFixed(2)}"
+                                cy="${yFor(m.kwh).toFixed(2)}"
+                                r="1.4"
+                                fill="${pvColor}"/>
+                    `)}
+                    ${hoverKwh !== null ? svg`
+                        <line class="dash-today-chart-hover-line"
+                              x1="${hoverX.toFixed(2)}" x2="${hoverX.toFixed(2)}"
+                              y1="${PAD_T}" y2="${H - PAD_B}"/>
+                        <circle class="dash-today-chart-hover-dot"
+                                cx="${hoverX.toFixed(2)}"
+                                cy="${yFor(hoverKwh).toFixed(2)}"
+                                r="2.2"
+                                fill="${pvColor}"/>
+                    ` : nothing}
+                </svg>
+                ${hoverKwh !== null ? html`
+                    <div class="dash-today-chart-tooltip"
+                         style="left: ${hoverFracX.toFixed(2)}%;"
+                    >
+                        ${hoverTimeLabel} · ${this._formatLocalisedNumber(hoverKwh, 1)} kWh
+                    </div>
+                ` : nothing}
+            </div>
+        `;
+    }
+
+    private _onDashChartPointerMove = (e: PointerEvent): void =>
+    {
+        const svg = e.currentTarget as SVGSVGElement | null;
+        if (!svg) return;
+        const rect = svg.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const W = 240, PAD_X = 4;
+        const fracPx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const xLogical = fracPx * W;
+        const today0 = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const startMs = today0.getTime();
+        const endMs   = startMs + 24 * 3_600_000;
+        const tFrac = (xLogical - PAD_X) / (W - 2 * PAD_X);
+        this._dashChartHoverTs = startMs
+            + Math.max(0, Math.min(1, tFrac)) * (endMs - startMs);
+    };
+
+    private _onDashChartPointerLeave = (): void =>
+    {
+        this._dashChartHoverTs = null;
+    };
 
     //Helper: format a wattage value as a short label (W or kW).
     private _formatPvWatts(w: number): string
@@ -4039,7 +4401,7 @@ export class HeliosCard extends LitElement
                 const tMs = series.times[i].getTime();
                 if (tMs < tomorrowMs || tMs >= endMs) continue;
                 const cloud = series.cloud[i] ?? 0;
-                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud);
+                const pct   = computePvPower(series.times[i], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
                 if (pct > 0 && k !== null)
                 {
                     const watts = pct * k;
@@ -4176,9 +4538,27 @@ export class HeliosCard extends LitElement
                                 <stop offset="100%" stop-color="${batteryColor}" stop-opacity="0.6"/>
                             </linearGradient>
                         </defs>
-                        <rect class="dash-batt-cap"
-                              x="${(W - capW) / 2}" y="${cellY - capH}"
-                              width="${capW}" height="${capH}" rx="1.5"/>
+                        ${(() => {
+                            //Battery cap drawn as an open path: top + two
+                            //sides, no bottom edge. The shell rect just
+                            //below provides the shared horizontal line,
+                            //so we avoid the two strokes stacking and
+                            //showing as a double thickness at the join.
+                            const capLx = (W - capW) / 2;
+                            const capRx = (W + capW) / 2;
+                            const capTy = cellY - capH;
+                            const capBy = cellY;
+                            const r = 1.5;
+                            const capPath = [
+                                `M ${capLx} ${capBy}`,
+                                `L ${capLx} ${capTy + r}`,
+                                `Q ${capLx} ${capTy} ${capLx + r} ${capTy}`,
+                                `L ${capRx - r} ${capTy}`,
+                                `Q ${capRx} ${capTy} ${capRx} ${capTy + r}`,
+                                `L ${capRx} ${capBy}`
+                            ].join(' ');
+                            return svg`<path class="dash-batt-cap" d="${capPath}"/>`;
+                        })()}
                         <rect class="dash-batt-shell"
                               x="${cellX}" y="${cellY}"
                               width="${cellW}" height="${cellH}" rx="3"/>

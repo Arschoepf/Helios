@@ -74,8 +74,33 @@ export function getSunPosition(date: Date, lat: number, lon: number):
 //        k = 1 - 0.75 · (cloudCover/100)^3.4
 //     Algebraically identical to the standard oktas formulation.
 //     Thin clouds barely attenuate; total overcast cuts ~75 %.
-//  4. Map effective GHI to % of STC and clamp to [0, 100].
-export function computePvPower(date: Date, lat: number, lon: number, cloudCoverPct: number): number
+//  4. Optional tilt/azimuth transposition (Liu-Jordan isotropic
+//     model), when the caller supplies a `panel` argument:
+//        cos(θi) = sin(α)·cos(β) + cos(α)·sin(β)·cos(γ_s − γ_p)
+//        POA = GHI · [ f_direct · R_b
+//                    + (1 − f_direct) · (1 + cos β) / 2
+//                    + ρ · (1 − cos β) / 2 ]
+//     where R_b = max(0, cos θi) / max(sin 5°, cos z), the direct
+//     fraction f_direct is derived from cloud cover (≈ 0 overcast,
+//     ≈ 0.85 clear), and the ground albedo ρ is fixed at 0.2. Without
+//     a `panel` argument the function keeps its original horizontal
+//     behaviour, so every caller that doesn't care about orientation
+//     stays untouched.
+//  5. Map effective POA to % of STC and clamp to [0, 100].
+export interface PanelOrientation
+{
+    tiltDeg:    number;   //0 = horizontal, 90 = vertical
+    azimuthDeg: number;   //compass bearing the panel faces, clockwise
+                          //from north (180 = south, 90 = east, etc.)
+}
+
+export function computePvPower(
+    date:          Date,
+    lat:           number,
+    lon:           number,
+    cloudCoverPct: number,
+    panel?:        PanelOrientation
+): number
 {
     const sun = getSunPosition(date, lat, lon);
     const alt = sun.altitude;
@@ -89,7 +114,45 @@ export function computePvPower(date: Date, lat: number, lon: number, cloudCoverP
     const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
 
     const ghiEff = ghiClear * kCloud;
-    return Math.max(0, Math.min(100, ghiEff / 1000 * 100));
+
+    //Horizontal panel (default): GHI already is the plane-of-array
+    //irradiance, no transposition needed.
+    if (!panel || panel.tiltDeg <= 0)
+    {
+        return Math.max(0, Math.min(100, ghiEff / 1000 * 100));
+    }
+
+    //Tilted panel: project the direct beam onto the panel normal,
+    //add the isotropic-sky diffuse component, plus a small ground-
+    //reflected term scaled by the panel's exposure to the ground.
+    const beta = panel.tiltDeg * D;
+    const dAz  = (sun.azimuth - panel.azimuthDeg) * D;
+    const altR = alt * D;
+
+    const cosTheta = Math.sin(altR) * Math.cos(beta)
+                   + Math.cos(altR) * Math.sin(beta) * Math.cos(dAz);
+
+    //Direct fraction from the cloud-attenuation factor. kCloud spans
+    //~0.25 (overcast) to 1.0 (clear sky), mapped to a direct fraction
+    //of 0 → 0.85. Loose approximation of a proper clearness-index
+    //decomposition (Erbs, Reindl); good enough at the hourly
+    //resolution the card runs at.
+    const directFraction  = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
+    const diffuseFraction = 1 - directFraction;
+
+    //Beam transposition ratio R_b = cos(θi) / cos(zenith). Clamp the
+    //denominator at sin(5°) so the ratio doesn't blow up at sunrise /
+    //sunset (the beam component is tiny there anyway).
+    const Rb = cosTheta > 0
+        ? Math.max(0, cosTheta) / Math.max(0.087, cosZ)
+        : 0;
+
+    const directPoa  = ghiEff * directFraction  * Rb;
+    const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
+    const groundPoa  = ghiEff * 0.2             * (1 - Math.cos(beta)) / 2;
+
+    const poaEff = directPoa + diffusePoa + groundPoa;
+    return Math.max(0, Math.min(100, poaEff / 1000 * 100));
 }
 
 

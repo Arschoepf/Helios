@@ -343,6 +343,15 @@ export const heliosCardStyles = css`
 
     /*  Section: today                                                  */
 
+    /*  Container queries: the cumulative chart is rendered only when   */
+    /*  the section is wide enough to read comfortably (>= 380px).     */
+    /*  Below that, the chart is hidden via display:none and the       */
+    /*  side stack reclaims the layout space.                          */
+    .dash-section.dash-today
+    {
+        container-type: inline-size;
+        container-name: dash-today;
+    }
     .dash-today-body
     {
         display: flex;
@@ -360,8 +369,8 @@ export const heliosCardStyles = css`
         display: flex;
         flex-direction: column;
         gap: 4px;
-        flex: 1;
         min-width: 0;
+        flex: 0 0 auto;
     }
     .dash-today-line
     {
@@ -383,6 +392,157 @@ export const heliosCardStyles = css`
         opacity: 0.55;
     }
     .dash-today-forecast .dash-line-value { font-style: italic; }
+
+    /*  Cumulative production sparkline. Hidden on narrow cards via    */
+    /*  the container query so we never display a squashed graph.      */
+    /*  Sits to the right of the side stack, takes the remaining       */
+    /*  horizontal space, and has its own slightly darker panel +      */
+    /*  hairline border so it reads as a distinct chart frame.         */
+    .dash-today-chart
+    {
+        display: none;
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        height: 60px;
+        align-self: stretch;
+        background: rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    ha-card.theme-dark .dash-today-chart
+    {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    @container dash-today (min-width: 380px)
+    {
+        .dash-today-chart
+        {
+            display: block;
+        }
+    }
+    .dash-today-chart-svg
+    {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    .dash-today-chart-past
+    {
+        fill: none;
+        stroke-width: 1.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0.95;
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-today-chart-future
+    {
+        fill: none;
+        stroke-width: 1.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 3 2;
+        opacity: 0.7;
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-today-chart-dot
+    {
+        opacity: 0.9;
+    }
+    .dash-today-chart-hover-line
+    {
+        stroke: rgba(0, 0, 0, 0.45);
+        stroke-width: 1;
+        stroke-dasharray: 2 2;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .dash-today-chart-hover-line
+    {
+        stroke: rgba(255, 255, 255, 0.45);
+    }
+    .dash-today-chart-hover-dot
+    {
+        stroke: #ffffff;
+        stroke-width: 1;
+        paint-order: stroke fill;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .dash-today-chart-hover-dot
+    {
+        stroke: #191a1b;
+    }
+    .dash-today-chart-tooltip
+    {
+        position: absolute;
+        top: 4px;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.78);
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        white-space: nowrap;
+        pointer-events: none;
+        font-variant-numeric: tabular-nums;
+    }
+    ha-card.theme-dark .dash-today-chart-tooltip
+    {
+        background: rgba(255, 255, 255, 0.92);
+        color: #111111;
+    }
+
+    /*  Status line under the produced value when the day's            */
+    /*  production hasn't started yet (produced ~ 0, peak still in     */
+    /*  the future). Discreet, small, italic, full row.                */
+    .dash-today-status
+    {
+        font-size: 11px;
+        opacity: 0.6;
+        font-style: italic;
+        margin-top: 4px;
+    }
+
+    /*  Skeleton placeholder shown in place of the produced value      */
+    /*  while the HA history fetch is in flight. Same footprint as     */
+    /*  ".dash-stat-value" so layout stays stable when the data        */
+    /*  arrives. The shimmer pulse is purely cosmetic.                 */
+    .dash-stat-skeleton
+    {
+        display: inline-block;
+        width: 88px;
+        height: 28px;
+        border-radius: 4px;
+        background: linear-gradient(
+            90deg,
+            rgba(0, 0, 0, 0.08) 0%,
+            rgba(0, 0, 0, 0.18) 50%,
+            rgba(0, 0, 0, 0.08) 100%
+        );
+        background-size: 200% 100%;
+        animation: dash-skeleton-pulse 1.4s ease-in-out infinite;
+        vertical-align: middle;
+    }
+    ha-card.theme-dark .dash-stat-skeleton
+    {
+        background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.06) 0%,
+            rgba(255, 255, 255, 0.18) 50%,
+            rgba(255, 255, 255, 0.06) 100%
+        );
+        background-size: 200% 100%;
+    }
+    @keyframes dash-skeleton-pulse
+    {
+        0%   { background-position: 100% 0; }
+        100% { background-position: -100% 0; }
+    }
 
     /*  Section: tomorrow                                               */
 
@@ -1169,6 +1329,15 @@ export const heliosCardStyles = css`
     .pv-home-leader-bead
     {
         opacity: 0.95;
+        stroke: #ffffff;
+        stroke-width: 1;
+        stroke-opacity: 0.85;
+        paint-order: stroke fill;
+    }
+    ha-card.theme-dark .pv-home-leader-bead
+    {
+        stroke: #191a1b;
+        stroke-opacity: 0.95;
     }
 
 
@@ -1205,6 +1374,15 @@ export const heliosCardStyles = css`
     .battery-leader-bead
     {
         opacity: 0.95;
+        stroke: #ffffff;
+        stroke-width: 1;
+        stroke-opacity: 0.85;
+        paint-order: stroke fill;
+    }
+    ha-card.theme-dark .battery-leader-bead
+    {
+        stroke: #191a1b;
+        stroke-opacity: 0.95;
     }
 
     /*  Cloud-cover leader line, black hairline from chip to disc. */

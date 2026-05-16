@@ -39,6 +39,9 @@ export interface Translations
         //  todayProduced   , subtitle under the produced kWh value
         //  todayForecast   , trailing text after the projected total
         //  todayPeak       , trailing text after the peak readout
+        //  todayNotStartedYet , status line shown when produced is
+        //                      effectively zero and the peak is still
+        //                      in the future (production hasn't begun)
         //  tomorrowLabel   , top of the tomorrow card
         //  tomorrowPeak    , prefix before the peak time chip
         //  batteryLabel    , top of the battery vessel section
@@ -48,6 +51,7 @@ export interface Translations
         todayProduced:     string;
         todayForecast:     string;
         todayPeak:         string;
+        todayNotStartedYet: string;
         tomorrowLabel:     string;
         tomorrowPeak:      string;
         batteryLabel:      string;
@@ -99,6 +103,14 @@ export interface Translations
         //observation only.
         pvPeakPower:              string;
         pvPeakPowerHelp:          string;
+        //Panel orientation, optional. Tilt 0..90 (0 = horizontal, 90 =
+        //vertical / balcony). Azimuth 0..360 (clockwise from north,
+        //180 = south). Drives the Liu-Jordan transposition that
+        //decides how the predicted GHI lands on the panel plane.
+        pvTilt:                   string;
+        pvTiltHelp:               string;
+        pvAzimuth:                string;
+        pvAzimuthHelp:            string;
         pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;

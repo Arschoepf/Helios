@@ -43,6 +43,19 @@ export interface HeliosConfig
     //but live observation, peak-of-day highlight and chart axes keep
     //working off the actual PV entity.
     'pv-peak-kwp'?:           unknown;
+    //Panel orientation. Optional; when unset the prediction model
+    //assumes horizontal panels (0° tilt) and the orientation maths is
+    //bypassed, preserving the original behaviour. Setting `pv-tilt`
+    //above 0 enables the Liu-Jordan transposition that splits GHI
+    //into direct + diffuse + ground-reflected components on the
+    //panel plane, which matters a lot for vertical balcony installs
+    //and roofs far from horizontal.
+    //  pv-tilt    : tilt angle from horizontal, 0–90°.
+    //  pv-azimuth : compass bearing the panel faces, 0–360°
+    //               clockwise from north (180 = south). Ignored when
+    //               tilt is 0.
+    'pv-tilt'?:               unknown;
+    'pv-azimuth'?:            unknown;
     //Optional home-battery overlay. A single chip below the
     //home shows the battery State-of-Charge (%) and the live signed
     //power draw (positive while charging, negative while discharging),
@@ -1343,6 +1356,10 @@ export class HeliosEngine
         //didn't supply shortwave_radiation_instant for this hour
         //(beyond forecast horizon, missing variable on the chosen
         //model, or auxiliary fetch failed).
+        //Stays on the horizontal-panel path: this value is paired
+        //with shortwave_radiation (GHI on horizontal) to compare two
+        //irradiance candidates, the tilt/azimuth transposition lives
+        //in the card-side PV prediction helpers instead.
         const pvPowerHaurwitz = computePvPower(t, this.homeLat, this.homeLon, w.cloudCover);
 
         let pvPowerShortwave = -1;
