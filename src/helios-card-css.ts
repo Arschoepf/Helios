@@ -34,7 +34,18 @@ export const heliosCardStyles = css`
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
         height:     100%;
         width:      100%;
-        min-height: 200px;
+        /*  Floor that survives dashboard layouts where the parent
+            doesn't apply an explicit height (vertical-stack, panel
+            view, some custom dashboards like Mushroom-based grids).
+            Without this floor, height:100% resolves to the children's
+            intrinsic height, which means only the timeline chart's
+            ~150 px contributes and the 3D map area collapses out of
+            view. 480 px leaves the chart its natural height and gives
+            the map area ~330 px which is enough to read the home and
+            its surroundings. Layouts that DO pass an explicit height
+            (masonry via getCardSize, sections view via getGridOptions)
+            override this freely.                                       */
+        min-height: 480px;
         /*  New stacking context so absolute children with z-index
             stay scoped to the card instead of escaping above HA's
             dashboard chrome on scroll. */

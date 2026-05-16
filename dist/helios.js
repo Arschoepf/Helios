@@ -33460,7 +33460,18 @@ const heliosCardStyles = i$3`
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
         height:     100%;
         width:      100%;
-        min-height: 200px;
+        /*  Floor that survives dashboard layouts where the parent
+            doesn't apply an explicit height (vertical-stack, panel
+            view, some custom dashboards like Mushroom-based grids).
+            Without this floor, height:100% resolves to the children's
+            intrinsic height, which means only the timeline chart's
+            ~150 px contributes and the 3D map area collapses out of
+            view. 480 px leaves the chart its natural height and gives
+            the map area ~330 px which is enough to read the home and
+            its surroundings. Layouts that DO pass an explicit height
+            (masonry via getCardSize, sections view via getGridOptions)
+            override this freely.                                       */
+        min-height: 480px;
         /*  New stacking context so absolute children with z-index
             stay scoped to the card instead of escaping above HA's
             dashboard chrome on scroll. */
@@ -36335,7 +36346,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.2"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.3"}`,
       labelStyle,
       versionStyle
     );
@@ -36356,7 +36367,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.2",
+        version: "1.6.0-alpha.3",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -36364,7 +36375,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
