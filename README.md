@@ -153,6 +153,7 @@ Other national LiDAR programmes were probed and not yet integrated:
 * **Switzerland (swisstopo)** , published WMS only carries pre-rendered PNG hillshade, not raw heights. Raw `swissALTI3D` rasters are downloadable as files only.
 * **Slovakia (ZBGIS)** , DMR (terrain) is available as GeoTIFF, but DMP (surface) is only published as cached PNG visualisations.
 * **Denmark (Datafordeler DHM)** , WCS GeoTIFF exists but requires a per-user API key / OAuth signup, integration parked until that friction is reduced.
+* **United States** , federal USGS 3DEP exposes a live ArcGIS Image Server (`elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer`) for the *bare-earth* DEM only (DTM). No public DSM service at federal level, so the height-above-ground data needed for shadows isn't reachable. State-level programmes such as Minnesota DNR (`mntopo`) publish raw LiDAR as per-tile ZIP downloads only, no live raster query API. BYO local nDSM is the practical path for US users until a public DSM service materialises.
 
 If your country publishes a usable LiDAR HD endpoint (raw float heights via WMS or WCS, CORS-friendly, no per-user authentication) and you'd like to see it integrated, open an issue. The provider plug-in shape is documented in [ARCHITECTURE.md](./ARCHITECTURE.md) (`helios-lidar.ts` interface + `./helios-lidar/providers/` registry).
 

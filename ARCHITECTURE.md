@@ -185,7 +185,10 @@ through the shared post-processing in
 Probed and parked: Wales (NRW, per-tile ZIP only), Switzerland
 (swisstopo, WMS only carries pre-rendered hillshade), Slovakia
 (ZBGIS, surface only as PNG), Denmark (Datafordeler DHM, requires
-per-user OAuth).
+per-user OAuth), United States (federal USGS 3DEP exposes a live
+ArcGIS Image Server for bare-earth DEM only; no public DSM service,
+and state programmes such as MN DNR publish raw LiDAR as per-tile
+ZIP downloads only).
 
 **Timeline polish.** Daily kWh totals now appear under each date
 label on the timeline. Sunrise / sunset ring markers on the sun arc
@@ -388,6 +391,15 @@ Providers probed and not yet integrated:
   is only published as cached PNG visualisation.
 * **Denmark** (Datafordeler DHM), WCS GeoTIFF exists but requires a
   per-user API key / OAuth signup.
+* **United States**, federal USGS 3DEP exposes a live ArcGIS Image
+  Server
+  (`elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer`)
+  for the *bare-earth* DEM only (DTM). No public DSM service at
+  federal level, so the height-above-ground data needed for shadows
+  isn't reachable. State-level programmes such as Minnesota DNR
+  (`mntopo`) publish raw LiDAR as per-tile ZIP downloads only, no
+  live raster query API. BYO local nDSM is the practical path for
+  US users until a public DSM service materialises.
 
 ### v1.3.0, Auto-calibrating PV, terrain detail, mobile rotation, stability
 
