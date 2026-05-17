@@ -11,7 +11,7 @@ import
 } from './helios-engine';
 import { computePvPower, type PanelOrientation } from './helios-sun';
 import { pickTranslations } from './i18n';
-import { heliosCardStyles } from './helios-card-css';
+import { heliosCardStyles } from './css/helios-card-css';
 //Side-effect import: registers <helios-color-picker> and
 //<helios-card-editor> as custom elements, plus exposes the cfgHex /
 //formatDate helpers used by the card.
@@ -2850,13 +2850,12 @@ export class HeliosCard extends LitElement
 
     protected render(): TemplateResult
     {
-        //We used to gate the whole render on a configured MapTiler API
-        //key. Since v1.4.1 we ship with OpenFreeMap as the basemap,
-        //which needs no key, so the precondition is now just "we have
-        //home coordinates and we're not stuck inside a dashboard
-        //editor preview". Kept under the same `hasApiKey` name so the
-        //sea of `${hasApiKey ? html\`...\` : nothing}` calls below
-        //read the same; only the meaning of the flag changed.
+        //Precondition for rendering the live card chrome: home
+        //coordinates resolved (HA config or the lat/lon override).
+        //The basemap itself is OpenFreeMap and needs no credentials.
+        //Variable name kept as `hasApiKey` because every conditional
+        //branch below already keys off it; only the meaning is "we
+        //have what we need to project the home onto the map".
         const hasApiKey = this._getHomeCoords() !== null;
 
 

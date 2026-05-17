@@ -27,9 +27,8 @@
 //
 //OpenFreeMap exposes the OpenMapTiles schema, which carries the
 //`building` source-layer with `render_height` and
-//`render_min_height` properties, identical to what MapTiler v3
-//ships, so the parsing pipeline is unchanged from the historical
-//MapTiler-backed version.
+//`render_min_height` properties. The parsing pipeline only needs
+//those two attributes plus the polygon geometry.
 
 import { VectorTile } from '@mapbox/vector-tile';
 import Pbf from 'pbf';

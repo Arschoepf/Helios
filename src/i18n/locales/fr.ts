@@ -10,20 +10,12 @@ import type { Translations } from '../index';
 
 export const fr: Translations = {
     cardName:        'HELIOS',
-    cardDescription: 'Visualisation en temps réel de l\'énergie solaire et de la couverture nuageuse',
-
-    placeholder:
-    {
-        subtitle: 'Exposition solaire & couverture nuageuse'
-    },
+    cardDescription: '☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel',
 
     detail:
     {
-        title:    'Vue détaillée',
-        subtitle: 'Tableau de bord détaillé à venir.',
         exitHint: 'Cliquez n\'importe où pour quitter',
         todayLabel:         'Aujourd\'hui',
-        todayProduced:      'produit',
         todayForecast:      'prévu',
         todayPeak:          'pic',
         todayNotStartedYet: 'production en pause',

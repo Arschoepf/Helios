@@ -1,4 +1,4 @@
-# HELIOS, v1.6.0-alpha.11
+# HELIOS, v1.6.0-alpha.12
 
 HELIOS is a Home Assistant Lovelace custom card that visualises solar
 conditions at a home in real time: sun arc, irradiance, cloud cover,
@@ -733,7 +733,9 @@ Helios/
 │   └── .python-version             Pins helper tooling to Python 3.12
 ├── src/
 │   ├── helios-card.ts              Lit card class, composes everything
-│   ├── helios-card-css.ts          Card styles (extracted for readability)
+│   ├── css/
+│   │   ├── helios-card-css.ts      Runtime card styles (map, chips, charts)
+│   │   └── helios-card-editor-css.ts   Editor + color-picker styles
 │   ├── helios-config.ts            Visual editor + color picker + config helpers
 │   ├── helios-engine.ts            Map orchestration + projection + layers
 │   ├── helios-buildings.ts         Self-sourced building tile fetch + radius/cluster filter

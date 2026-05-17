@@ -111,14 +111,15 @@ export interface HeliosConfig
     //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
     //rendering of the date/time chip at the top-right of the card.
     'time-format'?:           unknown;
-    //Picks the MapTiler base style. 'streets' (default) renders
-    //a sober vector basemap suited to dense urban areas; 'topo' renders
-    //a topographic basemap with contour lines and softer earth tones,
-    //better in hilly / outdoor settings. The label visibility toggle
-    //and the helios-buildings extrusion are independent of this choice
+    //Picks the OpenFreeMap base style. 'streets' (default) renders
+    //a sober vector basemap with full street / POI labels suited to
+    //urban areas; 'minimal' loads Streets then strips every non-
+    //essential label / POI icon / road shield for the cheapest
+    //per-frame fragment workload. The label visibility toggle and
+    //the helios-buildings extrusion are independent of this choice
     //(both are wired to custom sources). When `card-theme: dark` is
-    //set, the dark variants of these styles (streets-v4-dark /
-    //topo-v4-dark) are used so the basemap matches the chrome.
+    //set, the dark variants of these styles are used so the basemap
+    //matches the chrome.
     'map-style'?:             unknown;
     //Picks the card chrome theme. 'light' (default) paints chips,
     //charts, buttons, tooltips and the scrub overlay on a white

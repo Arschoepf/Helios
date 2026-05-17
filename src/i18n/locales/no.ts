@@ -11,21 +11,13 @@ import type { Translations } from '../index';
 //    (Nasjonal Høydemodell), referenced in the LiDAR precision hint.
 export const no: Translations = {
     cardName:        'HELIOS',
-    cardDescription: 'Sanntidsvisualisering av solenergi og skydekke',
-
-    placeholder:
-    {
-        subtitle: 'Soleksponering og skydekke'
-    },
+    cardDescription: '☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid',
 
     detail:
     {
-        title:    'Detaljvisning',
-        subtitle: 'Detaljert dashbord kommer snart.',
         exitHint: 'Trykk hvor som helst for å gå ut',
-    
+
         todayLabel:         'I dag',
-        todayProduced:      'produsert',
         todayForecast:      'estimert',
         todayPeak:          'topp',
         todayNotStartedYet: 'produksjon pauset',

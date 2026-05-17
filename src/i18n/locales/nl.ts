@@ -2,21 +2,13 @@ import type { Translations } from '../index';
 
 export const nl: Translations = {
     cardName:        'HELIOS',
-    cardDescription: 'Realtime visualisatie van zonne-energie en bewolking',
-
-    placeholder:
-    {
-        subtitle: 'Zonexpositie & bewolking'
-    },
+    cardDescription: '☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime',
 
     detail:
     {
-        title:    'Detailweergave',
-        subtitle: 'Gedetailleerd dashboard binnenkort.',
         exitHint: 'Tik ergens om te sluiten',
-    
+
         todayLabel:         'Vandaag',
-        todayProduced:      'opgewekt',
         todayForecast:      'verwacht',
         todayPeak:          'piek',
         todayNotStartedYet: 'opwekking gepauzeerd',

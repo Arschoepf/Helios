@@ -12,21 +12,13 @@ import type { Translations } from '../index';
  */
 export const en: Translations = {
     cardName:        'HELIOS',
-    cardDescription: 'Real-time solar energy and cloud coverage visualization',
-
-    placeholder:
-    {
-        subtitle: 'Solar exposure & cloud coverage'
-    },
+    cardDescription: '☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home',
 
     detail:
     {
-        title:    'Detailed view',
-        subtitle: 'Detailed dashboard coming soon.',
         exitHint: 'Tap anywhere to exit',
-    
+
         todayLabel:         'Today',
-        todayProduced:      'produced',
         todayForecast:      'forecast',
         todayPeak:          'peak',
         todayNotStartedYet: 'production paused',

@@ -19,24 +19,16 @@ export interface Translations
     cardName:        string;
     cardDescription: string;
 
-    placeholder:
-    {
-        subtitle: string;
-    };
-
     //Detail dashboard, opened by clicking the home. The camera eases
     //in (zoom + pitch) and a full-card overlay takes over while the
     //pre-existing HUD fades out.
     detail:
     {
-        title:     string;       //"Detailed view" / "Vue détaillée"
-        subtitle:  string;       //placeholder body line
         exitHint:  string;       //close-button aria-label
 
         //Section labels and short captions for the detail-mode
         //dashboard. Each section is one factual block:
         //  todayLabel      , top of the today section
-        //  todayProduced   , subtitle under the produced kWh value
         //  todayForecast   , trailing text after the projected total
         //  todayPeak       , trailing text after the peak readout
         //  todayNotStartedYet , status line shown when produced is
@@ -48,7 +40,6 @@ export interface Translations
         //  batteryCharged  , label under the charge total
         //  batteryDischarged , label under the discharge total
         todayLabel:        string;
-        todayProduced:     string;
         todayForecast:     string;
         todayPeak:         string;
         todayNotStartedYet: string;
@@ -130,11 +121,10 @@ export interface Translations
         pvArrayAdd:               string;
         pvArrayRemove:            string;
         pvArrayNormHint:          string;
-        //Per-field helps under tilt / azimuth / share. Restore the
-        //pedagogical content from the legacy single-orientation
-        //pvTiltHelp / pvAzimuthHelp keys (removed by PR #10's
-        //consolidation), and add a share-specific explanation of
-        //the auto-normalisation contract.
+        //Per-field helps under tilt / azimuth / share, with the
+        //share-specific explanation of the auto-normalisation
+        //contract spelled out so users know that 50/50 and 1/1 give
+        //the same forecast.
         pvArrayTiltHelp:          string;
         pvArrayAzimuthHelp:       string;
         pvArrayShareHelp:         string;

@@ -32555,16 +32555,10 @@ _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS = 5e3;
 let HeliosEngine = _HeliosEngine;
 const en = {
   cardName: "HELIOS",
-  cardDescription: "Real-time solar energy and cloud coverage visualization",
-  placeholder: {
-    subtitle: "Solar exposure & cloud coverage"
-  },
+  cardDescription: "☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home",
   detail: {
-    title: "Detailed view",
-    subtitle: "Detailed dashboard coming soon.",
     exitHint: "Tap anywhere to exit",
     todayLabel: "Today",
-    todayProduced: "produced",
     todayForecast: "forecast",
     todayPeak: "peak",
     todayNotStartedYet: "production paused",
@@ -32673,16 +32667,10 @@ const en = {
 };
 const fr = {
   cardName: "HELIOS",
-  cardDescription: "Visualisation en temps réel de l'énergie solaire et de la couverture nuageuse",
-  placeholder: {
-    subtitle: "Exposition solaire & couverture nuageuse"
-  },
+  cardDescription: "☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel",
   detail: {
-    title: "Vue détaillée",
-    subtitle: "Tableau de bord détaillé à venir.",
     exitHint: "Cliquez n'importe où pour quitter",
     todayLabel: "Aujourd'hui",
-    todayProduced: "produit",
     todayForecast: "prévu",
     todayPeak: "pic",
     todayNotStartedYet: "production en pause",
@@ -32791,16 +32779,10 @@ const fr = {
 };
 const de = {
   cardName: "HELIOS",
-  cardDescription: "Echtzeit-Visualisierung von Solarenergie und Wolkenbedeckung",
-  placeholder: {
-    subtitle: "Sonneneinstrahlung & Wolkenbedeckung"
-  },
+  cardDescription: "☀️ Sonne, Wolken, PV-Erzeugung, Batterie und LiDAR-Schatten am Haus, in 3D-Echtzeit",
   detail: {
-    title: "Detailansicht",
-    subtitle: "Detailliertes Dashboard demnächst.",
     exitHint: "Tippe irgendwo, um zu schließen",
     todayLabel: "Heute",
-    todayProduced: "erzeugt",
     todayForecast: "Prognose",
     todayPeak: "Spitze",
     todayNotStartedYet: "Erzeugung pausiert",
@@ -32909,16 +32891,10 @@ const de = {
 };
 const es = {
   cardName: "HELIOS",
-  cardDescription: "Visualización en tiempo real de la energía solar y la cobertura de nubes",
-  placeholder: {
-    subtitle: "Exposición solar y cobertura de nubes"
-  },
+  cardDescription: "☀️ Sol, nubes, producción FV, batería y sombras LiDAR sobre tu casa, en 3D y tiempo real",
   detail: {
-    title: "Vista detallada",
-    subtitle: "Panel detallado próximamente.",
     exitHint: "Toca en cualquier lugar para salir",
     todayLabel: "Hoy",
-    todayProduced: "producido",
     todayForecast: "previsto",
     todayPeak: "pico",
     todayNotStartedYet: "producción en pausa",
@@ -33027,16 +33003,10 @@ const es = {
 };
 const it = {
   cardName: "HELIOS",
-  cardDescription: "Visualizzazione in tempo reale dell'energia solare e della copertura nuvolosa",
-  placeholder: {
-    subtitle: "Esposizione solare e copertura nuvolosa"
-  },
+  cardDescription: "☀️ Sole, nuvole, produzione FV, batteria e ombre LiDAR sulla tua casa, in 3D e tempo reale",
   detail: {
-    title: "Vista dettagliata",
-    subtitle: "Pannello dettagliato in arrivo.",
     exitHint: "Tocca un punto qualsiasi per uscire",
     todayLabel: "Oggi",
-    todayProduced: "prodotto",
     todayForecast: "previsto",
     todayPeak: "picco",
     todayNotStartedYet: "produzione in pausa",
@@ -33145,16 +33115,10 @@ const it = {
 };
 const nl = {
   cardName: "HELIOS",
-  cardDescription: "Realtime visualisatie van zonne-energie en bewolking",
-  placeholder: {
-    subtitle: "Zonexpositie & bewolking"
-  },
+  cardDescription: "☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime",
   detail: {
-    title: "Detailweergave",
-    subtitle: "Gedetailleerd dashboard binnenkort.",
     exitHint: "Tik ergens om te sluiten",
     todayLabel: "Vandaag",
-    todayProduced: "opgewekt",
     todayForecast: "verwacht",
     todayPeak: "piek",
     todayNotStartedYet: "opwekking gepauzeerd",
@@ -33263,16 +33227,10 @@ const nl = {
 };
 const pt = {
   cardName: "HELIOS",
-  cardDescription: "Visualização em tempo real da energia solar e da cobertura de nuvens",
-  placeholder: {
-    subtitle: "Exposição solar e cobertura de nuvens"
-  },
+  cardDescription: "☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a tua casa, em 3D e tempo real",
   detail: {
-    title: "Vista detalhada",
-    subtitle: "Painel detalhado em breve.",
     exitHint: "Toca em qualquer lugar para sair",
     todayLabel: "Hoje",
-    todayProduced: "produzido",
     todayForecast: "previsto",
     todayPeak: "pico",
     todayNotStartedYet: "produção em pausa",
@@ -33381,16 +33339,10 @@ const pt = {
 };
 const no = {
   cardName: "HELIOS",
-  cardDescription: "Sanntidsvisualisering av solenergi og skydekke",
-  placeholder: {
-    subtitle: "Soleksponering og skydekke"
-  },
+  cardDescription: "☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid",
   detail: {
-    title: "Detaljvisning",
-    subtitle: "Detaljert dashbord kommer snart.",
     exitHint: "Trykk hvor som helst for å gå ut",
     todayLabel: "I dag",
-    todayProduced: "produsert",
     todayForecast: "estimert",
     todayPeak: "topp",
     todayNotStartedYet: "produksjon pauset",
@@ -34134,13 +34086,12 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Placeholder shown until the user enters a MapTiler key.
-        Mini-Helios vignette: a stylised iso scene matching the real
-        card's vocabulary (sun arc, sun + halo, low-poly buildings
-        with a brighter central home, ground cloud disc, leader
-        chips) over a light day-mode sky gradient. The brand chrome
-        (title + subtitle) sits at the bottom, the MapTiler key
-        prompt lives in the README, not on the catalogue thumbnail. */
+    /*  Placeholder shown until the engine is ready and home
+        coordinates are available. Mini-Helios vignette: a stylised
+        iso scene matching the real card's vocabulary (sun arc,
+        sun + halo, low-poly buildings with a brighter central home,
+        ground cloud disc, leader chips) over a light day-mode sky
+        gradient. The brand chrome sits at the bottom. */
 
     .placeholder
     {
@@ -34282,10 +34233,11 @@ const heliosCardStyles = i$3`
     }
 
     /*  PV prediction line, overlays the observed PV chart for hours
-        past "now" using the auto-calibrated scalar fit from history.
-        Dashed + half opacity makes it visually distinct from the
-        recorded curve while staying in the configured PV colour so
-        it reads as "the same quantity, projected". */
+        past "now" using the user-configured peak power (pv-peak-kwp)
+        scaled by the clear-sky model. Dashed + half opacity makes it
+        visually distinct from the recorded curve while staying in
+        the configured PV colour so it reads as "the same quantity,
+        projected". */
     .hc-chart-predicted
     {
         stroke-dasharray: 4 3;
@@ -35260,6 +35212,452 @@ const heliosCardStyles = i$3`
         }
     }
 `;
+const colorPickerStyles = i$3`
+    :host { position: relative; display: inline-block; }
+
+    .swatch
+    {
+        width: 44px;
+        height: 30px;
+        padding: 0;
+        border: 1px solid var(--divider-color, rgba(0,0,0,0.2));
+        border-radius: 4px;
+        cursor: pointer;
+        background-clip: padding-box;
+    }
+
+    .swatch:focus-visible
+    {
+        outline: 2px solid var(--primary-color, #03a9f4);
+        outline-offset: 2px;
+    }
+
+    .pop
+    {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 1000;
+        background: var(--card-background-color, #fff);
+        border: 1px solid var(--divider-color, rgba(0,0,0,0.18));
+        border-radius: 6px;
+        padding: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+        min-width: 220px;
+    }
+
+    .grid
+    {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+    }
+
+    .cell
+    {
+        width: 22px;
+        height: 22px;
+        border-radius: 3px;
+        border: 1px solid rgba(0,0,0,0.12);
+        cursor: pointer;
+        padding: 0;
+    }
+
+    .cell:hover    { transform: scale(1.1); }
+    .cell.selected
+    {
+        outline: 2px solid var(--primary-color, #03a9f4);
+        outline-offset: 1px;
+    }
+
+    .hex-row
+    {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        border: 1px solid var(--divider-color, rgba(0,0,0,0.18));
+        border-radius: 4px;
+        padding: 4px 6px;
+    }
+
+    .hex-prefix
+    {
+        color: var(--secondary-text-color, #727272);
+        font-family: monospace;
+        font-size: 13px;
+    }
+
+    .hex-input
+    {
+        border: none;
+        outline: none;
+        background: transparent;
+        font-family: monospace;
+        font-size: 13px;
+        width: 100%;
+        color: var(--primary-text-color, #212121);
+        text-transform: lowercase;
+    }
+`;
+const editorStyles = i$3`
+    .editor
+    {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .section-title
+    {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--primary-color, #03a9f4);
+        margin-top: 10px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+    }
+
+    /*  Collapsible section. Uses native <details>/<summary> so the
+        open/closed state needs no JS plumbing and survives keyboard
+        navigation for free. The default disclosure triangle is
+        replaced by a custom chevron via ::before so the summary
+        row visually matches a regular .section-title heading with a
+        single rotating glyph that signals expandability.
+
+        Extra margin-top between sibling sections so they read as
+        distinct blocks even when several are collapsed in a row.
+        The first child of the editor gets no margin (the editor
+        container handles its own top padding).                     */
+    details.advanced-section
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        margin-top: 24px;
+    }
+    details.advanced-section:first-child { margin-top: 0; }
+    details.advanced-section > summary
+    {
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+    }
+    details.advanced-section > summary::-webkit-details-marker { display: none; }
+    details.advanced-section > summary.section-title-collapse
+    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--primary-color, #03a9f4);
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.18));
+    }
+    details.advanced-section > summary.section-title-collapse::before
+    {
+        content: '▸';
+        display: inline-block;
+        font-size: 10px;
+        line-height: 1;
+        transition: transform 120ms ease-out;
+    }
+    details.advanced-section[open] > summary.section-title-collapse::before
+    {
+        transform: rotate(90deg);
+    }
+
+    /*  Vertical rhythm: a positive top margin pushes the help
+        visibly away from its field above, and a generous bottom
+        margin creates a clear break before the next field. Both
+        stack with the section's 14 px flex gap, giving:
+          field → help        = gap + top    = 14 + 8  = 22 px
+          help  → next field  = gap + bottom = 14 + 20 = 34 px
+        Hierarchy ratio 1.5×, both spacings comfortable to read.   */
+    .field-help
+    {
+        font-size: 11px;
+        color: var(--secondary-text-color, #727272);
+        margin: 8px 0 20px 0;
+    }
+
+    .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
+    .field-help a:hover { text-decoration: underline; }
+
+    .hint
+    {
+        font-size: 11px;
+        color: var(--secondary-text-color, #727272);
+        font-style: italic;
+        margin: 8px 0 20px 0;
+    }
+
+    .field
+    {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        position: relative;
+    }
+
+    /*  Stacked variant for controls too wide to share a row with
+        their label (e.g. ha-entity-picker). */
+    .field.field-block
+    {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+    }
+
+    .field.field-block .label             { flex: none; }
+    .field.field-block ha-entity-picker   { width: 100%; }
+
+    .label
+    {
+        font-size: 13px;
+        color: var(--primary-text-color, #212121);
+        flex: 1;
+    }
+
+    input[type="text"],
+    input[type="number"]
+    {
+        width: 180px;
+        padding: 6px 8px;
+        border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        border-radius: 4px;
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
+        font-size: 13px;
+    }
+
+    /*  Native dropdown reused for any setting with 3+ options whose
+        labels can't fit a horizontal segmented toggle without
+        cropping across languages. Same width budget as the text
+        inputs so right-edge alignment matches the rest of the
+        editor. The browser's native chevron + dropdown menu is
+        kept on purpose: it's the most familiar control on every
+        HA frontend (desktop, mobile, iframe). */
+    .he-select
+    {
+        width: 180px;
+        padding: 6px 8px;
+        border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        border-radius: 4px;
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
+        font-size: 13px;
+    }
+
+    /*  Two-button toggle, sized to match the other inputs so
+        the right-edge alignment stays consistent across fields. */
+    .segmented-toggle
+    {
+        display: inline-flex;
+        width: 180px;
+        border-radius: 6px;
+        overflow: hidden;
+        border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        background: var(--card-background-color, #fff);
+    }
+
+    .seg-option
+    {
+        flex: 1;
+        padding: 7px 10px;
+        background: transparent;
+        color: var(--primary-text-color, #212121);
+        border: none;
+        cursor: pointer;
+        font-size: 13px;
+        font-family: inherit;
+        transition: background 0.15s, color 0.15s;
+    }
+
+    .seg-option + .seg-option
+    {
+        border-left: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+    }
+
+    .seg-option:hover:not(.active)
+    {
+        background: var(--secondary-background-color, rgba(0,0,0,0.04));
+    }
+
+    .seg-option.active
+    {
+        background: var(--primary-color, #03a9f4);
+        color: var(--text-primary-color, #fff);
+    }
+
+    /*  Slider variant, replaces type="number" inputs so the
+        user can never enter a value outside the supported range.
+        The matching value is shown to the right of the track. */
+    .slider-row
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: 180px;
+    }
+
+    .slider-row input[type="range"]
+    {
+        flex: 1;
+        min-width: 0;
+        accent-color: var(--primary-color, #03a9f4);
+    }
+
+    .slider-value
+    {
+        font-variant-numeric: tabular-nums;
+        font-size: 12px;
+        color: var(--secondary-text-color, #727272);
+        min-width: 44px;
+        text-align: right;
+    }
+
+    code
+    {
+        font-family: monospace;
+        background: var(--secondary-background-color, rgba(0,0,0,0.05));
+        padding: 1px 4px;
+        border-radius: 3px;
+    }
+
+    /*  One bordered card per PV array entry. Now a <details> so
+        the user can collapse individual arrays once they're set up
+        and keep the editor short. The card frame stays whether
+        collapsed or expanded so the multi-array config still reads
+        as discrete groups rather than a tall undifferentiated list. */
+    details.pv-array-card
+    {
+        border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        border-radius: 6px;
+        background: var(--card-background-color, #fff);
+        overflow: hidden;
+    }
+
+    /*  Summary = header row of the collapsed/expanded card. Stays
+        visible whether the card is open or not; clicking anywhere
+        on it toggles. Native marker is hidden, replaced by a
+        custom chevron so the rotation is consistent with the
+        other collapsible sections above. */
+    details.pv-array-card > summary.pv-array-summary
+    {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+        user-select: none;
+    }
+    details.pv-array-card > summary.pv-array-summary::-webkit-details-marker { display: none; }
+    details.pv-array-card[open] > summary.pv-array-summary
+    {
+        border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.08));
+    }
+
+    /*  Chevron rotates 90° when the card is open. Same SVG-less
+        approach used by the .section-title-collapse arrow so the
+        two collapsibles look coherent. */
+    .pv-array-chevron
+    {
+        width: 0;
+        height: 0;
+        border-style: solid;
+        border-width: 4px 0 4px 5px;
+        border-color: transparent transparent transparent var(--secondary-text-color, #757575);
+        transition: transform 0.15s ease;
+        flex-shrink: 0;
+    }
+    details.pv-array-card[open] > summary.pv-array-summary > .pv-array-chevron
+    {
+        transform: rotate(90deg);
+    }
+
+    .pv-array-title
+    {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--primary-text-color, #212121);
+        flex: 1;
+    }
+
+    /*  Body of the open card: holds the tilt / azimuth / share
+        stacked fields. Padding kept consistent with the previous
+        div-card layout. */
+    .pv-array-body
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 12px;
+    }
+
+    /*  Borderless text buttons for add/remove so the cards stay
+        visually quiet. The +Add button gets the accent colour to
+        telegraph the affordance, Remove stays muted (destructive
+        actions don't need to shout; they're behind a disabled
+        state when there's only one card). */
+    .pv-array-add,
+    .pv-array-remove
+    {
+        background: transparent;
+        border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-family: inherit;
+        cursor: pointer;
+        color: var(--primary-text-color, #212121);
+    }
+
+    /*  "+ Add array" button: right-aligned at the bottom of the
+        section. Block element with margin-left: auto and
+        fit-content width pulls it to the right without depending
+        on the parent being a flex container (the outer <details>
+        isn't). */
+    .pv-array-add
+    {
+        color: var(--primary-color, #03a9f4);
+        border-color: var(--primary-color, #03a9f4);
+        display: block;
+        margin-left: auto;
+        margin-top: 8px;
+        width: fit-content;
+    }
+
+    .pv-array-remove:disabled
+    {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .pv-array-add:hover:not(:disabled),
+    .pv-array-remove:hover:not(:disabled)
+    {
+        background: var(--secondary-background-color, rgba(0,0,0,0.04));
+    }
+
+    /*  Mirror the focus-visible ring used on .swatch elsewhere
+        in the editor so keyboard users get a consistent indicator
+        on the new add/remove buttons. */
+    .pv-array-add:focus-visible,
+    .pv-array-remove:focus-visible
+    {
+        outline: 2px solid var(--primary-color, #03a9f4);
+        outline-offset: 2px;
+    }
+`;
 var __defProp$1 = Object.defineProperty;
 var __getOwnPropDesc$1 = Object.getOwnPropertyDescriptor;
 var __decorateClass$1 = (decorators, target, key, kind) => {
@@ -35455,94 +35853,7 @@ HeliosColorPicker.PRESETS = [
   "#9d174d",
   "#500724"
 ];
-HeliosColorPicker.styles = i$3`
-        :host { position: relative; display: inline-block; }
-
-        .swatch
-        {
-            width: 44px;
-            height: 30px;
-            padding: 0;
-            border: 1px solid var(--divider-color, rgba(0,0,0,0.2));
-            border-radius: 4px;
-            cursor: pointer;
-            background-clip: padding-box;
-        }
-
-        .swatch:focus-visible
-        {
-            outline: 2px solid var(--primary-color, #03a9f4);
-            outline-offset: 2px;
-        }
-
-        .pop
-        {
-            position: absolute;
-            top: calc(100% + 6px);
-            right: 0;
-            z-index: 1000;
-            background: var(--card-background-color, #fff);
-            border: 1px solid var(--divider-color, rgba(0,0,0,0.18));
-            border-radius: 6px;
-            padding: 10px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.18);
-            min-width: 220px;
-        }
-
-        .grid
-        {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 4px;
-        }
-
-        .cell
-        {
-            width: 22px;
-            height: 22px;
-            border-radius: 3px;
-            border: 1px solid rgba(0,0,0,0.12);
-            cursor: pointer;
-            padding: 0;
-        }
-
-        .cell:hover    { transform: scale(1.1); }
-        .cell.selected
-        {
-            outline: 2px solid var(--primary-color, #03a9f4);
-            outline-offset: 1px;
-        }
-
-        .hex-row
-        {
-            margin-top: 10px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            border: 1px solid var(--divider-color, rgba(0,0,0,0.18));
-            border-radius: 4px;
-            padding: 4px 6px;
-        }
-
-        .hex-prefix
-        {
-            color: var(--secondary-text-color, #727272);
-            font-family: monospace;
-            font-size: 13px;
-        }
-
-        .hex-input
-        {
-            border: none;
-            outline: none;
-            background: transparent;
-            font-family: monospace;
-            font-size: 13px;
-            width: 100%;
-            color: var(--primary-text-color, #212121);
-            text-transform: lowercase;
-        }
-    `;
+HeliosColorPicker.styles = colorPickerStyles;
 __decorateClass$1([
   n2({ type: String })
 ], HeliosColorPicker.prototype, "value", 2);
@@ -35563,6 +35874,7 @@ let HeliosCardEditor = class extends i {
     super(...arguments);
     this._cfg = {};
     this._pickerReady = false;
+    this._openSection = "location";
     this._openArrayIndices = /* @__PURE__ */ new Set([0]);
     this._sliderDebounce = /* @__PURE__ */ new Map();
     this._pvEntityFilter = (entity) => {
@@ -35790,6 +36102,20 @@ let HeliosCardEditor = class extends i {
   _arraySharesSum(list) {
     return list.reduce((a2, e2) => a2 + (e2.share ?? 0), 0);
   }
+  //Enforces the accordion contract for top-level editor sections:
+  //opening one closes every other (Lit re-render is driven by the
+  //_openSection state binding the `open` attribute on each
+  //<details>). When the user collapses the currently-open section
+  //the editor falls back to "everything closed", a valid state
+  //since the section content is the only mandatory surface.
+  _onSectionToggle(sectionId, e2) {
+    const el = e2.currentTarget;
+    if (el.open) {
+      this._openSection = sectionId;
+    } else if (this._openSection === sectionId) {
+      this._openSection = null;
+    }
+  }
   //Syncs the local open-set with the <details> element's runtime
   //state on every native `toggle` event. Without this round-trip,
   //Lit re-renders would snap the `open` attribute back to whatever
@@ -35816,7 +36142,7 @@ let HeliosCardEditor = class extends i {
     return b`
             <div class="editor">
 
-                <details class="advanced-section" open>
+                <details class="advanced-section" ?open="${this._openSection === "location"}" @toggle="${(e2) => this._onSectionToggle("location", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.locationSection}</summary>
                 <label class="field">
                     <span class="label">${t2.editor.homeLatitude}</span>
@@ -35846,7 +36172,7 @@ let HeliosCardEditor = class extends i {
 
                 </details>
 
-                <details class="advanced-section" open>
+                <details class="advanced-section" ?open="${this._openSection === "map"}" @toggle="${(e2) => this._onSectionToggle("map", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.mapSection}</summary>
                 <label class="field">
                     <span class="label">${t2.editor.mapStyle}</span>
@@ -35940,7 +36266,7 @@ let HeliosCardEditor = class extends i {
 
                 </details>
 
-                <details class="advanced-section" open>
+                <details class="advanced-section" ?open="${this._openSection === "buildings"}" @toggle="${(e2) => this._onSectionToggle("buildings", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.buildingsSection}</summary>
                 <label class="field">
                     <span class="label">${t2.editor.buildingClusterRadius}</span>
@@ -35964,19 +36290,11 @@ let HeliosCardEditor = class extends i {
                         <span class="slider-value">${this._fmtNum(Number(c2["building-opacity"] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
                     </div>
                 </label>
-                <label class="field">
-                    <span class="label">${t2.editor.buildingColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["building-color"], DEFAULT_BUILDING_COLOR_HEX)}"
-                        .ariaLabel="${t2.editor.buildingColor}"
-                        @value-changed="${(e2) => this._color("building-color", e2)}"
-                    ></helios-color-picker>
-                </label>
                 <div class="hint">${t2.editor.buildingsHint}</div>
 
                 </details>
 
-                <details class="advanced-section" open>
+                <details class="advanced-section" ?open="${this._openSection === "shadows"}" @toggle="${(e2) => this._onSectionToggle("shadows", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.shadowsSection}</summary>
                 <div class="field">
                     <span class="label">${t2.editor.shadowsEnabled}</span>
@@ -36024,7 +36342,7 @@ let HeliosCardEditor = class extends i {
 
                 </details>
 
-                <details class="advanced-section" open>
+                <details class="advanced-section" ?open="${this._openSection === "pv"}" @toggle="${(e2) => this._onSectionToggle("pv", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.pvSection}</summary>
                 <div class="field field-block">
                     <span class="label">${t2.editor.pvEntity}</span>
@@ -36148,19 +36466,11 @@ let HeliosCardEditor = class extends i {
                         </details>
                     `;
     })()}
-                <label class="field">
-                    <span class="label">${t2.editor.pvColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["pv-color"], DEFAULT_PV_COLOR_HEX)}"
-                        .ariaLabel="${t2.editor.pvColor}"
-                        @value-changed="${(e2) => this._color("pv-color", e2)}"
-                    ></helios-color-picker>
-                </label>
                 <div class="hint">${t2.editor.pvHint}</div>
 
                 </details>
 
-                <details class="advanced-section" open>
+                <details class="advanced-section" ?open="${this._openSection === "battery"}" @toggle="${(e2) => this._onSectionToggle("battery", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.batterySection}</summary>
                 <div class="field field-block">
                     <span class="label">${t2.editor.batterySocEntity}</span>
@@ -36220,19 +36530,11 @@ let HeliosCardEditor = class extends i {
                     </div>
                 </div>
                 <div class="field-help">${t2.editor.batteryPowerInvertHelp}</div>
-                <label class="field">
-                    <span class="label">${t2.editor.batteryColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["battery-color"], DEFAULT_BATTERY_COLOR_HEX)}"
-                        .ariaLabel="${t2.editor.batteryColor}"
-                        @value-changed="${(e2) => this._color("battery-color", e2)}"
-                    ></helios-color-picker>
-                </label>
                 <div class="hint">${t2.editor.batteryHint}</div>
 
                 </details>
 
-                <details class="advanced-section" open>
+                <details class="advanced-section" ?open="${this._openSection === "colors"}" @toggle="${(e2) => this._onSectionToggle("colors", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.colors}</summary>
                     <label class="field">
                         <span class="label">${t2.editor.sunColor}</span>
@@ -36250,10 +36552,34 @@ let HeliosCardEditor = class extends i {
                             @value-changed="${(e2) => this._color("cloud-color", e2)}"
                         ></helios-color-picker>
                     </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.pvColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c2["pv-color"], DEFAULT_PV_COLOR_HEX)}"
+                            .ariaLabel="${t2.editor.pvColor}"
+                            @value-changed="${(e2) => this._color("pv-color", e2)}"
+                        ></helios-color-picker>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.batteryColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c2["battery-color"], DEFAULT_BATTERY_COLOR_HEX)}"
+                            .ariaLabel="${t2.editor.batteryColor}"
+                            @value-changed="${(e2) => this._color("battery-color", e2)}"
+                        ></helios-color-picker>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.buildingColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c2["building-color"], DEFAULT_BUILDING_COLOR_HEX)}"
+                            .ariaLabel="${t2.editor.buildingColor}"
+                            @value-changed="${(e2) => this._color("building-color", e2)}"
+                        ></helios-color-picker>
+                    </label>
                     <div class="hint">${t2.editor.colorsHint}</div>
                 </details>
 
-                <details class="advanced-section" open>
+                <details class="advanced-section" ?open="${this._openSection === "timeline"}" @toggle="${(e2) => this._onSectionToggle("timeline", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.timeline}</summary>
                 <label class="field">
                     <span class="label">${t2.editor.dateFormat}</span>
@@ -36286,7 +36612,7 @@ let HeliosCardEditor = class extends i {
 
                 </details>
 
-                <details class="advanced-section">
+                <details class="advanced-section" ?open="${this._openSection === "lidar"}" @toggle="${(e2) => this._onSectionToggle("lidar", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.localLidarSection}</summary>
                     <div class="hint">${t2.editor.localLidarHint}</div>
                     <div class="hint" style="margin-bottom: 14px;">${t2.editor.localLidarToolsHint}</div>
@@ -36370,376 +36696,7 @@ let HeliosCardEditor = class extends i {
 };
 HeliosCardEditor.SLIDER_COMMIT_DELAY_MS = 250;
 HeliosCardEditor.PV_ARRAYS_MAX = 6;
-HeliosCardEditor.styles = i$3`
-        .editor
-        {
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .section-title
-        {
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            color: var(--primary-color, #03a9f4);
-            margin-top: 10px;
-            padding-bottom: 4px;
-            border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
-        }
-
-        /*  Collapsible section. Uses native <details>/<summary> so the
-            open/closed state needs no JS plumbing and survives keyboard
-            navigation for free. The default disclosure triangle is
-            replaced by a custom chevron via ::before so the summary
-            row visually matches a regular .section-title heading with a
-            single rotating glyph that signals expandability.
-
-            Extra margin-top between sibling sections so they read as
-            distinct blocks even when several are collapsed in a row.
-            The first child of the editor gets no margin (the editor
-            container handles its own top padding).                     */
-        details.advanced-section
-        {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            margin-top: 24px;
-        }
-        details.advanced-section:first-child { margin-top: 0; }
-        details.advanced-section > summary
-        {
-            list-style: none;
-            cursor: pointer;
-            user-select: none;
-        }
-        details.advanced-section > summary::-webkit-details-marker { display: none; }
-        details.advanced-section > summary.section-title-collapse
-        {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            color: var(--primary-color, #03a9f4);
-            padding-bottom: 6px;
-            border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.18));
-        }
-        details.advanced-section > summary.section-title-collapse::before
-        {
-            content: '▸';
-            display: inline-block;
-            font-size: 10px;
-            line-height: 1;
-            transition: transform 120ms ease-out;
-        }
-        details.advanced-section[open] > summary.section-title-collapse::before
-        {
-            transform: rotate(90deg);
-        }
-
-        /*  Vertical rhythm with positive-only margins. The previous
-            negative-margin approach kept biting back: too small and
-            the editor read as dense, too aggressive and the hint
-            visually overlapped the field above. With a positive
-            margin-bottom on hint/help (and the section's flex gap
-            handling the field-to-hint spacing), we get a clean
-            asymmetry without any overlap risk:
-              field → hint        = section gap (14 px)
-              hint  → next field  = section gap + 20 px = 34 px
-            Hierarchy is visible (2.4× ratio) and no element ever
-            sits underneath another.                                  */
-        /*  Vertical rhythm: a positive top margin pushes the help
-            visibly away from its field above, and a generous bottom
-            margin creates a clear break before the next field. Both
-            stack with the section's 14 px flex gap, giving:
-              field → help        = gap + top    = 14 + 8  = 22 px
-              help  → next field  = gap + bottom = 14 + 20 = 34 px
-            Hierarchy ratio 1.5×, both spacings comfortable to read.   */
-        .field-help
-        {
-            font-size: 11px;
-            color: var(--secondary-text-color, #727272);
-            margin: 8px 0 20px 0;
-        }
-
-        .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
-        .field-help a:hover { text-decoration: underline; }
-
-        .hint
-        {
-            font-size: 11px;
-            color: var(--secondary-text-color, #727272);
-            font-style: italic;
-            margin: 8px 0 20px 0;
-        }
-
-        .field
-        {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            position: relative;
-        }
-
-        /*  Stacked variant for controls too wide to share a row with
-            their label (e.g. ha-entity-picker). */
-        .field.field-block
-        {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 4px;
-        }
-
-        .field.field-block .label             { flex: none; }
-        .field.field-block ha-entity-picker   { width: 100%; }
-
-        .label
-        {
-            font-size: 13px;
-            color: var(--primary-text-color, #212121);
-            flex: 1;
-        }
-
-        input[type="text"],
-        input[type="number"]
-        {
-            width: 180px;
-            padding: 6px 8px;
-            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
-            border-radius: 4px;
-            background: var(--card-background-color, #fff);
-            color: var(--primary-text-color, #212121);
-            font-size: 13px;
-        }
-
-        /*  Native dropdown reused for any setting with 3+ options whose
-            labels can't fit a horizontal segmented toggle without
-            cropping across languages. Same width budget as the text
-            inputs so right-edge alignment matches the rest of the
-            editor. The browser's native chevron + dropdown menu is
-            kept on purpose: it's the most familiar control on every
-            HA frontend (desktop, mobile, iframe). */
-        .he-select
-        {
-            width: 180px;
-            padding: 6px 8px;
-            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
-            border-radius: 4px;
-            background: var(--card-background-color, #fff);
-            color: var(--primary-text-color, #212121);
-            font-size: 13px;
-        }
-
-        /*  Two-button toggle, sized to match the other inputs so
-            the right-edge alignment stays consistent across fields. */
-        .segmented-toggle
-        {
-            display: inline-flex;
-            width: 180px;
-            border-radius: 6px;
-            overflow: hidden;
-            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
-            background: var(--card-background-color, #fff);
-        }
-
-        .seg-option
-        {
-            flex: 1;
-            padding: 7px 10px;
-            background: transparent;
-            color: var(--primary-text-color, #212121);
-            border: none;
-            cursor: pointer;
-            font-size: 13px;
-            font-family: inherit;
-            transition: background 0.15s, color 0.15s;
-        }
-
-        .seg-option + .seg-option
-        {
-            border-left: 1px solid var(--divider-color, rgba(0,0,0,0.12));
-        }
-
-        .seg-option:hover:not(.active)
-        {
-            background: var(--secondary-background-color, rgba(0,0,0,0.04));
-        }
-
-        .seg-option.active
-        {
-            background: var(--primary-color, #03a9f4);
-            color: var(--text-primary-color, #fff);
-        }
-
-        /*  Slider variant, replaces type="number" inputs so the
-            user can never enter a value outside the supported range.
-            The matching value is shown to the right of the track. */
-        .slider-row
-        {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            width: 180px;
-        }
-
-        .slider-row input[type="range"]
-        {
-            flex: 1;
-            min-width: 0;
-            accent-color: var(--primary-color, #03a9f4);
-        }
-
-        .slider-value
-        {
-            font-variant-numeric: tabular-nums;
-            font-size: 12px;
-            color: var(--secondary-text-color, #727272);
-            min-width: 44px;
-            text-align: right;
-        }
-
-        code
-        {
-            font-family: monospace;
-            background: var(--secondary-background-color, rgba(0,0,0,0.05));
-            padding: 1px 4px;
-            border-radius: 3px;
-        }
-
-        /*  One bordered card per PV array entry. Now a <details> so
-            the user can collapse individual arrays once they're set up
-            and keep the editor short. The card frame stays whether
-            collapsed or expanded so the multi-array config still reads
-            as discrete groups rather than a tall undifferentiated list. */
-        details.pv-array-card
-        {
-            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
-            border-radius: 6px;
-            background: var(--card-background-color, #fff);
-            overflow: hidden;
-        }
-
-        /*  Summary = header row of the collapsed/expanded card. Stays
-            visible whether the card is open or not; clicking anywhere
-            on it toggles. Native marker is hidden, replaced by a
-            custom chevron so the rotation is consistent with the
-            other collapsible sections above. */
-        details.pv-array-card > summary.pv-array-summary
-        {
-            list-style: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            cursor: pointer;
-            user-select: none;
-        }
-        details.pv-array-card > summary.pv-array-summary::-webkit-details-marker { display: none; }
-        details.pv-array-card[open] > summary.pv-array-summary
-        {
-            border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.08));
-        }
-
-        /*  Chevron rotates 90° when the card is open. Same SVG-less
-            approach used by the .section-title-collapse arrow so the
-            two collapsibles look coherent. */
-        .pv-array-chevron
-        {
-            width: 0;
-            height: 0;
-            border-style: solid;
-            border-width: 4px 0 4px 5px;
-            border-color: transparent transparent transparent var(--secondary-text-color, #757575);
-            transition: transform 0.15s ease;
-            flex-shrink: 0;
-        }
-        details.pv-array-card[open] > summary.pv-array-summary > .pv-array-chevron
-        {
-            transform: rotate(90deg);
-        }
-
-        .pv-array-title
-        {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--primary-text-color, #212121);
-            flex: 1;
-        }
-
-        /*  Body of the open card: holds the tilt / azimuth / share
-            stacked fields. Padding kept consistent with the previous
-            div-card layout. */
-        .pv-array-body
-        {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding: 10px 12px;
-        }
-
-        /*  Borderless text buttons for add/remove so the cards stay
-            visually quiet. The +Add button gets the accent colour to
-            telegraph the affordance, Remove stays muted (destructive
-            actions don't need to shout; they're behind a disabled
-            state when there's only one card). */
-        .pv-array-add,
-        .pv-array-remove
-        {
-            background: transparent;
-            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
-            border-radius: 4px;
-            padding: 4px 10px;
-            font-size: 12px;
-            font-family: inherit;
-            cursor: pointer;
-            color: var(--primary-text-color, #212121);
-        }
-
-        /*  "+ Add array" button: right-aligned at the bottom of the
-            section. Block element with margin-left: auto and
-            fit-content width pulls it to the right without depending
-            on the parent being a flex container (the outer <details>
-            isn't). */
-        .pv-array-add
-        {
-            color: var(--primary-color, #03a9f4);
-            border-color: var(--primary-color, #03a9f4);
-            display: block;
-            margin-left: auto;
-            margin-top: 8px;
-            width: fit-content;
-        }
-
-        .pv-array-remove:disabled
-        {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .pv-array-add:hover:not(:disabled),
-        .pv-array-remove:hover:not(:disabled)
-        {
-            background: var(--secondary-background-color, rgba(0,0,0,0.04));
-        }
-
-        /*  Mirror the focus-visible ring used on .swatch elsewhere
-            in the editor so keyboard users get a consistent indicator
-            on the new add/remove buttons. */
-        .pv-array-add:focus-visible,
-        .pv-array-remove:focus-visible
-        {
-            outline: 2px solid var(--primary-color, #03a9f4);
-            outline-offset: 2px;
-        }
-
-    `;
+HeliosCardEditor.styles = editorStyles;
 __decorateClass$1([
   n2({ attribute: false })
 ], HeliosCardEditor.prototype, "hass", 2);
@@ -36749,6 +36706,9 @@ __decorateClass$1([
 __decorateClass$1([
   r()
 ], HeliosCardEditor.prototype, "_pickerReady", 2);
+__decorateClass$1([
+  r()
+], HeliosCardEditor.prototype, "_openSection", 2);
 __decorateClass$1([
   r()
 ], HeliosCardEditor.prototype, "_openArrayIndices", 2);
@@ -36785,7 +36745,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.11"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.12"}`,
       labelStyle,
       versionStyle
     );
@@ -36806,7 +36766,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.11",
+        version: "1.6.0-alpha.12",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -36814,7 +36774,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.11"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.12"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

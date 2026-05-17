@@ -636,13 +636,12 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Placeholder shown until the user enters a MapTiler key.
-        Mini-Helios vignette: a stylised iso scene matching the real
-        card's vocabulary (sun arc, sun + halo, low-poly buildings
-        with a brighter central home, ground cloud disc, leader
-        chips) over a light day-mode sky gradient. The brand chrome
-        (title + subtitle) sits at the bottom, the MapTiler key
-        prompt lives in the README, not on the catalogue thumbnail. */
+    /*  Placeholder shown until the engine is ready and home
+        coordinates are available. Mini-Helios vignette: a stylised
+        iso scene matching the real card's vocabulary (sun arc,
+        sun + halo, low-poly buildings with a brighter central home,
+        ground cloud disc, leader chips) over a light day-mode sky
+        gradient. The brand chrome sits at the bottom. */
 
     .placeholder
     {
@@ -784,10 +783,11 @@ export const heliosCardStyles = css`
     }
 
     /*  PV prediction line, overlays the observed PV chart for hours
-        past "now" using the auto-calibrated scalar fit from history.
-        Dashed + half opacity makes it visually distinct from the
-        recorded curve while staying in the configured PV colour so
-        it reads as "the same quantity, projected". */
+        past "now" using the user-configured peak power (pv-peak-kwp)
+        scaled by the clear-sky model. Dashed + half opacity makes it
+        visually distinct from the recorded curve while staying in
+        the configured PV colour so it reads as "the same quantity,
+        projected". */
     .hc-chart-predicted
     {
         stroke-dasharray: 4 3;
