@@ -1374,8 +1374,8 @@ export class HeliosCardEditor extends LitElement
         {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-top: 16px;
+            gap: 14px;
+            margin-top: 24px;
         }
         details.advanced-section:first-child { margin-top: 0; }
         details.advanced-section > summary
@@ -1412,22 +1412,22 @@ export class HeliosCardEditor extends LitElement
         }
 
         /*  Asymmetric vertical rhythm: the help/hint sits close to its
-            companion field (small negative margin pulls it up into the
-            flex gap so the two read as a logical unit) but pushes the
-            NEXT field away with a generous bottom margin so consecutive
-            field+help blocks remain visually distinct. Without this
-            asymmetry the flex gap distributes spacing evenly and the
-            editor reads as a single dense column.
+            companion field (negative margin-top pulls it up against
+            the flex gap so the two read as a logical unit) and pushes
+            the NEXT field away with a generous bottom margin so
+            consecutive field+help blocks remain visually distinct.
 
-            The -2px negative is gentle enough to avoid the overlap
-            with tall controls (ha-entity-picker, segmented toggles)
-            that the previous -6px caused.                              */
+            The -8px negative compensates the section's 14px gap to
+            land at ~6px below the field (tight, "this label belongs
+            to that field above"), then the 22px margin-bottom adds
+            to the gap for a ~36px break before the next field (clear,
+            "new field now").                                          */
         .field-help
         {
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
-            margin-top: -2px;
-            margin-bottom: 10px;
+            margin-top: -8px;
+            margin-bottom: 22px;
         }
 
         .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
@@ -1438,8 +1438,8 @@ export class HeliosCardEditor extends LitElement
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
             font-style: italic;
-            margin-top: -2px;
-            margin-bottom: 10px;
+            margin-top: -8px;
+            margin-bottom: 22px;
         }
 
         .field

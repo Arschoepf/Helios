@@ -36566,8 +36566,8 @@ HeliosCardEditor.styles = i$3`
         {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-top: 16px;
+            gap: 14px;
+            margin-top: 24px;
         }
         details.advanced-section:first-child { margin-top: 0; }
         details.advanced-section > summary
@@ -36604,22 +36604,22 @@ HeliosCardEditor.styles = i$3`
         }
 
         /*  Asymmetric vertical rhythm: the help/hint sits close to its
-            companion field (small negative margin pulls it up into the
-            flex gap so the two read as a logical unit) but pushes the
-            NEXT field away with a generous bottom margin so consecutive
-            field+help blocks remain visually distinct. Without this
-            asymmetry the flex gap distributes spacing evenly and the
-            editor reads as a single dense column.
+            companion field (negative margin-top pulls it up against
+            the flex gap so the two read as a logical unit) and pushes
+            the NEXT field away with a generous bottom margin so
+            consecutive field+help blocks remain visually distinct.
 
-            The -2px negative is gentle enough to avoid the overlap
-            with tall controls (ha-entity-picker, segmented toggles)
-            that the previous -6px caused.                              */
+            The -8px negative compensates the section's 14px gap to
+            land at ~6px below the field (tight, "this label belongs
+            to that field above"), then the 22px margin-bottom adds
+            to the gap for a ~36px break before the next field (clear,
+            "new field now").                                          */
         .field-help
         {
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
-            margin-top: -2px;
-            margin-bottom: 10px;
+            margin-top: -8px;
+            margin-bottom: 22px;
         }
 
         .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
@@ -36630,8 +36630,8 @@ HeliosCardEditor.styles = i$3`
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
             font-style: italic;
-            margin-top: -2px;
-            margin-bottom: 10px;
+            margin-top: -8px;
+            margin-bottom: 22px;
         }
 
         .field
@@ -37010,7 +37010,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.8"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.9"}`,
       labelStyle,
       versionStyle
     );
@@ -37031,7 +37031,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.8",
+        version: "1.6.0-alpha.9",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37039,7 +37039,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.8"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.9"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
