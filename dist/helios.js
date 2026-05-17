@@ -36603,17 +36603,23 @@ HeliosCardEditor.styles = i$3`
             transform: rotate(90deg);
         }
 
-        /*  Tucked under its companion field, with a small breathing
-            margin so tall controls (ha-entity-picker, segmented toggles,
-            preset chip rows) don't visually overlap the help text. The
-            previous 'margin-top: -6px' worked for plain number inputs
-            but caused the help to disappear under tall pickers.        */
+        /*  Asymmetric vertical rhythm: the help/hint sits close to its
+            companion field (small negative margin pulls it up into the
+            flex gap so the two read as a logical unit) but pushes the
+            NEXT field away with a generous bottom margin so consecutive
+            field+help blocks remain visually distinct. Without this
+            asymmetry the flex gap distributes spacing evenly and the
+            editor reads as a single dense column.
+
+            The -2px negative is gentle enough to avoid the overlap
+            with tall controls (ha-entity-picker, segmented toggles)
+            that the previous -6px caused.                              */
         .field-help
         {
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
-            margin-top: 2px;
-            margin-bottom: 6px;
+            margin-top: -2px;
+            margin-bottom: 10px;
         }
 
         .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
@@ -36624,6 +36630,8 @@ HeliosCardEditor.styles = i$3`
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
             font-style: italic;
+            margin-top: -2px;
+            margin-bottom: 10px;
         }
 
         .field
@@ -37002,7 +37010,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.7"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.8"}`,
       labelStyle,
       versionStyle
     );
@@ -37023,7 +37031,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.7",
+        version: "1.6.0-alpha.8",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37031,7 +37039,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.7"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.8"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -37290,7 +37298,7 @@ let HeliosCard = class extends i {
     super.connectedCallback();
     _liveCards.add(this);
     this._tick();
-    this._timer = window.setInterval(() => this._tick(), 1e3);
+    this._timer = window.setInterval(() => this._tick(), 3e4);
     this._initVisibilityObserver();
     this._isInEditorPreview = this._detectEditorPreview();
   }
@@ -37849,12 +37857,15 @@ let HeliosCard = class extends i {
     }
     return out;
   }
-  //Re-renders the card every second.
-  //  - In live mode this advances both the clock display and the live
-  //    cursor on the timeline (positioned from Date.now() on every render).
+  //Re-renders the card every 30 seconds.
+  //  - In live mode this advances both the HH:MM clock display
+  //    (seconds were dropped to allow the slower cadence) and the
+  //    live cursor on the timeline.
   //  - In scrubbed mode the clock shows the selected instant and the
   //    live cursor still continues to move underneath as wall-clock
   //    time progresses.
+  //PV and battery live readings update on Home Assistant state
+  //changes, not on this tick, so they stay real-time regardless.
   _tick() {
     this._now = /* @__PURE__ */ new Date();
     this._refreshOverlays();
@@ -38712,7 +38723,6 @@ let HeliosCard = class extends i {
     const displayTimeLabel = displayDate.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
       hourCycle: is12h ? "h12" : "h23"
     });
     const cloudPctRound = Math.max(0, Math.round(this._cloudCover));

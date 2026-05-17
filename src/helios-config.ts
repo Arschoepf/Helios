@@ -1411,17 +1411,23 @@ export class HeliosCardEditor extends LitElement
             transform: rotate(90deg);
         }
 
-        /*  Tucked under its companion field, with a small breathing
-            margin so tall controls (ha-entity-picker, segmented toggles,
-            preset chip rows) don't visually overlap the help text. The
-            previous 'margin-top: -6px' worked for plain number inputs
-            but caused the help to disappear under tall pickers.        */
+        /*  Asymmetric vertical rhythm: the help/hint sits close to its
+            companion field (small negative margin pulls it up into the
+            flex gap so the two read as a logical unit) but pushes the
+            NEXT field away with a generous bottom margin so consecutive
+            field+help blocks remain visually distinct. Without this
+            asymmetry the flex gap distributes spacing evenly and the
+            editor reads as a single dense column.
+
+            The -2px negative is gentle enough to avoid the overlap
+            with tall controls (ha-entity-picker, segmented toggles)
+            that the previous -6px caused.                              */
         .field-help
         {
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
-            margin-top: 2px;
-            margin-bottom: 6px;
+            margin-top: -2px;
+            margin-bottom: 10px;
         }
 
         .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
@@ -1432,6 +1438,8 @@ export class HeliosCardEditor extends LitElement
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
             font-style: italic;
+            margin-top: -2px;
+            margin-bottom: 10px;
         }
 
         .field

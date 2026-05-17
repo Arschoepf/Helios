@@ -603,7 +603,14 @@ export class HeliosCard extends LitElement
         super.connectedCallback();
         _liveCards.add(this);
         this._tick();
-        this._timer = window.setInterval(() => this._tick(), 1000);
+        //30 s tick: the clock displays HH:MM only (seconds dropped),
+        //the sun moves ~0.13° per refresh (visually smooth at that
+        //cadence), and the live cursor on a 5-day timeline advances
+        //~6 px per 30 s on a 1000 px wide chart. PV and battery live
+        //readings update on hass state changes, not on this tick, so
+        //they remain real-time regardless. Cuts the per-second wake-
+        //ups by 30× compared to the previous 1 Hz cadence.
+        this._timer = window.setInterval(() => this._tick(), 30_000);
         this._initVisibilityObserver();
         //Detect early whether we're rendered inside HA's dashboard
         //editor preview. The editor instantiates a fresh helios-card
@@ -1553,12 +1560,15 @@ export class HeliosCard extends LitElement
         return out;
     }
 
-    //Re-renders the card every second.
-    //  - In live mode this advances both the clock display and the live
-    //    cursor on the timeline (positioned from Date.now() on every render).
+    //Re-renders the card every 30 seconds.
+    //  - In live mode this advances both the HH:MM clock display
+    //    (seconds were dropped to allow the slower cadence) and the
+    //    live cursor on the timeline.
     //  - In scrubbed mode the clock shows the selected instant and the
     //    live cursor still continues to move underneath as wall-clock
     //    time progresses.
+    //PV and battery live readings update on Home Assistant state
+    //changes, not on this tick, so they stay real-time regardless.
     private _tick(): void
     {
         this._now = new Date();
@@ -2866,7 +2876,6 @@ export class HeliosCard extends LitElement
         const displayTimeLabel = displayDate.toLocaleTimeString([], {
             hour:      '2-digit',
             minute:    '2-digit',
-            second:    '2-digit',
             hourCycle: is12h ? 'h12' : 'h23'
         } as Intl.DateTimeFormatOptions);
 
