@@ -32708,7 +32708,7 @@ const fr = {
     locationSection: "Localisation",
     homeLatitude: "Latitude du domicile *",
     homeLongitude: "Longitude du domicile *",
-    locationHint: "Remplace l'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides ; toute valeur partielle ou hors plage est ignorée silencieusement.",
+    locationHint: "Remplace l'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides; toute valeur partielle ou hors plage est ignorée silencieusement.",
     mapSection: "Carte",
     mapStyle: "Style de la carte *",
     mapStyleHint: "Trois fonds de carte : Rues (sobre, urbain), Topo (lignes de niveau et tons terreux, idéal en zone vallonnée) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). Les bâtiments 3D et les libellés se comportent à l'identique sur Rues et Topo. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
@@ -32743,7 +32743,7 @@ const fr = {
     pvPeakPower: "Puissance crête (kWp)",
     pvPeakPowerHelp: "Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.",
     pvArraysSection: "Orientation des panneaux",
-    pvArraysHelp: "Une entrée par pan de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat ; ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
+    pvArraysHelp: "Une entrée par pan de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat; ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
     pvArrayTitle: "Pan {n}",
     pvArrayTilt: "Inclinaison (°)",
     pvArrayAzimuth: "Azimut (°)",
@@ -32768,11 +32768,11 @@ const fr = {
     compassNW: "NO",
     pvColor: "Couleur de production *",
     batterySection: "Batterie domestique",
-    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles ; la pastille correspondante s'affiche dès que l'entité est renseignée.",
+    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles; la pastille correspondante s'affiche dès que l'entité est renseignée.",
     batterySocEntity: "Entité d'état de charge",
     batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (%, typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
     batteryPowerEntity: "Entité de puissance",
-    batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même ; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
+    batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
     batteryPowerInvert: "Signe de la puissance batterie",
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Inversé",
@@ -32803,7 +32803,7 @@ const fr = {
     shadowOpacity: "Opacité des ombres *",
     shadowOpacityHint: "Opacité des ombres projetées au sol.",
     localLidarSection: "Avancé — LiDAR local (BYO)",
-    localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la bbox cette source remplace tout fournisseur national ; à l'extérieur, la chaîne de repli habituelle s'applique.",
+    localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la bbox cette source remplace tout fournisseur national; à l'extérieur, la chaîne de repli habituelle s'applique.",
     localLidarToolsHint: "Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d'inspection / conversion / test synthétique).",
     localLidarEnabled: "Utiliser les données locales",
     localLidarUrl: "URL du GeoTIFF",
@@ -35659,6 +35659,7 @@ let HeliosCardEditor = class extends i {
     super(...arguments);
     this._cfg = {};
     this._pickerReady = false;
+    this._openArrayIndices = /* @__PURE__ */ new Set([0]);
     this._sliderDebounce = /* @__PURE__ */ new Map();
     this._pvEntityFilter = (entity) => {
       if (!entity || !entity.attributes) return false;
@@ -35855,6 +35856,7 @@ let HeliosCardEditor = class extends i {
     const list = this._readPvArrays();
     if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
     list.push({ tilt: null, azimuth: null, share: null });
+    this._openArrayIndices = /* @__PURE__ */ new Set([...this._openArrayIndices, list.length - 1]);
     this._writePvArrays(list);
   }
   //Removes entry `i`. The render disables this button when only
@@ -35868,6 +35870,13 @@ let HeliosCardEditor = class extends i {
     const list = this._readPvArrays();
     if (i2 < 0 || i2 >= list.length || list.length <= 1) return;
     list.splice(i2, 1);
+    const next3 = /* @__PURE__ */ new Set();
+    for (const idx of this._openArrayIndices) {
+      if (idx === i2) continue;
+      if (idx > i2) next3.add(idx - 1);
+      else next3.add(idx);
+    }
+    this._openArrayIndices = next3;
     this._writePvArrays(list);
   }
   //Sum of declared shares across the editor's current view; used
@@ -35887,6 +35896,17 @@ let HeliosCardEditor = class extends i {
     if (i2 < 0 || i2 >= list.length) return;
     list[i2] = { ...list[i2], [key]: value };
     this._writePvArrays(list);
+  }
+  //Syncs the local open-set with the <details> element's runtime
+  //state on every native `toggle` event. Without this round-trip,
+  //Lit re-renders would snap the `open` attribute back to whatever
+  //_openArrayIndices says, fighting the user's click.
+  _onArrayToggle(i2, e2) {
+    const el = e2.currentTarget;
+    const next3 = new Set(this._openArrayIndices);
+    if (el.open) next3.add(i2);
+    else next3.delete(i2);
+    this._openArrayIndices = next3;
   }
   //Active-chip match for tilt: plain absolute distance, ±5° to
   //absorb typing imprecision (e.g. "32" still highlights "Roof
@@ -35922,7 +35942,8 @@ let HeliosCardEditor = class extends i {
     return b`
             <div class="editor">
 
-                <div class="section-title">${t2.editor.locationSection}</div>
+                <details class="advanced-section" open>
+                    <summary class="section-title section-title-collapse">${t2.editor.locationSection}</summary>
                 <label class="field">
                     <span class="label">${t2.editor.homeLatitude}</span>
                     <input
@@ -35949,7 +35970,10 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="hint">${t2.editor.locationHint}</div>
 
-                <div class="section-title">${t2.editor.mapSection}</div>
+                </details>
+
+                <details class="advanced-section" open>
+                    <summary class="section-title section-title-collapse">${t2.editor.mapSection}</summary>
                 <label class="field">
                     <span class="label">${t2.editor.mapStyle}</span>
                     <select
@@ -36040,7 +36064,10 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="hint">${t2.editor.displayRadiusHint}</div>
 
-                <div class="section-title">${t2.editor.buildingsSection}</div>
+                </details>
+
+                <details class="advanced-section" open>
+                    <summary class="section-title section-title-collapse">${t2.editor.buildingsSection}</summary>
                 <label class="field">
                     <span class="label">${t2.editor.buildingClusterRadius}</span>
                     <div class="slider-row">
@@ -36073,7 +36100,10 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="hint">${t2.editor.buildingsHint}</div>
 
-                <div class="section-title">${t2.editor.shadowsSection}</div>
+                </details>
+
+                <details class="advanced-section" open>
+                    <summary class="section-title section-title-collapse">${t2.editor.shadowsSection}</summary>
                 <div class="field">
                     <span class="label">${t2.editor.shadowsEnabled}</span>
                     <div class="segmented-toggle">
@@ -36118,7 +36148,10 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="hint">${t2.editor.shadowOpacityHint}</div>
 
-                <div class="section-title">${t2.editor.colors}</div>
+                </details>
+
+                <details class="advanced-section" open>
+                    <summary class="section-title section-title-collapse">${t2.editor.colors}</summary>
                 <label class="field">
                     <span class="label">${t2.editor.sunColor}</span>
                     <helios-color-picker
@@ -36137,7 +36170,10 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="hint">${t2.editor.colorsHint}</div>
 
-                <div class="section-title">${t2.editor.pvSection}</div>
+                </details>
+
+                <details class="advanced-section" open>
+                    <summary class="section-title section-title-collapse">${t2.editor.pvSection}</summary>
                 <div class="field field-block">
                     <span class="label">${t2.editor.pvEntity}</span>
                     ${this._pickerReady ? b`
@@ -36176,92 +36212,106 @@ let HeliosCardEditor = class extends i {
       const sharesSum = this._arraySharesSum(arrays);
       const explicit = arrays.filter((a2) => a2.share !== null).length;
       const showNormHint = explicit >= 2 && Math.abs(sharesSum - 100) > 0.5;
+      const hasArrays = Array.isArray(c2["pv-arrays"]) && c2["pv-arrays"].length > 0;
+      const hasLegacy = c2["pv-tilt"] != null && c2["pv-tilt"] !== "";
+      const sectionOpen = hasArrays || hasLegacy;
       return b`
-                        <div class="section-title">${t2.editor.pvArraysSection}</div>
-                        <div class="hint">${t2.editor.pvArraysHelp}</div>
-                        ${arrays.map((arr, i2) => b`
-                            <div class="pv-array-card">
-                                <div class="pv-array-head">
-                                    <span class="pv-array-title">
-                                        ${t2.editor.pvArrayTitle.replace("{n}", String(i2 + 1))}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        class="pv-array-remove"
-                                        aria-label="${t2.editor.pvArrayRemove}: ${t2.editor.pvArrayTitle.replace("{n}", String(i2 + 1))}"
-                                        ?disabled="${arrays.length <= 1}"
-                                        @click="${() => this._arrayRemove(i2)}"
-                                    >${t2.editor.pvArrayRemove}</button>
-                                </div>
-                                <div class="field">
-                                    <span class="label">${t2.editor.pvArrayTilt}</span>
-                                    <div class="preset-row" role="group" aria-label="${t2.editor.pvArrayTilt}">
-                                        ${HeliosCardEditor.TILT_PRESETS.map((p2) => b`
+                        <details class="advanced-section" ?open="${sectionOpen}">
+                            <summary class="section-title section-title-collapse">${t2.editor.pvArraysSection}</summary>
+                            <div class="hint">${t2.editor.pvArraysHelp}</div>
+                            ${arrays.map((arr, i2) => {
+        const title = t2.editor.pvArrayTitle.replace("{n}", String(i2 + 1));
+        const isOpen = this._openArrayIndices.has(i2);
+        return b`
+                                    <details class="pv-array-card" ?open="${isOpen}" @toggle="${(e2) => this._onArrayToggle(i2, e2)}">
+                                        <summary class="pv-array-summary">
+                                            <span class="pv-array-chevron" aria-hidden="true"></span>
+                                            <span class="pv-array-title">${title}</span>
                                             <button
                                                 type="button"
-                                                class="preset-chip ${this._isTiltPresetActive(arr.tilt, p2.deg) ? "is-active" : ""}"
-                                                @click="${() => this._arraySetField(i2, "tilt", p2.deg)}"
-                                            >${t2.editor[p2.key]} ${p2.deg}°</button>
-                                        `)}
-                                    </div>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="90"
-                                        step="1"
-                                        placeholder="0"
-                                        .value="${arr.tilt !== null ? String(arr.tilt) : ""}"
-                                        @change="${(e2) => this._arrayField(i2, "tilt", e2)}"
-                                    />
-                                </div>
-                                <div class="field-help">${t2.editor.pvArrayTiltHelp}</div>
-                                <div class="field">
-                                    <span class="label">${t2.editor.pvArrayAzimuth}</span>
-                                    <div class="preset-row" role="group" aria-label="${t2.editor.pvArrayAzimuth}">
-                                        ${HeliosCardEditor.AZIMUTH_PRESETS.map((p2) => b`
-                                            <button
-                                                type="button"
-                                                class="preset-chip ${this._isAzimuthPresetActive(arr.azimuth, p2.deg) ? "is-active" : ""}"
-                                                @click="${() => this._arraySetField(i2, "azimuth", p2.deg)}"
-                                            >${t2.editor[p2.key]}</button>
-                                        `)}
-                                    </div>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="360"
-                                        step="1"
-                                        placeholder="180"
-                                        .value="${arr.azimuth !== null ? String(arr.azimuth) : ""}"
-                                        @change="${(e2) => this._arrayField(i2, "azimuth", e2)}"
-                                    />
-                                </div>
-                                <div class="field-help">${t2.editor.pvArrayAzimuthHelp}</div>
-                                <label class="field">
-                                    <span class="label">${t2.editor.pvArrayShare}</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        step="1"
-                                        placeholder="${arrays.length === 1 ? "100" : String(Math.round(100 / arrays.length))}"
-                                        .value="${arr.share !== null ? String(arr.share) : ""}"
-                                        @change="${(e2) => this._arrayField(i2, "share", e2)}"
-                                    />
-                                </label>
-                                <div class="field-help">${t2.editor.pvArrayShareHelp}</div>
-                            </div>
-                        `)}
-                        ${arrays.length < HeliosCardEditor.PV_ARRAYS_MAX ? b`
-                            <button
-                                type="button"
-                                class="pv-array-add"
-                                @click="${() => this._arrayAdd()}"
-                            >${t2.editor.pvArrayAdd}</button>
-                        ` : A}
-                        ${showNormHint ? b`
-                            <div class="hint">${t2.editor.pvArrayNormHint}</div>
-                        ` : A}
+                                                class="pv-array-remove"
+                                                aria-label="${t2.editor.pvArrayRemove}: ${title}"
+                                                ?disabled="${arrays.length <= 1}"
+                                                @click="${(e2) => {
+          e2.preventDefault();
+          e2.stopPropagation();
+          this._arrayRemove(i2);
+        }}"
+                                            >${t2.editor.pvArrayRemove}</button>
+                                        </summary>
+                                        <div class="pv-array-body">
+                                            <div class="field field-stacked">
+                                                <span class="label">${t2.editor.pvArrayTilt}</span>
+                                                <div class="preset-row" role="group" aria-label="${t2.editor.pvArrayTilt}">
+                                                    ${HeliosCardEditor.TILT_PRESETS.map((p2) => b`
+                                                        <button
+                                                            type="button"
+                                                            class="preset-chip ${this._isTiltPresetActive(arr.tilt, p2.deg) ? "is-active" : ""}"
+                                                            @click="${() => this._arraySetField(i2, "tilt", p2.deg)}"
+                                                        >${t2.editor[p2.key]} ${p2.deg}°</button>
+                                                    `)}
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="90"
+                                                    step="1"
+                                                    placeholder="0"
+                                                    .value="${arr.tilt !== null ? String(arr.tilt) : ""}"
+                                                    @change="${(e2) => this._arrayField(i2, "tilt", e2)}"
+                                                />
+                                            </div>
+                                            <div class="field-help">${t2.editor.pvArrayTiltHelp}</div>
+                                            <div class="field field-stacked">
+                                                <span class="label">${t2.editor.pvArrayAzimuth}</span>
+                                                <div class="preset-row" role="group" aria-label="${t2.editor.pvArrayAzimuth}">
+                                                    ${HeliosCardEditor.AZIMUTH_PRESETS.map((p2) => b`
+                                                        <button
+                                                            type="button"
+                                                            class="preset-chip ${this._isAzimuthPresetActive(arr.azimuth, p2.deg) ? "is-active" : ""}"
+                                                            @click="${() => this._arraySetField(i2, "azimuth", p2.deg)}"
+                                                        >${t2.editor[p2.key]}</button>
+                                                    `)}
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="360"
+                                                    step="1"
+                                                    placeholder="180"
+                                                    .value="${arr.azimuth !== null ? String(arr.azimuth) : ""}"
+                                                    @change="${(e2) => this._arrayField(i2, "azimuth", e2)}"
+                                                />
+                                            </div>
+                                            <div class="field-help">${t2.editor.pvArrayAzimuthHelp}</div>
+                                            <label class="field">
+                                                <span class="label">${t2.editor.pvArrayShare}</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    step="1"
+                                                    placeholder="${arrays.length === 1 ? "100" : String(Math.round(100 / arrays.length))}"
+                                                    .value="${arr.share !== null ? String(arr.share) : ""}"
+                                                    @change="${(e2) => this._arrayField(i2, "share", e2)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t2.editor.pvArrayShareHelp}</div>
+                                        </div>
+                                    </details>
+                                `;
+      })}
+                            ${arrays.length < HeliosCardEditor.PV_ARRAYS_MAX ? b`
+                                <button
+                                    type="button"
+                                    class="pv-array-add"
+                                    @click="${() => this._arrayAdd()}"
+                                >${t2.editor.pvArrayAdd}</button>
+                            ` : A}
+                            ${showNormHint ? b`
+                                <div class="hint">${t2.editor.pvArrayNormHint}</div>
+                            ` : A}
+                        </details>
                     `;
     })()}
                 <label class="field">
@@ -36274,7 +36324,10 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="hint">${t2.editor.pvHint}</div>
 
-                <div class="section-title">${t2.editor.batterySection}</div>
+                </details>
+
+                <details class="advanced-section" open>
+                    <summary class="section-title section-title-collapse">${t2.editor.batterySection}</summary>
                 <div class="field field-block">
                     <span class="label">${t2.editor.batterySocEntity}</span>
                     ${this._pickerReady ? b`
@@ -36343,7 +36396,10 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="hint">${t2.editor.batteryHint}</div>
 
-                <div class="section-title">${t2.editor.timeline}</div>
+                </details>
+
+                <details class="advanced-section" open>
+                    <summary class="section-title section-title-collapse">${t2.editor.timeline}</summary>
                 <label class="field">
                     <span class="label">${t2.editor.dateFormat}</span>
                     <input
@@ -36373,10 +36429,12 @@ let HeliosCardEditor = class extends i {
                 </div>
                 <div class="hint">${t2.editor.timelineHint}</div>
 
+                </details>
+
                 <details class="advanced-section">
                     <summary class="section-title section-title-collapse">${t2.editor.localLidarSection}</summary>
                     <div class="hint">${t2.editor.localLidarHint}</div>
-                    <div class="hint">${t2.editor.localLidarToolsHint}</div>
+                    <div class="hint" style="margin-bottom: 14px;">${t2.editor.localLidarToolsHint}</div>
                     <div class="field">
                         <span class="label">${t2.editor.localLidarEnabled}</span>
                         <div class="segmented-toggle">
@@ -36684,28 +36742,56 @@ HeliosCardEditor.styles = i$3`
             border-radius: 3px;
         }
 
-        /*  One bordered card per PV array entry. Same vertical stack
-            of label/input rows as the rest of the editor, just framed
-            so the user reads a multi-array config as discrete groups
-            rather than a tall undifferentiated list of number fields. */
-        .pv-array-card
+        /*  One bordered card per PV array entry. Now a <details> so
+            the user can collapse individual arrays once they're set up
+            and keep the editor short. The card frame stays whether
+            collapsed or expanded so the multi-array config still reads
+            as discrete groups rather than a tall undifferentiated list. */
+        details.pv-array-card
         {
             border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
             border-radius: 6px;
-            padding: 10px 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
             background: var(--card-background-color, #fff);
+            overflow: hidden;
         }
 
-        .pv-array-head
+        /*  Summary = header row of the collapsed/expanded card. Stays
+            visible whether the card is open or not; clicking anywhere
+            on it toggles. Native marker is hidden, replaced by a
+            custom chevron so the rotation is consistent with the
+            other collapsible sections above. */
+        details.pv-array-card > summary.pv-array-summary
         {
+            list-style: none;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            user-select: none;
+        }
+        details.pv-array-card > summary.pv-array-summary::-webkit-details-marker { display: none; }
+        details.pv-array-card[open] > summary.pv-array-summary
+        {
             border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.08));
-            padding-bottom: 6px;
+        }
+
+        /*  Chevron rotates 90° when the card is open. Same SVG-less
+            approach used by the .section-title-collapse arrow so the
+            two collapsibles look coherent. */
+        .pv-array-chevron
+        {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 4px 0 4px 5px;
+            border-color: transparent transparent transparent var(--secondary-text-color, #757575);
+            transition: transform 0.15s ease;
+            flex-shrink: 0;
+        }
+        details.pv-array-card[open] > summary.pv-array-summary > .pv-array-chevron
+        {
+            transform: rotate(90deg);
         }
 
         .pv-array-title
@@ -36713,6 +36799,18 @@ HeliosCardEditor.styles = i$3`
             font-size: 12px;
             font-weight: 600;
             color: var(--primary-text-color, #212121);
+            flex: 1;
+        }
+
+        /*  Body of the open card: holds the tilt / azimuth / share
+            stacked fields. Padding kept consistent with the previous
+            div-card layout. */
+        .pv-array-body
+        {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px 12px;
         }
 
         /*  Borderless text buttons for add/remove so the cards stay
@@ -36733,11 +36831,19 @@ HeliosCardEditor.styles = i$3`
             color: var(--primary-text-color, #212121);
         }
 
+        /*  "+ Add array" button: right-aligned at the bottom of the
+            section. Block element with margin-left: auto and
+            fit-content width pulls it to the right without depending
+            on the parent being a flex container (the outer <details>
+            isn't). */
         .pv-array-add
         {
             color: var(--primary-color, #03a9f4);
             border-color: var(--primary-color, #03a9f4);
-            align-self: flex-start;
+            display: block;
+            margin-left: auto;
+            margin-top: 8px;
+            width: fit-content;
         }
 
         .pv-array-remove:disabled
@@ -36768,13 +36874,38 @@ HeliosCardEditor.styles = i$3`
             state lights up when the input value matches the chip
             within a small tolerance, click snaps the input to the
             chip's value.                                              */
+        /*  Stacked variant of .field used by tilt and azimuth in the
+            multi-array editor: three rows top to bottom (label,
+            chips, input). The input is pulled to the right via
+            margin-left: auto so the row visually anchors to the
+            opposite edge of the label, breathing room for the chips
+            in between. The free input keeps a fixed footprint so
+            the visual rhythm stays predictable as the user types
+            different value widths.                                    */
+        .field.field-stacked
+        {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 4px;
+        }
+        .field.field-stacked > .label
+        {
+            margin-bottom: 0;
+        }
+        .field.field-stacked > input
+        {
+            align-self: flex-end;
+            width: 100px;
+        }
+
         .preset-row
         {
             display: flex;
             flex-wrap: wrap;
             gap: 4px;
-            margin-top: 4px;
-            margin-bottom: 4px;
+            margin-top: 2px;
+            margin-bottom: 2px;
         }
 
         .preset-chip
@@ -36816,6 +36947,9 @@ __decorateClass$1([
 __decorateClass$1([
   r()
 ], HeliosCardEditor.prototype, "_pickerReady", 2);
+__decorateClass$1([
+  r()
+], HeliosCardEditor.prototype, "_openArrayIndices", 2);
 HeliosCardEditor = __decorateClass$1([
   t("helios-card-editor")
 ], HeliosCardEditor);
@@ -36849,7 +36983,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.5"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.6"}`,
       labelStyle,
       versionStyle
     );
@@ -36870,7 +37004,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.5",
+        version: "1.6.0-alpha.6",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -36878,7 +37012,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.5"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.6"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
