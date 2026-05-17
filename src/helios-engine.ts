@@ -211,6 +211,19 @@ export interface HeliosConfig
     //for one-off testing from the browser console).
     'home-latitude'?:          unknown;
     'home-longitude'?:         unknown;
+    //Optional live weather entity overrides. A physical sensor sitting
+    //at the home (typical Ecowitt / Davis / personal weather station)
+    //is more accurate than the Open-Meteo model interpolated to the
+    //home's grid cell, so when the user wires one we prefer it for the
+    //"now" reading. Past and forecast values keep coming from the
+    //model since a sensor only knows the present.
+    //  solar-radiation-entity : HA entity id of a numeric sensor
+    //                           reporting global shortwave irradiance
+    //                           in W/m². When set and the card is in
+    //                           live mode, its value replaces the
+    //                           model-derived irradiance on the sun
+    //                           chip and the live W/m² readouts.
+    'solar-radiation-entity'?: unknown;
 }
 
 //Default values for the building config, exposed so the visual
@@ -344,7 +357,12 @@ export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' 
 //               because the model integrates aerosols, humidity
 //               profile and multi-layer cloud effects that a purely
 //               analytical formula can't reproduce.
-export type IrradianceSource = 'haurwitz' | 'shortwave';
+//  sensor    , value pushed in from a Home Assistant entity via
+//               setLiveIrradianceOverride. Beats both model paths
+//               because it's a measurement at the home itself; only
+//               used while the card is in live mode, scrubbing past
+//               or forecast still falls back to shortwave/haurwitz.
+export type IrradianceSource = 'haurwitz' | 'shortwave' | 'sensor';
 
 export interface WeatherData
 {
@@ -639,6 +657,88 @@ export class HeliosEngine
     public onFetchStart?:    () => void;
     public onFetchEnd?:      () => void;
     public onWeatherUpdate?: (data: WeatherData) => void;
+
+    //Irradiance samples pushed in by the card from a HA solar-radiation
+    //sensor: the entity's history (recorder snapshots) up to "now",
+    //merged with the live state. Stored sorted ascending by time so the
+    //lookup at _sensorIrradianceAt can binary-search if the dataset
+    //grows past linear-scan territory. Null means "no entity configured
+    //or no usable samples yet", the model irradiance is used unchanged.
+    //
+    //Each sample is in W/m². The engine treats them as ground-truth
+    //point readings of global shortwave irradiance at the home, in
+    //the same units as Open-Meteo's shortwave_radiation_instant, so
+    //they slot into the existing irradiance pipeline without rescaling.
+    //
+    //Lookup is nearest-neighbour with a strict time window (±30 min by
+    //default): outside the window we fall through to the model rather
+    //than extrapolate a stale value. Forecast time always falls
+    //through since samples never sit in the future.
+    private _sensorIrradianceSamples: { tMs: number; wm2: number }[] | null = null;
+    private static readonly SENSOR_IRRADIANCE_WINDOW_MS = 30 * 60 * 1000;
+    public setSolarRadiationSamples(
+        samples: { time: Date; wm2: number }[] | null
+    ): void
+    {
+        if (!samples || samples.length === 0)
+        {
+            if (this._sensorIrradianceSamples === null) return;
+            this._sensorIrradianceSamples = null;
+            this._arcInputsCache = undefined;
+            this._renderForCurrentSelection();
+            return;
+        }
+        const cleaned: { tMs: number; wm2: number }[] = [];
+        for (const s of samples)
+        {
+            const ms = s.time.getTime();
+            if (!isFinite(ms)) continue;
+            if (!isFinite(s.wm2) || s.wm2 < 0) continue;
+            cleaned.push({ tMs: ms, wm2: s.wm2 });
+        }
+        cleaned.sort((a, b) => a.tMs - b.tMs);
+        this._sensorIrradianceSamples = cleaned.length > 0 ? cleaned : null;
+        //Sun arc cache colours each daily sample from a single live-
+        //cloud key; mixing sensor data into the lookup invalidates
+        //the existing cache for that day so the next projectSunScene
+        //rebuilds with the new ground truth.
+        this._arcInputsCache = undefined;
+        this._renderForCurrentSelection();
+    }
+
+    //Nearest-neighbour lookup over the pushed sensor history. Returns
+    //the W/m² reading whose timestamp is closest to `t` provided the
+    //gap is within the strict window; otherwise null so the caller
+    //falls back to the model. Linear scan is fine for ~hourly samples
+    //across a few-day window (a couple of hundred entries at most).
+    private _sensorIrradianceAt(t: Date): number | null
+    {
+        const samples = this._sensorIrradianceSamples;
+        if (!samples || samples.length === 0) return null;
+        const tMs = t.getTime();
+        let bestIdx = -1;
+        let bestDelta = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < samples.length; i++)
+        {
+            const d = Math.abs(samples[i].tMs - tMs);
+            if (d < bestDelta)
+            {
+                bestDelta = d;
+                bestIdx   = i;
+            }
+            //Samples are sorted, once delta starts growing again we
+            //can short-circuit, the rest is monotonically worse.
+            else if (d > bestDelta)
+            {
+                break;
+            }
+        }
+        if (bestIdx < 0 || bestDelta > HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS)
+        {
+            return null;
+        }
+        return samples[bestIdx].wm2;
+    }
     //Map transform changed, the card recomputes screen-space
     //projections (sun arc, chip positions, leaders) from this hook.
     public onMapTransform?:  () => void;
@@ -1367,15 +1467,17 @@ export class HeliosEngine
         const t = this._selectedTime ?? new Date();
         const w = this._getWeatherAtTime(t);
 
-        //Compute both irradiance candidates so the card can let the
-        //user compare them. Haurwitz is always defined (analytical
-        //fallback). pvPowerShortwave stays at -1 when the model
-        //didn't supply shortwave_radiation_instant for this hour
-        //(beyond forecast horizon, missing variable on the chosen
-        //model, or auxiliary fetch failed).
-        //Stays on the horizontal-panel path: this value is paired
-        //with shortwave_radiation (GHI on horizontal) to compare two
-        //irradiance candidates, the tilt/azimuth transposition lives
+        //Compute every irradiance candidate so the card can pick the
+        //best available source. Priority order at render time:
+        //  1. Sensor reading from the configured solar-radiation entity
+        //     (when one was pushed and matches `t` within the window).
+        //  2. shortwave_radiation_instant from Open-Meteo, when the
+        //     model supplied it for this hour.
+        //  3. Haurwitz (analytical clear-sky + Kasten-Czeplak cloud
+        //     attenuation), the always-defined fallback used outside
+        //     the model horizon.
+        //Stays on the horizontal-panel path: these values are GHI
+        //(global on horizontal). The tilt/azimuth transposition lives
         //in the card-side PV prediction helpers instead.
         const pvPowerHaurwitz = computePvPower(t, this.homeLat, this.homeLon, w.cloudCover);
 
@@ -1388,12 +1490,32 @@ export class HeliosEngine
             pvPowerShortwave = Math.max(0, Math.min(100, w.shortwave / 1000 * 100));
         }
 
-        //Pick the primary value to display:
-        //  - shortwave when available (model value, more accurate)
-        //  - Haurwitz otherwise (fallback)
-        const useShortwave    = pvPowerShortwave >= 0;
-        const pvPower         = useShortwave ? pvPowerShortwave : pvPowerHaurwitz;
-        const irradianceSource: IrradianceSource = useShortwave ? 'shortwave' : 'haurwitz';
+        const sensorWm2 = this._sensorIrradianceAt(t);
+        const pvPowerSensor = sensorWm2 !== null
+            ? Math.max(0, Math.min(100, sensorWm2 / 1000 * 100))
+            : -1;
+
+        //Pick the primary value to display, sensor beats model when
+        //both exist (a thermopile at the home is closer to ground
+        //truth than a gridded forecast), model beats analytical when
+        //available, Haurwitz is always defined as the last resort.
+        let pvPower:          number;
+        let irradianceSource: IrradianceSource;
+        if (pvPowerSensor >= 0)
+        {
+            pvPower          = pvPowerSensor;
+            irradianceSource = 'sensor';
+        }
+        else if (pvPowerShortwave >= 0)
+        {
+            pvPower          = pvPowerShortwave;
+            irradianceSource = 'shortwave';
+        }
+        else
+        {
+            pvPower          = pvPowerHaurwitz;
+            irradianceSource = 'haurwitz';
+        }
 
         this.onWeatherUpdate?.(
         {
@@ -3353,7 +3475,16 @@ export class HeliosEngine
                     samples.push(null);
                     continue;
                 }
-                const wm2 = computeIrradianceWm2(t, this.homeLat, this.homeLon, liveCloud);
+                //Per-sample priority: sensor reading if one sits
+                //within the lookup window, otherwise the analytical
+                //clear-sky × cloud-cover model. Mixing the two along
+                //the same arc is acceptable since the sensor's
+                //samples are sparse (hourly at most) and the gradient
+                //transitions smoothly between adjacent points.
+                const sensorWm2 = this._sensorIrradianceAt(t);
+                const wm2 = sensorWm2 !== null
+                    ? sensorWm2
+                    : computeIrradianceWm2(t, this.homeLat, this.homeLon, liveCloud);
                 samples.push({
                     lon:          sun3D.lon,
                     lat:          sun3D.lat,
@@ -3398,7 +3529,10 @@ export class HeliosEngine
         //Sun at "now", same spherical projection as the arc points.
         const sunNow3D = this._sunSpherePoint(now);
         const sunNowAlt = getSunPosition(now, this.homeLat, this.homeLon).altitude;
-        const sunNowWm2 = computeIrradianceWm2(now, this.homeLat, this.homeLon, liveCloud);
+        const sunNowSensor = this._sensorIrradianceAt(now);
+        const sunNowWm2 = sunNowSensor !== null
+            ? sunNowSensor
+            : computeIrradianceWm2(now, this.homeLat, this.homeLon, liveCloud);
 
         let sunScreen: { x: number; y: number; depth: number } | null = null;
         if (sunNow3D)
@@ -3621,6 +3755,15 @@ export class HeliosEngine
 
         const irradiance = home.times.map((_, i) =>
         {
+            //Per-hour priority: sensor → shortwave (model) → Haurwitz
+            //(analytical). Forecast hours never carry a sensor sample
+            //(it would lie in the future), so the future half of the
+            //chart automatically falls through to the model.
+            const sensorWm2 = this._sensorIrradianceAt(home.times[i]);
+            if (sensorWm2 !== null)
+            {
+                return sensorWm2;
+            }
             const sw = home.shortwave[i] ?? -1;
             if (sw >= 0)
             {

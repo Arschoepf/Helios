@@ -147,6 +147,16 @@ export interface Translations
         batteryPowerInvertInverted: string;
         batteryPowerInvertHelp:     string;
         batteryColor:             string;
+        //Weather section. Hosts the optional solar-radiation entity
+        //override: when wired to a physical W/m² sensor at the home
+        //(typical Ecowitt / Davis / personal weather station), the
+        //card prefers it over Open-Meteo for the live + past
+        //irradiance values. Forecast hours always fall through to
+        //the model since a sensor only knows the present.
+        weatherSection:           string;
+        weatherHint:              string;
+        solarRadiationEntity:     string;
+        solarRadiationEntityHelp: string;
         //Display radius (m) around the home: everything outside this
         //disc is hidden by an opaque crop mask, regardless of what
         //the basemap would otherwise show. Originally a buildings-

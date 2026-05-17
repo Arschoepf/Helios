@@ -646,6 +646,20 @@ export class HeliosCardEditor extends LitElement
         return u === 'W' || u === 'kW' || u === 'MW';
     };
 
+    //Filter for the solar-radiation picker. The canonical match is a
+    //sensor with the irradiance device_class (HA core 2024.4+) or any
+    //sensor reporting global shortwave radiation in W/m². The unit
+    //fallback catches custom template sensors that don't bother
+    //declaring a device_class, which is the common case for
+    //integrations like Ecowitt where the field is just a raw float.
+    private _solarRadiationEntityFilter = (entity: any): boolean =>
+    {
+        if (!entity || !entity.attributes) return false;
+        if (entity.attributes.device_class === 'irradiance') return true;
+        const u = String(entity.attributes.unit_of_measurement ?? '').trim();
+        return u === 'W/m²' || u === 'W/m2';
+    };
+
     protected render(): TemplateResult
     {
         const c = this._cfg;
@@ -1075,6 +1089,25 @@ export class HeliosCardEditor extends LitElement
                 <div class="field-help">${t.editor.batteryPowerInvertHelp}</div>
                 <div class="hint">${t.editor.batteryHint}</div>
 
+                </details>
+
+                <details class="advanced-section" ?open="${this._openSection === 'weather'}" @toggle="${(e: Event) => this._onSectionToggle('weather', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.weatherSection}</summary>
+                    <div class="hint">${t.editor.weatherHint}</div>
+                    <div class="field field-block">
+                        <span class="label">${t.editor.solarRadiationEntity}</span>
+                        ${this._pickerReady ? html`
+                            <ha-entity-picker
+                                allow-custom-entity
+                                .hass="${this.hass}"
+                                .value="${String(c['solar-radiation-entity'] ?? '')}"
+                                .includeDomains="${['sensor', 'input_number']}"
+                                .entityFilter="${this._solarRadiationEntityFilter}"
+                                @value-changed="${(e: CustomEvent) => this._update('solar-radiation-entity', e.detail.value ?? '')}"
+                            ></ha-entity-picker>
+                        ` : nothing}
+                    </div>
+                    <div class="field-help">${t.editor.solarRadiationEntityHelp}</div>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'colors'}" @toggle="${(e: Event) => this._onSectionToggle('colors', e)}">

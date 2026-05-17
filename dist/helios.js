@@ -30246,6 +30246,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._selectedTime = null;
     this._lastAtmosphereAlt = -999;
     this._rateLimitStreak = 0;
+    this._sensorIrradianceSamples = null;
     this._autoRotateLastFrame = 0;
     this._autoRotateLastUserAction = 0;
     this._buildingsData = null;
@@ -30418,6 +30419,51 @@ const _HeliosEngine = class _HeliosEngine {
       window.clearTimeout(this._weatherTimer);
       this._weatherTimer = void 0;
     }
+  }
+  setSolarRadiationSamples(samples) {
+    if (!samples || samples.length === 0) {
+      if (this._sensorIrradianceSamples === null) return;
+      this._sensorIrradianceSamples = null;
+      this._arcInputsCache = void 0;
+      this._renderForCurrentSelection();
+      return;
+    }
+    const cleaned = [];
+    for (const s2 of samples) {
+      const ms = s2.time.getTime();
+      if (!isFinite(ms)) continue;
+      if (!isFinite(s2.wm2) || s2.wm2 < 0) continue;
+      cleaned.push({ tMs: ms, wm2: s2.wm2 });
+    }
+    cleaned.sort((a2, b2) => a2.tMs - b2.tMs);
+    this._sensorIrradianceSamples = cleaned.length > 0 ? cleaned : null;
+    this._arcInputsCache = void 0;
+    this._renderForCurrentSelection();
+  }
+  //Nearest-neighbour lookup over the pushed sensor history. Returns
+  //the W/m² reading whose timestamp is closest to `t` provided the
+  //gap is within the strict window; otherwise null so the caller
+  //falls back to the model. Linear scan is fine for ~hourly samples
+  //across a few-day window (a couple of hundred entries at most).
+  _sensorIrradianceAt(t2) {
+    const samples = this._sensorIrradianceSamples;
+    if (!samples || samples.length === 0) return null;
+    const tMs = t2.getTime();
+    let bestIdx = -1;
+    let bestDelta = Number.POSITIVE_INFINITY;
+    for (let i2 = 0; i2 < samples.length; i2++) {
+      const d2 = Math.abs(samples[i2].tMs - tMs);
+      if (d2 < bestDelta) {
+        bestDelta = d2;
+        bestIdx = i2;
+      } else if (d2 > bestDelta) {
+        break;
+      }
+    }
+    if (bestIdx < 0 || bestDelta > _HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS) {
+      return null;
+    }
+    return samples[bestIdx].wm2;
   }
   //Resolves the active OpenFreeMap style URL from `map-style` +
   //`card-theme`. OpenFreeMap publishes a fixed set of MapLibre
@@ -30658,9 +30704,20 @@ const _HeliosEngine = class _HeliosEngine {
     if (w2.shortwave >= 0) {
       pvPowerShortwave = Math.max(0, Math.min(100, w2.shortwave / 1e3 * 100));
     }
-    const useShortwave = pvPowerShortwave >= 0;
-    const pvPower = useShortwave ? pvPowerShortwave : pvPowerHaurwitz;
-    const irradianceSource = useShortwave ? "shortwave" : "haurwitz";
+    const sensorWm2 = this._sensorIrradianceAt(t2);
+    const pvPowerSensor = sensorWm2 !== null ? Math.max(0, Math.min(100, sensorWm2 / 1e3 * 100)) : -1;
+    let pvPower;
+    let irradianceSource;
+    if (pvPowerSensor >= 0) {
+      pvPower = pvPowerSensor;
+      irradianceSource = "sensor";
+    } else if (pvPowerShortwave >= 0) {
+      pvPower = pvPowerShortwave;
+      irradianceSource = "shortwave";
+    } else {
+      pvPower = pvPowerHaurwitz;
+      irradianceSource = "haurwitz";
+    }
     this.onWeatherUpdate?.(
       {
         cloudCover: w2.cloudCover,
@@ -31980,7 +32037,8 @@ const _HeliosEngine = class _HeliosEngine {
           samples.push(null);
           continue;
         }
-        const wm2 = computeIrradianceWm2(t2, this.homeLat, this.homeLon, liveCloud);
+        const sensorWm2 = this._sensorIrradianceAt(t2);
+        const wm2 = sensorWm2 !== null ? sensorWm2 : computeIrradianceWm2(t2, this.homeLat, this.homeLon, liveCloud);
         samples.push({
           lon: sun3D.lon,
           lat: sun3D.lat,
@@ -32014,7 +32072,8 @@ const _HeliosEngine = class _HeliosEngine {
     }
     const sunNow3D = this._sunSpherePoint(now);
     const sunNowAlt = getSunPosition(now, this.homeLat, this.homeLon).altitude;
-    const sunNowWm2 = computeIrradianceWm2(now, this.homeLat, this.homeLon, liveCloud);
+    const sunNowSensor = this._sensorIrradianceAt(now);
+    const sunNowWm2 = sunNowSensor !== null ? sunNowSensor : computeIrradianceWm2(now, this.homeLat, this.homeLon, liveCloud);
     let sunScreen = null;
     if (sunNow3D) {
       sunScreen = this._projectScenePoint(sunNow3D.lon, sunNow3D.lat, sunNow3D.altitudeM);
@@ -32164,6 +32223,10 @@ const _HeliosEngine = class _HeliosEngine {
       return null;
     }
     const irradiance = home.times.map((_2, i2) => {
+      const sensorWm2 = this._sensorIrradianceAt(home.times[i2]);
+      if (sensorWm2 !== null) {
+        return sensorWm2;
+      }
       const sw = home.shortwave[i2] ?? -1;
       if (sw >= 0) {
         return sw;
@@ -32481,6 +32544,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
   }
 };
+_HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS = 30 * 60 * 1e3;
 _HeliosEngine.DETAIL_MODE_ZOOM_TARGET = 19.5;
 _HeliosEngine.DETAIL_MODE_PITCH_TARGET = 80;
 _HeliosEngine.DETAIL_MODE_TRANSITION_MS = 800;
@@ -32568,6 +32632,10 @@ const en = {
     batteryPowerInvertInverted: "Inverted",
     batteryPowerInvertHelp: "Default (Standard): the battery entity already reports charging as positive and discharging as negative. Pick Inverted when your entity does the opposite (some GivEnergy / GivTCP setups), Helios will flip the value once at ingest so the chip readout, the leader arrow and the daily charged / discharged totals keep their meaning.",
     batteryColor: "Battery color",
+    weatherSection: "Weather",
+    weatherHint: "Optional. Wire local weather entities to feed Helios with measurements taken at your home instead of the Open-Meteo model interpolated to your grid cell. Each entity is independently optional and only used when it carries a fresh value; missing or stale samples fall back to the model transparently.",
+    solarRadiationEntity: "Solar radiation entity",
+    solarRadiationEntityHelp: "Pick a sensor reporting global shortwave irradiance in W/m² (typical Ecowitt / Davis / personal weather station). When set, its current state and recorder history replace Open-Meteo for the live + past irradiance everywhere it appears (sun chip number, PV chart Y axis, sun arc colouring). Forecast hours always use Open-Meteo since a sensor only knows the present.",
     buildingsSection: "Building",
     buildingsHint: 'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
     displayRadius: "Display radius",
@@ -32682,6 +32750,10 @@ const fr = {
     batteryPowerInvertInverted: "Inversé",
     batteryPowerInvertHelp: "Par défaut (Standard) : ton capteur batterie rapporte déjà la charge en positif et la décharge en négatif. Passe sur Inversé si ton capteur fait l'inverse (certaines installations GivEnergy / GivTCP), Helios inverse alors la valeur une fois à la lecture pour que la pastille, la flèche du leader et les totaux journaliers charge / décharge gardent leur sens.",
     batteryColor: "Couleur batterie",
+    weatherSection: "Météo",
+    weatherHint: "Optionnel. Branche des entités météo locales pour qu'Helios utilise des mesures prises chez toi plutôt que le modèle Open-Meteo interpolé à ta cellule de grille. Chaque entité est indépendamment optionnelle et n'est utilisée que lorsqu'elle remonte une valeur fraîche ; les échantillons manquants ou périmés retombent sur le modèle de manière transparente.",
+    solarRadiationEntity: "Entité d'irradiance solaire",
+    solarRadiationEntityHelp: "Choisis un capteur qui remonte l'irradiance solaire globale en W/m² (typiquement une station météo Ecowitt / Davis / perso). Quand il est défini, son état actuel et son historique recorder remplacent Open-Meteo pour les valeurs live + passées partout où elles apparaissent (nombre sur la pastille soleil, axe Y du graphique PV, coloration de l'arc solaire). Les heures de prévision continuent d'utiliser Open-Meteo, un capteur ne connaît que le présent.",
     buildingsSection: "Bâtiment",
     buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
     displayRadius: "Rayon d'affichage",
@@ -32796,6 +32868,10 @@ const de = {
     batteryPowerInvertInverted: "Invertiert",
     batteryPowerInvertHelp: "Standardmäßig meldet die Batterie-Entität das Laden als positiv und das Entladen als negativ. Wähle Invertiert, wenn deine Entität es umgekehrt macht (einige GivEnergy- / GivTCP-Setups). Helios dreht den Wert dann einmal beim Einlesen um, damit Chip-Anzeige, Flusspfeil und tägliche Lade- / Entladesummen ihre Bedeutung behalten.",
     batteryColor: "Batteriefarbe",
+    weatherSection: "Wetter",
+    weatherHint: "Optional. Verbinde lokale Wetter-Entitäten, damit Helios direkt bei dir gemessene Werte verwendet, statt das Open-Meteo-Modell, das auf deine Gitterzelle interpoliert wird. Jede Entität ist unabhängig optional und wird nur verwendet, wenn sie einen frischen Wert liefert; fehlende oder veraltete Messwerte fallen transparent auf das Modell zurück.",
+    solarRadiationEntity: "Solarstrahlungs-Entität",
+    solarRadiationEntityHelp: "Wähle einen Sensor, der die globale Kurzwellenstrahlung in W/m² meldet (typisch Ecowitt / Davis / private Wetterstation). Wenn gesetzt, ersetzt sein aktueller Zustand und sein Recorder-Verlauf Open-Meteo bei allen Live- und Vergangenheitswerten der Bestrahlungsstärke (Zahl an der Sonnenpastille, Y-Achse des PV-Charts, Färbung des Sonnenbogens). Vorhersagestunden verwenden weiterhin Open-Meteo, da ein Sensor nur die Gegenwart kennt.",
     buildingsSection: "Gebäude",
     buildingsHint: 'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
     displayRadius: "Anzeigeradius",
@@ -32910,6 +32986,10 @@ const es = {
     batteryPowerInvertInverted: "Invertido",
     batteryPowerInvertHelp: "Por defecto (Estándar) tu entidad de batería ya informa la carga como positivo y la descarga como negativo. Cambia a Invertido si tu entidad hace lo contrario (algunas instalaciones GivEnergy / GivTCP), Helios invertirá el valor una vez en la lectura para que la pastilla, la flecha del flujo y los totales diarios de carga / descarga conserven su significado.",
     batteryColor: "Color batería",
+    weatherSection: "Meteorología",
+    weatherHint: "Opcional. Conecta entidades meteo locales para que Helios use mediciones tomadas en tu casa en lugar del modelo Open-Meteo interpolado a tu celda de la malla. Cada entidad es opcional de forma independiente y solo se usa cuando reporta un valor reciente; las muestras ausentes o caducadas vuelven al modelo de forma transparente.",
+    solarRadiationEntity: "Entidad de radiación solar",
+    solarRadiationEntityHelp: "Elige un sensor que reporte irradiancia solar global en W/m² (típicamente una estación meteo Ecowitt / Davis / personal). Cuando está definido, su estado actual y su historial del recorder reemplazan a Open-Meteo en los valores live y pasados de irradiancia en todos los sitios donde aparecen (número de la pastilla sol, eje Y del gráfico FV, coloración del arco solar). Las horas de previsión siguen usando Open-Meteo, un sensor solo conoce el presente.",
     buildingsSection: "Edificio",
     buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».",
     displayRadius: "Radio de visualización",
@@ -33024,6 +33104,10 @@ const it = {
     batteryPowerInvertInverted: "Invertito",
     batteryPowerInvertHelp: "Per impostazione predefinita (Standard) la tua entità batteria riporta la carica come positivo e la scarica come negativo. Scegli Invertito se la tua entità fa l'opposto (alcuni setup GivEnergy / GivTCP), Helios invertirà il valore una volta in lettura così che la pastiglia, la freccia del flusso e i totali giornalieri di carica / scarica mantengano il loro significato.",
     batteryColor: "Colore batteria",
+    weatherSection: "Meteo",
+    weatherHint: "Opzionale. Collega entità meteo locali perché Helios usi misure prese a casa tua invece del modello Open-Meteo interpolato sulla tua cella di griglia. Ogni entità è indipendentemente opzionale e viene usata solo quando riporta un valore fresco; i campioni mancanti o stantii ricadono sul modello in modo trasparente.",
+    solarRadiationEntity: "Entità irradianza solare",
+    solarRadiationEntityHelp: "Scegli un sensore che riporti l'irradianza solare globale in W/m² (tipicamente una stazione meteo Ecowitt / Davis / personale). Quando è impostato, il suo stato attuale e la sua storia del recorder sostituiscono Open-Meteo per i valori live e passati di irradianza ovunque appaiano (numero sulla pastiglia sole, asse Y del grafico FV, colorazione dell'arco solare). Le ore di previsione continuano a usare Open-Meteo, un sensore conosce solo il presente.",
     buildingsSection: "Edificio",
     buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».",
     displayRadius: "Raggio di visualizzazione",
@@ -33138,6 +33222,10 @@ const nl = {
     batteryPowerInvertInverted: "Omgekeerd",
     batteryPowerInvertHelp: "Standaard rapporteert je batterij-entiteit het laden als positief en het ontladen als negatief. Kies Omgekeerd als jouw entiteit het andersom doet (sommige GivEnergy- / GivTCP-installaties). Helios draait de waarde dan eenmalig om bij het inlezen, zodat de chip, de stroompijl en de dagelijkse laad- / ontlaadtotalen hun betekenis behouden.",
     batteryColor: "Batterijkleur",
+    weatherSection: "Weer",
+    weatherHint: "Optioneel. Koppel lokale weerentiteiten zodat Helios metingen bij jou thuis gebruikt in plaats van het Open-Meteo-model dat geïnterpoleerd wordt naar je rastercel. Elke entiteit is onafhankelijk optioneel en wordt alleen gebruikt wanneer ze een verse waarde levert; ontbrekende of verouderde monsters vallen transparant terug op het model.",
+    solarRadiationEntity: "Entiteit zonnestraling",
+    solarRadiationEntityHelp: "Kies een sensor die de globale kortgolvige instraling rapporteert in W/m² (typisch een Ecowitt / Davis / persoonlijk weerstation). Wanneer ingesteld, vervangen de huidige status en de recorder-geschiedenis Open-Meteo voor de live + verleden instralingswaarden overal waar ze verschijnen (cijfer op de zonpastille, Y-as van de PV-grafiek, kleuring van de zonneboog). Voorspellingsuren blijven Open-Meteo gebruiken, een sensor kent alleen het heden.",
     buildingsSection: "Gebouw",
     buildingsHint: 'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
     displayRadius: "Weergavestraal",
@@ -33252,6 +33340,10 @@ const pt = {
     batteryPowerInvertInverted: "Invertido",
     batteryPowerInvertHelp: "Por predefinição (Padrão) a tua entidade de bateria reporta a carga como positivo e a descarga como negativo. Escolhe Invertido se a tua entidade faz o oposto (alguns setups GivEnergy / GivTCP), o Helios inverte então o valor uma vez na leitura para que a pastilha, a seta do fluxo e os totais diários de carga / descarga mantenham o sentido.",
     batteryColor: "Cor da bateria",
+    weatherSection: "Meteorologia",
+    weatherHint: "Opcional. Liga entidades meteo locais para que o Helios use medições feitas em tua casa em vez do modelo Open-Meteo interpolado à tua célula da grelha. Cada entidade é opcional de forma independente e só é usada quando reporta um valor fresco; amostras em falta ou desactualizadas voltam ao modelo de forma transparente.",
+    solarRadiationEntity: "Entidade de radiação solar",
+    solarRadiationEntityHelp: "Escolhe um sensor que reporte irradiância solar global em W/m² (tipicamente uma estação meteo Ecowitt / Davis / pessoal). Quando definido, o seu estado atual e o seu histórico do recorder substituem o Open-Meteo nos valores live + passados de irradiância em todos os sítios onde aparecem (número na pastilha sol, eixo Y do gráfico FV, coloração do arco solar). As horas de previsão continuam a usar Open-Meteo, um sensor só conhece o presente.",
     buildingsSection: "Edifício",
     buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».",
     displayRadius: "Raio de visualização",
@@ -33366,6 +33458,10 @@ const no = {
     batteryPowerInvertInverted: "Invertert",
     batteryPowerInvertHelp: "Som standard rapporterer batteri-enheten lading som positivt og utlading som negativt. Velg Invertert hvis enheten din gjør motsatt (noen GivEnergy- / GivTCP-oppsett). Helios snur da verdien én gang ved innlesing, slik at chipen, strømpilen og daglige lade- / utladesummer beholder betydningen sin.",
     batteryColor: "Batterifarge",
+    weatherSection: "Vær",
+    weatherHint: "Valgfritt. Koble til lokale værentiteter slik at Helios bruker målinger tatt hjemme hos deg i stedet for Open-Meteo-modellen som interpoleres til rutecellen din. Hver entitet er uavhengig valgfri og brukes bare når den rapporterer en fersk verdi; manglende eller utdaterte prøver faller transparent tilbake til modellen.",
+    solarRadiationEntity: "Solinnstrålings-entitet",
+    solarRadiationEntityHelp: "Velg en sensor som rapporterer global kortbølget innstråling i W/m² (typisk en Ecowitt / Davis / personlig værstasjon). Når satt, erstatter dens nåværende tilstand og recorder-historikk Open-Meteo for live og tidligere innstrålingsverdier overalt der de vises (tall på solpastillen, Y-aksen i PV-grafen, fargen på solbuen). Prognose-timene bruker fortsatt Open-Meteo, en sensor kjenner bare nået.",
     buildingsSection: "Bygning",
     buildingsHint: "For å holde kortet flytende i tette urbane områder rendres bare bygninger innenfor konfigurert radius rundt huset i 3D. Selve huset holdes alltid på full opasitet; nabobygninger rendres med konfigurert opasitet for å gi urban kontekst uten å konkurrere med dataovergangene. Klyngeradiusen grupperer tilkoblede uthus (verandaer, garasjer, skur) i «hus»-settet.",
     displayRadius: "Visningsradius",
@@ -35763,6 +35859,12 @@ let HeliosCardEditor = class extends i {
       const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
       return u2 === "W" || u2 === "kW" || u2 === "MW";
     };
+    this._solarRadiationEntityFilter = (entity) => {
+      if (!entity || !entity.attributes) return false;
+      if (entity.attributes.device_class === "irradiance") return true;
+      const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
+      return u2 === "W/m²" || u2 === "W/m2";
+    };
   }
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -36440,6 +36542,25 @@ let HeliosCardEditor = class extends i {
 
                 </details>
 
+                <details class="advanced-section" ?open="${this._openSection === "weather"}" @toggle="${(e2) => this._onSectionToggle("weather", e2)}">
+                    <summary class="section-title section-title-collapse">${t2.editor.weatherSection}</summary>
+                    <div class="hint">${t2.editor.weatherHint}</div>
+                    <div class="field field-block">
+                        <span class="label">${t2.editor.solarRadiationEntity}</span>
+                        ${this._pickerReady ? b`
+                            <ha-entity-picker
+                                allow-custom-entity
+                                .hass="${this.hass}"
+                                .value="${String(c2["solar-radiation-entity"] ?? "")}"
+                                .includeDomains="${["sensor", "input_number"]}"
+                                .entityFilter="${this._solarRadiationEntityFilter}"
+                                @value-changed="${(e2) => this._update("solar-radiation-entity", e2.detail.value ?? "")}"
+                            ></ha-entity-picker>
+                        ` : A}
+                    </div>
+                    <div class="field-help">${t2.editor.solarRadiationEntityHelp}</div>
+                </details>
+
                 <details class="advanced-section" ?open="${this._openSection === "colors"}" @toggle="${(e2) => this._onSectionToggle("colors", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.colors}</summary>
                     <div class="hint">${t2.editor.colorsHint}</div>
@@ -36651,7 +36772,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.14"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.15"}`,
       labelStyle,
       versionStyle
     );
@@ -36672,7 +36793,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.14",
+        version: "1.6.0-alpha.15",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -36680,7 +36801,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.14"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.15"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -36753,6 +36874,9 @@ let HeliosCard = class extends i {
     this._batteryPowerHistory = null;
     this._batteryFetchKey = "";
     this._batteryFetching = false;
+    this._solarRadiationHistory = null;
+    this._solarRadiationFetchKey = "";
+    this._solarRadiationFetching = false;
     this._sunScene = null;
     this._cloudScene = null;
     this._homeSilhouettes = [];
@@ -37015,6 +37139,7 @@ let HeliosCard = class extends i {
     }
     this._refreshPv();
     this._refreshBattery();
+    this._refreshSolarRadiation();
   }
   //Photovoltaic production
   //
@@ -37143,6 +37268,143 @@ let HeliosCard = class extends i {
     }
     this._batteryFetchKey = fetchKey;
     this._fetchBatteryHistory(socEntity, powerEntity, this._timeRange.start, this._timeRange.end);
+  }
+  //Solar-radiation override.
+  //
+  //When the user wires `solar-radiation-entity` to a physical
+  //W/m² sensor (typical Ecowitt / Davis / personal weather station),
+  //its samples beat Open-Meteo for the live + past portions of the
+  //irradiance pipeline. The card pulls two flavours of data on every
+  //refresh cycle, exactly like the PV / battery hooks:
+  //  - the entity's current state, read synchronously from
+  //    hass.states, gives a fresh "now" sample.
+  //  - the entity's historical state changes over the active time
+  //    range, fetched via the history WebSocket command, fill the
+  //    past portion of the timeline.
+  //Future hours never get a sample (the sensor doesn't know what
+  //tomorrow will look like) so the forecast half of the chart
+  //naturally falls through to Open-Meteo on the engine side.
+  _refreshSolarRadiation() {
+    const entity = String(this.config?.["solar-radiation-entity"] ?? "").trim();
+    if (!entity || !this.hass) {
+      if (this._solarRadiationHistory !== null) {
+        this._solarRadiationHistory = null;
+      }
+      this._solarRadiationFetchKey = "";
+      this._engine?.setSolarRadiationSamples(null);
+      return;
+    }
+    this._pushSolarRadiationToEngine();
+    if (!this._timeRange || this._solarRadiationFetching) {
+      return;
+    }
+    const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
+    const fetchKey = `${entity}@${rangeKey}`;
+    if (fetchKey === this._solarRadiationFetchKey) {
+      return;
+    }
+    this._solarRadiationFetchKey = fetchKey;
+    this._fetchSolarRadiationHistory(entity, this._timeRange.start, this._timeRange.end);
+  }
+  //Merge the cached recorder history with the live state and push the
+  //result down to the engine. Called both on every refresh cycle (so
+  //the latest live sample is always in there) and once a history
+  //fetch lands. Cheap, just an array concat + a setter that runs an
+  //O(n log n) sort once.
+  _pushSolarRadiationToEngine() {
+    if (!this._engine) return;
+    const entity = String(this.config?.["solar-radiation-entity"] ?? "").trim();
+    if (!entity || !this.hass) {
+      this._engine.setSolarRadiationSamples(null);
+      return;
+    }
+    const samples = [];
+    const hist = this._solarRadiationHistory;
+    if (hist) {
+      for (let i2 = 0; i2 < hist.times.length; i2++) {
+        samples.push({ time: hist.times[i2], wm2: hist.values[i2] });
+      }
+    }
+    const stateObj = this.hass.states?.[entity];
+    if (stateObj) {
+      const v2 = parseFloat(stateObj.state);
+      if (isFinite(v2) && v2 >= 0) {
+        const ts = stateObj.last_updated ? new Date(stateObj.last_updated) : /* @__PURE__ */ new Date();
+        samples.push({ time: ts, wm2: v2 });
+      }
+    }
+    this._engine.setSolarRadiationSamples(samples.length > 0 ? samples : null);
+  }
+  //Mirrors _fetchPvHistory: same payload shape, same defensive
+  //parsing across HA's compaction / minimal_response variants.
+  //W/m² values are taken as-is; the sensor is expected to expose
+  //solar irradiance in the same unit the engine consumes, no
+  //normalisation step.
+  async _fetchSolarRadiationHistory(entityId, start, end) {
+    if (!this.hass?.callWS) {
+      return;
+    }
+    this._solarRadiationFetching = true;
+    try {
+      const now = /* @__PURE__ */ new Date();
+      const fetchEnd = end > now ? now : end;
+      if (start >= fetchEnd) {
+        this._solarRadiationHistory = { times: [], values: [] };
+        this._pushSolarRadiationToEngine();
+        return;
+      }
+      const result = await this.hass.callWS({
+        type: "history/history_during_period",
+        start_time: start.toISOString(),
+        end_time: fetchEnd.toISOString(),
+        entity_ids: [entityId],
+        minimal_response: true,
+        no_attributes: true
+      });
+      const arr = (result && result[entityId]) ?? [];
+      const times = [];
+      const values2 = [];
+      let lastTsMs = null;
+      for (const item of arr) {
+        const sRaw = item?.s ?? item?.state;
+        if (sRaw === null || sRaw === void 0 || sRaw === "unavailable" || sRaw === "unknown" || sRaw === "") {
+          continue;
+        }
+        const v2 = parseFloat(String(sRaw));
+        if (!isFinite(v2) || v2 < 0) {
+          continue;
+        }
+        let ts = null;
+        const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+        if (typeof tsRaw === "number") {
+          ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1e3);
+        } else if (typeof tsRaw === "string") {
+          const asNum = Number(tsRaw);
+          if (Number.isFinite(asNum) && asNum > 1e9) {
+            ts = new Date(asNum > 1e12 ? asNum : asNum * 1e3);
+          } else {
+            ts = new Date(tsRaw);
+          }
+        }
+        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) {
+          ts = new Date(lastTsMs);
+        }
+        if (!ts || isNaN(ts.getTime())) {
+          continue;
+        }
+        lastTsMs = ts.getTime();
+        times.push(ts);
+        values2.push(v2);
+      }
+      this._solarRadiationHistory = { times, values: values2 };
+      this._pushSolarRadiationToEngine();
+    } catch (e2) {
+      console.warn("[HELIOS] Solar radiation history fetch failed:", e2);
+      this._solarRadiationHistory = { times: [], values: [] };
+      this._pushSolarRadiationToEngine();
+    } finally {
+      this._solarRadiationFetching = false;
+    }
   }
   //Single-call history fetch for the battery overlay. Both entities
   //(when configured) are bundled into one `entity_ids` array so we
@@ -39685,6 +39947,11 @@ HeliosCard._VISUAL_CONFIG_KEYS = [
   "battery-soc-entity",
   "battery-power-entity",
   "battery-color",
+  //solar-radiation-entity, when set, feeds the engine sensor
+  //samples that override Open-Meteo for the live + past
+  //irradiance values. A change must refresh the engine so
+  //the override (or its absence) is picked up immediately.
+  "solar-radiation-entity",
   //card-theme is card-level (light/dark skin) but must be in the
   //sig so Lit re-renders when the user toggles it.
   "card-theme",

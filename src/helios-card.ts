@@ -291,6 +291,16 @@ export class HeliosCard extends LitElement
     } | null = null;
     private _batteryFetchKey  = '';
     private _batteryFetching  = false;
+    //Solar-radiation entity history, populated when
+    //`solar-radiation-entity` is configured. We pull the recorder's
+    //samples over the active timeline range and merge them with the
+    //live state, then push the merged set down to the engine via
+    //setSolarRadiationSamples. Held as a plain field (no @state)
+    //because nothing in the card render reads it directly; the
+    //engine owns the lookup logic.
+    private _solarRadiationHistory: { times: Date[]; values: number[] } | null = null;
+    private _solarRadiationFetchKey = '';
+    private _solarRadiationFetching = false;
     //Screen-space layout of the solar arc, sun, and incidence ray.
     //Recomputed via engine.projectSunScene() on every map transform
     //and every clock tick (sun position moves with time, refreshed
@@ -389,6 +399,11 @@ export class HeliosCard extends LitElement
         'battery-soc-entity',
         'battery-power-entity',
         'battery-color',
+        //solar-radiation-entity, when set, feeds the engine sensor
+        //samples that override Open-Meteo for the live + past
+        //irradiance values. A change must refresh the engine so
+        //the override (or its absence) is picked up immediately.
+        'solar-radiation-entity',
         //card-theme is card-level (light/dark skin) but must be in the
         //sig so Lit re-renders when the user toggles it.
         'card-theme',
@@ -740,6 +755,7 @@ export class HeliosCard extends LitElement
 
         this._refreshPv();
         this._refreshBattery();
+        this._refreshSolarRadiation();
     }
 
 
@@ -944,6 +960,204 @@ export class HeliosCard extends LitElement
         }
         this._batteryFetchKey = fetchKey;
         this._fetchBatteryHistory(socEntity, powerEntity, this._timeRange.start, this._timeRange.end);
+    }
+
+    //Solar-radiation override.
+    //
+    //When the user wires `solar-radiation-entity` to a physical
+    //W/m² sensor (typical Ecowitt / Davis / personal weather station),
+    //its samples beat Open-Meteo for the live + past portions of the
+    //irradiance pipeline. The card pulls two flavours of data on every
+    //refresh cycle, exactly like the PV / battery hooks:
+    //  - the entity's current state, read synchronously from
+    //    hass.states, gives a fresh "now" sample.
+    //  - the entity's historical state changes over the active time
+    //    range, fetched via the history WebSocket command, fill the
+    //    past portion of the timeline.
+    //Future hours never get a sample (the sensor doesn't know what
+    //tomorrow will look like) so the forecast half of the chart
+    //naturally falls through to Open-Meteo on the engine side.
+    private _refreshSolarRadiation(): void
+    {
+        const entity = String(this.config?.['solar-radiation-entity'] ?? '').trim();
+
+        if (!entity || !this.hass)
+        {
+            //Clear everything when the entity is removed so the engine
+            //drops back to its built-in irradiance sources.
+            if (this._solarRadiationHistory !== null)
+            {
+                this._solarRadiationHistory = null;
+            }
+            this._solarRadiationFetchKey = '';
+            this._engine?.setSolarRadiationSamples(null);
+            return;
+        }
+
+        //Push the latest live state alongside whatever history we have.
+        //Doing this on every Lit cycle keeps the engine's "now" sample
+        //fresh; the engine de-dupes internally on sort, so the cost is
+        //tiny even at sub-minute tick rates.
+        this._pushSolarRadiationToEngine();
+
+        if (!this._timeRange || this._solarRadiationFetching)
+        {
+            return;
+        }
+        const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
+        const fetchKey = `${entity}@${rangeKey}`;
+        if (fetchKey === this._solarRadiationFetchKey)
+        {
+            return;
+        }
+        this._solarRadiationFetchKey = fetchKey;
+        this._fetchSolarRadiationHistory(entity, this._timeRange.start, this._timeRange.end);
+    }
+
+    //Merge the cached recorder history with the live state and push the
+    //result down to the engine. Called both on every refresh cycle (so
+    //the latest live sample is always in there) and once a history
+    //fetch lands. Cheap, just an array concat + a setter that runs an
+    //O(n log n) sort once.
+    private _pushSolarRadiationToEngine(): void
+    {
+        if (!this._engine) return;
+        const entity = String(this.config?.['solar-radiation-entity'] ?? '').trim();
+        if (!entity || !this.hass)
+        {
+            this._engine.setSolarRadiationSamples(null);
+            return;
+        }
+        const samples: { time: Date; wm2: number }[] = [];
+        const hist = this._solarRadiationHistory;
+        if (hist)
+        {
+            for (let i = 0; i < hist.times.length; i++)
+            {
+                samples.push({ time: hist.times[i], wm2: hist.values[i] });
+            }
+        }
+        const stateObj = this.hass.states?.[entity];
+        if (stateObj)
+        {
+            const v = parseFloat(stateObj.state);
+            if (isFinite(v) && v >= 0)
+            {
+                const ts = stateObj.last_updated
+                    ? new Date(stateObj.last_updated)
+                    : new Date();
+                samples.push({ time: ts, wm2: v });
+            }
+        }
+        this._engine.setSolarRadiationSamples(samples.length > 0 ? samples : null);
+    }
+
+    //Mirrors _fetchPvHistory: same payload shape, same defensive
+    //parsing across HA's compaction / minimal_response variants.
+    //W/m² values are taken as-is; the sensor is expected to expose
+    //solar irradiance in the same unit the engine consumes, no
+    //normalisation step.
+    private async _fetchSolarRadiationHistory(
+        entityId: string, start: Date, end: Date
+    ): Promise<void>
+    {
+        if (!this.hass?.callWS)
+        {
+            return;
+        }
+        this._solarRadiationFetching = true;
+        try
+        {
+            const now = new Date();
+            const fetchEnd = end > now ? now : end;
+            if (start >= fetchEnd)
+            {
+                this._solarRadiationHistory = { times: [], values: [] };
+                this._pushSolarRadiationToEngine();
+                return;
+            }
+
+            const result: any = await this.hass.callWS({
+                type:             'history/history_during_period',
+                start_time:       start.toISOString(),
+                end_time:         fetchEnd.toISOString(),
+                entity_ids:       [entityId],
+                minimal_response: true,
+                no_attributes:    true
+            });
+
+            const arr: any[] = (result && result[entityId]) ?? [];
+            const times:  Date[]   = [];
+            const values: number[] = [];
+            let lastTsMs: number | null = null;
+
+            for (const item of arr)
+            {
+                const sRaw = item?.s ?? item?.state;
+                if (sRaw === null
+                    || sRaw === undefined
+                    || sRaw === 'unavailable'
+                    || sRaw === 'unknown'
+                    || sRaw === '')
+                {
+                    continue;
+                }
+                const v = parseFloat(String(sRaw));
+                if (!isFinite(v) || v < 0)
+                {
+                    continue;
+                }
+
+                let ts: Date | null = null;
+                const tsRaw =
+                    item?.lu             ??
+                    item?.lc             ??
+                    item?.last_updated   ??
+                    item?.last_changed   ??
+                    null;
+                if (typeof tsRaw === 'number')
+                {
+                    ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
+                }
+                else if (typeof tsRaw === 'string')
+                {
+                    const asNum = Number(tsRaw);
+                    if (Number.isFinite(asNum) && asNum > 1e9)
+                    {
+                        ts = new Date(asNum > 1e12 ? asNum : asNum * 1000);
+                    }
+                    else
+                    {
+                        ts = new Date(tsRaw);
+                    }
+                }
+                if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
+                {
+                    ts = new Date(lastTsMs);
+                }
+                if (!ts || isNaN(ts.getTime()))
+                {
+                    continue;
+                }
+
+                lastTsMs = ts.getTime();
+                times.push(ts);
+                values.push(v);
+            }
+
+            this._solarRadiationHistory = { times, values };
+            this._pushSolarRadiationToEngine();
+        }
+        catch (e)
+        {
+            console.warn('[HELIOS] Solar radiation history fetch failed:', e);
+            this._solarRadiationHistory = { times: [], values: [] };
+            this._pushSolarRadiationToEngine();
+        }
+        finally
+        {
+            this._solarRadiationFetching = false;
+        }
     }
 
     //Single-call history fetch for the battery overlay. Both entities
