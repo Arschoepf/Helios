@@ -15,7 +15,7 @@ import maplibreCss from 'maplibre-gl/dist/maplibre-gl.css?inline';
 
 //Visual styles for the main HeliosCard. Kept in a dedicated file so
 //the card module reads as logic only; rules are grouped by feature
-//(layout → placeholder → timeline → overlays → solar arc → tooltips).
+//(layout, timeline, overlays, solar arc, tooltips).
 export const heliosCardStyles = css`
     ${unsafeCSS(maplibreCss)}
 
@@ -52,22 +52,11 @@ export const heliosCardStyles = css`
         isolation: isolate;
     }
 
-    ha-card.placeholder-mode
-    {
-        height:     100%;
-        min-height: 200px;
-    }
-
     #map-container
     {
         width: 100%;
         height: 100%;
         position: relative;
-    }
-
-    #map-container.hidden
-    {
-        display: none;
     }
 
 
@@ -633,92 +622,6 @@ export const heliosCardStyles = css`
         text-transform: uppercase;
         letter-spacing: 1px;
         opacity: 0.55;
-    }
-
-
-    /*  Placeholder shown until the engine is ready and home
-        coordinates are available. Mini-Helios vignette: a stylised
-        iso scene matching the real card's vocabulary (sun arc,
-        sun + halo, low-poly buildings with a brighter central home,
-        ground cloud disc, leader chips) over a light day-mode sky
-        gradient. The brand chrome sits at the bottom. */
-
-    .placeholder
-    {
-        position: absolute;
-        inset: 0;
-        overflow: hidden;
-        z-index: 20;
-        isolation: isolate;
-        background:
-            radial-gradient(1000px 600px at 65% 28%,
-                rgba(255,210,150,0.30) 0%,
-                rgba(255,210,150,0)    55%),
-            linear-gradient(180deg,
-                #dbe3ec 0%,
-                #e6e0d4 55%,
-                #d3ccbf 100%);
-    }
-
-    .ph-scene
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 1;
-    }
-
-    /*  Sun halo pulses gently, same visual language as the live
-        card's breathing sun. Only the glow circle scales; the
-        inner orange disc stays fixed so the brand colour reads
-        cleanly at the centre. */
-    .ph-sun-glow
-    {
-        transform-origin: center;
-        transform-box: fill-box;
-        animation: ph-sun-pulse 4s ease-in-out infinite;
-    }
-
-    @keyframes ph-sun-pulse
-    {
-        0%, 100% { transform: scale(1);    opacity: 1;   }
-        50%      { transform: scale(1.15); opacity: 0.9; }
-    }
-
-    .ph-content
-    {
-        position: absolute;
-        /*  Title centred horizontally, vertically anchored at 65 %
-            from the BOTTOM of the placeholder (so 35 % from the
-            top). Sits just above the iso buildings and visually
-            below the solar arc apex, feels less "crammed in the
-            middle" than a strict 50 % vertical centre. */
-        top: 35%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        text-align: center;
-        z-index: 10;
-        padding: 6px 18px;
-        box-sizing: border-box;
-    }
-
-    .ph-title
-    {
-        font-size: 1.85rem;
-        font-weight: 200;
-        letter-spacing: 10px;
-        text-transform: uppercase;
-        color: #2a2e34;
-        text-shadow: 0 1px 1px rgba(255,255,255,0.6);
-        line-height: 1;
-        white-space: nowrap;
-        /*  Optical centre, letter-spacing piles up on the right of
-            the last glyph so the visual centre of the wordmark
-            sits a few pixels left of the geometric centre. The
-            padding-left compensates so HELIOS reads centred. */
-        padding-left: 10px;
     }
 
 
@@ -1609,10 +1512,6 @@ export const heliosCardStyles = css`
           - the scrub blue (#1f6feb) and the live tooltip dark
             plate already read on dark backgrounds, so they're left
             alone.
-          - the placeholder vignette is left in light mode regardless
-            of theme: it's a marketing thumbnail rendered when no
-            API key is set, with a sunset gradient that doesn't have
-            a meaningful dark equivalent.
         ============================================================ */
 
     /*  Cards (chart panels) and hairlines on the chart. */
@@ -1736,9 +1635,9 @@ export const heliosCardStyles = css`
         1. .helios-paused, set on the host element by the card's
            IntersectionObserver when the card scrolls out of the
            viewport. Pauses every CSS animation (SVG dash-flow,
-           offset-path arrow flow, placeholder spin / pulse) until
-           the card returns. SMIL <animateMotion> is paused in
-           parallel via svg.pauseAnimations() in the card script.
+           offset-path arrow flow) until the card returns. SMIL
+           <animateMotion> is paused in parallel via
+           svg.pauseAnimations() in the card script.
 
         2. prefers-reduced-motion, respects the user's system
            setting. When the user has asked for reduced motion at

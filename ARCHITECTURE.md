@@ -456,16 +456,13 @@ stay legible at low opacity.
 **Editor and lifecycle stability.**
 
 - Engine initialisation is debounced by 500 ms; cards that live for
-  less than that (HA dashboard editor preview, rapid config edits)
-  never spawn a MapLibre engine or claim a WebGL context.
+  less than that (rapid config edits creating then discarding card
+  instances) never spawn a MapLibre engine or claim a WebGL context.
 - A module-level cap on live `HeliosEngine` instances force-cleans
   the oldest when a new one would push the count over the Safari
   mobile WebGL ceiling.
-- A hard skip on cards rendered inside HA's dashboard editor
-  preview prevents context exhaustion during config editing.
 - `window.__heliosStats` exposes lifecycle counters
-  (engine create / cleanup / skipped-as-preview) for in-browser
-  forensics.
+  (engine create / cleanup) for in-browser forensics.
 
 **Memory hardening.**
 
@@ -1034,7 +1031,7 @@ card section contains:
 A `lifecycle` block aggregates module-level counters maintained by
 the engine (`window.__heliosStats`): engines created vs cleaned up,
 WebGL context-lost events, building fetches fired, etc. Useful for
-diagnosing leaks across editor previews and reloads.
+diagnosing leaks across config edits and reloads.
 
 `heliosStats()` does not mutate any state; it can be invoked from
 the user's console at any time.

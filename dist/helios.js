@@ -30457,27 +30457,6 @@ const _HeliosEngine = class _HeliosEngine {
       styleName
     };
   }
-  //True when the user picked the curated minimal basemap. The map
-  //still loads streets-v4 (we don't ship a hand-built style); the
-  //pruning happens in _pruneMinimalStyle at style.load time.
-  _isMinimalStyle() {
-    return String(this.cfg["map-style"] ?? "streets").toLowerCase() === "minimal";
-  }
-  _pruneMinimalStyle() {
-    if (!this.map || !this._isMinimalStyle()) {
-      return;
-    }
-    const keep = _HeliosEngine.MINIMAL_KEEP_LAYER_IDS;
-    const layers = this.map.getStyle().layers ?? [];
-    for (const l2 of layers) {
-      if (l2.id.startsWith("helios-")) continue;
-      if (keep.has(l2.id)) continue;
-      try {
-        this.map.removeLayer(l2.id);
-      } catch (_2) {
-      }
-    }
-  }
   //Resolve the WebGL canvas pixel ratio. '1x' forces 1.0 (cheapest
   //fragment workload), anything else (including unset) falls back
   //to the device-native ratio capped at 2 on desktop / 1.25 on
@@ -30704,7 +30683,6 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     this._mapReady = true;
-    this._pruneMinimalStyle();
     this.map.getStyle().layers?.forEach((l2) => {
       if (l2.type === "raster") {
         try {
@@ -32268,7 +32246,6 @@ const _HeliosEngine = class _HeliosEngine {
   updateConfig(cfg) {
     bumpStat("updateConfigCalls");
     const prevStyleUrl = this._resolveMapStyle().url;
-    const prevMinimal = this._isMinimalStyle();
     const prevPixelR = this._pixelRatio();
     const prevRadius = this._buildingRadiusMeters();
     const prevCluster = this._buildingClusterRadiusMeters();
@@ -32282,7 +32259,7 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     const nextStyleInfo = this._resolveMapStyle();
-    const styleNeedsReload = nextStyleInfo.url !== prevStyleUrl || this._isMinimalStyle() !== prevMinimal;
+    const styleNeedsReload = nextStyleInfo.url !== prevStyleUrl;
     if (styleNeedsReload) {
       bumpStat("styleReloads");
       this._mapReady = false;
@@ -32504,34 +32481,6 @@ const _HeliosEngine = class _HeliosEngine {
     }
   }
 };
-_HeliosEngine.MINIMAL_KEEP_LAYER_IDS = /* @__PURE__ */ new Set([
-  "Background",
-  //Land use / cover that give the ground its colour palette
-  //without adding any extra draw call beyond what's already
-  //present.
-  "Farmland",
-  "Vegetation",
-  "Wood",
-  "Forest",
-  "Grass",
-  "Residential",
-  "Sand",
-  "Ice",
-  //Water everywhere it appears (lakes, rivers, swimming pools)
-  //plus the visible river/stream lines.
-  "Water",
-  "River",
-  "Stream",
-  //Roads: keep the meaningful classes for orientation; drop
-  //tunnels, bridges, hatching, ramps, oneways, shields, etc.
-  "Major road",
-  "Highway",
-  "Minor road z10",
-  "Minor road z12",
-  "Service road",
-  "Pathway",
-  "Track"
-]);
 _HeliosEngine.DETAIL_MODE_ZOOM_TARGET = 19.5;
 _HeliosEngine.DETAIL_MODE_PITCH_TARGET = 80;
 _HeliosEngine.DETAIL_MODE_TRANSITION_MS = 800;
@@ -33505,22 +33454,11 @@ const heliosCardStyles = i$3`
         isolation: isolate;
     }
 
-    ha-card.placeholder-mode
-    {
-        height:     100%;
-        min-height: 200px;
-    }
-
     #map-container
     {
         width: 100%;
         height: 100%;
         position: relative;
-    }
-
-    #map-container.hidden
-    {
-        display: none;
     }
 
 
@@ -34086,92 +34024,6 @@ const heliosCardStyles = i$3`
         text-transform: uppercase;
         letter-spacing: 1px;
         opacity: 0.55;
-    }
-
-
-    /*  Placeholder shown until the engine is ready and home
-        coordinates are available. Mini-Helios vignette: a stylised
-        iso scene matching the real card's vocabulary (sun arc,
-        sun + halo, low-poly buildings with a brighter central home,
-        ground cloud disc, leader chips) over a light day-mode sky
-        gradient. The brand chrome sits at the bottom. */
-
-    .placeholder
-    {
-        position: absolute;
-        inset: 0;
-        overflow: hidden;
-        z-index: 20;
-        isolation: isolate;
-        background:
-            radial-gradient(1000px 600px at 65% 28%,
-                rgba(255,210,150,0.30) 0%,
-                rgba(255,210,150,0)    55%),
-            linear-gradient(180deg,
-                #dbe3ec 0%,
-                #e6e0d4 55%,
-                #d3ccbf 100%);
-    }
-
-    .ph-scene
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 1;
-    }
-
-    /*  Sun halo pulses gently, same visual language as the live
-        card's breathing sun. Only the glow circle scales; the
-        inner orange disc stays fixed so the brand colour reads
-        cleanly at the centre. */
-    .ph-sun-glow
-    {
-        transform-origin: center;
-        transform-box: fill-box;
-        animation: ph-sun-pulse 4s ease-in-out infinite;
-    }
-
-    @keyframes ph-sun-pulse
-    {
-        0%, 100% { transform: scale(1);    opacity: 1;   }
-        50%      { transform: scale(1.15); opacity: 0.9; }
-    }
-
-    .ph-content
-    {
-        position: absolute;
-        /*  Title centred horizontally, vertically anchored at 65 %
-            from the BOTTOM of the placeholder (so 35 % from the
-            top). Sits just above the iso buildings and visually
-            below the solar arc apex, feels less "crammed in the
-            middle" than a strict 50 % vertical centre. */
-        top: 35%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        text-align: center;
-        z-index: 10;
-        padding: 6px 18px;
-        box-sizing: border-box;
-    }
-
-    .ph-title
-    {
-        font-size: 1.85rem;
-        font-weight: 200;
-        letter-spacing: 10px;
-        text-transform: uppercase;
-        color: #2a2e34;
-        text-shadow: 0 1px 1px rgba(255,255,255,0.6);
-        line-height: 1;
-        white-space: nowrap;
-        /*  Optical centre, letter-spacing piles up on the right of
-            the last glyph so the visual centre of the wordmark
-            sits a few pixels left of the geometric centre. The
-            padding-left compensates so HELIOS reads centred. */
-        padding-left: 10px;
     }
 
 
@@ -35062,10 +34914,6 @@ const heliosCardStyles = i$3`
           - the scrub blue (#1f6feb) and the live tooltip dark
             plate already read on dark backgrounds, so they're left
             alone.
-          - the placeholder vignette is left in light mode regardless
-            of theme: it's a marketing thumbnail rendered when no
-            API key is set, with a sunset gradient that doesn't have
-            a meaningful dark equivalent.
         ============================================================ */
 
     /*  Cards (chart panels) and hairlines on the chart. */
@@ -35189,9 +35037,9 @@ const heliosCardStyles = i$3`
         1. .helios-paused, set on the host element by the card's
            IntersectionObserver when the card scrolls out of the
            viewport. Pauses every CSS animation (SVG dash-flow,
-           offset-path arrow flow, placeholder spin / pulse) until
-           the card returns. SMIL <animateMotion> is paused in
-           parallel via svg.pauseAnimations() in the card script.
+           offset-path arrow flow) until the card returns. SMIL
+           <animateMotion> is paused in parallel via
+           svg.pauseAnimations() in the card script.
 
         2. prefers-reduced-motion, respects the user's system
            setting. When the user has asked for reduced motion at
@@ -36689,7 +36537,7 @@ let HeliosCardEditor = class extends i {
                             >${t2.editor.autoRotateOff}</button>
                         </div>
                     </div>
-                    <div class="field field-block">
+                    <label class="field">
                         <span class="label">${t2.editor.localLidarUrl}</span>
                         <input
                             type="text"
@@ -36697,7 +36545,7 @@ let HeliosCardEditor = class extends i {
                             placeholder="/local/community/Helios/lidar/home-ndsm.tif"
                             @change="${(e2) => this._str("lidar-local-ndsm-url", e2)}"
                         />
-                    </div>
+                    </label>
                     <label class="field">
                         <span class="label">${t2.editor.localLidarMinLat}</span>
                         <input
@@ -36803,7 +36651,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.13"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.14"}`,
       labelStyle,
       versionStyle
     );
@@ -36824,7 +36672,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.13",
+        version: "1.6.0-alpha.14",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -36832,7 +36680,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.13"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.14"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -38607,13 +38455,10 @@ let HeliosCard = class extends i {
     }
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
-    const showPlaceholder = !hasApiKey;
     return b`
-            <ha-card class="${cardThemeClass} ${showPlaceholder ? "placeholder-mode" : ""} ${this._detailMode ? "detail-active" : ""}">
+            <ha-card class="${cardThemeClass} ${this._detailMode ? "detail-active" : ""}">
 
-                ${showPlaceholder ? this._renderPlaceholder() : A}
-
-                <div id="map-container" class="${showPlaceholder ? "hidden" : ""}"></div>
+                <div id="map-container"></div>
 
                 ${hasApiKey && this._timeRange ? b`
                     <div
@@ -39814,91 +39659,6 @@ let HeliosCard = class extends i {
     }
     this._detailMode = false;
     this._engine?.setDetailMode(false);
-  }
-  //Placeholder (no API key configured)
-  _renderPlaceholder() {
-    return b`
-            <div class="placeholder">
-
-                <svg
-                    class="ph-scene"
-                    viewBox="0 0 400 320"
-                    preserveAspectRatio="xMidYMid meet"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <defs>
-                        <radialGradient id="ph-cloud-disc-grad" cx="50%" cy="50%" r="50%">
-                            <stop offset="0%"   stop-color="rgba(90,141,196,0.55)" />
-                            <stop offset="80%"  stop-color="rgba(90,141,196,0.20)" />
-                            <stop offset="100%" stop-color="rgba(90,141,196,0)"    />
-                        </radialGradient>
-                        <radialGradient id="ph-sun-glow-grad" cx="50%" cy="50%" r="50%">
-                            <stop offset="0%"   stop-color="rgba(239,159,39,0.85)" />
-                            <stop offset="50%"  stop-color="rgba(239,159,39,0.30)" />
-                            <stop offset="100%" stop-color="rgba(239,159,39,0)"    />
-                        </radialGradient>
-                    </defs>
-
-                    <!-- Cloud disc on the ground; rendered first so
-                         buildings emerge through it as islands. -->
-                    <ellipse cx="215" cy="215" rx="110" ry="30"
-                        fill="url(#ph-cloud-disc-grad)" />
-                    <ellipse cx="215" cy="215" rx="110" ry="30"
-                        fill="none"
-                        stroke="rgba(90,141,196,0.50)"
-                        stroke-width="0.6" />
-
-                    <!-- Far-back-left neighbour. -->
-                    <g>
-                        <polygon points="110,168 132,180 110,192 88,180"  fill="#dadade" />
-                        <polygon points="132,180 110,192 110,212 132,200" fill="#cbcbcf" />
-                        <polygon points="88,180 110,192 110,212 88,200"   fill="#bcbcc1" />
-                    </g>
-
-                    <!-- Far-back-right neighbour, slightly taller. -->
-                    <g>
-                        <polygon points="300,162 324,176 300,190 276,176" fill="#dadade" />
-                        <polygon points="324,176 300,190 300,212 324,198" fill="#cbcbcf" />
-                        <polygon points="276,176 300,190 300,212 276,198" fill="#bcbcc1" />
-                    </g>
-
-                    <!-- Home: bigger and brighter than its neighbours,
-                         centred on the cloud disc. -->
-                    <g>
-                        <polygon points="215,178 253,198 215,218 177,198" fill="#ebebef" />
-                        <polygon points="253,198 215,218 215,260 253,240" fill="#dededf" />
-                        <polygon points="177,198 215,218 215,260 177,240" fill="#ccccd0" />
-                    </g>
-
-                    <!-- Solar arc, drawn over the buildings so it
-                         visually inhabits the sky. -->
-                    <path
-                        d="M 50 230 Q 215 60 360 230"
-                        fill="none"
-                        stroke="#EF9F27"
-                        stroke-width="2.5"
-                        stroke-linecap="round"
-                        stroke-opacity="0.85" />
-
-                    <!-- Sun disc + halo, riding on the arc at t=0.75
-                         (3/4 of the way from the left) so it sits ON
-                         the path. The glow circle pulses; the inner
-                         disc stays still so the brand colour reads
-                         clearly. -->
-                    <g transform="translate(286, 166)">
-                        <circle class="ph-sun-glow" r="22" fill="url(#ph-sun-glow-grad)" />
-                        <circle r="9" fill="#EF9F27" />
-                        <circle r="8.5" fill="none"
-                            stroke="#a36617" stroke-width="0.7" stroke-opacity="0.55" />
-                    </g>
-                </svg>
-
-                <div class="ph-content">
-                    <div class="ph-title">HELIOS</div>
-                </div>
-
-            </div>
-        `;
   }
 };
 HeliosCard.OUTLINE_FAR = 1.5;

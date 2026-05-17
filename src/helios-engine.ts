@@ -112,14 +112,13 @@ export interface HeliosConfig
     //rendering of the date/time chip at the top-right of the card.
     'time-format'?:           unknown;
     //Picks the OpenFreeMap base style. 'streets' (default) renders
-    //a sober vector basemap with full street / POI labels suited to
-    //urban areas; 'minimal' loads Streets then strips every non-
-    //essential label / POI icon / road shield for the cheapest
-    //per-frame fragment workload. The label visibility toggle and
-    //the helios-buildings extrusion are independent of this choice
-    //(both are wired to custom sources). When `card-theme: dark` is
-    //set, the dark variants of these styles are used so the basemap
-    //matches the chrome.
+    //the full-colour Liberty style with street / POI labels suited to
+    //urban areas; 'minimal' renders the muted-grey Positron style for
+    //a quieter, label-light basemap that draws less attention. The
+    //label visibility toggle and the helios-buildings extrusion are
+    //independent of this choice (both are wired to custom sources).
+    //When `card-theme: dark` is set, the Fiord dark style is used for
+    //both choices so the basemap matches the chrome.
     'map-style'?:             unknown;
     //Picks the card chrome theme. 'light' (default) paints chips,
     //charts, buttons, tooltips and the scrub overlay on a white
@@ -1097,51 +1096,6 @@ export class HeliosEngine
         };
     }
 
-    //True when the user picked the curated minimal basemap. The map
-    //still loads streets-v4 (we don't ship a hand-built style); the
-    //pruning happens in _pruneMinimalStyle at style.load time.
-    private _isMinimalStyle(): boolean
-    {
-        return String(this.cfg['map-style'] ?? 'streets').toLowerCase() === 'minimal';
-    }
-
-    //Layers we keep when `map-style: minimal` is active. Everything
-    //else is removed outright in _pruneMinimalStyle, removeLayer is
-    //immune to MapLibre 5 style-import scoping (the bare removeLayer
-    //call was confirmed effective on the streets-v4 layer set).
-    private static readonly MINIMAL_KEEP_LAYER_IDS: ReadonlySet<string> = new Set([
-        'Background',
-        //Land use / cover that give the ground its colour palette
-        //without adding any extra draw call beyond what's already
-        //present.
-        'Farmland', 'Vegetation', 'Wood', 'Forest', 'Grass',
-        'Residential', 'Sand', 'Ice',
-        //Water everywhere it appears (lakes, rivers, swimming pools)
-        //plus the visible river/stream lines.
-        'Water', 'River', 'Stream',
-        //Roads: keep the meaningful classes for orientation; drop
-        //tunnels, bridges, hatching, ramps, oneways, shields, etc.
-        'Major road', 'Highway', 'Minor road z10', 'Minor road z12',
-        'Service road', 'Pathway', 'Track'
-    ]);
-
-    private _pruneMinimalStyle(): void
-    {
-        if (!this.map || !this._isMinimalStyle())
-        {
-            return;
-        }
-        const keep   = HeliosEngine.MINIMAL_KEEP_LAYER_IDS;
-        const layers = this.map.getStyle().layers ?? [];
-        for (const l of layers)
-        {
-            if (l.id.startsWith('helios-')) continue;
-            if (keep.has(l.id))             continue;
-            try { this.map.removeLayer(l.id); }
-            catch (_) {}
-        }
-    }
-
     //Resolve the WebGL canvas pixel ratio. '1x' forces 1.0 (cheapest
     //fragment workload), anything else (including unset) falls back
     //to the device-native ratio capped at 2 on desktop / 1.25 on
@@ -1471,11 +1425,6 @@ export class HeliosEngine
             return;
         }
         this._mapReady = true;
-
-        //Minimal basemap: prune all native layers outside the
-        //curated whitelist before any helios-* layer is added,
-        //so we don't waste setup work on layers that won't render.
-        this._pruneMinimalStyle();
 
         this.map.getStyle().layers?.forEach(l =>
         {
@@ -3774,7 +3723,6 @@ export class HeliosEngine
     {
         bumpStat('updateConfigCalls');
         const prevStyleUrl = this._resolveMapStyle().url;
-        const prevMinimal  = this._isMinimalStyle();
         const prevPixelR   = this._pixelRatio();
         const prevRadius      = this._buildingRadiusMeters();
         const prevCluster     = this._buildingClusterRadiusMeters();
@@ -3790,16 +3738,13 @@ export class HeliosEngine
             return;
         }
 
-        //Map-style or minimal-pruning toggle change → reload the
-        //basemap. setStyle() replaces sources, layers, sprites and
-        //glyphs; our custom sources get wiped and re-added by the
-        //_onStyleLoad handler. Drop _mapReady while the new style is
-        //in flight so other code paths don't operate on a half-loaded
-        //style.
+        //Map-style change → reload the basemap. setStyle() replaces
+        //sources, layers, sprites and glyphs; our custom sources get
+        //wiped and re-added by the _onStyleLoad handler. Drop
+        //_mapReady while the new style is in flight so other code
+        //paths don't operate on a half-loaded style.
         const nextStyleInfo = this._resolveMapStyle();
-        const styleNeedsReload =
-               nextStyleInfo.url    !== prevStyleUrl
-            || this._isMinimalStyle() !== prevMinimal;
+        const styleNeedsReload = nextStyleInfo.url !== prevStyleUrl;
         if (styleNeedsReload)
         {
             bumpStat('styleReloads');

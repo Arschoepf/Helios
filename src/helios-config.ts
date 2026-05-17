@@ -1174,7 +1174,7 @@ export class HeliosCardEditor extends LitElement
                             >${t.editor.autoRotateOff}</button>
                         </div>
                     </div>
-                    <div class="field field-block">
+                    <label class="field">
                         <span class="label">${t.editor.localLidarUrl}</span>
                         <input
                             type="text"
@@ -1182,7 +1182,7 @@ export class HeliosCardEditor extends LitElement
                             placeholder="/local/community/Helios/lidar/home-ndsm.tif"
                             @change="${(e: Event) => this._str('lidar-local-ndsm-url', e)}"
                         />
-                    </div>
+                    </label>
                     <label class="field">
                         <span class="label">${t.editor.localLidarMinLat}</span>
                         <input

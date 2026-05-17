@@ -622,7 +622,8 @@ export class HeliosCard extends LitElement
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
         //If the card dies before the debounce fires, drop the pending
-        //init, short-lived editor preview cards never get an engine.
+        //init so a short-lived instance never spawns an engine it won't
+        //use.
         if (this._initDebounceTimer !== undefined)
         {
             window.clearTimeout(this._initDebounceTimer);
@@ -3184,18 +3185,10 @@ export class HeliosCard extends LitElement
         const cardTheme = String(this.config?.['card-theme'] ?? 'light').toLowerCase();
         const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';
 
-        //showPlaceholder covers the single case where HA hasn't
-        //published home coordinates yet (fresh dashboard before the
-        //location is set). The dashboard editor preview now renders
-        //the live map instead of a static illustration.
-        const showPlaceholder = !hasApiKey;
-
         return html`
-            <ha-card class="${cardThemeClass} ${showPlaceholder ? 'placeholder-mode' : ''} ${this._detailMode ? 'detail-active' : ''}">
+            <ha-card class="${cardThemeClass} ${this._detailMode ? 'detail-active' : ''}">
 
-                ${showPlaceholder ? this._renderPlaceholder() : nothing}
-
-                <div id="map-container" class="${showPlaceholder ? 'hidden' : ''}"></div>
+                <div id="map-container"></div>
 
                 ${hasApiKey && this._timeRange ? html`
                     <div
@@ -3914,8 +3907,8 @@ export class HeliosCard extends LitElement
     private _onHomeClick(e: Event): void
     {
         //Stop propagation so the underlying map doesn't also process
-        //the click as a pan / drag start, and so a nested layer
-        //(e.g. the placeholder) doesn't double-handle it.
+        //the click as a pan / drag start, and so nested overlay
+        //layers don't double-handle it.
         e.stopPropagation();
         if (this._detailMode) { return; }
         //Clear the hover flag immediately, the hitbox un-renders
@@ -4757,105 +4750,6 @@ export class HeliosCard extends LitElement
     {
         this._homeHover = false;
     };
-
-    //Placeholder (no API key configured)
-
-    private _renderPlaceholder(): TemplateResult
-    {
-        //Minimal catalogue thumbnail: only the stylised iso scene
-        //(low-poly buildings + ground cloud disc) and the solar arc
-        //+ sun overhead, no chips, no leaders, no subtitle. The
-        //"HELIOS" wordmark sits centred on top via .ph-content. The
-        //sun is positioned at t = 0.75 along the arc Bezier
-        //(M 50,230 Q 215,60 360,230 → (286, 166)) so it visually
-        //rides ON the curve rather than floating above it. The
-        //placeholder is now only rendered while HA has not yet
-        //published home coordinates, or inside HA's dashboard
-        //editor preview where the engine is intentionally not
-        //instantiated.
-        return html`
-            <div class="placeholder">
-
-                <svg
-                    class="ph-scene"
-                    viewBox="0 0 400 320"
-                    preserveAspectRatio="xMidYMid meet"
-                    xmlns="http://www.w3.org/2000/svg"
-                >
-                    <defs>
-                        <radialGradient id="ph-cloud-disc-grad" cx="50%" cy="50%" r="50%">
-                            <stop offset="0%"   stop-color="rgba(90,141,196,0.55)" />
-                            <stop offset="80%"  stop-color="rgba(90,141,196,0.20)" />
-                            <stop offset="100%" stop-color="rgba(90,141,196,0)"    />
-                        </radialGradient>
-                        <radialGradient id="ph-sun-glow-grad" cx="50%" cy="50%" r="50%">
-                            <stop offset="0%"   stop-color="rgba(239,159,39,0.85)" />
-                            <stop offset="50%"  stop-color="rgba(239,159,39,0.30)" />
-                            <stop offset="100%" stop-color="rgba(239,159,39,0)"    />
-                        </radialGradient>
-                    </defs>
-
-                    <!-- Cloud disc on the ground; rendered first so
-                         buildings emerge through it as islands. -->
-                    <ellipse cx="215" cy="215" rx="110" ry="30"
-                        fill="url(#ph-cloud-disc-grad)" />
-                    <ellipse cx="215" cy="215" rx="110" ry="30"
-                        fill="none"
-                        stroke="rgba(90,141,196,0.50)"
-                        stroke-width="0.6" />
-
-                    <!-- Far-back-left neighbour. -->
-                    <g>
-                        <polygon points="110,168 132,180 110,192 88,180"  fill="#dadade" />
-                        <polygon points="132,180 110,192 110,212 132,200" fill="#cbcbcf" />
-                        <polygon points="88,180 110,192 110,212 88,200"   fill="#bcbcc1" />
-                    </g>
-
-                    <!-- Far-back-right neighbour, slightly taller. -->
-                    <g>
-                        <polygon points="300,162 324,176 300,190 276,176" fill="#dadade" />
-                        <polygon points="324,176 300,190 300,212 324,198" fill="#cbcbcf" />
-                        <polygon points="276,176 300,190 300,212 276,198" fill="#bcbcc1" />
-                    </g>
-
-                    <!-- Home: bigger and brighter than its neighbours,
-                         centred on the cloud disc. -->
-                    <g>
-                        <polygon points="215,178 253,198 215,218 177,198" fill="#ebebef" />
-                        <polygon points="253,198 215,218 215,260 253,240" fill="#dededf" />
-                        <polygon points="177,198 215,218 215,260 177,240" fill="#ccccd0" />
-                    </g>
-
-                    <!-- Solar arc, drawn over the buildings so it
-                         visually inhabits the sky. -->
-                    <path
-                        d="M 50 230 Q 215 60 360 230"
-                        fill="none"
-                        stroke="#EF9F27"
-                        stroke-width="2.5"
-                        stroke-linecap="round"
-                        stroke-opacity="0.85" />
-
-                    <!-- Sun disc + halo, riding on the arc at t=0.75
-                         (3/4 of the way from the left) so it sits ON
-                         the path. The glow circle pulses; the inner
-                         disc stays still so the brand colour reads
-                         clearly. -->
-                    <g transform="translate(286, 166)">
-                        <circle class="ph-sun-glow" r="22" fill="url(#ph-sun-glow-grad)" />
-                        <circle r="9" fill="#EF9F27" />
-                        <circle r="8.5" fill="none"
-                            stroke="#a36617" stroke-width="0.7" stroke-opacity="0.55" />
-                    </g>
-                </svg>
-
-                <div class="ph-content">
-                    <div class="ph-title">HELIOS</div>
-                </div>
-
-            </div>
-        `;
-    }
 
     static styles = heliosCardStyles;
 }
