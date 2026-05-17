@@ -617,49 +617,6 @@ export class HeliosCardEditor extends LitElement
         return list.reduce((a, e) => a + (e.share ?? 0), 0);
     }
 
-    //Sets a single field on entry `i` to an explicit value (not via
-    //an input event). Used by the tilt / azimuth preset chips so a
-    //click on "S" or "Vertical" snaps the matching input without
-    //the user having to type. Same write contract as `_arrayField`,
-    //just sourced from a programmatic value instead of the DOM.
-    private _arraySetField(i: number, key: 'tilt' | 'azimuth' | 'share', value: number): void
-    {
-        const list = this._readPvArrays();
-        if (i < 0 || i >= list.length) return;
-        list[i] = { ...list[i], [key]: value };
-        this._writePvArrays(list);
-    }
-
-    //Tilt preset chips: 0 = flat install, 30 = typical pitched roof,
-    //45 = steep roof, 90 = fully vertical (e.g. balcony). Plenty of
-    //custom angles exist (12, 22, 35, ...); the chips are shortcuts
-    //for the common cases, the free input below remains the source
-    //of truth and covers anything in between. Active chip lights up
-    //when the input matches the chip value within a small tolerance.
-    private static readonly TILT_PRESETS: ReadonlyArray<{ deg: number; key: keyof Translations['editor'] }> = [
-        { deg: 0,  key: 'pvTiltPresetFlat' },
-        { deg: 30, key: 'pvTiltPresetRoof' },
-        { deg: 45, key: 'pvTiltPresetSteepRoof' },
-        { deg: 90, key: 'pvTiltPresetVertical' }
-    ];
-
-    //Azimuth preset chips: the 8 cardinal / intercardinal compass
-    //bearings (0 / 45 / 90 / ... / 315). Covers the vast majority of
-    //roof orientations; users with a roof at 247° still type it in
-    //the free input below. The active-chip match uses wrap-aware
-    //distance so "N" stays active for typed values just above 360
-    //and just below 0.
-    private static readonly AZIMUTH_PRESETS: ReadonlyArray<{ deg: number; key: keyof Translations['editor'] }> = [
-        { deg: 0,   key: 'compassN'  },
-        { deg: 45,  key: 'compassNE' },
-        { deg: 90,  key: 'compassE'  },
-        { deg: 135, key: 'compassSE' },
-        { deg: 180, key: 'compassS'  },
-        { deg: 225, key: 'compassSW' },
-        { deg: 270, key: 'compassW'  },
-        { deg: 315, key: 'compassNW' }
-    ];
-
     //Syncs the local open-set with the <details> element's runtime
     //state on every native `toggle` event. Without this round-trip,
     //Lit re-renders would snap the `open` attribute back to whatever
@@ -671,29 +628,6 @@ export class HeliosCardEditor extends LitElement
         if (el.open) next.add(i);
         else         next.delete(i);
         this._openArrayIndices = next;
-    }
-
-    //Active-chip match for tilt: plain absolute distance, ±5° to
-    //absorb typing imprecision (e.g. "32" still highlights "Roof
-    //30°"). Returns false for null inputs so a freshly-opened editor
-    //shows no chip active.
-    private _isTiltPresetActive(current: number | null, presetDeg: number): boolean
-    {
-        if (current === null) return false;
-        return Math.abs(current - presetDeg) <= 5;
-    }
-
-    //Active-chip match for azimuth: wrap-aware so 359° still
-    //highlights "N" (0°) and -3° (if ever typed) highlights "N"
-    //too. Same ±5° tolerance as tilt.
-    private _isAzimuthPresetActive(current: number | null, presetDeg: number): boolean
-    {
-        if (current === null) return false;
-        const norm   = ((current % 360) + 360) % 360;
-        const target = ((presetDeg % 360) + 360) % 360;
-        let diff = Math.abs(norm - target);
-        if (diff > 180) diff = 360 - diff;
-        return diff <= 5;
     }
 
     //Format a numeric slider value for display alongside the input.
@@ -1044,17 +978,8 @@ export class HeliosCardEditor extends LitElement
                                             >${t.editor.pvArrayRemove}</button>
                                         </summary>
                                         <div class="pv-array-body">
-                                            <div class="field field-stacked">
+                                            <label class="field">
                                                 <span class="label">${t.editor.pvArrayTilt}</span>
-                                                <div class="preset-row" role="group" aria-label="${t.editor.pvArrayTilt}">
-                                                    ${HeliosCardEditor.TILT_PRESETS.map(p => html`
-                                                        <button
-                                                            type="button"
-                                                            class="preset-chip ${this._isTiltPresetActive(arr.tilt, p.deg) ? 'is-active' : ''}"
-                                                            @click="${() => this._arraySetField(i, 'tilt', p.deg)}"
-                                                        >${t.editor[p.key]} ${p.deg}°</button>
-                                                    `)}
-                                                </div>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -1064,19 +989,10 @@ export class HeliosCardEditor extends LitElement
                                                     .value="${arr.tilt !== null ? String(arr.tilt) : ''}"
                                                     @change="${(e: Event) => this._arrayField(i, 'tilt', e)}"
                                                 />
-                                            </div>
+                                            </label>
                                             <div class="field-help">${t.editor.pvArrayTiltHelp}</div>
-                                            <div class="field field-stacked">
+                                            <label class="field">
                                                 <span class="label">${t.editor.pvArrayAzimuth}</span>
-                                                <div class="preset-row" role="group" aria-label="${t.editor.pvArrayAzimuth}">
-                                                    ${HeliosCardEditor.AZIMUTH_PRESETS.map(p => html`
-                                                        <button
-                                                            type="button"
-                                                            class="preset-chip ${this._isAzimuthPresetActive(arr.azimuth, p.deg) ? 'is-active' : ''}"
-                                                            @click="${() => this._arraySetField(i, 'azimuth', p.deg)}"
-                                                        >${t.editor[p.key]}</button>
-                                                    `)}
-                                                </div>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -1086,7 +1002,7 @@ export class HeliosCardEditor extends LitElement
                                                     .value="${arr.azimuth !== null ? String(arr.azimuth) : ''}"
                                                     @change="${(e: Event) => this._arrayField(i, 'azimuth', e)}"
                                                 />
-                                            </div>
+                                            </label>
                                             <div class="field-help">${t.editor.pvArrayAzimuthHelp}</div>
                                             <label class="field">
                                                 <span class="label">${t.editor.pvArrayShare}</span>
@@ -1422,11 +1338,18 @@ export class HeliosCardEditor extends LitElement
               hint  → next field  = section gap + 20 px = 34 px
             Hierarchy is visible (2.4× ratio) and no element ever
             sits underneath another.                                  */
+        /*  Vertical rhythm: a positive top margin pushes the help
+            visibly away from its field above, and a generous bottom
+            margin creates a clear break before the next field. Both
+            stack with the section's 14 px flex gap, giving:
+              field → help        = gap + top    = 14 + 8  = 22 px
+              help  → next field  = gap + bottom = 14 + 20 = 34 px
+            Hierarchy ratio 1.5×, both spacings comfortable to read.   */
         .field-help
         {
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
-            margin: 0 0 20px 0;
+            margin: 8px 0 20px 0;
         }
 
         .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
@@ -1437,7 +1360,7 @@ export class HeliosCardEditor extends LitElement
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
             font-style: italic;
-            margin: 0 0 20px 0;
+            margin: 8px 0 20px 0;
         }
 
         .field
@@ -1700,75 +1623,5 @@ export class HeliosCardEditor extends LitElement
             outline-offset: 2px;
         }
 
-        /*  Preset chips above tilt and azimuth inputs. Pill-shaped,
-            borderless, kept visually quiet so the row never competes
-            with the input that's the actual source of truth. Active
-            state lights up when the input value matches the chip
-            within a small tolerance, click snaps the input to the
-            chip's value.                                              */
-        /*  Stacked variant of .field used by tilt and azimuth in the
-            multi-array editor: three rows top to bottom (label,
-            chips, input). The input is pulled to the right via
-            margin-left: auto so the row visually anchors to the
-            opposite edge of the label, breathing room for the chips
-            in between. The free input keeps a fixed footprint so
-            the visual rhythm stays predictable as the user types
-            different value widths.                                    */
-        .field.field-stacked
-        {
-            display: flex;
-            flex-direction: column;
-            align-items: stretch;
-            gap: 4px;
-        }
-        .field.field-stacked > .label
-        {
-            margin-bottom: 0;
-        }
-        .field.field-stacked > input
-        {
-            align-self: flex-end;
-            width: 100px;
-        }
-
-        .preset-row
-        {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 4px;
-            margin-top: 2px;
-            margin-bottom: 2px;
-        }
-
-        .preset-chip
-        {
-            background: transparent;
-            border: 1px solid var(--divider-color, rgba(0,0,0,0.18));
-            border-radius: 999px;
-            padding: 2px 9px;
-            font-size: 11px;
-            font-family: inherit;
-            font-variant-numeric: tabular-nums;
-            cursor: pointer;
-            color: var(--secondary-text-color, #757575);
-            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-        }
-        .preset-chip:hover
-        {
-            background: var(--secondary-background-color, rgba(0,0,0,0.04));
-            color: var(--primary-text-color, #212121);
-        }
-        .preset-chip.is-active
-        {
-            background: var(--primary-color, #03a9f4);
-            border-color: var(--primary-color, #03a9f4);
-            color: #ffffff;
-        }
-        .preset-chip:focus-visible
-        {
-            outline: 2px solid var(--primary-color, #03a9f4);
-            outline-offset: 2px;
-        }
     `;
 }

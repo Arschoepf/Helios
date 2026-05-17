@@ -138,28 +138,6 @@ export interface Translations
         pvArrayTiltHelp:          string;
         pvArrayAzimuthHelp:       string;
         pvArrayShareHelp:         string;
-        //Quick-pick preset labels rendered above each tilt input as
-        //clickable chips. The chip values are wired to fixed angles
-        //(0 / 30 / 45 / 90) in the card editor. The chips snap the
-        //input to the corresponding angle; the input itself stays a
-        //free numeric field so any in-between value (e.g. 12, 22)
-        //remains typeable.
-        pvTiltPresetFlat:         string;
-        pvTiltPresetRoof:         string;
-        pvTiltPresetSteepRoof:    string;
-        pvTiltPresetVertical:     string;
-        //Compass abbreviations rendered above each azimuth input as
-        //clickable chips. The chips snap the input to the matching
-        //cardinal/intercardinal degree (0, 45, 90, ... 315). Free
-        //input still wins for exotic orientations like 247.
-        compassN:                 string;
-        compassNE:                string;
-        compassE:                 string;
-        compassSE:                string;
-        compassS:                 string;
-        compassSW:                string;
-        compassW:                 string;
-        compassNW:                string;
         pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;

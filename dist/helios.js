@@ -32567,7 +32567,7 @@ const en = {
     todayProduced: "produced",
     todayForecast: "forecast",
     todayPeak: "peak",
-    todayNotStartedYet: "production hasn't started yet",
+    todayNotStartedYet: "production paused",
     tomorrowLabel: "Tomorrow",
     tomorrowPeak: "peak expected around",
     batteryLabel: "Battery",
@@ -32578,7 +32578,7 @@ const en = {
     locationSection: "Location",
     homeLatitude: "Home latitude *",
     homeLongitude: "Home longitude *",
-    locationHint: "Override the home address used as the card's center. Leave both fields empty to use Home Assistant's configured home. The override is only applied when BOTH fields are set to valid coordinates; partial or out-of-range values silently fall back to the HA default.",
+    locationHint: "Override the home address used as the card's center. Leave both fields empty to use Home Assistant's configured home. The override is only applied when BOTH fields are set to valid coordinates.",
     mapSection: "Map",
     mapStyle: "Map style *",
     mapStyleHint: "Two basemaps: Streets (sober, urban, with full labels) or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). The dark variant of the chosen style is used automatically when the card theme is set to dark.",
@@ -32613,7 +32613,7 @@ const en = {
     pvPeakPower: "Peak power (kWp)",
     pvPeakPowerHelp: "Installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty to hide the forecast; observed production and the daily peak still render.",
     pvArraysSection: "Panel orientation",
-    pvArraysHelp: "One entry per group of co-oriented panels. Leave a single entry with tilt 0 for a flat install; add more entries when panels are split across multiple orientations (e.g. one row facing east, one facing west). The card forecasts each entry separately and weights the result by its share of the total kWp.",
+    pvArraysHelp: "One entry per group of co-oriented panels. Leave a single entry with tilt 0 for a flat install. Add more entries when panels are split across multiple orientations (e.g. one row facing east, one facing west). The card forecasts each entry separately and weights the result by its share of the total kWp.",
     pvArrayTitle: "Array {n}",
     pvArrayTilt: "Tilt (°)",
     pvArrayAzimuth: "Azimuth (°)",
@@ -32621,28 +32621,16 @@ const en = {
     pvArrayAdd: "+ Add array",
     pvArrayRemove: "Remove",
     pvArrayNormHint: "Shares don't add up to 100%, the forecast normalises them automatically.",
-    pvArrayTiltHelp: "Tilt of this array from horizontal: 0 for a flat install, 30 to 45 for a typical pitched roof, 90 for a fully vertical setup such as a balcony. Use the chips above for common values, or type any angle from 0 to 90. Combined with the azimuth, this drives the Liu-Jordan transposition that projects the predicted irradiance onto the panel plane.",
-    pvArrayAzimuthHelp: "Compass bearing this array faces, clockwise from north: 0 = north, 90 = east, 180 = south, 270 = west. Use the chips above for the 8 cardinal / intercardinal directions, or type any value from 0 to 360 for an exact orientation.",
+    pvArrayTiltHelp: "Tilt of this array from horizontal, 0 to 90: 0 for a flat install, 30 to 45 for a typical pitched roof, 90 for a fully vertical setup such as a balcony. Combined with the azimuth, this drives the Liu-Jordan transposition that projects the predicted irradiance onto the panel plane.",
+    pvArrayAzimuthHelp: "Compass bearing this array faces, clockwise from north, 0 to 360: 0 = north, 90 = east, 180 = south, 270 = west.",
     pvArrayShareHelp: "Relative weight of this array within the total kWp. Auto-normalised at compute time, so 50/50, 60/60 and 1/1 all produce the same forecast. Leave blank when there's only one array (it gets 100% by default).",
-    pvTiltPresetFlat: "Flat",
-    pvTiltPresetRoof: "Roof",
-    pvTiltPresetSteepRoof: "Steep roof",
-    pvTiltPresetVertical: "Vertical",
-    compassN: "N",
-    compassNE: "NE",
-    compassE: "E",
-    compassSE: "SE",
-    compassS: "S",
-    compassSW: "SW",
-    compassW: "W",
-    compassNW: "NW",
     pvColor: "Production color *",
     batterySection: "Home battery",
-    batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional; the chip on its side appears as soon as the entity is set.",
+    batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional. The chip on its side appears as soon as the entity is set.",
     batterySocEntity: "State of charge entity",
     batterySocEntityHelp: 'Pick a battery State of Charge sensor (%, usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
     batteryPowerEntity: "Power entity",
-    batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself; positive is interpreted as charging and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
+    batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself (positive is interpreted as charging) and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
     batteryPowerInvert: "Battery power sign",
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Inverted",
@@ -32673,7 +32661,7 @@ const en = {
     shadowOpacity: "Shadow opacity *",
     shadowOpacityHint: "Opacity of the cast ground shadows.",
     localLidarSection: "Advanced — Local LiDAR (BYO)",
-    localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the bounding box this source replaces any national provider; outside, the regular fallback chain applies.",
+    localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the bounding box this source replaces any national provider. Outside, the regular fallback chain applies.",
     localLidarToolsHint: "Need to prepare a raster from scratch? The Helios repo ships Python helper tools under `tools/lidar/`, see the README there for the full pipeline (system GDAL install, `uv` setup, inspect / convert / synthetic test commands).",
     localLidarEnabled: "Use local data",
     localLidarUrl: "GeoTIFF URL",
@@ -32697,7 +32685,7 @@ const fr = {
     todayProduced: "produit",
     todayForecast: "prévu",
     todayPeak: "pic",
-    todayNotStartedYet: "production pas encore démarrée",
+    todayNotStartedYet: "production en pause",
     tomorrowLabel: "Demain",
     tomorrowPeak: "pic prévu vers",
     batteryLabel: "Batterie",
@@ -32708,7 +32696,7 @@ const fr = {
     locationSection: "Localisation",
     homeLatitude: "Latitude du domicile *",
     homeLongitude: "Longitude du domicile *",
-    locationHint: "Remplace l'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides; toute valeur partielle ou hors plage est ignorée silencieusement.",
+    locationHint: "Remplace l'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides.",
     mapSection: "Carte",
     mapStyle: "Style de la carte *",
     mapStyleHint: "Deux fonds de carte : Rues (sobre, urbain, libellés complets) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
@@ -32743,7 +32731,7 @@ const fr = {
     pvPeakPower: "Puissance crête (kWp)",
     pvPeakPowerHelp: "Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.",
     pvArraysSection: "Orientation des panneaux",
-    pvArraysHelp: "Une entrée par pan de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat; ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
+    pvArraysHelp: "Une entrée par pan de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat. Ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
     pvArrayTitle: "Pan {n}",
     pvArrayTilt: "Inclinaison (°)",
     pvArrayAzimuth: "Azimut (°)",
@@ -32751,28 +32739,16 @@ const fr = {
     pvArrayAdd: "+ Ajouter un pan",
     pvArrayRemove: "Supprimer",
     pvArrayNormHint: "Les parts ne totalisent pas 100 %, la prévision les normalise automatiquement.",
-    pvArrayTiltHelp: "Inclinaison de ce pan par rapport à l'horizontale : 0 pour une installation à plat, 30 à 45 pour un toit incliné classique, 90 pour une installation verticale (par exemple un balcon). Utilise les chips au-dessus pour les valeurs courantes, ou tape n'importe quel angle de 0 à 90. Combinée à l'azimut, elle pilote la transposition Liu-Jordan qui projette l'irradiance prévue sur le plan des panneaux.",
-    pvArrayAzimuthHelp: "Orientation à la boussole vers laquelle ce pan est tourné, sens horaire depuis le nord : 0 = nord, 90 = est, 180 = sud, 270 = ouest. Utilise les chips au-dessus pour les 8 directions cardinales et intercardinales, ou tape n'importe quelle valeur de 0 à 360 pour une orientation exacte.",
+    pvArrayTiltHelp: "Inclinaison de ce pan par rapport à l'horizontale, de 0 à 90 : 0 pour une installation à plat, 30 à 45 pour un toit incliné classique, 90 pour une installation verticale (par exemple un balcon). Combinée à l'azimut, elle pilote la transposition Liu-Jordan qui projette l'irradiance prévue sur le plan des panneaux.",
+    pvArrayAzimuthHelp: "Orientation à la boussole vers laquelle ce pan est tourné, sens horaire depuis le nord, de 0 à 360 : 0 = nord, 90 = est, 180 = sud, 270 = ouest.",
     pvArrayShareHelp: "Poids relatif de ce pan dans le total des kWp. Normalisé automatiquement au calcul : 50/50, 60/60 et 1/1 donnent tous le même résultat. Laisse vide quand il n'y a qu'un seul pan (il prend 100 % par défaut).",
-    pvTiltPresetFlat: "Plat",
-    pvTiltPresetRoof: "Toit",
-    pvTiltPresetSteepRoof: "Toit raide",
-    pvTiltPresetVertical: "Vertical",
-    compassN: "N",
-    compassNE: "NE",
-    compassE: "E",
-    compassSE: "SE",
-    compassS: "S",
-    compassSW: "SO",
-    compassW: "O",
-    compassNW: "NO",
     pvColor: "Couleur de production *",
     batterySection: "Batterie domestique",
-    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles; la pastille correspondante s'affiche dès que l'entité est renseignée.",
+    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles. La pastille correspondante s'affiche dès que l'entité est renseignée.",
     batterySocEntity: "Entité d'état de charge",
     batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (%, typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
     batteryPowerEntity: "Entité de puissance",
-    batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même; positif = en charge et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
+    batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même (positif = en charge) et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
     batteryPowerInvert: "Signe de la puissance batterie",
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Inversé",
@@ -32803,7 +32779,7 @@ const fr = {
     shadowOpacity: "Opacité des ombres *",
     shadowOpacityHint: "Opacité des ombres projetées au sol.",
     localLidarSection: "Avancé — LiDAR local (BYO)",
-    localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la bbox cette source remplace tout fournisseur national; à l'extérieur, la chaîne de repli habituelle s'applique.",
+    localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la bbox cette source remplace tout fournisseur national. A l'extérieur, la chaîne de repli habituelle s'applique.",
     localLidarToolsHint: "Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d'inspection / conversion / test synthétique).",
     localLidarEnabled: "Utiliser les données locales",
     localLidarUrl: "URL du GeoTIFF",
@@ -32827,7 +32803,7 @@ const de = {
     todayProduced: "erzeugt",
     todayForecast: "Prognose",
     todayPeak: "Spitze",
-    todayNotStartedYet: "Erzeugung noch nicht gestartet",
+    todayNotStartedYet: "Erzeugung pausiert",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "Spitze erwartet gegen",
     batteryLabel: "Batterie",
@@ -32838,7 +32814,7 @@ const de = {
     locationSection: "Standort",
     homeLatitude: "Breitengrad des Zuhauses *",
     homeLongitude: "Längengrad des Zuhauses *",
-    locationHint: "Überschreibt die Heimadresse, die als Mittelpunkt der Karte verwendet wird. Beide Felder leer lassen, um die in Home Assistant konfigurierte Adresse zu nutzen. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten; unvollständige oder ungültige Werte werden ignoriert.",
+    locationHint: "Überschreibt die Heimadresse, die als Mittelpunkt der Karte verwendet wird. Beide Felder leer lassen, um die in Home Assistant konfigurierte Adresse zu nutzen. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten.",
     mapSection: "Karte",
     mapStyle: "Kartenstil *",
     mapStyleHint: "Zwei Basiskarten: Straßen (nüchtern, urban, mit vollständigen Beschriftungen) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
@@ -32873,7 +32849,7 @@ const de = {
     pvPeakPower: "Spitzenleistung (kWp)",
     pvPeakPowerHelp: "Installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, um die Prognose auszublenden; gemessene Produktion und Tagesspitze werden weiter angezeigt.",
     pvArraysSection: "Modulausrichtung",
-    pvArraysHelp: "Ein Eintrag pro Gruppe gleich ausgerichteter Module. Lasse einen einzigen Eintrag mit Neigung 0 für eine flache Installation; füge weitere Einträge hinzu, wenn deine Module auf mehrere Ausrichtungen verteilt sind (zum Beispiel eine Reihe nach Osten, eine nach Westen). Die Prognose wird pro Eintrag berechnet und nach dem Anteil an der Gesamt-kWp gewichtet.",
+    pvArraysHelp: "Ein Eintrag pro Gruppe gleich ausgerichteter Module. Lasse einen einzigen Eintrag mit Neigung 0 für eine flache Installation. Füge weitere Einträge hinzu, wenn deine Module auf mehrere Ausrichtungen verteilt sind (zum Beispiel eine Reihe nach Osten, eine nach Westen). Die Prognose wird pro Eintrag berechnet und nach dem Anteil an der Gesamt-kWp gewichtet.",
     pvArrayTitle: "Feld {n}",
     pvArrayTilt: "Neigung (°)",
     pvArrayAzimuth: "Azimut (°)",
@@ -32881,28 +32857,16 @@ const de = {
     pvArrayAdd: "+ Feld hinzufügen",
     pvArrayRemove: "Entfernen",
     pvArrayNormHint: "Die Anteile ergeben nicht 100 %, die Prognose normalisiert sie automatisch.",
-    pvArrayTiltHelp: "Neigung dieses Felds gegenüber der Horizontalen: 0 für eine flache Installation, 30 bis 45 für ein typisches Steildach, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Nutze die Chips oben für gängige Werte, oder tippe einen beliebigen Winkel von 0 bis 90 ein. Zusammen mit dem Azimut treibt die Neigung die Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert.",
-    pvArrayAzimuthHelp: "Kompassrichtung, in die dieses Feld zeigt, im Uhrzeigersinn ab Norden: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen. Nutze die Chips oben für die 8 Haupt- und Zwischenrichtungen, oder tippe einen beliebigen Wert von 0 bis 360 für eine exakte Orientierung.",
+    pvArrayTiltHelp: "Neigung dieses Felds gegenüber der Horizontalen, 0 bis 90: 0 für eine flache Installation, 30 bis 45 für ein typisches Steildach, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Zusammen mit dem Azimut treibt die Neigung die Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert.",
+    pvArrayAzimuthHelp: "Kompassrichtung, in die dieses Feld zeigt, im Uhrzeigersinn ab Norden, 0 bis 360: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen.",
     pvArrayShareHelp: "Relativer Anteil dieses Felds an der Gesamt-kWp. Wird zum Berechnungszeitpunkt automatisch normalisiert, deshalb liefern 50/50, 60/60 und 1/1 dieselbe Prognose. Leer lassen, wenn nur ein Feld existiert (es bekommt standardmäßig 100 %).",
-    pvTiltPresetFlat: "Flach",
-    pvTiltPresetRoof: "Dach",
-    pvTiltPresetSteepRoof: "Steiles Dach",
-    pvTiltPresetVertical: "Vertikal",
-    compassN: "N",
-    compassNE: "NO",
-    compassE: "O",
-    compassSE: "SO",
-    compassS: "S",
-    compassSW: "SW",
-    compassW: "W",
-    compassNW: "NW",
     pvColor: "Produktionsfarbe *",
     batterySection: "Hausbatterie",
-    batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional; der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
+    batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional. Der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
     batterySocEntity: "Ladezustand-Entität",
     batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (%, typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
     batteryPowerEntity: "Leistungs-Entität",
-    batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst; positiv = Laden und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
+    batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst (positiv = Laden) und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
     batteryPowerInvert: "Vorzeichen der Batterieleistung",
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertiert",
@@ -32933,7 +32897,7 @@ const de = {
     shadowOpacity: "Schatten-Deckkraft *",
     shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
     localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
-    localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb der Bounding-Box ersetzt diese Quelle jeden nationalen Anbieter; außerhalb greift die normale Fallback-Kette.",
+    localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb der Bounding-Box ersetzt diese Quelle jeden nationalen Anbieter. Außerhalb greift die normale Fallback-Kette.",
     localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).",
     localLidarEnabled: "Lokale Daten verwenden",
     localLidarUrl: "GeoTIFF-URL",
@@ -32957,7 +32921,7 @@ const es = {
     todayProduced: "producido",
     todayForecast: "previsto",
     todayPeak: "pico",
-    todayNotStartedYet: "producción aún no iniciada",
+    todayNotStartedYet: "producción en pausa",
     tomorrowLabel: "Mañana",
     tomorrowPeak: "pico previsto sobre las",
     batteryLabel: "Batería",
@@ -32968,7 +32932,7 @@ const es = {
     locationSection: "Ubicación",
     homeLatitude: "Latitud del hogar *",
     homeLongitude: "Longitud del hogar *",
-    locationHint: "Anula la dirección del hogar usada como centro de la tarjeta. Deja ambos campos vacíos para usar el hogar configurado en Home Assistant. La anulación se aplica solo cuando AMBOS campos contienen coordenadas válidas; los valores parciales o fuera de rango se ignoran silenciosamente.",
+    locationHint: "Anula la dirección del hogar usada como centro de la tarjeta. Deja ambos campos vacíos para usar el hogar configurado en Home Assistant. La anulación se aplica solo cuando AMBOS campos contienen coordenadas válidas.",
     mapSection: "Mapa",
     mapStyle: "Estilo del mapa *",
     mapStyleHint: "Dos mapas base: Calles (sobrio, urbano, con etiquetas completas) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
@@ -33003,7 +32967,7 @@ const es = {
     pvPeakPower: "Potencia pico (kWp)",
     pvPeakPowerHelp: "Potencia pico instalada de tu campo en kilovatios-pico. Controla la curva de previsión punteada en el gráfico PV y la saturación del flujo PV → casa. Déjalo vacío para ocultar la previsión; la producción observada y el pico del día siguen mostrándose.",
     pvArraysSection: "Orientación de los paneles",
-    pvArraysHelp: "Una entrada por grupo de paneles con la misma orientación. Deja una sola entrada con inclinación 0 para una instalación plana; añade más entradas cuando tus paneles estén repartidos en varias orientaciones (por ejemplo, una fila al este y otra al oeste). La previsión se calcula por entrada y se pondera por su parte del total de kWp.",
+    pvArraysHelp: "Una entrada por grupo de paneles con la misma orientación. Deja una sola entrada con inclinación 0 para una instalación plana. Añade más entradas cuando tus paneles estén repartidos en varias orientaciones (por ejemplo, una fila al este y otra al oeste). La previsión se calcula por entrada y se pondera por su parte del total de kWp.",
     pvArrayTitle: "Campo {n}",
     pvArrayTilt: "Inclinación (°)",
     pvArrayAzimuth: "Azimut (°)",
@@ -33011,28 +32975,16 @@ const es = {
     pvArrayAdd: "+ Añadir campo",
     pvArrayRemove: "Eliminar",
     pvArrayNormHint: "Las partes no suman 100 %, la previsión las normaliza automáticamente.",
-    pvArrayTiltHelp: "Inclinación de este campo respecto a la horizontal: 0 para una instalación plana, 30 a 45 para un tejado inclinado clásico, 90 para una instalación vertical (por ejemplo balcón). Usa las chips de arriba para los valores comunes, o escribe cualquier ángulo entre 0 y 90. Combinada con el azimut, dirige la transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel.",
-    pvArrayAzimuthHelp: "Orientación brújula a la que apunta este campo, en sentido horario desde el norte: 0 = norte, 90 = este, 180 = sur, 270 = oeste. Usa las chips de arriba para las 8 direcciones cardinales o intercardinales, o escribe cualquier valor entre 0 y 360 para una orientación exacta.",
+    pvArrayTiltHelp: "Inclinación de este campo respecto a la horizontal, de 0 a 90: 0 para una instalación plana, 30 a 45 para un tejado inclinado clásico, 90 para una instalación vertical (por ejemplo balcón). Combinada con el azimut, dirige la transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel.",
+    pvArrayAzimuthHelp: "Orientación brújula a la que apunta este campo, en sentido horario desde el norte, de 0 a 360: 0 = norte, 90 = este, 180 = sur, 270 = oeste.",
     pvArrayShareHelp: "Peso relativo de este campo en el total de kWp. Se normaliza automáticamente al calcular: 50/50, 60/60 y 1/1 producen el mismo resultado. Déjalo vacío cuando solo hay un campo (recibe el 100 % por defecto).",
-    pvTiltPresetFlat: "Plano",
-    pvTiltPresetRoof: "Tejado",
-    pvTiltPresetSteepRoof: "Tejado inclinado",
-    pvTiltPresetVertical: "Vertical",
-    compassN: "N",
-    compassNE: "NE",
-    compassE: "E",
-    compassSE: "SE",
-    compassS: "S",
-    compassSW: "SO",
-    compassW: "O",
-    compassNW: "NO",
     pvColor: "Color de producción *",
     batterySection: "Batería doméstica",
-    batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales; el chip correspondiente aparece en cuanto la entidad está definida.",
+    batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales. El chip correspondiente aparece en cuanto la entidad está definida.",
     batterySocEntity: "Entidad de estado de carga",
     batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (%, típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
     batteryPowerEntity: "Entidad de potencia",
-    batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma; positivo = cargando y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
+    batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma (positivo = cargando) y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
     batteryPowerInvert: "Signo de la potencia de la batería",
     batteryPowerInvertStandard: "Estándar",
     batteryPowerInvertInverted: "Invertido",
@@ -33063,7 +33015,7 @@ const es = {
     shadowOpacity: "Opacidad de las sombras *",
     shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
     localLidarSection: "Avanzado — LiDAR local (BYO)",
-    localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del bounding box esta fuente reemplaza cualquier proveedor nacional; fuera, se aplica la cadena de respaldo habitual.",
+    localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del bounding box esta fuente reemplaza cualquier proveedor nacional. Fuera, se aplica la cadena de respaldo habitual.",
     localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? El repositorio de Helios incluye herramientas Python en `tools/lidar/`, consulta el README de esa carpeta para el pipeline completo (instalación de GDAL de sistema, configuración de `uv`, comandos de inspección / conversión / prueba sintética).",
     localLidarEnabled: "Usar datos locales",
     localLidarUrl: "URL del GeoTIFF",
@@ -33087,7 +33039,7 @@ const it = {
     todayProduced: "prodotto",
     todayForecast: "previsto",
     todayPeak: "picco",
-    todayNotStartedYet: "produzione non ancora iniziata",
+    todayNotStartedYet: "produzione in pausa",
     tomorrowLabel: "Domani",
     tomorrowPeak: "picco previsto verso le",
     batteryLabel: "Batteria",
@@ -33098,7 +33050,7 @@ const it = {
     locationSection: "Posizione",
     homeLatitude: "Latitudine di casa *",
     homeLongitude: "Longitudine di casa *",
-    locationHint: "Sovrascrive l'indirizzo di casa usato come centro della scheda. Lascia entrambi i campi vuoti per usare l'indirizzo configurato in Home Assistant. La sovrascrittura è applicata solo quando ENTRAMBI i campi contengono coordinate valide; valori parziali o fuori intervallo vengono ignorati silenziosamente.",
+    locationHint: "Sovrascrive l'indirizzo di casa usato come centro della scheda. Lascia entrambi i campi vuoti per usare l'indirizzo configurato in Home Assistant. La sovrascrittura è applicata solo quando ENTRAMBI i campi contengono coordinate valide.",
     mapSection: "Mappa",
     mapStyle: "Stile della mappa *",
     mapStyleHint: "Due mappe di base: Strade (sobria, urbana, con etichette complete) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
@@ -33133,7 +33085,7 @@ const it = {
     pvPeakPower: "Potenza di picco (kWp)",
     pvPeakPowerHelp: "Potenza di picco installata del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata sul grafico PV e la saturazione del flusso PV → casa. Lascia vuoto per nascondere la previsione; la produzione osservata e il picco del giorno restano visibili.",
     pvArraysSection: "Orientamento dei pannelli",
-    pvArraysHelp: "Una voce per ogni campo di pannelli con la stessa orientazione. Lascia una sola voce con inclinazione 0 per un'installazione piana; aggiungi altre voci quando i pannelli sono distribuiti su più orientazioni (per esempio una fila a est e una a ovest). La previsione viene calcolata per ciascuna voce e pesata in base alla sua quota dei kWp totali.",
+    pvArraysHelp: "Una voce per ogni campo di pannelli con la stessa orientazione. Lascia una sola voce con inclinazione 0 per un'installazione piana. Aggiungi altre voci quando i pannelli sono distribuiti su più orientazioni (per esempio una fila a est e una a ovest). La previsione viene calcolata per ciascuna voce e pesata in base alla sua quota dei kWp totali.",
     pvArrayTitle: "Campo {n}",
     pvArrayTilt: "Inclinazione (°)",
     pvArrayAzimuth: "Azimut (°)",
@@ -33141,28 +33093,16 @@ const it = {
     pvArrayAdd: "+ Aggiungi campo",
     pvArrayRemove: "Rimuovi",
     pvArrayNormHint: "Le quote non sommano a 100 %, la previsione le normalizza automaticamente.",
-    pvArrayTiltHelp: "Inclinazione di questo campo rispetto all'orizzontale: 0 per un'installazione piana, 30 a 45 per un tetto inclinato classico, 90 per un'installazione verticale (per esempio balcone). Usa le chips qui sopra per i valori comuni, o digita un angolo qualunque da 0 a 90. Combinata con l'azimut, guida la trasposizione Liu-Jordan che proietta l'irradianza prevista sul piano del pannello.",
-    pvArrayAzimuthHelp: "Orientamento bussola verso cui è rivolto questo campo, in senso orario da nord: 0 = nord, 90 = est, 180 = sud, 270 = ovest. Usa le chips qui sopra per le 8 direzioni cardinali o intercardinali, o digita un valore qualunque da 0 a 360 per un'orientazione esatta.",
+    pvArrayTiltHelp: "Inclinazione di questo campo rispetto all'orizzontale, da 0 a 90: 0 per un'installazione piana, 30 a 45 per un tetto inclinato classico, 90 per un'installazione verticale (per esempio balcone). Combinata con l'azimut, guida la trasposizione Liu-Jordan che proietta l'irradianza prevista sul piano del pannello.",
+    pvArrayAzimuthHelp: "Orientamento bussola verso cui è rivolto questo campo, in senso orario da nord, da 0 a 360: 0 = nord, 90 = est, 180 = sud, 270 = ovest.",
     pvArrayShareHelp: "Peso relativo di questo campo nel totale dei kWp. Normalizzato automaticamente al calcolo: 50/50, 60/60 e 1/1 danno lo stesso risultato. Lascia vuoto quando c'è un solo campo (prende il 100 % per default).",
-    pvTiltPresetFlat: "Piano",
-    pvTiltPresetRoof: "Tetto",
-    pvTiltPresetSteepRoof: "Tetto ripido",
-    pvTiltPresetVertical: "Verticale",
-    compassN: "N",
-    compassNE: "NE",
-    compassE: "E",
-    compassSE: "SE",
-    compassS: "S",
-    compassSW: "SO",
-    compassW: "O",
-    compassNW: "NO",
     pvColor: "Colore di produzione *",
     batterySection: "Batteria domestica",
-    batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali; la pastiglia corrispondente appare appena l'entità è impostata.",
+    batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali. La pastiglia corrispondente appare appena l'entità è impostata.",
     batterySocEntity: "Entità stato di carica",
     batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (%, tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
     batteryPowerEntity: "Entità di potenza",
-    batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa; positivo = in carica e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
+    batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa (positivo = in carica) e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
     batteryPowerInvert: "Segno della potenza della batteria",
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertito",
@@ -33193,7 +33133,7 @@ const it = {
     shadowOpacity: "Opacità delle ombre *",
     shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
     localLidarSection: "Avanzato — LiDAR locale (BYO)",
-    localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. Dentro la bounding box questa sorgente sostituisce qualsiasi provider nazionale; fuori, si applica la consueta catena di fallback.",
+    localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. Dentro la bounding box questa sorgente sostituisce qualsiasi provider nazionale. Fuori, si applica la consueta catena di fallback.",
     localLidarToolsHint: "Devi preparare un raster da zero? Il repository Helios include strumenti Python in `tools/lidar/`, vedi il README di quella cartella per la pipeline completa (installazione di GDAL di sistema, configurazione di `uv`, comandi di ispezione / conversione / test sintetico).",
     localLidarEnabled: "Usa dati locali",
     localLidarUrl: "URL del GeoTIFF",
@@ -33217,7 +33157,7 @@ const nl = {
     todayProduced: "opgewekt",
     todayForecast: "verwacht",
     todayPeak: "piek",
-    todayNotStartedYet: "opwekking nog niet begonnen",
+    todayNotStartedYet: "opwekking gepauzeerd",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "piek verwacht rond",
     batteryLabel: "Batterij",
@@ -33228,7 +33168,7 @@ const nl = {
     locationSection: "Locatie",
     homeLatitude: "Breedtegraad woning *",
     homeLongitude: "Lengtegraad woning *",
-    locationHint: "Overschrijft het thuisadres dat als middelpunt van de kaart wordt gebruikt. Laat beide velden leeg om het in Home Assistant geconfigureerde adres te gebruiken. De override geldt alleen wanneer BEIDE velden geldige coördinaten bevatten; gedeeltelijke of ongeldige waarden worden stilzwijgend genegeerd.",
+    locationHint: "Overschrijft het thuisadres dat als middelpunt van de kaart wordt gebruikt. Laat beide velden leeg om het in Home Assistant geconfigureerde adres te gebruiken. De override geldt alleen wanneer BEIDE velden geldige coördinaten bevatten.",
     mapSection: "Kaart",
     mapStyle: "Kaartstijl *",
     mapStyleHint: "Twee basiskaarten: Straten (sober, stedelijk, met volledige labels) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
@@ -33263,7 +33203,7 @@ const nl = {
     pvPeakPower: "Piekvermogen (kWp)",
     pvPeakPowerHelp: "Geïnstalleerd piekvermogen van je panelen in kilowattpiek. Stuurt de gestippelde voorspellingslijn op de PV-grafiek en de stroomverzadiging van de PV → huis-leider. Laat leeg om de voorspelling te verbergen; gemeten productie en de dagelijkse piek blijven zichtbaar.",
     pvArraysSection: "Paneeloriëntatie",
-    pvArraysHelp: "Eén item per veld panelen met dezelfde oriëntatie. Laat één item staan met hellingshoek 0 voor een platte opstelling; voeg extra items toe wanneer je panelen over meerdere richtingen verdeeld zijn (bijvoorbeeld een rij oost, een rij west). De prognose wordt per item berekend en gewogen op basis van het percentage van het totale kWp.",
+    pvArraysHelp: "Eén item per veld panelen met dezelfde oriëntatie. Laat één item staan met hellingshoek 0 voor een platte opstelling. Voeg extra items toe wanneer je panelen over meerdere richtingen verdeeld zijn (bijvoorbeeld een rij oost, een rij west). De prognose wordt per item berekend en gewogen op basis van het percentage van het totale kWp.",
     pvArrayTitle: "Veld {n}",
     pvArrayTilt: "Helling (°)",
     pvArrayAzimuth: "Azimut (°)",
@@ -33271,28 +33211,16 @@ const nl = {
     pvArrayAdd: "+ Veld toevoegen",
     pvArrayRemove: "Verwijderen",
     pvArrayNormHint: "De percentages komen niet uit op 100%, de prognose herschaalt ze automatisch.",
-    pvArrayTiltHelp: "Helling van dit veld ten opzichte van het horizontale vlak: 0 voor een platte opstelling, 30 tot 45 voor een klassiek schuin dak, 90 voor een volledig verticale opstelling (bijvoorbeeld een balkon). Gebruik de chips hierboven voor gangbare waarden, of typ een willekeurige hoek tussen 0 en 90. Samen met de azimut stuurt deze instelling de Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert.",
-    pvArrayAzimuthHelp: "Kompasrichting waarnaar dit veld wijst, met de klok mee vanaf het noorden: 0 = noord, 90 = oost, 180 = zuid, 270 = west. Gebruik de chips hierboven voor de 8 hoofd- of tussenrichtingen, of typ een willekeurige waarde tussen 0 en 360 voor een exacte oriëntatie.",
+    pvArrayTiltHelp: "Helling van dit veld ten opzichte van het horizontale vlak, 0 tot 90: 0 voor een platte opstelling, 30 tot 45 voor een klassiek schuin dak, 90 voor een volledig verticale opstelling (bijvoorbeeld een balkon). Samen met de azimut stuurt deze instelling de Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert.",
+    pvArrayAzimuthHelp: "Kompasrichting waarnaar dit veld wijst, met de klok mee vanaf het noorden, 0 tot 360: 0 = noord, 90 = oost, 180 = zuid, 270 = west.",
     pvArrayShareHelp: "Relatief gewicht van dit veld in het totale kWp. Wordt op berekentijd automatisch genormaliseerd: 50/50, 60/60 en 1/1 leveren hetzelfde resultaat. Laat leeg wanneer er maar één veld is (krijgt standaard 100%).",
-    pvTiltPresetFlat: "Plat",
-    pvTiltPresetRoof: "Dak",
-    pvTiltPresetSteepRoof: "Steil dak",
-    pvTiltPresetVertical: "Verticaal",
-    compassN: "N",
-    compassNE: "NO",
-    compassE: "O",
-    compassSE: "ZO",
-    compassS: "Z",
-    compassSW: "ZW",
-    compassW: "W",
-    compassNW: "NW",
     pvColor: "Productiekleur *",
     batterySection: "Thuisbatterij",
-    batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel; de bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
+    batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel. De bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
     batterySocEntity: "Laadtoestand-entiteit",
     batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (%, meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
     batteryPowerEntity: "Vermogen-entiteit",
-    batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf; positief = opladen en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
+    batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf (positief = opladen) en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
     batteryPowerInvert: "Teken van het batterijvermogen",
     batteryPowerInvertStandard: "Standaard",
     batteryPowerInvertInverted: "Omgekeerd",
@@ -33323,7 +33251,7 @@ const nl = {
     shadowOpacity: "Schaduwdekking *",
     shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
     localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
-    localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen de bounding box vervangt deze bron elke nationale leverancier; daarbuiten geldt de gebruikelijke fallback-keten.",
+    localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen de bounding box vervangt deze bron elke nationale leverancier. Daarbuiten geldt de gebruikelijke fallback-keten.",
     localLidarToolsHint: "Een eigen raster nodig? De Helios-repository bevat Python-hulpmiddelen onder `tools/lidar/`, zie de README daar voor de volledige pipeline (installatie van de GDAL-systeembibliotheek, `uv`-setup, inspect / convert / synthetisch test-commando's).",
     localLidarEnabled: "Lokale data gebruiken",
     localLidarUrl: "GeoTIFF-URL",
@@ -33347,7 +33275,7 @@ const pt = {
     todayProduced: "produzido",
     todayForecast: "previsto",
     todayPeak: "pico",
-    todayNotStartedYet: "produção ainda não iniciada",
+    todayNotStartedYet: "produção em pausa",
     tomorrowLabel: "Amanhã",
     tomorrowPeak: "pico previsto por volta das",
     batteryLabel: "Bateria",
@@ -33358,7 +33286,7 @@ const pt = {
     locationSection: "Localização",
     homeLatitude: "Latitude de casa *",
     homeLongitude: "Longitude de casa *",
-    locationHint: "Substitui o endereço de casa usado como centro do cartão. Deixe ambos os campos vazios para usar o endereço configurado no Home Assistant. A substituição só é aplicada quando AMBOS os campos contêm coordenadas válidas; valores parciais ou fora do intervalo são ignorados silenciosamente.",
+    locationHint: "Substitui o endereço de casa usado como centro do cartão. Deixe ambos os campos vazios para usar o endereço configurado no Home Assistant. A substituição só é aplicada quando AMBOS os campos contêm coordenadas válidas.",
     mapSection: "Mapa",
     mapStyle: "Estilo do mapa *",
     mapStyleHint: "Dois mapas base: Ruas (sóbrio, urbano, com etiquetas completas) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
@@ -33393,7 +33321,7 @@ const pt = {
     pvPeakPower: "Potência de pico (kWp)",
     pvPeakPowerHelp: "Potência de pico instalada do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada no gráfico PV e a saturação do fluxo PV → casa. Deixa vazio para ocultar a previsão; a produção observada e o pico do dia continuam visíveis.",
     pvArraysSection: "Orientação dos painéis",
-    pvArraysHelp: "Uma entrada por campo de painéis com a mesma orientação. Deixa uma única entrada com inclinação 0 para uma instalação plana; acrescenta mais entradas quando os painéis estão repartidos por várias orientações (por exemplo uma fila a este e outra a oeste). A previsão é calculada por entrada e ponderada pela sua quota dos kWp totais.",
+    pvArraysHelp: "Uma entrada por campo de painéis com a mesma orientação. Deixa uma única entrada com inclinação 0 para uma instalação plana. Acrescenta mais entradas quando os painéis estão repartidos por várias orientações (por exemplo uma fila a este e outra a oeste). A previsão é calculada por entrada e ponderada pela sua quota dos kWp totais.",
     pvArrayTitle: "Campo {n}",
     pvArrayTilt: "Inclinação (°)",
     pvArrayAzimuth: "Azimute (°)",
@@ -33401,28 +33329,16 @@ const pt = {
     pvArrayAdd: "+ Adicionar campo",
     pvArrayRemove: "Remover",
     pvArrayNormHint: "As quotas não somam 100 %, a previsão normaliza-as automaticamente.",
-    pvArrayTiltHelp: "Inclinação deste campo em relação à horizontal: 0 para uma instalação plana, 30 a 45 para um telhado inclinado clássico, 90 para uma instalação vertical (por exemplo varanda). Usa as chips acima para os valores correntes, ou escreve qualquer ângulo entre 0 e 90. Combinada com o azimute, conduz a transposição Liu-Jordan que projeta a irradiância prevista sobre o plano do painel.",
-    pvArrayAzimuthHelp: "Orientação na bússola para onde este campo aponta, no sentido horário a partir do norte: 0 = norte, 90 = este, 180 = sul, 270 = oeste. Usa as chips acima para as 8 direções cardinais ou intercardinais, ou escreve qualquer valor entre 0 e 360 para uma orientação exacta.",
+    pvArrayTiltHelp: "Inclinação deste campo em relação à horizontal, de 0 a 90: 0 para uma instalação plana, 30 a 45 para um telhado inclinado clássico, 90 para uma instalação vertical (por exemplo varanda). Combinada com o azimute, conduz a transposição Liu-Jordan que projeta a irradiância prevista sobre o plano do painel.",
+    pvArrayAzimuthHelp: "Orientação na bússola para onde este campo aponta, no sentido horário a partir do norte, de 0 a 360: 0 = norte, 90 = este, 180 = sul, 270 = oeste.",
     pvArrayShareHelp: "Peso relativo deste campo no total dos kWp. Normalizado automaticamente no cálculo: 50/50, 60/60 e 1/1 produzem o mesmo resultado. Deixa vazio quando só existe um campo (recebe 100 % por predefinição).",
-    pvTiltPresetFlat: "Plano",
-    pvTiltPresetRoof: "Telhado",
-    pvTiltPresetSteepRoof: "Telhado inclinado",
-    pvTiltPresetVertical: "Vertical",
-    compassN: "N",
-    compassNE: "NE",
-    compassE: "E",
-    compassSE: "SE",
-    compassS: "S",
-    compassSW: "SO",
-    compassW: "O",
-    compassNW: "NO",
     pvColor: "Cor de produção *",
     batterySection: "Bateria doméstica",
-    batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais; o chip correspondente aparece assim que a entidade é definida.",
+    batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais. O chip correspondente aparece assim que a entidade é definida.",
     batterySocEntity: "Entidade do estado de carga",
     batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (%, normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
     batteryPowerEntity: "Entidade de potência",
-    batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade; positivo = a carregar e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
+    batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade (positivo = a carregar) e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
     batteryPowerInvert: "Sinal da potência da bateria",
     batteryPowerInvertStandard: "Padrão",
     batteryPowerInvertInverted: "Invertido",
@@ -33453,7 +33369,7 @@ const pt = {
     shadowOpacity: "Opacidade das sombras *",
     shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
     localLidarSection: "Avançado — LiDAR local (BYO)",
-    localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da bounding box esta fonte substitui qualquer fornecedor nacional; fora, aplica-se a cadeia de fallback habitual.",
+    localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da bounding box esta fonte substitui qualquer fornecedor nacional. Fora, aplica-se a cadeia de fallback habitual.",
     localLidarToolsHint: "Precisas de preparar um raster do zero? O repositório Helios inclui ferramentas Python em `tools/lidar/`, consulta o README dessa pasta para o pipeline completo (instalação do GDAL de sistema, configuração do `uv`, comandos de inspeção / conversão / teste sintético).",
     localLidarEnabled: "Usar dados locais",
     localLidarUrl: "URL do GeoTIFF",
@@ -33477,7 +33393,7 @@ const no = {
     todayProduced: "produsert",
     todayForecast: "estimert",
     todayPeak: "topp",
-    todayNotStartedYet: "produksjon ikke startet ennå",
+    todayNotStartedYet: "produksjon pauset",
     tomorrowLabel: "I morgen",
     tomorrowPeak: "topp ventet rundt",
     batteryLabel: "Batteri",
@@ -33488,7 +33404,7 @@ const no = {
     locationSection: "Sted",
     homeLatitude: "Hjemmets breddegrad *",
     homeLongitude: "Hjemmets lengdegrad *",
-    locationHint: "Overstyrer hjemmeadressen som brukes som kortets sentrum. La begge feltene være tomme for å bruke hjemmet som er konfigurert i Home Assistant. Overstyringen brukes kun når BEGGE feltene har gyldige koordinater; ufullstendige eller ugyldige verdier ignoreres stille.",
+    locationHint: "Overstyrer hjemmeadressen som brukes som kortets sentrum. La begge feltene være tomme for å bruke hjemmet som er konfigurert i Home Assistant. Overstyringen brukes kun når BEGGE feltene har gyldige koordinater.",
     mapSection: "Kart",
     mapStyle: "Kartstil *",
     mapStyleHint: "To grunnkart: Gater (nøkternt, urbant, med fulle etiketter) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.",
@@ -33523,7 +33439,7 @@ const no = {
     pvPeakPower: "Toppeffekt (kWp)",
     pvPeakPowerHelp: "Installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen i PV-grafen og strømningsmetningen for PV → hus-leaderen. La stå tom for å skjule prognosen; observert produksjon og dagens topp tegnes likevel.",
     pvArraysSection: "Panelorientering",
-    pvArraysHelp: "Én oppføring per felt paneler med samme orientering. La én oppføring stå med helning 0 for en flat installasjon; legg til flere oppføringer når panelene er fordelt på flere retninger (for eksempel en rad mot øst og en mot vest). Prognosen beregnes per oppføring og vektes etter prosenten av total kWp.",
+    pvArraysHelp: "Én oppføring per felt paneler med samme orientering. La én oppføring stå med helning 0 for en flat installasjon. Legg til flere oppføringer når panelene er fordelt på flere retninger (for eksempel en rad mot øst og en mot vest). Prognosen beregnes per oppføring og vektes etter prosenten av total kWp.",
     pvArrayTitle: "Felt {n}",
     pvArrayTilt: "Helning (°)",
     pvArrayAzimuth: "Azimut (°)",
@@ -33531,28 +33447,16 @@ const no = {
     pvArrayAdd: "+ Legg til felt",
     pvArrayRemove: "Fjern",
     pvArrayNormHint: "Prosentene summerer ikke til 100 %, prognosen normaliserer dem automatisk.",
-    pvArrayTiltHelp: "Helningen til dette feltet i forhold til vannrett: 0 for flat installasjon, 30 til 45 for et typisk skråtak, 90 for en helt vertikal oppstilling (for eksempel balkong). Bruk chipsene over for vanlige verdier, eller skriv inn en hvilken som helst vinkel fra 0 til 90. Sammen med azimuten driver helningen Liu-Jordan-transposisjonen som projiserer forventet stråling på panelets plan.",
-    pvArrayAzimuthHelp: "Kompassretningen dette feltet peker mot, med klokken fra nord: 0 = nord, 90 = øst, 180 = sør, 270 = vest. Bruk chipsene over for de 8 hoved- eller mellomretningene, eller skriv en hvilken som helst verdi fra 0 til 360 for en eksakt orientering.",
+    pvArrayTiltHelp: "Helningen til dette feltet i forhold til vannrett, fra 0 til 90: 0 for flat installasjon, 30 til 45 for et typisk skråtak, 90 for en helt vertikal oppstilling (for eksempel balkong). Sammen med azimuten driver helningen Liu-Jordan-transposisjonen som projiserer forventet stråling på panelets plan.",
+    pvArrayAzimuthHelp: "Kompassretningen dette feltet peker mot, med klokken fra nord, fra 0 til 360: 0 = nord, 90 = øst, 180 = sør, 270 = vest.",
     pvArrayShareHelp: "Relativ vekt av dette feltet i den totale kWp. Normaliseres automatisk ved beregning: 50/50, 60/60 og 1/1 gir samme resultat. La stå tomt når det bare finnes ett felt (det får 100 % som standard).",
-    pvTiltPresetFlat: "Flatt",
-    pvTiltPresetRoof: "Tak",
-    pvTiltPresetSteepRoof: "Bratt tak",
-    pvTiltPresetVertical: "Vertikalt",
-    compassN: "N",
-    compassNE: "NØ",
-    compassE: "Ø",
-    compassSE: "SØ",
-    compassS: "S",
-    compassSW: "SV",
-    compassW: "V",
-    compassNW: "NV",
     pvColor: "Produksjonsfarge *",
     batterySection: "Husbatteri",
-    batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie; chipen på sin side vises så snart entiteten er satt.",
+    batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie. Chipen på sin side vises så snart entiteten er satt.",
     batterySocEntity: "Ladenivå-entitet",
     batterySocEntityHelp: 'Velg en sensor for batteriets ladenivå (%, vanligvis med device_class "battery"). Vises som chip til venstre for PV-chipen med live prosent.',
     batteryPowerEntity: "Effekt-entitet",
-    batteryPowerEntityHelp: "Velg en sensor for batterieffekt (W eller kW). Fortegnskonvensjonen følger entiteten selv; positiv tolkes som lading og vises ordrett på chipen (f.eks. «+3,00 kW» ved lading, «−1,20 kW» ved utlading).",
+    batteryPowerEntityHelp: "Velg en sensor for batterieffekt (W eller kW). Fortegnskonvensjonen følger entiteten selv (positiv tolkes som lading) og vises ordrett på chipen (f.eks. «+3,00 kW» ved lading, «−1,20 kW» ved utlading).",
     batteryPowerInvert: "Fortegn på batterieffekt",
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertert",
@@ -33583,7 +33487,7 @@ const no = {
     shadowOpacity: "Skyggeopasitet *",
     shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
     localLidarSection: "Avansert — Lokal LiDAR (BYO)",
-    localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor avgrensningsboksen erstatter denne kilden enhver nasjonal leverandør; utenfor gjelder vanlig fallback-kjede.",
+    localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor avgrensningsboksen erstatter denne kilden enhver nasjonal leverandør. Utenfor gjelder vanlig fallback-kjede.",
     localLidarToolsHint: "Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).",
     localLidarEnabled: "Bruk lokale data",
     localLidarUrl: "GeoTIFF-URL",
@@ -35886,17 +35790,6 @@ let HeliosCardEditor = class extends i {
   _arraySharesSum(list) {
     return list.reduce((a2, e2) => a2 + (e2.share ?? 0), 0);
   }
-  //Sets a single field on entry `i` to an explicit value (not via
-  //an input event). Used by the tilt / azimuth preset chips so a
-  //click on "S" or "Vertical" snaps the matching input without
-  //the user having to type. Same write contract as `_arrayField`,
-  //just sourced from a programmatic value instead of the DOM.
-  _arraySetField(i2, key, value) {
-    const list = this._readPvArrays();
-    if (i2 < 0 || i2 >= list.length) return;
-    list[i2] = { ...list[i2], [key]: value };
-    this._writePvArrays(list);
-  }
   //Syncs the local open-set with the <details> element's runtime
   //state on every native `toggle` event. Without this round-trip,
   //Lit re-renders would snap the `open` attribute back to whatever
@@ -35907,25 +35800,6 @@ let HeliosCardEditor = class extends i {
     if (el.open) next3.add(i2);
     else next3.delete(i2);
     this._openArrayIndices = next3;
-  }
-  //Active-chip match for tilt: plain absolute distance, ±5° to
-  //absorb typing imprecision (e.g. "32" still highlights "Roof
-  //30°"). Returns false for null inputs so a freshly-opened editor
-  //shows no chip active.
-  _isTiltPresetActive(current, presetDeg) {
-    if (current === null) return false;
-    return Math.abs(current - presetDeg) <= 5;
-  }
-  //Active-chip match for azimuth: wrap-aware so 359° still
-  //highlights "N" (0°) and -3° (if ever typed) highlights "N"
-  //too. Same ±5° tolerance as tilt.
-  _isAzimuthPresetActive(current, presetDeg) {
-    if (current === null) return false;
-    const norm = (current % 360 + 360) % 360;
-    const target = (presetDeg % 360 + 360) % 360;
-    let diff = Math.abs(norm - target);
-    if (diff > 180) diff = 360 - diff;
-    return diff <= 5;
   }
   //Format a numeric slider value for display alongside the input.
   //Integers stay integer; fractional values get 2 decimals.
@@ -36218,17 +36092,8 @@ let HeliosCardEditor = class extends i {
                                             >${t2.editor.pvArrayRemove}</button>
                                         </summary>
                                         <div class="pv-array-body">
-                                            <div class="field field-stacked">
+                                            <label class="field">
                                                 <span class="label">${t2.editor.pvArrayTilt}</span>
-                                                <div class="preset-row" role="group" aria-label="${t2.editor.pvArrayTilt}">
-                                                    ${HeliosCardEditor.TILT_PRESETS.map((p2) => b`
-                                                        <button
-                                                            type="button"
-                                                            class="preset-chip ${this._isTiltPresetActive(arr.tilt, p2.deg) ? "is-active" : ""}"
-                                                            @click="${() => this._arraySetField(i2, "tilt", p2.deg)}"
-                                                        >${t2.editor[p2.key]} ${p2.deg}°</button>
-                                                    `)}
-                                                </div>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -36238,19 +36103,10 @@ let HeliosCardEditor = class extends i {
                                                     .value="${arr.tilt !== null ? String(arr.tilt) : ""}"
                                                     @change="${(e2) => this._arrayField(i2, "tilt", e2)}"
                                                 />
-                                            </div>
+                                            </label>
                                             <div class="field-help">${t2.editor.pvArrayTiltHelp}</div>
-                                            <div class="field field-stacked">
+                                            <label class="field">
                                                 <span class="label">${t2.editor.pvArrayAzimuth}</span>
-                                                <div class="preset-row" role="group" aria-label="${t2.editor.pvArrayAzimuth}">
-                                                    ${HeliosCardEditor.AZIMUTH_PRESETS.map((p2) => b`
-                                                        <button
-                                                            type="button"
-                                                            class="preset-chip ${this._isAzimuthPresetActive(arr.azimuth, p2.deg) ? "is-active" : ""}"
-                                                            @click="${() => this._arraySetField(i2, "azimuth", p2.deg)}"
-                                                        >${t2.editor[p2.key]}</button>
-                                                    `)}
-                                                </div>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -36260,7 +36116,7 @@ let HeliosCardEditor = class extends i {
                                                     .value="${arr.azimuth !== null ? String(arr.azimuth) : ""}"
                                                     @change="${(e2) => this._arrayField(i2, "azimuth", e2)}"
                                                 />
-                                            </div>
+                                            </label>
                                             <div class="field-help">${t2.editor.pvArrayAzimuthHelp}</div>
                                             <label class="field">
                                                 <span class="label">${t2.editor.pvArrayShare}</span>
@@ -36514,22 +36370,6 @@ let HeliosCardEditor = class extends i {
 };
 HeliosCardEditor.SLIDER_COMMIT_DELAY_MS = 250;
 HeliosCardEditor.PV_ARRAYS_MAX = 6;
-HeliosCardEditor.TILT_PRESETS = [
-  { deg: 0, key: "pvTiltPresetFlat" },
-  { deg: 30, key: "pvTiltPresetRoof" },
-  { deg: 45, key: "pvTiltPresetSteepRoof" },
-  { deg: 90, key: "pvTiltPresetVertical" }
-];
-HeliosCardEditor.AZIMUTH_PRESETS = [
-  { deg: 0, key: "compassN" },
-  { deg: 45, key: "compassNE" },
-  { deg: 90, key: "compassE" },
-  { deg: 135, key: "compassSE" },
-  { deg: 180, key: "compassS" },
-  { deg: 225, key: "compassSW" },
-  { deg: 270, key: "compassW" },
-  { deg: 315, key: "compassNW" }
-];
 HeliosCardEditor.styles = i$3`
         .editor
         {
@@ -36614,11 +36454,18 @@ HeliosCardEditor.styles = i$3`
               hint  → next field  = section gap + 20 px = 34 px
             Hierarchy is visible (2.4× ratio) and no element ever
             sits underneath another.                                  */
+        /*  Vertical rhythm: a positive top margin pushes the help
+            visibly away from its field above, and a generous bottom
+            margin creates a clear break before the next field. Both
+            stack with the section's 14 px flex gap, giving:
+              field → help        = gap + top    = 14 + 8  = 22 px
+              help  → next field  = gap + bottom = 14 + 20 = 34 px
+            Hierarchy ratio 1.5×, both spacings comfortable to read.   */
         .field-help
         {
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
-            margin: 0 0 20px 0;
+            margin: 8px 0 20px 0;
         }
 
         .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
@@ -36629,7 +36476,7 @@ HeliosCardEditor.styles = i$3`
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
             font-style: italic;
-            margin: 0 0 20px 0;
+            margin: 8px 0 20px 0;
         }
 
         .field
@@ -36892,76 +36739,6 @@ HeliosCardEditor.styles = i$3`
             outline-offset: 2px;
         }
 
-        /*  Preset chips above tilt and azimuth inputs. Pill-shaped,
-            borderless, kept visually quiet so the row never competes
-            with the input that's the actual source of truth. Active
-            state lights up when the input value matches the chip
-            within a small tolerance, click snaps the input to the
-            chip's value.                                              */
-        /*  Stacked variant of .field used by tilt and azimuth in the
-            multi-array editor: three rows top to bottom (label,
-            chips, input). The input is pulled to the right via
-            margin-left: auto so the row visually anchors to the
-            opposite edge of the label, breathing room for the chips
-            in between. The free input keeps a fixed footprint so
-            the visual rhythm stays predictable as the user types
-            different value widths.                                    */
-        .field.field-stacked
-        {
-            display: flex;
-            flex-direction: column;
-            align-items: stretch;
-            gap: 4px;
-        }
-        .field.field-stacked > .label
-        {
-            margin-bottom: 0;
-        }
-        .field.field-stacked > input
-        {
-            align-self: flex-end;
-            width: 100px;
-        }
-
-        .preset-row
-        {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 4px;
-            margin-top: 2px;
-            margin-bottom: 2px;
-        }
-
-        .preset-chip
-        {
-            background: transparent;
-            border: 1px solid var(--divider-color, rgba(0,0,0,0.18));
-            border-radius: 999px;
-            padding: 2px 9px;
-            font-size: 11px;
-            font-family: inherit;
-            font-variant-numeric: tabular-nums;
-            cursor: pointer;
-            color: var(--secondary-text-color, #757575);
-            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-        }
-        .preset-chip:hover
-        {
-            background: var(--secondary-background-color, rgba(0,0,0,0.04));
-            color: var(--primary-text-color, #212121);
-        }
-        .preset-chip.is-active
-        {
-            background: var(--primary-color, #03a9f4);
-            border-color: var(--primary-color, #03a9f4);
-            color: #ffffff;
-        }
-        .preset-chip:focus-visible
-        {
-            outline: 2px solid var(--primary-color, #03a9f4);
-            outline-offset: 2px;
-        }
     `;
 __decorateClass$1([
   n2({ attribute: false })
@@ -37008,7 +36785,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.10"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.11"}`,
       labelStyle,
       versionStyle
     );
@@ -37029,7 +36806,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.10",
+        version: "1.6.0-alpha.11",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37037,7 +36814,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.10"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.11"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
