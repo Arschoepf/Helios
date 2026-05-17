@@ -32612,10 +32612,30 @@ const en = {
     pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
     pvPeakPower: "Peak power (kWp)",
     pvPeakPowerHelp: "Installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty to hide the forecast; observed production and the daily peak still render.",
-    pvTilt: "Panel tilt (°)",
-    pvTiltHelp: "Tilt angle of your panels from horizontal, 0 for a flat install and 90 for a fully vertical install such as a balcony. Leave empty or set to 0 to keep the original flat-panel forecast. Combined with the azimuth, it powers a Liu-Jordan transposition that projects the predicted irradiance onto the panel plane, fixing the overshoot seen on steeply pitched roofs and balcony setups.",
-    pvAzimuth: "Panel azimuth (°)",
-    pvAzimuthHelp: "Compass bearing your panels face, clockwise from north: 0 = north, 90 = east, 180 = south, 270 = west. Defaults to 180 (south-facing) when tilt is set. Only used when tilt is greater than 0.",
+    pvArraysSection: "Panel orientation",
+    pvArraysHelp: "One entry per group of co-oriented panels. Leave a single entry with tilt 0 for a flat install; add more entries when panels are split across multiple orientations (e.g. one row facing east, one facing west). The card forecasts each entry separately and weights the result by its share of the total kWp.",
+    pvArrayTitle: "Array {n}",
+    pvArrayTilt: "Tilt (°)",
+    pvArrayAzimuth: "Azimuth (°)",
+    pvArrayShare: "Share (%)",
+    pvArrayAdd: "+ Add array",
+    pvArrayRemove: "Remove",
+    pvArrayNormHint: "Shares don't add up to 100%, the forecast normalises them automatically.",
+    pvArrayTiltHelp: "Tilt of this array from horizontal: 0 for a flat install, 30 to 45 for a typical pitched roof, 90 for a fully vertical setup such as a balcony. Use the chips above for common values, or type any angle from 0 to 90. Combined with the azimuth, this drives the Liu-Jordan transposition that projects the predicted irradiance onto the panel plane.",
+    pvArrayAzimuthHelp: "Compass bearing this array faces, clockwise from north: 0 = north, 90 = east, 180 = south, 270 = west. Use the chips above for the 8 cardinal / intercardinal directions, or type any value from 0 to 360 for an exact orientation.",
+    pvArrayShareHelp: "Relative weight of this array within the total kWp. Auto-normalised at compute time, so 50/50, 60/60 and 1/1 all produce the same forecast. Leave blank when there's only one array (it gets 100% by default).",
+    pvTiltPresetFlat: "Flat",
+    pvTiltPresetRoof: "Roof",
+    pvTiltPresetSteepRoof: "Steep roof",
+    pvTiltPresetVertical: "Vertical",
+    compassN: "N",
+    compassNE: "NE",
+    compassE: "E",
+    compassSE: "SE",
+    compassS: "S",
+    compassSW: "SW",
+    compassW: "W",
+    compassNW: "NW",
     pvColor: "Production color *",
     batterySection: "Home battery",
     batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional; the chip on its side appears as soon as the entity is set.",
@@ -32722,10 +32742,30 @@ const fr = {
     pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
     pvPeakPower: "Puissance crête (kWp)",
     pvPeakPowerHelp: "Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.",
-    pvTilt: "Inclinaison des panneaux (°)",
-    pvTiltHelp: "Angle d'inclinaison de tes panneaux par rapport à l'horizontale, 0 pour une installation à plat et 90 pour une installation verticale (par exemple en balcon). Laisser vide ou à 0 conserve la prévision panneaux à plat d'origine. Combiné à l'azimut, ce réglage active une transposition Liu-Jordan qui projette l'irradiance prévue sur le plan des panneaux et corrige la surestimation visible sur les toits pentus et les installations balcon.",
-    pvAzimuth: "Azimut des panneaux (°)",
-    pvAzimuthHelp: "Orientation à la boussole vers laquelle tes panneaux sont tournés, sens horaire depuis le nord : 0 = nord, 90 = est, 180 = sud, 270 = ouest. Par défaut 180 (plein sud) quand une inclinaison est définie. Utilisé uniquement quand l'inclinaison est supérieure à 0.",
+    pvArraysSection: "Orientation des panneaux",
+    pvArraysHelp: "Une entrée par pan de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat ; ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
+    pvArrayTitle: "Pan {n}",
+    pvArrayTilt: "Inclinaison (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Part (%)",
+    pvArrayAdd: "+ Ajouter un pan",
+    pvArrayRemove: "Supprimer",
+    pvArrayNormHint: "Les parts ne totalisent pas 100 %, la prévision les normalise automatiquement.",
+    pvArrayTiltHelp: "Inclinaison de ce pan par rapport à l'horizontale : 0 pour une installation à plat, 30 à 45 pour un toit incliné classique, 90 pour une installation verticale (par exemple un balcon). Utilise les chips au-dessus pour les valeurs courantes, ou tape n'importe quel angle de 0 à 90. Combinée à l'azimut, elle pilote la transposition Liu-Jordan qui projette l'irradiance prévue sur le plan des panneaux.",
+    pvArrayAzimuthHelp: "Orientation à la boussole vers laquelle ce pan est tourné, sens horaire depuis le nord : 0 = nord, 90 = est, 180 = sud, 270 = ouest. Utilise les chips au-dessus pour les 8 directions cardinales et intercardinales, ou tape n'importe quelle valeur de 0 à 360 pour une orientation exacte.",
+    pvArrayShareHelp: "Poids relatif de ce pan dans le total des kWp. Normalisé automatiquement au calcul : 50/50, 60/60 et 1/1 donnent tous le même résultat. Laisse vide quand il n'y a qu'un seul pan (il prend 100 % par défaut).",
+    pvTiltPresetFlat: "Plat",
+    pvTiltPresetRoof: "Toit",
+    pvTiltPresetSteepRoof: "Toit raide",
+    pvTiltPresetVertical: "Vertical",
+    compassN: "N",
+    compassNE: "NE",
+    compassE: "E",
+    compassSE: "SE",
+    compassS: "S",
+    compassSW: "SO",
+    compassW: "O",
+    compassNW: "NO",
     pvColor: "Couleur de production *",
     batterySection: "Batterie domestique",
     batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles ; la pastille correspondante s'affiche dès que l'entité est renseignée.",
@@ -32832,10 +32872,30 @@ const de = {
     pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
     pvPeakPower: "Spitzenleistung (kWp)",
     pvPeakPowerHelp: "Installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, um die Prognose auszublenden; gemessene Produktion und Tagesspitze werden weiter angezeigt.",
-    pvTilt: "Neigung der Module (°)",
-    pvTiltHelp: "Neigungswinkel deiner Module gegenüber der Horizontalen: 0 für eine flache Installation, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Leer lassen oder auf 0 setzen, um die ursprüngliche Flachdach-Prognose beizubehalten. Zusammen mit dem Azimut treibt der Wert eine Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert und so die deutliche Überschätzung auf Steildächern und Balkonanlagen korrigiert.",
-    pvAzimuth: "Azimut der Module (°)",
-    pvAzimuthHelp: "Kompassrichtung, in die deine Module zeigen, im Uhrzeigersinn ab Norden: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen. Standardmäßig 180 (Süd), wenn eine Neigung gesetzt ist. Wird nur verwendet, wenn die Neigung größer als 0 ist.",
+    pvArraysSection: "Modulausrichtung",
+    pvArraysHelp: "Ein Eintrag pro Gruppe gleich ausgerichteter Module. Lasse einen einzigen Eintrag mit Neigung 0 für eine flache Installation; füge weitere Einträge hinzu, wenn deine Module auf mehrere Ausrichtungen verteilt sind (zum Beispiel eine Reihe nach Osten, eine nach Westen). Die Prognose wird pro Eintrag berechnet und nach dem Anteil an der Gesamt-kWp gewichtet.",
+    pvArrayTitle: "Feld {n}",
+    pvArrayTilt: "Neigung (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Anteil (%)",
+    pvArrayAdd: "+ Feld hinzufügen",
+    pvArrayRemove: "Entfernen",
+    pvArrayNormHint: "Die Anteile ergeben nicht 100 %, die Prognose normalisiert sie automatisch.",
+    pvArrayTiltHelp: "Neigung dieses Felds gegenüber der Horizontalen: 0 für eine flache Installation, 30 bis 45 für ein typisches Steildach, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Nutze die Chips oben für gängige Werte, oder tippe einen beliebigen Winkel von 0 bis 90 ein. Zusammen mit dem Azimut treibt die Neigung die Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert.",
+    pvArrayAzimuthHelp: "Kompassrichtung, in die dieses Feld zeigt, im Uhrzeigersinn ab Norden: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen. Nutze die Chips oben für die 8 Haupt- und Zwischenrichtungen, oder tippe einen beliebigen Wert von 0 bis 360 für eine exakte Orientierung.",
+    pvArrayShareHelp: "Relativer Anteil dieses Felds an der Gesamt-kWp. Wird zum Berechnungszeitpunkt automatisch normalisiert, deshalb liefern 50/50, 60/60 und 1/1 dieselbe Prognose. Leer lassen, wenn nur ein Feld existiert (es bekommt standardmäßig 100 %).",
+    pvTiltPresetFlat: "Flach",
+    pvTiltPresetRoof: "Dach",
+    pvTiltPresetSteepRoof: "Steiles Dach",
+    pvTiltPresetVertical: "Vertikal",
+    compassN: "N",
+    compassNE: "NO",
+    compassE: "O",
+    compassSE: "SO",
+    compassS: "S",
+    compassSW: "SW",
+    compassW: "W",
+    compassNW: "NW",
     pvColor: "Produktionsfarbe *",
     batterySection: "Hausbatterie",
     batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional; der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
@@ -32942,10 +33002,30 @@ const es = {
     pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
     pvPeakPower: "Potencia pico (kWp)",
     pvPeakPowerHelp: "Potencia pico instalada de tu campo en kilovatios-pico. Controla la curva de previsión punteada en el gráfico PV y la saturación del flujo PV → casa. Déjalo vacío para ocultar la previsión; la producción observada y el pico del día siguen mostrándose.",
-    pvTilt: "Inclinación de los paneles (°)",
-    pvTiltHelp: "Ángulo de inclinación de tus paneles respecto a la horizontal: 0 para una instalación plana y 90 para una completamente vertical (por ejemplo, balcón). Déjalo vacío o en 0 para mantener la previsión original de panel plano. Combinado con el azimut, activa una transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel y corrige la sobreestimación visible en tejados muy inclinados e instalaciones en balcón.",
-    pvAzimuth: "Azimut de los paneles (°)",
-    pvAzimuthHelp: "Orientación brújula a la que apuntan tus paneles, en sentido horario desde el norte: 0 = norte, 90 = este, 180 = sur, 270 = oeste. Por defecto 180 (sur) cuando hay inclinación. Solo se usa cuando la inclinación es mayor que 0.",
+    pvArraysSection: "Orientación de los paneles",
+    pvArraysHelp: "Una entrada por grupo de paneles con la misma orientación. Deja una sola entrada con inclinación 0 para una instalación plana; añade más entradas cuando tus paneles estén repartidos en varias orientaciones (por ejemplo, una fila al este y otra al oeste). La previsión se calcula por entrada y se pondera por su parte del total de kWp.",
+    pvArrayTitle: "Campo {n}",
+    pvArrayTilt: "Inclinación (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Parte (%)",
+    pvArrayAdd: "+ Añadir campo",
+    pvArrayRemove: "Eliminar",
+    pvArrayNormHint: "Las partes no suman 100 %, la previsión las normaliza automáticamente.",
+    pvArrayTiltHelp: "Inclinación de este campo respecto a la horizontal: 0 para una instalación plana, 30 a 45 para un tejado inclinado clásico, 90 para una instalación vertical (por ejemplo balcón). Usa las chips de arriba para los valores comunes, o escribe cualquier ángulo entre 0 y 90. Combinada con el azimut, dirige la transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel.",
+    pvArrayAzimuthHelp: "Orientación brújula a la que apunta este campo, en sentido horario desde el norte: 0 = norte, 90 = este, 180 = sur, 270 = oeste. Usa las chips de arriba para las 8 direcciones cardinales o intercardinales, o escribe cualquier valor entre 0 y 360 para una orientación exacta.",
+    pvArrayShareHelp: "Peso relativo de este campo en el total de kWp. Se normaliza automáticamente al calcular: 50/50, 60/60 y 1/1 producen el mismo resultado. Déjalo vacío cuando solo hay un campo (recibe el 100 % por defecto).",
+    pvTiltPresetFlat: "Plano",
+    pvTiltPresetRoof: "Tejado",
+    pvTiltPresetSteepRoof: "Tejado inclinado",
+    pvTiltPresetVertical: "Vertical",
+    compassN: "N",
+    compassNE: "NE",
+    compassE: "E",
+    compassSE: "SE",
+    compassS: "S",
+    compassSW: "SO",
+    compassW: "O",
+    compassNW: "NO",
     pvColor: "Color de producción *",
     batterySection: "Batería doméstica",
     batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales; el chip correspondiente aparece en cuanto la entidad está definida.",
@@ -33052,10 +33132,30 @@ const it = {
     pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
     pvPeakPower: "Potenza di picco (kWp)",
     pvPeakPowerHelp: "Potenza di picco installata del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata sul grafico PV e la saturazione del flusso PV → casa. Lascia vuoto per nascondere la previsione; la produzione osservata e il picco del giorno restano visibili.",
-    pvTilt: "Inclinazione dei pannelli (°)",
-    pvTiltHelp: "Angolo di inclinazione dei tuoi pannelli rispetto all'orizzontale: 0 per un'installazione piana e 90 per una verticale (per esempio balcone). Lascia vuoto o imposta 0 per mantenere la previsione originale a pannello piano. Combinato con l'azimut, guida una trasposizione Liu-Jordan che proietta l'irradianza prevista sul piano del pannello e corregge la sovrastima visibile su tetti molto inclinati e installazioni a balcone.",
-    pvAzimuth: "Azimut dei pannelli (°)",
-    pvAzimuthHelp: "Orientamento bussola verso cui sono rivolti i tuoi pannelli, in senso orario da nord: 0 = nord, 90 = est, 180 = sud, 270 = ovest. Predefinito 180 (sud) quando è impostata un'inclinazione. Usato solo quando l'inclinazione è maggiore di 0.",
+    pvArraysSection: "Orientamento dei pannelli",
+    pvArraysHelp: "Una voce per ogni campo di pannelli con la stessa orientazione. Lascia una sola voce con inclinazione 0 per un'installazione piana; aggiungi altre voci quando i pannelli sono distribuiti su più orientazioni (per esempio una fila a est e una a ovest). La previsione viene calcolata per ciascuna voce e pesata in base alla sua quota dei kWp totali.",
+    pvArrayTitle: "Campo {n}",
+    pvArrayTilt: "Inclinazione (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Quota (%)",
+    pvArrayAdd: "+ Aggiungi campo",
+    pvArrayRemove: "Rimuovi",
+    pvArrayNormHint: "Le quote non sommano a 100 %, la previsione le normalizza automaticamente.",
+    pvArrayTiltHelp: "Inclinazione di questo campo rispetto all'orizzontale: 0 per un'installazione piana, 30 a 45 per un tetto inclinato classico, 90 per un'installazione verticale (per esempio balcone). Usa le chips qui sopra per i valori comuni, o digita un angolo qualunque da 0 a 90. Combinata con l'azimut, guida la trasposizione Liu-Jordan che proietta l'irradianza prevista sul piano del pannello.",
+    pvArrayAzimuthHelp: "Orientamento bussola verso cui è rivolto questo campo, in senso orario da nord: 0 = nord, 90 = est, 180 = sud, 270 = ovest. Usa le chips qui sopra per le 8 direzioni cardinali o intercardinali, o digita un valore qualunque da 0 a 360 per un'orientazione esatta.",
+    pvArrayShareHelp: "Peso relativo di questo campo nel totale dei kWp. Normalizzato automaticamente al calcolo: 50/50, 60/60 e 1/1 danno lo stesso risultato. Lascia vuoto quando c'è un solo campo (prende il 100 % per default).",
+    pvTiltPresetFlat: "Piano",
+    pvTiltPresetRoof: "Tetto",
+    pvTiltPresetSteepRoof: "Tetto ripido",
+    pvTiltPresetVertical: "Verticale",
+    compassN: "N",
+    compassNE: "NE",
+    compassE: "E",
+    compassSE: "SE",
+    compassS: "S",
+    compassSW: "SO",
+    compassW: "O",
+    compassNW: "NO",
     pvColor: "Colore di produzione *",
     batterySection: "Batteria domestica",
     batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali; la pastiglia corrispondente appare appena l'entità è impostata.",
@@ -33162,10 +33262,30 @@ const nl = {
     pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
     pvPeakPower: "Piekvermogen (kWp)",
     pvPeakPowerHelp: "Geïnstalleerd piekvermogen van je panelen in kilowattpiek. Stuurt de gestippelde voorspellingslijn op de PV-grafiek en de stroomverzadiging van de PV → huis-leider. Laat leeg om de voorspelling te verbergen; gemeten productie en de dagelijkse piek blijven zichtbaar.",
-    pvTilt: "Hellingshoek panelen (°)",
-    pvTiltHelp: "Hellingshoek van je panelen ten opzichte van het horizontale vlak: 0 voor een platte opstelling, 90 voor volledig verticaal (bijvoorbeeld balkon). Laat leeg of zet op 0 om de oorspronkelijke vlakke prognose te behouden. Samen met de azimut stuurt deze instelling een Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert en zo de overschatting op steile daken en balkoninstallaties corrigeert.",
-    pvAzimuth: "Azimut panelen (°)",
-    pvAzimuthHelp: "Kompasrichting waarnaar je panelen wijzen, met de wijzers van de klok mee vanaf het noorden: 0 = noord, 90 = oost, 180 = zuid, 270 = west. Standaard 180 (pal zuid) wanneer een helling is ingesteld. Alleen actief wanneer de helling groter is dan 0.",
+    pvArraysSection: "Paneeloriëntatie",
+    pvArraysHelp: "Eén item per veld panelen met dezelfde oriëntatie. Laat één item staan met hellingshoek 0 voor een platte opstelling; voeg extra items toe wanneer je panelen over meerdere richtingen verdeeld zijn (bijvoorbeeld een rij oost, een rij west). De prognose wordt per item berekend en gewogen op basis van het percentage van het totale kWp.",
+    pvArrayTitle: "Veld {n}",
+    pvArrayTilt: "Helling (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Aandeel (%)",
+    pvArrayAdd: "+ Veld toevoegen",
+    pvArrayRemove: "Verwijderen",
+    pvArrayNormHint: "De percentages komen niet uit op 100%, de prognose herschaalt ze automatisch.",
+    pvArrayTiltHelp: "Helling van dit veld ten opzichte van het horizontale vlak: 0 voor een platte opstelling, 30 tot 45 voor een klassiek schuin dak, 90 voor een volledig verticale opstelling (bijvoorbeeld een balkon). Gebruik de chips hierboven voor gangbare waarden, of typ een willekeurige hoek tussen 0 en 90. Samen met de azimut stuurt deze instelling de Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert.",
+    pvArrayAzimuthHelp: "Kompasrichting waarnaar dit veld wijst, met de klok mee vanaf het noorden: 0 = noord, 90 = oost, 180 = zuid, 270 = west. Gebruik de chips hierboven voor de 8 hoofd- of tussenrichtingen, of typ een willekeurige waarde tussen 0 en 360 voor een exacte oriëntatie.",
+    pvArrayShareHelp: "Relatief gewicht van dit veld in het totale kWp. Wordt op berekentijd automatisch genormaliseerd: 50/50, 60/60 en 1/1 leveren hetzelfde resultaat. Laat leeg wanneer er maar één veld is (krijgt standaard 100%).",
+    pvTiltPresetFlat: "Plat",
+    pvTiltPresetRoof: "Dak",
+    pvTiltPresetSteepRoof: "Steil dak",
+    pvTiltPresetVertical: "Verticaal",
+    compassN: "N",
+    compassNE: "NO",
+    compassE: "O",
+    compassSE: "ZO",
+    compassS: "Z",
+    compassSW: "ZW",
+    compassW: "W",
+    compassNW: "NW",
     pvColor: "Productiekleur *",
     batterySection: "Thuisbatterij",
     batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel; de bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
@@ -33272,10 +33392,30 @@ const pt = {
     pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
     pvPeakPower: "Potência de pico (kWp)",
     pvPeakPowerHelp: "Potência de pico instalada do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada no gráfico PV e a saturação do fluxo PV → casa. Deixa vazio para ocultar a previsão; a produção observada e o pico do dia continuam visíveis.",
-    pvTilt: "Inclinação dos painéis (°)",
-    pvTiltHelp: "Ângulo de inclinação dos teus painéis em relação à horizontal: 0 para uma instalação plana, 90 para totalmente vertical (por exemplo, varanda). Deixa vazio ou em 0 para manter a previsão original de painel plano. Combinado com o azimute, este valor aciona uma transposição Liu-Jordan que projeta a irradiância prevista sobre o plano do painel e corrige a sobreavaliação visível em telhados muito inclinados e instalações de varanda.",
-    pvAzimuth: "Azimute dos painéis (°)",
-    pvAzimuthHelp: "Orientação na bússola para onde os teus painéis apontam, no sentido horário a partir do norte: 0 = norte, 90 = este, 180 = sul, 270 = oeste. Predefinido 180 (sul) quando há uma inclinação. Só é usado quando a inclinação é superior a 0.",
+    pvArraysSection: "Orientação dos painéis",
+    pvArraysHelp: "Uma entrada por campo de painéis com a mesma orientação. Deixa uma única entrada com inclinação 0 para uma instalação plana; acrescenta mais entradas quando os painéis estão repartidos por várias orientações (por exemplo uma fila a este e outra a oeste). A previsão é calculada por entrada e ponderada pela sua quota dos kWp totais.",
+    pvArrayTitle: "Campo {n}",
+    pvArrayTilt: "Inclinação (°)",
+    pvArrayAzimuth: "Azimute (°)",
+    pvArrayShare: "Quota (%)",
+    pvArrayAdd: "+ Adicionar campo",
+    pvArrayRemove: "Remover",
+    pvArrayNormHint: "As quotas não somam 100 %, a previsão normaliza-as automaticamente.",
+    pvArrayTiltHelp: "Inclinação deste campo em relação à horizontal: 0 para uma instalação plana, 30 a 45 para um telhado inclinado clássico, 90 para uma instalação vertical (por exemplo varanda). Usa as chips acima para os valores correntes, ou escreve qualquer ângulo entre 0 e 90. Combinada com o azimute, conduz a transposição Liu-Jordan que projeta a irradiância prevista sobre o plano do painel.",
+    pvArrayAzimuthHelp: "Orientação na bússola para onde este campo aponta, no sentido horário a partir do norte: 0 = norte, 90 = este, 180 = sul, 270 = oeste. Usa as chips acima para as 8 direções cardinais ou intercardinais, ou escreve qualquer valor entre 0 e 360 para uma orientação exacta.",
+    pvArrayShareHelp: "Peso relativo deste campo no total dos kWp. Normalizado automaticamente no cálculo: 50/50, 60/60 e 1/1 produzem o mesmo resultado. Deixa vazio quando só existe um campo (recebe 100 % por predefinição).",
+    pvTiltPresetFlat: "Plano",
+    pvTiltPresetRoof: "Telhado",
+    pvTiltPresetSteepRoof: "Telhado inclinado",
+    pvTiltPresetVertical: "Vertical",
+    compassN: "N",
+    compassNE: "NE",
+    compassE: "E",
+    compassSE: "SE",
+    compassS: "S",
+    compassSW: "SO",
+    compassW: "O",
+    compassNW: "NO",
     pvColor: "Cor de produção *",
     batterySection: "Bateria doméstica",
     batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais; o chip correspondente aparece assim que a entidade é definida.",
@@ -33382,10 +33522,30 @@ const no = {
     pvEntityHelp: "Velg en sensor for sol-effekt eller -energi (W, kW, Wh, kWh).",
     pvPeakPower: "Toppeffekt (kWp)",
     pvPeakPowerHelp: "Installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen i PV-grafen og strømningsmetningen for PV → hus-leaderen. La stå tom for å skjule prognosen; observert produksjon og dagens topp tegnes likevel.",
-    pvTilt: "Helningsvinkel for panelene (°)",
-    pvTiltHelp: "Helningsvinkelen til panelene dine i forhold til vannrett: 0 for flat installasjon, 90 for helt vertikalt (for eksempel balkong). La feltet stå tomt eller sett 0 for å beholde den opprinnelige prognosen for flat plassering. Sammen med azimuten driver verdien en Liu-Jordan-transposisjon som projiserer forventet stråling på panelets plan, og retter overestimeringen som er synlig på bratte tak og balkonganlegg.",
-    pvAzimuth: "Azimut for panelene (°)",
-    pvAzimuthHelp: "Kompassretningen panelene peker mot, med klokken fra nord: 0 = nord, 90 = øst, 180 = sør, 270 = vest. Standardverdi 180 (sør) når helning er angitt. Brukes bare når helningen er større enn 0.",
+    pvArraysSection: "Panelorientering",
+    pvArraysHelp: "Én oppføring per felt paneler med samme orientering. La én oppføring stå med helning 0 for en flat installasjon; legg til flere oppføringer når panelene er fordelt på flere retninger (for eksempel en rad mot øst og en mot vest). Prognosen beregnes per oppføring og vektes etter prosenten av total kWp.",
+    pvArrayTitle: "Felt {n}",
+    pvArrayTilt: "Helning (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Andel (%)",
+    pvArrayAdd: "+ Legg til felt",
+    pvArrayRemove: "Fjern",
+    pvArrayNormHint: "Prosentene summerer ikke til 100 %, prognosen normaliserer dem automatisk.",
+    pvArrayTiltHelp: "Helningen til dette feltet i forhold til vannrett: 0 for flat installasjon, 30 til 45 for et typisk skråtak, 90 for en helt vertikal oppstilling (for eksempel balkong). Bruk chipsene over for vanlige verdier, eller skriv inn en hvilken som helst vinkel fra 0 til 90. Sammen med azimuten driver helningen Liu-Jordan-transposisjonen som projiserer forventet stråling på panelets plan.",
+    pvArrayAzimuthHelp: "Kompassretningen dette feltet peker mot, med klokken fra nord: 0 = nord, 90 = øst, 180 = sør, 270 = vest. Bruk chipsene over for de 8 hoved- eller mellomretningene, eller skriv en hvilken som helst verdi fra 0 til 360 for en eksakt orientering.",
+    pvArrayShareHelp: "Relativ vekt av dette feltet i den totale kWp. Normaliseres automatisk ved beregning: 50/50, 60/60 og 1/1 gir samme resultat. La stå tomt når det bare finnes ett felt (det får 100 % som standard).",
+    pvTiltPresetFlat: "Flatt",
+    pvTiltPresetRoof: "Tak",
+    pvTiltPresetSteepRoof: "Bratt tak",
+    pvTiltPresetVertical: "Vertikalt",
+    compassN: "N",
+    compassNE: "NØ",
+    compassE: "Ø",
+    compassSE: "SØ",
+    compassS: "S",
+    compassSW: "SV",
+    compassW: "V",
+    compassNW: "NV",
     pvColor: "Produksjonsfarge *",
     batterySection: "Husbatteri",
     batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie; chipen på sin side vises så snart entiteten er satt.",
@@ -35620,6 +35780,133 @@ let HeliosCardEditor = class extends i {
   _color(key, e2) {
     this._update(key, e2.detail.value);
   }
+  //Reads the configured PV layout into the shape the editor's
+  //repeatable section consumes. Always returns at least one entry
+  //so the section always has a card to render:
+  //  - `pv-arrays` present → one editor entry per array.
+  //  - legacy `pv-tilt` / `pv-azimuth` present → one entry seeded
+  //    from those values, share defaulted to 100.
+  //  - nothing set → one entry with all-null fields (placeholders
+  //    show through).
+  //Field values are stored as `number | null`, where null means
+  //"empty input"; that maps directly to the input's value binding.
+  _readPvArrays() {
+    const toNum2 = (v2) => {
+      if (v2 === void 0 || v2 === null || v2 === "") return null;
+      const n3 = typeof v2 === "number" ? v2 : parseFloat(String(v2));
+      return isFinite(n3) ? n3 : null;
+    };
+    const raw2 = this._cfg?.["pv-arrays"];
+    if (Array.isArray(raw2) && raw2.length > 0) {
+      const out = raw2.map((entry) => {
+        const e2 = entry && typeof entry === "object" ? entry : {};
+        return {
+          tilt: toNum2(e2["tilt"]),
+          azimuth: toNum2(e2["azimuth"]),
+          share: toNum2(e2["share"])
+        };
+      });
+      return out.length > 0 ? out : [{ tilt: null, azimuth: null, share: null }];
+    }
+    const legacyTilt = toNum2(this._cfg?.["pv-tilt"]);
+    const legacyAz = toNum2(this._cfg?.["pv-azimuth"]);
+    if (legacyTilt !== null || legacyAz !== null) {
+      return [{ tilt: legacyTilt, azimuth: legacyAz, share: 100 }];
+    }
+    return [{ tilt: null, azimuth: null, share: null }];
+  }
+  //Persists a list of array entries to the config under `pv-arrays`
+  //and clears the legacy `pv-tilt` / `pv-azimuth` keys in the same
+  //event so configs converge to the new shape once the user touches
+  //the section. Null fields are dropped so a partially-filled card
+  //(e.g. tilt set but azimuth blank) still produces a sparse but
+  //valid YAML entry; the card-side reader applies sensible defaults.
+  _writePvArrays(list) {
+    const arrays = list.map((e2) => {
+      const o2 = {};
+      if (e2.tilt !== null) o2["tilt"] = e2.tilt;
+      if (e2.azimuth !== null) o2["azimuth"] = e2.azimuth;
+      if (e2.share !== null) o2["share"] = e2.share;
+      return o2;
+    });
+    const next3 = { ...this._cfg, "pv-arrays": arrays };
+    if ("pv-tilt" in next3) delete next3["pv-tilt"];
+    if ("pv-azimuth" in next3) delete next3["pv-azimuth"];
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next3 } }));
+    this._cfg = next3;
+  }
+  //Updates a single field on entry `i` in the array list. Empty
+  //input clears the field to null (mirrors `_numField`); any other
+  //unparseable value is ignored so the previous typed value sticks.
+  _arrayField(i2, key, e2) {
+    const list = this._readPvArrays();
+    if (i2 < 0 || i2 >= list.length) return;
+    const raw2 = e2.target.value.trim();
+    if (raw2 === "") {
+      list[i2] = { ...list[i2], [key]: null };
+    } else {
+      const v2 = parseFloat(raw2);
+      if (!isFinite(v2)) return;
+      list[i2] = { ...list[i2], [key]: v2 };
+    }
+    this._writePvArrays(list);
+  }
+  _arrayAdd() {
+    const list = this._readPvArrays();
+    if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
+    list.push({ tilt: null, azimuth: null, share: null });
+    this._writePvArrays(list);
+  }
+  //Removes entry `i`. The render disables this button when only
+  //one entry remains so the list never collapses to zero. After
+  //removal the remaining shares stay exactly as the user set
+  //them; auto-normalisation in the card-side reader handles the
+  //rest. The share placeholder updates to reflect the new entry
+  //count, so a remaining single entry with a null share visually
+  //reads as "100%" without needing to write 100 into the YAML.
+  _arrayRemove(i2) {
+    const list = this._readPvArrays();
+    if (i2 < 0 || i2 >= list.length || list.length <= 1) return;
+    list.splice(i2, 1);
+    this._writePvArrays(list);
+  }
+  //Sum of declared shares across the editor's current view; used
+  //by the render to decide whether to surface the "auto-normalised"
+  //hint. Null shares count as 0, since the user hasn't typed a
+  //number there yet and there's no need to nag.
+  _arraySharesSum(list) {
+    return list.reduce((a2, e2) => a2 + (e2.share ?? 0), 0);
+  }
+  //Sets a single field on entry `i` to an explicit value (not via
+  //an input event). Used by the tilt / azimuth preset chips so a
+  //click on "S" or "Vertical" snaps the matching input without
+  //the user having to type. Same write contract as `_arrayField`,
+  //just sourced from a programmatic value instead of the DOM.
+  _arraySetField(i2, key, value) {
+    const list = this._readPvArrays();
+    if (i2 < 0 || i2 >= list.length) return;
+    list[i2] = { ...list[i2], [key]: value };
+    this._writePvArrays(list);
+  }
+  //Active-chip match for tilt: plain absolute distance, ±5° to
+  //absorb typing imprecision (e.g. "32" still highlights "Roof
+  //30°"). Returns false for null inputs so a freshly-opened editor
+  //shows no chip active.
+  _isTiltPresetActive(current, presetDeg) {
+    if (current === null) return false;
+    return Math.abs(current - presetDeg) <= 5;
+  }
+  //Active-chip match for azimuth: wrap-aware so 359° still
+  //highlights "N" (0°) and -3° (if ever typed) highlights "N"
+  //too. Same ±5° tolerance as tilt.
+  _isAzimuthPresetActive(current, presetDeg) {
+    if (current === null) return false;
+    const norm = (current % 360 + 360) % 360;
+    const target = (presetDeg % 360 + 360) % 360;
+    let diff = Math.abs(norm - target);
+    if (diff > 180) diff = 360 - diff;
+    return diff <= 5;
+  }
   //Format a numeric slider value for display alongside the input.
   //Integers stay integer; fractional values get 2 decimals.
   _fmtNum(v2, step) {
@@ -35884,32 +36171,99 @@ let HeliosCardEditor = class extends i {
                     />
                 </label>
                 <div class="field-help">${t2.editor.pvPeakPowerHelp}</div>
-                <label class="field">
-                    <span class="label">${t2.editor.pvTilt}</span>
-                    <input
-                        type="number"
-                        min="0"
-                        max="90"
-                        step="1"
-                        placeholder="0"
-                        .value="${c2["pv-tilt"] != null ? String(c2["pv-tilt"]) : ""}"
-                        @change="${(e2) => this._numField("pv-tilt", e2)}"
-                    />
-                </label>
-                <div class="field-help">${t2.editor.pvTiltHelp}</div>
-                <label class="field">
-                    <span class="label">${t2.editor.pvAzimuth}</span>
-                    <input
-                        type="number"
-                        min="0"
-                        max="360"
-                        step="1"
-                        placeholder="180"
-                        .value="${c2["pv-azimuth"] != null ? String(c2["pv-azimuth"]) : ""}"
-                        @change="${(e2) => this._numField("pv-azimuth", e2)}"
-                    />
-                </label>
-                <div class="field-help">${t2.editor.pvAzimuthHelp}</div>
+                ${(() => {
+      const arrays = this._readPvArrays();
+      const sharesSum = this._arraySharesSum(arrays);
+      const explicit = arrays.filter((a2) => a2.share !== null).length;
+      const showNormHint = explicit >= 2 && Math.abs(sharesSum - 100) > 0.5;
+      return b`
+                        <div class="section-title">${t2.editor.pvArraysSection}</div>
+                        <div class="hint">${t2.editor.pvArraysHelp}</div>
+                        ${arrays.map((arr, i2) => b`
+                            <div class="pv-array-card">
+                                <div class="pv-array-head">
+                                    <span class="pv-array-title">
+                                        ${t2.editor.pvArrayTitle.replace("{n}", String(i2 + 1))}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        class="pv-array-remove"
+                                        aria-label="${t2.editor.pvArrayRemove}: ${t2.editor.pvArrayTitle.replace("{n}", String(i2 + 1))}"
+                                        ?disabled="${arrays.length <= 1}"
+                                        @click="${() => this._arrayRemove(i2)}"
+                                    >${t2.editor.pvArrayRemove}</button>
+                                </div>
+                                <div class="field">
+                                    <span class="label">${t2.editor.pvArrayTilt}</span>
+                                    <div class="preset-row" role="group" aria-label="${t2.editor.pvArrayTilt}">
+                                        ${HeliosCardEditor.TILT_PRESETS.map((p2) => b`
+                                            <button
+                                                type="button"
+                                                class="preset-chip ${this._isTiltPresetActive(arr.tilt, p2.deg) ? "is-active" : ""}"
+                                                @click="${() => this._arraySetField(i2, "tilt", p2.deg)}"
+                                            >${t2.editor[p2.key]} ${p2.deg}°</button>
+                                        `)}
+                                    </div>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="90"
+                                        step="1"
+                                        placeholder="0"
+                                        .value="${arr.tilt !== null ? String(arr.tilt) : ""}"
+                                        @change="${(e2) => this._arrayField(i2, "tilt", e2)}"
+                                    />
+                                </div>
+                                <div class="field-help">${t2.editor.pvArrayTiltHelp}</div>
+                                <div class="field">
+                                    <span class="label">${t2.editor.pvArrayAzimuth}</span>
+                                    <div class="preset-row" role="group" aria-label="${t2.editor.pvArrayAzimuth}">
+                                        ${HeliosCardEditor.AZIMUTH_PRESETS.map((p2) => b`
+                                            <button
+                                                type="button"
+                                                class="preset-chip ${this._isAzimuthPresetActive(arr.azimuth, p2.deg) ? "is-active" : ""}"
+                                                @click="${() => this._arraySetField(i2, "azimuth", p2.deg)}"
+                                            >${t2.editor[p2.key]}</button>
+                                        `)}
+                                    </div>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="360"
+                                        step="1"
+                                        placeholder="180"
+                                        .value="${arr.azimuth !== null ? String(arr.azimuth) : ""}"
+                                        @change="${(e2) => this._arrayField(i2, "azimuth", e2)}"
+                                    />
+                                </div>
+                                <div class="field-help">${t2.editor.pvArrayAzimuthHelp}</div>
+                                <label class="field">
+                                    <span class="label">${t2.editor.pvArrayShare}</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="1"
+                                        placeholder="${arrays.length === 1 ? "100" : String(Math.round(100 / arrays.length))}"
+                                        .value="${arr.share !== null ? String(arr.share) : ""}"
+                                        @change="${(e2) => this._arrayField(i2, "share", e2)}"
+                                    />
+                                </label>
+                                <div class="field-help">${t2.editor.pvArrayShareHelp}</div>
+                            </div>
+                        `)}
+                        ${arrays.length < HeliosCardEditor.PV_ARRAYS_MAX ? b`
+                            <button
+                                type="button"
+                                class="pv-array-add"
+                                @click="${() => this._arrayAdd()}"
+                            >${t2.editor.pvArrayAdd}</button>
+                        ` : A}
+                        ${showNormHint ? b`
+                            <div class="hint">${t2.editor.pvArrayNormHint}</div>
+                        ` : A}
+                    `;
+    })()}
                 <label class="field">
                     <span class="label">${t2.editor.pvColor}</span>
                     <helios-color-picker
@@ -36102,6 +36456,23 @@ let HeliosCardEditor = class extends i {
   }
 };
 HeliosCardEditor.SLIDER_COMMIT_DELAY_MS = 250;
+HeliosCardEditor.PV_ARRAYS_MAX = 6;
+HeliosCardEditor.TILT_PRESETS = [
+  { deg: 0, key: "pvTiltPresetFlat" },
+  { deg: 30, key: "pvTiltPresetRoof" },
+  { deg: 45, key: "pvTiltPresetSteepRoof" },
+  { deg: 90, key: "pvTiltPresetVertical" }
+];
+HeliosCardEditor.AZIMUTH_PRESETS = [
+  { deg: 0, key: "compassN" },
+  { deg: 45, key: "compassNE" },
+  { deg: 90, key: "compassE" },
+  { deg: 135, key: "compassSE" },
+  { deg: 180, key: "compassS" },
+  { deg: 225, key: "compassSW" },
+  { deg: 270, key: "compassW" },
+  { deg: 315, key: "compassNW" }
+];
 HeliosCardEditor.styles = i$3`
         .editor
         {
@@ -36312,6 +36683,129 @@ HeliosCardEditor.styles = i$3`
             padding: 1px 4px;
             border-radius: 3px;
         }
+
+        /*  One bordered card per PV array entry. Same vertical stack
+            of label/input rows as the rest of the editor, just framed
+            so the user reads a multi-array config as discrete groups
+            rather than a tall undifferentiated list of number fields. */
+        .pv-array-card
+        {
+            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+            border-radius: 6px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: var(--card-background-color, #fff);
+        }
+
+        .pv-array-head
+        {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.08));
+            padding-bottom: 6px;
+        }
+
+        .pv-array-title
+        {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary-text-color, #212121);
+        }
+
+        /*  Borderless text buttons for add/remove so the cards stay
+            visually quiet. The +Add button gets the accent colour to
+            telegraph the affordance, Remove stays muted (destructive
+            actions don't need to shout; they're behind a disabled
+            state when there's only one card). */
+        .pv-array-add,
+        .pv-array-remove
+        {
+            background: transparent;
+            border: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            color: var(--primary-text-color, #212121);
+        }
+
+        .pv-array-add
+        {
+            color: var(--primary-color, #03a9f4);
+            border-color: var(--primary-color, #03a9f4);
+            align-self: flex-start;
+        }
+
+        .pv-array-remove:disabled
+        {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .pv-array-add:hover:not(:disabled),
+        .pv-array-remove:hover:not(:disabled)
+        {
+            background: var(--secondary-background-color, rgba(0,0,0,0.04));
+        }
+
+        /*  Mirror the focus-visible ring used on .swatch elsewhere
+            in the editor so keyboard users get a consistent indicator
+            on the new add/remove buttons. */
+        .pv-array-add:focus-visible,
+        .pv-array-remove:focus-visible
+        {
+            outline: 2px solid var(--primary-color, #03a9f4);
+            outline-offset: 2px;
+        }
+
+        /*  Preset chips above tilt and azimuth inputs. Pill-shaped,
+            borderless, kept visually quiet so the row never competes
+            with the input that's the actual source of truth. Active
+            state lights up when the input value matches the chip
+            within a small tolerance, click snaps the input to the
+            chip's value.                                              */
+        .preset-row
+        {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+            margin-bottom: 4px;
+        }
+
+        .preset-chip
+        {
+            background: transparent;
+            border: 1px solid var(--divider-color, rgba(0,0,0,0.18));
+            border-radius: 999px;
+            padding: 2px 9px;
+            font-size: 11px;
+            font-family: inherit;
+            font-variant-numeric: tabular-nums;
+            cursor: pointer;
+            color: var(--secondary-text-color, #757575);
+            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+        }
+        .preset-chip:hover
+        {
+            background: var(--secondary-background-color, rgba(0,0,0,0.04));
+            color: var(--primary-text-color, #212121);
+        }
+        .preset-chip.is-active
+        {
+            background: var(--primary-color, #03a9f4);
+            border-color: var(--primary-color, #03a9f4);
+            color: #ffffff;
+        }
+        .preset-chip:focus-visible
+        {
+            outline: 2px solid var(--primary-color, #03a9f4);
+            outline-offset: 2px;
+        }
     `;
 __decorateClass$1([
   n2({ attribute: false })
@@ -36355,7 +36849,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.4"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.5"}`,
       labelStyle,
       versionStyle
     );
@@ -36376,7 +36870,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.4",
+        version: "1.6.0-alpha.5",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -36384,7 +36878,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.5"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -37489,7 +37983,7 @@ let HeliosCard = class extends i {
         if (tMs < nowMs) continue;
         if (tMs < startMs) continue;
         if (tMs > endMsAbs) continue;
-        const pct = computePvPower(series.times[i2], lat, lon, series.cloud[i2] ?? 0, this._pvPanelOrientation());
+        const pct = this._computePvPowerWeighted(series.times[i2], lat, lon, series.cloud[i2] ?? 0);
         if (pct <= 0) continue;
         predictedSamples.push({ t: series.times[i2], v: pct * k2 * nativeFromW });
       }
@@ -37690,7 +38184,7 @@ let HeliosCard = class extends i {
         if (tMs < startMs || tMs > endMsAbs) continue;
         if (tMs < nowMs) continue;
         const cloud = series.cloud[i2] ?? 0;
-        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+        const pct = this._computePvPowerWeighted(series.times[i2], coords.lat, coords.lon, cloud);
         if (pct <= 0) continue;
         const kwh = pct * k2 / 1e3;
         const dk = dayKey(tMs);
@@ -37888,22 +38382,94 @@ let HeliosCard = class extends i {
   _batteryPowerInvert() {
     return this.config?.["battery-power-invert"] === true;
   }
-  //Panel orientation derived from the editor config. Returns
-  //undefined when no tilt is set, which keeps the prediction model
-  //on the original horizontal-panel fast path. Setting tilt > 0
-  //enables the tilt/azimuth transposition in computePvPower so
-  //balcony / steeply-pitched roof installs stop seeing a flat-roof
-  //forecast that's wildly optimistic.
-  _pvPanelOrientation() {
-    const rawTilt = this.config?.["pv-tilt"];
-    const tilt = typeof rawTilt === "number" ? rawTilt : parseFloat(String(rawTilt ?? ""));
-    if (!isFinite(tilt) || tilt <= 0) return void 0;
-    const rawAz = this.config?.["pv-azimuth"];
-    const az = typeof rawAz === "number" ? rawAz : parseFloat(String(rawAz ?? ""));
-    return {
-      tiltDeg: Math.max(0, Math.min(90, tilt)),
-      azimuthDeg: isFinite(az) ? (az % 360 + 360) % 360 : 180
-    };
+  //Resolves the configured PV layout into a flat list of panel
+  //orientations + pre-normalised shares (sum to 1.0).
+  //
+  //Read order, first match wins:
+  //  1. `pv-arrays`: non-empty array, each entry parsed as
+  //     { tilt: 0–90, azimuth: 0–360, share: weight }. Missing
+  //     tilt defaults to 0 (horizontal fast path inside
+  //     computePvPower, no transposition applied for that entry).
+  //     Missing azimuth defaults to 180. Missing share triggers
+  //     equal-split with siblings. Entries with share ≤ 0 are
+  //     dropped. Shares are normalised so they sum to 1.0 before
+  //     the caller weights them, so 50/50, 60/60 and 1/1 all
+  //     produce the same forecast (forgives user typos).
+  //  2. Legacy `pv-tilt` + `pv-azimuth`: read as a single entry
+  //     with share = 1.0, but only when `pv-tilt` > 0 (matches the
+  //     historical behaviour where tilt = 0 / unset skipped the
+  //     transposition entirely).
+  //  3. Otherwise empty result, caller uses the horizontal-panel
+  //     fast path inside computePvPower.
+  _pvArrays() {
+    const out = [];
+    const sh = [];
+    const rawList = this.config?.["pv-arrays"];
+    if (Array.isArray(rawList) && rawList.length > 0) {
+      for (const entry of rawList) {
+        if (!entry || typeof entry !== "object") continue;
+        const e2 = entry;
+        const rawTilt = e2["tilt"];
+        const tiltRaw = typeof rawTilt === "number" ? rawTilt : parseFloat(String(rawTilt ?? ""));
+        const tilt = isFinite(tiltRaw) ? tiltRaw : 0;
+        const rawAz = e2["azimuth"];
+        const az = typeof rawAz === "number" ? rawAz : parseFloat(String(rawAz ?? ""));
+        const azDeg = isFinite(az) ? (az % 360 + 360) % 360 : 180;
+        const rawShare = e2["share"];
+        let share;
+        if (rawShare === void 0 || rawShare === null || rawShare === "") {
+          share = NaN;
+        } else {
+          const s2 = typeof rawShare === "number" ? rawShare : parseFloat(String(rawShare));
+          if (!isFinite(s2) || s2 <= 0) continue;
+          share = s2;
+        }
+        out.push({
+          tiltDeg: Math.max(0, Math.min(90, tilt)),
+          azimuthDeg: azDeg
+        });
+        sh.push(share);
+      }
+      const explicit = sh.filter((s2) => isFinite(s2));
+      const fillVal = explicit.length > 0 ? explicit.reduce((a2, b2) => a2 + b2, 0) / explicit.length : 1;
+      for (let i2 = 0; i2 < sh.length; i2++) {
+        if (!isFinite(sh[i2])) sh[i2] = fillVal;
+      }
+    }
+    if (out.length === 0) {
+      const rawTilt = this.config?.["pv-tilt"];
+      const tilt = typeof rawTilt === "number" ? rawTilt : parseFloat(String(rawTilt ?? ""));
+      if (isFinite(tilt) && tilt > 0) {
+        const rawAz = this.config?.["pv-azimuth"];
+        const az = typeof rawAz === "number" ? rawAz : parseFloat(String(rawAz ?? ""));
+        out.push({
+          tiltDeg: Math.max(0, Math.min(90, tilt)),
+          azimuthDeg: isFinite(az) ? (az % 360 + 360) % 360 : 180
+        });
+        sh.push(1);
+      }
+    }
+    const total = sh.reduce((a2, b2) => a2 + b2, 0);
+    if (total > 0) {
+      for (let i2 = 0; i2 < sh.length; i2++) sh[i2] /= total;
+    }
+    return { orientations: out, shares: sh };
+  }
+  //Forecast PV percentage at a single sample, summed across every
+  //configured array weighted by its share of the total kWp. Falls
+  //through to the horizontal-panel fast path inside computePvPower
+  //when no array is configured (returns the GHI-normalised value
+  //the legacy code used to produce).
+  _computePvPowerWeighted(t2, lat, lon, cloudPct) {
+    const { orientations, shares } = this._pvArrays();
+    if (orientations.length === 0) {
+      return computePvPower(t2, lat, lon, cloudPct);
+    }
+    let acc = 0;
+    for (let i2 = 0; i2 < orientations.length; i2++) {
+      acc += computePvPower(t2, lat, lon, cloudPct, orientations[i2]) * shares[i2];
+    }
+    return acc;
   }
   _wipeLegacyPvCalibStorage() {
     try {
@@ -38021,7 +38587,7 @@ let HeliosCard = class extends i {
           }
         }
         const cloud = series.cloud[best] ?? 0;
-        const pct = computePvPower(this._selectedTime, coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+        const pct = this._computePvPowerWeighted(this._selectedTime, coords.lat, coords.lon, cloud);
         if (pct > 0) {
           pvPredictedRate = { value: pct * k2, unit: "W" };
         }
@@ -38859,7 +39425,7 @@ let HeliosCard = class extends i {
         const tMs = series.times[i2].getTime();
         if (tMs < startMs || tMs >= endMs) continue;
         const cloud = series.cloud[i2] ?? 0;
-        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+        const pct = this._computePvPowerWeighted(series.times[i2], coords.lat, coords.lon, cloud);
         if (pct < 0) continue;
         const watts = pct * k2;
         const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
@@ -38955,7 +39521,7 @@ let HeliosCard = class extends i {
         const binEnd = binStart + HOUR_MS;
         if (binEnd <= nowMs) continue;
         const cloud = series.cloud[i2] ?? 0;
-        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+        const pct = this._computePvPowerWeighted(series.times[i2], coords.lat, coords.lon, cloud);
         if (pct < 0) continue;
         const futureStart = Math.max(binStart, nowMs);
         const fraction = Math.min(1, (binEnd - futureStart) / HOUR_MS);
@@ -39175,7 +39741,7 @@ let HeliosCard = class extends i {
         const tMs = series.times[i2].getTime();
         if (tMs < tomorrowMs || tMs >= endMs) continue;
         const cloud = series.cloud[i2] ?? 0;
-        const pct = computePvPower(series.times[i2], coords.lat, coords.lon, cloud, this._pvPanelOrientation());
+        const pct = this._computePvPowerWeighted(series.times[i2], coords.lat, coords.lon, cloud);
         if (pct > 0 && k2 !== null) {
           const watts = pct * k2;
           totalKwh += watts / 1e3;

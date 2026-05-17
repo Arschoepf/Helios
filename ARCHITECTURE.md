@@ -1,4 +1,4 @@
-# HELIOS, v1.6.0-alpha.4
+# HELIOS, v1.6.0-alpha.5
 
 HELIOS is a Home Assistant Lovelace custom card that visualises solar
 conditions at a home in real time: sun arc, irradiance, cloud cover,
@@ -25,7 +25,9 @@ core author:
   credited to [@stephenwq](https://github.com/stephenwq).
 * **[@i6media](https://github.com/i6media)** (Frank Boon) , optional
   `home-latitude` / `home-longitude` overrides in v1.6.0-alpha.1
-  (PR #9).
+  (PR #9), and the multi-orientation PV layout (`pv-arrays`) in
+  v1.6.0-alpha.5 (PR #10) for installs with panels split across
+  several roofs / orientations.
 
 ---
 

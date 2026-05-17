@@ -111,14 +111,55 @@ export interface Translations
         //observation only.
         pvPeakPower:              string;
         pvPeakPowerHelp:          string;
-        //Panel orientation, optional. Tilt 0..90 (0 = horizontal, 90 =
-        //vertical / balcony). Azimuth 0..360 (clockwise from north,
-        //180 = south). Drives the Liu-Jordan transposition that
-        //decides how the predicted GHI lands on the panel plane.
-        pvTilt:                   string;
-        pvTiltHelp:               string;
-        pvAzimuth:                string;
-        pvAzimuthHelp:            string;
+        //Multi-array PV layout. Each array entry exposes its own
+        //tilt (0..90, 0 = horizontal, 90 = vertical / balcony),
+        //azimuth (0..360 clockwise from north, 180 = south), and
+        //share % of the total kWp. The card-side reader normalises
+        //the shares to sum to 1.0 at compute time, so the editor
+        //surfaces a small hint when the typed shares don't add to
+        //100. The "+ Add array" button is hidden past 6 entries.
+        //Section title for the multi-array region, lifted into its
+        //own block so the editor reads as a discrete sub-section
+        //instead of a free-form continuation of the kWp row above.
+        pvArraysSection:          string;
+        pvArraysHelp:             string;
+        pvArrayTitle:             string;   //e.g. "Array {n}"
+        pvArrayTilt:              string;
+        pvArrayAzimuth:           string;
+        pvArrayShare:             string;
+        pvArrayAdd:               string;
+        pvArrayRemove:            string;
+        pvArrayNormHint:          string;
+        //Per-field helps under tilt / azimuth / share. Restore the
+        //pedagogical content from the legacy single-orientation
+        //pvTiltHelp / pvAzimuthHelp keys (removed by PR #10's
+        //consolidation), and add a share-specific explanation of
+        //the auto-normalisation contract.
+        pvArrayTiltHelp:          string;
+        pvArrayAzimuthHelp:       string;
+        pvArrayShareHelp:         string;
+        //Quick-pick preset labels rendered above each tilt input as
+        //clickable chips. The chip values are wired to fixed angles
+        //(0 / 30 / 45 / 90) in the card editor. The chips snap the
+        //input to the corresponding angle; the input itself stays a
+        //free numeric field so any in-between value (e.g. 12, 22)
+        //remains typeable.
+        pvTiltPresetFlat:         string;
+        pvTiltPresetRoof:         string;
+        pvTiltPresetSteepRoof:    string;
+        pvTiltPresetVertical:     string;
+        //Compass abbreviations rendered above each azimuth input as
+        //clickable chips. The chips snap the input to the matching
+        //cardinal/intercardinal degree (0, 45, 90, ... 315). Free
+        //input still wins for exotic orientations like 247.
+        compassN:                 string;
+        compassNE:                string;
+        compassE:                 string;
+        compassSE:                string;
+        compassS:                 string;
+        compassSW:                string;
+        compassW:                 string;
+        compassNW:                string;
         pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;
