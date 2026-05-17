@@ -34,7 +34,7 @@ export const it: Translations = {
         locationHint:       'Sovrascrive l\'indirizzo di casa usato come centro della scheda. Lascia entrambi i campi vuoti per usare l\'indirizzo configurato in Home Assistant. La sovrascrittura è applicata solo quando ENTRAMBI i campi contengono coordinate valide; valori parziali o fuori intervallo vengono ignorati silenziosamente.',
         mapSection:         'Mappa',
         mapStyle:           'Stile della mappa *',
-        mapStyleHint:       'Tre mappe di base: Strade (sobria, urbana), Topo (curve di livello e toni terrosi, ideale in terreno collinare) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). Gli edifici 3D e le etichette si comportano allo stesso modo su Strade e Topo. La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.',
+        mapStyleHint:       'Due mappe di base: Strade (sobria, urbana, con etichette complete) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.',
         mapStyleStreet:     'Strade',
         cardTheme:          'Tema della scheda *',
         cardThemeHint:      'Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) e la mappa 3D di sfondo tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri.',

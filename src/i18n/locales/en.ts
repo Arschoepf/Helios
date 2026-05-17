@@ -44,7 +44,7 @@ export const en: Translations = {
         locationHint:       'Override the home address used as the card\'s center. Leave both fields empty to use Home Assistant\'s configured home. The override is only applied when BOTH fields are set to valid coordinates; partial or out-of-range values silently fall back to the HA default.',
         mapSection:         'Map',
         mapStyle:           'Map style *',
-        mapStyleHint:       'Three basemaps: Streets (sober, urban), Topo (contour lines and earth tones, better in hilly terrain), or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). 3D buildings and labels behave identically on Streets and Topo. The dark variant of the chosen style is used automatically when the card theme is set to dark.',
+        mapStyleHint:       'Two basemaps: Streets (sober, urban, with full labels) or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). The dark variant of the chosen style is used automatically when the card theme is set to dark.',
         mapStyleStreet:     'Streets',
         cardTheme:          'Card theme *',
         cardThemeHint:      'Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) and the 3D map basemap between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards.',

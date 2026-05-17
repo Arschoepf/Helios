@@ -43,7 +43,7 @@ export const no: Translations = {
         locationHint:       'Overstyrer hjemmeadressen som brukes som kortets sentrum. La begge feltene være tomme for å bruke hjemmet som er konfigurert i Home Assistant. Overstyringen brukes kun når BEGGE feltene har gyldige koordinater; ufullstendige eller ugyldige verdier ignoreres stille.',
         mapSection:         'Kart',
         mapStyle:           'Kartstil *',
-        mapStyleHint:       'Tre grunnkart: Gater (nøkternt, urbant), Topo (høydekoter og jordfargetoner, bedre i kupert terreng) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). 3D-bygninger og etiketter oppfører seg likt på Gater og Topo. Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.',
+        mapStyleHint:       'To grunnkart: Gater (nøkternt, urbant, med fulle etiketter) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.',
         mapStyleStreet:     'Gater',
         cardTheme:          'Korttema *',
         cardThemeHint:      'Bytter kortets utseende (chips, grafer, knapper, verktøytips, scrub-overlegg) og 3D-grunnkartet mellom et lyst tema (standard, på hvit bakgrunn) og et mørkt tema (på nesten svart bakgrunn) slik at kortet passer rent inn i lyse eller mørke Home Assistant-dashbord.',

@@ -34,7 +34,7 @@ export const nl: Translations = {
         locationHint:       'Overschrijft het thuisadres dat als middelpunt van de kaart wordt gebruikt. Laat beide velden leeg om het in Home Assistant geconfigureerde adres te gebruiken. De override geldt alleen wanneer BEIDE velden geldige coördinaten bevatten; gedeeltelijke of ongeldige waarden worden stilzwijgend genegeerd.',
         mapSection:         'Kaart',
         mapStyle:           'Kaartstijl *',
-        mapStyleHint:       'Drie basiskaarten: Straten (sober, stedelijk), Topo (hoogtelijnen en aardse tinten, ideaal in heuvelachtig terrein) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). 3D-gebouwen en labels gedragen zich identiek op Straten en Topo. De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.',
+        mapStyleHint:       'Twee basiskaarten: Straten (sober, stedelijk, met volledige labels) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.',
         mapStyleStreet:     'Straten',
         cardTheme:          'Kaartthema *',
         cardThemeHint:      'Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) en de 3D-basemap tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards.',

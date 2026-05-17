@@ -34,7 +34,7 @@ export const es: Translations = {
         locationHint:       'Anula la dirección del hogar usada como centro de la tarjeta. Deja ambos campos vacíos para usar el hogar configurado en Home Assistant. La anulación se aplica solo cuando AMBOS campos contienen coordenadas válidas; los valores parciales o fuera de rango se ignoran silenciosamente.',
         mapSection:         'Mapa',
         mapStyle:           'Estilo del mapa *',
-        mapStyleHint:       'Tres mapas base: Calles (sobrio, urbano), Topo (líneas de nivel y tonos terrosos, ideal en terreno montañoso) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). Los edificios 3D y las etiquetas se comportan igual en Calles y Topo. La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.',
+        mapStyleHint:       'Dos mapas base: Calles (sobrio, urbano, con etiquetas completas) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.',
         mapStyleStreet:     'Calles',
         cardTheme:          'Tema de la tarjeta *',
         cardThemeHint:      'Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) y el mapa 3D de fondo entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros.',

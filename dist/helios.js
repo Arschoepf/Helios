@@ -32581,7 +32581,7 @@ const en = {
     locationHint: "Override the home address used as the card's center. Leave both fields empty to use Home Assistant's configured home. The override is only applied when BOTH fields are set to valid coordinates; partial or out-of-range values silently fall back to the HA default.",
     mapSection: "Map",
     mapStyle: "Map style *",
-    mapStyleHint: "Three basemaps: Streets (sober, urban), Topo (contour lines and earth tones, better in hilly terrain), or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). 3D buildings and labels behave identically on Streets and Topo. The dark variant of the chosen style is used automatically when the card theme is set to dark.",
+    mapStyleHint: "Two basemaps: Streets (sober, urban, with full labels) or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). The dark variant of the chosen style is used automatically when the card theme is set to dark.",
     mapStyleStreet: "Streets",
     cardTheme: "Card theme *",
     cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) and the 3D map basemap between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards.",
@@ -32711,7 +32711,7 @@ const fr = {
     locationHint: "Remplace l'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides; toute valeur partielle ou hors plage est ignorée silencieusement.",
     mapSection: "Carte",
     mapStyle: "Style de la carte *",
-    mapStyleHint: "Trois fonds de carte : Rues (sobre, urbain), Topo (lignes de niveau et tons terreux, idéal en zone vallonnée) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). Les bâtiments 3D et les libellés se comportent à l'identique sur Rues et Topo. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
+    mapStyleHint: "Deux fonds de carte : Rues (sobre, urbain, libellés complets) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
     mapStyleStreet: "Rues",
     cardTheme: "Thème de la carte *",
     cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) ainsi que le fond de carte 3D entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre.",
@@ -32841,7 +32841,7 @@ const de = {
     locationHint: "Überschreibt die Heimadresse, die als Mittelpunkt der Karte verwendet wird. Beide Felder leer lassen, um die in Home Assistant konfigurierte Adresse zu nutzen. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten; unvollständige oder ungültige Werte werden ignoriert.",
     mapSection: "Karte",
     mapStyle: "Kartenstil *",
-    mapStyleHint: "Drei Basiskarten: Straßen (nüchtern, urban), Topo (Höhenlinien und Erdtöne, ideal in hügeligem Gelände) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). 3D-Gebäude und Beschriftungen verhalten sich auf Straßen und Topo identisch. Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
+    mapStyleHint: "Zwei Basiskarten: Straßen (nüchtern, urban, mit vollständigen Beschriftungen) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
     mapStyleStreet: "Straßen",
     cardTheme: "Karten-Thema *",
     cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) sowie die 3D-Grundkarte zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt.",
@@ -32971,7 +32971,7 @@ const es = {
     locationHint: "Anula la dirección del hogar usada como centro de la tarjeta. Deja ambos campos vacíos para usar el hogar configurado en Home Assistant. La anulación se aplica solo cuando AMBOS campos contienen coordenadas válidas; los valores parciales o fuera de rango se ignoran silenciosamente.",
     mapSection: "Mapa",
     mapStyle: "Estilo del mapa *",
-    mapStyleHint: "Tres mapas base: Calles (sobrio, urbano), Topo (líneas de nivel y tonos terrosos, ideal en terreno montañoso) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). Los edificios 3D y las etiquetas se comportan igual en Calles y Topo. La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
+    mapStyleHint: "Dos mapas base: Calles (sobrio, urbano, con etiquetas completas) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
     mapStyleStreet: "Calles",
     cardTheme: "Tema de la tarjeta *",
     cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) y el mapa 3D de fondo entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros.",
@@ -33101,7 +33101,7 @@ const it = {
     locationHint: "Sovrascrive l'indirizzo di casa usato come centro della scheda. Lascia entrambi i campi vuoti per usare l'indirizzo configurato in Home Assistant. La sovrascrittura è applicata solo quando ENTRAMBI i campi contengono coordinate valide; valori parziali o fuori intervallo vengono ignorati silenziosamente.",
     mapSection: "Mappa",
     mapStyle: "Stile della mappa *",
-    mapStyleHint: "Tre mappe di base: Strade (sobria, urbana), Topo (curve di livello e toni terrosi, ideale in terreno collinare) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). Gli edifici 3D e le etichette si comportano allo stesso modo su Strade e Topo. La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
+    mapStyleHint: "Due mappe di base: Strade (sobria, urbana, con etichette complete) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
     mapStyleStreet: "Strade",
     cardTheme: "Tema della scheda *",
     cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) e la mappa 3D di sfondo tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri.",
@@ -33231,7 +33231,7 @@ const nl = {
     locationHint: "Overschrijft het thuisadres dat als middelpunt van de kaart wordt gebruikt. Laat beide velden leeg om het in Home Assistant geconfigureerde adres te gebruiken. De override geldt alleen wanneer BEIDE velden geldige coördinaten bevatten; gedeeltelijke of ongeldige waarden worden stilzwijgend genegeerd.",
     mapSection: "Kaart",
     mapStyle: "Kaartstijl *",
-    mapStyleHint: "Drie basiskaarten: Straten (sober, stedelijk), Topo (hoogtelijnen en aardse tinten, ideaal in heuvelachtig terrein) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). 3D-gebouwen en labels gedragen zich identiek op Straten en Topo. De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
+    mapStyleHint: "Twee basiskaarten: Straten (sober, stedelijk, met volledige labels) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
     mapStyleStreet: "Straten",
     cardTheme: "Kaartthema *",
     cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) en de 3D-basemap tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards.",
@@ -33361,7 +33361,7 @@ const pt = {
     locationHint: "Substitui o endereço de casa usado como centro do cartão. Deixe ambos os campos vazios para usar o endereço configurado no Home Assistant. A substituição só é aplicada quando AMBOS os campos contêm coordenadas válidas; valores parciais ou fora do intervalo são ignorados silenciosamente.",
     mapSection: "Mapa",
     mapStyle: "Estilo do mapa *",
-    mapStyleHint: "Três mapas base: Ruas (sóbrio, urbano), Topo (curvas de nível e tons terrosos, ideal em terreno montanhoso) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). Os edifícios 3D e as etiquetas comportam-se de forma idêntica em Ruas e Topo. A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
+    mapStyleHint: "Dois mapas base: Ruas (sóbrio, urbano, com etiquetas completas) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
     mapStyleStreet: "Ruas",
     cardTheme: "Tema do cartão *",
     cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) e o mapa 3D de fundo entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros.",
@@ -33491,7 +33491,7 @@ const no = {
     locationHint: "Overstyrer hjemmeadressen som brukes som kortets sentrum. La begge feltene være tomme for å bruke hjemmet som er konfigurert i Home Assistant. Overstyringen brukes kun når BEGGE feltene har gyldige koordinater; ufullstendige eller ugyldige verdier ignoreres stille.",
     mapSection: "Kart",
     mapStyle: "Kartstil *",
-    mapStyleHint: "Tre grunnkart: Gater (nøkternt, urbant), Topo (høydekoter og jordfargetoner, bedre i kupert terreng) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). 3D-bygninger og etiketter oppfører seg likt på Gater og Topo. Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.",
+    mapStyleHint: "To grunnkart: Gater (nøkternt, urbant, med fulle etiketter) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.",
     mapStyleStreet: "Gater",
     cardTheme: "Korttema *",
     cardThemeHint: "Bytter kortets utseende (chips, grafer, knapper, verktøytips, scrub-overlegg) og 3D-grunnkartet mellom et lyst tema (standard, på hvit bakgrunn) og et mørkt tema (på nesten svart bakgrunn) slik at kortet passer rent inn i lyse eller mørke Home Assistant-dashbord.",
@@ -36151,28 +36151,6 @@ let HeliosCardEditor = class extends i {
                 </details>
 
                 <details class="advanced-section" open>
-                    <summary class="section-title section-title-collapse">${t2.editor.colors}</summary>
-                <label class="field">
-                    <span class="label">${t2.editor.sunColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["sun-color"], DEFAULT_SUN_COLOR_HEX)}"
-                        .ariaLabel="${t2.editor.sunColor}"
-                        @value-changed="${(e2) => this._color("sun-color", e2)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t2.editor.cloudColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["cloud-color"], DEFAULT_CLOUD_COLOR_HEX)}"
-                        .ariaLabel="${t2.editor.cloudColor}"
-                        @value-changed="${(e2) => this._color("cloud-color", e2)}"
-                    ></helios-color-picker>
-                </label>
-                <div class="hint">${t2.editor.colorsHint}</div>
-
-                </details>
-
-                <details class="advanced-section" open>
                     <summary class="section-title section-title-collapse">${t2.editor.pvSection}</summary>
                 <div class="field field-block">
                     <span class="label">${t2.editor.pvEntity}</span>
@@ -36399,6 +36377,27 @@ let HeliosCardEditor = class extends i {
                 </details>
 
                 <details class="advanced-section" open>
+                    <summary class="section-title section-title-collapse">${t2.editor.colors}</summary>
+                    <label class="field">
+                        <span class="label">${t2.editor.sunColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c2["sun-color"], DEFAULT_SUN_COLOR_HEX)}"
+                            .ariaLabel="${t2.editor.sunColor}"
+                            @value-changed="${(e2) => this._color("sun-color", e2)}"
+                        ></helios-color-picker>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.cloudColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c2["cloud-color"], DEFAULT_CLOUD_COLOR_HEX)}"
+                            .ariaLabel="${t2.editor.cloudColor}"
+                            @value-changed="${(e2) => this._color("cloud-color", e2)}"
+                        ></helios-color-picker>
+                    </label>
+                    <div class="hint">${t2.editor.colorsHint}</div>
+                </details>
+
+                <details class="advanced-section" open>
                     <summary class="section-title section-title-collapse">${t2.editor.timeline}</summary>
                 <label class="field">
                     <span class="label">${t2.editor.dateFormat}</span>
@@ -36552,18 +36551,25 @@ HeliosCardEditor.styles = i$3`
             border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
         }
 
-        /*  Collapsible "advanced" section. Uses native <details>/<summary>
-            so the open/closed state needs no JS plumbing and survives
-            keyboard navigation for free. The default disclosure triangle
-            is replaced by a custom chevron via ::before so the summary
+        /*  Collapsible section. Uses native <details>/<summary> so the
+            open/closed state needs no JS plumbing and survives keyboard
+            navigation for free. The default disclosure triangle is
+            replaced by a custom chevron via ::before so the summary
             row visually matches a regular .section-title heading with a
-            single rotating glyph that signals expandability.            */
+            single rotating glyph that signals expandability.
+
+            Extra margin-top between sibling sections so they read as
+            distinct blocks even when several are collapsed in a row.
+            The first child of the editor gets no margin (the editor
+            container handles its own top padding).                     */
         details.advanced-section
         {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            margin-top: 16px;
         }
+        details.advanced-section:first-child { margin-top: 0; }
         details.advanced-section > summary
         {
             list-style: none;
@@ -36576,6 +36582,13 @@ HeliosCardEditor.styles = i$3`
             display: flex;
             align-items: center;
             gap: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--primary-color, #03a9f4);
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.18));
         }
         details.advanced-section > summary.section-title-collapse::before
         {
@@ -36590,12 +36603,17 @@ HeliosCardEditor.styles = i$3`
             transform: rotate(90deg);
         }
 
+        /*  Tucked under its companion field, with a small breathing
+            margin so tall controls (ha-entity-picker, segmented toggles,
+            preset chip rows) don't visually overlap the help text. The
+            previous 'margin-top: -6px' worked for plain number inputs
+            but caused the help to disappear under tall pickers.        */
         .field-help
         {
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
-            margin-top: -6px;
-            margin-bottom: 4px;
+            margin-top: 2px;
+            margin-bottom: 6px;
         }
 
         .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
@@ -36903,6 +36921,7 @@ HeliosCardEditor.styles = i$3`
         {
             display: flex;
             flex-wrap: wrap;
+            justify-content: center;
             gap: 4px;
             margin-top: 2px;
             margin-bottom: 2px;
@@ -36983,7 +37002,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.6"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.7"}`,
       labelStyle,
       versionStyle
     );
@@ -37004,7 +37023,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.6",
+        version: "1.6.0-alpha.7",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37012,7 +37031,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.6"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.7"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

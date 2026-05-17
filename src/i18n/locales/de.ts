@@ -34,7 +34,7 @@ export const de: Translations = {
         locationHint:       'Überschreibt die Heimadresse, die als Mittelpunkt der Karte verwendet wird. Beide Felder leer lassen, um die in Home Assistant konfigurierte Adresse zu nutzen. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten; unvollständige oder ungültige Werte werden ignoriert.',
         mapSection:         'Karte',
         mapStyle:           'Kartenstil *',
-        mapStyleHint:       'Drei Basiskarten: Straßen (nüchtern, urban), Topo (Höhenlinien und Erdtöne, ideal in hügeligem Gelände) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). 3D-Gebäude und Beschriftungen verhalten sich auf Straßen und Topo identisch. Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.',
+        mapStyleHint:       'Zwei Basiskarten: Straßen (nüchtern, urban, mit vollständigen Beschriftungen) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.',
         mapStyleStreet:     'Straßen',
         cardTheme:          'Karten-Thema *',
         cardThemeHint:      'Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) sowie die 3D-Grundkarte zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt.',

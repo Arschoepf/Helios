@@ -971,28 +971,6 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" open>
-                    <summary class="section-title section-title-collapse">${t.editor.colors}</summary>
-                <label class="field">
-                    <span class="label">${t.editor.sunColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c['sun-color'], DEFAULT_SUN_COLOR_HEX)}"
-                        .ariaLabel="${t.editor.sunColor}"
-                        @value-changed="${(e: CustomEvent) => this._color('sun-color', e)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t.editor.cloudColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c['cloud-color'], DEFAULT_CLOUD_COLOR_HEX)}"
-                        .ariaLabel="${t.editor.cloudColor}"
-                        @value-changed="${(e: CustomEvent) => this._color('cloud-color', e)}"
-                    ></helios-color-picker>
-                </label>
-                <div class="hint">${t.editor.colorsHint}</div>
-
-                </details>
-
-                <details class="advanced-section" open>
                     <summary class="section-title section-title-collapse">${t.editor.pvSection}</summary>
                 <div class="field field-block">
                     <span class="label">${t.editor.pvEntity}</span>
@@ -1225,6 +1203,27 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" open>
+                    <summary class="section-title section-title-collapse">${t.editor.colors}</summary>
+                    <label class="field">
+                        <span class="label">${t.editor.sunColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c['sun-color'], DEFAULT_SUN_COLOR_HEX)}"
+                            .ariaLabel="${t.editor.sunColor}"
+                            @value-changed="${(e: CustomEvent) => this._color('sun-color', e)}"
+                        ></helios-color-picker>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.cloudColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c['cloud-color'], DEFAULT_CLOUD_COLOR_HEX)}"
+                            .ariaLabel="${t.editor.cloudColor}"
+                            @value-changed="${(e: CustomEvent) => this._color('cloud-color', e)}"
+                        ></helios-color-picker>
+                    </label>
+                    <div class="hint">${t.editor.colorsHint}</div>
+                </details>
+
+                <details class="advanced-section" open>
                     <summary class="section-title section-title-collapse">${t.editor.timeline}</summary>
                 <label class="field">
                     <span class="label">${t.editor.dateFormat}</span>
@@ -1360,18 +1359,25 @@ export class HeliosCardEditor extends LitElement
             border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
         }
 
-        /*  Collapsible "advanced" section. Uses native <details>/<summary>
-            so the open/closed state needs no JS plumbing and survives
-            keyboard navigation for free. The default disclosure triangle
-            is replaced by a custom chevron via ::before so the summary
+        /*  Collapsible section. Uses native <details>/<summary> so the
+            open/closed state needs no JS plumbing and survives keyboard
+            navigation for free. The default disclosure triangle is
+            replaced by a custom chevron via ::before so the summary
             row visually matches a regular .section-title heading with a
-            single rotating glyph that signals expandability.            */
+            single rotating glyph that signals expandability.
+
+            Extra margin-top between sibling sections so they read as
+            distinct blocks even when several are collapsed in a row.
+            The first child of the editor gets no margin (the editor
+            container handles its own top padding).                     */
         details.advanced-section
         {
             display: flex;
             flex-direction: column;
             gap: 10px;
+            margin-top: 16px;
         }
+        details.advanced-section:first-child { margin-top: 0; }
         details.advanced-section > summary
         {
             list-style: none;
@@ -1384,6 +1390,13 @@ export class HeliosCardEditor extends LitElement
             display: flex;
             align-items: center;
             gap: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--primary-color, #03a9f4);
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.18));
         }
         details.advanced-section > summary.section-title-collapse::before
         {
@@ -1398,12 +1411,17 @@ export class HeliosCardEditor extends LitElement
             transform: rotate(90deg);
         }
 
+        /*  Tucked under its companion field, with a small breathing
+            margin so tall controls (ha-entity-picker, segmented toggles,
+            preset chip rows) don't visually overlap the help text. The
+            previous 'margin-top: -6px' worked for plain number inputs
+            but caused the help to disappear under tall pickers.        */
         .field-help
         {
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
-            margin-top: -6px;
-            margin-bottom: 4px;
+            margin-top: 2px;
+            margin-bottom: 6px;
         }
 
         .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
@@ -1711,6 +1729,7 @@ export class HeliosCardEditor extends LitElement
         {
             display: flex;
             flex-wrap: wrap;
+            justify-content: center;
             gap: 4px;
             margin-top: 2px;
             margin-bottom: 2px;

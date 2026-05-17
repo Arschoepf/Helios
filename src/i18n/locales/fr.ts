@@ -42,7 +42,7 @@ export const fr: Translations = {
         locationHint:       'Remplace l\'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n\'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides; toute valeur partielle ou hors plage est ignorée silencieusement.',
         mapSection:         'Carte',
         mapStyle:           'Style de la carte *',
-        mapStyleHint:       'Trois fonds de carte : Rues (sobre, urbain), Topo (lignes de niveau et tons terreux, idéal en zone vallonnée) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). Les bâtiments 3D et les libellés se comportent à l\'identique sur Rues et Topo. La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.',
+        mapStyleHint:       'Deux fonds de carte : Rues (sobre, urbain, libellés complets) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.',
         mapStyleStreet:     'Rues',
         cardTheme:          'Thème de la carte *',
         cardThemeHint:      'Bascule l\'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) ainsi que le fond de carte 3D entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s\'intègre proprement dans un tableau de bord Home Assistant clair ou sombre.',

@@ -34,7 +34,7 @@ export const pt: Translations = {
         locationHint:       'Substitui o endereço de casa usado como centro do cartão. Deixe ambos os campos vazios para usar o endereço configurado no Home Assistant. A substituição só é aplicada quando AMBOS os campos contêm coordenadas válidas; valores parciais ou fora do intervalo são ignorados silenciosamente.',
         mapSection:         'Mapa',
         mapStyle:           'Estilo do mapa *',
-        mapStyleHint:       'Três mapas base: Ruas (sóbrio, urbano), Topo (curvas de nível e tons terrosos, ideal em terreno montanhoso) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). Os edifícios 3D e as etiquetas comportam-se de forma idêntica em Ruas e Topo. A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.',
+        mapStyleHint:       'Dois mapas base: Ruas (sóbrio, urbano, com etiquetas completas) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.',
         mapStyleStreet:     'Ruas',
         cardTheme:          'Tema do cartão *',
         cardThemeHint:      'Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) e o mapa 3D de fundo entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros.',
