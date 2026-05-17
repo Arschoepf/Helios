@@ -913,6 +913,7 @@ export class HeliosCardEditor extends LitElement
                 <details class="advanced-section">
                     <summary class="section-title section-title-collapse">${t.editor.localLidarSection}</summary>
                     <div class="hint">${t.editor.localLidarHint}</div>
+                    <div class="hint">${t.editor.localLidarToolsHint}</div>
                     <div class="field">
                         <span class="label">${t.editor.localLidarEnabled}</span>
                         <div class="segmented-toggle">

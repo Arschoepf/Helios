@@ -115,6 +115,7 @@ export const fr: Translations = {
         shadowOpacityHint:     'Opacité des ombres projetées au sol.',
         localLidarSection:     'Avancé — LiDAR local (BYO)',
         localLidarHint:        'Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d\'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l\'intérieur de la bbox cette source remplace tout fournisseur national ; à l\'extérieur, la chaîne de repli habituelle s\'applique.',
+        localLidarToolsHint:   'Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d\'inspection / conversion / test synthétique).',
         localLidarEnabled:     'Utiliser les données locales',
         localLidarUrl:         'URL du GeoTIFF',
         localLidarMinLat:      'Latitude min',

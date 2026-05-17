@@ -32654,6 +32654,7 @@ const en = {
     shadowOpacityHint: "Opacity of the cast ground shadows.",
     localLidarSection: "Advanced — Local LiDAR (BYO)",
     localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the bounding box this source replaces any national provider; outside, the regular fallback chain applies.",
+    localLidarToolsHint: "Need to prepare a raster from scratch? The Helios repo ships Python helper tools under `tools/lidar/`, see the README there for the full pipeline (system GDAL install, `uv` setup, inspect / convert / synthetic test commands).",
     localLidarEnabled: "Use local data",
     localLidarUrl: "GeoTIFF URL",
     localLidarMinLat: "Min latitude",
@@ -32763,6 +32764,7 @@ const fr = {
     shadowOpacityHint: "Opacité des ombres projetées au sol.",
     localLidarSection: "Avancé — LiDAR local (BYO)",
     localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la bbox cette source remplace tout fournisseur national ; à l'extérieur, la chaîne de repli habituelle s'applique.",
+    localLidarToolsHint: "Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d'inspection / conversion / test synthétique).",
     localLidarEnabled: "Utiliser les données locales",
     localLidarUrl: "URL du GeoTIFF",
     localLidarMinLat: "Latitude min",
@@ -32872,6 +32874,7 @@ const de = {
     shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
     localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
     localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb der Bounding-Box ersetzt diese Quelle jeden nationalen Anbieter; außerhalb greift die normale Fallback-Kette.",
+    localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).",
     localLidarEnabled: "Lokale Daten verwenden",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min. Breitengrad",
@@ -32981,6 +32984,7 @@ const es = {
     shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
     localLidarSection: "Avanzado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del bounding box esta fuente reemplaza cualquier proveedor nacional; fuera, se aplica la cadena de respaldo habitual.",
+    localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? El repositorio de Helios incluye herramientas Python en `tools/lidar/`, consulta el README de esa carpeta para el pipeline completo (instalación de GDAL de sistema, configuración de `uv`, comandos de inspección / conversión / prueba sintética).",
     localLidarEnabled: "Usar datos locales",
     localLidarUrl: "URL del GeoTIFF",
     localLidarMinLat: "Latitud mín.",
@@ -33090,6 +33094,7 @@ const it = {
     shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
     localLidarSection: "Avanzato — LiDAR locale (BYO)",
     localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. Dentro la bounding box questa sorgente sostituisce qualsiasi provider nazionale; fuori, si applica la consueta catena di fallback.",
+    localLidarToolsHint: "Devi preparare un raster da zero? Il repository Helios include strumenti Python in `tools/lidar/`, vedi il README di quella cartella per la pipeline completa (installazione di GDAL di sistema, configurazione di `uv`, comandi di ispezione / conversione / test sintetico).",
     localLidarEnabled: "Usa dati locali",
     localLidarUrl: "URL del GeoTIFF",
     localLidarMinLat: "Latitudine min",
@@ -33199,6 +33204,7 @@ const nl = {
     shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
     localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
     localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen de bounding box vervangt deze bron elke nationale leverancier; daarbuiten geldt de gebruikelijke fallback-keten.",
+    localLidarToolsHint: "Een eigen raster nodig? De Helios-repository bevat Python-hulpmiddelen onder `tools/lidar/`, zie de README daar voor de volledige pipeline (installatie van de GDAL-systeembibliotheek, `uv`-setup, inspect / convert / synthetisch test-commando's).",
     localLidarEnabled: "Lokale data gebruiken",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min. breedtegraad",
@@ -33308,6 +33314,7 @@ const pt = {
     shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
     localLidarSection: "Avançado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da bounding box esta fonte substitui qualquer fornecedor nacional; fora, aplica-se a cadeia de fallback habitual.",
+    localLidarToolsHint: "Precisas de preparar um raster do zero? O repositório Helios inclui ferramentas Python em `tools/lidar/`, consulta o README dessa pasta para o pipeline completo (instalação do GDAL de sistema, configuração do `uv`, comandos de inspeção / conversão / teste sintético).",
     localLidarEnabled: "Usar dados locais",
     localLidarUrl: "URL do GeoTIFF",
     localLidarMinLat: "Latitude mín.",
@@ -33417,6 +33424,7 @@ const no = {
     shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
     localLidarSection: "Avansert — Lokal LiDAR (BYO)",
     localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor avgrensningsboksen erstatter denne kilden enhver nasjonal leverandør; utenfor gjelder vanlig fallback-kjede.",
+    localLidarToolsHint: "Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).",
     localLidarEnabled: "Bruk lokale data",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min breddegrad",
@@ -36014,6 +36022,7 @@ let HeliosCardEditor = class extends i {
                 <details class="advanced-section">
                     <summary class="section-title section-title-collapse">${t2.editor.localLidarSection}</summary>
                     <div class="hint">${t2.editor.localLidarHint}</div>
+                    <div class="hint">${t2.editor.localLidarToolsHint}</div>
                     <div class="field">
                         <span class="label">${t2.editor.localLidarEnabled}</span>
                         <div class="segmented-toggle">
@@ -36346,7 +36355,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.3"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.4"}`,
       labelStyle,
       versionStyle
     );
@@ -36367,7 +36376,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.3",
+        version: "1.6.0-alpha.4",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -36375,7 +36384,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

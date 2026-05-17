@@ -107,6 +107,7 @@ export const de: Translations = {
         shadowOpacityHint:     'Deckkraft der am Boden geworfenen Schatten.',
         localLidarSection:     'Erweitert — Lokales LiDAR (BYO)',
         localLidarHint:        'Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb der Bounding-Box ersetzt diese Quelle jeden nationalen Anbieter; außerhalb greift die normale Fallback-Kette.',
+        localLidarToolsHint:   'Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).',
         localLidarEnabled:     'Lokale Daten verwenden',
         localLidarUrl:         'GeoTIFF-URL',
         localLidarMinLat:      'Min. Breitengrad',

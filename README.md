@@ -165,9 +165,11 @@ If your region isn't covered by any of the public providers above but you have a
 
 The card config exposes a `lidar-local-ndsm-*` family (visible in the editor's collapsed "Advanced — Local LiDAR (BYO)" section, hidden by default). When the toggle is on AND the URL + the 4 bounding-box keys all validate, this source takes precedence over any public provider that would otherwise match inside the bbox. Outside the bbox, the regular fallback chain (public providers → OpenFreeMap footprints) applies unchanged.
 
-What "nDSM" means: a normalised Digital Surface Model = DSM (top of canopy / rooftops) − DTM (bare earth), so each pixel holds height-above-ground in metres. A bare-earth DTM or a raw DSM is *not* a valid input — preparation has to happen offline (typically a few minutes in QGIS / GDAL / WhiteboxTools from the raw point cloud or the published DSM + DTM rasters). Host the resulting GeoTIFF anywhere your browser can fetch it (the recommended path is `/config/www/community/Helios/lidar/foo.tif`, exposed as `/local/community/Helios/lidar/foo.tif`).
+What "nDSM" means: a normalised Digital Surface Model = DSM (top of canopy / rooftops) − DTM (bare earth), so each pixel holds height-above-ground in metres. A bare-earth DTM or a raw DSM is *not* a valid input, preparation has to happen offline (typically a few minutes in QGIS / GDAL / WhiteboxTools from the raw point cloud or the published DSM + DTM rasters). Host the resulting GeoTIFF anywhere your browser can fetch it (the recommended path is `/config/www/community/Helios/lidar/foo.tif`, exposed as `/local/community/Helios/lidar/foo.tif`).
 
-The BYO local nDSM provider was contributed by [@jourdant](https://github.com/jourdant) in [PR #5](https://github.com/ReikanYsora/Helios/pull/5), with the original idea credited to [@stephenwq](https://github.com/stephenwq). Initial use case: NSW Australia (raster prepared from the [NSW elevation portal](https://elevation.fsdf.org.au/)), where no national provider plug-in exists in Helios yet.
+**Preparation tools**: a set of Python helpers under [`tools/lidar/`](tools/lidar/README.md) walks you through the last stages of the prep pipeline (inspect a GeoTIFF, convert it to a Cloud Optimized GeoTIFF for efficient browser streaming, generate a synthetic test raster). Use them if you want a guided path; bypass them entirely if you already have a COG-formatted nDSM ready to host. The detailed guide, including the GDAL system-library install per OS, the `uv` setup, and the YAML config snippet to paste back into Helios, lives in [`tools/lidar/README.md`](tools/lidar/README.md).
+
+The BYO local nDSM provider was contributed by [@jourdant](https://github.com/jourdant) in [PR #5](https://github.com/ReikanYsora/Helios/pull/5), the preparation tooling in [PR #11](https://github.com/ReikanYsora/Helios/pull/11), with the original idea credited to [@stephenwq](https://github.com/stephenwq). Initial use case: NSW Australia (raster prepared from the [NSW elevation portal](https://elevation.fsdf.org.au/)), where no national provider plug-in exists in Helios yet. Big thanks to all three for closing the LiDAR-coverage gap for the rest of the world.
 
 ---
 
@@ -180,6 +182,7 @@ The BYO local nDSM provider was contributed by [@jourdant](https://github.com/jo
 | **GeoTIFF** | [geotiff.js](https://github.com/geotiffjs/geotiff.js) for parsing the Float32 LiDAR rasters from UK / ES / NL / NO providers |
 | **Weather data** | [Open-Meteo API](https://open-meteo.com/) (free, no key) |
 | **Solar math** | NOAA-validated (mean altitude error 0.30°, mean azimuth error 0.36°) |
+| **Offline prep tooling** | Python 3.12 + `uv` for LiDAR and future dataset-prep helpers |
 | **Build** | Vite 5 |
 
 ---
@@ -192,6 +195,15 @@ npm run dev        # local dev server
 npm run typecheck  # strict TS
 npm run build      # produces dist/helios.js
 ```
+
+The card itself stays TypeScript-first. A separate Python toolchain
+under [`tools/`](tools/lidar/README.md) hosts offline data-prep helpers
+(currently the LiDAR nDSM workflow); it's optional and self-contained.
+You only need it if you want to prepare a BYO LiDAR raster for a region
+Helios doesn't ship a built-in provider for. Setup, prerequisites and
+usage are documented in [`tools/lidar/README.md`](tools/lidar/README.md).
+The Python side is opt-in: contributors working only on the card never
+need to touch it.
 
 Source layout:
 
@@ -210,6 +222,8 @@ Source layout:
 | `src/helios-sun.ts`         | Solar position + Haurwitz / Kasten-Czeplak math |
 | `src/helios-weather.ts`     | Open-Meteo multi-model fetch + cache |
 | `src/i18n/`                 | 8-locale strict-typed translations (en/fr/de/es/it/nl/pt/no) |
+| `tools/`                    | Python helper scripts for local data preparation workflows |
+| `data/`                     | Local working datasets and derived outputs used by helper tooling |
 
 ---
 

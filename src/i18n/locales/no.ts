@@ -116,6 +116,7 @@ export const no: Translations = {
         shadowOpacityHint:     'Opasitet for projiserte bakkeskygger.',
         localLidarSection:     'Avansert — Lokal LiDAR (BYO)',
         localLidarHint:        'Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor avgrensningsboksen erstatter denne kilden enhver nasjonal leverandør; utenfor gjelder vanlig fallback-kjede.',
+        localLidarToolsHint:   'Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).',
         localLidarEnabled:     'Bruk lokale data',
         localLidarUrl:         'GeoTIFF-URL',
         localLidarMinLat:      'Min breddegrad',

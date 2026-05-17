@@ -189,6 +189,12 @@ export interface Translations
         //stays simple for the 99% of users who never need it.
         localLidarSection:        string;
         localLidarHint:           string;
+        //Discoverability line shown right under localLidarHint that
+        //points users at the Python tooling in tools/lidar/ for
+        //preparing the nDSM raster offline. Keeps the editor short
+        //while still making the helpers findable for users who don't
+        //yet know how to roll their own raster.
+        localLidarToolsHint:      string;
         localLidarEnabled:        string;
         localLidarUrl:            string;
         localLidarMinLat:         string;
