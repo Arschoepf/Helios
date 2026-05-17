@@ -285,7 +285,6 @@ interface HeliosStats
 {
     enginesCreated:           number;
     enginesCleanedUp:         number;
-    enginesSkippedAsPreview?: number;
     updateConfigCalls:        number;
     styleReloads:             number;
     addBuildingsCalls:        number;
@@ -654,17 +653,11 @@ export class HeliosEngine
     private _autoRotateRaf?:           number;
     private _autoRotateLastFrame:      number = 0;
     private _autoRotateLastUserAction: number = 0;
-    //Inactivity-bumper bookkeeping, we hold both the canvas and the
-    //listener reference so cleanup() can fully detach them. Without
-    //this, every engine re-init (API key change, home-coords change,
-    //map-style change) accumulates the four listeners + their closure
-    //(which captures `this`, hence the entire dead engine + its old
-    //MapLibre context) until the browser starts recycling WebGL
-    //contexts under pressure, visible as random dashboard reloads
-    //during editing and creeping FPS degradation after several
-    //re-inits within the same session.
-    private _bumpInactivityCanvas?: HTMLCanvasElement;
-    private _bumpInactivityHandler?: () => void;
+    //MapLibre canvas reference, captured at init so cleanup() can
+    //detach our WebGL context listeners against the same node. Held
+    //separately because map.getCanvas() returns null once map.remove()
+    //has run.
+    private _mapCanvas?: HTMLCanvasElement;
 
     //Single-pointer drag-rotate state. We disable MapLibre's default
     //right-click dragRotate and replace it with a pointer-driven
@@ -948,24 +941,13 @@ export class HeliosEngine
         this._mapMoveHandler = () => this.onMapTransform?.();
         this.map.on('move', this._mapMoveHandler);
 
-        //Auto-rotation pause, any DOM-level interaction on the canvas
-        //(mouse, touch, wheel) bumps the inactivity timer so the
-        //rotation loop yields immediately and only resumes after a
-        //few seconds of stillness. We hook DOM events rather than
-        //MapLibre 'rotate' / 'pitch' / 'drag' because the loop ITSELF
-        //emits those (via setBearing), which would otherwise be
-        //indistinguishable from a real user action.
+        //Auto-rotation pause is bumped ONLY by the single-pointer
+        //drag-rotate handler below (onDown / onMove). Wheel zoom,
+        //two-finger pinch-rotate and incidental touches leave the
+        //orbit running, only an explicit single-finger drag (or
+        //left-mouse drag on desktop) interrupts it.
         const canvas = this.map.getCanvas();
-        const bumpInactivity = () =>
-        {
-            this._autoRotateLastUserAction = Date.now();
-        };
-        this._bumpInactivityCanvas  = canvas;
-        this._bumpInactivityHandler = bumpInactivity;
-        canvas.addEventListener('mousedown',  bumpInactivity);
-        canvas.addEventListener('wheel',      bumpInactivity, { passive: true });
-        canvas.addEventListener('touchstart', bumpInactivity, { passive: true });
-        canvas.addEventListener('touchmove',  bumpInactivity, { passive: true });
+        this._mapCanvas = canvas;
 
         //Custom drag-rotate. Left-click drag on desktop, single-finger
         //drag on touch. Two-finger pinch-rotate still works via
@@ -999,6 +981,7 @@ export class HeliosEngine
             dragRotating = true;
             activeId     = e.pointerId;
             lastPointerX = e.clientX;
+            this._autoRotateLastUserAction = Date.now();
             try { canvas.setPointerCapture(e.pointerId); }
             catch (_) {}
         };
@@ -1007,6 +990,7 @@ export class HeliosEngine
             if (!dragRotating || !this.map || e.pointerId !== activeId) return;
             const dx = e.clientX - lastPointerX;
             lastPointerX = e.clientX;
+            this._autoRotateLastUserAction = Date.now();
             //Positive dx (drag right) bumps bearing up so the map
             //content under the finger / cursor follows the gesture
             //direction, what you'd intuitively expect on a touchable
@@ -4038,17 +4022,12 @@ export class HeliosEngine
         //do it), THEN call map.remove(), THEN force-lose the WebGL
         //context to release the slot.
 
-        const canvas = this._bumpInactivityCanvas;
+        const canvas = this._mapCanvas;
 
-        //Step 1, DOM listeners on the canvas (inactivity bumper,
-        //single-pointer drag-rotate, WebGL context lost/restored).
-        if (canvas && this._bumpInactivityHandler)
-        {
-            canvas.removeEventListener('mousedown',  this._bumpInactivityHandler);
-            canvas.removeEventListener('wheel',      this._bumpInactivityHandler);
-            canvas.removeEventListener('touchstart', this._bumpInactivityHandler);
-            canvas.removeEventListener('touchmove',  this._bumpInactivityHandler);
-        }
+        //Step 1, DOM listeners on the canvas (single-pointer drag-
+        //rotate, WebGL context lost/restored). The auto-rotate
+        //inactivity bump now lives inside the drag-rotate handler
+        //itself, no separate listeners to detach.
         if (this._dragRotateHandlers)
         {
             const h = this._dragRotateHandlers;
@@ -4148,8 +4127,7 @@ export class HeliosEngine
         this._buildingsData     = null;
         this._buildingsFetchKey = '';
         this._homeHourlyData    = null;
-        this._bumpInactivityCanvas  = undefined;
-        this._bumpInactivityHandler = undefined;
+        this._mapCanvas             = undefined;
         this._dragRotateHandlers    = undefined;
         this._mapPinHandler         = undefined;
         this._mapStyleLoadHandler   = undefined;

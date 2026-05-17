@@ -210,6 +210,18 @@ export const editorStyles = css`
         position: relative;
     }
 
+    /*  Extra breathing room between two consecutive fields with no
+        help text between them (e.g. the Location lat/lon pair or
+        the Local LiDAR bbox quartet). Without it the rows visually
+        touch because the section flex gap alone is too tight. The
+        selector only fires when both siblings are .field, so cases
+        with a .hint or .field-help between still rely on the
+        help's own margins.                                          */
+    .field + .field
+    {
+        margin-top: 8px;
+    }
+
     /*  Stacked variant for controls too wide to share a row with
         their label (e.g. ha-entity-picker). */
     .field.field-block
@@ -346,6 +358,10 @@ export const editorStyles = css`
         border-radius: 6px;
         background: var(--card-background-color, #fff);
         overflow: hidden;
+    }
+    details.pv-array-card + details.pv-array-card
+    {
+        margin-top: 10px;
     }
 
     /*  Summary = header row of the collapsed/expanded card. Stays

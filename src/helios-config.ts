@@ -398,13 +398,19 @@ export class HeliosCardEditor extends LitElement
     //    show through).
     //Field values are stored as `number | null`, where null means
     //"empty input"; that maps directly to the input's value binding.
-    private _readPvArrays(): { tilt: number | null; azimuth: number | null; share: number | null }[]
+    private _readPvArrays(): { name: string | null; tilt: number | null; azimuth: number | null; share: number | null }[]
     {
         const toNum = (v: unknown): number | null =>
         {
             if (v === undefined || v === null || v === '') return null;
             const n = typeof v === 'number' ? v : parseFloat(String(v));
             return isFinite(n) ? n : null;
+        };
+        const toStr = (v: unknown): string | null =>
+        {
+            if (v === undefined || v === null) return null;
+            const s = String(v).trim();
+            return s === '' ? null : s;
         };
 
         const raw = this._cfg?.['pv-arrays'];
@@ -414,21 +420,22 @@ export class HeliosCardEditor extends LitElement
             {
                 const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
                 return {
+                    name:    toStr(e['name']),
                     tilt:    toNum(e['tilt']),
                     azimuth: toNum(e['azimuth']),
                     share:   toNum(e['share'])
                 };
             });
-            return out.length > 0 ? out : [{ tilt: null, azimuth: null, share: null }];
+            return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null }];
         }
 
         const legacyTilt = toNum(this._cfg?.['pv-tilt']);
         const legacyAz   = toNum(this._cfg?.['pv-azimuth']);
         if (legacyTilt !== null || legacyAz !== null)
         {
-            return [{ tilt: legacyTilt, azimuth: legacyAz, share: 100 }];
+            return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100 }];
         }
-        return [{ tilt: null, azimuth: null, share: null }];
+        return [{ name: null, tilt: null, azimuth: null, share: null }];
     }
 
     //Persists a list of array entries to the config under `pv-arrays`
@@ -437,11 +444,12 @@ export class HeliosCardEditor extends LitElement
     //the section. Null fields are dropped so a partially-filled card
     //(e.g. tilt set but azimuth blank) still produces a sparse but
     //valid YAML entry; the card-side reader applies sensible defaults.
-    private _writePvArrays(list: { tilt: number | null; azimuth: number | null; share: number | null }[]): void
+    private _writePvArrays(list: { name: string | null; tilt: number | null; azimuth: number | null; share: number | null }[]): void
     {
         const arrays = list.map(e =>
         {
-            const o: Record<string, number> = {};
+            const o: Record<string, number | string> = {};
+            if (e.name    !== null) o['name']    = e.name;
             if (e.tilt    !== null) o['tilt']    = e.tilt;
             if (e.azimuth !== null) o['azimuth'] = e.azimuth;
             if (e.share   !== null) o['share']   = e.share;
@@ -479,6 +487,19 @@ export class HeliosCardEditor extends LitElement
         this._writePvArrays(list);
     }
 
+    //Updates the user-typed name for row `i`. Empty input clears the
+    //field to null, the summary then falls back to the auto-numbered
+    //"Row N" title. Stops the event so the parent <details>` toggle
+    //doesn't fire when the user types inside the input.
+    private _arrayName(i: number, e: Event): void
+    {
+        const list = this._readPvArrays();
+        if (i < 0 || i >= list.length) return;
+        const raw = (e.target as HTMLInputElement).value.trim();
+        list[i] = { ...list[i], name: raw === '' ? null : raw };
+        this._writePvArrays(list);
+    }
+
     //Adds a new array entry below the existing ones. The new entry
     //is left fully blank so all three inputs show their placeholders
     //(tilt 0, azimuth 180, share = 100 / N). No mirror, no inherited
@@ -494,7 +515,7 @@ export class HeliosCardEditor extends LitElement
     {
         const list = this._readPvArrays();
         if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
-        list.push({ tilt: null, azimuth: null, share: null });
+        list.push({ name: null, tilt: null, azimuth: null, share: null });
         //Open the newly added pan in the editor by default: the user
         //just clicked to add it, so its body should be visible without
         //requiring a second click on the chevron. Existing pans keep
@@ -544,12 +565,21 @@ export class HeliosCardEditor extends LitElement
     //<details>). When the user collapses the currently-open section
     //the editor falls back to "everything closed", a valid state
     //since the section content is the only mandatory surface.
+    //
+    //Also scrolls the just-opened section into view so the user is
+    //never left looking at the bottom of the previous section after
+    //a click. Done on the next rAF tick so the layout reflects the
+    //newly-expanded body before we measure.
     private _onSectionToggle(sectionId: string, e: Event): void
     {
         const el = e.currentTarget as HTMLDetailsElement;
         if (el.open)
         {
             this._openSection = sectionId;
+            requestAnimationFrame(() =>
+            {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
         }
         else if (this._openSection === sectionId)
         {
@@ -838,6 +868,7 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" ?open="${this._openSection === 'pv'}" @toggle="${(e: Event) => this._onSectionToggle('pv', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.pvSection}</summary>
+                <div class="hint">${t.editor.pvHint}</div>
                 <div class="field field-block">
                     <span class="label">${t.editor.pvEntity}</span>
                     ${this._pickerReady ? html`
@@ -894,7 +925,8 @@ export class HeliosCardEditor extends LitElement
                             <summary class="section-title section-title-collapse">${t.editor.pvArraysSection}</summary>
                             <div class="hint">${t.editor.pvArraysHelp}</div>
                             ${arrays.map((arr, i) => {
-                                const title = t.editor.pvArrayTitle.replace('{n}', String(i + 1));
+                                const fallback = t.editor.pvArrayTitle.replace('{n}', String(i + 1));
+                                const title = arr.name ?? fallback;
                                 const isOpen = this._openArrayIndices.has(i);
                                 return html`
                                     <details class="pv-array-card" ?open="${isOpen}" @toggle="${(e: Event) => this._onArrayToggle(i, e)}">
@@ -910,6 +942,17 @@ export class HeliosCardEditor extends LitElement
                                             >${t.editor.pvArrayRemove}</button>
                                         </summary>
                                         <div class="pv-array-body">
+                                            <label class="field">
+                                                <span class="label">${t.editor.pvArrayName}</span>
+                                                <input
+                                                    type="text"
+                                                    maxlength="40"
+                                                    placeholder="${fallback}"
+                                                    .value="${arr.name ?? ''}"
+                                                    @change="${(e: Event) => this._arrayName(i, e)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t.editor.pvArrayNameHelp}</div>
                                             <label class="field">
                                                 <span class="label">${t.editor.pvArrayTilt}</span>
                                                 <input
@@ -966,12 +1009,12 @@ export class HeliosCardEditor extends LitElement
                         </details>
                     `;
                 })()}
-                <div class="hint">${t.editor.pvHint}</div>
 
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'battery'}" @toggle="${(e: Event) => this._onSectionToggle('battery', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.batterySection}</summary>
+                <div class="hint">${t.editor.batteryHint}</div>
                 <div class="field field-block">
                     <span class="label">${t.editor.batterySocEntity}</span>
                     ${this._pickerReady ? html`
@@ -1036,6 +1079,7 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" ?open="${this._openSection === 'colors'}" @toggle="${(e: Event) => this._onSectionToggle('colors', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.colors}</summary>
+                    <div class="hint">${t.editor.colorsHint}</div>
                     <label class="field">
                         <span class="label">${t.editor.sunColor}</span>
                         <helios-color-picker
@@ -1076,7 +1120,6 @@ export class HeliosCardEditor extends LitElement
                             @value-changed="${(e: CustomEvent) => this._color('building-color', e)}"
                         ></helios-color-picker>
                     </label>
-                    <div class="hint">${t.editor.colorsHint}</div>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'timeline'}" @toggle="${(e: Event) => this._onSectionToggle('timeline', e)}">

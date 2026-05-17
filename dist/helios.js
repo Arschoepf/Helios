@@ -30349,15 +30349,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._mapMoveHandler = () => this.onMapTransform?.();
     this.map.on("move", this._mapMoveHandler);
     const canvas = this.map.getCanvas();
-    const bumpInactivity = () => {
-      this._autoRotateLastUserAction = Date.now();
-    };
-    this._bumpInactivityCanvas = canvas;
-    this._bumpInactivityHandler = bumpInactivity;
-    canvas.addEventListener("mousedown", bumpInactivity);
-    canvas.addEventListener("wheel", bumpInactivity, { passive: true });
-    canvas.addEventListener("touchstart", bumpInactivity, { passive: true });
-    canvas.addEventListener("touchmove", bumpInactivity, { passive: true });
+    this._mapCanvas = canvas;
     canvas.style.touchAction = "none";
     const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
     let dragRotating = false;
@@ -30370,6 +30362,7 @@ const _HeliosEngine = class _HeliosEngine {
       dragRotating = true;
       activeId = e2.pointerId;
       lastPointerX = e2.clientX;
+      this._autoRotateLastUserAction = Date.now();
       try {
         canvas.setPointerCapture(e2.pointerId);
       } catch (_2) {
@@ -30379,6 +30372,7 @@ const _HeliosEngine = class _HeliosEngine {
       if (!dragRotating || !this.map || e2.pointerId !== activeId) return;
       const dx = e2.clientX - lastPointerX;
       lastPointerX = e2.clientX;
+      this._autoRotateLastUserAction = Date.now();
       this.map.setBearing(this.map.getBearing() + dx * ROTATE_SENSITIVITY_DEG_PER_PX);
     };
     const onEnd = (e2) => {
@@ -32412,13 +32406,7 @@ const _HeliosEngine = class _HeliosEngine {
       cancelAnimationFrame(this._detailDiveRaf);
       this._detailDiveRaf = void 0;
     }
-    const canvas = this._bumpInactivityCanvas;
-    if (canvas && this._bumpInactivityHandler) {
-      canvas.removeEventListener("mousedown", this._bumpInactivityHandler);
-      canvas.removeEventListener("wheel", this._bumpInactivityHandler);
-      canvas.removeEventListener("touchstart", this._bumpInactivityHandler);
-      canvas.removeEventListener("touchmove", this._bumpInactivityHandler);
-    }
+    const canvas = this._mapCanvas;
     if (this._dragRotateHandlers) {
       const h2 = this._dragRotateHandlers;
       h2.canvas.removeEventListener("pointerdown", h2.onDown);
@@ -32492,8 +32480,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._buildingsData = null;
     this._buildingsFetchKey = "";
     this._homeHourlyData = null;
-    this._bumpInactivityCanvas = void 0;
-    this._bumpInactivityHandler = void 0;
+    this._mapCanvas = void 0;
     this._dragRotateHandlers = void 0;
     this._mapPinHandler = void 0;
     this._mapStyleLoadHandler = void 0;
@@ -32570,36 +32557,36 @@ const en = {
   },
   editor: {
     locationSection: "Location",
-    homeLatitude: "Home latitude *",
-    homeLongitude: "Home longitude *",
+    homeLatitude: "Home latitude",
+    homeLongitude: "Home longitude",
     locationHint: "Override the home address used as the card's center. Leave both fields empty to use Home Assistant's configured home. The override is only applied when BOTH fields are set to valid coordinates.",
     mapSection: "Map",
-    mapStyle: "Map style *",
+    mapStyle: "Map style",
     mapStyleHint: "Two basemaps: Streets (sober, urban, with full labels) or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). The dark variant of the chosen style is used automatically when the card theme is set to dark.",
     mapStyleStreet: "Streets",
-    cardTheme: "Card theme *",
+    cardTheme: "Card theme",
     cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) and the 3D map basemap between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards.",
     cardThemeLight: "Light",
     cardThemeDark: "Dark",
-    showLabels: "Show labels *",
+    showLabels: "Show labels",
     showLabelsHint: "Toggles street names, building numbers, points of interest and place names on the basemap.",
     labelsOn: "Shown",
     labelsOff: "Hidden",
-    autoRotate: "Camera auto-rotation *",
-    autoRotateHint: "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). Any pinch, drag or wheel pauses it instantly and it resumes once you let go.",
+    autoRotate: "Camera auto-rotation",
+    autoRotateHint: "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). A single-finger drag pauses it instantly and it resumes once you let go.",
     autoRotateOn: "On",
     autoRotateOff: "Off",
-    timeline: "Timeline",
-    timelineHint: "Format of the date labels shown on the timeline and inside the scrub chip.",
-    dateFormat: "Date format * (default: mm-dd)",
+    timeline: "Date & time format",
+    timelineHint: "Format of the date and time labels shown on the timeline and inside the scrub chip.",
+    dateFormat: "Date format (default: mm-dd)",
     dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Examples:",
-    timeFormat: "Time format *",
+    timeFormat: "Time format",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
     colors: "Colors",
-    colorsHint: "One colour per metric, reused everywhere it appears. The sun colour paints the arc, the sun disc and the upper area of the timeline. The cloud colour paints the on-ground disc and the lower area of the timeline.",
-    sunColor: "Sun color *",
-    cloudColor: "Cloud color *",
+    colorsHint: "One colour per metric, reused everywhere it appears. Sun: the arc, the sun disc and the upper area of the timeline. Cloud: the on-ground disc and the lower area of the timeline. Production: the PV chip near the home and the dedicated graph (only shown when a production entity is configured). Battery: the battery chips around the PV one (only shown when a battery entity is configured). Buildings: the base tint of the 3D buildings around the home.",
+    sunColor: "Sun color",
+    cloudColor: "Cloud color",
     pvSection: "Solar production",
     pvHint: "Optional. When set, a chip appears near the home with the instant production (computed over the last minute) and a dedicated graph is added above the timeline. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).",
     pvEntity: "Production entity",
@@ -32608,17 +32595,19 @@ const en = {
     pvPeakPowerHelp: "Installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty to hide the forecast; observed production and the daily peak still render.",
     pvArraysSection: "Panel orientation",
     pvArraysHelp: "One entry per group of co-oriented panels. Leave a single entry with tilt 0 for a flat install. Add more entries when panels are split across multiple orientations (e.g. one row facing east, one facing west). The card forecasts each entry separately and weights the result by its share of the total kWp.",
-    pvArrayTitle: "Array {n}",
+    pvArrayTitle: "Row {n}",
+    pvArrayName: "Name",
+    pvArrayNameHelp: 'Optional. A label for this row shown in the editor header (e.g. "South roof", "East garage"). Leave empty to fall back to the auto-numbered title.',
     pvArrayTilt: "Tilt (°)",
     pvArrayAzimuth: "Azimuth (°)",
     pvArrayShare: "Share (%)",
-    pvArrayAdd: "+ Add array",
+    pvArrayAdd: "+ Add row",
     pvArrayRemove: "Remove",
     pvArrayNormHint: "Shares don't add up to 100%, the forecast normalises them automatically.",
-    pvArrayTiltHelp: "Tilt of this array from horizontal, 0 to 90: 0 for a flat install, 30 to 45 for a typical pitched roof, 90 for a fully vertical setup such as a balcony. Combined with the azimuth, this drives the Liu-Jordan transposition that projects the predicted irradiance onto the panel plane.",
-    pvArrayAzimuthHelp: "Compass bearing this array faces, clockwise from north, 0 to 360: 0 = north, 90 = east, 180 = south, 270 = west.",
-    pvArrayShareHelp: "Relative weight of this array within the total kWp. Auto-normalised at compute time, so 50/50, 60/60 and 1/1 all produce the same forecast. Leave blank when there's only one array (it gets 100% by default).",
-    pvColor: "Production color *",
+    pvArrayTiltHelp: "Tilt of this row from horizontal, 0 to 90: 0 for a flat install, 30 to 45 for a typical pitched roof, 90 for a fully vertical setup such as a balcony. Combined with the azimuth, this drives the Liu-Jordan transposition that projects the predicted irradiance onto the panel plane.",
+    pvArrayAzimuthHelp: "Compass bearing this row faces, clockwise from north, 0 to 360: 0 = north, 90 = east, 180 = south, 270 = west.",
+    pvArrayShareHelp: "Relative weight of this row within the total kWp. Auto-normalised at compute time, so 50/50, 60/60 and 1/1 all produce the same forecast. Leave blank when there's only one row (it gets 100% by default).",
+    pvColor: "Production color",
     batterySection: "Home battery",
     batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional. The chip on its side appears as soon as the entity is set.",
     batterySocEntity: "State of charge entity",
@@ -32629,33 +32618,33 @@ const en = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Inverted",
     batteryPowerInvertHelp: "Default (Standard): the battery entity already reports charging as positive and discharging as negative. Pick Inverted when your entity does the opposite (some GivEnergy / GivTCP setups), Helios will flip the value once at ingest so the chip readout, the leader arrow and the daily charged / discharged totals keep their meaning.",
-    batteryColor: "Battery color *",
-    buildingsSection: "Surrounding buildings",
+    batteryColor: "Battery color",
+    buildingsSection: "Building",
     buildingsHint: 'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
-    displayRadius: "Display radius *",
+    displayRadius: "Display radius",
     displayRadiusHint: "Defines the visible area around the home. Anything past this radius is hidden: basemap, neighbouring buildings, shadows. Also drives the LiDAR fetch extent and the projected-shadow clip.",
-    buildingClusterRadius: "Home cluster radius *",
-    buildingOpacity: "Surrounding opacity *",
-    buildingColor: "Building color *",
-    pixelRatio: "Pixel ratio *",
+    buildingClusterRadius: "Home cluster radius",
+    buildingOpacity: "Surrounding opacity",
+    buildingColor: "Building color",
+    pixelRatio: "Pixel ratio",
     pixelRatioAuto: "Auto",
     pixelRatio1x: "1x",
     pixelRatioHint: "Auto (default) uses your screen's native devicePixelRatio (capped at 2 on desktop, 1.25 on mobile) for crisp rendering. 1x forces the value to 1.0 for the cheapest possible per-frame fragment workload, useful on low-end devices or for long sessions where battery life / heat matters more than crispness.",
     mapStyleMinimal: "Minimal",
     shadowsSection: "Shading",
-    shadowsEnabled: "Show shadows *",
+    shadowsEnabled: "Show shadows",
     shadowsEnabledOn: "Shown",
     shadowsEnabledOff: "Hidden",
     shadowsEnabledHint: "Master toggle for cast ground shadows. When hidden, no shadows are projected at all. When shown, the source picks itself: a LiDAR provider when one covers your location (buildings + vegetation), OpenFreeMap building footprints otherwise (buildings only).",
-    lidarPrecision: "LiDAR precision *",
+    lidarPrecision: "LiDAR precision",
     lidarPrecisionLow: "Low",
     lidarPrecisionMedium: "Medium",
     lidarPrecisionHigh: "High",
     lidarPrecisionHint: "If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat OpenFreeMap building footprints and this setting has no effect.",
-    shadowOpacity: "Shadow opacity *",
+    shadowOpacity: "Shadow opacity",
     shadowOpacityHint: "Opacity of the cast ground shadows.",
     localLidarSection: "Advanced — Local LiDAR (BYO)",
-    localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the bounding box this source replaces any national provider. Outside, the regular fallback chain applies.",
+    localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.",
     localLidarToolsHint: "Need to prepare a raster from scratch? The Helios repo ships Python helper tools under `tools/lidar/`, see the README there for the full pipeline (system GDAL install, `uv` setup, inspect / convert / synthetic test commands).",
     localLidarEnabled: "Use local data",
     localLidarUrl: "GeoTIFF URL",
@@ -32682,36 +32671,36 @@ const fr = {
   },
   editor: {
     locationSection: "Localisation",
-    homeLatitude: "Latitude du domicile *",
-    homeLongitude: "Longitude du domicile *",
+    homeLatitude: "Latitude du domicile",
+    homeLongitude: "Longitude du domicile",
     locationHint: "Remplace l'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides.",
     mapSection: "Carte",
-    mapStyle: "Style de la carte *",
+    mapStyle: "Style de la carte",
     mapStyleHint: "Deux fonds de carte : Rues (sobre, urbain, libellés complets) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
     mapStyleStreet: "Rues",
-    cardTheme: "Thème de la carte *",
+    cardTheme: "Thème de la carte",
     cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) ainsi que le fond de carte 3D entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre.",
     cardThemeLight: "Clair",
     cardThemeDark: "Sombre",
-    showLabels: "Afficher les libellés *",
+    showLabels: "Afficher les libellés",
     showLabelsHint: "Affiche ou masque les noms de rues, numéros de bâtiments, points d'intérêt et noms de quartiers du fond de carte.",
     labelsOn: "Affichés",
     labelsOff: "Masqués",
-    autoRotate: "Rotation auto de la caméra *",
-    autoRotateHint: "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Tout pincement, glissement ou molette met la rotation en pause immédiatement, elle reprend dès que tu lâches.",
+    autoRotate: "Rotation auto de la caméra",
+    autoRotateHint: "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que tu lâches.",
     autoRotateOn: "Activée",
     autoRotateOff: "Désactivée",
-    timeline: "Chronologie",
-    timelineHint: "Format des libellés de date affichés sur la chronologie et dans la pastille du scrub.",
-    dateFormat: "Format de date * (par défaut : mm-dd)",
+    timeline: "Format date et heure",
+    timelineHint: "Format des libellés de date et d'heure affichés sur la chronologie et dans la pastille du scrub.",
+    dateFormat: "Format de date (par défaut : mm-dd)",
     dateFormatHelp: "Tokens : yyyy, yy, mm, dd. Exemples :",
-    timeFormat: "Format de l'heure *",
+    timeFormat: "Format de l'heure",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
     colors: "Couleurs",
-    colorsHint: "Une couleur par grandeur, réutilisée partout où elle apparaît. La couleur du soleil peint l'arc, le disque solaire et la zone haute de la chronologie. La couleur des nuages peint le disque au sol et la zone basse de la chronologie.",
-    sunColor: "Couleur du soleil *",
-    cloudColor: "Couleur des nuages *",
+    colorsHint: "Une couleur par grandeur, réutilisée partout où elle apparaît. Soleil : l'arc, le disque solaire et la zone haute de la chronologie. Nuages : le disque au sol et la zone basse de la chronologie. Production : la pastille PV près de la maison et le graphique dédié (visible uniquement si une entité de production est configurée). Batterie : les pastilles batterie autour de la PV (visibles uniquement si une entité batterie est configurée). Bâtiments : la teinte de base des bâtiments 3D autour de la maison.",
+    sunColor: "Couleur du soleil",
+    cloudColor: "Couleur des nuages",
     pvSection: "Production photovoltaïque",
     pvHint: "Optionnel. Si renseigné, une pastille apparaît près de la maison avec la production instantanée (calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
     pvEntity: "Entité de production",
@@ -32719,18 +32708,20 @@ const fr = {
     pvPeakPower: "Puissance crête (kWp)",
     pvPeakPowerHelp: "Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.",
     pvArraysSection: "Orientation des panneaux",
-    pvArraysHelp: "Une entrée par pan de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat. Ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
-    pvArrayTitle: "Pan {n}",
+    pvArraysHelp: "Une entrée par rangée de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat. Ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
+    pvArrayTitle: "Rangée {n}",
+    pvArrayName: "Nom",
+    pvArrayNameHelp: "Optionnel. Un libellé pour cette rangée affiché dans l'en-tête de l'éditeur (par exemple « Toit sud », « Garage est »). Laisse vide pour retomber sur le titre numéroté automatiquement.",
     pvArrayTilt: "Inclinaison (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Part (%)",
-    pvArrayAdd: "+ Ajouter un pan",
+    pvArrayAdd: "+ Ajouter une rangée",
     pvArrayRemove: "Supprimer",
     pvArrayNormHint: "Les parts ne totalisent pas 100 %, la prévision les normalise automatiquement.",
-    pvArrayTiltHelp: "Inclinaison de ce pan par rapport à l'horizontale, de 0 à 90 : 0 pour une installation à plat, 30 à 45 pour un toit incliné classique, 90 pour une installation verticale (par exemple un balcon). Combinée à l'azimut, elle pilote la transposition Liu-Jordan qui projette l'irradiance prévue sur le plan des panneaux.",
-    pvArrayAzimuthHelp: "Orientation à la boussole vers laquelle ce pan est tourné, sens horaire depuis le nord, de 0 à 360 : 0 = nord, 90 = est, 180 = sud, 270 = ouest.",
-    pvArrayShareHelp: "Poids relatif de ce pan dans le total des kWp. Normalisé automatiquement au calcul : 50/50, 60/60 et 1/1 donnent tous le même résultat. Laisse vide quand il n'y a qu'un seul pan (il prend 100 % par défaut).",
-    pvColor: "Couleur de production *",
+    pvArrayTiltHelp: "Inclinaison de cette rangée par rapport à l'horizontale, de 0 à 90 : 0 pour une installation à plat, 30 à 45 pour un toit incliné classique, 90 pour une installation verticale (par exemple un balcon). Combinée à l'azimut, elle pilote la transposition Liu-Jordan qui projette l'irradiance prévue sur le plan des panneaux.",
+    pvArrayAzimuthHelp: "Orientation à la boussole vers laquelle cette rangée est tournée, sens horaire depuis le nord, de 0 à 360 : 0 = nord, 90 = est, 180 = sud, 270 = ouest.",
+    pvArrayShareHelp: "Poids relatif de cette rangée dans le total des kWp. Normalisé automatiquement au calcul : 50/50, 60/60 et 1/1 donnent tous le même résultat. Laisse vide quand il n'y a qu'une seule rangée (elle prend 100 % par défaut).",
+    pvColor: "Couleur de production",
     batterySection: "Batterie domestique",
     batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles. La pastille correspondante s'affiche dès que l'entité est renseignée.",
     batterySocEntity: "Entité d'état de charge",
@@ -32741,33 +32732,33 @@ const fr = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Inversé",
     batteryPowerInvertHelp: "Par défaut (Standard) : ton capteur batterie rapporte déjà la charge en positif et la décharge en négatif. Passe sur Inversé si ton capteur fait l'inverse (certaines installations GivEnergy / GivTCP), Helios inverse alors la valeur une fois à la lecture pour que la pastille, la flèche du leader et les totaux journaliers charge / décharge gardent leur sens.",
-    batteryColor: "Couleur batterie *",
-    buildingsSection: "Bâtiments alentour",
+    batteryColor: "Couleur batterie",
+    buildingsSection: "Bâtiment",
     buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
-    displayRadius: "Rayon d'affichage *",
+    displayRadius: "Rayon d'affichage",
     displayRadiusHint: "Définit la zone visible autour de la maison. Tout ce qui se trouve au-delà de ce rayon est masqué : fond de carte, bâtiments voisins, ombres. Pilote également l'étendue du fetch LiDAR et le clip des ombres projetées.",
-    buildingClusterRadius: "Rayon de regroupement maison *",
-    buildingOpacity: "Opacité des bâtiments voisins *",
-    buildingColor: "Couleur des bâtiments *",
-    pixelRatio: "Pixel ratio *",
+    buildingClusterRadius: "Rayon de regroupement maison",
+    buildingOpacity: "Opacité des bâtiments voisins",
+    buildingColor: "Couleur des bâtiments",
+    pixelRatio: "Pixel ratio",
     pixelRatioAuto: "Auto",
     pixelRatio1x: "1x",
     pixelRatioHint: "Auto (par défaut) utilise la densité de pixels native de ton écran (plafonnée à 2 sur desktop, 1.25 sur mobile) pour un rendu net. 1x force la valeur à 1.0, le rendu est moins net mais le coût par frame est divisé d'autant : à privilégier sur appareils bas/moyen de gamme ou pour les longues sessions où l'autonomie / la chaleur compte plus que la finesse.",
     mapStyleMinimal: "Minimal",
     shadowsSection: "Ombrage",
-    shadowsEnabled: "Afficher les ombres *",
+    shadowsEnabled: "Afficher les ombres",
     shadowsEnabledOn: "Affichées",
     shadowsEnabledOff: "Masquées",
     shadowsEnabledHint: "Interrupteur principal des ombres projetées au sol. Si elles sont masquées, aucune ombre n'est calculée. Si elles sont affichées, la source est choisie automatiquement : provider LiDAR quand ta zone est couverte (bâtiments et végétation), empreintes plates des bâtiments OpenFreeMap sinon (bâtiments uniquement).",
-    lidarPrecision: "Précision LiDAR *",
+    lidarPrecision: "Précision LiDAR",
     lidarPrecisionLow: "Basse",
     lidarPrecisionMedium: "Moyenne",
     lidarPrecisionHigh: "Haute",
     lidarPrecisionHint: "Si ta zone est couverte par un provider LiDAR intégré à Helios, tu bénéficies d'ombres plus réalistes (bâtiments ET végétation). Des décalages peuvent apparaître entre les bâtiments affichés et leurs ombres : les données LiDAR sont enregistrées à un instant donné et ne reflètent pas toujours l'état actuel du terrain. Hors zone LiDAR, les ombres retombent sur les empreintes plates des bâtiments OpenFreeMap et cette option n'a aucun effet.",
-    shadowOpacity: "Opacité des ombres *",
+    shadowOpacity: "Opacité des ombres",
     shadowOpacityHint: "Opacité des ombres projetées au sol.",
     localLidarSection: "Avancé — LiDAR local (BYO)",
-    localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la bbox cette source remplace tout fournisseur national. A l'extérieur, la chaîne de repli habituelle s'applique.",
+    localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la zone définie, cette source remplace tout fournisseur national.",
     localLidarToolsHint: "Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d'inspection / conversion / test synthétique).",
     localLidarEnabled: "Utiliser les données locales",
     localLidarUrl: "URL du GeoTIFF",
@@ -32794,36 +32785,36 @@ const de = {
   },
   editor: {
     locationSection: "Standort",
-    homeLatitude: "Breitengrad des Zuhauses *",
-    homeLongitude: "Längengrad des Zuhauses *",
+    homeLatitude: "Breitengrad des Zuhauses",
+    homeLongitude: "Längengrad des Zuhauses",
     locationHint: "Überschreibt die Heimadresse, die als Mittelpunkt der Karte verwendet wird. Beide Felder leer lassen, um die in Home Assistant konfigurierte Adresse zu nutzen. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten.",
     mapSection: "Karte",
-    mapStyle: "Kartenstil *",
+    mapStyle: "Kartenstil",
     mapStyleHint: "Zwei Basiskarten: Straßen (nüchtern, urban, mit vollständigen Beschriftungen) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
     mapStyleStreet: "Straßen",
-    cardTheme: "Karten-Thema *",
+    cardTheme: "Karten-Thema",
     cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) sowie die 3D-Grundkarte zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt.",
     cardThemeLight: "Hell",
     cardThemeDark: "Dunkel",
-    showLabels: "Beschriftungen anzeigen *",
+    showLabels: "Beschriftungen anzeigen",
     showLabelsHint: "Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.",
     labelsOn: "Sichtbar",
     labelsOff: "Ausgeblendet",
-    autoRotate: "Automatische Kamerarotation *",
-    autoRotateHint: "Nach ein paar Sekunden Inaktivität kreist die Kamera langsam um das Haus (ca. 1,5°/s, gegenläufig zur scheinbaren Sonnenbahn). Pinch, Drag oder Mausrad pausieren sie sofort; sie setzt fort, sobald du loslässt.",
+    autoRotate: "Automatische Kamerarotation",
+    autoRotateHint: "Nach ein paar Sekunden Inaktivität kreist die Kamera langsam um das Haus (ca. 1,5°/s, gegenläufig zur scheinbaren Sonnenbahn). Eine Ein-Finger-Geste pausiert sie sofort; sie setzt fort, sobald du loslässt.",
     autoRotateOn: "Ein",
     autoRotateOff: "Aus",
-    timeline: "Zeitachse",
-    timelineHint: "Format der Datumsanzeige auf der Zeitachse und im Scrub-Chip.",
-    dateFormat: "Datumsformat * (Standard: mm-dd)",
+    timeline: "Datum- und Zeitformat",
+    timelineHint: "Format der Datums- und Zeitanzeige auf der Zeitachse und im Scrub-Chip.",
+    dateFormat: "Datumsformat (Standard: mm-dd)",
     dateFormatHelp: "Platzhalter: yyyy, yy, mm, dd. Beispiele:",
-    timeFormat: "Zeitformat *",
+    timeFormat: "Zeitformat",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
     colors: "Farben",
-    colorsHint: "Eine Farbe pro Messgröße, überall einheitlich verwendet. Die Sonnenfarbe füllt den Bogen, die Sonnenscheibe und den oberen Bereich der Zeitachse. Die Wolkenfarbe füllt die Bodenscheibe und den unteren Bereich der Zeitachse.",
-    sunColor: "Sonnenfarbe *",
-    cloudColor: "Wolkenfarbe *",
+    colorsHint: "Eine Farbe pro Messgröße, überall einheitlich verwendet. Sonne: der Bogen, die Sonnenscheibe und der obere Bereich der Zeitachse. Wolken: die Bodenscheibe und der untere Bereich der Zeitachse. Erzeugung: der PV-Chip am Haus und das dedizierte Diagramm (nur sichtbar, wenn eine Erzeugungs-Entität gesetzt ist). Batterie: die Batterie-Chips um den PV-Chip (nur sichtbar, wenn eine Batterie-Entität gesetzt ist). Gebäude: der Grundton der 3D-Gebäude um das Haus.",
+    sunColor: "Sonnenfarbe",
+    cloudColor: "Wolkenfarbe",
     pvSection: "Solarproduktion",
     pvHint: "Optional. Wenn gesetzt, erscheint nahe dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
     pvEntity: "Produktions-Entität",
@@ -32832,17 +32823,19 @@ const de = {
     pvPeakPowerHelp: "Installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, um die Prognose auszublenden; gemessene Produktion und Tagesspitze werden weiter angezeigt.",
     pvArraysSection: "Modulausrichtung",
     pvArraysHelp: "Ein Eintrag pro Gruppe gleich ausgerichteter Module. Lasse einen einzigen Eintrag mit Neigung 0 für eine flache Installation. Füge weitere Einträge hinzu, wenn deine Module auf mehrere Ausrichtungen verteilt sind (zum Beispiel eine Reihe nach Osten, eine nach Westen). Die Prognose wird pro Eintrag berechnet und nach dem Anteil an der Gesamt-kWp gewichtet.",
-    pvArrayTitle: "Feld {n}",
+    pvArrayTitle: "Reihe {n}",
+    pvArrayName: "Name",
+    pvArrayNameHelp: 'Optional. Ein Label für diese Reihe, das im Editor-Header angezeigt wird (z. B. „Süddach", „Garage Ost"). Leer lassen, um auf den automatisch nummerierten Titel zurückzufallen.',
     pvArrayTilt: "Neigung (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Anteil (%)",
-    pvArrayAdd: "+ Feld hinzufügen",
+    pvArrayAdd: "+ Reihe hinzufügen",
     pvArrayRemove: "Entfernen",
     pvArrayNormHint: "Die Anteile ergeben nicht 100 %, die Prognose normalisiert sie automatisch.",
-    pvArrayTiltHelp: "Neigung dieses Felds gegenüber der Horizontalen, 0 bis 90: 0 für eine flache Installation, 30 bis 45 für ein typisches Steildach, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Zusammen mit dem Azimut treibt die Neigung die Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert.",
-    pvArrayAzimuthHelp: "Kompassrichtung, in die dieses Feld zeigt, im Uhrzeigersinn ab Norden, 0 bis 360: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen.",
-    pvArrayShareHelp: "Relativer Anteil dieses Felds an der Gesamt-kWp. Wird zum Berechnungszeitpunkt automatisch normalisiert, deshalb liefern 50/50, 60/60 und 1/1 dieselbe Prognose. Leer lassen, wenn nur ein Feld existiert (es bekommt standardmäßig 100 %).",
-    pvColor: "Produktionsfarbe *",
+    pvArrayTiltHelp: "Neigung dieser Reihe gegenüber der Horizontalen, 0 bis 90: 0 für eine flache Installation, 30 bis 45 für ein typisches Steildach, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Zusammen mit dem Azimut treibt die Neigung die Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert.",
+    pvArrayAzimuthHelp: "Kompassrichtung, in die diese Reihe zeigt, im Uhrzeigersinn ab Norden, 0 bis 360: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen.",
+    pvArrayShareHelp: "Relativer Anteil dieser Reihe an der Gesamt-kWp. Wird zum Berechnungszeitpunkt automatisch normalisiert, deshalb liefern 50/50, 60/60 und 1/1 dieselbe Prognose. Leer lassen, wenn nur eine Reihe existiert (sie bekommt standardmäßig 100 %).",
+    pvColor: "Produktionsfarbe",
     batterySection: "Hausbatterie",
     batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional. Der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
     batterySocEntity: "Ladezustand-Entität",
@@ -32853,33 +32846,33 @@ const de = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertiert",
     batteryPowerInvertHelp: "Standardmäßig meldet die Batterie-Entität das Laden als positiv und das Entladen als negativ. Wähle Invertiert, wenn deine Entität es umgekehrt macht (einige GivEnergy- / GivTCP-Setups). Helios dreht den Wert dann einmal beim Einlesen um, damit Chip-Anzeige, Flusspfeil und tägliche Lade- / Entladesummen ihre Bedeutung behalten.",
-    batteryColor: "Batteriefarbe *",
-    buildingsSection: "Umliegende Gebäude",
+    batteryColor: "Batteriefarbe",
+    buildingsSection: "Gebäude",
     buildingsHint: 'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
-    displayRadius: "Anzeigeradius *",
+    displayRadius: "Anzeigeradius",
     displayRadiusHint: "Bestimmt den um das Zuhause sichtbaren Bereich. Alles jenseits dieses Radius bleibt verborgen: Grundkarte, Nachbargebäude, Schatten. Steuert zugleich den LiDAR-Fetch-Bereich und das Clipping der projizierten Schatten.",
-    buildingClusterRadius: "Cluster-Radius Zuhause *",
-    buildingOpacity: "Deckkraft Nachbargebäude *",
-    buildingColor: "Gebäudefarbe *",
-    pixelRatio: "Pixel-Ratio *",
+    buildingClusterRadius: "Cluster-Radius Zuhause",
+    buildingOpacity: "Deckkraft Nachbargebäude",
+    buildingColor: "Gebäudefarbe",
+    pixelRatio: "Pixel-Ratio",
     pixelRatioAuto: "Auto",
     pixelRatio1x: "1x",
     pixelRatioHint: "Auto (Standard) verwendet die native devicePixelRatio des Bildschirms (gedeckelt auf 2 am Desktop, 1.25 mobil) für eine scharfe Darstellung. 1x erzwingt 1.0, weniger scharf, dafür minimale Fragment-Last pro Frame, sinnvoll auf leistungsschwachen Geräten oder bei langen Sitzungen, wenn Akkulaufzeit / Wärme wichtiger sind als Schärfe.",
     mapStyleMinimal: "Minimal",
     shadowsSection: "Schattierung",
-    shadowsEnabled: "Schatten anzeigen *",
+    shadowsEnabled: "Schatten anzeigen",
     shadowsEnabledOn: "Sichtbar",
     shadowsEnabledOff: "Ausgeblendet",
     shadowsEnabledHint: "Hauptschalter für die am Boden geworfenen Schatten. Ausgeblendet werden gar keine Schatten berechnet. Sichtbar wählt die Quelle automatisch: ein LiDAR-Provider, wenn er das Gebiet abdeckt (Gebäude und Vegetation), sonst die flachen OpenFreeMap-Gebäudegrundrisse (nur Gebäude).",
-    lidarPrecision: "LiDAR-Präzision *",
+    lidarPrecision: "LiDAR-Präzision",
     lidarPrecisionLow: "Niedrig",
     lidarPrecisionMedium: "Mittel",
     lidarPrecisionHigh: "Hoch",
     lidarPrecisionHint: "Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen OpenFreeMap-Gebäudegrundrisse, und diese Option bleibt wirkungslos.",
-    shadowOpacity: "Schatten-Deckkraft *",
+    shadowOpacity: "Schatten-Deckkraft",
     shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
     localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
-    localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb der Bounding-Box ersetzt diese Quelle jeden nationalen Anbieter. Außerhalb greift die normale Fallback-Kette.",
+    localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb des definierten Bereichs ersetzt diese Quelle jeden nationalen Anbieter.",
     localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).",
     localLidarEnabled: "Lokale Daten verwenden",
     localLidarUrl: "GeoTIFF-URL",
@@ -32906,36 +32899,36 @@ const es = {
   },
   editor: {
     locationSection: "Ubicación",
-    homeLatitude: "Latitud del hogar *",
-    homeLongitude: "Longitud del hogar *",
+    homeLatitude: "Latitud del hogar",
+    homeLongitude: "Longitud del hogar",
     locationHint: "Anula la dirección del hogar usada como centro de la tarjeta. Deja ambos campos vacíos para usar el hogar configurado en Home Assistant. La anulación se aplica solo cuando AMBOS campos contienen coordenadas válidas.",
     mapSection: "Mapa",
-    mapStyle: "Estilo del mapa *",
+    mapStyle: "Estilo del mapa",
     mapStyleHint: "Dos mapas base: Calles (sobrio, urbano, con etiquetas completas) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
     mapStyleStreet: "Calles",
-    cardTheme: "Tema de la tarjeta *",
+    cardTheme: "Tema de la tarjeta",
     cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) y el mapa 3D de fondo entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros.",
     cardThemeLight: "Claro",
     cardThemeDark: "Oscuro",
-    showLabels: "Mostrar etiquetas *",
+    showLabels: "Mostrar etiquetas",
     showLabelsHint: "Muestra u oculta los nombres de calles, números de edificios, puntos de interés y nombres de zonas en el mapa de fondo.",
     labelsOn: "Visibles",
     labelsOff: "Ocultas",
-    autoRotate: "Rotación automática de la cámara *",
-    autoRotateHint: "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (aprox. 1,5°/s, en sentido opuesto al movimiento aparente del sol). Cualquier pellizco, arrastre o rueda la pausa al instante y se reanuda cuando sueltas.",
+    autoRotate: "Rotación automática de la cámara",
+    autoRotateHint: "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (aprox. 1,5°/s, en sentido contrario al movimiento aparente del sol). Un gesto con un dedo la pausa al instante; se reanuda cuando sueltas.",
     autoRotateOn: "Activada",
     autoRotateOff: "Desactivada",
-    timeline: "Cronología",
-    timelineHint: "Formato de las fechas mostradas en la cronología y en la pastilla del scrub.",
-    dateFormat: "Formato de fecha * (por defecto: mm-dd)",
+    timeline: "Formato de fecha y hora",
+    timelineHint: "Formato de las etiquetas de fecha y hora mostradas en la línea de tiempo y en la pastilla del scrub.",
+    dateFormat: "Formato de fecha (por defecto: mm-dd)",
     dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Ejemplos:",
-    timeFormat: "Formato de hora *",
+    timeFormat: "Formato de hora",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
     colors: "Colores",
-    colorsHint: "Un color por magnitud, reutilizado en todos los lugares donde aparece. El color del sol pinta el arco, el disco solar y la zona alta de la cronología. El color de las nubes pinta el disco del suelo y la zona baja de la cronología.",
-    sunColor: "Color del sol *",
-    cloudColor: "Color de las nubes *",
+    colorsHint: "Un color por magnitud, reutilizado donde aparezca. Sol: el arco, el disco solar y la zona superior de la línea de tiempo. Nubes: el disco en el suelo y la zona inferior de la línea de tiempo. Producción: la pastilla PV junto a la casa y el gráfico dedicado (solo visible si hay una entidad de producción configurada). Batería: las pastillas de batería alrededor de la PV (solo visibles si hay una entidad de batería configurada). Edificios: el tono base de los edificios 3D alrededor de la casa.",
+    sunColor: "Color del sol",
+    cloudColor: "Color de las nubes",
     pvSection: "Producción solar",
     pvHint: "Opcional. Si se define, aparece una pastilla cerca de la casa con la producción instantánea (calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
     pvEntity: "Entidad de producción",
@@ -32944,17 +32937,19 @@ const es = {
     pvPeakPowerHelp: "Potencia pico instalada de tu campo en kilovatios-pico. Controla la curva de previsión punteada en el gráfico PV y la saturación del flujo PV → casa. Déjalo vacío para ocultar la previsión; la producción observada y el pico del día siguen mostrándose.",
     pvArraysSection: "Orientación de los paneles",
     pvArraysHelp: "Una entrada por grupo de paneles con la misma orientación. Deja una sola entrada con inclinación 0 para una instalación plana. Añade más entradas cuando tus paneles estén repartidos en varias orientaciones (por ejemplo, una fila al este y otra al oeste). La previsión se calcula por entrada y se pondera por su parte del total de kWp.",
-    pvArrayTitle: "Campo {n}",
+    pvArrayTitle: "Hilera {n}",
+    pvArrayName: "Nombre",
+    pvArrayNameHelp: "Opcional. Una etiqueta para esta hilera mostrada en el encabezado del editor (por ejemplo «Tejado sur», «Garaje este»). Déjalo vacío para volver al título numerado automáticamente.",
     pvArrayTilt: "Inclinación (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Parte (%)",
-    pvArrayAdd: "+ Añadir campo",
+    pvArrayAdd: "+ Añadir hilera",
     pvArrayRemove: "Eliminar",
     pvArrayNormHint: "Las partes no suman 100 %, la previsión las normaliza automáticamente.",
-    pvArrayTiltHelp: "Inclinación de este campo respecto a la horizontal, de 0 a 90: 0 para una instalación plana, 30 a 45 para un tejado inclinado clásico, 90 para una instalación vertical (por ejemplo balcón). Combinada con el azimut, dirige la transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel.",
-    pvArrayAzimuthHelp: "Orientación brújula a la que apunta este campo, en sentido horario desde el norte, de 0 a 360: 0 = norte, 90 = este, 180 = sur, 270 = oeste.",
-    pvArrayShareHelp: "Peso relativo de este campo en el total de kWp. Se normaliza automáticamente al calcular: 50/50, 60/60 y 1/1 producen el mismo resultado. Déjalo vacío cuando solo hay un campo (recibe el 100 % por defecto).",
-    pvColor: "Color de producción *",
+    pvArrayTiltHelp: "Inclinación de esta hilera respecto a la horizontal, de 0 a 90: 0 para una instalación plana, 30 a 45 para un tejado inclinado clásico, 90 para una instalación vertical (por ejemplo balcón). Combinada con el azimut, dirige la transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel.",
+    pvArrayAzimuthHelp: "Orientación brújula a la que apunta esta hilera, en sentido horario desde el norte, de 0 a 360: 0 = norte, 90 = este, 180 = sur, 270 = oeste.",
+    pvArrayShareHelp: "Peso relativo de esta hilera en el total de kWp. Se normaliza automáticamente al calcular: 50/50, 60/60 y 1/1 producen el mismo resultado. Déjalo vacío cuando solo hay una hilera (recibe el 100 % por defecto).",
+    pvColor: "Color de producción",
     batterySection: "Batería doméstica",
     batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales. El chip correspondiente aparece en cuanto la entidad está definida.",
     batterySocEntity: "Entidad de estado de carga",
@@ -32965,33 +32960,33 @@ const es = {
     batteryPowerInvertStandard: "Estándar",
     batteryPowerInvertInverted: "Invertido",
     batteryPowerInvertHelp: "Por defecto (Estándar) tu entidad de batería ya informa la carga como positivo y la descarga como negativo. Cambia a Invertido si tu entidad hace lo contrario (algunas instalaciones GivEnergy / GivTCP), Helios invertirá el valor una vez en la lectura para que la pastilla, la flecha del flujo y los totales diarios de carga / descarga conserven su significado.",
-    batteryColor: "Color batería *",
-    buildingsSection: "Edificios circundantes",
+    batteryColor: "Color batería",
+    buildingsSection: "Edificio",
     buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».",
-    displayRadius: "Radio de visualización *",
+    displayRadius: "Radio de visualización",
     displayRadiusHint: "Define el área visible alrededor de la casa. Todo lo que esté más allá de este radio queda oculto: mapa base, edificios vecinos, sombras. También determina el ámbito del fetch LiDAR y el recorte de las sombras proyectadas.",
-    buildingClusterRadius: "Radio del grupo de la casa *",
-    buildingOpacity: "Opacidad de los vecinos *",
-    buildingColor: "Color de los edificios *",
-    pixelRatio: "Pixel ratio *",
+    buildingClusterRadius: "Radio del grupo de la casa",
+    buildingOpacity: "Opacidad de los vecinos",
+    buildingColor: "Color de los edificios",
+    pixelRatio: "Pixel ratio",
     pixelRatioAuto: "Auto",
     pixelRatio1x: "1x",
     pixelRatioHint: "Auto (por defecto) usa la densidad de píxeles nativa de tu pantalla (limitada a 2 en escritorio, 1.25 en móvil) para un renderizado nítido. 1x fuerza el valor a 1.0, menos nítido pero con la carga por frame mínima, ideal en dispositivos modestos o sesiones largas donde la batería / el calor importan más que la nitidez.",
     mapStyleMinimal: "Mínimo",
     shadowsSection: "Sombreado",
-    shadowsEnabled: "Mostrar sombras *",
+    shadowsEnabled: "Mostrar sombras",
     shadowsEnabledOn: "Mostradas",
     shadowsEnabledOff: "Ocultas",
     shadowsEnabledHint: "Interruptor principal de las sombras proyectadas en el suelo. Si están ocultas, no se calcula ninguna sombra. Si están mostradas, la fuente se elige sola: un proveedor LiDAR si cubre tu zona (edificios y vegetación), o las huellas planas de los edificios OpenFreeMap en caso contrario (solo edificios).",
-    lidarPrecision: "Precisión LiDAR *",
+    lidarPrecision: "Precisión LiDAR",
     lidarPrecisionLow: "Baja",
     lidarPrecisionMedium: "Media",
     lidarPrecisionHigh: "Alta",
     lidarPrecisionHint: "Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de los edificios OpenFreeMap y esta opción no tiene efecto.",
-    shadowOpacity: "Opacidad de las sombras *",
+    shadowOpacity: "Opacidad de las sombras",
     shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
     localLidarSection: "Avanzado — LiDAR local (BYO)",
-    localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del bounding box esta fuente reemplaza cualquier proveedor nacional. Fuera, se aplica la cadena de respaldo habitual.",
+    localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del área definida, esta fuente reemplaza cualquier proveedor nacional.",
     localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? El repositorio de Helios incluye herramientas Python en `tools/lidar/`, consulta el README de esa carpeta para el pipeline completo (instalación de GDAL de sistema, configuración de `uv`, comandos de inspección / conversión / prueba sintética).",
     localLidarEnabled: "Usar datos locales",
     localLidarUrl: "URL del GeoTIFF",
@@ -33018,36 +33013,36 @@ const it = {
   },
   editor: {
     locationSection: "Posizione",
-    homeLatitude: "Latitudine di casa *",
-    homeLongitude: "Longitudine di casa *",
+    homeLatitude: "Latitudine di casa",
+    homeLongitude: "Longitudine di casa",
     locationHint: "Sovrascrive l'indirizzo di casa usato come centro della scheda. Lascia entrambi i campi vuoti per usare l'indirizzo configurato in Home Assistant. La sovrascrittura è applicata solo quando ENTRAMBI i campi contengono coordinate valide.",
     mapSection: "Mappa",
-    mapStyle: "Stile della mappa *",
+    mapStyle: "Stile della mappa",
     mapStyleHint: "Due mappe di base: Strade (sobria, urbana, con etichette complete) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
     mapStyleStreet: "Strade",
-    cardTheme: "Tema della scheda *",
+    cardTheme: "Tema della scheda",
     cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) e la mappa 3D di sfondo tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri.",
     cardThemeLight: "Chiaro",
     cardThemeDark: "Scuro",
-    showLabels: "Mostra etichette *",
+    showLabels: "Mostra etichette",
     showLabelsHint: "Mostra o nasconde i nomi delle vie, i numeri civici, i punti di interesse e i nomi dei quartieri sulla mappa di base.",
     labelsOn: "Visibili",
     labelsOff: "Nascoste",
-    autoRotate: "Rotazione automatica della camera *",
-    autoRotateHint: "Dopo qualche secondo di inattività, la camera ruota lentamente attorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Pinch, drag o rotellina la mettono in pausa all'istante e riprende non appena rilasci.",
+    autoRotate: "Rotazione automatica della camera",
+    autoRotateHint: "Dopo qualche secondo di inattività, la camera ruota lentamente attorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Un gesto con un dito la mette in pausa all'istante e riprende non appena rilasci.",
     autoRotateOn: "Attiva",
     autoRotateOff: "Disattiva",
-    timeline: "Cronologia",
-    timelineHint: "Formato delle date mostrate sulla cronologia e nella pastiglia di scrub.",
-    dateFormat: "Formato data * (predefinito: mm-dd)",
+    timeline: "Formato data e ora",
+    timelineHint: "Formato delle etichette di data e ora mostrate sulla cronologia e nella pastiglia di scrub.",
+    dateFormat: "Formato data (predefinito: mm-dd)",
     dateFormatHelp: "Token: yyyy, yy, mm, dd. Esempi:",
-    timeFormat: "Formato ora *",
+    timeFormat: "Formato ora",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
     colors: "Colori",
-    colorsHint: "Un colore per grandezza, riutilizzato ovunque appaia. Il colore del sole dipinge l'arco, il disco solare e l'area superiore della cronologia. Il colore delle nuvole dipinge il disco al suolo e l'area inferiore della cronologia.",
-    sunColor: "Colore del sole *",
-    cloudColor: "Colore delle nuvole *",
+    colorsHint: "Un colore per grandezza, riutilizzato ovunque appaia. Sole: l'arco, il disco solare e l'area superiore della cronologia. Nuvole: il disco al suolo e l'area inferiore della cronologia. Produzione: la pastiglia PV vicino alla casa e il grafico dedicato (visibile solo se è configurata un'entità di produzione). Batteria: le pastiglie batteria attorno alla PV (visibili solo se è configurata un'entità batteria). Edifici: il tono di base degli edifici 3D attorno alla casa.",
+    sunColor: "Colore del sole",
+    cloudColor: "Colore delle nuvole",
     pvSection: "Produzione solare",
     pvHint: "Opzionale. Se impostato, una pastiglia appare vicino alla casa con la produzione istantanea (calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
     pvEntity: "Entità di produzione",
@@ -33056,17 +33051,19 @@ const it = {
     pvPeakPowerHelp: "Potenza di picco installata del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata sul grafico PV e la saturazione del flusso PV → casa. Lascia vuoto per nascondere la previsione; la produzione osservata e il picco del giorno restano visibili.",
     pvArraysSection: "Orientamento dei pannelli",
     pvArraysHelp: "Una voce per ogni campo di pannelli con la stessa orientazione. Lascia una sola voce con inclinazione 0 per un'installazione piana. Aggiungi altre voci quando i pannelli sono distribuiti su più orientazioni (per esempio una fila a est e una a ovest). La previsione viene calcolata per ciascuna voce e pesata in base alla sua quota dei kWp totali.",
-    pvArrayTitle: "Campo {n}",
+    pvArrayTitle: "Fila {n}",
+    pvArrayName: "Nome",
+    pvArrayNameHelp: "Opzionale. Un'etichetta per questa fila mostrata nell'intestazione dell'editor (per esempio «Tetto sud», «Garage est»). Lascia vuoto per tornare al titolo numerato automaticamente.",
     pvArrayTilt: "Inclinazione (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Quota (%)",
-    pvArrayAdd: "+ Aggiungi campo",
+    pvArrayAdd: "+ Aggiungi fila",
     pvArrayRemove: "Rimuovi",
     pvArrayNormHint: "Le quote non sommano a 100 %, la previsione le normalizza automaticamente.",
-    pvArrayTiltHelp: "Inclinazione di questo campo rispetto all'orizzontale, da 0 a 90: 0 per un'installazione piana, 30 a 45 per un tetto inclinato classico, 90 per un'installazione verticale (per esempio balcone). Combinata con l'azimut, guida la trasposizione Liu-Jordan che proietta l'irradianza prevista sul piano del pannello.",
-    pvArrayAzimuthHelp: "Orientamento bussola verso cui è rivolto questo campo, in senso orario da nord, da 0 a 360: 0 = nord, 90 = est, 180 = sud, 270 = ovest.",
-    pvArrayShareHelp: "Peso relativo di questo campo nel totale dei kWp. Normalizzato automaticamente al calcolo: 50/50, 60/60 e 1/1 danno lo stesso risultato. Lascia vuoto quando c'è un solo campo (prende il 100 % per default).",
-    pvColor: "Colore di produzione *",
+    pvArrayTiltHelp: "Inclinazione di questa fila rispetto all'orizzontale, da 0 a 90: 0 per un'installazione piana, 30 a 45 per un tetto inclinato classico, 90 per un'installazione verticale (per esempio balcone). Combinata con l'azimut, guida la trasposizione Liu-Jordan che proietta l'irradianza prevista sul piano del pannello.",
+    pvArrayAzimuthHelp: "Orientamento bussola verso cui è rivolta questa fila, in senso orario da nord, da 0 a 360: 0 = nord, 90 = est, 180 = sud, 270 = ovest.",
+    pvArrayShareHelp: "Peso relativo di questa fila nel totale dei kWp. Normalizzato automaticamente al calcolo: 50/50, 60/60 e 1/1 danno lo stesso risultato. Lascia vuoto quando c'è una sola fila (prende il 100 % per default).",
+    pvColor: "Colore di produzione",
     batterySection: "Batteria domestica",
     batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali. La pastiglia corrispondente appare appena l'entità è impostata.",
     batterySocEntity: "Entità stato di carica",
@@ -33077,33 +33074,33 @@ const it = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertito",
     batteryPowerInvertHelp: "Per impostazione predefinita (Standard) la tua entità batteria riporta la carica come positivo e la scarica come negativo. Scegli Invertito se la tua entità fa l'opposto (alcuni setup GivEnergy / GivTCP), Helios invertirà il valore una volta in lettura così che la pastiglia, la freccia del flusso e i totali giornalieri di carica / scarica mantengano il loro significato.",
-    batteryColor: "Colore batteria *",
-    buildingsSection: "Edifici circostanti",
+    batteryColor: "Colore batteria",
+    buildingsSection: "Edificio",
     buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».",
-    displayRadius: "Raggio di visualizzazione *",
+    displayRadius: "Raggio di visualizzazione",
     displayRadiusHint: "Definisce l'area visibile attorno alla casa. Tutto ciò che è oltre questo raggio viene nascosto: mappa di base, edifici vicini, ombre. Determina anche l'estensione del fetch LiDAR e il taglio delle ombre proiettate.",
-    buildingClusterRadius: "Raggio del gruppo casa *",
-    buildingOpacity: "Opacità degli edifici vicini *",
-    buildingColor: "Colore degli edifici *",
-    pixelRatio: "Pixel ratio *",
+    buildingClusterRadius: "Raggio del gruppo casa",
+    buildingOpacity: "Opacità degli edifici vicini",
+    buildingColor: "Colore degli edifici",
+    pixelRatio: "Pixel ratio",
     pixelRatioAuto: "Auto",
     pixelRatio1x: "1x",
     pixelRatioHint: "Auto (predefinito) usa la densità di pixel nativa dello schermo (limitata a 2 su desktop, 1.25 su mobile) per un rendering nitido. 1x forza il valore a 1.0, meno nitido ma con il carico per frame minimo, ideale su dispositivi modesti o sessioni lunghe in cui autonomia / calore contano più della nitidezza.",
     mapStyleMinimal: "Minimale",
     shadowsSection: "Ombreggiatura",
-    shadowsEnabled: "Mostrare le ombre *",
+    shadowsEnabled: "Mostrare le ombre",
     shadowsEnabledOn: "Visibili",
     shadowsEnabledOff: "Nascoste",
     shadowsEnabledHint: "Interruttore principale delle ombre proiettate a terra. Se nascoste, non viene calcolata alcuna ombra. Se visibili, la sorgente viene scelta da sola: un provider LiDAR se copre la tua zona (edifici e vegetazione), altrimenti le impronte piatte degli edifici OpenFreeMap (solo edifici).",
-    lidarPrecision: "Precisione LiDAR *",
+    lidarPrecision: "Precisione LiDAR",
     lidarPrecisionLow: "Bassa",
     lidarPrecisionMedium: "Media",
     lidarPrecisionHigh: "Alta",
     lidarPrecisionHint: "Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte degli edifici OpenFreeMap e questa opzione non ha alcun effetto.",
-    shadowOpacity: "Opacità delle ombre *",
+    shadowOpacity: "Opacità delle ombre",
     shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
     localLidarSection: "Avanzato — LiDAR locale (BYO)",
-    localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. Dentro la bounding box questa sorgente sostituisce qualsiasi provider nazionale. Fuori, si applica la consueta catena di fallback.",
+    localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. All'interno dell'area definita, questa sorgente sostituisce qualsiasi provider nazionale.",
     localLidarToolsHint: "Devi preparare un raster da zero? Il repository Helios include strumenti Python in `tools/lidar/`, vedi il README di quella cartella per la pipeline completa (installazione di GDAL di sistema, configurazione di `uv`, comandi di ispezione / conversione / test sintetico).",
     localLidarEnabled: "Usa dati locali",
     localLidarUrl: "URL del GeoTIFF",
@@ -33130,36 +33127,36 @@ const nl = {
   },
   editor: {
     locationSection: "Locatie",
-    homeLatitude: "Breedtegraad woning *",
-    homeLongitude: "Lengtegraad woning *",
+    homeLatitude: "Breedtegraad woning",
+    homeLongitude: "Lengtegraad woning",
     locationHint: "Overschrijft het thuisadres dat als middelpunt van de kaart wordt gebruikt. Laat beide velden leeg om het in Home Assistant geconfigureerde adres te gebruiken. De override geldt alleen wanneer BEIDE velden geldige coördinaten bevatten.",
     mapSection: "Kaart",
-    mapStyle: "Kaartstijl *",
+    mapStyle: "Kaartstijl",
     mapStyleHint: "Twee basiskaarten: Straten (sober, stedelijk, met volledige labels) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
     mapStyleStreet: "Straten",
-    cardTheme: "Kaartthema *",
+    cardTheme: "Kaartthema",
     cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) en de 3D-basemap tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards.",
     cardThemeLight: "Licht",
     cardThemeDark: "Donker",
-    showLabels: "Labels weergeven *",
+    showLabels: "Labels weergeven",
     showLabelsHint: "Toont of verbergt straatnamen, huisnummers, points of interest en buurtnamen op de basiskaart.",
     labelsOn: "Zichtbaar",
     labelsOff: "Verborgen",
-    autoRotate: "Automatische camerarotatie *",
-    autoRotateHint: "Na een paar seconden inactiviteit draait de camera langzaam rond het huis (ongeveer 1,5°/s, tegen de schijnbare beweging van de zon in). Een knijp-, sleep- of muiswielgebaar pauzeert de rotatie direct; ze hervat zodra je loslaat.",
+    autoRotate: "Automatische camerarotatie",
+    autoRotateHint: "Na een paar seconden inactiviteit draait de camera langzaam rond het huis (ongeveer 1,5°/s, tegen de schijnbare beweging van de zon in). Een veeg met één vinger pauzeert de rotatie direct; ze hervat zodra je loslaat.",
     autoRotateOn: "Aan",
     autoRotateOff: "Uit",
-    timeline: "Tijdlijn",
-    timelineHint: "Datumformaat dat op de tijdlijn en in de scrub-chip wordt weergegeven.",
-    dateFormat: "Datumformaat * (standaard: mm-dd)",
+    timeline: "Datum- en tijdformaat",
+    timelineHint: "Formaat van de datum- en tijdlabels op de tijdlijn en in de scrub-chip.",
+    dateFormat: "Datumformaat (standaard: mm-dd)",
     dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Voorbeelden:",
-    timeFormat: "Tijdformaat *",
+    timeFormat: "Tijdformaat",
     timeFormat12: "12 u",
     timeFormat24: "24 u",
     colors: "Kleuren",
-    colorsHint: "Eén kleur per grootheid, overal hergebruikt. De zonkleur kleurt de boog, de zonneschijf en het bovenste deel van de tijdlijn. De wolkenkleur kleurt de schijf op de grond en het onderste deel van de tijdlijn.",
-    sunColor: "Zonkleur *",
-    cloudColor: "Wolkenkleur *",
+    colorsHint: "Eén kleur per grootheid, overal hergebruikt. Zon: de boog, de zonneschijf en het bovenste deel van de tijdlijn. Wolken: de schijf op de grond en het onderste deel van de tijdlijn. Productie: de PV-chip bij het huis en de toegewijde grafiek (alleen zichtbaar als er een productie-entiteit is ingesteld). Batterij: de batterijchips rond de PV-chip (alleen zichtbaar als er een batterij-entiteit is ingesteld). Gebouwen: de basistoon van de 3D-gebouwen rond het huis.",
+    sunColor: "Zonkleur",
+    cloudColor: "Wolkenkleur",
     pvSection: "Zonneproductie",
     pvHint: "Optioneel. Als ingesteld verschijnt bij het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
     pvEntity: "Productie-entiteit",
@@ -33168,17 +33165,19 @@ const nl = {
     pvPeakPowerHelp: "Geïnstalleerd piekvermogen van je panelen in kilowattpiek. Stuurt de gestippelde voorspellingslijn op de PV-grafiek en de stroomverzadiging van de PV → huis-leider. Laat leeg om de voorspelling te verbergen; gemeten productie en de dagelijkse piek blijven zichtbaar.",
     pvArraysSection: "Paneeloriëntatie",
     pvArraysHelp: "Eén item per veld panelen met dezelfde oriëntatie. Laat één item staan met hellingshoek 0 voor een platte opstelling. Voeg extra items toe wanneer je panelen over meerdere richtingen verdeeld zijn (bijvoorbeeld een rij oost, een rij west). De prognose wordt per item berekend en gewogen op basis van het percentage van het totale kWp.",
-    pvArrayTitle: "Veld {n}",
+    pvArrayTitle: "Rij {n}",
+    pvArrayName: "Naam",
+    pvArrayNameHelp: 'Optioneel. Een label voor deze rij dat in de editor-koptekst wordt getoond (bijvoorbeeld "Zuiddak", "Oostgarage"). Laat leeg om terug te vallen op de automatisch genummerde titel.',
     pvArrayTilt: "Helling (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Aandeel (%)",
-    pvArrayAdd: "+ Veld toevoegen",
+    pvArrayAdd: "+ Rij toevoegen",
     pvArrayRemove: "Verwijderen",
     pvArrayNormHint: "De percentages komen niet uit op 100%, de prognose herschaalt ze automatisch.",
-    pvArrayTiltHelp: "Helling van dit veld ten opzichte van het horizontale vlak, 0 tot 90: 0 voor een platte opstelling, 30 tot 45 voor een klassiek schuin dak, 90 voor een volledig verticale opstelling (bijvoorbeeld een balkon). Samen met de azimut stuurt deze instelling de Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert.",
-    pvArrayAzimuthHelp: "Kompasrichting waarnaar dit veld wijst, met de klok mee vanaf het noorden, 0 tot 360: 0 = noord, 90 = oost, 180 = zuid, 270 = west.",
-    pvArrayShareHelp: "Relatief gewicht van dit veld in het totale kWp. Wordt op berekentijd automatisch genormaliseerd: 50/50, 60/60 en 1/1 leveren hetzelfde resultaat. Laat leeg wanneer er maar één veld is (krijgt standaard 100%).",
-    pvColor: "Productiekleur *",
+    pvArrayTiltHelp: "Helling van deze rij ten opzichte van het horizontale vlak, 0 tot 90: 0 voor een platte opstelling, 30 tot 45 voor een klassiek schuin dak, 90 voor een volledig verticale opstelling (bijvoorbeeld een balkon). Samen met de azimut stuurt deze instelling de Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert.",
+    pvArrayAzimuthHelp: "Kompasrichting waarnaar deze rij wijst, met de klok mee vanaf het noorden, 0 tot 360: 0 = noord, 90 = oost, 180 = zuid, 270 = west.",
+    pvArrayShareHelp: "Relatief gewicht van deze rij in het totale kWp. Wordt op berekentijd automatisch genormaliseerd: 50/50, 60/60 en 1/1 leveren hetzelfde resultaat. Laat leeg wanneer er maar één rij is (krijgt standaard 100%).",
+    pvColor: "Productiekleur",
     batterySection: "Thuisbatterij",
     batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel. De bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
     batterySocEntity: "Laadtoestand-entiteit",
@@ -33189,33 +33188,33 @@ const nl = {
     batteryPowerInvertStandard: "Standaard",
     batteryPowerInvertInverted: "Omgekeerd",
     batteryPowerInvertHelp: "Standaard rapporteert je batterij-entiteit het laden als positief en het ontladen als negatief. Kies Omgekeerd als jouw entiteit het andersom doet (sommige GivEnergy- / GivTCP-installaties). Helios draait de waarde dan eenmalig om bij het inlezen, zodat de chip, de stroompijl en de dagelijkse laad- / ontlaadtotalen hun betekenis behouden.",
-    batteryColor: "Batterijkleur *",
-    buildingsSection: "Omliggende gebouwen",
+    batteryColor: "Batterijkleur",
+    buildingsSection: "Gebouw",
     buildingsHint: 'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
-    displayRadius: "Weergavestraal *",
+    displayRadius: "Weergavestraal",
     displayRadiusHint: "Bepaalt het zichtbare gebied rond het huis. Alles buiten deze straal wordt verborgen: basiskaart, naburige gebouwen, schaduwen. Stuurt ook de omvang van de LiDAR-fetch en de clip van de geprojecteerde schaduwen aan.",
-    buildingClusterRadius: "Cluster-straal huis *",
-    buildingOpacity: "Dekking omliggende gebouwen *",
-    buildingColor: "Gebouwkleur *",
-    pixelRatio: "Pixel ratio *",
+    buildingClusterRadius: "Cluster-straal huis",
+    buildingOpacity: "Dekking omliggende gebouwen",
+    buildingColor: "Gebouwkleur",
+    pixelRatio: "Pixel ratio",
     pixelRatioAuto: "Auto",
     pixelRatio1x: "1x",
     pixelRatioHint: "Auto (standaard) gebruikt de native devicePixelRatio van je scherm (begrensd op 2 op desktop, 1.25 op mobiel) voor een scherpe rendering. 1x forceert 1.0, minder scherp maar met de minimale fragment-belasting per frame, ideaal op bescheiden apparaten of lange sessies waar batterijduur / warmte zwaarder weegt dan scherpte.",
     mapStyleMinimal: "Minimaal",
     shadowsSection: "Schaduw",
-    shadowsEnabled: "Schaduwen tonen *",
+    shadowsEnabled: "Schaduwen tonen",
     shadowsEnabledOn: "Zichtbaar",
     shadowsEnabledOff: "Verborgen",
     shadowsEnabledHint: "Hoofdschakelaar voor de op de grond geprojecteerde schaduwen. Verborgen betekent geen enkele schaduwberekening. Zichtbaar kiest de bron zelf: een LiDAR-provider als die je gebied dekt (gebouwen en vegetatie), anders de platte OpenFreeMap-gebouwomtreklijnen (alleen gebouwen).",
-    lidarPrecision: "LiDAR-precisie *",
+    lidarPrecision: "LiDAR-precisie",
     lidarPrecisionLow: "Laag",
     lidarPrecisionMedium: "Middel",
     lidarPrecisionHigh: "Hoog",
     lidarPrecisionHint: "Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte OpenFreeMap-gebouwomtreklijnen en heeft deze optie geen effect.",
-    shadowOpacity: "Schaduwdekking *",
+    shadowOpacity: "Schaduwdekking",
     shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
     localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
-    localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen de bounding box vervangt deze bron elke nationale leverancier. Daarbuiten geldt de gebruikelijke fallback-keten.",
+    localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen het gedefinieerde gebied vervangt deze bron elke nationale leverancier.",
     localLidarToolsHint: "Een eigen raster nodig? De Helios-repository bevat Python-hulpmiddelen onder `tools/lidar/`, zie de README daar voor de volledige pipeline (installatie van de GDAL-systeembibliotheek, `uv`-setup, inspect / convert / synthetisch test-commando's).",
     localLidarEnabled: "Lokale data gebruiken",
     localLidarUrl: "GeoTIFF-URL",
@@ -33242,36 +33241,36 @@ const pt = {
   },
   editor: {
     locationSection: "Localização",
-    homeLatitude: "Latitude de casa *",
-    homeLongitude: "Longitude de casa *",
+    homeLatitude: "Latitude de casa",
+    homeLongitude: "Longitude de casa",
     locationHint: "Substitui o endereço de casa usado como centro do cartão. Deixe ambos os campos vazios para usar o endereço configurado no Home Assistant. A substituição só é aplicada quando AMBOS os campos contêm coordenadas válidas.",
     mapSection: "Mapa",
-    mapStyle: "Estilo do mapa *",
+    mapStyle: "Estilo do mapa",
     mapStyleHint: "Dois mapas base: Ruas (sóbrio, urbano, com etiquetas completas) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
     mapStyleStreet: "Ruas",
-    cardTheme: "Tema do cartão *",
+    cardTheme: "Tema do cartão",
     cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) e o mapa 3D de fundo entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros.",
     cardThemeLight: "Claro",
     cardThemeDark: "Escuro",
-    showLabels: "Mostrar etiquetas *",
+    showLabels: "Mostrar etiquetas",
     showLabelsHint: "Mostra ou oculta os nomes das ruas, números de edifícios, pontos de interesse e nomes de bairros no mapa de fundo.",
     labelsOn: "Visíveis",
     labelsOff: "Ocultas",
-    autoRotate: "Rotação automática da câmara *",
-    autoRotateHint: "Após alguns segundos de inatividade, a câmara orbita lentamente em torno da casa (cerca de 1,5°/s, em sentido oposto ao movimento aparente do sol). Qualquer beliscão, arrastar ou roda pausa-a instantaneamente e retoma assim que largas.",
+    autoRotate: "Rotação automática da câmara",
+    autoRotateHint: "Após alguns segundos de inatividade, a câmara orbita lentamente em torno da casa (cerca de 1,5°/s, em sentido oposto ao movimento aparente do sol). Um gesto com um dedo pausa-a instantaneamente; retoma assim que largas.",
     autoRotateOn: "Ligada",
     autoRotateOff: "Desligada",
-    timeline: "Linha temporal",
-    timelineHint: "Formato das datas mostradas na linha temporal e na pastilha do scrub.",
-    dateFormat: "Formato de data * (predefinição: mm-dd)",
+    timeline: "Formato de data e hora",
+    timelineHint: "Formato das etiquetas de data e hora mostradas na linha temporal e na pastilha do scrub.",
+    dateFormat: "Formato de data (predefinição: mm-dd)",
     dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Exemplos:",
-    timeFormat: "Formato da hora *",
+    timeFormat: "Formato da hora",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
     colors: "Cores",
-    colorsHint: "Uma cor por grandeza, reutilizada onde quer que apareça. A cor do sol pinta o arco, o disco solar e a área superior da linha temporal. A cor das nuvens pinta o disco no solo e a área inferior da linha temporal.",
-    sunColor: "Cor do sol *",
-    cloudColor: "Cor das nuvens *",
+    colorsHint: "Uma cor por grandeza, reutilizada onde quer que apareça. Sol: o arco, o disco solar e a área superior da linha temporal. Nuvens: o disco no solo e a área inferior da linha temporal. Produção: a pastilha PV perto da casa e o gráfico dedicado (só visível se houver uma entidade de produção configurada). Bateria: as pastilhas de bateria à volta da PV (só visíveis se houver uma entidade de bateria configurada). Edifícios: o tom base dos edifícios 3D à volta da casa.",
+    sunColor: "Cor do sol",
+    cloudColor: "Cor das nuvens",
     pvSection: "Produção solar",
     pvHint: "Opcional. Quando definido, surge uma pastilha perto da casa com a produção instantânea (calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
     pvEntity: "Entidade de produção",
@@ -33280,17 +33279,19 @@ const pt = {
     pvPeakPowerHelp: "Potência de pico instalada do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada no gráfico PV e a saturação do fluxo PV → casa. Deixa vazio para ocultar a previsão; a produção observada e o pico do dia continuam visíveis.",
     pvArraysSection: "Orientação dos painéis",
     pvArraysHelp: "Uma entrada por campo de painéis com a mesma orientação. Deixa uma única entrada com inclinação 0 para uma instalação plana. Acrescenta mais entradas quando os painéis estão repartidos por várias orientações (por exemplo uma fila a este e outra a oeste). A previsão é calculada por entrada e ponderada pela sua quota dos kWp totais.",
-    pvArrayTitle: "Campo {n}",
+    pvArrayTitle: "Fileira {n}",
+    pvArrayName: "Nome",
+    pvArrayNameHelp: "Opcional. Um rótulo para esta fileira mostrado no cabeçalho do editor (por exemplo «Telhado sul», «Garagem leste»). Deixa vazio para voltar ao título numerado automaticamente.",
     pvArrayTilt: "Inclinação (°)",
     pvArrayAzimuth: "Azimute (°)",
     pvArrayShare: "Quota (%)",
-    pvArrayAdd: "+ Adicionar campo",
+    pvArrayAdd: "+ Adicionar fileira",
     pvArrayRemove: "Remover",
     pvArrayNormHint: "As quotas não somam 100 %, a previsão normaliza-as automaticamente.",
-    pvArrayTiltHelp: "Inclinação deste campo em relação à horizontal, de 0 a 90: 0 para uma instalação plana, 30 a 45 para um telhado inclinado clássico, 90 para uma instalação vertical (por exemplo varanda). Combinada com o azimute, conduz a transposição Liu-Jordan que projeta a irradiância prevista sobre o plano do painel.",
-    pvArrayAzimuthHelp: "Orientação na bússola para onde este campo aponta, no sentido horário a partir do norte, de 0 a 360: 0 = norte, 90 = este, 180 = sul, 270 = oeste.",
-    pvArrayShareHelp: "Peso relativo deste campo no total dos kWp. Normalizado automaticamente no cálculo: 50/50, 60/60 e 1/1 produzem o mesmo resultado. Deixa vazio quando só existe um campo (recebe 100 % por predefinição).",
-    pvColor: "Cor de produção *",
+    pvArrayTiltHelp: "Inclinação desta fileira em relação à horizontal, de 0 a 90: 0 para uma instalação plana, 30 a 45 para um telhado inclinado clássico, 90 para uma instalação vertical (por exemplo varanda). Combinada com o azimute, conduz a transposição Liu-Jordan que projeta a irradiância prevista sobre o plano do painel.",
+    pvArrayAzimuthHelp: "Orientação na bússola para onde esta fileira aponta, no sentido horário a partir do norte, de 0 a 360: 0 = norte, 90 = este, 180 = sul, 270 = oeste.",
+    pvArrayShareHelp: "Peso relativo desta fileira no total dos kWp. Normalizado automaticamente no cálculo: 50/50, 60/60 e 1/1 produzem o mesmo resultado. Deixa vazio quando só existe uma fileira (recebe 100 % por predefinição).",
+    pvColor: "Cor de produção",
     batterySection: "Bateria doméstica",
     batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais. O chip correspondente aparece assim que a entidade é definida.",
     batterySocEntity: "Entidade do estado de carga",
@@ -33301,33 +33302,33 @@ const pt = {
     batteryPowerInvertStandard: "Padrão",
     batteryPowerInvertInverted: "Invertido",
     batteryPowerInvertHelp: "Por predefinição (Padrão) a tua entidade de bateria reporta a carga como positivo e a descarga como negativo. Escolhe Invertido se a tua entidade faz o oposto (alguns setups GivEnergy / GivTCP), o Helios inverte então o valor uma vez na leitura para que a pastilha, a seta do fluxo e os totais diários de carga / descarga mantenham o sentido.",
-    batteryColor: "Cor da bateria *",
-    buildingsSection: "Edifícios circundantes",
+    batteryColor: "Cor da bateria",
+    buildingsSection: "Edifício",
     buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».",
-    displayRadius: "Raio de visualização *",
+    displayRadius: "Raio de visualização",
     displayRadiusHint: "Define a área visível em torno da casa. Tudo o que estiver para além deste raio fica oculto: mapa base, edifícios vizinhos, sombras. Também controla o âmbito do fetch LiDAR e o corte das sombras projetadas.",
-    buildingClusterRadius: "Raio do grupo da casa *",
-    buildingOpacity: "Opacidade dos vizinhos *",
-    buildingColor: "Cor dos edifícios *",
-    pixelRatio: "Pixel ratio *",
+    buildingClusterRadius: "Raio do grupo da casa",
+    buildingOpacity: "Opacidade dos vizinhos",
+    buildingColor: "Cor dos edifícios",
+    pixelRatio: "Pixel ratio",
     pixelRatioAuto: "Auto",
     pixelRatio1x: "1x",
     pixelRatioHint: "Auto (predefinição) usa a densidade de píxeis nativa do ecrã (limitada a 2 em desktop, 1.25 em mobile) para uma renderização nítida. 1x força o valor a 1.0, menos nítido mas com a carga por frame mínima, ideal em dispositivos modestos ou sessões longas em que a autonomia / o calor pesam mais que a nitidez.",
     mapStyleMinimal: "Mínimo",
     shadowsSection: "Sombreamento",
-    shadowsEnabled: "Mostrar sombras *",
+    shadowsEnabled: "Mostrar sombras",
     shadowsEnabledOn: "Visíveis",
     shadowsEnabledOff: "Ocultas",
     shadowsEnabledHint: "Interruptor principal das sombras projetadas no chão. Quando ocultas, nenhuma sombra é calculada. Quando visíveis, a fonte é escolhida automaticamente: um fornecedor LiDAR se cobrir a tua zona (edifícios e vegetação), caso contrário as impressões planas dos edifícios OpenFreeMap (apenas edifícios).",
-    lidarPrecision: "Precisão LiDAR *",
+    lidarPrecision: "Precisão LiDAR",
     lidarPrecisionLow: "Baixa",
     lidarPrecisionMedium: "Média",
     lidarPrecisionHigh: "Alta",
     lidarPrecisionHint: "Se a tua zona é coberta por um fornecedor LiDAR integrado no Helios, beneficias de sombras mais realistas (edifícios E vegetação). Podem aparecer desfasamentos entre os edifícios desenhados e as suas sombras: os dados LiDAR são capturados num instante preciso e nem sempre refletem o estado atual do terreno. Fora da cobertura LiDAR, as sombras voltam às impressões planas dos edifícios OpenFreeMap e esta opção não tem qualquer efeito.",
-    shadowOpacity: "Opacidade das sombras *",
+    shadowOpacity: "Opacidade das sombras",
     shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
     localLidarSection: "Avançado — LiDAR local (BYO)",
-    localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da bounding box esta fonte substitui qualquer fornecedor nacional. Fora, aplica-se a cadeia de fallback habitual.",
+    localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da área definida, esta fonte substitui qualquer fornecedor nacional.",
     localLidarToolsHint: "Precisas de preparar um raster do zero? O repositório Helios inclui ferramentas Python em `tools/lidar/`, consulta o README dessa pasta para o pipeline completo (instalação do GDAL de sistema, configuração do `uv`, comandos de inspeção / conversão / teste sintético).",
     localLidarEnabled: "Usar dados locais",
     localLidarUrl: "URL do GeoTIFF",
@@ -33354,36 +33355,36 @@ const no = {
   },
   editor: {
     locationSection: "Sted",
-    homeLatitude: "Hjemmets breddegrad *",
-    homeLongitude: "Hjemmets lengdegrad *",
+    homeLatitude: "Hjemmets breddegrad",
+    homeLongitude: "Hjemmets lengdegrad",
     locationHint: "Overstyrer hjemmeadressen som brukes som kortets sentrum. La begge feltene være tomme for å bruke hjemmet som er konfigurert i Home Assistant. Overstyringen brukes kun når BEGGE feltene har gyldige koordinater.",
     mapSection: "Kart",
-    mapStyle: "Kartstil *",
+    mapStyle: "Kartstil",
     mapStyleHint: "To grunnkart: Gater (nøkternt, urbant, med fulle etiketter) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.",
     mapStyleStreet: "Gater",
-    cardTheme: "Korttema *",
+    cardTheme: "Korttema",
     cardThemeHint: "Bytter kortets utseende (chips, grafer, knapper, verktøytips, scrub-overlegg) og 3D-grunnkartet mellom et lyst tema (standard, på hvit bakgrunn) og et mørkt tema (på nesten svart bakgrunn) slik at kortet passer rent inn i lyse eller mørke Home Assistant-dashbord.",
     cardThemeLight: "Lyst",
     cardThemeDark: "Mørkt",
-    showLabels: "Vis etiketter *",
+    showLabels: "Vis etiketter",
     showLabelsHint: "Slår av eller på gatenavn, husnumre, interessepunkter og stedsnavn på grunnkartet.",
     labelsOn: "Vist",
     labelsOff: "Skjult",
-    autoRotate: "Automatisk kamerarotasjon *",
-    autoRotateHint: "Etter noen sekunder uten aktivitet roterer kameraet sakte rundt huset (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). Et knip, dra eller hjul pauser den øyeblikkelig, og den fortsetter så snart du slipper.",
+    autoRotate: "Automatisk kamerarotasjon",
+    autoRotateHint: "Etter noen sekunder uten aktivitet roterer kameraet sakte rundt huset (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). En enfingers-bevegelse pauser den umiddelbart, og den fortsetter så snart du slipper.",
     autoRotateOn: "På",
     autoRotateOff: "Av",
-    timeline: "Tidslinje",
-    timelineHint: "Format på datoetikettene som vises på tidslinjen og i scrub-chipen.",
-    dateFormat: "Datoformat * (standard: mm-dd)",
+    timeline: "Dato- og tidsformat",
+    timelineHint: "Format på dato- og tidsetikettene som vises på tidslinjen og i scrub-chipen.",
+    dateFormat: "Datoformat (standard: mm-dd)",
     dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Eksempler:",
-    timeFormat: "Klokkeformat *",
+    timeFormat: "Klokkeformat",
     timeFormat12: "12 t",
     timeFormat24: "24 t",
     colors: "Farger",
-    colorsHint: "Én farge per måleverdi, gjenbrukt overalt der den vises. Solfargen maler buen, solskiven og det øvre området på tidslinjen. Skyfargen maler skiven på bakken og det nedre området på tidslinjen.",
-    sunColor: "Solfarge *",
-    cloudColor: "Skyfarge *",
+    colorsHint: "Én farge per måleverdi, gjenbrukt overalt der den vises. Sol: buen, solskiven og det øvre området på tidslinjen. Skyer: skiven på bakken og det nedre området på tidslinjen. Produksjon: PV-chipen ved huset og den dedikerte grafen (vises bare hvis en produksjons-entitet er konfigurert). Batteri: batteri-chipene rundt PV-chipen (vises bare hvis en batteri-entitet er konfigurert). Bygninger: grunntonen til 3D-bygningene rundt huset.",
+    sunColor: "Solfarge",
+    cloudColor: "Skyfarge",
     pvSection: "Solproduksjon",
     pvHint: "Valgfri. Når satt vises en chip nær huset med øyeblikkelig produksjon (beregnet over siste minutt), og en dedikert graf legges til over tidslinjen. Aksepterer enten en effektsensor (W/kW) eller en kumulativ energisensor (Wh/kWh).",
     pvEntity: "Produksjons-entitet",
@@ -33392,17 +33393,19 @@ const no = {
     pvPeakPowerHelp: "Installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen i PV-grafen og strømningsmetningen for PV → hus-leaderen. La stå tom for å skjule prognosen; observert produksjon og dagens topp tegnes likevel.",
     pvArraysSection: "Panelorientering",
     pvArraysHelp: "Én oppføring per felt paneler med samme orientering. La én oppføring stå med helning 0 for en flat installasjon. Legg til flere oppføringer når panelene er fordelt på flere retninger (for eksempel en rad mot øst og en mot vest). Prognosen beregnes per oppføring og vektes etter prosenten av total kWp.",
-    pvArrayTitle: "Felt {n}",
+    pvArrayTitle: "Rad {n}",
+    pvArrayName: "Navn",
+    pvArrayNameHelp: "Valgfritt. En etikett for denne raden som vises i editor-overskriften (for eksempel «Sørtak», «Østgarasje»). La feltet stå tomt for å falle tilbake til den automatisk nummererte tittelen.",
     pvArrayTilt: "Helning (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Andel (%)",
-    pvArrayAdd: "+ Legg til felt",
+    pvArrayAdd: "+ Legg til rad",
     pvArrayRemove: "Fjern",
     pvArrayNormHint: "Prosentene summerer ikke til 100 %, prognosen normaliserer dem automatisk.",
-    pvArrayTiltHelp: "Helningen til dette feltet i forhold til vannrett, fra 0 til 90: 0 for flat installasjon, 30 til 45 for et typisk skråtak, 90 for en helt vertikal oppstilling (for eksempel balkong). Sammen med azimuten driver helningen Liu-Jordan-transposisjonen som projiserer forventet stråling på panelets plan.",
-    pvArrayAzimuthHelp: "Kompassretningen dette feltet peker mot, med klokken fra nord, fra 0 til 360: 0 = nord, 90 = øst, 180 = sør, 270 = vest.",
-    pvArrayShareHelp: "Relativ vekt av dette feltet i den totale kWp. Normaliseres automatisk ved beregning: 50/50, 60/60 og 1/1 gir samme resultat. La stå tomt når det bare finnes ett felt (det får 100 % som standard).",
-    pvColor: "Produksjonsfarge *",
+    pvArrayTiltHelp: "Helningen til denne raden i forhold til vannrett, fra 0 til 90: 0 for flat installasjon, 30 til 45 for et typisk skråtak, 90 for en helt vertikal oppstilling (for eksempel balkong). Sammen med azimuten driver helningen Liu-Jordan-transposisjonen som projiserer forventet stråling på panelets plan.",
+    pvArrayAzimuthHelp: "Kompassretningen denne raden peker mot, med klokken fra nord, fra 0 til 360: 0 = nord, 90 = øst, 180 = sør, 270 = vest.",
+    pvArrayShareHelp: "Relativ vekt av denne raden i den totale kWp. Normaliseres automatisk ved beregning: 50/50, 60/60 og 1/1 gir samme resultat. La stå tomt når det bare finnes én rad (den får 100 % som standard).",
+    pvColor: "Produksjonsfarge",
     batterySection: "Husbatteri",
     batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie. Chipen på sin side vises så snart entiteten er satt.",
     batterySocEntity: "Ladenivå-entitet",
@@ -33413,33 +33416,33 @@ const no = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertert",
     batteryPowerInvertHelp: "Som standard rapporterer batteri-enheten lading som positivt og utlading som negativt. Velg Invertert hvis enheten din gjør motsatt (noen GivEnergy- / GivTCP-oppsett). Helios snur da verdien én gang ved innlesing, slik at chipen, strømpilen og daglige lade- / utladesummer beholder betydningen sin.",
-    batteryColor: "Batterifarge *",
-    buildingsSection: "Omkringliggende bygninger",
+    batteryColor: "Batterifarge",
+    buildingsSection: "Bygning",
     buildingsHint: "For å holde kortet flytende i tette urbane områder rendres bare bygninger innenfor konfigurert radius rundt huset i 3D. Selve huset holdes alltid på full opasitet; nabobygninger rendres med konfigurert opasitet for å gi urban kontekst uten å konkurrere med dataovergangene. Klyngeradiusen grupperer tilkoblede uthus (verandaer, garasjer, skur) i «hus»-settet.",
-    displayRadius: "Visningsradius *",
+    displayRadius: "Visningsradius",
     displayRadiusHint: "Definerer det synlige området rundt huset. Alt utenfor denne radiusen skjules: grunnkart, nabobygninger, skygger. Styrer også LiDAR-hentingens omfang og klipp av projiserte skygger.",
-    buildingClusterRadius: "Hus-klyngeradius *",
-    buildingOpacity: "Opasitet for nabobygninger *",
-    buildingColor: "Bygningsfarge *",
-    pixelRatio: "Pikselforhold *",
+    buildingClusterRadius: "Hus-klyngeradius",
+    buildingOpacity: "Opasitet for nabobygninger",
+    buildingColor: "Bygningsfarge",
+    pixelRatio: "Pikselforhold",
     pixelRatioAuto: "Auto",
     pixelRatio1x: "1x",
     pixelRatioHint: "Auto (standard) bruker skjermens native devicePixelRatio (begrenset til 2 på skrivebord, 1,25 på mobil) for skarp rendering. 1x tvinger verdien til 1,0 for det billigste mulige per-frame fragmentarbeidet, nyttig på lavtytende enheter eller for lange økter der batteritid / varme betyr mer enn skarphet.",
     mapStyleMinimal: "Minimal",
     shadowsSection: "Skygger",
-    shadowsEnabled: "Vis skygger *",
+    shadowsEnabled: "Vis skygger",
     shadowsEnabledOn: "Vist",
     shadowsEnabledOff: "Skjult",
     shadowsEnabledHint: "Hovedbryter for projiserte bakkeskygger. Når skjult beregnes ingen skygger i det hele tatt. Når vist velges kilden automatisk: en LiDAR-leverandør når én dekker området ditt (bygninger + vegetasjon), OpenFreeMap-bygningsfotavtrykk ellers (bare bygninger).",
-    lidarPrecision: "LiDAR-presisjon *",
+    lidarPrecision: "LiDAR-presisjon",
     lidarPrecisionLow: "Lav",
     lidarPrecisionMedium: "Middels",
     lidarPrecisionHigh: "Høy",
     lidarPrecisionHint: "Hvis huset ligger innenfor en LiDAR-leverandør integrert med Helios (Kartverket NHM for Norge), får du mer realistiske skygger (bygninger OG vegetasjon). Noe forskyvning kan oppstå mellom de viste bygningene og skyggene deres: LiDAR-undersøkelsen er fanget på en gitt dato og gjenspeiler kanskje ikke nåværende tilstand. Utenfor LiDAR-dekning faller skyggene tilbake til de flate OpenFreeMap-bygningsfotavtrykkene, og denne innstillingen har ingen effekt.",
-    shadowOpacity: "Skyggeopasitet *",
+    shadowOpacity: "Skyggeopasitet",
     shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
     localLidarSection: "Avansert — Lokal LiDAR (BYO)",
-    localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor avgrensningsboksen erstatter denne kilden enhver nasjonal leverandør. Utenfor gjelder vanlig fallback-kjede.",
+    localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.",
     localLidarToolsHint: "Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).",
     localLidarEnabled: "Bruk lokale data",
     localLidarUrl: "GeoTIFF-URL",
@@ -35407,6 +35410,18 @@ const editorStyles = i$3`
         position: relative;
     }
 
+    /*  Extra breathing room between two consecutive fields with no
+        help text between them (e.g. the Location lat/lon pair or
+        the Local LiDAR bbox quartet). Without it the rows visually
+        touch because the section flex gap alone is too tight. The
+        selector only fires when both siblings are .field, so cases
+        with a .hint or .field-help between still rely on the
+        help's own margins.                                          */
+    .field + .field
+    {
+        margin-top: 8px;
+    }
+
     /*  Stacked variant for controls too wide to share a row with
         their label (e.g. ha-entity-picker). */
     .field.field-block
@@ -35543,6 +35558,10 @@ const editorStyles = i$3`
         border-radius: 6px;
         background: var(--card-background-color, #fff);
         overflow: hidden;
+    }
+    details.pv-array-card + details.pv-array-card
+    {
+        margin-top: 10px;
     }
 
     /*  Summary = header row of the collapsed/expanded card. Stays
@@ -36013,24 +36032,30 @@ let HeliosCardEditor = class extends i {
       const n3 = typeof v2 === "number" ? v2 : parseFloat(String(v2));
       return isFinite(n3) ? n3 : null;
     };
+    const toStr = (v2) => {
+      if (v2 === void 0 || v2 === null) return null;
+      const s2 = String(v2).trim();
+      return s2 === "" ? null : s2;
+    };
     const raw2 = this._cfg?.["pv-arrays"];
     if (Array.isArray(raw2) && raw2.length > 0) {
       const out = raw2.map((entry) => {
         const e2 = entry && typeof entry === "object" ? entry : {};
         return {
+          name: toStr(e2["name"]),
           tilt: toNum2(e2["tilt"]),
           azimuth: toNum2(e2["azimuth"]),
           share: toNum2(e2["share"])
         };
       });
-      return out.length > 0 ? out : [{ tilt: null, azimuth: null, share: null }];
+      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null }];
     }
     const legacyTilt = toNum2(this._cfg?.["pv-tilt"]);
     const legacyAz = toNum2(this._cfg?.["pv-azimuth"]);
     if (legacyTilt !== null || legacyAz !== null) {
-      return [{ tilt: legacyTilt, azimuth: legacyAz, share: 100 }];
+      return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100 }];
     }
-    return [{ tilt: null, azimuth: null, share: null }];
+    return [{ name: null, tilt: null, azimuth: null, share: null }];
   }
   //Persists a list of array entries to the config under `pv-arrays`
   //and clears the legacy `pv-tilt` / `pv-azimuth` keys in the same
@@ -36041,6 +36066,7 @@ let HeliosCardEditor = class extends i {
   _writePvArrays(list) {
     const arrays = list.map((e2) => {
       const o2 = {};
+      if (e2.name !== null) o2["name"] = e2.name;
       if (e2.tilt !== null) o2["tilt"] = e2.tilt;
       if (e2.azimuth !== null) o2["azimuth"] = e2.azimuth;
       if (e2.share !== null) o2["share"] = e2.share;
@@ -36068,10 +36094,21 @@ let HeliosCardEditor = class extends i {
     }
     this._writePvArrays(list);
   }
+  //Updates the user-typed name for row `i`. Empty input clears the
+  //field to null, the summary then falls back to the auto-numbered
+  //"Row N" title. Stops the event so the parent <details>` toggle
+  //doesn't fire when the user types inside the input.
+  _arrayName(i2, e2) {
+    const list = this._readPvArrays();
+    if (i2 < 0 || i2 >= list.length) return;
+    const raw2 = e2.target.value.trim();
+    list[i2] = { ...list[i2], name: raw2 === "" ? null : raw2 };
+    this._writePvArrays(list);
+  }
   _arrayAdd() {
     const list = this._readPvArrays();
     if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
-    list.push({ tilt: null, azimuth: null, share: null });
+    list.push({ name: null, tilt: null, azimuth: null, share: null });
     this._openArrayIndices = /* @__PURE__ */ new Set([...this._openArrayIndices, list.length - 1]);
     this._writePvArrays(list);
   }
@@ -36108,10 +36145,18 @@ let HeliosCardEditor = class extends i {
   //<details>). When the user collapses the currently-open section
   //the editor falls back to "everything closed", a valid state
   //since the section content is the only mandatory surface.
+  //
+  //Also scrolls the just-opened section into view so the user is
+  //never left looking at the bottom of the previous section after
+  //a click. Done on the next rAF tick so the layout reflects the
+  //newly-expanded body before we measure.
   _onSectionToggle(sectionId, e2) {
     const el = e2.currentTarget;
     if (el.open) {
       this._openSection = sectionId;
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } else if (this._openSection === sectionId) {
       this._openSection = null;
     }
@@ -36344,6 +36389,7 @@ let HeliosCardEditor = class extends i {
 
                 <details class="advanced-section" ?open="${this._openSection === "pv"}" @toggle="${(e2) => this._onSectionToggle("pv", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.pvSection}</summary>
+                <div class="hint">${t2.editor.pvHint}</div>
                 <div class="field field-block">
                     <span class="label">${t2.editor.pvEntity}</span>
                     ${this._pickerReady ? b`
@@ -36390,7 +36436,8 @@ let HeliosCardEditor = class extends i {
                             <summary class="section-title section-title-collapse">${t2.editor.pvArraysSection}</summary>
                             <div class="hint">${t2.editor.pvArraysHelp}</div>
                             ${arrays.map((arr, i2) => {
-        const title = t2.editor.pvArrayTitle.replace("{n}", String(i2 + 1));
+        const fallback = t2.editor.pvArrayTitle.replace("{n}", String(i2 + 1));
+        const title = arr.name ?? fallback;
         const isOpen = this._openArrayIndices.has(i2);
         return b`
                                     <details class="pv-array-card" ?open="${isOpen}" @toggle="${(e2) => this._onArrayToggle(i2, e2)}">
@@ -36410,6 +36457,17 @@ let HeliosCardEditor = class extends i {
                                             >${t2.editor.pvArrayRemove}</button>
                                         </summary>
                                         <div class="pv-array-body">
+                                            <label class="field">
+                                                <span class="label">${t2.editor.pvArrayName}</span>
+                                                <input
+                                                    type="text"
+                                                    maxlength="40"
+                                                    placeholder="${fallback}"
+                                                    .value="${arr.name ?? ""}"
+                                                    @change="${(e2) => this._arrayName(i2, e2)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t2.editor.pvArrayNameHelp}</div>
                                             <label class="field">
                                                 <span class="label">${t2.editor.pvArrayTilt}</span>
                                                 <input
@@ -36466,12 +36524,12 @@ let HeliosCardEditor = class extends i {
                         </details>
                     `;
     })()}
-                <div class="hint">${t2.editor.pvHint}</div>
 
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "battery"}" @toggle="${(e2) => this._onSectionToggle("battery", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.batterySection}</summary>
+                <div class="hint">${t2.editor.batteryHint}</div>
                 <div class="field field-block">
                     <span class="label">${t2.editor.batterySocEntity}</span>
                     ${this._pickerReady ? b`
@@ -36536,6 +36594,7 @@ let HeliosCardEditor = class extends i {
 
                 <details class="advanced-section" ?open="${this._openSection === "colors"}" @toggle="${(e2) => this._onSectionToggle("colors", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.colors}</summary>
+                    <div class="hint">${t2.editor.colorsHint}</div>
                     <label class="field">
                         <span class="label">${t2.editor.sunColor}</span>
                         <helios-color-picker
@@ -36576,7 +36635,6 @@ let HeliosCardEditor = class extends i {
                             @value-changed="${(e2) => this._color("building-color", e2)}"
                         ></helios-color-picker>
                     </label>
-                    <div class="hint">${t2.editor.colorsHint}</div>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "timeline"}" @toggle="${(e2) => this._onSectionToggle("timeline", e2)}">
@@ -36745,7 +36803,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.12"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.13"}`,
       labelStyle,
       versionStyle
     );
@@ -36766,7 +36824,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.12",
+        version: "1.6.0-alpha.13",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -36774,7 +36832,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.12"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.13"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -36862,7 +36920,6 @@ let HeliosCard = class extends i {
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
-    this._isInEditorPreview = false;
     this._trackElement = null;
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
@@ -37035,29 +37092,6 @@ let HeliosCard = class extends i {
     this._tick();
     this._timer = window.setInterval(() => this._tick(), 3e4);
     this._initVisibilityObserver();
-    this._isInEditorPreview = this._detectEditorPreview();
-  }
-  _detectEditorPreview() {
-    const EDITOR_TAGS = /* @__PURE__ */ new Set([
-      "hui-dialog-edit-card",
-      "hui-card-element-editor",
-      "hui-edit-card",
-      "hui-card-editor"
-    ]);
-    let node = this;
-    let hops = 0;
-    while (node && hops++ < 40) {
-      if (node instanceof ShadowRoot) {
-        node = node.host;
-        continue;
-      }
-      if (node instanceof Element) {
-        const tag = node.tagName?.toLowerCase();
-        if (tag && EDITOR_TAGS.has(tag)) return true;
-      }
-      node = node.parentNode;
-    }
-    return false;
   }
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -37486,16 +37520,6 @@ let HeliosCard = class extends i {
     }
   }
   _initEngine() {
-    if (this._isInEditorPreview) {
-      try {
-        const w2 = window;
-        if (w2.__heliosStats) {
-          w2.__heliosStats.enginesSkippedAsPreview = (w2.__heliosStats.enginesSkippedAsPreview ?? 0) + 1;
-        }
-      } catch (_2) {
-      }
-      return;
-    }
     this._initInflight = true;
     if (this._initDebounceTimer !== void 0) {
       window.clearTimeout(this._initDebounceTimer);
@@ -38583,7 +38607,7 @@ let HeliosCard = class extends i {
     }
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
-    const showPlaceholder = !hasApiKey || this._isInEditorPreview;
+    const showPlaceholder = !hasApiKey;
     return b`
             <ha-card class="${cardThemeClass} ${showPlaceholder ? "placeholder-mode" : ""} ${this._detailMode ? "detail-active" : ""}">
 

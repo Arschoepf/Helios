@@ -612,51 +612,6 @@ export class HeliosCard extends LitElement
         //ups by 30× compared to the previous 1 Hz cadence.
         this._timer = window.setInterval(() => this._tick(), 30_000);
         this._initVisibilityObserver();
-        //Detect early whether we're rendered inside HA's dashboard
-        //editor preview. The editor instantiates a fresh helios-card
-        //on every config change and each engine takes a WebGL
-        //context, Safari mobile caps at ~8 and starts recycling
-        //past that, which is the root cause of the FPS drift and
-        //iOS black-screen lockup. We skip the engine entirely for
-        //preview cards (the dashboard card on the actual page keeps
-        //its full rendering).
-        this._isInEditorPreview = this._detectEditorPreview();
-    }
-
-    //Cached at connectedCallback time; does not change for the
-    //lifetime of the card instance.
-    private _isInEditorPreview = false;
-
-    private _detectEditorPreview(): boolean
-    {
-        //Tag list collected from inspecting HA's dashboard editor
-        //DOM: the modal dialog wrapping each preview, the element
-        //editor, plus a couple of generic fallbacks. We walk every
-        //ancestor (including across shadow-root boundaries via
-        //node.host) until we hit one matching, or run out of hops.
-        const EDITOR_TAGS = new Set([
-            'hui-dialog-edit-card',
-            'hui-card-element-editor',
-            'hui-edit-card',
-            'hui-card-editor'
-        ]);
-        let node: Node | null = this;
-        let hops = 0;
-        while (node && hops++ < 40)
-        {
-            if (node instanceof ShadowRoot)
-            {
-                node = node.host;
-                continue;
-            }
-            if (node instanceof Element)
-            {
-                const tag = node.tagName?.toLowerCase();
-                if (tag && EDITOR_TAGS.has(tag)) return true;
-            }
-            node = (node as Node).parentNode;
-        }
-        return false;
     }
 
     public disconnectedCallback(): void
@@ -1364,26 +1319,6 @@ export class HeliosCard extends LitElement
 
     private _initEngine(): void
     {
-        //Hard skip: cards rendered inside HA's dashboard editor
-        //preview never spawn an engine, each one would claim a
-        //WebGL context Safari mobile can't release fast enough.
-        //The live dashboard card keeps its full rendering.
-        if (this._isInEditorPreview)
-        {
-            //Bump a counter so we can see in __heliosStats how many
-            //preview cards the detection actually caught.
-            try
-            {
-                const w = window as unknown as { __heliosStats?: { enginesSkippedAsPreview?: number } };
-                if (w.__heliosStats)
-                {
-                    w.__heliosStats.enginesSkippedAsPreview =
-                        (w.__heliosStats.enginesSkippedAsPreview ?? 0) + 1;
-                }
-            }
-            catch (_) {}
-            return;
-        }
         this._initInflight = true;
 
         //Cancel any pending debounce, a fresh _initEngine() call
@@ -3249,14 +3184,11 @@ export class HeliosCard extends LitElement
         const cardTheme = String(this.config?.['card-theme'] ?? 'light').toLowerCase();
         const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';
 
-        //showPlaceholder collapses two cases that share the same
-        //render: (a) HA hasn't published home coordinates yet (the
-        //card is in a fresh dashboard before the location is set),
-        //(b) the card is rendered inside HA's dashboard editor
-        //preview, where we deliberately skip the WebGL engine to
-        //avoid context exhaustion. Both fall back to the same
-        //illustrated placeholder.
-        const showPlaceholder = !hasApiKey || this._isInEditorPreview;
+        //showPlaceholder covers the single case where HA hasn't
+        //published home coordinates yet (fresh dashboard before the
+        //location is set). The dashboard editor preview now renders
+        //the live map instead of a static illustration.
+        const showPlaceholder = !hasApiKey;
 
         return html`
             <ha-card class="${cardThemeClass} ${showPlaceholder ? 'placeholder-mode' : ''} ${this._detailMode ? 'detail-active' : ''}">

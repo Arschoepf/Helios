@@ -115,6 +115,8 @@ export interface Translations
         pvArraysSection:          string;
         pvArraysHelp:             string;
         pvArrayTitle:             string;   //e.g. "Array {n}"
+        pvArrayName:              string;
+        pvArrayNameHelp:          string;
         pvArrayTilt:              string;
         pvArrayAzimuth:           string;
         pvArrayShare:             string;
