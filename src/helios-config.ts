@@ -1411,23 +1411,22 @@ export class HeliosCardEditor extends LitElement
             transform: rotate(90deg);
         }
 
-        /*  Asymmetric vertical rhythm: the help/hint sits close to its
-            companion field (negative margin-top pulls it up against
-            the flex gap so the two read as a logical unit) and pushes
-            the NEXT field away with a generous bottom margin so
-            consecutive field+help blocks remain visually distinct.
-
-            The -8px negative compensates the section's 14px gap to
-            land at ~6px below the field (tight, "this label belongs
-            to that field above"), then the 22px margin-bottom adds
-            to the gap for a ~36px break before the next field (clear,
-            "new field now").                                          */
+        /*  Vertical rhythm with positive-only margins. The previous
+            negative-margin approach kept biting back: too small and
+            the editor read as dense, too aggressive and the hint
+            visually overlapped the field above. With a positive
+            margin-bottom on hint/help (and the section's flex gap
+            handling the field-to-hint spacing), we get a clean
+            asymmetry without any overlap risk:
+              field → hint        = section gap (14 px)
+              hint  → next field  = section gap + 20 px = 34 px
+            Hierarchy is visible (2.4× ratio) and no element ever
+            sits underneath another.                                  */
         .field-help
         {
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
-            margin-top: -8px;
-            margin-bottom: 22px;
+            margin: 0 0 20px 0;
         }
 
         .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
@@ -1438,8 +1437,7 @@ export class HeliosCardEditor extends LitElement
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
             font-style: italic;
-            margin-top: -8px;
-            margin-bottom: 22px;
+            margin: 0 0 20px 0;
         }
 
         .field

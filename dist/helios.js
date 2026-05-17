@@ -36603,23 +36603,22 @@ HeliosCardEditor.styles = i$3`
             transform: rotate(90deg);
         }
 
-        /*  Asymmetric vertical rhythm: the help/hint sits close to its
-            companion field (negative margin-top pulls it up against
-            the flex gap so the two read as a logical unit) and pushes
-            the NEXT field away with a generous bottom margin so
-            consecutive field+help blocks remain visually distinct.
-
-            The -8px negative compensates the section's 14px gap to
-            land at ~6px below the field (tight, "this label belongs
-            to that field above"), then the 22px margin-bottom adds
-            to the gap for a ~36px break before the next field (clear,
-            "new field now").                                          */
+        /*  Vertical rhythm with positive-only margins. The previous
+            negative-margin approach kept biting back: too small and
+            the editor read as dense, too aggressive and the hint
+            visually overlapped the field above. With a positive
+            margin-bottom on hint/help (and the section's flex gap
+            handling the field-to-hint spacing), we get a clean
+            asymmetry without any overlap risk:
+              field → hint        = section gap (14 px)
+              hint  → next field  = section gap + 20 px = 34 px
+            Hierarchy is visible (2.4× ratio) and no element ever
+            sits underneath another.                                  */
         .field-help
         {
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
-            margin-top: -8px;
-            margin-bottom: 22px;
+            margin: 0 0 20px 0;
         }
 
         .field-help a       { color: var(--primary-color, #03a9f4); text-decoration: none; }
@@ -36630,8 +36629,7 @@ HeliosCardEditor.styles = i$3`
             font-size: 11px;
             color: var(--secondary-text-color, #727272);
             font-style: italic;
-            margin-top: -8px;
-            margin-bottom: 22px;
+            margin: 0 0 20px 0;
         }
 
         .field
@@ -37010,7 +37008,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.9"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.10"}`,
       labelStyle,
       versionStyle
     );
@@ -37031,7 +37029,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.9",
+        version: "1.6.0-alpha.10",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37039,7 +37037,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.9"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.10"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
