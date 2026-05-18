@@ -20,7 +20,8 @@ export const it: Translations = {
         batteryCharged:     'caricato',
         batteryDischarged:  'scaricato',
         actualShort:        'Reale',
-        forecastShort:      'Previsto',},
+        forecastShort:      'Previsto',
+        deltaTooltip:       'Produzione reale vs prevista in questo momento',},
 
     editor:
     {

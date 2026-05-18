@@ -29,7 +29,8 @@ export const no: Translations = {
         batteryCharged:     'ladet',
         batteryDischarged:  'utladet',
         actualShort:        'Reell',
-        forecastShort:      'Estimert',},
+        forecastShort:      'Estimert',
+        deltaTooltip:       'Reell produksjon vs estimat akkurat nå',},
 
     editor:
     {

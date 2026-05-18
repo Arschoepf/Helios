@@ -46,6 +46,9 @@ export interface Translations
         //                    spaces (chart hover tooltip)
         //  forecastShort   , short "Forecast" label used in compact
         //                    spaces (chart hover tooltip)
+        //  deltaTooltip    , native title hover hint on the headline
+        //                    (+X % / -X %) chip, explaining the
+        //                    comparison reference
         todayLabel:        string;
         todayProduced:     string;
         todayForecast:     string;
@@ -59,6 +62,7 @@ export interface Translations
         batteryDischarged: string;
         actualShort:       string;
         forecastShort:     string;
+        deltaTooltip:      string;
     };
 
     editor:

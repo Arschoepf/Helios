@@ -20,7 +20,8 @@ export const nl: Translations = {
         batteryCharged:     'opgeladen',
         batteryDischarged:  'ontladen',
         actualShort:        'Werkelijk',
-        forecastShort:      'Verwacht',},
+        forecastShort:      'Verwacht',
+        deltaTooltip:       'Werkelijke opwekking vs verwachting op dit moment',},
 
     editor:
     {

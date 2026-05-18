@@ -511,7 +511,9 @@ export function renderDashTodaySection(
                             <span class="dash-stat-value">${formatLocalisedNumber(host.hass, producedKwh, 1)}</span>
                             <span class="dash-stat-unit">kWh ${t.detail.todayProduced}</span>
                             ${deltaPct !== null ? html`
-                                <span class="dash-stat-delta ${deltaPct >= 0 ? 'dash-stat-delta-up' : 'dash-stat-delta-down'}">
+                                <span class="dash-stat-delta ${deltaPct >= 0 ? 'dash-stat-delta-up' : 'dash-stat-delta-down'}"
+                                      title="${t.detail.deltaTooltip}"
+                                >
                                     (${deltaPct >= 0 ? '+' : ''}${formatLocalisedNumber(host.hass, deltaPct, 0, true)} %)
                                 </span>
                             ` : nothing}
@@ -733,21 +735,17 @@ export function renderDashTodayChart(
                           x1="${hoverX.toFixed(2)}" x2="${hoverX.toFixed(2)}"
                           y1="${PAD_T}" y2="${H - PAD_B}"/>
                 ` : nothing}
-                ${hoverPredictedKwh !== null ? svg`
-                    <circle class="dash-today-chart-hover-dot"
-                            cx="${hoverX.toFixed(2)}"
-                            cy="${yFor(hoverPredictedKwh).toFixed(2)}"
-                            r="2.2"
-                            fill="${predictedColor}"/>
-                ` : nothing}
-                ${hoverActualKwh !== null ? svg`
-                    <circle class="dash-today-chart-hover-dot"
-                            cx="${hoverX.toFixed(2)}"
-                            cy="${yFor(hoverActualKwh).toFixed(2)}"
-                            r="2.2"
-                            fill="${pvColor}"/>
-                ` : nothing}
             </svg>
+            ${hoverPredictedKwh !== null ? html`
+                <div class="dash-today-chart-hover-dot"
+                     style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(yFor(hoverPredictedKwh) / H * 100).toFixed(2)}%; background: ${predictedColor};"
+                ></div>
+            ` : nothing}
+            ${hoverActualKwh !== null ? html`
+                <div class="dash-today-chart-hover-dot"
+                     style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(yFor(hoverActualKwh) / H * 100).toFixed(2)}%; background: ${pvColor};"
+                ></div>
+            ` : nothing}
             <div class="dash-today-chart-axis-x">
                 ${hourTicks.map(h => html`
                     <span class="dash-today-chart-axis-x-label"

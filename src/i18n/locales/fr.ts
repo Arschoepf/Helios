@@ -28,6 +28,7 @@ export const fr: Translations = {
         batteryDischarged:  'déchargé',
         actualShort:        'Réel',
         forecastShort:      'Prévu',
+        deltaTooltip:       'Production réelle vs prévision à cet instant',
     },
 
     editor:

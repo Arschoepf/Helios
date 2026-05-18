@@ -605,16 +605,27 @@ export const heliosCardStyles = css`
     {
         stroke: rgba(255, 255, 255, 0.45);
     }
+    /*  HTML overlay (not SVG circle) so the dot stays perfectly
+        round regardless of the chart's non-uniform aspect ratio.
+        SVG circles inside preserveAspectRatio="none" stretch into
+        ovals when the container's width:height ratio differs from
+        the viewBox's; HTML border-radius is screen-pixel based and
+        immune to that distortion.                                */
     .dash-today-chart-hover-dot
     {
-        stroke: #ffffff;
-        stroke-width: 1;
-        paint-order: stroke fill;
+        position: absolute;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        border: 1.5px solid #ffffff;
+        box-sizing: border-box;
+        transform: translate(-50%, -50%);
         pointer-events: none;
+        z-index: 1;
     }
     ha-card.theme-dark .dash-today-chart-hover-dot
     {
-        stroke: #191a1b;
+        border-color: #191a1b;
     }
 
     /*  X-axis: hour ticks ('00h' / '06h' / ...) along the bottom

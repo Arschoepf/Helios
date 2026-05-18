@@ -618,7 +618,8 @@ const en = {
     batteryCharged: "charged",
     batteryDischarged: "discharged",
     actualShort: "Actual",
-    forecastShort: "Forecast"
+    forecastShort: "Forecast",
+    deltaTooltip: "Actual production vs forecast at this moment"
   },
   editor: {
     locationSection: "Location",
@@ -760,7 +761,8 @@ const fr = {
     batteryCharged: "chargé",
     batteryDischarged: "déchargé",
     actualShort: "Réel",
-    forecastShort: "Prévu"
+    forecastShort: "Prévu",
+    deltaTooltip: "Production réelle vs prévision à cet instant"
   },
   editor: {
     locationSection: "Localisation",
@@ -902,7 +904,8 @@ const de = {
     batteryCharged: "geladen",
     batteryDischarged: "entladen",
     actualShort: "Real",
-    forecastShort: "Prognose"
+    forecastShort: "Prognose",
+    deltaTooltip: "Reale Erzeugung vs Prognose im aktuellen Moment"
   },
   editor: {
     locationSection: "Standort",
@@ -1044,7 +1047,8 @@ const es = {
     batteryCharged: "cargado",
     batteryDischarged: "descargado",
     actualShort: "Real",
-    forecastShort: "Previsto"
+    forecastShort: "Previsto",
+    deltaTooltip: "Producción real vs previsión en este momento"
   },
   editor: {
     locationSection: "Ubicación",
@@ -1186,7 +1190,8 @@ const it = {
     batteryCharged: "caricato",
     batteryDischarged: "scaricato",
     actualShort: "Reale",
-    forecastShort: "Previsto"
+    forecastShort: "Previsto",
+    deltaTooltip: "Produzione reale vs prevista in questo momento"
   },
   editor: {
     locationSection: "Posizione",
@@ -1328,7 +1333,8 @@ const nl = {
     batteryCharged: "opgeladen",
     batteryDischarged: "ontladen",
     actualShort: "Werkelijk",
-    forecastShort: "Verwacht"
+    forecastShort: "Verwacht",
+    deltaTooltip: "Werkelijke opwekking vs verwachting op dit moment"
   },
   editor: {
     locationSection: "Locatie",
@@ -1470,7 +1476,8 @@ const pt = {
     batteryCharged: "carregado",
     batteryDischarged: "descarregado",
     actualShort: "Real",
-    forecastShort: "Previsto"
+    forecastShort: "Previsto",
+    deltaTooltip: "Produção real vs previsão neste momento"
   },
   editor: {
     locationSection: "Localização",
@@ -1612,7 +1619,8 @@ const no = {
     batteryCharged: "ladet",
     batteryDischarged: "utladet",
     actualShort: "Reell",
-    forecastShort: "Estimert"
+    forecastShort: "Estimert",
+    deltaTooltip: "Reell produksjon vs estimat akkurat nå"
   },
   editor: {
     locationSection: "Sted",
@@ -2343,16 +2351,27 @@ const heliosCardStyles = i$3`
     {
         stroke: rgba(255, 255, 255, 0.45);
     }
+    /*  HTML overlay (not SVG circle) so the dot stays perfectly
+        round regardless of the chart's non-uniform aspect ratio.
+        SVG circles inside preserveAspectRatio="none" stretch into
+        ovals when the container's width:height ratio differs from
+        the viewBox's; HTML border-radius is screen-pixel based and
+        immune to that distortion.                                */
     .dash-today-chart-hover-dot
     {
-        stroke: #ffffff;
-        stroke-width: 1;
-        paint-order: stroke fill;
+        position: absolute;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        border: 1.5px solid #ffffff;
+        box-sizing: border-box;
+        transform: translate(-50%, -50%);
         pointer-events: none;
+        z-index: 1;
     }
     ha-card.theme-dark .dash-today-chart-hover-dot
     {
-        stroke: #191a1b;
+        border-color: #191a1b;
     }
 
     /*  X-axis: hour ticks ('00h' / '06h' / ...) along the bottom
@@ -37872,7 +37891,9 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                             <span class="dash-stat-value">${formatLocalisedNumber(host.hass, producedKwh, 1)}</span>
                             <span class="dash-stat-unit">kWh ${t2.detail.todayProduced}</span>
                             ${deltaPct !== null ? b`
-                                <span class="dash-stat-delta ${deltaPct >= 0 ? "dash-stat-delta-up" : "dash-stat-delta-down"}">
+                                <span class="dash-stat-delta ${deltaPct >= 0 ? "dash-stat-delta-up" : "dash-stat-delta-down"}"
+                                      title="${t2.detail.deltaTooltip}"
+                                >
                                     (${deltaPct >= 0 ? "+" : ""}${formatLocalisedNumber(host.hass, deltaPct, 0, true)} %)
                                 </span>
                             ` : A}
@@ -38037,21 +38058,17 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                           x1="${hoverX.toFixed(2)}" x2="${hoverX.toFixed(2)}"
                           y1="${PAD_T}" y2="${H2 - PAD_B}"/>
                 ` : A}
-                ${hoverPredictedKwh !== null ? w`
-                    <circle class="dash-today-chart-hover-dot"
-                            cx="${hoverX.toFixed(2)}"
-                            cy="${yFor(hoverPredictedKwh).toFixed(2)}"
-                            r="2.2"
-                            fill="${predictedColor}"/>
-                ` : A}
-                ${hoverActualKwh !== null ? w`
-                    <circle class="dash-today-chart-hover-dot"
-                            cx="${hoverX.toFixed(2)}"
-                            cy="${yFor(hoverActualKwh).toFixed(2)}"
-                            r="2.2"
-                            fill="${pvColor}"/>
-                ` : A}
             </svg>
+            ${hoverPredictedKwh !== null ? b`
+                <div class="dash-today-chart-hover-dot"
+                     style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(yFor(hoverPredictedKwh) / H2 * 100).toFixed(2)}%; background: ${predictedColor};"
+                ></div>
+            ` : A}
+            ${hoverActualKwh !== null ? b`
+                <div class="dash-today-chart-hover-dot"
+                     style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(yFor(hoverActualKwh) / H2 * 100).toFixed(2)}%; background: ${pvColor};"
+                ></div>
+            ` : A}
             <div class="dash-today-chart-axis-x">
                 ${hourTicks.map((h2) => b`
                     <span class="dash-today-chart-axis-x-label"
@@ -40028,7 +40045,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.42"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.43"}`,
       labelStyle,
       versionStyle
     );
@@ -40049,7 +40066,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.42",
+        version: "1.6.0-alpha.43",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40057,7 +40074,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.42"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.43"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
