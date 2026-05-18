@@ -22,26 +22,33 @@ import type {
     Map as MapLibreMap
 } from 'maplibre-gl';
 
-//Vertex shader. Takes one Mercator triplet per point, filters by
-//distance to the home in metres (kept in metres so the user-facing
-//`lidar-view-radius` config maps 1:1 to the shader uniform), and sets
-//gl_PointSize so the dot occupies the configured pixel area
-//regardless of zoom. Off-radius points collapse to PointSize 0 so the
-//rasteriser skips them entirely.
+//Vertex shader. Takes one Mercator-offset triplet per point (each
+//cell's position relative to the home, in Mercator units), filters by
+//distance to the home in metres, and sets gl_PointSize so the dot
+//occupies the configured pixel area regardless of zoom. Off-radius
+//points collapse to PointSize 0 so the rasteriser skips them.
+//
+//The matrix is *already* shifted to be home-relative: the host JS
+//pre-multiplies MapLibre's projection matrix by a translation to the
+//home in float64, then sends the combined mat4 as the uniform. That
+//shift is what keeps the per-vertex math precise: storing absolute
+//Mercator coords (~0.5 + tiny per-cell deltas) puts the deltas at the
+//edge of float32's mantissa and the per-frame matrix-times-vec4
+//product jitters by a pixel or two each rotation step. With offsets
+//(~1e-6 worst case), float32 has plenty of headroom and the cloud
+//stays rock-solid as the camera moves.
 const VERT_SRC = `
+precision highp float;
 attribute vec3 a_pos;
 uniform mat4  u_matrix;
-uniform vec2  u_homeMerc;
 uniform float u_mercPerMeter;
 uniform float u_radiusMeters;
 uniform float u_pointSizePx;
 varying float v_inside;
 
 void main() {
-    float dxMerc = a_pos.x - u_homeMerc.x;
-    float dyMerc = a_pos.y - u_homeMerc.y;
-    float dxM = dxMerc / u_mercPerMeter;
-    float dyM = dyMerc / u_mercPerMeter;
+    float dxM = a_pos.x / u_mercPerMeter;
+    float dyM = a_pos.y / u_mercPerMeter;
     float d2  = dxM * dxM + dyM * dyM;
     float r2  = u_radiusMeters * u_radiusMeters;
     v_inside  = step(d2, r2);
@@ -99,12 +106,14 @@ export class LidarViewLayer implements CustomLayerInterface
 
     private _aPos: number = -1;
     private _uMatrix?:       WebGLUniformLocation;
-    private _uHomeMerc?:     WebGLUniformLocation;
     private _uMercPerMeter?: WebGLUniformLocation;
     private _uRadius?:       WebGLUniformLocation;
     private _uPointSize?:    WebGLUniformLocation;
     private _uColor?:        WebGLUniformLocation;
     private _uAlphaFade?:    WebGLUniformLocation;
+    //Reusable scratch for the per-frame matrix shift, allocated once
+    //to avoid garbage on every render call.
+    private _shiftedMatrix:  Float32Array = new Float32Array(16);
 
     //Tunables, pushed by the engine on config / fade ticks.
     private _radiusMeters: number = 100;
@@ -113,13 +122,19 @@ export class LidarViewLayer implements CustomLayerInterface
     private _alphaFade:    number = 0;
 
     //Home position in Mercator. Recomputed when setHome is called so
-    //the radius filter stays anchored on the rendered home.
+    //the radius filter stays anchored on the rendered home, and used
+    //per-frame as the translation injected into the projection matrix
+    //(home-relative buffer trick, see render()).
     private _homeMerc: maplibregl.MercatorCoordinate;
     private _mercPerMeter: number;
 
     //Vertices cached when the engine sets data BEFORE the layer is
     //added to the map. Uploaded to GL the moment onAdd runs.
     private _pendingVerts?: Float32Array;
+    //Raster reference kept around so setHome can rebuild the buffer
+    //against the new origin. Without this, switching homes would
+    //leave the cloud anchored at the previous mercator centre.
+    private _raster: LidarRaster | null = null;
 
     constructor(opts: LidarViewLayerOpts)
     {
@@ -131,6 +146,9 @@ export class LidarViewLayer implements CustomLayerInterface
     {
         this._homeMerc     = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0);
         this._mercPerMeter = this._homeMerc.meterInMercatorCoordinateUnits();
+        //Buffer encodes offsets from the previous home, refit it
+        //against the new origin so the cloud stays anchored.
+        if (this._raster) this.setData(this._raster);
         this._map?.triggerRepaint();
     }
 
@@ -166,8 +184,18 @@ export class LidarViewLayer implements CustomLayerInterface
     //Rebuild the GPU buffer from a fresh height raster. Only finite
     //cells are uploaded; NaN sentinels (no-data) are dropped at build
     //time so the shader never sees them.
+    //
+    //Each cell is encoded as a Mercator OFFSET from the home origin
+    //in float64 first, then truncated to float32. With offsets in the
+    //~1e-6 range (a few hundred metres at typical lats), float32 has
+    //plenty of mantissa for sub-metre placement; storing absolute
+    //Mercator coords (~0.5 + small delta) quantises adjacent cells to
+    //the same float32 value and produces the diagonal moiré bands you
+    //get on the ground layer at high precision.
     public setData(raster: LidarRaster | null): void
     {
+        this._raster = raster;
+
         if (!raster || raster.rasterSize <= 0)
         {
             this._vertexCount = 0;
@@ -184,6 +212,12 @@ export class LidarViewLayer implements CustomLayerInterface
         const { heights, rasterSize, minLat, maxLat, minLon, maxLon } = raster;
         const pxLon = (maxLon - minLon) / rasterSize;
         const pxLat = (maxLat - minLat) / rasterSize;
+        //Home Mercator captured here as float64; the subtraction below
+        //runs in float64 (JS Number) so each cell's offset reaches the
+        //buffer with full double precision before float32 truncation.
+        const homeX = this._homeMerc.x;
+        const homeY = this._homeMerc.y;
+        const homeZ = this._homeMerc.z ?? 0;
 
         //Worst-case all-cells-finite allocation. We slice the unused
         //tail off before upload so the GPU buffer only carries real
@@ -200,9 +234,9 @@ export class LidarViewLayer implements CustomLayerInterface
                 if (!isFinite(h)) continue;
                 const cLon = minLon + (i + 0.5) * pxLon;
                 const mc   = maplibregl.MercatorCoordinate.fromLngLat([cLon, cLat], h);
-                verts[n * 3    ] = mc.x;
-                verts[n * 3 + 1] = mc.y;
-                verts[n * 3 + 2] = mc.z ?? 0;
+                verts[n * 3    ] = mc.x       - homeX;
+                verts[n * 3 + 1] = mc.y       - homeY;
+                verts[n * 3 + 2] = (mc.z ?? 0) - homeZ;
                 n++;
             }
         }
@@ -245,7 +279,6 @@ export class LidarViewLayer implements CustomLayerInterface
 
         this._aPos          = gl.getAttribLocation(program, 'a_pos');
         this._uMatrix       = gl.getUniformLocation(program, 'u_matrix')       ?? undefined;
-        this._uHomeMerc     = gl.getUniformLocation(program, 'u_homeMerc')     ?? undefined;
         this._uMercPerMeter = gl.getUniformLocation(program, 'u_mercPerMeter') ?? undefined;
         this._uRadius       = gl.getUniformLocation(program, 'u_radiusMeters') ?? undefined;
         this._uPointSize    = gl.getUniformLocation(program, 'u_pointSizePx')  ?? undefined;
@@ -270,20 +303,21 @@ export class LidarViewLayer implements CustomLayerInterface
         if (this._alphaFade <= 0) return;
 
         //MapLibre passes a projection matrix that maps Mercator [0..1]
-        //world coords into clip space.
+        //world coords into clip space. The buffer stores home-relative
+        //offsets, so we inject a translation by the home Mercator
+        //into the matrix before uploading. The math runs in float64
+        //(JS Number) so the combined matrix carries the home shift
+        //without losing precision on the way to the float32 uniform.
         const rawMatrix = args.defaultProjectionData?.mainMatrix as ArrayLike<number> | undefined;
         if (!rawMatrix) return;
-        const matrix = rawMatrix instanceof Float32Array
-            ? rawMatrix
-            : Float32Array.from(rawMatrix as ArrayLike<number>);
+        this._buildShiftedMatrix(rawMatrix);
 
         gl.useProgram(this._program);
         gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
         gl.enableVertexAttribArray(this._aPos);
         gl.vertexAttribPointer(this._aPos, 3, gl.FLOAT, false, 0, 0);
 
-        if (this._uMatrix)       gl.uniformMatrix4fv(this._uMatrix, false, matrix);
-        if (this._uHomeMerc)     gl.uniform2f(this._uHomeMerc, this._homeMerc.x, this._homeMerc.y);
+        if (this._uMatrix)       gl.uniformMatrix4fv(this._uMatrix, false, this._shiftedMatrix);
         if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
         if (this._uRadius)       gl.uniform1f(this._uRadius, this._radiusMeters);
         const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
@@ -291,16 +325,42 @@ export class LidarViewLayer implements CustomLayerInterface
         if (this._uColor)        gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
         if (this._uAlphaFade)    gl.uniform1f(this._uAlphaFade, this._alphaFade);
 
-        //Standard premultiplied-style alpha blending so the dot cloud
-        //composites correctly over the basemap + building extrusions.
-        //MapLibre may leave blending state from a previous layer; we
-        //force what we need and don't bother restoring (every visible
-        //layer sets its own anyway).
+        //Reset the GL state we depend on. MapLibre's other layers can
+        //leave stencil + depth tests enabled and a non-default
+        //blendFunc behind; without explicit resets we'd inherit them
+        //and see flickering points or a clipped overlay near the
+        //screen edges.
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         gl.disable(gl.DEPTH_TEST);
+        gl.disable(gl.STENCIL_TEST);
+        gl.disable(gl.CULL_FACE);
 
         gl.drawArrays(gl.POINTS, 0, this._vertexCount);
+    }
+
+    //Build `mainMatrix * translation(homeMerc)` directly in the
+    //pre-allocated Float32Array uniform target. The product simplifies
+    //because translation(t) only touches the last column of the
+    //identity, so only mat[12..15] need recomputing; the rotation /
+    //scale block (mat[0..11]) carries over unchanged. Done in JS so
+    //the home shift is added in float64 before any float32 truncation
+    //happens, which is what saves the per-cell precision near the
+    //ground (otherwise neighbouring cells quantise to the same float
+    //and you get diagonal moiré bands at high precision).
+    private _buildShiftedMatrix(src: ArrayLike<number>): void
+    {
+        const tx = this._homeMerc.x;
+        const ty = this._homeMerc.y;
+        const tz = this._homeMerc.z ?? 0;
+        const out = this._shiftedMatrix;
+        out[ 0] = src[ 0]; out[ 1] = src[ 1]; out[ 2] = src[ 2]; out[ 3] = src[ 3];
+        out[ 4] = src[ 4]; out[ 5] = src[ 5]; out[ 6] = src[ 6]; out[ 7] = src[ 7];
+        out[ 8] = src[ 8]; out[ 9] = src[ 9]; out[10] = src[10]; out[11] = src[11];
+        out[12] = src[ 0] * tx + src[ 4] * ty + src[ 8] * tz + src[12];
+        out[13] = src[ 1] * tx + src[ 5] * ty + src[ 9] * tz + src[13];
+        out[14] = src[ 2] * tx + src[ 6] * ty + src[10] * tz + src[14];
+        out[15] = src[ 3] * tx + src[ 7] * ty + src[11] * tz + src[15];
     }
 
     public onRemove(_map: MapLibreMap, gl: WebGLRenderingContext | WebGL2RenderingContext): void

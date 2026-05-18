@@ -30203,19 +30203,17 @@ function resolveLidarSource(lat, lon, cfg) {
   return findLidarSource(lat, lon);
 }
 const VERT_SRC = `
+precision highp float;
 attribute vec3 a_pos;
 uniform mat4  u_matrix;
-uniform vec2  u_homeMerc;
 uniform float u_mercPerMeter;
 uniform float u_radiusMeters;
 uniform float u_pointSizePx;
 varying float v_inside;
 
 void main() {
-    float dxMerc = a_pos.x - u_homeMerc.x;
-    float dyMerc = a_pos.y - u_homeMerc.y;
-    float dxM = dxMerc / u_mercPerMeter;
-    float dyM = dyMerc / u_mercPerMeter;
+    float dxM = a_pos.x / u_mercPerMeter;
+    float dyM = a_pos.y / u_mercPerMeter;
     float d2  = dxM * dxM + dyM * dyM;
     float r2  = u_radiusMeters * u_radiusMeters;
     v_inside  = step(d2, r2);
@@ -30241,16 +30239,19 @@ class LidarViewLayer {
     this.renderingMode = "2d";
     this._vertexCount = 0;
     this._aPos = -1;
+    this._shiftedMatrix = new Float32Array(16);
     this._radiusMeters = 100;
     this._pointSizePx = 1.5;
     this._color = [1, 1, 1, 0.5];
     this._alphaFade = 0;
+    this._raster = null;
     this._homeMerc = maplibregl.MercatorCoordinate.fromLngLat([opts.homeLon, opts.homeLat], 0);
     this._mercPerMeter = this._homeMerc.meterInMercatorCoordinateUnits();
   }
   setHome(lat, lon) {
     this._homeMerc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0);
     this._mercPerMeter = this._homeMerc.meterInMercatorCoordinateUnits();
+    if (this._raster) this.setData(this._raster);
     this._map?.triggerRepaint();
   }
   setRadiusMeters(r2) {
@@ -30277,7 +30278,16 @@ class LidarViewLayer {
   //Rebuild the GPU buffer from a fresh height raster. Only finite
   //cells are uploaded; NaN sentinels (no-data) are dropped at build
   //time so the shader never sees them.
+  //
+  //Each cell is encoded as a Mercator OFFSET from the home origin
+  //in float64 first, then truncated to float32. With offsets in the
+  //~1e-6 range (a few hundred metres at typical lats), float32 has
+  //plenty of mantissa for sub-metre placement; storing absolute
+  //Mercator coords (~0.5 + small delta) quantises adjacent cells to
+  //the same float32 value and produces the diagonal moiré bands you
+  //get on the ground layer at high precision.
   setData(raster) {
+    this._raster = raster;
     if (!raster || raster.rasterSize <= 0) {
       this._vertexCount = 0;
       this._pendingVerts = void 0;
@@ -30291,6 +30301,9 @@ class LidarViewLayer {
     const { heights, rasterSize, minLat, maxLat, minLon, maxLon } = raster;
     const pxLon = (maxLon - minLon) / rasterSize;
     const pxLat = (maxLat - minLat) / rasterSize;
+    const homeX = this._homeMerc.x;
+    const homeY = this._homeMerc.y;
+    const homeZ = this._homeMerc.z ?? 0;
     const verts = new Float32Array(rasterSize * rasterSize * 3);
     let n3 = 0;
     for (let j = 0; j < rasterSize; j++) {
@@ -30300,9 +30313,9 @@ class LidarViewLayer {
         if (!isFinite(h2)) continue;
         const cLon = minLon + (i2 + 0.5) * pxLon;
         const mc = maplibregl.MercatorCoordinate.fromLngLat([cLon, cLat], h2);
-        verts[n3 * 3] = mc.x;
-        verts[n3 * 3 + 1] = mc.y;
-        verts[n3 * 3 + 2] = mc.z ?? 0;
+        verts[n3 * 3] = mc.x - homeX;
+        verts[n3 * 3 + 1] = mc.y - homeY;
+        verts[n3 * 3 + 2] = (mc.z ?? 0) - homeZ;
         n3++;
       }
     }
@@ -30334,7 +30347,6 @@ class LidarViewLayer {
     this._program = program;
     this._aPos = gl.getAttribLocation(program, "a_pos");
     this._uMatrix = gl.getUniformLocation(program, "u_matrix") ?? void 0;
-    this._uHomeMerc = gl.getUniformLocation(program, "u_homeMerc") ?? void 0;
     this._uMercPerMeter = gl.getUniformLocation(program, "u_mercPerMeter") ?? void 0;
     this._uRadius = gl.getUniformLocation(program, "u_radiusMeters") ?? void 0;
     this._uPointSize = gl.getUniformLocation(program, "u_pointSizePx") ?? void 0;
@@ -30353,13 +30365,12 @@ class LidarViewLayer {
     if (this._alphaFade <= 0) return;
     const rawMatrix = args.defaultProjectionData?.mainMatrix;
     if (!rawMatrix) return;
-    const matrix = rawMatrix instanceof Float32Array ? rawMatrix : Float32Array.from(rawMatrix);
+    this._buildShiftedMatrix(rawMatrix);
     gl.useProgram(this._program);
     gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
     gl.enableVertexAttribArray(this._aPos);
     gl.vertexAttribPointer(this._aPos, 3, gl.FLOAT, false, 0, 0);
-    if (this._uMatrix) gl.uniformMatrix4fv(this._uMatrix, false, matrix);
-    if (this._uHomeMerc) gl.uniform2f(this._uHomeMerc, this._homeMerc.x, this._homeMerc.y);
+    if (this._uMatrix) gl.uniformMatrix4fv(this._uMatrix, false, this._shiftedMatrix);
     if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
     if (this._uRadius) gl.uniform1f(this._uRadius, this._radiusMeters);
     const dpr = typeof window !== "undefined" && window.devicePixelRatio || 1;
@@ -30369,7 +30380,40 @@ class LidarViewLayer {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.STENCIL_TEST);
+    gl.disable(gl.CULL_FACE);
     gl.drawArrays(gl.POINTS, 0, this._vertexCount);
+  }
+  //Build `mainMatrix * translation(homeMerc)` directly in the
+  //pre-allocated Float32Array uniform target. The product simplifies
+  //because translation(t) only touches the last column of the
+  //identity, so only mat[12..15] need recomputing; the rotation /
+  //scale block (mat[0..11]) carries over unchanged. Done in JS so
+  //the home shift is added in float64 before any float32 truncation
+  //happens, which is what saves the per-cell precision near the
+  //ground (otherwise neighbouring cells quantise to the same float
+  //and you get diagonal moiré bands at high precision).
+  _buildShiftedMatrix(src) {
+    const tx = this._homeMerc.x;
+    const ty = this._homeMerc.y;
+    const tz = this._homeMerc.z ?? 0;
+    const out = this._shiftedMatrix;
+    out[0] = src[0];
+    out[1] = src[1];
+    out[2] = src[2];
+    out[3] = src[3];
+    out[4] = src[4];
+    out[5] = src[5];
+    out[6] = src[6];
+    out[7] = src[7];
+    out[8] = src[8];
+    out[9] = src[9];
+    out[10] = src[10];
+    out[11] = src[11];
+    out[12] = src[0] * tx + src[4] * ty + src[8] * tz + src[12];
+    out[13] = src[1] * tx + src[5] * ty + src[9] * tz + src[13];
+    out[14] = src[2] * tx + src[6] * ty + src[10] * tz + src[14];
+    out[15] = src[3] * tx + src[7] * ty + src[11] * tz + src[15];
   }
   onRemove(_map, gl) {
     if (this._buffer) gl.deleteBuffer(this._buffer);
@@ -37259,7 +37303,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.28"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.29"}`,
       labelStyle,
       versionStyle
     );
@@ -37280,7 +37324,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.28",
+        version: "1.6.0-alpha.29",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37288,7 +37332,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.28"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.29"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
