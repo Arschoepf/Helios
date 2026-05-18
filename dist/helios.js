@@ -32781,15 +32781,13 @@ const en = {
     autoRotateHint: "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). A single-finger drag pauses it instantly and it resumes once you let go.",
     autoRotateOn: "On",
     autoRotateOff: "Off",
-    timeline: "Date & time format",
-    timelineHint: "Format of the date and time labels shown on the timeline and inside the scrub chip.",
     dateFormat: "Date format (default: mm-dd)",
     dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Examples:",
     timeFormat: "Time format",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
-    colors: "Colors",
-    colorsHint: "One colour per metric, reused everywhere it appears. Sun: the arc, the sun disc and the upper area of the timeline. Cloud: the on-ground disc and the lower area of the timeline. Production: the PV chip near the home and the dedicated graph (only shown when a production entity is configured). Battery: the battery chips around the PV one (only shown when a battery entity is configured). Buildings: the base tint of the 3D buildings around the home.",
+    uiSection: "UI",
+    uiColorsHint: "One colour per metric, reused everywhere it appears. Sun: the arc, the sun disc and the upper area of the timeline. Cloud: the on-ground disc and the lower area of the timeline.",
     sunColor: "Sun color",
     cloudColor: "Cloud color",
     pvSection: "Solar production",
@@ -32906,15 +32904,13 @@ const fr = {
     autoRotateHint: "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que tu lâches.",
     autoRotateOn: "Activée",
     autoRotateOff: "Désactivée",
-    timeline: "Format date et heure",
-    timelineHint: "Format des libellés de date et d'heure affichés sur la chronologie et dans la pastille du scrub.",
     dateFormat: "Format de date (par défaut : mm-dd)",
     dateFormatHelp: "Tokens : yyyy, yy, mm, dd. Exemples :",
     timeFormat: "Format de l'heure",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
-    colors: "Couleurs",
-    colorsHint: "Une couleur par grandeur, réutilisée partout où elle apparaît. Soleil : l'arc, le disque solaire et la zone haute de la chronologie. Nuages : le disque au sol et la zone basse de la chronologie. Production : la pastille PV près de la maison et le graphique dédié (visible uniquement si une entité de production est configurée). Batterie : les pastilles batterie autour de la PV (visibles uniquement si une entité batterie est configurée). Bâtiments : la teinte de base des bâtiments 3D autour de la maison.",
+    uiSection: "UI",
+    uiColorsHint: "Une couleur par grandeur, réutilisée partout où elle apparaît. Soleil : l'arc, le disque solaire et la zone haute de la chronologie. Nuages : le disque au sol et la zone basse de la chronologie.",
     sunColor: "Couleur du soleil",
     cloudColor: "Couleur des nuages",
     pvSection: "Production photovoltaïque",
@@ -33031,15 +33027,13 @@ const de = {
     autoRotateHint: "Nach ein paar Sekunden Inaktivität kreist die Kamera langsam um das Haus (ca. 1,5°/s, gegenläufig zur scheinbaren Sonnenbahn). Eine Ein-Finger-Geste pausiert sie sofort; sie setzt fort, sobald du loslässt.",
     autoRotateOn: "Ein",
     autoRotateOff: "Aus",
-    timeline: "Datum- und Zeitformat",
-    timelineHint: "Format der Datums- und Zeitanzeige auf der Zeitachse und im Scrub-Chip.",
     dateFormat: "Datumsformat (Standard: mm-dd)",
     dateFormatHelp: "Platzhalter: yyyy, yy, mm, dd. Beispiele:",
     timeFormat: "Zeitformat",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
-    colors: "Farben",
-    colorsHint: "Eine Farbe pro Messgröße, überall einheitlich verwendet. Sonne: der Bogen, die Sonnenscheibe und der obere Bereich der Zeitachse. Wolken: die Bodenscheibe und der untere Bereich der Zeitachse. Erzeugung: der PV-Chip am Haus und das dedizierte Diagramm (nur sichtbar, wenn eine Erzeugungs-Entität gesetzt ist). Batterie: die Batterie-Chips um den PV-Chip (nur sichtbar, wenn eine Batterie-Entität gesetzt ist). Gebäude: der Grundton der 3D-Gebäude um das Haus.",
+    uiSection: "UI",
+    uiColorsHint: "Eine Farbe pro Messgröße, überall einheitlich verwendet. Sonne: der Bogen, die Sonnenscheibe und der obere Bereich der Zeitachse. Wolken: die Bodenscheibe und der untere Bereich der Zeitachse.",
     sunColor: "Sonnenfarbe",
     cloudColor: "Wolkenfarbe",
     pvSection: "Solarproduktion",
@@ -33156,15 +33150,13 @@ const es = {
     autoRotateHint: "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (aprox. 1,5°/s, en sentido contrario al movimiento aparente del sol). Un gesto con un dedo la pausa al instante; se reanuda cuando sueltas.",
     autoRotateOn: "Activada",
     autoRotateOff: "Desactivada",
-    timeline: "Formato de fecha y hora",
-    timelineHint: "Formato de las etiquetas de fecha y hora mostradas en la línea de tiempo y en la pastilla del scrub.",
     dateFormat: "Formato de fecha (por defecto: mm-dd)",
     dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Ejemplos:",
     timeFormat: "Formato de hora",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
-    colors: "Colores",
-    colorsHint: "Un color por magnitud, reutilizado donde aparezca. Sol: el arco, el disco solar y la zona superior de la línea de tiempo. Nubes: el disco en el suelo y la zona inferior de la línea de tiempo. Producción: la pastilla PV junto a la casa y el gráfico dedicado (solo visible si hay una entidad de producción configurada). Batería: las pastillas de batería alrededor de la PV (solo visibles si hay una entidad de batería configurada). Edificios: el tono base de los edificios 3D alrededor de la casa.",
+    uiSection: "UI",
+    uiColorsHint: "Un color por magnitud, reutilizado donde aparezca. Sol: el arco, el disco solar y la zona superior de la línea de tiempo. Nubes: el disco en el suelo y la zona inferior de la línea de tiempo.",
     sunColor: "Color del sol",
     cloudColor: "Color de las nubes",
     pvSection: "Producción solar",
@@ -33281,15 +33273,13 @@ const it = {
     autoRotateHint: "Dopo qualche secondo di inattività, la camera ruota lentamente attorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Un gesto con un dito la mette in pausa all'istante e riprende non appena rilasci.",
     autoRotateOn: "Attiva",
     autoRotateOff: "Disattiva",
-    timeline: "Formato data e ora",
-    timelineHint: "Formato delle etichette di data e ora mostrate sulla cronologia e nella pastiglia di scrub.",
     dateFormat: "Formato data (predefinito: mm-dd)",
     dateFormatHelp: "Token: yyyy, yy, mm, dd. Esempi:",
     timeFormat: "Formato ora",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
-    colors: "Colori",
-    colorsHint: "Un colore per grandezza, riutilizzato ovunque appaia. Sole: l'arco, il disco solare e l'area superiore della cronologia. Nuvole: il disco al suolo e l'area inferiore della cronologia. Produzione: la pastiglia PV vicino alla casa e il grafico dedicato (visibile solo se è configurata un'entità di produzione). Batteria: le pastiglie batteria attorno alla PV (visibili solo se è configurata un'entità batteria). Edifici: il tono di base degli edifici 3D attorno alla casa.",
+    uiSection: "UI",
+    uiColorsHint: "Un colore per grandezza, riutilizzato ovunque appaia. Sole: l'arco, il disco solare e l'area superiore della cronologia. Nuvole: il disco al suolo e l'area inferiore della cronologia.",
     sunColor: "Colore del sole",
     cloudColor: "Colore delle nuvole",
     pvSection: "Produzione solare",
@@ -33406,15 +33396,13 @@ const nl = {
     autoRotateHint: "Na een paar seconden inactiviteit draait de camera langzaam rond het huis (ongeveer 1,5°/s, tegen de schijnbare beweging van de zon in). Een veeg met één vinger pauzeert de rotatie direct; ze hervat zodra je loslaat.",
     autoRotateOn: "Aan",
     autoRotateOff: "Uit",
-    timeline: "Datum- en tijdformaat",
-    timelineHint: "Formaat van de datum- en tijdlabels op de tijdlijn en in de scrub-chip.",
     dateFormat: "Datumformaat (standaard: mm-dd)",
     dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Voorbeelden:",
     timeFormat: "Tijdformaat",
     timeFormat12: "12 u",
     timeFormat24: "24 u",
-    colors: "Kleuren",
-    colorsHint: "Eén kleur per grootheid, overal hergebruikt. Zon: de boog, de zonneschijf en het bovenste deel van de tijdlijn. Wolken: de schijf op de grond en het onderste deel van de tijdlijn. Productie: de PV-chip bij het huis en de toegewijde grafiek (alleen zichtbaar als er een productie-entiteit is ingesteld). Batterij: de batterijchips rond de PV-chip (alleen zichtbaar als er een batterij-entiteit is ingesteld). Gebouwen: de basistoon van de 3D-gebouwen rond het huis.",
+    uiSection: "UI",
+    uiColorsHint: "Eén kleur per grootheid, overal hergebruikt. Zon: de boog, de zonneschijf en het bovenste deel van de tijdlijn. Wolken: de schijf op de grond en het onderste deel van de tijdlijn.",
     sunColor: "Zonkleur",
     cloudColor: "Wolkenkleur",
     pvSection: "Zonneproductie",
@@ -33531,15 +33519,13 @@ const pt = {
     autoRotateHint: "Após alguns segundos de inatividade, a câmara orbita lentamente em torno da casa (cerca de 1,5°/s, em sentido oposto ao movimento aparente do sol). Um gesto com um dedo pausa-a instantaneamente; retoma assim que largas.",
     autoRotateOn: "Ligada",
     autoRotateOff: "Desligada",
-    timeline: "Formato de data e hora",
-    timelineHint: "Formato das etiquetas de data e hora mostradas na linha temporal e na pastilha do scrub.",
     dateFormat: "Formato de data (predefinição: mm-dd)",
     dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Exemplos:",
     timeFormat: "Formato da hora",
     timeFormat12: "12 h",
     timeFormat24: "24 h",
-    colors: "Cores",
-    colorsHint: "Uma cor por grandeza, reutilizada onde quer que apareça. Sol: o arco, o disco solar e a área superior da linha temporal. Nuvens: o disco no solo e a área inferior da linha temporal. Produção: a pastilha PV perto da casa e o gráfico dedicado (só visível se houver uma entidade de produção configurada). Bateria: as pastilhas de bateria à volta da PV (só visíveis se houver uma entidade de bateria configurada). Edifícios: o tom base dos edifícios 3D à volta da casa.",
+    uiSection: "UI",
+    uiColorsHint: "Uma cor por grandeza, reutilizada onde quer que apareça. Sol: o arco, o disco solar e a área superior da linha temporal. Nuvens: o disco no solo e a área inferior da linha temporal.",
     sunColor: "Cor do sol",
     cloudColor: "Cor das nuvens",
     pvSection: "Produção solar",
@@ -33656,15 +33642,13 @@ const no = {
     autoRotateHint: "Etter noen sekunder uten aktivitet roterer kameraet sakte rundt huset (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). En enfingers-bevegelse pauser den umiddelbart, og den fortsetter så snart du slipper.",
     autoRotateOn: "På",
     autoRotateOff: "Av",
-    timeline: "Dato- og tidsformat",
-    timelineHint: "Format på dato- og tidsetikettene som vises på tidslinjen og i scrub-chipen.",
     dateFormat: "Datoformat (standard: mm-dd)",
     dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Eksempler:",
     timeFormat: "Klokkeformat",
     timeFormat12: "12 t",
     timeFormat24: "24 t",
-    colors: "Farger",
-    colorsHint: "Én farge per måleverdi, gjenbrukt overalt der den vises. Sol: buen, solskiven og det øvre området på tidslinjen. Skyer: skiven på bakken og det nedre området på tidslinjen. Produksjon: PV-chipen ved huset og den dedikerte grafen (vises bare hvis en produksjons-entitet er konfigurert). Batteri: batteri-chipene rundt PV-chipen (vises bare hvis en batteri-entitet er konfigurert). Bygninger: grunntonen til 3D-bygningene rundt huset.",
+    uiSection: "UI",
+    uiColorsHint: "Én farge per måleverdi, gjenbrukt overalt der den vises. Sol: buen, solskiven og det øvre området på tidslinjen. Skyer: skiven på bakken og det nedre området på tidslinjen.",
     sunColor: "Solfarge",
     cloudColor: "Skyfarge",
     pvSection: "Solproduksjon",
@@ -34688,13 +34672,20 @@ const heliosCardStyles = i$3`
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         font-size: 11px;
         font-weight: 600;
         letter-spacing: 0.5px;
         text-transform: uppercase;
         line-height: 1;
         cursor: pointer;
-        transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+        /*  Force full opacity at every state except :disabled (which
+            sets its own 0.35 for the visual "not available" hint).
+            The transition only covers background + color so a state
+            change (active / inactive) doesn't briefly pass through a
+            translucent state. */
+        opacity: 1;
+        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
         /*  The parent .overlay-top-right rail has pointer-events: none
             (so the rail itself never steals map interactions when
             empty). The button has to opt back in explicitly so its
@@ -36705,6 +36696,14 @@ let HeliosCardEditor = class extends i {
                         <span class="slider-value">${this._fmtNum(Number(c2["building-opacity"] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
                     </div>
                 </label>
+                <label class="field">
+                    <span class="label">${t2.editor.buildingColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["building-color"], DEFAULT_BUILDING_COLOR_HEX)}"
+                        .ariaLabel="${t2.editor.buildingColor}"
+                        @value-changed="${(e2) => this._color("building-color", e2)}"
+                    ></helios-color-picker>
+                </label>
                 <div class="hint">${t2.editor.buildingsHint}</div>
 
                 </details>
@@ -36754,48 +36753,6 @@ let HeliosCardEditor = class extends i {
                     </div>
                 </label>
                 <div class="hint">${t2.editor.shadowOpacityHint}</div>
-
-                <div class="subsection-title">${t2.editor.lidarViewSection}</div>
-                <div class="hint">${t2.editor.lidarViewHint}</div>
-                <label class="field">
-                    <span class="label">${t2.editor.lidarViewRadius}</span>
-                    <input
-                        type="number" min="10" max="1000" step="10"
-                        placeholder="${String(DEFAULT_LIDAR_VIEW_RADIUS_M)}"
-                        .value="${c2["lidar-view-radius"] != null ? String(c2["lidar-view-radius"]) : ""}"
-                        @change="${(e2) => this._numField("lidar-view-radius", e2)}"
-                    />
-                </label>
-                <div class="field-help">${t2.editor.lidarViewRadiusHelp}</div>
-                <label class="field">
-                    <span class="label">${t2.editor.lidarViewPointSize}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="1" max="6" step="0.5"
-                            .value="${String(c2["lidar-view-point-size"] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX)}"
-                            @input="${(e2) => this._numSlider("lidar-view-point-size", e2)}"
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-point-size"] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX), 0.5)}</span>
-                    </div>
-                </label>
-                <label class="field">
-                    <span class="label">${t2.editor.lidarViewPointColor}</span>
-                    <helios-color-picker
-                        .value="${String(c2["lidar-view-point-color"] ?? DEFAULT_LIDAR_VIEW_POINT_COLOR)}"
-                        @value-changed="${(e2) => this._update("lidar-view-point-color", e2.detail.value)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t2.editor.lidarViewPointOpacity}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="1" step="0.05"
-                            .value="${String(c2["lidar-view-point-opacity"] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY)}"
-                            @input="${(e2) => this._numSlider("lidar-view-point-opacity", e2)}"
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-point-opacity"] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
-                    </div>
-                </label>
 
                 </details>
 
@@ -36937,6 +36894,15 @@ let HeliosCardEditor = class extends i {
                     `;
     })()}
 
+                <label class="field">
+                    <span class="label">${t2.editor.pvColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["pv-color"], DEFAULT_PV_COLOR_HEX)}"
+                        .ariaLabel="${t2.editor.pvColor}"
+                        @value-changed="${(e2) => this._color("pv-color", e2)}"
+                    ></helios-color-picker>
+                </label>
+
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "battery"}" @toggle="${(e2) => this._onSectionToggle("battery", e2)}">
@@ -37000,6 +36966,14 @@ let HeliosCardEditor = class extends i {
                     </div>
                 </div>
                 <div class="field-help">${t2.editor.batteryPowerInvertHelp}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.batteryColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["battery-color"], DEFAULT_BATTERY_COLOR_HEX)}"
+                        .ariaLabel="${t2.editor.batteryColor}"
+                        @value-changed="${(e2) => this._color("battery-color", e2)}"
+                    ></helios-color-picker>
+                </label>
                 <div class="hint">${t2.editor.batteryHint}</div>
 
                 </details>
@@ -37023,9 +36997,9 @@ let HeliosCardEditor = class extends i {
                     <div class="field-help">${t2.editor.solarRadiationEntityHelp}</div>
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === "colors"}" @toggle="${(e2) => this._onSectionToggle("colors", e2)}">
-                    <summary class="section-title section-title-collapse">${t2.editor.colors}</summary>
-                    <div class="hint">${t2.editor.colorsHint}</div>
+                <details class="advanced-section" ?open="${this._openSection === "ui"}" @toggle="${(e2) => this._onSectionToggle("ui", e2)}">
+                    <summary class="section-title section-title-collapse">${t2.editor.uiSection}</summary>
+                    <div class="hint">${t2.editor.uiColorsHint}</div>
                     <label class="field">
                         <span class="label">${t2.editor.sunColor}</span>
                         <helios-color-picker
@@ -37043,62 +37017,76 @@ let HeliosCardEditor = class extends i {
                         ></helios-color-picker>
                     </label>
                     <label class="field">
-                        <span class="label">${t2.editor.pvColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c2["pv-color"], DEFAULT_PV_COLOR_HEX)}"
-                            .ariaLabel="${t2.editor.pvColor}"
-                            @value-changed="${(e2) => this._color("pv-color", e2)}"
-                        ></helios-color-picker>
+                        <span class="label">${t2.editor.dateFormat}</span>
+                        <input
+                            type="text"
+                            .value="${String(c2["date-format"] ?? "")}"
+                            placeholder="mm-dd"
+                            @change="${(e2) => this._str("date-format", e2)}"
+                        />
                     </label>
-                    <label class="field">
-                        <span class="label">${t2.editor.batteryColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c2["battery-color"], DEFAULT_BATTERY_COLOR_HEX)}"
-                            .ariaLabel="${t2.editor.batteryColor}"
-                            @value-changed="${(e2) => this._color("battery-color", e2)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t2.editor.buildingColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c2["building-color"], DEFAULT_BUILDING_COLOR_HEX)}"
-                            .ariaLabel="${t2.editor.buildingColor}"
-                            @value-changed="${(e2) => this._color("building-color", e2)}"
-                        ></helios-color-picker>
-                    </label>
+                    <div class="field-help">
+                        ${t2.editor.dateFormatHelp} <code>mm-dd</code>, <code>dd/mm</code>, <code>yyyy-mm-dd</code>.
+                    </div>
+                    <div class="field">
+                        <span class="label">${t2.editor.timeFormat}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${String(c2["time-format"] ?? "24h") === "24h" ? "active" : ""}"
+                                @click="${() => this._update("time-format", "24h")}"
+                            >${t2.editor.timeFormat24}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${String(c2["time-format"] ?? "24h") === "12h" ? "active" : ""}"
+                                @click="${() => this._update("time-format", "12h")}"
+                            >${t2.editor.timeFormat12}</button>
+                        </div>
+                    </div>
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === "timeline"}" @toggle="${(e2) => this._onSectionToggle("timeline", e2)}">
-                    <summary class="section-title section-title-collapse">${t2.editor.timeline}</summary>
-                <label class="field">
-                    <span class="label">${t2.editor.dateFormat}</span>
-                    <input
-                        type="text"
-                        .value="${String(c2["date-format"] ?? "")}"
-                        placeholder="mm-dd"
-                        @change="${(e2) => this._str("date-format", e2)}"
-                    />
-                </label>
-                <div class="field-help">
-                    ${t2.editor.dateFormatHelp} <code>mm-dd</code>, <code>dd/mm</code>, <code>yyyy-mm-dd</code>.
-                </div>
-                <div class="field">
-                    <span class="label">${t2.editor.timeFormat}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["time-format"] ?? "24h") === "24h" ? "active" : ""}"
-                            @click="${() => this._update("time-format", "24h")}"
-                        >${t2.editor.timeFormat24}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["time-format"] ?? "24h") === "12h" ? "active" : ""}"
-                            @click="${() => this._update("time-format", "12h")}"
-                        >${t2.editor.timeFormat12}</button>
-                    </div>
-                </div>
-                <div class="hint">${t2.editor.timelineHint}</div>
-
+                <details class="advanced-section" ?open="${this._openSection === "lidarView"}" @toggle="${(e2) => this._onSectionToggle("lidarView", e2)}">
+                    <summary class="section-title section-title-collapse">${t2.editor.lidarViewSection}</summary>
+                    <div class="hint">${t2.editor.lidarViewHint}</div>
+                    <label class="field">
+                        <span class="label">${t2.editor.lidarViewRadius}</span>
+                        <input
+                            type="number" min="10" max="1000" step="10"
+                            placeholder="${String(DEFAULT_LIDAR_VIEW_RADIUS_M)}"
+                            .value="${c2["lidar-view-radius"] != null ? String(c2["lidar-view-radius"]) : ""}"
+                            @change="${(e2) => this._numField("lidar-view-radius", e2)}"
+                        />
+                    </label>
+                    <div class="field-help">${t2.editor.lidarViewRadiusHelp}</div>
+                    <label class="field">
+                        <span class="label">${t2.editor.lidarViewPointSize}</span>
+                        <div class="slider-row">
+                            <input
+                                type="range" min="1" max="6" step="0.5"
+                                .value="${String(c2["lidar-view-point-size"] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX)}"
+                                @input="${(e2) => this._numSlider("lidar-view-point-size", e2)}"
+                            />
+                            <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-point-size"] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX), 0.5)}</span>
+                        </div>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.lidarViewPointColor}</span>
+                        <helios-color-picker
+                            .value="${String(c2["lidar-view-point-color"] ?? DEFAULT_LIDAR_VIEW_POINT_COLOR)}"
+                            @value-changed="${(e2) => this._update("lidar-view-point-color", e2.detail.value)}"
+                        ></helios-color-picker>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.lidarViewPointOpacity}</span>
+                        <div class="slider-row">
+                            <input
+                                type="range" min="0" max="1" step="0.05"
+                                .value="${String(c2["lidar-view-point-opacity"] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY)}"
+                                @input="${(e2) => this._numSlider("lidar-view-point-opacity", e2)}"
+                            />
+                            <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-point-opacity"] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
+                        </div>
+                    </label>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "lidar"}" @toggle="${(e2) => this._onSectionToggle("lidar", e2)}">
@@ -37234,7 +37222,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.23"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.24"}`,
       labelStyle,
       versionStyle
     );
@@ -37255,7 +37243,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.23",
+        version: "1.6.0-alpha.24",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37263,7 +37251,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.23"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.24"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

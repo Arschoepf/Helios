@@ -76,19 +76,18 @@ export interface Translations
         autoRotateHint:           string;
         autoRotateOn:             string;
         autoRotateOff:            string;
-        timeline:                 string;
-        timelineHint:             string;
         dateFormat:               string;
         dateFormatHelp:           string;
         timeFormat:               string;
         timeFormat12:             string;
         timeFormat24:             string;
-        //Fixed-colour design system. Each phenomenon (sun, cloud)
-        //has one configurable colour reused across the timeline
-        //mirror chart, the on-ground cloud disc and the on-arc sun
-        //disc.
-        colors:                   string;
-        colorsHint:               string;
+        //UI section, hosts the chrome-level customisation that
+        //doesn't belong to a specific data overlay: sun + cloud
+        //colours (the two phenomena that don't have their own
+        //section), plus the date and time format toggles for the
+        //clock chip + the timeline labels.
+        uiSection:                string;
+        uiColorsHint:             string;
         sunColor:                 string;
         cloudColor:               string;
         //Optional photovoltaic production overlay.

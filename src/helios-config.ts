@@ -832,6 +832,14 @@ export class HeliosCardEditor extends LitElement
                         <span class="slider-value">${this._fmtNum(Number(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
                     </div>
                 </label>
+                <label class="field">
+                    <span class="label">${t.editor.buildingColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c['building-color'], DEFAULT_BUILDING_COLOR_HEX)}"
+                        .ariaLabel="${t.editor.buildingColor}"
+                        @value-changed="${(e: CustomEvent) => this._color('building-color', e)}"
+                    ></helios-color-picker>
+                </label>
                 <div class="hint">${t.editor.buildingsHint}</div>
 
                 </details>
@@ -881,48 +889,6 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </label>
                 <div class="hint">${t.editor.shadowOpacityHint}</div>
-
-                <div class="subsection-title">${t.editor.lidarViewSection}</div>
-                <div class="hint">${t.editor.lidarViewHint}</div>
-                <label class="field">
-                    <span class="label">${t.editor.lidarViewRadius}</span>
-                    <input
-                        type="number" min="10" max="1000" step="10"
-                        placeholder="${String(DEFAULT_LIDAR_VIEW_RADIUS_M)}"
-                        .value="${c['lidar-view-radius'] != null ? String(c['lidar-view-radius']) : ''}"
-                        @change="${(e: Event) => this._numField('lidar-view-radius', e)}"
-                    />
-                </label>
-                <div class="field-help">${t.editor.lidarViewRadiusHelp}</div>
-                <label class="field">
-                    <span class="label">${t.editor.lidarViewPointSize}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="1" max="6" step="0.5"
-                            .value="${String(c['lidar-view-point-size'] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX)}"
-                            @input="${(e: Event) => this._numSlider('lidar-view-point-size', e)}"
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-size'] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX), 0.5)}</span>
-                    </div>
-                </label>
-                <label class="field">
-                    <span class="label">${t.editor.lidarViewPointColor}</span>
-                    <helios-color-picker
-                        .value="${String(c['lidar-view-point-color'] ?? DEFAULT_LIDAR_VIEW_POINT_COLOR)}"
-                        @value-changed="${(e: CustomEvent) => this._update('lidar-view-point-color', e.detail.value)}"
-                    ></helios-color-picker>
-                </label>
-                <label class="field">
-                    <span class="label">${t.editor.lidarViewPointOpacity}</span>
-                    <div class="slider-row">
-                        <input
-                            type="range" min="0" max="1" step="0.05"
-                            .value="${String(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY)}"
-                            @input="${(e: Event) => this._numSlider('lidar-view-point-opacity', e)}"
-                        />
-                        <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
-                    </div>
-                </label>
 
                 </details>
 
@@ -1070,6 +1036,15 @@ export class HeliosCardEditor extends LitElement
                     `;
                 })()}
 
+                <label class="field">
+                    <span class="label">${t.editor.pvColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c['pv-color'], DEFAULT_PV_COLOR_HEX)}"
+                        .ariaLabel="${t.editor.pvColor}"
+                        @value-changed="${(e: CustomEvent) => this._color('pv-color', e)}"
+                    ></helios-color-picker>
+                </label>
+
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'battery'}" @toggle="${(e: Event) => this._onSectionToggle('battery', e)}">
@@ -1133,6 +1108,14 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="field-help">${t.editor.batteryPowerInvertHelp}</div>
+                <label class="field">
+                    <span class="label">${t.editor.batteryColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c['battery-color'], DEFAULT_BATTERY_COLOR_HEX)}"
+                        .ariaLabel="${t.editor.batteryColor}"
+                        @value-changed="${(e: CustomEvent) => this._color('battery-color', e)}"
+                    ></helios-color-picker>
+                </label>
                 <div class="hint">${t.editor.batteryHint}</div>
 
                 </details>
@@ -1156,9 +1139,9 @@ export class HeliosCardEditor extends LitElement
                     <div class="field-help">${t.editor.solarRadiationEntityHelp}</div>
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'colors'}" @toggle="${(e: Event) => this._onSectionToggle('colors', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.colors}</summary>
-                    <div class="hint">${t.editor.colorsHint}</div>
+                <details class="advanced-section" ?open="${this._openSection === 'ui'}" @toggle="${(e: Event) => this._onSectionToggle('ui', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.uiSection}</summary>
+                    <div class="hint">${t.editor.uiColorsHint}</div>
                     <label class="field">
                         <span class="label">${t.editor.sunColor}</span>
                         <helios-color-picker
@@ -1176,62 +1159,76 @@ export class HeliosCardEditor extends LitElement
                         ></helios-color-picker>
                     </label>
                     <label class="field">
-                        <span class="label">${t.editor.pvColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c['pv-color'], DEFAULT_PV_COLOR_HEX)}"
-                            .ariaLabel="${t.editor.pvColor}"
-                            @value-changed="${(e: CustomEvent) => this._color('pv-color', e)}"
-                        ></helios-color-picker>
+                        <span class="label">${t.editor.dateFormat}</span>
+                        <input
+                            type="text"
+                            .value="${String(c['date-format'] ?? '')}"
+                            placeholder="mm-dd"
+                            @change="${(e: Event) => this._str('date-format', e)}"
+                        />
                     </label>
-                    <label class="field">
-                        <span class="label">${t.editor.batteryColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c['battery-color'], DEFAULT_BATTERY_COLOR_HEX)}"
-                            .ariaLabel="${t.editor.batteryColor}"
-                            @value-changed="${(e: CustomEvent) => this._color('battery-color', e)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.buildingColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c['building-color'], DEFAULT_BUILDING_COLOR_HEX)}"
-                            .ariaLabel="${t.editor.buildingColor}"
-                            @value-changed="${(e: CustomEvent) => this._color('building-color', e)}"
-                        ></helios-color-picker>
-                    </label>
+                    <div class="field-help">
+                        ${t.editor.dateFormatHelp} <code>mm-dd</code>, <code>dd/mm</code>, <code>yyyy-mm-dd</code>.
+                    </div>
+                    <div class="field">
+                        <span class="label">${t.editor.timeFormat}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${(String(c['time-format'] ?? '24h')) === '24h' ? 'active' : ''}"
+                                @click="${() => this._update('time-format', '24h')}"
+                            >${t.editor.timeFormat24}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${(String(c['time-format'] ?? '24h')) === '12h' ? 'active' : ''}"
+                                @click="${() => this._update('time-format', '12h')}"
+                            >${t.editor.timeFormat12}</button>
+                        </div>
+                    </div>
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'timeline'}" @toggle="${(e: Event) => this._onSectionToggle('timeline', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.timeline}</summary>
-                <label class="field">
-                    <span class="label">${t.editor.dateFormat}</span>
-                    <input
-                        type="text"
-                        .value="${String(c['date-format'] ?? '')}"
-                        placeholder="mm-dd"
-                        @change="${(e: Event) => this._str('date-format', e)}"
-                    />
-                </label>
-                <div class="field-help">
-                    ${t.editor.dateFormatHelp} <code>mm-dd</code>, <code>dd/mm</code>, <code>yyyy-mm-dd</code>.
-                </div>
-                <div class="field">
-                    <span class="label">${t.editor.timeFormat}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['time-format'] ?? '24h')) === '24h' ? 'active' : ''}"
-                            @click="${() => this._update('time-format', '24h')}"
-                        >${t.editor.timeFormat24}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['time-format'] ?? '24h')) === '12h' ? 'active' : ''}"
-                            @click="${() => this._update('time-format', '12h')}"
-                        >${t.editor.timeFormat12}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.timelineHint}</div>
-
+                <details class="advanced-section" ?open="${this._openSection === 'lidarView'}" @toggle="${(e: Event) => this._onSectionToggle('lidarView', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.lidarViewSection}</summary>
+                    <div class="hint">${t.editor.lidarViewHint}</div>
+                    <label class="field">
+                        <span class="label">${t.editor.lidarViewRadius}</span>
+                        <input
+                            type="number" min="10" max="1000" step="10"
+                            placeholder="${String(DEFAULT_LIDAR_VIEW_RADIUS_M)}"
+                            .value="${c['lidar-view-radius'] != null ? String(c['lidar-view-radius']) : ''}"
+                            @change="${(e: Event) => this._numField('lidar-view-radius', e)}"
+                        />
+                    </label>
+                    <div class="field-help">${t.editor.lidarViewRadiusHelp}</div>
+                    <label class="field">
+                        <span class="label">${t.editor.lidarViewPointSize}</span>
+                        <div class="slider-row">
+                            <input
+                                type="range" min="1" max="6" step="0.5"
+                                .value="${String(c['lidar-view-point-size'] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX)}"
+                                @input="${(e: Event) => this._numSlider('lidar-view-point-size', e)}"
+                            />
+                            <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-size'] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX), 0.5)}</span>
+                        </div>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.lidarViewPointColor}</span>
+                        <helios-color-picker
+                            .value="${String(c['lidar-view-point-color'] ?? DEFAULT_LIDAR_VIEW_POINT_COLOR)}"
+                            @value-changed="${(e: CustomEvent) => this._update('lidar-view-point-color', e.detail.value)}"
+                        ></helios-color-picker>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.lidarViewPointOpacity}</span>
+                        <div class="slider-row">
+                            <input
+                                type="range" min="0" max="1" step="0.05"
+                                .value="${String(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY)}"
+                                @input="${(e: Event) => this._numSlider('lidar-view-point-opacity', e)}"
+                            />
+                            <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
+                        </div>
+                    </label>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'lidar'}" @toggle="${(e: Event) => this._onSectionToggle('lidar', e)}">

@@ -942,13 +942,20 @@ export const heliosCardStyles = css`
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         font-size: 11px;
         font-weight: 600;
         letter-spacing: 0.5px;
         text-transform: uppercase;
         line-height: 1;
         cursor: pointer;
-        transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+        /*  Force full opacity at every state except :disabled (which
+            sets its own 0.35 for the visual "not available" hint).
+            The transition only covers background + color so a state
+            change (active / inactive) doesn't briefly pass through a
+            translucent state. */
+        opacity: 1;
+        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
         /*  The parent .overlay-top-right rail has pointer-events: none
             (so the rail itself never steals map interactions when
             empty). The button has to opt back in explicitly so its
