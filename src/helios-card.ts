@@ -7,11 +7,7 @@ import
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
-    DEFAULT_BATTERY_COLOR_HEX,
-    DEFAULT_BUILDING_RADIUS_M,
-    DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
-    DEFAULT_LIDAR_VIEW_POINT_COLOR,
-    DEFAULT_LIDAR_VIEW_POINT_OPACITY
+    DEFAULT_BATTERY_COLOR_HEX
 } from './helios-engine';
 import { computePvPower, type PanelOrientation } from './helios-sun';
 import { pickTranslations } from './i18n';
@@ -379,24 +375,16 @@ export class HeliosCard extends LitElement
     //CSS class .detail-active on ha-card fades out every overlay.
     @state() private _detailMode    = false;
     //True while the LiDAR View overlay is showing: the map UI fades
-    //out, a full-card canvas paints every loaded LiDAR cell as a
-    //dot, and the same toggle button (top-right) brings the regular
-    //UI back when clicked again. Independent of detail mode; both
-    //can't be on at once (the button is hidden in detail).
+    //out, the engine's WebGL custom layer paints every loaded LiDAR
+    //cell as a dot, and the same toggle button (top-right) brings the
+    //regular UI back when clicked again. Independent of detail mode;
+    //both can't be on at once (the button is hidden in detail).
     @state() private _lidarViewMode = false;
-    //Screen-space projection of the raw LiDAR raster for the current
-    //map transform. Refreshed in _refreshOverlays whenever a transform
-    //fires AND lidar view is active. xy is interleaved
-    //[x0,y0,x1,y1,...] of `count` projected dot positions, in CSS
-    //pixels relative to the canvas.
-    @state() private _lidarViewPoints:
-        { xy: Float32Array; count: number }
-        | null = null;
-    //Fade timestamps. On enter the canvas eases in from alpha 0 to 1
-    //over _LIDAR_FADE_IN_MS; on exit it eases back out before the
-    //regular HUD fade-in. Null when no fade is in flight; the canvas
-    //then either paints the full point cloud at the configured alpha
-    //or stays cleared.
+    //Fade timestamps. On enter the dot cloud eases in from alpha 0 to
+    //1 over _LIDAR_FADE_IN_MS; on exit it eases back out before the
+    //regular HUD fade-in. Null when no fade is in flight; the layer
+    //alpha then stays at its resting value (1 while active, 0 while
+    //inactive).
     private _lidarFadeInStartMs:  number | null = null;
     private _lidarFadeOutStartMs: number | null = null;
     private _lidarFadeRaf?:       number;
@@ -798,11 +786,6 @@ export class HeliosCard extends LitElement
         this._refreshPv();
         this._refreshBattery();
         this._refreshSolarRadiation();
-        //Repaint the LiDAR View canvas after the DOM has settled. The
-        //call is cheap (an early-return when the mode is off, a short-
-        //circuit when the signature is unchanged), so we can run it
-        //unconditionally on every Lit cycle without measurable cost.
-        this._redrawLidarCanvas();
     }
 
 
@@ -1727,75 +1710,11 @@ export class HeliosCard extends LitElement
         this._cloudScene      = this._engine ? this._engine.projectCloudScene()  : null;
         this._homeSilhouettes = this._engine ? this._engine.projectHomeFootprints() : [];
 
-        //LiDAR View overlay, only walked when the user opened it.
-        //Skipping the projection when the mode is off keeps the per-
-        //transform overhead at zero for the regular UI path, so the
-        //feature is pay-for-what-you-use (a 1M-cell raster wouldn't
-        //slow down anyone who never opens the LiDAR View).
-        if (this._lidarViewMode && this._engine)
-        {
-            //Two radii feed the projection:
-            //  buildingRadius = how far the engine actually fetched
-            //                   LiDAR data (and what shadows / 3D
-            //                   buildings span). Hard cap on the View.
-            //  viewRadius     = optional per-View override so a user
-            //                   can fetch wide for shadows but paint
-            //                   a tight dot cloud, useful on fullscreen
-            //                   layouts with high precision where every
-            //                   visible cell adds to the bake cost.
-            //min() so a stray viewRadius > buildingRadius never asks
-            //the engine for cells that were never loaded.
-            const buildingRadius = this._readRadiusKey('building-radius', DEFAULT_BUILDING_RADIUS_M);
-            const viewRadius     = this._readRadiusKey('lidar-view-radius', buildingRadius);
-            const radius         = Math.min(buildingRadius, viewRadius);
-            this._lidarViewPoints = this._engine.projectLidarPoints(radius);
-            this._lidarCanvasTransformTick++;
-        }
-        else if (this._lidarViewPoints !== null)
-        {
-            this._lidarViewPoints = null;
-        }
-    }
-
-    //Parse a metre-valued radius key off the config, defending against
-    //missing / non-numeric / out-of-range values. The clamp mirrors
-    //the engine's building-radius ceiling so a hand-edited YAML can't
-    //ask for cells the fetch never covered.
-    private _readRadiusKey(key: 'building-radius' | 'lidar-view-radius', fallback: number): number
-    {
-        const raw = this.config?.[key];
-        const parsed = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-        if (!isFinite(parsed) || parsed <= 0) return fallback;
-        return Math.min(500, Math.max(20, parsed));
-    }
-
-    //LiDAR View visual knobs. Each helper parses the matching config
-    //key and falls back to the engine-side DEFAULT_* constant when the
-    //key is missing, non-finite, out of range, or otherwise unusable.
-    //Keeping the validation here means the canvas draw loop doesn't
-    //need its own defensive checks per frame.
-    private _lidarViewPointSizePx(): number
-    {
-        const raw = this.config?.['lidar-view-point-size'];
-        const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-        if (!isFinite(n) || n <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
-        return Math.min(6, n);
-    }
-    private _lidarViewPointColor(): string
-    {
-        const raw = this.config?.['lidar-view-point-color'];
-        if (typeof raw === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(raw.trim()))
-        {
-            return raw.trim();
-        }
-        return DEFAULT_LIDAR_VIEW_POINT_COLOR;
-    }
-    private _lidarViewPointOpacity(): number
-    {
-        const raw = this.config?.['lidar-view-point-opacity'];
-        const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-        if (!isFinite(n)) return DEFAULT_LIDAR_VIEW_POINT_OPACITY;
-        return Math.max(0, Math.min(1, n));
+        //LiDAR View overlay lives entirely inside the engine's WebGL
+        //custom layer now: no per-transform projection on the JS side,
+        //no canvas redraw. The card just drives the fade-in/out alpha
+        //via _startLidarFadeLoop; MapLibre re-issues the layer's draw
+        //call on every transform automatically.
     }
 
     //Toggle the LiDAR View overlay. Disabled (silently no-op) when
@@ -1844,9 +1763,12 @@ export class HeliosCard extends LitElement
         }
     };
 
-    //Drives the per-frame redraw while a fade is in flight. Self-
-    //terminates when both fades are null (idle stable state), so the
-    //rAF cost stays at zero during normal viewing.
+    //Drives the fade alpha while a fade is in flight. Each tick
+    //computes the current alpha multiplier and pushes it to the
+    //engine; the WebGL layer composites the dot cloud with that alpha
+    //next time MapLibre repaints. Self-terminates when both fades are
+    //null (idle stable state) so the rAF cost stays at zero during
+    //regular viewing.
     private _startLidarFadeLoop(): void
     {
         if (this._lidarFadeRaf !== undefined) return;
@@ -1856,21 +1778,39 @@ export class HeliosCard extends LitElement
             const inStart  = this._lidarFadeInStartMs;
             const outStart = this._lidarFadeOutStartMs;
 
-            //Exit fade complete, finalise the mode flip.
+            //Exit fade complete, finalise the mode flip and clamp the
+            //layer alpha to 0 in one go.
             if (outStart !== null && now - outStart >= HeliosCard._LIDAR_FADE_OUT_MS)
             {
                 this._lidarFadeOutStartMs = null;
                 this._lidarViewMode = false;
+                this._engine?.setLidarViewFadeAlpha(0);
                 this._engine?.setLidarViewActive(false);
             }
-            //Enter fade complete, drop the marker so the alpha stops
-            //ramping (idle state = full opacity, no per-frame work).
+            //Enter fade complete, drop the marker so subsequent ticks
+            //stop ramping. The layer alpha sits at 1 until the user
+            //toggles back off.
             if (inStart !== null && now - inStart >= HeliosCard._LIDAR_FADE_IN_MS)
             {
                 this._lidarFadeInStartMs = null;
             }
 
-            this._redrawLidarCanvas();
+            //Recompute the fade progress on the still-active marker(s)
+            //and push to the engine. The push triggers a MapLibre
+            //repaint via the layer's setter, so the user sees the
+            //updated alpha on the next frame.
+            const inT  = this._lidarFadeInStartMs  !== null
+                ? Math.max(0, Math.min(1, (now - this._lidarFadeInStartMs)  / HeliosCard._LIDAR_FADE_IN_MS))
+                : 1;
+            const outT = this._lidarFadeOutStartMs !== null
+                ? Math.max(0, Math.min(1, (now - this._lidarFadeOutStartMs) / HeliosCard._LIDAR_FADE_OUT_MS))
+                : 0;
+            //Enter ramps 0→1, exit brings it back to 0. They're never
+            //both in flight (toggle clears one before starting the
+            //other) so the multiplication is a guard.
+            const alpha = (this._lidarFadeInStartMs  !== null ? inT : (this._lidarViewMode ? 1 : 0))
+                        * (this._lidarFadeOutStartMs !== null ? (1 - outT) : 1);
+            this._engine?.setLidarViewFadeAlpha(alpha);
 
             if (this._lidarFadeInStartMs !== null || this._lidarFadeOutStartMs !== null)
             {
@@ -1882,137 +1822,6 @@ export class HeliosCard extends LitElement
             }
         };
         this._lidarFadeRaf = requestAnimationFrame(tick);
-    }
-
-    //Offscreen "bake" of the full dot cloud at the current camera
-    //transform. The hot path during fades is no longer "walk N points
-    //and rect() each one per frame", it's a single drawImage of the
-    //pre-baked canvas with a global alpha multiplier, constant cost
-    //regardless of point count.
-    //
-    //The bake is invalidated by the bake signature (point count +
-    //visual config + canvas size + camera transform tick), so the
-    //bake re-runs only when the user rotates / zooms / resizes /
-    //tunes the colours, never on the per-frame fade tick.
-    private _lidarOffscreen?:        HTMLCanvasElement;
-    private _lidarOffscreenSig:      string = '';
-
-    private _redrawLidarCanvas(): void
-    {
-        //Stay painting while the exit fade is in flight even after
-        //_lidarViewMode flips back to false at the end of the ramp;
-        //the rAF loop owns the final clear.
-        if (!this._lidarViewMode && this._lidarFadeOutStartMs === null) return;
-        const canvas = this.renderRoot?.querySelector?.('canvas.lidar-view-canvas') as HTMLCanvasElement | null;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const dpr = window.devicePixelRatio || 1;
-        const cssW = canvas.clientWidth;
-        const cssH = canvas.clientHeight;
-        const wantW = Math.max(1, Math.round(cssW * dpr));
-        const wantH = Math.max(1, Math.round(cssH * dpr));
-        if (canvas.width !== wantW)  canvas.width  = wantW;
-        if (canvas.height !== wantH) canvas.height = wantH;
-
-        const points = this._lidarViewPoints;
-        const size   = this._lidarViewPointSizePx();
-        const color  = this._lidarViewPointColor();
-        const alpha  = this._lidarViewPointOpacity();
-
-        //Fade progress, [0..1]. inT 0 → fully transparent, 1 → fully
-        //opaque. outT 0 → fully opaque, 1 → fully transparent.
-        const now      = performance.now();
-        const inStart  = this._lidarFadeInStartMs;
-        const outStart = this._lidarFadeOutStartMs;
-        const inT  = inStart  !== null
-            ? Math.max(0, Math.min(1, (now - inStart)  / HeliosCard._LIDAR_FADE_IN_MS))
-            : 1;
-        const outT = outStart !== null
-            ? Math.max(0, Math.min(1, (now - outStart) / HeliosCard._LIDAR_FADE_OUT_MS))
-            : 0;
-        //Combine: enter brings alpha 0→1, exit brings it back to 0.
-        //They're never both in flight (toggle clears one before
-        //starting the other), so the multiplication is just a guard.
-        const globalAlpha = (inStart !== null ? inT : 1) * (outStart !== null ? (1 - outT) : 1);
-
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, cssW, cssH);
-        if (!points || points.count === 0) return;
-        if (globalAlpha <= 0) return;
-
-        //Bake the full dot cloud into an offscreen canvas. Re-bakes
-        //only when the projection or visual config changes; the per-
-        //frame fade reuses the same bake and just composites it with
-        //a global alpha multiplier.
-        const bakeSig = `${points.count}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}`;
-        if (bakeSig !== this._lidarOffscreenSig || !this._lidarOffscreen)
-        {
-            if (!this._lidarOffscreen)
-            {
-                this._lidarOffscreen = document.createElement('canvas');
-            }
-            const off = this._lidarOffscreen;
-            off.width  = wantW;
-            off.height = wantH;
-            const offCtx = off.getContext('2d')!;
-            offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            offCtx.fillStyle = this._withAlpha(color, alpha);
-            const half = size / 2;
-            const xy   = points.xy;
-            const N    = points.count;
-            const W    = cssW;
-            const H    = cssH;
-            const path = new Path2D();
-            for (let i = 0; i < N; i++)
-            {
-                const x = xy[i * 2];
-                const y = xy[i * 2 + 1];
-                if (x < -half || y < -half || x > W + half || y > H + half) continue;
-                path.rect(x - half, y - half, size, size);
-            }
-            offCtx.fill(path);
-            this._lidarOffscreenSig = bakeSig;
-        }
-
-        if (globalAlpha < 1) ctx.globalAlpha = globalAlpha;
-        ctx.drawImage(this._lidarOffscreen!, 0, 0, cssW, cssH);
-        if (globalAlpha < 1) ctx.globalAlpha = 1;
-    }
-
-    //Bumped on every overlay refresh so _redrawLidarCanvas knows the
-    //projected buffer changed even when its length and the visual
-    //config are stable (the most common case: same raster, the camera
-    //rotated). Cheaper than diffing the Float32Array contents.
-    private _lidarCanvasTransformTick = 0;
-
-    //Mix a CSS hex colour with an alpha value to produce an rgba()
-    //string. Accepts #rgb / #rrggbb / #rrggbbaa (the alpha component
-    //in the source is replaced by the supplied alpha). Falls back to
-    //full opacity if parsing fails so the dots stay visible during
-    //bad-input edits.
-    private _withAlpha(hex: string, alpha: number): string
-    {
-        const h = hex.replace('#', '');
-        let r = 255, g = 255, b = 255;
-        if (h.length === 3)
-        {
-            r = parseInt(h[0] + h[0], 16);
-            g = parseInt(h[1] + h[1], 16);
-            b = parseInt(h[2] + h[2], 16);
-        }
-        else if (h.length >= 6)
-        {
-            r = parseInt(h.slice(0, 2), 16);
-            g = parseInt(h.slice(2, 4), 16);
-            b = parseInt(h.slice(4, 6), 16);
-        }
-        if (!isFinite(r) || !isFinite(g) || !isFinite(b))
-        {
-            return `rgba(255,255,255,${alpha})`;
-        }
-        return `rgba(${r},${g},${b},${alpha})`;
     }
 
     //Segments now share one fixed colour (the configured sun
@@ -3758,15 +3567,6 @@ export class HeliosCard extends LitElement
             <ha-card class="${cardClasses}">
 
                 <div id="map-container"></div>
-
-                <!--  LiDAR View canvas overlay. Always present in the
-                      DOM so the canvas backing store survives across
-                      view-mode toggles (no flash on re-enter), but
-                      visually hidden until .lidar-view-active is set
-                      on ha-card. The canvas is sized to the host via
-                      CSS (100%/100%) and to its backing pixel buffer
-                      in _redrawLidarCanvas() based on devicePixelRatio. -->
-                <canvas class="lidar-view-canvas" aria-hidden="true"></canvas>
 
                 ${hasApiKey && this._timeRange ? html`
                     <div

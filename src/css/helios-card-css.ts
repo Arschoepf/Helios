@@ -1006,27 +1006,6 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  LiDAR View canvas overlay. Sits above the map and the
-        regular HUD but below the LiDAR View toggle button itself,
-        so the user can always exit. Hidden by default; revealed
-        with a fade when .lidar-view-active lands on ha-card. */
-    .lidar-view-canvas
-    {
-        position: absolute;
-        inset: 0;
-        width:  100%;
-        height: 100%;
-        z-index: 30;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.25s ease;
-        background: transparent;
-    }
-    ha-card.lidar-view-active .lidar-view-canvas
-    {
-        opacity: 1;
-    }
-
     /*  When LiDAR View is active, fade out every overlay layer so
         the dot cloud reads on its own against a quiet basemap. The
         toggle button itself is opted back in (selector below) so

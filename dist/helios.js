@@ -30202,6 +30202,196 @@ function resolveLidarSource(lat, lon, cfg) {
   }
   return findLidarSource(lat, lon);
 }
+const VERT_SRC = `
+attribute vec3 a_pos;
+uniform mat4  u_matrix;
+uniform vec2  u_homeMerc;
+uniform float u_mercPerMeter;
+uniform float u_radiusMeters;
+uniform float u_pointSizePx;
+varying float v_inside;
+
+void main() {
+    float dxMerc = a_pos.x - u_homeMerc.x;
+    float dyMerc = a_pos.y - u_homeMerc.y;
+    float dxM = dxMerc / u_mercPerMeter;
+    float dyM = dyMerc / u_mercPerMeter;
+    float d2  = dxM * dxM + dyM * dyM;
+    float r2  = u_radiusMeters * u_radiusMeters;
+    v_inside  = step(d2, r2);
+    gl_Position  = u_matrix * vec4(a_pos, 1.0);
+    gl_PointSize = u_pointSizePx * v_inside;
+}
+`;
+const FRAG_SRC = `
+precision mediump float;
+uniform vec4  u_color;
+uniform float u_alphaFade;
+varying float v_inside;
+
+void main() {
+    if (v_inside < 0.5) discard;
+    gl_FragColor = vec4(u_color.rgb, u_color.a * u_alphaFade);
+}
+`;
+class LidarViewLayer {
+  constructor(opts) {
+    this.id = "helios-lidar-view";
+    this.type = "custom";
+    this.renderingMode = "2d";
+    this._vertexCount = 0;
+    this._aPos = -1;
+    this._radiusMeters = 100;
+    this._pointSizePx = 1.5;
+    this._color = [1, 1, 1, 0.5];
+    this._alphaFade = 0;
+    this._homeMerc = maplibregl.MercatorCoordinate.fromLngLat([opts.homeLon, opts.homeLat], 0);
+    this._mercPerMeter = this._homeMerc.meterInMercatorCoordinateUnits();
+  }
+  setHome(lat, lon) {
+    this._homeMerc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0);
+    this._mercPerMeter = this._homeMerc.meterInMercatorCoordinateUnits();
+    this._map?.triggerRepaint();
+  }
+  setRadiusMeters(r2) {
+    if (r2 === this._radiusMeters) return;
+    this._radiusMeters = r2;
+    this._map?.triggerRepaint();
+  }
+  setPointSizePx(px) {
+    if (px === this._pointSizePx) return;
+    this._pointSizePx = px;
+    this._map?.triggerRepaint();
+  }
+  setColor(rgba) {
+    this._color = rgba;
+    this._map?.triggerRepaint();
+  }
+  //Fade multiplier in [0..1]. 0 = invisible (shortcut: no draw call).
+  setAlphaFade(a2) {
+    const clamped = Math.max(0, Math.min(1, a2));
+    if (clamped === this._alphaFade) return;
+    this._alphaFade = clamped;
+    this._map?.triggerRepaint();
+  }
+  //Rebuild the GPU buffer from a fresh height raster. Only finite
+  //cells are uploaded; NaN sentinels (no-data) are dropped at build
+  //time so the shader never sees them.
+  setData(raster) {
+    if (!raster || raster.rasterSize <= 0) {
+      this._vertexCount = 0;
+      this._pendingVerts = void 0;
+      if (this._gl && this._buffer) {
+        this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this._buffer);
+        this._gl.bufferData(this._gl.ARRAY_BUFFER, 0, this._gl.STATIC_DRAW);
+      }
+      this._map?.triggerRepaint();
+      return;
+    }
+    const { heights, rasterSize, minLat, maxLat, minLon, maxLon } = raster;
+    const pxLon = (maxLon - minLon) / rasterSize;
+    const pxLat = (maxLat - minLat) / rasterSize;
+    const verts = new Float32Array(rasterSize * rasterSize * 3);
+    let n3 = 0;
+    for (let j = 0; j < rasterSize; j++) {
+      const cLat = maxLat - (j + 0.5) * pxLat;
+      for (let i2 = 0; i2 < rasterSize; i2++) {
+        const h2 = heights[j * rasterSize + i2];
+        if (!isFinite(h2)) continue;
+        const cLon = minLon + (i2 + 0.5) * pxLon;
+        const mc = maplibregl.MercatorCoordinate.fromLngLat([cLon, cLat], h2);
+        verts[n3 * 3] = mc.x;
+        verts[n3 * 3 + 1] = mc.y;
+        verts[n3 * 3 + 2] = mc.z ?? 0;
+        n3++;
+      }
+    }
+    this._vertexCount = n3;
+    const used = n3 > 0 ? verts.subarray(0, n3 * 3) : new Float32Array(0);
+    if (this._gl && this._buffer) {
+      this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this._buffer);
+      this._gl.bufferData(this._gl.ARRAY_BUFFER, used, this._gl.STATIC_DRAW);
+    } else {
+      this._pendingVerts = used;
+    }
+    this._map?.triggerRepaint();
+  }
+  onAdd(map, gl) {
+    this._map = map;
+    this._gl = gl;
+    const vs = this._compileShader(gl, gl.VERTEX_SHADER, VERT_SRC);
+    const fs = this._compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
+    const program = gl.createProgram();
+    if (!program) throw new Error("LidarViewLayer: createProgram failed");
+    gl.attachShader(program, vs);
+    gl.attachShader(program, fs);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      const log = gl.getProgramInfoLog(program) ?? "";
+      gl.deleteProgram(program);
+      throw new Error(`LidarViewLayer: link failed: ${log}`);
+    }
+    this._program = program;
+    this._aPos = gl.getAttribLocation(program, "a_pos");
+    this._uMatrix = gl.getUniformLocation(program, "u_matrix") ?? void 0;
+    this._uHomeMerc = gl.getUniformLocation(program, "u_homeMerc") ?? void 0;
+    this._uMercPerMeter = gl.getUniformLocation(program, "u_mercPerMeter") ?? void 0;
+    this._uRadius = gl.getUniformLocation(program, "u_radiusMeters") ?? void 0;
+    this._uPointSize = gl.getUniformLocation(program, "u_pointSizePx") ?? void 0;
+    this._uColor = gl.getUniformLocation(program, "u_color") ?? void 0;
+    this._uAlphaFade = gl.getUniformLocation(program, "u_alphaFade") ?? void 0;
+    this._buffer = gl.createBuffer() ?? void 0;
+    if (this._pendingVerts && this._buffer) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, this._pendingVerts, gl.STATIC_DRAW);
+      this._pendingVerts = void 0;
+    }
+  }
+  render(gl, args) {
+    if (!this._program || !this._buffer) return;
+    if (this._vertexCount === 0) return;
+    if (this._alphaFade <= 0) return;
+    const rawMatrix = args.defaultProjectionData?.mainMatrix;
+    if (!rawMatrix) return;
+    const matrix = rawMatrix instanceof Float32Array ? rawMatrix : Float32Array.from(rawMatrix);
+    gl.useProgram(this._program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
+    gl.enableVertexAttribArray(this._aPos);
+    gl.vertexAttribPointer(this._aPos, 3, gl.FLOAT, false, 0, 0);
+    if (this._uMatrix) gl.uniformMatrix4fv(this._uMatrix, false, matrix);
+    if (this._uHomeMerc) gl.uniform2f(this._uHomeMerc, this._homeMerc.x, this._homeMerc.y);
+    if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
+    if (this._uRadius) gl.uniform1f(this._uRadius, this._radiusMeters);
+    const dpr = typeof window !== "undefined" && window.devicePixelRatio || 1;
+    if (this._uPointSize) gl.uniform1f(this._uPointSize, this._pointSizePx * dpr);
+    if (this._uColor) gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
+    if (this._uAlphaFade) gl.uniform1f(this._uAlphaFade, this._alphaFade);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.disable(gl.DEPTH_TEST);
+    gl.drawArrays(gl.POINTS, 0, this._vertexCount);
+  }
+  onRemove(_map, gl) {
+    if (this._buffer) gl.deleteBuffer(this._buffer);
+    if (this._program) gl.deleteProgram(this._program);
+    this._buffer = void 0;
+    this._program = void 0;
+    this._gl = void 0;
+    this._map = void 0;
+  }
+  _compileShader(gl, type, src) {
+    const sh = gl.createShader(type);
+    if (!sh) throw new Error("LidarViewLayer: createShader failed");
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(sh) ?? "";
+      gl.deleteShader(sh);
+      throw new Error(`LidarViewLayer: compile failed: ${log}`);
+    }
+    return sh;
+  }
+}
 const DEFAULT_BUILDING_RADIUS_M = 100;
 const DEFAULT_BUILDING_OPACITY = 0.25;
 const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
@@ -30862,6 +31052,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._initNightShade();
     this._initCloudCoverDisc();
     this._addBuildings();
+    this._initLidarViewLayer();
     this._applyLabelVisibility();
     window.clearInterval(this._skyTimer);
     this._lastAtmosphereAlt = -999;
@@ -31119,6 +31310,77 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarViewActive = on;
     if (on) this._ensureLidarFetched();
   }
+  //Wire (or rewire after a style reload) the WebGL custom layer that
+  //paints the LiDAR View dot cloud on the map's own GL context. The
+  //layer instance is created once per engine and reused across style
+  //reloads; setStyle wipes layers but the JS object survives, so we
+  //re-add it and replay the cached buffer + tunables.
+  _initLidarViewLayer() {
+    if (!this.map) return;
+    if (!this._lidarViewLayer) {
+      this._lidarViewLayer = new LidarViewLayer({
+        homeLat: this.homeLat,
+        homeLon: this.homeLon
+      });
+    }
+    if (!this.map.getLayer(this._lidarViewLayer.id)) {
+      this.map.addLayer(this._lidarViewLayer);
+    }
+    this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
+    this._pushLidarViewConfig();
+    if (this._lidarRaster) this._lidarViewLayer.setData(this._lidarRaster);
+  }
+  //Read all LiDAR View visual knobs off the current config and push
+  //them to the layer. Called on init and whenever updateConfig sees a
+  //relevant key change.
+  _pushLidarViewConfig() {
+    if (!this._lidarViewLayer) return;
+    this._lidarViewLayer.setRadiusMeters(this._lidarViewRadiusMeters());
+    this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
+    this._lidarViewLayer.setColor(this._lidarViewColorRgba());
+  }
+  //Fade alpha multiplier in [0..1]. Driven by the card's enter/exit
+  //animation; the engine just forwards. When the View is off the
+  //card keeps this at 0, the layer short-circuits its draw call.
+  setLidarViewFadeAlpha(alpha) {
+    this._lidarViewLayer?.setAlphaFade(alpha);
+  }
+  _lidarViewRadiusMeters() {
+    const buildingRadius = this._buildingRadiusMeters();
+    const raw2 = this.cfg["lidar-view-radius"];
+    const parsed = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+    if (!isFinite(parsed) || parsed <= 0) return buildingRadius;
+    const viewRadius = Math.min(500, Math.max(20, parsed));
+    return Math.min(buildingRadius, viewRadius);
+  }
+  _lidarViewPointSizePx() {
+    const raw2 = this.cfg["lidar-view-point-size"];
+    const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+    if (!isFinite(n3) || n3 <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
+    return Math.min(6, n3);
+  }
+  _lidarViewColorRgba() {
+    const rawColor = this.cfg["lidar-view-point-color"];
+    const hex = typeof rawColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim()) ? rawColor.trim() : DEFAULT_LIDAR_VIEW_POINT_COLOR;
+    const rawOpa = this.cfg["lidar-view-point-opacity"];
+    const opa = typeof rawOpa === "number" ? rawOpa : parseFloat(String(rawOpa ?? ""));
+    const alpha = isFinite(opa) ? Math.max(0, Math.min(1, opa)) : DEFAULT_LIDAR_VIEW_POINT_OPACITY;
+    const rgb = this._hexToRgb01(hex);
+    return [rgb[0], rgb[1], rgb[2], alpha];
+  }
+  _hexToRgb01(hex) {
+    let h2 = hex.replace("#", "");
+    if (h2.length === 3) h2 = h2.split("").map((c2) => c2 + c2).join("");
+    if (h2.length === 8) h2 = h2.slice(0, 6);
+    const r2 = parseInt(h2.slice(0, 2), 16) / 255;
+    const g2 = parseInt(h2.slice(2, 4), 16) / 255;
+    const b2 = parseInt(h2.slice(4, 6), 16) / 255;
+    return [
+      isFinite(r2) ? r2 : 1,
+      isFinite(g2) ? g2 : 1,
+      isFinite(b2) ? b2 : 1
+    ];
+  }
   //LiDAR View support, exposed to the card.
   //
   //getActiveLidarSourceId returns the id of the provider that
@@ -31132,84 +31394,6 @@ const _HeliosEngine = class _HeliosEngine {
   getActiveLidarSourceId() {
     const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
     return provider ? provider.id : null;
-  }
-  //Project every raw raster cell (vegetation + ground + buildings,
-  //threshold-bypassed) to screen-space. Returns interleaved
-  //[x0, y0, x1, y1, ...] Float32 plus the count, so the card can
-  //fillRect through the buffer without per-point object allocations
-  //on every frame.
-  //
-  //Performance: hot path runs at hundreds of thousands of cells per
-  //frame during camera rotation. The naive per-cell
-  //`_projectScenePoint(lon, lat, h)` is a full 4x4 matrix-build +
-  //multiply (~5 microseconds), which puts a 500 K-cell scene over
-  //2 seconds per frame, unusable. We dodge that by projecting the
-  //home + three anchors (1 m east, 1 m north, home + 1 m of
-  //altitude) ONCE per frame, deriving a 2×3 affine jacobian
-  //(world-metres around the home → screen pixels), then the cell
-  //loop is a flat 6 mul + 6 add per point. ~50× faster on the
-  //typical raster, no visual difference within the ~100 m disc
-  //(the small-area linearisation holds well at zoom 18 with a
-  //fixed camera tween cadence).
-  //
-  //maxRadiusMeters is honoured client-side: cells whose centre
-  //sits past that distance from the home are skipped. The card
-  //surfaces this as a config knob so the user can shrink the
-  //visible disc to keep frame times sane on big rasters / weak
-  //devices.
-  //
-  //Returns null when no raster has been fetched yet (home outside
-  //coverage, shadows disabled, fetch still in flight) so the card
-  //can show an empty overlay instead of garbage.
-  projectLidarPoints(maxRadiusMeters) {
-    if (!this.map || !this._mapReady) return null;
-    const raster = this._lidarRaster;
-    if (!raster) return null;
-    const { heights, rasterSize, minLat, maxLat, minLon, maxLon } = raster;
-    const N2 = rasterSize * rasterSize;
-    if (heights.length < N2) return null;
-    const homeLat = this.homeLat;
-    const homeLon = this.homeLon;
-    const COS_LAT = Math.cos(homeLat * Math.PI / 180);
-    const M_PER_DEG_LAT2 = 111320;
-    const M_PER_DEG_LON = M_PER_DEG_LAT2 * COS_LAT;
-    const ONE_METRE_LAT = 1 / M_PER_DEG_LAT2;
-    const ONE_METRE_LON = 1 / M_PER_DEG_LON;
-    const homeAnchor = this._projectScenePoint(homeLon, homeLat, 0);
-    const eastAnchor = this._projectScenePoint(homeLon + ONE_METRE_LON, homeLat, 0);
-    const northAnchor = this._projectScenePoint(homeLon, homeLat + ONE_METRE_LAT, 0);
-    const upAnchor = this._projectScenePoint(homeLon, homeLat, 1);
-    if (!homeAnchor || !eastAnchor || !northAnchor || !upAnchor) return null;
-    const jExX = eastAnchor.x - homeAnchor.x;
-    const jExY = eastAnchor.y - homeAnchor.y;
-    const jNoX = northAnchor.x - homeAnchor.x;
-    const jNoY = northAnchor.y - homeAnchor.y;
-    const jUpX = upAnchor.x - homeAnchor.x;
-    const jUpY = upAnchor.y - homeAnchor.y;
-    const hX = homeAnchor.x;
-    const hY = homeAnchor.y;
-    const pxLon = (maxLon - minLon) / rasterSize;
-    const pxLat = (maxLat - minLat) / rasterSize;
-    const radius = Math.max(1, maxRadiusMeters);
-    const r2 = radius * radius;
-    const xy = new Float32Array(N2 * 2);
-    let count = 0;
-    for (let j = 0; j < rasterSize; j++) {
-      const cLat = maxLat - (j + 0.5) * pxLat;
-      const dLatM = (cLat - homeLat) * M_PER_DEG_LAT2;
-      const dLatM2 = dLatM * dLatM;
-      for (let i2 = 0; i2 < rasterSize; i2++) {
-        const h2 = heights[j * rasterSize + i2];
-        if (!isFinite(h2)) continue;
-        const cLon = minLon + (i2 + 0.5) * pxLon;
-        const dLonM = (cLon - homeLon) * M_PER_DEG_LON;
-        if (dLonM * dLonM + dLatM2 > r2) continue;
-        xy[count * 2] = hX + dLonM * jExX + dLatM * jNoX + h2 * jUpX;
-        xy[count * 2 + 1] = hY + dLonM * jExY + dLatM * jNoY + h2 * jUpY;
-        count++;
-      }
-    }
-    return { xy, count };
   }
   //Toggle MapTiler's symbol layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
@@ -31516,6 +31700,7 @@ const _HeliosEngine = class _HeliosEngine {
       this._lidarShadowDiagnostics = null;
       this._lidarShadowKey = "";
       this._lidarRaster = null;
+      this._lidarViewLayer?.setData(null);
       this._lidarShadowAbort?.abort();
       this._lidarShadowAbort = void 0;
       return;
@@ -31550,6 +31735,7 @@ const _HeliosEngine = class _HeliosEngine {
       this._lidarShadowFeatures = res.features;
       this._lidarShadowDiagnostics = res.diagnostics;
       this._lidarRaster = res.raster ?? null;
+      this._lidarViewLayer?.setData(this._lidarRaster);
       this._lastAtmosphereAlt = -999;
       this._refreshShadowsAndAtmosphere();
     }).catch((err) => {
@@ -32451,6 +32637,7 @@ const _HeliosEngine = class _HeliosEngine {
       this._lastAtmosphereAlt = -999;
       this._refreshShadowsAndAtmosphere();
     }
+    this._pushLidarViewConfig();
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
     }
@@ -34598,27 +34785,6 @@ const heliosCardStyles = i$3`
         border-color: #1f6feb;
     }
 
-
-    /*  LiDAR View canvas overlay. Sits above the map and the
-        regular HUD but below the LiDAR View toggle button itself,
-        so the user can always exit. Hidden by default; revealed
-        with a fade when .lidar-view-active lands on ha-card. */
-    .lidar-view-canvas
-    {
-        position: absolute;
-        inset: 0;
-        width:  100%;
-        height: 100%;
-        z-index: 30;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.25s ease;
-        background: transparent;
-    }
-    ha-card.lidar-view-active .lidar-view-canvas
-    {
-        opacity: 1;
-    }
 
     /*  When LiDAR View is active, fade out every overlay layer so
         the dot cloud reads on its own against a quiet basemap. The
@@ -37093,7 +37259,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.27"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.28"}`,
       labelStyle,
       versionStyle
     );
@@ -37114,7 +37280,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.27",
+        version: "1.6.0-alpha.28",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37122,7 +37288,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.27"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.28"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -37211,7 +37377,6 @@ let HeliosCard = class extends i {
     this._shadowBusy = false;
     this._detailMode = false;
     this._lidarViewMode = false;
-    this._lidarViewPoints = null;
     this._lidarFadeInStartMs = null;
     this._lidarFadeOutStartMs = null;
     this._lastHomeKey = "";
@@ -37233,8 +37398,6 @@ let HeliosCard = class extends i {
         this._startLidarFadeLoop();
       }
     };
-    this._lidarOffscreenSig = "";
-    this._lidarCanvasTransformTick = 0;
     this._trackElement = null;
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
@@ -37496,7 +37659,6 @@ let HeliosCard = class extends i {
     this._refreshPv();
     this._refreshBattery();
     this._refreshSolarRadiation();
-    this._redrawLidarCanvas();
   }
   //Photovoltaic production
   //
@@ -38058,53 +38220,13 @@ let HeliosCard = class extends i {
     this._sunScene = this._engine ? this._engine.projectSunScene(t2) : null;
     this._cloudScene = this._engine ? this._engine.projectCloudScene() : null;
     this._homeSilhouettes = this._engine ? this._engine.projectHomeFootprints() : [];
-    if (this._lidarViewMode && this._engine) {
-      const buildingRadius = this._readRadiusKey("building-radius", DEFAULT_BUILDING_RADIUS_M);
-      const viewRadius = this._readRadiusKey("lidar-view-radius", buildingRadius);
-      const radius = Math.min(buildingRadius, viewRadius);
-      this._lidarViewPoints = this._engine.projectLidarPoints(radius);
-      this._lidarCanvasTransformTick++;
-    } else if (this._lidarViewPoints !== null) {
-      this._lidarViewPoints = null;
-    }
   }
-  //Parse a metre-valued radius key off the config, defending against
-  //missing / non-numeric / out-of-range values. The clamp mirrors
-  //the engine's building-radius ceiling so a hand-edited YAML can't
-  //ask for cells the fetch never covered.
-  _readRadiusKey(key, fallback) {
-    const raw2 = this.config?.[key];
-    const parsed = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-    if (!isFinite(parsed) || parsed <= 0) return fallback;
-    return Math.min(500, Math.max(20, parsed));
-  }
-  //LiDAR View visual knobs. Each helper parses the matching config
-  //key and falls back to the engine-side DEFAULT_* constant when the
-  //key is missing, non-finite, out of range, or otherwise unusable.
-  //Keeping the validation here means the canvas draw loop doesn't
-  //need its own defensive checks per frame.
-  _lidarViewPointSizePx() {
-    const raw2 = this.config?.["lidar-view-point-size"];
-    const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-    if (!isFinite(n3) || n3 <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
-    return Math.min(6, n3);
-  }
-  _lidarViewPointColor() {
-    const raw2 = this.config?.["lidar-view-point-color"];
-    if (typeof raw2 === "string" && /^#[0-9a-fA-F]{3,8}$/.test(raw2.trim())) {
-      return raw2.trim();
-    }
-    return DEFAULT_LIDAR_VIEW_POINT_COLOR;
-  }
-  _lidarViewPointOpacity() {
-    const raw2 = this.config?.["lidar-view-point-opacity"];
-    const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-    if (!isFinite(n3)) return DEFAULT_LIDAR_VIEW_POINT_OPACITY;
-    return Math.max(0, Math.min(1, n3));
-  }
-  //Drives the per-frame redraw while a fade is in flight. Self-
-  //terminates when both fades are null (idle stable state), so the
-  //rAF cost stays at zero during normal viewing.
+  //Drives the fade alpha while a fade is in flight. Each tick
+  //computes the current alpha multiplier and pushes it to the
+  //engine; the WebGL layer composites the dot cloud with that alpha
+  //next time MapLibre repaints. Self-terminates when both fades are
+  //null (idle stable state) so the rAF cost stays at zero during
+  //regular viewing.
   _startLidarFadeLoop() {
     if (this._lidarFadeRaf !== void 0) return;
     const tick = () => {
@@ -38114,12 +38236,16 @@ let HeliosCard = class extends i {
       if (outStart !== null && now - outStart >= HeliosCard._LIDAR_FADE_OUT_MS) {
         this._lidarFadeOutStartMs = null;
         this._lidarViewMode = false;
+        this._engine?.setLidarViewFadeAlpha(0);
         this._engine?.setLidarViewActive(false);
       }
       if (inStart !== null && now - inStart >= HeliosCard._LIDAR_FADE_IN_MS) {
         this._lidarFadeInStartMs = null;
       }
-      this._redrawLidarCanvas();
+      const inT = this._lidarFadeInStartMs !== null ? Math.max(0, Math.min(1, (now - this._lidarFadeInStartMs) / HeliosCard._LIDAR_FADE_IN_MS)) : 1;
+      const outT = this._lidarFadeOutStartMs !== null ? Math.max(0, Math.min(1, (now - this._lidarFadeOutStartMs) / HeliosCard._LIDAR_FADE_OUT_MS)) : 0;
+      const alpha = (this._lidarFadeInStartMs !== null ? inT : this._lidarViewMode ? 1 : 0) * (this._lidarFadeOutStartMs !== null ? 1 - outT : 1);
+      this._engine?.setLidarViewFadeAlpha(alpha);
       if (this._lidarFadeInStartMs !== null || this._lidarFadeOutStartMs !== null) {
         this._lidarFadeRaf = requestAnimationFrame(tick);
       } else {
@@ -38127,85 +38253,6 @@ let HeliosCard = class extends i {
       }
     };
     this._lidarFadeRaf = requestAnimationFrame(tick);
-  }
-  _redrawLidarCanvas() {
-    if (!this._lidarViewMode && this._lidarFadeOutStartMs === null) return;
-    const canvas = this.renderRoot?.querySelector?.("canvas.lidar-view-canvas");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    const cssW = canvas.clientWidth;
-    const cssH = canvas.clientHeight;
-    const wantW = Math.max(1, Math.round(cssW * dpr));
-    const wantH = Math.max(1, Math.round(cssH * dpr));
-    if (canvas.width !== wantW) canvas.width = wantW;
-    if (canvas.height !== wantH) canvas.height = wantH;
-    const points = this._lidarViewPoints;
-    const size = this._lidarViewPointSizePx();
-    const color = this._lidarViewPointColor();
-    const alpha = this._lidarViewPointOpacity();
-    const now = performance.now();
-    const inStart = this._lidarFadeInStartMs;
-    const outStart = this._lidarFadeOutStartMs;
-    const inT = inStart !== null ? Math.max(0, Math.min(1, (now - inStart) / HeliosCard._LIDAR_FADE_IN_MS)) : 1;
-    const outT = outStart !== null ? Math.max(0, Math.min(1, (now - outStart) / HeliosCard._LIDAR_FADE_OUT_MS)) : 0;
-    const globalAlpha = (inStart !== null ? inT : 1) * (outStart !== null ? 1 - outT : 1);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, cssW, cssH);
-    if (!points || points.count === 0) return;
-    if (globalAlpha <= 0) return;
-    const bakeSig = `${points.count}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}`;
-    if (bakeSig !== this._lidarOffscreenSig || !this._lidarOffscreen) {
-      if (!this._lidarOffscreen) {
-        this._lidarOffscreen = document.createElement("canvas");
-      }
-      const off = this._lidarOffscreen;
-      off.width = wantW;
-      off.height = wantH;
-      const offCtx = off.getContext("2d");
-      offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      offCtx.fillStyle = this._withAlpha(color, alpha);
-      const half = size / 2;
-      const xy = points.xy;
-      const N2 = points.count;
-      const W = cssW;
-      const H2 = cssH;
-      const path = new Path2D();
-      for (let i2 = 0; i2 < N2; i2++) {
-        const x2 = xy[i2 * 2];
-        const y3 = xy[i2 * 2 + 1];
-        if (x2 < -half || y3 < -half || x2 > W + half || y3 > H2 + half) continue;
-        path.rect(x2 - half, y3 - half, size, size);
-      }
-      offCtx.fill(path);
-      this._lidarOffscreenSig = bakeSig;
-    }
-    if (globalAlpha < 1) ctx.globalAlpha = globalAlpha;
-    ctx.drawImage(this._lidarOffscreen, 0, 0, cssW, cssH);
-    if (globalAlpha < 1) ctx.globalAlpha = 1;
-  }
-  //Mix a CSS hex colour with an alpha value to produce an rgba()
-  //string. Accepts #rgb / #rrggbb / #rrggbbaa (the alpha component
-  //in the source is replaced by the supplied alpha). Falls back to
-  //full opacity if parsing fails so the dots stay visible during
-  //bad-input edits.
-  _withAlpha(hex, alpha) {
-    const h2 = hex.replace("#", "");
-    let r2 = 255, g2 = 255, b2 = 255;
-    if (h2.length === 3) {
-      r2 = parseInt(h2[0] + h2[0], 16);
-      g2 = parseInt(h2[1] + h2[1], 16);
-      b2 = parseInt(h2[2] + h2[2], 16);
-    } else if (h2.length >= 6) {
-      r2 = parseInt(h2.slice(0, 2), 16);
-      g2 = parseInt(h2.slice(2, 4), 16);
-      b2 = parseInt(h2.slice(4, 6), 16);
-    }
-    if (!isFinite(r2) || !isFinite(g2) || !isFinite(b2)) {
-      return `rgba(255,255,255,${alpha})`;
-    }
-    return `rgba(${r2},${g2},${b2},${alpha})`;
   }
   //Segments now share one fixed colour (the configured sun
   //colour). Depth perception comes entirely from the per-segment
@@ -39234,15 +39281,6 @@ let HeliosCard = class extends i {
             <ha-card class="${cardClasses}">
 
                 <div id="map-container"></div>
-
-                <!--  LiDAR View canvas overlay. Always present in the
-                      DOM so the canvas backing store survives across
-                      view-mode toggles (no flash on re-enter), but
-                      visually hidden until .lidar-view-active is set
-                      on ha-card. The canvas is sized to the host via
-                      CSS (100%/100%) and to its backing pixel buffer
-                      in _redrawLidarCanvas() based on devicePixelRatio. -->
-                <canvas class="lidar-view-canvas" aria-hidden="true"></canvas>
 
                 ${hasApiKey && this._timeRange ? b`
                     <div
@@ -40607,9 +40645,6 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_lidarViewMode", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_lidarViewPoints", 2);
 HeliosCard = __decorateClass([
   t("helios-card")
 ], HeliosCard);

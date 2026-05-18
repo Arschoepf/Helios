@@ -6,6 +6,7 @@ import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildin
 import { projectExtrusionShadows } from './helios-shadows';
 import { resolveLidarSource } from './helios-lidar';
 import { RASTER_DEFAULTS } from './helios-lidar/helios-lidar-pipeline';
+import { LidarViewLayer } from './helios-lidar-view-layer';
 
 //Public types
 
@@ -917,6 +918,14 @@ export class HeliosEngine
         }
         | null = null;
 
+    //Custom MapLibre layer rendering the LiDAR View dot cloud directly
+    //on the GPU. Owns one Float32 buffer with the Mercator triplet of
+    //each finite cell, rebuilt only when a new raster lands; per frame
+    //the shader projects + radius-filters all points in a single
+    //drawArrays(POINTS) call. Replaces the old CPU-bake / 2D canvas
+    //path, which couldn't keep up past a few hundred thousand cells.
+    private _lidarViewLayer?: LidarViewLayer;
+
     //Offscreen canvas used to rasterise cast shadows before uploading
     //them to the MapLibre image source. Lives for the whole engine
     //lifetime so we don't realloc on every sun tick. Sized at
@@ -1667,6 +1676,7 @@ export class HeliosEngine
         this._initNightShade();
         this._initCloudCoverDisc();
         this._addBuildings();
+        this._initLidarViewLayer();
         this._applyLabelVisibility();
 
         window.clearInterval(this._skyTimer);
@@ -2006,6 +2016,105 @@ export class HeliosEngine
         if (on) this._ensureLidarFetched();
     }
 
+    //Wire (or rewire after a style reload) the WebGL custom layer that
+    //paints the LiDAR View dot cloud on the map's own GL context. The
+    //layer instance is created once per engine and reused across style
+    //reloads; setStyle wipes layers but the JS object survives, so we
+    //re-add it and replay the cached buffer + tunables.
+    private _initLidarViewLayer(): void
+    {
+        if (!this.map) return;
+        if (!this._lidarViewLayer)
+        {
+            this._lidarViewLayer = new LidarViewLayer({
+                homeLat: this.homeLat,
+                homeLon: this.homeLon
+            });
+        }
+        if (!this.map.getLayer(this._lidarViewLayer.id))
+        {
+            this.map.addLayer(this._lidarViewLayer);
+        }
+        //Keep the home + visual knobs in sync (style reloads may have
+        //wiped the previous GL state, the setters double as
+        //"replay the current values" hooks).
+        this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
+        this._pushLidarViewConfig();
+        if (this._lidarRaster) this._lidarViewLayer.setData(this._lidarRaster);
+    }
+
+    //Read all LiDAR View visual knobs off the current config and push
+    //them to the layer. Called on init and whenever updateConfig sees a
+    //relevant key change.
+    private _pushLidarViewConfig(): void
+    {
+        if (!this._lidarViewLayer) return;
+        this._lidarViewLayer.setRadiusMeters(this._lidarViewRadiusMeters());
+        this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
+        this._lidarViewLayer.setColor(this._lidarViewColorRgba());
+    }
+
+    //Fade alpha multiplier in [0..1]. Driven by the card's enter/exit
+    //animation; the engine just forwards. When the View is off the
+    //card keeps this at 0, the layer short-circuits its draw call.
+    public setLidarViewFadeAlpha(alpha: number): void
+    {
+        this._lidarViewLayer?.setAlphaFade(alpha);
+    }
+
+    private _lidarViewRadiusMeters(): number
+    {
+        //Two radii bound the View:
+        //  buildingRadius : how far the LiDAR raster actually covers.
+        //  viewRadius     : optional override (lidar-view-radius).
+        //min() so a stray viewRadius > buildingRadius never reveals
+        //ghost cells that were never fetched.
+        const buildingRadius = this._buildingRadiusMeters();
+        const raw = this.cfg['lidar-view-radius'];
+        const parsed = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+        if (!isFinite(parsed) || parsed <= 0) return buildingRadius;
+        const viewRadius = Math.min(500, Math.max(20, parsed));
+        return Math.min(buildingRadius, viewRadius);
+    }
+
+    private _lidarViewPointSizePx(): number
+    {
+        const raw = this.cfg['lidar-view-point-size'];
+        const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+        if (!isFinite(n) || n <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
+        return Math.min(6, n);
+    }
+
+    private _lidarViewColorRgba(): [number, number, number, number]
+    {
+        const rawColor = this.cfg['lidar-view-point-color'];
+        const hex = typeof rawColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim())
+            ? rawColor.trim()
+            : DEFAULT_LIDAR_VIEW_POINT_COLOR;
+        const rawOpa = this.cfg['lidar-view-point-opacity'];
+        const opa = typeof rawOpa === 'number' ? rawOpa : parseFloat(String(rawOpa ?? ''));
+        const alpha = isFinite(opa)
+            ? Math.max(0, Math.min(1, opa))
+            : DEFAULT_LIDAR_VIEW_POINT_OPACITY;
+        const rgb = this._hexToRgb01(hex);
+        return [rgb[0], rgb[1], rgb[2], alpha];
+    }
+
+    private _hexToRgb01(hex: string): [number, number, number]
+    {
+        let h = hex.replace('#', '');
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        if (h.length === 8) h = h.slice(0, 6);
+        const r = parseInt(h.slice(0, 2), 16) / 255;
+        const g = parseInt(h.slice(2, 4), 16) / 255;
+        const b = parseInt(h.slice(4, 6), 16) / 255;
+        return [
+            isFinite(r) ? r : 1,
+            isFinite(g) ? g : 1,
+            isFinite(b) ? b : 1
+        ];
+    }
+
     //LiDAR View support, exposed to the card.
     //
     //getActiveLidarSourceId returns the id of the provider that
@@ -2020,113 +2129,6 @@ export class HeliosEngine
     {
         const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
         return provider ? provider.id : null;
-    }
-
-    //Project every raw raster cell (vegetation + ground + buildings,
-    //threshold-bypassed) to screen-space. Returns interleaved
-    //[x0, y0, x1, y1, ...] Float32 plus the count, so the card can
-    //fillRect through the buffer without per-point object allocations
-    //on every frame.
-    //
-    //Performance: hot path runs at hundreds of thousands of cells per
-    //frame during camera rotation. The naive per-cell
-    //`_projectScenePoint(lon, lat, h)` is a full 4x4 matrix-build +
-    //multiply (~5 microseconds), which puts a 500 K-cell scene over
-    //2 seconds per frame, unusable. We dodge that by projecting the
-    //home + three anchors (1 m east, 1 m north, home + 1 m of
-    //altitude) ONCE per frame, deriving a 2×3 affine jacobian
-    //(world-metres around the home → screen pixels), then the cell
-    //loop is a flat 6 mul + 6 add per point. ~50× faster on the
-    //typical raster, no visual difference within the ~100 m disc
-    //(the small-area linearisation holds well at zoom 18 with a
-    //fixed camera tween cadence).
-    //
-    //maxRadiusMeters is honoured client-side: cells whose centre
-    //sits past that distance from the home are skipped. The card
-    //surfaces this as a config knob so the user can shrink the
-    //visible disc to keep frame times sane on big rasters / weak
-    //devices.
-    //
-    //Returns null when no raster has been fetched yet (home outside
-    //coverage, shadows disabled, fetch still in flight) so the card
-    //can show an empty overlay instead of garbage.
-    public projectLidarPoints(
-        maxRadiusMeters: number
-    ): { xy: Float32Array; count: number } | null
-    {
-        if (!this.map || !this._mapReady) return null;
-        const raster = this._lidarRaster;
-        if (!raster) return null;
-
-        const { heights, rasterSize, minLat, maxLat, minLon, maxLon } = raster;
-        const N = rasterSize * rasterSize;
-        if (heights.length < N) return null;
-
-        const homeLat = this.homeLat;
-        const homeLon = this.homeLon;
-
-        //One full projection at the home, three at +1 metre offsets
-        //along each world axis (east, north, up). The screen-space
-        //deltas give the columns of the world-to-screen jacobian.
-        //Bail if any anchor lands behind the camera, the cell loop
-        //has no fallback for that case (the whole disc would be
-        //off-screen anyway).
-        const COS_LAT       = Math.cos(homeLat * Math.PI / 180);
-        const M_PER_DEG_LAT = 111_320;
-        const M_PER_DEG_LON = M_PER_DEG_LAT * COS_LAT;
-        const ONE_METRE_LAT = 1 / M_PER_DEG_LAT;
-        const ONE_METRE_LON = 1 / M_PER_DEG_LON;
-
-        const homeAnchor = this._projectScenePoint(homeLon, homeLat, 0);
-        const eastAnchor = this._projectScenePoint(homeLon + ONE_METRE_LON, homeLat, 0);
-        const northAnchor = this._projectScenePoint(homeLon, homeLat + ONE_METRE_LAT, 0);
-        const upAnchor    = this._projectScenePoint(homeLon, homeLat, 1);
-        if (!homeAnchor || !eastAnchor || !northAnchor || !upAnchor) return null;
-
-        //Columns of the 2x3 jacobian (screen pixels per world metre).
-        //east → +X world (+lon), north → +Y world (+lat),
-        //up   → +Z world (+altitude metres).
-        const jExX = eastAnchor.x  - homeAnchor.x;
-        const jExY = eastAnchor.y  - homeAnchor.y;
-        const jNoX = northAnchor.x - homeAnchor.x;
-        const jNoY = northAnchor.y - homeAnchor.y;
-        const jUpX = upAnchor.x    - homeAnchor.x;
-        const jUpY = upAnchor.y    - homeAnchor.y;
-        const hX   = homeAnchor.x;
-        const hY   = homeAnchor.y;
-
-        const pxLon  = (maxLon - minLon) / rasterSize;
-        const pxLat  = (maxLat - minLat) / rasterSize;
-        const radius = Math.max(1, maxRadiusMeters);
-        const r2     = radius * radius;
-
-        //Pre-size at worst-case all-visible. The card reads only
-        //[0, count*2) entries; the trailing slack stays unread.
-        const xy = new Float32Array(N * 2);
-        let count = 0;
-
-        for (let j = 0; j < rasterSize; j++)
-        {
-            const cLat   = maxLat - (j + 0.5) * pxLat;
-            const dLatM  = (cLat - homeLat) * M_PER_DEG_LAT;
-            const dLatM2 = dLatM * dLatM;
-            for (let i = 0; i < rasterSize; i++)
-            {
-                const h = heights[j * rasterSize + i];
-                if (!isFinite(h)) continue;
-                const cLon  = minLon + (i + 0.5) * pxLon;
-                const dLonM = (cLon - homeLon) * M_PER_DEG_LON;
-                if (dLonM * dLonM + dLatM2 > r2) continue;
-                //Affine projection: 6 mul + 4 add per point. Replaces
-                //a full matrix multiply per cell, the single biggest
-                //frame-cost win in this overlay.
-                xy[count * 2]     = hX + dLonM * jExX + dLatM * jNoX + h * jUpX;
-                xy[count * 2 + 1] = hY + dLonM * jExY + dLatM * jNoY + h * jUpY;
-                count++;
-            }
-        }
-
-        return { xy, count };
     }
 
     //Toggle MapTiler's symbol layers (road names, house numbers,
@@ -2556,6 +2558,7 @@ export class HeliosEngine
             this._lidarShadowDiagnostics = null;
             this._lidarShadowKey         = '';
             this._lidarRaster            = null;
+            this._lidarViewLayer?.setData(null);
             this._lidarShadowAbort?.abort();
             this._lidarShadowAbort       = undefined;
             return;
@@ -2600,6 +2603,12 @@ export class HeliosEngine
             this._lidarShadowFeatures    = res.features;
             this._lidarShadowDiagnostics = res.diagnostics;
             this._lidarRaster            = res.raster ?? null;
+            //Pump the fresh raster to the WebGL LiDAR View layer so
+            //the dot cloud refreshes as soon as the fetch lands. No-op
+            //when the View has never been opened, the layer just sits
+            //with alphaFade=0 and the buffer is ready when the user
+            //eventually clicks the toggle.
+            this._lidarViewLayer?.setData(this._lidarRaster);
             //New shadow source available, force a full atmosphere /
             //shadow refresh on the next call rather than waiting for
             //the sun to move past the 0.5 deg threshold.
@@ -4049,6 +4058,12 @@ export class HeliosEngine
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
         }
+
+        //LiDAR View visual knobs (radius / point size / colour /
+        //opacity) are cheap uniform updates on the custom GL layer.
+        //Pushed unconditionally; the layer no-ops when nothing actually
+        //changed.
+        this._pushLidarViewConfig();
 
         if (this._homeHourlyData && this._mapReady)
         {
