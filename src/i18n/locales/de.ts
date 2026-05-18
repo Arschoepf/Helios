@@ -9,6 +9,7 @@ export const de: Translations = {
         exitHint: 'Tippe irgendwo, um zu schließen',
 
         todayLabel:         'Heute',
+        todayProduced:      'erzeugt',
         todayForecast:      'Prognose',
         todayPeak:          'Spitze',
         todayNotStartedYet: 'Erzeugung pausiert',

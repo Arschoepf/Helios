@@ -607,6 +607,7 @@ const en = {
   detail: {
     exitHint: "Tap anywhere to exit",
     todayLabel: "Today",
+    todayProduced: "produced",
     todayForecast: "forecast",
     todayPeak: "peak",
     todayNotStartedYet: "production paused",
@@ -745,6 +746,7 @@ const fr = {
   detail: {
     exitHint: "Cliquez n'importe où pour quitter",
     todayLabel: "Aujourd'hui",
+    todayProduced: "produit",
     todayForecast: "prévu",
     todayPeak: "pic",
     todayNotStartedYet: "production en pause",
@@ -883,6 +885,7 @@ const de = {
   detail: {
     exitHint: "Tippe irgendwo, um zu schließen",
     todayLabel: "Heute",
+    todayProduced: "erzeugt",
     todayForecast: "Prognose",
     todayPeak: "Spitze",
     todayNotStartedYet: "Erzeugung pausiert",
@@ -1021,6 +1024,7 @@ const es = {
   detail: {
     exitHint: "Toca en cualquier lugar para salir",
     todayLabel: "Hoy",
+    todayProduced: "producido",
     todayForecast: "previsto",
     todayPeak: "pico",
     todayNotStartedYet: "producción en pausa",
@@ -1159,6 +1163,7 @@ const it = {
   detail: {
     exitHint: "Tocca un punto qualsiasi per uscire",
     todayLabel: "Oggi",
+    todayProduced: "prodotto",
     todayForecast: "previsto",
     todayPeak: "picco",
     todayNotStartedYet: "produzione in pausa",
@@ -1297,6 +1302,7 @@ const nl = {
   detail: {
     exitHint: "Tik ergens om te sluiten",
     todayLabel: "Vandaag",
+    todayProduced: "opgewekt",
     todayForecast: "verwacht",
     todayPeak: "piek",
     todayNotStartedYet: "opwekking gepauzeerd",
@@ -1435,6 +1441,7 @@ const pt = {
   detail: {
     exitHint: "Toca em qualquer lugar para sair",
     todayLabel: "Hoje",
+    todayProduced: "produzido",
     todayForecast: "previsto",
     todayPeak: "pico",
     todayNotStartedYet: "produção em pausa",
@@ -1573,6 +1580,7 @@ const no = {
   detail: {
     exitHint: "Trykk hvor som helst for å gå ut",
     todayLabel: "I dag",
+    todayProduced: "produsert",
     todayForecast: "estimert",
     todayPeak: "topp",
     todayNotStartedYet: "produksjon pauset",
@@ -1986,10 +1994,13 @@ const heliosCardStyles = i$3`
         transform: translateY(8px);
         animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
-    .dash-card:nth-of-type(1) { animation-delay: 0.00s; }
-    .dash-card:nth-of-type(2) { animation-delay: 0.18s; }
-    .dash-card:nth-of-type(3) { animation-delay: 0.36s; }
-    .dash-card:nth-of-type(4) { animation-delay: 0.54s; }
+    /*  Staggered reveal: today first, then the tomorrow + battery
+        row appears with a single shared delay. Tomorrow + battery
+        sit inside .dash-row (so nth-of-type counts wouldn't line
+        up); the explicit class targets keep the cascade readable. */
+    .dash-card.dash-today    { animation-delay: 0.00s; }
+    .dash-card.dash-tomorrow { animation-delay: 0.18s; }
+    .dash-card.dash-battery  { animation-delay: 0.18s; }
     @keyframes dash-card-in
     {
         to { opacity: 1; transform: translateY(0); }
@@ -2062,36 +2073,63 @@ const heliosCardStyles = i$3`
         opacity: 0.65;
     }
 
-    /*  Section: today                                                  */
-
-    /*  Container queries: the cumulative chart is rendered only when   */
-    /*  the section is wide enough to read comfortably (>= 380px).     */
-    /*  Below that, the chart is hidden via display:none and the       */
-    /*  side stack reclaims the layout space.                          */
-    .dash-section.dash-today
+    /*  Row that holds the two half-width sections (tomorrow +
+        battery) side by side. Each child grows to fill its share;
+        min-width:0 lets text inside truncate cleanly when the card
+        is narrow rather than stretching the row.                    */
+    .dash-row
     {
-        container-type: inline-size;
-        container-name: dash-today;
+        display: flex;
+        gap: 10px;
+        align-items: stretch;
+        flex-wrap: wrap;
     }
+    .dash-row > .dash-section
+    {
+        /*  Grow to fill the row and shrink below the basis when the
+            two siblings can still sit side by side, but never narrower
+            than ~190 px or the half-width contents (vessel + flows)
+            start truncating; below that, flex-wrap drops to one
+            column.                                                  */
+        flex: 1 1 190px;
+        min-width: 0;
+    }
+
+    /*  Section: today                                                  */
+    /*                                                                  */
+    /*  Vertical body: the two big "produit / prévu" values on top,    */
+    /*  the peak line below, then the full-width chart. The chart is   */
+    /*  always shown (no container query) since today owns the full    */
+    /*  panel width.                                                   */
     .dash-today-body
     {
         display: flex;
-        align-items: center;
-        gap: 12px;
+        flex-direction: column;
+        gap: 10px;
         padding: 2px 0;
     }
-    .dash-today-produced
+    .dash-today-headline
+    {
+        display: flex;
+        align-items: baseline;
+        gap: 18px;
+        flex-wrap: wrap;
+    }
+    .dash-today-stat
     {
         display: inline-flex;
         align-items: baseline;
+        line-height: 1;
     }
-    .dash-today-side
+    .dash-today-stat-predicted .dash-stat-value
+    {
+        font-style: italic;
+    }
+    .dash-today-meta
     {
         display: flex;
-        flex-direction: column;
-        gap: 4px;
-        min-width: 0;
-        flex: 0 0 auto;
+        gap: 14px;
+        flex-wrap: wrap;
     }
     .dash-today-line
     {
@@ -2103,7 +2141,6 @@ const heliosCardStyles = i$3`
         white-space: nowrap;
     }
     .dash-today-line ha-icon { --mdc-icon-size: 14px; }
-    .dash-today-line .dash-line-arrow { font-size: 14px; opacity: 0.65; font-weight: 600; }
     .dash-today-line .dash-line-value { font-weight: 700; }
     .dash-today-line .dash-line-label
     {
@@ -2112,40 +2149,28 @@ const heliosCardStyles = i$3`
         letter-spacing: 1px;
         opacity: 0.55;
     }
-    .dash-today-forecast .dash-line-value { font-style: italic; }
 
-    /*  Cumulative production sparkline. Hidden on narrow cards via    */
-    /*  the container query so we never display a squashed graph.      */
-    /*  Sits to the right of the side stack, takes the remaining       */
-    /*  horizontal space, and has its own slightly darker panel +      */
-    /*  hairline border so it reads as a distinct chart frame.         */
+    /*  Cumulative production sparkline, full panel width below the
+        headline. Two curves share the same Y scale: the actual
+        history (dark PV colour) and the full-day model forecast
+        (lighter PV colour) so the user can read "predicted vs
+        produced" at a glance. Frame style stays consistent with
+        the white card surface; no overflow:hidden so the tooltip
+        can extend beyond the chart edges.                            */
     .dash-today-chart
     {
-        display: none;
+        display: block;
         position: relative;
-        flex: 1;
-        min-width: 0;
-        height: 60px;
-        align-self: stretch;
+        width: 100%;
+        height: 110px;
         background: rgba(0, 0, 0, 0.05);
         border: 1px solid rgba(0, 0, 0, 0.12);
         border-radius: 4px;
-        /*  No overflow:hidden, the SVG fills the frame exactly with
-            no visual bleed and the tooltip needs to be free to
-            extend beyond the chart edges (otherwise it gets clipped
-            when the cursor sits on either end of the curve).        */
     }
     ha-card.theme-dark .dash-today-chart
     {
         background: rgba(255, 255, 255, 0.06);
         border-color: rgba(255, 255, 255, 0.15);
-    }
-    @container dash-today (min-width: 380px)
-    {
-        .dash-today-chart
-        {
-            display: block;
-        }
     }
     .dash-today-chart-svg
     {
@@ -2153,28 +2178,23 @@ const heliosCardStyles = i$3`
         width: 100%;
         height: 100%;
     }
-    .dash-today-chart-past
+    .dash-today-chart-actual
     {
         fill: none;
-        stroke-width: 1.2;
+        stroke-width: 1.6;
         stroke-linecap: round;
         stroke-linejoin: round;
         opacity: 0.95;
         vector-effect: non-scaling-stroke;
     }
-    .dash-today-chart-future
+    .dash-today-chart-predicted
     {
         fill: none;
-        stroke-width: 1.2;
+        stroke-width: 1.4;
         stroke-linecap: round;
         stroke-linejoin: round;
-        stroke-dasharray: 3 2;
-        opacity: 0.7;
+        opacity: 0.95;
         vector-effect: non-scaling-stroke;
-    }
-    .dash-today-chart-dot
-    {
-        opacity: 0.9;
     }
     .dash-today-chart-hover-line
     {
@@ -2204,26 +2224,42 @@ const heliosCardStyles = i$3`
         position: absolute;
         top: 4px;
         transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.78);
+        background: rgba(0, 0, 0, 0.82);
         color: #ffffff;
         font-size: 10px;
         font-weight: 600;
         letter-spacing: 0.2px;
-        padding: 2px 6px;
+        padding: 4px 7px;
         border-radius: 3px;
         white-space: nowrap;
         pointer-events: none;
         font-variant-numeric: tabular-nums;
+        display: inline-flex;
+        flex-direction: column;
+        gap: 1px;
+        line-height: 1.2;
     }
     ha-card.theme-dark .dash-today-chart-tooltip
     {
         background: rgba(255, 255, 255, 0.92);
         color: #111111;
     }
+    .dash-today-chart-tooltip-time
+    {
+        font-weight: 700;
+        opacity: 0.85;
+        font-size: 9px;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+    }
+    .dash-today-chart-tooltip-actual,
+    .dash-today-chart-tooltip-predicted
+    {
+        font-weight: 700;
+    }
 
-    /*  Status line under the produced value when the day's            */
-    /*  production hasn't started yet (produced ~ 0, peak still in     */
-    /*  the future). Discreet, small, italic, full row.                */
+    /*  Status line under the body when the day's production hasn't
+        started yet (produced ~ 0, peak still in the future).         */
     .dash-today-status
     {
         font-size: 11px;
@@ -37385,8 +37421,10 @@ function renderDashboard(host) {
             </button>
             <div class="detail-panel-inner">
                 ${renderDashTodaySection(host, t2, pvColor, sunColor)}
-                ${renderDashTomorrowSection(host, t2, sunColor)}
-                ${hasBattery ? renderDashBatterySection(host, t2, batteryColor) : A}
+                <div class="dash-row">
+                    ${renderDashTomorrowSection(host, t2, sunColor)}
+                    ${hasBattery ? renderDashBatterySection(host, t2, batteryColor) : A}
+                </div>
             </div>
         </div>
     `;
@@ -37491,9 +37529,9 @@ function computeTodayCumulative(host) {
   const startMs = today0.getTime();
   const endMs = startMs + 24 * HOUR_MS;
   const nowMs = Date.now();
-  const samples = [];
-  samples.push({ tMs: startMs, kwh: 0 });
-  let cumKwh = 0;
+  const actualSamples = [];
+  actualSamples.push({ tMs: startMs, kwh: 0 });
+  let actualKwh = 0;
   let pastEndMs = startMs;
   const hist = host._pvHistory;
   if (hist && hist.times.length > 0) {
@@ -37510,18 +37548,18 @@ function computeTodayCumulative(host) {
         const v2 = hist.values[i2] * energyFactor;
         if (baseline === null) baseline = v2;
         const kwh = Math.max(0, v2 - baseline);
-        samples.push({ tMs, kwh });
-        cumKwh = kwh;
+        actualSamples.push({ tMs, kwh });
+        actualKwh = kwh;
       } else {
         const w2 = pvNormalizeToWatts(hist.values[i2], host._pvUnit);
         if (!isFinite(w2)) continue;
         if (prevT !== null && prevW !== null) {
           const dh = (tMs - prevT) / HOUR_MS;
           if (dh > 0 && dh <= 6) {
-            cumKwh += (prevW + w2) / 2 / 1e3 * dh;
+            actualKwh += (prevW + w2) / 2 / 1e3 * dh;
           }
         }
-        samples.push({ tMs, kwh: cumKwh });
+        actualSamples.push({ tMs, kwh: actualKwh });
         prevT = tMs;
         prevW = w2;
       }
@@ -37529,9 +37567,12 @@ function computeTodayCumulative(host) {
     }
   }
   if (pastEndMs < nowMs && nowMs < endMs) {
-    samples.push({ tMs: nowMs, kwh: cumKwh });
+    actualSamples.push({ tMs: nowMs, kwh: actualKwh });
     pastEndMs = nowMs;
   }
+  const predictedSamples = [];
+  predictedSamples.push({ tMs: startMs, kwh: 0 });
+  let predictedKwh = 0;
   const k2 = pvCalibK(host.config);
   const series = host._chartSeries;
   const coords = getHomeCoords(host.config, host.hass);
@@ -37539,40 +37580,18 @@ function computeTodayCumulative(host) {
     for (let i2 = 0; i2 < series.times.length; i2++) {
       const tMs = series.times[i2].getTime();
       if (tMs < startMs || tMs >= endMs) continue;
-      const binStart = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-      const binEnd = binStart + HOUR_MS;
-      if (binEnd <= nowMs) continue;
+      const binEnd = Math.floor(tMs / HOUR_MS) * HOUR_MS + HOUR_MS;
       const cloud = series.cloud[i2] ?? 0;
       const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud);
       if (pct < 0) continue;
-      const futureStart = Math.max(binStart, nowMs);
-      const fraction = Math.min(1, (binEnd - futureStart) / HOUR_MS);
-      cumKwh += pct * k2 / 1e3 * fraction;
-      samples.push({ tMs: binEnd, kwh: cumKwh });
+      predictedKwh += pct * k2 / 1e3;
+      predictedSamples.push({ tMs: binEnd, kwh: predictedKwh });
     }
-  }
-  const lookup = (t2) => {
-    if (samples.length === 0) return 0;
-    if (t2 <= samples[0].tMs) return samples[0].kwh;
-    if (t2 >= samples[samples.length - 1].tMs) return samples[samples.length - 1].kwh;
-    let lo = 0, hi = samples.length - 1;
-    while (lo < hi - 1) {
-      const mid = lo + hi >> 1;
-      if (samples[mid].tMs <= t2) lo = mid;
-      else hi = mid;
-    }
-    const a2 = samples[lo], b2 = samples[hi];
-    if (b2.tMs === a2.tMs) return a2.kwh;
-    return a2.kwh + (t2 - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
-  };
-  const hourMarks = [];
-  for (let h2 = 0; h2 <= 24; h2++) {
-    const tMs = startMs + h2 * HOUR_MS;
-    hourMarks.push({ tMs, kwh: lookup(tMs) });
   }
   let maxKwh = 0;
-  for (const s2 of samples) if (s2.kwh > maxKwh) maxKwh = s2.kwh;
-  return { samples, hourMarks, pastEndMs, maxKwh };
+  for (const s2 of actualSamples) if (s2.kwh > maxKwh) maxKwh = s2.kwh;
+  for (const s2 of predictedSamples) if (s2.kwh > maxKwh) maxKwh = s2.kwh;
+  return { actualSamples, predictedSamples, pastEndMs, maxKwh };
 }
 function renderDashTodaySection(host, t2, pvColor, sunColor) {
   const data = computeTodayHourly(host);
@@ -37593,6 +37612,7 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
   const pvConfigured = String(host.config?.["pv-power-entity"] ?? "").trim() !== "";
   const historyLoading = pvConfigured && host._pvHistory === null;
   const notStartedYet = !historyLoading && data.producedKwh < 0.05 && data.peakHourTs !== null && data.peakHourTs > Date.now();
+  const predictedColor = lerpHexToward(pvColor, "#ffffff", 0.55);
   return b`
         <section class="dash-section dash-card dash-today">
             <header class="dash-card-header">
@@ -37600,30 +37620,31 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                 <span class="dash-card-label">${t2.detail.todayLabel}</span>
             </header>
             <div class="dash-today-body">
-                <div class="dash-today-produced" style="color:${pvColor}">
-                    ${historyLoading ? b`
-                        <span class="dash-stat-skeleton" aria-hidden="true"></span>
-                    ` : b`
-                        <span class="dash-stat-value">${formatLocalisedNumber(host.hass, data.producedKwh, 1)}</span>
-                        <span class="dash-stat-unit">kWh</span>
-                    `}
-                </div>
-                <div class="dash-today-side">
+                <div class="dash-today-headline">
+                    <div class="dash-today-stat" style="color:${pvColor}">
+                        ${historyLoading ? b`
+                            <span class="dash-stat-skeleton" aria-hidden="true"></span>
+                        ` : b`
+                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, data.producedKwh, 1)}</span>
+                            <span class="dash-stat-unit">kWh ${t2.detail.todayProduced}</span>
+                        `}
+                    </div>
                     ${showForecast ? b`
-                        <div class="dash-today-line dash-today-forecast">
-                            <span class="dash-line-arrow">→</span>
-                            <span class="dash-line-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)} kWh</span>
-                            <span class="dash-line-label">${t2.detail.todayForecast}</span>
+                        <div class="dash-today-stat dash-today-stat-predicted" style="color:${predictedColor}">
+                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)}</span>
+                            <span class="dash-stat-unit">kWh ${t2.detail.todayForecast}</span>
                         </div>
                     ` : A}
-                    ${showPeak ? b`
+                </div>
+                ${showPeak ? b`
+                    <div class="dash-today-meta">
                         <div class="dash-today-line dash-today-peak">
                             <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
-                            <span class="dash-line-value">${peakTimeLabel} · ${peakValueLabel}</span>
                             <span class="dash-line-label">${t2.detail.todayPeak}</span>
+                            <span class="dash-line-value">${peakTimeLabel} · ${peakValueLabel}</span>
                         </div>
-                    ` : A}
-                </div>
+                    </div>
+                ` : A}
                 ${historyLoading ? A : renderDashTodayChart(host, pvColor)}
             </div>
             ${notStartedYet ? b`
@@ -37651,41 +37672,41 @@ function renderDashTodayChart(host, pvColor) {
       (p2) => `${xFor(p2.tMs).toFixed(2)} ${yFor(p2.kwh).toFixed(2)}`
     ).join(" L ");
   };
-  const pastSamples = cum.samples.filter((s2) => s2.tMs <= cum.pastEndMs);
-  const futureSamples = cum.samples.filter((s2) => s2.tMs >= cum.pastEndMs);
-  const pastPath = buildPath(pastSamples);
-  const futurePath = buildPath(futureSamples);
+  const actualPath = buildPath(cum.actualSamples);
+  const predictedPath = buildPath(cum.predictedSamples);
+  const predictedColor = lerpHexToward(pvColor, "#ffffff", 0.55);
+  const interp = (pts, t2) => {
+    if (pts.length === 0) return null;
+    if (t2 < pts[0].tMs) return null;
+    if (t2 > pts[pts.length - 1].tMs) return null;
+    let lo = 0, hi = pts.length - 1;
+    while (lo < hi - 1) {
+      const mid = lo + hi >> 1;
+      if (pts[mid].tMs <= t2) lo = mid;
+      else hi = mid;
+    }
+    const a2 = pts[lo], b2 = pts[hi];
+    if (b2.tMs === a2.tMs) return a2.kwh;
+    return a2.kwh + (t2 - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
+  };
   const hoverTs = host._dashChartHoverTs;
-  let hoverKwh = null;
+  let hoverActualKwh = null;
+  let hoverPredictedKwh = null;
   let hoverX = 0;
   let hoverFracX = 0;
   let hoverTimeLabel = "";
   if (hoverTs !== null && hoverTs >= startMs && hoverTs < endMs) {
-    const samples = cum.samples;
-    if (samples.length > 0) {
-      if (hoverTs <= samples[0].tMs) {
-        hoverKwh = samples[0].kwh;
-      } else if (hoverTs >= samples[samples.length - 1].tMs) {
-        hoverKwh = samples[samples.length - 1].kwh;
-      } else {
-        let lo = 0, hi = samples.length - 1;
-        while (lo < hi - 1) {
-          const mid = lo + hi >> 1;
-          if (samples[mid].tMs <= hoverTs) lo = mid;
-          else hi = mid;
-        }
-        const a2 = samples[lo], b2 = samples[hi];
-        hoverKwh = a2.tMs === b2.tMs ? a2.kwh : a2.kwh + (hoverTs - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
-      }
-      hoverX = xFor(hoverTs);
-      hoverFracX = hoverX / W * 100;
-      hoverTimeLabel = new Date(hoverTs).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23"
-      });
-    }
+    hoverActualKwh = interp(cum.actualSamples, hoverTs);
+    hoverPredictedKwh = interp(cum.predictedSamples, hoverTs);
+    hoverX = xFor(hoverTs);
+    hoverFracX = hoverX / W * 100;
+    hoverTimeLabel = new Date(hoverTs).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    });
   }
+  const showHover = hoverActualKwh !== null || hoverPredictedKwh !== null;
   return b`
         <div class="dash-today-chart">
             <svg class="dash-today-chart-svg"
@@ -37694,39 +37715,51 @@ function renderDashTodayChart(host, pvColor) {
                  @pointermove="${(e2) => handleDashChartPointerMove(host, e2)}"
                  @pointerleave="${() => handleDashChartPointerLeave(host)}"
             >
-                ${pastPath !== "" ? w`
-                    <path class="dash-today-chart-past"
-                          d="${pastPath}"
+                ${predictedPath !== "" ? w`
+                    <path class="dash-today-chart-predicted"
+                          d="${predictedPath}"
+                          stroke="${predictedColor}"/>
+                ` : A}
+                ${actualPath !== "" ? w`
+                    <path class="dash-today-chart-actual"
+                          d="${actualPath}"
                           stroke="${pvColor}"/>
                 ` : A}
-                ${futurePath !== "" ? w`
-                    <path class="dash-today-chart-future"
-                          d="${futurePath}"
-                          stroke="${pvColor}"/>
-                ` : A}
-                ${cum.hourMarks.map((m2) => w`
-                    <circle class="dash-today-chart-dot"
-                            cx="${xFor(m2.tMs).toFixed(2)}"
-                            cy="${yFor(m2.kwh).toFixed(2)}"
-                            r="1.4"
-                            fill="${pvColor}"/>
-                `)}
-                ${hoverKwh !== null ? w`
+                ${showHover ? w`
                     <line class="dash-today-chart-hover-line"
                           x1="${hoverX.toFixed(2)}" x2="${hoverX.toFixed(2)}"
                           y1="${PAD_T}" y2="${H2 - PAD_B}"/>
+                ` : A}
+                ${hoverPredictedKwh !== null ? w`
                     <circle class="dash-today-chart-hover-dot"
                             cx="${hoverX.toFixed(2)}"
-                            cy="${yFor(hoverKwh).toFixed(2)}"
+                            cy="${yFor(hoverPredictedKwh).toFixed(2)}"
+                            r="2.2"
+                            fill="${predictedColor}"/>
+                ` : A}
+                ${hoverActualKwh !== null ? w`
+                    <circle class="dash-today-chart-hover-dot"
+                            cx="${hoverX.toFixed(2)}"
+                            cy="${yFor(hoverActualKwh).toFixed(2)}"
                             r="2.2"
                             fill="${pvColor}"/>
                 ` : A}
             </svg>
-            ${hoverKwh !== null ? b`
+            ${showHover ? b`
                 <div class="dash-today-chart-tooltip"
                      style="left: ${hoverFracX.toFixed(2)}%;"
                 >
-                    ${hoverTimeLabel} · ${formatLocalisedNumber(host.hass, hoverKwh, 1)} kWh
+                    <span class="dash-today-chart-tooltip-time">${hoverTimeLabel}</span>
+                    ${hoverActualKwh !== null ? b`
+                        <span class="dash-today-chart-tooltip-actual" style="color:${pvColor}">
+                            ${formatLocalisedNumber(host.hass, hoverActualKwh, 1)} kWh
+                        </span>
+                    ` : A}
+                    ${hoverPredictedKwh !== null ? b`
+                        <span class="dash-today-chart-tooltip-predicted" style="color:${predictedColor}">
+                            ${formatLocalisedNumber(host.hass, hoverPredictedKwh, 1)} kWh
+                        </span>
+                    ` : A}
                 </div>
             ` : A}
         </div>
@@ -39655,7 +39688,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.37"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.38"}`,
       labelStyle,
       versionStyle
     );
@@ -39676,7 +39709,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.37",
+        version: "1.6.0-alpha.38",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -39684,7 +39717,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.37"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.38"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -40532,18 +40565,20 @@ let HeliosCard = class extends i {
                                 x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
                                 stroke="${sunColor}"
                             ></line>
-                            <polygon
-                                class="solar-ray-arrow"
-                                points="-6,-4 0,0 -6,4"
-                                fill="${sunColor}"
-                            >
-                                <animateMotion
-                                    dur="${sunFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${sunScene.sun.x},${sunScene.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
-                                ></animateMotion>
-                            </polygon>
+                            ${this._isLiveMode ? w`
+                                <polygon
+                                    class="solar-ray-arrow"
+                                    points="-6,-4 0,0 -6,4"
+                                    fill="${sunColor}"
+                                >
+                                    <animateMotion
+                                        dur="${sunFlowDuration}s"
+                                        repeatCount="indefinite"
+                                        rotate="auto"
+                                        path="M ${sunScene.sun.x},${sunScene.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
+                                    ></animateMotion>
+                                </polygon>
+                            ` : A}
                         ` : A}
                         ${(() => {
       const r2 = HeliosCard.SUN_R_FAR + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene.sun.nearness;

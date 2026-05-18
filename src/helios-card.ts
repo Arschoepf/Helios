@@ -1590,18 +1590,20 @@ export class HeliosCard extends LitElement
                                 x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
                                 stroke="${sunColor}"
                             ></line>
-                            <polygon
-                                class="solar-ray-arrow"
-                                points="-6,-4 0,0 -6,4"
-                                fill="${sunColor}"
-                            >
-                                <animateMotion
-                                    dur="${sunFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    rotate="auto"
-                                    path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
-                                ></animateMotion>
-                            </polygon>
+                            ${this._isLiveMode ? svg`
+                                <polygon
+                                    class="solar-ray-arrow"
+                                    points="-6,-4 0,0 -6,4"
+                                    fill="${sunColor}"
+                                >
+                                    <animateMotion
+                                        dur="${sunFlowDuration}s"
+                                        repeatCount="indefinite"
+                                        rotate="auto"
+                                        path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
+                                    ></animateMotion>
+                                </polygon>
+                            ` : nothing}
                         ` : nothing}
                         ${(() => {
                             //Sun disc, four concentric layers, painted

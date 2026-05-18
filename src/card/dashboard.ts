@@ -18,7 +18,7 @@ import
     DEFAULT_PV_COLOR_HEX,
     DEFAULT_BATTERY_COLOR_HEX
 } from '../helios-config';
-import { cfgHex, formatLocalisedNumber } from './format';
+import { cfgHex, formatLocalisedNumber, lerpHexToward } from './format';
 import
 {
     pvCalibK,
@@ -78,8 +78,10 @@ export function renderDashboard(host: DashboardHost): TemplateResult
             </button>
             <div class="detail-panel-inner">
                 ${renderDashTodaySection(host, t, pvColor, sunColor)}
-                ${renderDashTomorrowSection(host, t, sunColor, cloudColor)}
-                ${hasBattery ? renderDashBatterySection(host, t, batteryColor) : nothing}
+                <div class="dash-row">
+                    ${renderDashTomorrowSection(host, t, sunColor, cloudColor)}
+                    ${hasBattery ? renderDashBatterySection(host, t, batteryColor) : nothing}
+                </div>
             </div>
         </div>
     `;
@@ -241,17 +243,19 @@ export function computeTodayHourly(host: DashboardHost): {
 }
 
 
-//Time-ordered cumulative production samples for today's chart.
-//Past portion comes from the raw PV history (cumulative-energy
-//sensors: subtract the day's baseline; power sensors: trapezoidal
-//integration), future portion extends with the hourly forecast
-//model. Hour marks are interpolated at every full hour so the
-//chart can render a dot per hour without snapping the curve.
+//Two time-ordered cumulative production curves for today's chart.
+//`actualSamples` is the observed history integrated from midnight
+//up to the latest sample (or "now" if the entity went quiet for
+//a few minutes). `predictedSamples` is the pure forecast model
+//(kWp × clear-sky × cloud) integrated hour by hour from midnight
+//to midnight, regardless of "now", so the user can compare what
+//was predicted at each past hour against what was actually
+//produced. Both curves share the same Y scale via `maxKwh`.
 export function computeTodayCumulative(host: DashboardHost): {
-    samples:   Array<{ tMs: number; kwh: number }>;
-    hourMarks: Array<{ tMs: number; kwh: number }>;
-    pastEndMs: number;
-    maxKwh:    number;
+    actualSamples:    Array<{ tMs: number; kwh: number }>;
+    predictedSamples: Array<{ tMs: number; kwh: number }>;
+    pastEndMs:        number;
+    maxKwh:           number;
 }
 {
     const HOUR_MS = 3_600_000;
@@ -261,13 +265,13 @@ export function computeTodayCumulative(host: DashboardHost): {
     const endMs   = startMs + 24 * HOUR_MS;
     const nowMs   = Date.now();
 
-    const samples: Array<{ tMs: number; kwh: number }> = [];
-    samples.push({ tMs: startMs, kwh: 0 });
+    const actualSamples: Array<{ tMs: number; kwh: number }> = [];
+    actualSamples.push({ tMs: startMs, kwh: 0 });
 
-    let cumKwh    = 0;
+    let actualKwh = 0;
     let pastEndMs = startMs;
 
-    //Past: integrate observed history. Cumulative-energy sensors
+    //Actual: integrate observed history. Cumulative-energy sensors
     //get a baseline-subtracted reading per sample; power sensors
     //get trapezoidal integration over consecutive pairs.
     const hist = host._pvHistory;
@@ -292,8 +296,8 @@ export function computeTodayCumulative(host: DashboardHost): {
                 const v = hist.values[i] * energyFactor;
                 if (baseline === null) baseline = v;
                 const kwh = Math.max(0, v - baseline);
-                samples.push({ tMs, kwh });
-                cumKwh = kwh;
+                actualSamples.push({ tMs, kwh });
+                actualKwh = kwh;
             }
             else
             {
@@ -304,10 +308,10 @@ export function computeTodayCumulative(host: DashboardHost): {
                     const dh = (tMs - prevT) / HOUR_MS;
                     if (dh > 0 && dh <= 6)
                     {
-                        cumKwh += ((prevW + w) / 2) / 1000 * dh;
+                        actualKwh += ((prevW + w) / 2) / 1000 * dh;
                     }
                 }
-                samples.push({ tMs, kwh: cumKwh });
+                actualSamples.push({ tMs, kwh: actualKwh });
                 prevT = tMs;
                 prevW = w;
             }
@@ -315,19 +319,23 @@ export function computeTodayCumulative(host: DashboardHost): {
         }
     }
 
-    //Anchor at "now" so the solid past line ends precisely at the
-    //present moment, instead of stopping at the last sample which
-    //could be a minute or two stale.
+    //Anchor the actual line at "now" so the curve ends precisely
+    //at the present moment, instead of stopping at the last
+    //sample which could be a minute or two stale.
     if (pastEndMs < nowMs && nowMs < endMs)
     {
-        samples.push({ tMs: nowMs, kwh: cumKwh });
+        actualSamples.push({ tMs: nowMs, kwh: actualKwh });
         pastEndMs = nowMs;
     }
 
-    //Future: cumulate hourly forecast. Each hour contributes its
-    //full bin amount, except the bin straddling "now" which only
-    //contributes its remaining fraction so the boundary stitches
-    //cleanly with the past curve.
+    //Predicted: integrate the forecast model hour by hour over the
+    //whole day (no "now" filter). Each forecast sample contributes
+    //the full hour bin (`pct * k / 1000` kWh). Skipped silently
+    //when peak power isn't configured.
+    const predictedSamples: Array<{ tMs: number; kwh: number }> = [];
+    predictedSamples.push({ tMs: startMs, kwh: 0 });
+    let predictedKwh = 0;
+
     const k      = pvCalibK(host.config);
     const series = host._chartSeries;
     const coords = getHomeCoords(host.config, host.hass);
@@ -337,49 +345,20 @@ export function computeTodayCumulative(host: DashboardHost): {
         {
             const tMs = series.times[i].getTime();
             if (tMs < startMs || tMs >= endMs) continue;
-            const binStart = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-            const binEnd   = binStart + HOUR_MS;
-            if (binEnd <= nowMs) continue;
-            const cloud = series.cloud[i] ?? 0;
-            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud);
+            const binEnd = Math.floor(tMs / HOUR_MS) * HOUR_MS + HOUR_MS;
+            const cloud  = series.cloud[i] ?? 0;
+            const pct    = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud);
             if (pct < 0) continue;
-            const futureStart = Math.max(binStart, nowMs);
-            const fraction    = Math.min(1, (binEnd - futureStart) / HOUR_MS);
-            cumKwh += (pct * k) / 1000 * fraction;
-            samples.push({ tMs: binEnd, kwh: cumKwh });
+            predictedKwh += (pct * k) / 1000;
+            predictedSamples.push({ tMs: binEnd, kwh: predictedKwh });
         }
-    }
-
-    //Linearly interpolate the cumulative kWh at every full hour
-    //so each dot lands exactly on the curve. Done in one pass via
-    //a binary search since `samples` is time-ordered.
-    const lookup = (t: number): number =>
-    {
-        if (samples.length === 0)                          return 0;
-        if (t <= samples[0].tMs)                           return samples[0].kwh;
-        if (t >= samples[samples.length - 1].tMs)          return samples[samples.length - 1].kwh;
-        let lo = 0, hi = samples.length - 1;
-        while (lo < hi - 1)
-        {
-            const mid = (lo + hi) >> 1;
-            if (samples[mid].tMs <= t) lo = mid; else hi = mid;
-        }
-        const a = samples[lo], b = samples[hi];
-        if (b.tMs === a.tMs) return a.kwh;
-        return a.kwh + ((t - a.tMs) / (b.tMs - a.tMs)) * (b.kwh - a.kwh);
-    };
-
-    const hourMarks: Array<{ tMs: number; kwh: number }> = [];
-    for (let h = 0; h <= 24; h++)
-    {
-        const tMs = startMs + h * HOUR_MS;
-        hourMarks.push({ tMs, kwh: lookup(tMs) });
     }
 
     let maxKwh = 0;
-    for (const s of samples) if (s.kwh > maxKwh) maxKwh = s.kwh;
+    for (const s of actualSamples)    if (s.kwh > maxKwh) maxKwh = s.kwh;
+    for (const s of predictedSamples) if (s.kwh > maxKwh) maxKwh = s.kwh;
 
-    return { samples, hourMarks, pastEndMs, maxKwh };
+    return { actualSamples, predictedSamples, pastEndMs, maxKwh };
 }
 
 
@@ -434,6 +413,8 @@ export function renderDashTodaySection(
      && data.peakHourTs !== null
      && data.peakHourTs > Date.now();
 
+    const predictedColor = lerpHexToward(pvColor, '#ffffff', 0.55);
+
     return html`
         <section class="dash-section dash-card dash-today">
             <header class="dash-card-header">
@@ -441,30 +422,31 @@ export function renderDashTodaySection(
                 <span class="dash-card-label">${t.detail.todayLabel}</span>
             </header>
             <div class="dash-today-body">
-                <div class="dash-today-produced" style="color:${pvColor}">
-                    ${historyLoading ? html`
-                        <span class="dash-stat-skeleton" aria-hidden="true"></span>
-                    ` : html`
-                        <span class="dash-stat-value">${formatLocalisedNumber(host.hass, data.producedKwh, 1)}</span>
-                        <span class="dash-stat-unit">kWh</span>
-                    `}
-                </div>
-                <div class="dash-today-side">
+                <div class="dash-today-headline">
+                    <div class="dash-today-stat" style="color:${pvColor}">
+                        ${historyLoading ? html`
+                            <span class="dash-stat-skeleton" aria-hidden="true"></span>
+                        ` : html`
+                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, data.producedKwh, 1)}</span>
+                            <span class="dash-stat-unit">kWh ${t.detail.todayProduced}</span>
+                        `}
+                    </div>
                     ${showForecast ? html`
-                        <div class="dash-today-line dash-today-forecast">
-                            <span class="dash-line-arrow">→</span>
-                            <span class="dash-line-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)} kWh</span>
-                            <span class="dash-line-label">${t.detail.todayForecast}</span>
+                        <div class="dash-today-stat dash-today-stat-predicted" style="color:${predictedColor}">
+                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)}</span>
+                            <span class="dash-stat-unit">kWh ${t.detail.todayForecast}</span>
                         </div>
                     ` : nothing}
-                    ${showPeak ? html`
+                </div>
+                ${showPeak ? html`
+                    <div class="dash-today-meta">
                         <div class="dash-today-line dash-today-peak">
                             <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
-                            <span class="dash-line-value">${peakTimeLabel} · ${peakValueLabel}</span>
                             <span class="dash-line-label">${t.detail.todayPeak}</span>
+                            <span class="dash-line-value">${peakTimeLabel} · ${peakValueLabel}</span>
                         </div>
-                    ` : nothing}
-                </div>
+                    </div>
+                ` : nothing}
                 ${historyLoading ? nothing : renderDashTodayChart(host, pvColor)}
             </div>
             ${notStartedYet ? html`
@@ -508,52 +490,50 @@ export function renderDashTodayChart(host: DashboardHost, pvColor: string): Temp
         ).join(' L ');
     };
 
-    const pastSamples   = cum.samples.filter(s => s.tMs <= cum.pastEndMs);
-    const futureSamples = cum.samples.filter(s => s.tMs >= cum.pastEndMs);
-    const pastPath      = buildPath(pastSamples);
-    const futurePath    = buildPath(futureSamples);
+    const actualPath    = buildPath(cum.actualSamples);
+    const predictedPath = buildPath(cum.predictedSamples);
+    const predictedColor = lerpHexToward(pvColor, '#ffffff', 0.55);
 
-    //Hover lookup: interpolate cumulative kWh at the cursor's
-    //time. Same binary search as computeTodayCumulative so the
-    //tooltip lines up exactly with the curve.
+    //Hover lookup: interpolate cumulative kWh on each curve at the
+    //cursor's time so the tooltip can show predicted vs actual
+    //side by side. Returns null when the cursor sits outside the
+    //curve's defined range (e.g. actual stops at "now").
+    const interp = (
+        pts: Array<{ tMs: number; kwh: number }>,
+        t:   number
+    ): number | null =>
+    {
+        if (pts.length === 0)                          return null;
+        if (t < pts[0].tMs)                            return null;
+        if (t > pts[pts.length - 1].tMs)               return null;
+        let lo = 0, hi = pts.length - 1;
+        while (lo < hi - 1)
+        {
+            const mid = (lo + hi) >> 1;
+            if (pts[mid].tMs <= t) lo = mid; else hi = mid;
+        }
+        const a = pts[lo], b = pts[hi];
+        if (b.tMs === a.tMs) return a.kwh;
+        return a.kwh + ((t - a.tMs) / (b.tMs - a.tMs)) * (b.kwh - a.kwh);
+    };
+
     const hoverTs = host._dashChartHoverTs;
-    let hoverKwh:        number | null = null;
-    let hoverX:          number        = 0;
-    let hoverFracX:      number        = 0;
-    let hoverTimeLabel:  string        = '';
+    let hoverActualKwh:    number | null = null;
+    let hoverPredictedKwh: number | null = null;
+    let hoverX:           number = 0;
+    let hoverFracX:       number = 0;
+    let hoverTimeLabel:   string = '';
     if (hoverTs !== null && hoverTs >= startMs && hoverTs < endMs)
     {
-        const samples = cum.samples;
-        if (samples.length > 0)
-        {
-            if (hoverTs <= samples[0].tMs)
-            {
-                hoverKwh = samples[0].kwh;
-            }
-            else if (hoverTs >= samples[samples.length - 1].tMs)
-            {
-                hoverKwh = samples[samples.length - 1].kwh;
-            }
-            else
-            {
-                let lo = 0, hi = samples.length - 1;
-                while (lo < hi - 1)
-                {
-                    const mid = (lo + hi) >> 1;
-                    if (samples[mid].tMs <= hoverTs) lo = mid; else hi = mid;
-                }
-                const a = samples[lo], b = samples[hi];
-                hoverKwh = a.tMs === b.tMs
-                    ? a.kwh
-                    : a.kwh + ((hoverTs - a.tMs) / (b.tMs - a.tMs)) * (b.kwh - a.kwh);
-            }
-            hoverX         = xFor(hoverTs);
-            hoverFracX     = (hoverX / W) * 100;
-            hoverTimeLabel = new Date(hoverTs).toLocaleTimeString([], {
-                hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-            });
-        }
+        hoverActualKwh    = interp(cum.actualSamples,    hoverTs);
+        hoverPredictedKwh = interp(cum.predictedSamples, hoverTs);
+        hoverX            = xFor(hoverTs);
+        hoverFracX        = (hoverX / W) * 100;
+        hoverTimeLabel    = new Date(hoverTs).toLocaleTimeString([], {
+            hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+        });
     }
+    const showHover = hoverActualKwh !== null || hoverPredictedKwh !== null;
 
     return html`
         <div class="dash-today-chart">
@@ -563,39 +543,51 @@ export function renderDashTodayChart(host: DashboardHost, pvColor: string): Temp
                  @pointermove="${(e: PointerEvent) => handleDashChartPointerMove(host, e)}"
                  @pointerleave="${() => handleDashChartPointerLeave(host)}"
             >
-                ${pastPath !== '' ? svg`
-                    <path class="dash-today-chart-past"
-                          d="${pastPath}"
+                ${predictedPath !== '' ? svg`
+                    <path class="dash-today-chart-predicted"
+                          d="${predictedPath}"
+                          stroke="${predictedColor}"/>
+                ` : nothing}
+                ${actualPath !== '' ? svg`
+                    <path class="dash-today-chart-actual"
+                          d="${actualPath}"
                           stroke="${pvColor}"/>
                 ` : nothing}
-                ${futurePath !== '' ? svg`
-                    <path class="dash-today-chart-future"
-                          d="${futurePath}"
-                          stroke="${pvColor}"/>
-                ` : nothing}
-                ${cum.hourMarks.map(m => svg`
-                    <circle class="dash-today-chart-dot"
-                            cx="${xFor(m.tMs).toFixed(2)}"
-                            cy="${yFor(m.kwh).toFixed(2)}"
-                            r="1.4"
-                            fill="${pvColor}"/>
-                `)}
-                ${hoverKwh !== null ? svg`
+                ${showHover ? svg`
                     <line class="dash-today-chart-hover-line"
                           x1="${hoverX.toFixed(2)}" x2="${hoverX.toFixed(2)}"
                           y1="${PAD_T}" y2="${H - PAD_B}"/>
+                ` : nothing}
+                ${hoverPredictedKwh !== null ? svg`
                     <circle class="dash-today-chart-hover-dot"
                             cx="${hoverX.toFixed(2)}"
-                            cy="${yFor(hoverKwh).toFixed(2)}"
+                            cy="${yFor(hoverPredictedKwh).toFixed(2)}"
+                            r="2.2"
+                            fill="${predictedColor}"/>
+                ` : nothing}
+                ${hoverActualKwh !== null ? svg`
+                    <circle class="dash-today-chart-hover-dot"
+                            cx="${hoverX.toFixed(2)}"
+                            cy="${yFor(hoverActualKwh).toFixed(2)}"
                             r="2.2"
                             fill="${pvColor}"/>
                 ` : nothing}
             </svg>
-            ${hoverKwh !== null ? html`
+            ${showHover ? html`
                 <div class="dash-today-chart-tooltip"
                      style="left: ${hoverFracX.toFixed(2)}%;"
                 >
-                    ${hoverTimeLabel} · ${formatLocalisedNumber(host.hass, hoverKwh, 1)} kWh
+                    <span class="dash-today-chart-tooltip-time">${hoverTimeLabel}</span>
+                    ${hoverActualKwh !== null ? html`
+                        <span class="dash-today-chart-tooltip-actual" style="color:${pvColor}">
+                            ${formatLocalisedNumber(host.hass, hoverActualKwh, 1)} kWh
+                        </span>
+                    ` : nothing}
+                    ${hoverPredictedKwh !== null ? html`
+                        <span class="dash-today-chart-tooltip-predicted" style="color:${predictedColor}">
+                            ${formatLocalisedNumber(host.hass, hoverPredictedKwh, 1)} kWh
+                        </span>
+                    ` : nothing}
                 </div>
             ` : nothing}
         </div>

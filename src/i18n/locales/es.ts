@@ -9,6 +9,7 @@ export const es: Translations = {
         exitHint: 'Toca en cualquier lugar para salir',
 
         todayLabel:         'Hoy',
+        todayProduced:      'producido',
         todayForecast:      'previsto',
         todayPeak:          'pico',
         todayNotStartedYet: 'producción en pausa',

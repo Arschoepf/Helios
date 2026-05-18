@@ -19,6 +19,7 @@ export const en: Translations = {
         exitHint: 'Tap anywhere to exit',
 
         todayLabel:         'Today',
+        todayProduced:      'produced',
         todayForecast:      'forecast',
         todayPeak:          'peak',
         todayNotStartedYet: 'production paused',

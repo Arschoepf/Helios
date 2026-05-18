@@ -16,6 +16,7 @@ export const fr: Translations = {
     {
         exitHint: 'Cliquez n\'importe où pour quitter',
         todayLabel:         'Aujourd\'hui',
+        todayProduced:      'produit',
         todayForecast:      'prévu',
         todayPeak:          'pic',
         todayNotStartedYet: 'production en pause',

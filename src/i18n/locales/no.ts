@@ -18,6 +18,7 @@ export const no: Translations = {
         exitHint: 'Trykk hvor som helst for å gå ut',
 
         todayLabel:         'I dag',
+        todayProduced:      'produsert',
         todayForecast:      'estimert',
         todayPeak:          'topp',
         todayNotStartedYet: 'produksjon pauset',

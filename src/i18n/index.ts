@@ -29,6 +29,7 @@ export interface Translations
         //Section labels and short captions for the detail-mode
         //dashboard. Each section is one factual block:
         //  todayLabel      , top of the today section
+        //  todayProduced   , trailing text after the produced total
         //  todayForecast   , trailing text after the projected total
         //  todayPeak       , trailing text after the peak readout
         //  todayNotStartedYet , status line shown when produced is
@@ -40,6 +41,7 @@ export interface Translations
         //  batteryCharged  , label under the charge total
         //  batteryDischarged , label under the discharge total
         todayLabel:        string;
+        todayProduced:     string;
         todayForecast:     string;
         todayPeak:         string;
         todayNotStartedYet: string;

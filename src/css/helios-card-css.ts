@@ -280,10 +280,13 @@ export const heliosCardStyles = css`
         transform: translateY(8px);
         animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
-    .dash-card:nth-of-type(1) { animation-delay: 0.00s; }
-    .dash-card:nth-of-type(2) { animation-delay: 0.18s; }
-    .dash-card:nth-of-type(3) { animation-delay: 0.36s; }
-    .dash-card:nth-of-type(4) { animation-delay: 0.54s; }
+    /*  Staggered reveal: today first, then the tomorrow + battery
+        row appears with a single shared delay. Tomorrow + battery
+        sit inside .dash-row (so nth-of-type counts wouldn't line
+        up); the explicit class targets keep the cascade readable. */
+    .dash-card.dash-today    { animation-delay: 0.00s; }
+    .dash-card.dash-tomorrow { animation-delay: 0.18s; }
+    .dash-card.dash-battery  { animation-delay: 0.18s; }
     @keyframes dash-card-in
     {
         to { opacity: 1; transform: translateY(0); }
@@ -356,36 +359,63 @@ export const heliosCardStyles = css`
         opacity: 0.65;
     }
 
-    /*  Section: today                                                  */
-
-    /*  Container queries: the cumulative chart is rendered only when   */
-    /*  the section is wide enough to read comfortably (>= 380px).     */
-    /*  Below that, the chart is hidden via display:none and the       */
-    /*  side stack reclaims the layout space.                          */
-    .dash-section.dash-today
+    /*  Row that holds the two half-width sections (tomorrow +
+        battery) side by side. Each child grows to fill its share;
+        min-width:0 lets text inside truncate cleanly when the card
+        is narrow rather than stretching the row.                    */
+    .dash-row
     {
-        container-type: inline-size;
-        container-name: dash-today;
+        display: flex;
+        gap: 10px;
+        align-items: stretch;
+        flex-wrap: wrap;
     }
+    .dash-row > .dash-section
+    {
+        /*  Grow to fill the row and shrink below the basis when the
+            two siblings can still sit side by side, but never narrower
+            than ~190 px or the half-width contents (vessel + flows)
+            start truncating; below that, flex-wrap drops to one
+            column.                                                  */
+        flex: 1 1 190px;
+        min-width: 0;
+    }
+
+    /*  Section: today                                                  */
+    /*                                                                  */
+    /*  Vertical body: the two big "produit / prévu" values on top,    */
+    /*  the peak line below, then the full-width chart. The chart is   */
+    /*  always shown (no container query) since today owns the full    */
+    /*  panel width.                                                   */
     .dash-today-body
     {
         display: flex;
-        align-items: center;
-        gap: 12px;
+        flex-direction: column;
+        gap: 10px;
         padding: 2px 0;
     }
-    .dash-today-produced
+    .dash-today-headline
+    {
+        display: flex;
+        align-items: baseline;
+        gap: 18px;
+        flex-wrap: wrap;
+    }
+    .dash-today-stat
     {
         display: inline-flex;
         align-items: baseline;
+        line-height: 1;
     }
-    .dash-today-side
+    .dash-today-stat-predicted .dash-stat-value
+    {
+        font-style: italic;
+    }
+    .dash-today-meta
     {
         display: flex;
-        flex-direction: column;
-        gap: 4px;
-        min-width: 0;
-        flex: 0 0 auto;
+        gap: 14px;
+        flex-wrap: wrap;
     }
     .dash-today-line
     {
@@ -397,7 +427,6 @@ export const heliosCardStyles = css`
         white-space: nowrap;
     }
     .dash-today-line ha-icon { --mdc-icon-size: 14px; }
-    .dash-today-line .dash-line-arrow { font-size: 14px; opacity: 0.65; font-weight: 600; }
     .dash-today-line .dash-line-value { font-weight: 700; }
     .dash-today-line .dash-line-label
     {
@@ -406,40 +435,28 @@ export const heliosCardStyles = css`
         letter-spacing: 1px;
         opacity: 0.55;
     }
-    .dash-today-forecast .dash-line-value { font-style: italic; }
 
-    /*  Cumulative production sparkline. Hidden on narrow cards via    */
-    /*  the container query so we never display a squashed graph.      */
-    /*  Sits to the right of the side stack, takes the remaining       */
-    /*  horizontal space, and has its own slightly darker panel +      */
-    /*  hairline border so it reads as a distinct chart frame.         */
+    /*  Cumulative production sparkline, full panel width below the
+        headline. Two curves share the same Y scale: the actual
+        history (dark PV colour) and the full-day model forecast
+        (lighter PV colour) so the user can read "predicted vs
+        produced" at a glance. Frame style stays consistent with
+        the white card surface; no overflow:hidden so the tooltip
+        can extend beyond the chart edges.                            */
     .dash-today-chart
     {
-        display: none;
+        display: block;
         position: relative;
-        flex: 1;
-        min-width: 0;
-        height: 60px;
-        align-self: stretch;
+        width: 100%;
+        height: 110px;
         background: rgba(0, 0, 0, 0.05);
         border: 1px solid rgba(0, 0, 0, 0.12);
         border-radius: 4px;
-        /*  No overflow:hidden, the SVG fills the frame exactly with
-            no visual bleed and the tooltip needs to be free to
-            extend beyond the chart edges (otherwise it gets clipped
-            when the cursor sits on either end of the curve).        */
     }
     ha-card.theme-dark .dash-today-chart
     {
         background: rgba(255, 255, 255, 0.06);
         border-color: rgba(255, 255, 255, 0.15);
-    }
-    @container dash-today (min-width: 380px)
-    {
-        .dash-today-chart
-        {
-            display: block;
-        }
     }
     .dash-today-chart-svg
     {
@@ -447,28 +464,23 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
     }
-    .dash-today-chart-past
+    .dash-today-chart-actual
     {
         fill: none;
-        stroke-width: 1.2;
+        stroke-width: 1.6;
         stroke-linecap: round;
         stroke-linejoin: round;
         opacity: 0.95;
         vector-effect: non-scaling-stroke;
     }
-    .dash-today-chart-future
+    .dash-today-chart-predicted
     {
         fill: none;
-        stroke-width: 1.2;
+        stroke-width: 1.4;
         stroke-linecap: round;
         stroke-linejoin: round;
-        stroke-dasharray: 3 2;
-        opacity: 0.7;
+        opacity: 0.95;
         vector-effect: non-scaling-stroke;
-    }
-    .dash-today-chart-dot
-    {
-        opacity: 0.9;
     }
     .dash-today-chart-hover-line
     {
@@ -498,26 +510,42 @@ export const heliosCardStyles = css`
         position: absolute;
         top: 4px;
         transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.78);
+        background: rgba(0, 0, 0, 0.82);
         color: #ffffff;
         font-size: 10px;
         font-weight: 600;
         letter-spacing: 0.2px;
-        padding: 2px 6px;
+        padding: 4px 7px;
         border-radius: 3px;
         white-space: nowrap;
         pointer-events: none;
         font-variant-numeric: tabular-nums;
+        display: inline-flex;
+        flex-direction: column;
+        gap: 1px;
+        line-height: 1.2;
     }
     ha-card.theme-dark .dash-today-chart-tooltip
     {
         background: rgba(255, 255, 255, 0.92);
         color: #111111;
     }
+    .dash-today-chart-tooltip-time
+    {
+        font-weight: 700;
+        opacity: 0.85;
+        font-size: 9px;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+    }
+    .dash-today-chart-tooltip-actual,
+    .dash-today-chart-tooltip-predicted
+    {
+        font-weight: 700;
+    }
 
-    /*  Status line under the produced value when the day's            */
-    /*  production hasn't started yet (produced ~ 0, peak still in     */
-    /*  the future). Discreet, small, italic, full row.                */
+    /*  Status line under the body when the day's production hasn't
+        started yet (produced ~ 0, peak still in the future).         */
     .dash-today-status
     {
         font-size: 11px;

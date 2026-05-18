@@ -39,6 +39,14 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 
 ---
 
+## Support my work
+
+If you find this project useful, don't hesitate to give it a ⭐ on GitHub, and consider supporting me with a donation if you can.
+
+<a href="https://www.buymeacoffee.com/reikanysora"><img src="https://img.buymeacoffee.com/button-api/?text=+1 W/m² of motivation&emoji=☀️&slug=reikanysora&button_colour=5F7FFF&font_colour=ffffff&font_family=Inter&outline_colour=000000&coffee_colour=FFDD00" /></a>
+
+---
+
 ## Installation via HACS
 
 ### Custom repository (recommended for now)
@@ -300,14 +308,6 @@ External contributors who have shaped the card beyond the core author:
 ## About me
 
 I build bridges between data and reality. To me, development is more than a profession; it is the tool I have used since childhood to try and decode the complexity of the world around us. I learn every day, fully aware that total understanding is an infinite horizon I will likely never reach, but the journey is worth it.
-
----
-
-## Support my work
-
-If you find this project useful and want to support its development, feel free to buy me a coffee (or another battery ;-))!
-
-<a href="https://www.buymeacoffee.com/reikanysora"><img src="https://img.buymeacoffee.com/button-api/?text=+1 W/m² of motivation&emoji=☀️&slug=reikanysora&button_colour=5F7FFF&font_colour=ffffff&font_family=Inter&outline_colour=000000&coffee_colour=FFDD00" /></a>
 
 ---
 

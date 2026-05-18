@@ -9,6 +9,7 @@ export const nl: Translations = {
         exitHint: 'Tik ergens om te sluiten',
 
         todayLabel:         'Vandaag',
+        todayProduced:      'opgewekt',
         todayForecast:      'verwacht',
         todayPeak:          'piek',
         todayNotStartedYet: 'opwekking gepauzeerd',
