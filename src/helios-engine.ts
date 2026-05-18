@@ -325,10 +325,19 @@ export function defaultLidarViewWireframeColor(cardTheme: unknown): string
     return isDark ? '#d0d0d0' : '#404040';
 }
 //Distance from the home at which the LiDAR view is at full opacity.
-//Beyond this, alpha smoothstep-fades down to 0 at the fetch radius
-//(building-radius), so the cloud reads as anchored on the home and
-//dissolves into the basemap as you look further out.
+//Beyond this, alpha smoothstep-fades down to 0 at the display
+//radius below, so the cloud reads as anchored on the home and
+//dissolves into the basemap as you look further out. Decoupled from
+//building-radius on purpose: the building-radius controls the data
+//fetch (shadows, vegetation extent) and the LiDAR overlay shouldn't
+//inherit that bound, mixing the two knobs felt opaque in the editor.
 export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
+//Outer radius where the LiDAR view alpha hits zero. Fixed regardless
+//of the configured fetch radius. Past this distance the shader fades
+//cells to zero, so we never paint a million dots for cells the user
+//can barely see anyway, which keeps frame times stable on fullscreen
+//layouts.
+export const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
 
 
 //Single ground-shadow layer, rendered as an image source rather
@@ -2124,22 +2133,16 @@ export class HeliosEngine
         this._lidarViewLayer?.setAlphaFade(alpha);
     }
 
-    //Distance-based opacity fall-off bounds for the View. The cloud
-    //sits at full opacity within LIDAR_VIEW_FULL_OPACITY_RADIUS_M of
-    //the home, then smooth-fades to 0 at half the fetch radius
-    //(building-radius / 2). Halving the outer bound keeps the fade
-    //band tight enough to be visible even on a fullscreen layout
-    //with a large display radius, and roughly quarters the cell
-    //count rasterised per frame (area scales with r squared). On
-    //tight discs (building-radius / 2 < the full-opacity threshold)
-    //the band collapses to a near-sharp cut at the data edge, with
-    //a 1 m epsilon so the shader's smoothstep never sees edge0 ==
-    //edge1 (undefined behaviour in GLSL).
+    //Distance-based opacity fall-off bounds for the View. Both
+    //thresholds are fixed: full opacity inside
+    //LIDAR_VIEW_FULL_OPACITY_RADIUS_M, smooth fade out at
+    //LIDAR_VIEW_DISPLAY_RADIUS_M. Decoupled from building-radius on
+    //purpose, so the LiDAR overlay is always painted at a tight,
+    //consistent disc no matter how far the underlying raster
+    //actually extends.
     private _lidarViewFadeRange(): [fullMeters: number, fadeMeters: number]
     {
-        const fadeOut = Math.max(2, this._buildingRadiusMeters() * 0.5);
-        const full    = Math.max(1, Math.min(LIDAR_VIEW_FULL_OPACITY_RADIUS_M, fadeOut - 1));
-        return [full, fadeOut];
+        return [LIDAR_VIEW_FULL_OPACITY_RADIUS_M, LIDAR_VIEW_DISPLAY_RADIUS_M];
     }
 
     private _lidarViewPointSizePx(): number
