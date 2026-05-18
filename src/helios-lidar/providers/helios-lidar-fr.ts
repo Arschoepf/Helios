@@ -31,6 +31,8 @@ export const franceLidarHd: LidarSource =
 {
     id:   'fr-ign-lidarhd',
     name: 'IGN LiDAR HD (France)',
+    //IGN LiDAR HD MNH is published on a 0.5 m grid.
+    nativeCellPitchMeters: 0.5,
 
     covers(lat: number, lon: number): boolean
     {

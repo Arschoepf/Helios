@@ -208,6 +208,8 @@ export interface Translations
         //loaded LiDAR cell as a dot, plus tune its visual knobs.
         lidarViewSection:         string;
         lidarViewHint:            string;
+        lidarViewRadius:          string;
+        lidarViewRadiusHint:      string;
         lidarViewPointSize:       string;
         lidarViewPointColor:      string;
         lidarViewPointOpacity:    string;

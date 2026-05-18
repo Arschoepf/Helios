@@ -41,6 +41,8 @@ export const norwayKartverketNhm: LidarSource =
 {
     id:   'no-kartverket-nhm',
     name: 'Kartverket NHM (Norway)',
+    //Kartverket DTM / DOM ImageServers expose 1 m sampling nationwide.
+    nativeCellPitchMeters: 1.0,
 
     covers(lat: number, lon: number): boolean
     {

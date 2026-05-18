@@ -39,6 +39,8 @@ export const englandLidarComposite: LidarSource =
 {
     id:   'uk-defra-lidar-composite',
     name: 'Environment Agency LiDAR Composite (England)',
+    //Defra LiDAR Composite DSM / DTM are published on a 1 m grid.
+    nativeCellPitchMeters: 1.0,
 
     covers(lat: number, lon: number): boolean
     {

@@ -84,6 +84,12 @@ export function createLocalNdsmSource(cfg: LocalNdsmConfig): LidarSource
     return {
         id:   'local-ndsm',
         name: 'Local nDSM GeoTIFF',
+        //Local rasters have no advertised pitch; default to 1 m which
+        //covers the common LiDAR DSM / DTM grids users typically prep
+        //offline. The engine still scales rasterSize off this value
+        //via the precision knob, so a finer source can be exercised by
+        //picking "high" precision in the editor.
+        nativeCellPitchMeters: 1.0,
 
         covers(lat: number, lon: number): boolean
         {

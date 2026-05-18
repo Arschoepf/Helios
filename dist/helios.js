@@ -26507,6 +26507,8 @@ const FR_BBOX = { minLat: 41, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 const franceLidarHd = {
   id: "fr-ign-lidarhd",
   name: "IGN LiDAR HD (France)",
+  //IGN LiDAR HD MNH is published on a 0.5 m grid.
+  nativeCellPitchMeters: 0.5,
   covers(lat, lon) {
     return lat >= FR_BBOX.minLat && lat <= FR_BBOX.maxLat && lon >= FR_BBOX.minLon && lon <= FR_BBOX.maxLon;
   },
@@ -29799,6 +29801,8 @@ const UK_BBOX = { minLat: 49.7, maxLat: 56, minLon: -7.2, maxLon: 2.1 };
 const englandLidarComposite = {
   id: "uk-defra-lidar-composite",
   name: "Environment Agency LiDAR Composite (England)",
+  //Defra LiDAR Composite DSM / DTM are published on a 1 m grid.
+  nativeCellPitchMeters: 1,
   covers(lat, lon) {
     return lat >= UK_BBOX.minLat && lat <= UK_BBOX.maxLat && lon >= UK_BBOX.minLon && lon <= UK_BBOX.maxLon;
   },
@@ -29856,6 +29860,8 @@ const ES_BBOX = { minLat: 35.8, maxLat: 44, minLon: -9.6, maxLon: 4.4 };
 const spainPnoaLidar = {
   id: "es-ign-pnoa-mdsn",
   name: "IGN España PNOA-LiDAR MDSn (Spain)",
+  //IGN España PNOA-LiDAR MDSn coverages are published on a 2.5 m grid.
+  nativeCellPitchMeters: 2.5,
   covers(lat, lon) {
     return lat >= ES_BBOX.minLat && lat <= ES_BBOX.maxLat && lon >= ES_BBOX.minLon && lon <= ES_BBOX.maxLon;
   },
@@ -29910,6 +29916,8 @@ const NL_BBOX = { minLat: 50.7, maxLat: 53.8, minLon: 3.1, maxLon: 7.3 };
 const netherlandsAhn4 = {
   id: "nl-pdok-ahn4",
   name: "PDOK AHN4 (Netherlands)",
+  //AHN4 dsm_05m / dtm_05m are published on a 0.5 m grid.
+  nativeCellPitchMeters: 0.5,
   covers(lat, lon) {
     return lat >= NL_BBOX.minLat && lat <= NL_BBOX.maxLat && lon >= NL_BBOX.minLon && lon <= NL_BBOX.maxLon;
   },
@@ -29963,6 +29971,8 @@ const NO_BBOX = { minLat: 57.5, maxLat: 81, minLon: 4, maxLon: 33 };
 const norwayKartverketNhm = {
   id: "no-kartverket-nhm",
   name: "Kartverket NHM (Norway)",
+  //Kartverket DTM / DOM ImageServers expose 1 m sampling nationwide.
+  nativeCellPitchMeters: 1,
   covers(lat, lon) {
     return lat >= NO_BBOX.minLat && lat <= NO_BBOX.maxLat && lon >= NO_BBOX.minLon && lon <= NO_BBOX.maxLon;
   },
@@ -30023,6 +30033,8 @@ const NRW_BBOX = { minLat: 50.3, maxLat: 52.55, minLon: 5.85, maxLon: 9.5 };
 const nrwLidarNdom = {
   id: "de-nrw-ndom",
   name: "Geobasis NRW nDOM (Nordrhein-Westfalen)",
+  //Geobasis NRW nDOM is published on a 1 m grid.
+  nativeCellPitchMeters: 1,
   covers(lat, lon) {
     return lat >= NRW_BBOX.minLat && lat <= NRW_BBOX.maxLat && lon >= NRW_BBOX.minLon && lon <= NRW_BBOX.maxLon;
   },
@@ -30093,6 +30105,12 @@ function createLocalNdsmSource(cfg) {
   return {
     id: "local-ndsm",
     name: "Local nDSM GeoTIFF",
+    //Local rasters have no advertised pitch; default to 1 m which
+    //covers the common LiDAR DSM / DTM grids users typically prep
+    //offline. The engine still scales rasterSize off this value
+    //via the precision knob, so a finer source can be exercised by
+    //picking "high" precision in the editor.
+    nativeCellPitchMeters: 1,
     covers(lat, lon) {
       return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
     },
@@ -30189,10 +30207,10 @@ const DEFAULT_BUILDING_OPACITY = 0.25;
 const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 const DEFAULT_BUILDING_COLOR_HEX = "#d2d2d7";
 const DEFAULT_LIDAR_PRECISION = "medium";
-const LIDAR_PRECISION_RASTER = {
-  low: 256,
-  medium: 512,
-  high: 1024
+const LIDAR_PRECISION_PITCH_MULT = {
+  low: 4,
+  medium: 2,
+  high: 1
 };
 const DEFAULT_SHADOW_OPACITY = 0.32;
 const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1.5;
@@ -31503,8 +31521,13 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     const level = this._lidarPrecisionLevel();
-    const rasterSize = LIDAR_PRECISION_RASTER[level];
     const radius = this._buildingRadiusMeters();
+    const effectivePitch = provider.nativeCellPitchMeters * LIDAR_PRECISION_PITCH_MULT[level];
+    const rawCells = Math.round(2 * radius / Math.max(0.01, effectivePitch));
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, rawCells)
+    );
     const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
     if (this._lidarShadowKey === key && this._lidarShadowFeatures) return;
     this._lidarShadowAbort?.abort();
@@ -32687,11 +32710,13 @@ const en = {
     lidarPrecisionLow: "Low",
     lidarPrecisionMedium: "Medium",
     lidarPrecisionHigh: "High",
-    lidarPrecisionHint: "If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat OpenFreeMap building footprints and this setting has no effect.",
+    lidarPrecisionHint: "If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat OpenFreeMap building footprints and this setting has no effect. Higher precision pulls more cells from the source: the LiDAR view shows more points and weighs more on the GPU. The actual density depends on what the provider publishes for your area.",
     shadowOpacity: "Shadow opacity",
     shadowOpacityHint: "Opacity of the cast ground shadows.",
     lidarViewSection: "LiDAR View",
     lidarViewHint: "Click the LiDAR button in the top-right of the card to switch into a point-cloud view of your surroundings: every loaded LiDAR cell (ground, vegetation and buildings) is painted over the basemap. The button stays disabled when no provider covers the home. The view reuses the data already fetched at the current precision, no extra calls are made.",
+    lidarViewRadius: "LiDAR view radius (m)",
+    lidarViewRadiusHint: "Only the points inside this radius around the home are drawn. The underlying data and the shadows are unchanged, this is purely a per-frame paint filter. Useful with high precision or fullscreen layouts: fetch a wide area for the shadows, paint a tighter dot cloud. Capped by the display radius (you can't draw more than what was fetched).",
     lidarViewPointSize: "Point size (px)",
     lidarViewPointColor: "Point color",
     lidarViewPointOpacity: "Point opacity",
@@ -32808,11 +32833,13 @@ const fr = {
     lidarPrecisionLow: "Basse",
     lidarPrecisionMedium: "Moyenne",
     lidarPrecisionHigh: "Haute",
-    lidarPrecisionHint: "Si ta zone est couverte par un provider LiDAR intégré à Helios, tu bénéficies d'ombres plus réalistes (bâtiments ET végétation). Des décalages peuvent apparaître entre les bâtiments affichés et leurs ombres : les données LiDAR sont enregistrées à un instant donné et ne reflètent pas toujours l'état actuel du terrain. Hors zone LiDAR, les ombres retombent sur les empreintes plates des bâtiments OpenFreeMap et cette option n'a aucun effet.",
+    lidarPrecisionHint: "Si ta zone est couverte par un provider LiDAR intégré à Helios, tu bénéficies d'ombres plus réalistes (bâtiments ET végétation). Des décalages peuvent apparaître entre les bâtiments affichés et leurs ombres : les données LiDAR sont enregistrées à un instant donné et ne reflètent pas toujours l'état actuel du terrain. Hors zone LiDAR, les ombres retombent sur les empreintes plates des bâtiments OpenFreeMap et cette option n'a aucun effet. Plus la précision est haute, plus on tire de cellules depuis la source : la vue LiDAR affiche davantage de points et pèse plus sur le GPU. La densité réelle dépend de ce que le provider expose pour ta zone.",
     shadowOpacity: "Opacité des ombres",
     shadowOpacityHint: "Opacité des ombres projetées au sol.",
     lidarViewSection: "Vue LiDAR",
     lidarViewHint: "Clique sur le bouton LiDAR en haut à droite de la carte pour basculer dans une vue en nuage de points de tes environs : chaque cellule LiDAR chargée (sol, végétation et bâtiments) est peinte par-dessus la carte de fond. Le bouton reste désactivé quand aucun provider ne couvre la maison. La vue réutilise les données déjà récupérées à la précision actuelle, aucun appel supplémentaire n'est fait.",
+    lidarViewRadius: "Rayon de la vue LiDAR (m)",
+    lidarViewRadiusHint: "Seuls les points à l'intérieur de ce rayon autour de la maison sont dessinés. Les données et les ombres restent intactes, c'est un simple filtre au moment du tracé. Utile en précision haute ou en plein écran : tu peux récupérer une zone large pour les ombres tout en peignant un nuage de points plus serré. Bornée par le rayon d'affichage (impossible de tracer plus que ce qui a été chargé).",
     lidarViewPointSize: "Taille des points (px)",
     lidarViewPointColor: "Couleur des points",
     lidarViewPointOpacity: "Opacité des points",
@@ -32929,11 +32956,13 @@ const de = {
     lidarPrecisionLow: "Niedrig",
     lidarPrecisionMedium: "Mittel",
     lidarPrecisionHigh: "Hoch",
-    lidarPrecisionHint: "Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen OpenFreeMap-Gebäudegrundrisse, und diese Option bleibt wirkungslos.",
+    lidarPrecisionHint: "Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen OpenFreeMap-Gebäudegrundrisse, und diese Option bleibt wirkungslos. Bei höherer Präzision werden mehr Zellen aus der Quelle geladen: Die LiDAR-Ansicht zeigt mehr Punkte und belastet die GPU stärker. Die tatsächliche Dichte hängt davon ab, was der Anbieter für dein Gebiet bereitstellt.",
     shadowOpacity: "Schatten-Deckkraft",
     shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
     lidarViewSection: "LiDAR-Ansicht",
     lidarViewHint: "Klicke oben rechts auf die Karte auf die Schaltfläche LiDAR, um in eine Punktwolken-Ansicht deiner Umgebung zu wechseln: Jede geladene LiDAR-Zelle (Boden, Vegetation und Gebäude) wird über der Basiskarte gemalt. Die Schaltfläche bleibt deaktiviert, wenn kein Anbieter das Zuhause abdeckt. Die Ansicht verwendet die bereits in der aktuellen Präzision abgerufenen Daten wieder, es werden keine zusätzlichen Aufrufe gemacht.",
+    lidarViewRadius: "LiDAR-Ansichtsradius (m)",
+    lidarViewRadiusHint: "Nur Punkte innerhalb dieses Radius rund ums Zuhause werden gezeichnet. Daten und Schatten bleiben unangetastet, das ist nur ein Filter beim Zeichnen. Hilfreich bei hoher Präzision oder Vollbild-Layouts: einen großen Bereich für die Schatten laden, eine kompaktere Punktwolke zeichnen. Begrenzt durch den Anzeigeradius (mehr als geladen wurde, lässt sich nicht zeichnen).",
     lidarViewPointSize: "Punktgröße (px)",
     lidarViewPointColor: "Punktfarbe",
     lidarViewPointOpacity: "Punktdeckkraft",
@@ -33050,11 +33079,13 @@ const es = {
     lidarPrecisionLow: "Baja",
     lidarPrecisionMedium: "Media",
     lidarPrecisionHigh: "Alta",
-    lidarPrecisionHint: "Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de los edificios OpenFreeMap y esta opción no tiene efecto.",
+    lidarPrecisionHint: "Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de los edificios OpenFreeMap y esta opción no tiene efecto. A mayor precisión, más celdas se piden a la fuente: la vista LiDAR muestra más puntos y exige más a la GPU. La densidad real depende de lo que el proveedor publique para tu zona.",
     shadowOpacity: "Opacidad de las sombras",
     shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
     lidarViewSection: "Vista LiDAR",
     lidarViewHint: "Haz clic en el botón LiDAR arriba a la derecha de la tarjeta para cambiar a una vista en nube de puntos de tu entorno: cada celda LiDAR cargada (suelo, vegetación y edificios) se pinta sobre el mapa de fondo. El botón queda deshabilitado cuando ningún proveedor cubre la casa. La vista reutiliza los datos ya recuperados con la precisión actual, no se hacen llamadas adicionales.",
+    lidarViewRadius: "Radio de la vista LiDAR (m)",
+    lidarViewRadiusHint: "Solo se dibujan los puntos dentro de este radio alrededor del hogar. Los datos y las sombras quedan intactos, es únicamente un filtro al pintar. Útil con precisión alta o en pantalla completa: capturas un área amplia para las sombras y pintas una nube de puntos más ajustada. Limitado por el radio de visualización (no puedes dibujar más de lo que se cargó).",
     lidarViewPointSize: "Tamaño de puntos (px)",
     lidarViewPointColor: "Color de puntos",
     lidarViewPointOpacity: "Opacidad de puntos",
@@ -33171,11 +33202,13 @@ const it = {
     lidarPrecisionLow: "Bassa",
     lidarPrecisionMedium: "Media",
     lidarPrecisionHigh: "Alta",
-    lidarPrecisionHint: "Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte degli edifici OpenFreeMap e questa opzione non ha alcun effetto.",
+    lidarPrecisionHint: "Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte degli edifici OpenFreeMap e questa opzione non ha alcun effetto. Più la precisione è alta, più celle vengono richieste alla sorgente: la vista LiDAR mostra più punti e pesa di più sulla GPU. La densità effettiva dipende da ciò che il provider espone per la tua zona.",
     shadowOpacity: "Opacità delle ombre",
     shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
     lidarViewSection: "Vista LiDAR",
     lidarViewHint: "Clicca sul pulsante LiDAR in alto a destra della scheda per passare a una vista a nuvola di punti dei tuoi dintorni: ogni cella LiDAR caricata (suolo, vegetazione ed edifici) viene dipinta sopra la mappa di base. Il pulsante resta disabilitato quando nessun provider copre la casa. La vista riutilizza i dati già recuperati alla precisione attuale, nessuna chiamata aggiuntiva viene fatta.",
+    lidarViewRadius: "Raggio della vista LiDAR (m)",
+    lidarViewRadiusHint: "Vengono disegnati solo i punti all'interno di questo raggio intorno a casa. I dati e le ombre restano invariati, è solo un filtro al momento del disegno. Utile con alta precisione o layout a schermo intero: carichi un'area ampia per le ombre e disegni una nuvola di punti più stretta. Limitato dal raggio di visualizzazione (non puoi disegnare oltre quanto già caricato).",
     lidarViewPointSize: "Dimensione punti (px)",
     lidarViewPointColor: "Colore punti",
     lidarViewPointOpacity: "Opacità punti",
@@ -33292,11 +33325,13 @@ const nl = {
     lidarPrecisionLow: "Laag",
     lidarPrecisionMedium: "Middel",
     lidarPrecisionHigh: "Hoog",
-    lidarPrecisionHint: "Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte OpenFreeMap-gebouwomtreklijnen en heeft deze optie geen effect.",
+    lidarPrecisionHint: "Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte OpenFreeMap-gebouwomtreklijnen en heeft deze optie geen effect. Hoe hoger de precisie, hoe meer cellen er bij de bron worden opgevraagd: de LiDAR-weergave toont meer punten en is zwaarder voor de GPU. De daadwerkelijke dichtheid hangt af van wat de provider voor jouw zone publiceert.",
     shadowOpacity: "Schaduwdekking",
     shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
     lidarViewSection: "LiDAR-weergave",
     lidarViewHint: "Klik rechtsboven in de kaart op de LiDAR-knop om over te schakelen naar een puntenwolk-weergave van je omgeving: elke geladen LiDAR-cel (grond, vegetatie en gebouwen) wordt over de basiskaart geschilderd. De knop blijft uitgeschakeld wanneer geen enkele provider het huis dekt. De weergave hergebruikt de data die al is opgehaald op de huidige precisie, er worden geen extra calls gedaan.",
+    lidarViewRadius: "LiDAR-weergaveradius (m)",
+    lidarViewRadiusHint: "Alleen de punten binnen deze straal rond de woning worden getekend. De data en de schaduwen blijven ongemoeid; dit is puur een filter bij het tekenen. Handig bij hoge precisie of een schermvullende layout: je laadt een breed gebied voor de schaduwen en tekent een compactere puntwolk. Begrensd door de weergavestraal (je kunt niet meer tekenen dan wat geladen is).",
     lidarViewPointSize: "Puntgrootte (px)",
     lidarViewPointColor: "Puntkleur",
     lidarViewPointOpacity: "Puntdekking",
@@ -33413,11 +33448,13 @@ const pt = {
     lidarPrecisionLow: "Baixa",
     lidarPrecisionMedium: "Média",
     lidarPrecisionHigh: "Alta",
-    lidarPrecisionHint: "Se a tua zona é coberta por um fornecedor LiDAR integrado no Helios, beneficias de sombras mais realistas (edifícios E vegetação). Podem aparecer desfasamentos entre os edifícios desenhados e as suas sombras: os dados LiDAR são capturados num instante preciso e nem sempre refletem o estado atual do terreno. Fora da cobertura LiDAR, as sombras voltam às impressões planas dos edifícios OpenFreeMap e esta opção não tem qualquer efeito.",
+    lidarPrecisionHint: "Se a tua zona é coberta por um fornecedor LiDAR integrado no Helios, beneficias de sombras mais realistas (edifícios E vegetação). Podem aparecer desfasamentos entre os edifícios desenhados e as suas sombras: os dados LiDAR são capturados num instante preciso e nem sempre refletem o estado atual do terreno. Fora da cobertura LiDAR, as sombras voltam às impressões planas dos edifícios OpenFreeMap e esta opção não tem qualquer efeito. Quanto maior a precisão, mais células são pedidas à fonte: a vista LiDAR mostra mais pontos e pesa mais na GPU. A densidade real depende do que o fornecedor publica para a tua zona.",
     shadowOpacity: "Opacidade das sombras",
     shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
     lidarViewSection: "Vista LiDAR",
     lidarViewHint: "Clica no botão LiDAR no canto superior direito da carta para alternar para uma vista em nuvem de pontos do teu ambiente: cada célula LiDAR carregada (solo, vegetação e edifícios) é pintada sobre o mapa de fundo. O botão fica desactivado quando nenhum provedor cobre a casa. A vista reutiliza os dados já obtidos com a precisão actual, nenhuma chamada adicional é feita.",
+    lidarViewRadius: "Raio da vista LiDAR (m)",
+    lidarViewRadiusHint: "Apenas os pontos dentro deste raio à volta da casa são desenhados. Os dados e as sombras ficam intactos, é apenas um filtro ao desenhar. Útil com alta precisão ou em ecrã inteiro: capturas uma zona ampla para as sombras e desenhas uma nuvem de pontos mais apertada. Limitado pelo raio de visualização (não podes desenhar mais do que foi carregado).",
     lidarViewPointSize: "Tamanho dos pontos (px)",
     lidarViewPointColor: "Cor dos pontos",
     lidarViewPointOpacity: "Opacidade dos pontos",
@@ -33534,11 +33571,13 @@ const no = {
     lidarPrecisionLow: "Lav",
     lidarPrecisionMedium: "Middels",
     lidarPrecisionHigh: "Høy",
-    lidarPrecisionHint: "Hvis huset ligger innenfor en LiDAR-leverandør integrert med Helios (Kartverket NHM for Norge), får du mer realistiske skygger (bygninger OG vegetasjon). Noe forskyvning kan oppstå mellom de viste bygningene og skyggene deres: LiDAR-undersøkelsen er fanget på en gitt dato og gjenspeiler kanskje ikke nåværende tilstand. Utenfor LiDAR-dekning faller skyggene tilbake til de flate OpenFreeMap-bygningsfotavtrykkene, og denne innstillingen har ingen effekt.",
+    lidarPrecisionHint: "Hvis huset ligger innenfor en LiDAR-leverandør integrert med Helios (Kartverket NHM for Norge), får du mer realistiske skygger (bygninger OG vegetasjon). Noe forskyvning kan oppstå mellom de viste bygningene og skyggene deres: LiDAR-undersøkelsen er fanget på en gitt dato og gjenspeiler kanskje ikke nåværende tilstand. Utenfor LiDAR-dekning faller skyggene tilbake til de flate OpenFreeMap-bygningsfotavtrykkene, og denne innstillingen har ingen effekt. Høyere presisjon henter flere celler fra kilden: LiDAR-visningen tegner flere punkter og er tyngre for GPU-en. Den faktiske tettheten avhenger av hva leverandøren publiserer for området ditt.",
     shadowOpacity: "Skyggeopasitet",
     shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
     lidarViewSection: "LiDAR-visning",
     lidarViewHint: "Klikk på LiDAR-knappen øverst til høyre på kortet for å bytte til en punktskyvisning av omgivelsene dine: hver lastet LiDAR-celle (bakke, vegetasjon og bygninger) males over grunnkartet. Knappen forblir deaktivert når ingen leverandør dekker hjemmet. Visningen gjenbruker dataen som allerede er hentet med gjeldende presisjon, ingen ekstra kall gjøres.",
+    lidarViewRadius: "LiDAR-visningsradius (m)",
+    lidarViewRadiusHint: "Bare punktene innenfor denne radiusen rundt huset tegnes. Dataene og skyggene forblir uberørte, dette er bare et filter ved tegningen. Nyttig ved høy presisjon eller fullskjermoppsett: du henter et stort område for skyggene og tegner en strammere punktsky. Begrenset av visningsradiusen (du kan ikke tegne mer enn det som er hentet).",
     lidarViewPointSize: "Punktstørrelse (px)",
     lidarViewPointColor: "Punktfarge",
     lidarViewPointOpacity: "Punktopasitet",
@@ -36879,6 +36918,18 @@ let HeliosCardEditor = class extends i {
                     <summary class="section-title section-title-collapse">${t2.editor.lidarViewSection}</summary>
                     <div class="hint">${t2.editor.lidarViewHint}</div>
                     <label class="field">
+                        <span class="label">${t2.editor.lidarViewRadius}</span>
+                        <div class="slider-row">
+                            <input
+                                type="range" min="20" max="500" step="10"
+                                .value="${String(c2["lidar-view-radius"] ?? (c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M))}"
+                                @input="${(e2) => this._numSlider("lidar-view-radius", e2)}"
+                            />
+                            <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-radius"] ?? (c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M)), 1)} m</span>
+                        </div>
+                    </label>
+                    <div class="hint">${t2.editor.lidarViewRadiusHint}</div>
+                    <label class="field">
                         <span class="label">${t2.editor.lidarViewPointSize}</span>
                         <div class="slider-row">
                             <input
@@ -37042,7 +37093,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.26"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.27"}`,
       labelStyle,
       versionStyle
     );
@@ -37063,7 +37114,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.26",
+        version: "1.6.0-alpha.27",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37071,7 +37122,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.26"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.27"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -38008,14 +38059,24 @@ let HeliosCard = class extends i {
     this._cloudScene = this._engine ? this._engine.projectCloudScene() : null;
     this._homeSilhouettes = this._engine ? this._engine.projectHomeFootprints() : [];
     if (this._lidarViewMode && this._engine) {
-      const raw2 = this.config?.["building-radius"];
-      const parsed = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-      const radius = !isFinite(parsed) || parsed <= 0 ? DEFAULT_BUILDING_RADIUS_M : Math.min(500, Math.max(20, parsed));
+      const buildingRadius = this._readRadiusKey("building-radius", DEFAULT_BUILDING_RADIUS_M);
+      const viewRadius = this._readRadiusKey("lidar-view-radius", buildingRadius);
+      const radius = Math.min(buildingRadius, viewRadius);
       this._lidarViewPoints = this._engine.projectLidarPoints(radius);
       this._lidarCanvasTransformTick++;
     } else if (this._lidarViewPoints !== null) {
       this._lidarViewPoints = null;
     }
+  }
+  //Parse a metre-valued radius key off the config, defending against
+  //missing / non-numeric / out-of-range values. The clamp mirrors
+  //the engine's building-radius ceiling so a hand-edited YAML can't
+  //ask for cells the fetch never covered.
+  _readRadiusKey(key, fallback) {
+    const raw2 = this.config?.[key];
+    const parsed = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+    if (!isFinite(parsed) || parsed <= 0) return fallback;
+    return Math.min(500, Math.max(20, parsed));
   }
   //LiDAR View visual knobs. Each helper parses the matching config
   //key and falls back to the engine-side DEFAULT_* constant when the
@@ -39262,7 +39323,6 @@ let HeliosCard = class extends i {
                             type="button"
                             class="lidar-view-btn ${this._lidarViewMode ? "is-on" : ""}"
                             ?disabled="${!lidarViewEnabled && !this._lidarViewMode}"
-                            title="${this._lidarViewMode ? "Exit LiDAR View" : lidarViewEnabled ? "LiDAR View" : "No LiDAR coverage here"}"
                             aria-label="${this._lidarViewMode ? "Exit LiDAR View" : "LiDAR View"}"
                             aria-pressed="${this._lidarViewMode ? "true" : "false"}"
                             @click="${this._toggleLidarView}"

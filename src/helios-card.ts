@@ -1734,15 +1734,20 @@ export class HeliosCard extends LitElement
         //slow down anyone who never opens the LiDAR View).
         if (this._lidarViewMode && this._engine)
         {
-            //Disc radius for the LiDAR View reuses the existing
-            //"Display radius" knob (building-radius), capped to the
-            //same 500 m ceiling the engine enforces. Single source of
-            //truth, no second editor field for the user to reconcile.
-            const raw = this.config?.['building-radius'];
-            const parsed = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-            const radius = (!isFinite(parsed) || parsed <= 0)
-                ? DEFAULT_BUILDING_RADIUS_M
-                : Math.min(500, Math.max(20, parsed));
+            //Two radii feed the projection:
+            //  buildingRadius = how far the engine actually fetched
+            //                   LiDAR data (and what shadows / 3D
+            //                   buildings span). Hard cap on the View.
+            //  viewRadius     = optional per-View override so a user
+            //                   can fetch wide for shadows but paint
+            //                   a tight dot cloud, useful on fullscreen
+            //                   layouts with high precision where every
+            //                   visible cell adds to the bake cost.
+            //min() so a stray viewRadius > buildingRadius never asks
+            //the engine for cells that were never loaded.
+            const buildingRadius = this._readRadiusKey('building-radius', DEFAULT_BUILDING_RADIUS_M);
+            const viewRadius     = this._readRadiusKey('lidar-view-radius', buildingRadius);
+            const radius         = Math.min(buildingRadius, viewRadius);
             this._lidarViewPoints = this._engine.projectLidarPoints(radius);
             this._lidarCanvasTransformTick++;
         }
@@ -1750,6 +1755,18 @@ export class HeliosCard extends LitElement
         {
             this._lidarViewPoints = null;
         }
+    }
+
+    //Parse a metre-valued radius key off the config, defending against
+    //missing / non-numeric / out-of-range values. The clamp mirrors
+    //the engine's building-radius ceiling so a hand-edited YAML can't
+    //ask for cells the fetch never covered.
+    private _readRadiusKey(key: 'building-radius' | 'lidar-view-radius', fallback: number): number
+    {
+        const raw = this.config?.[key];
+        const parsed = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+        if (!isFinite(parsed) || parsed <= 0) return fallback;
+        return Math.min(500, Math.max(20, parsed));
     }
 
     //LiDAR View visual knobs. Each helper parses the matching config
@@ -3830,7 +3847,6 @@ export class HeliosCard extends LitElement
                             type="button"
                             class="lidar-view-btn ${this._lidarViewMode ? 'is-on' : ''}"
                             ?disabled="${!lidarViewEnabled && !this._lidarViewMode}"
-                            title="${this._lidarViewMode ? 'Exit LiDAR View' : (lidarViewEnabled ? 'LiDAR View' : 'No LiDAR coverage here')}"
                             aria-label="${this._lidarViewMode ? 'Exit LiDAR View' : 'LiDAR View'}"
                             aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
                             @click="${this._toggleLidarView}"

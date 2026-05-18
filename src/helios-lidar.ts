@@ -25,6 +25,15 @@ export interface LidarSource
     //Human-readable label, currently logs-only.
     name:  string;
 
+    //Native cell pitch in metres for the upstream raster as published
+    //by the data owner. The engine sizes the requested rasterSize off
+    //this value so the fetched grid matches real source samples
+    //instead of forcing the server to interpolate up: at "high"
+    //precision the engine asks one cell per native sample, "medium"
+    //one per 2, "low" one per 4. Lets the LiDAR view + shadows scale
+    //with the actual ground truth rather than a fixed pixel count.
+    nativeCellPitchMeters: number;
+
     //Cheap synchronous coverage probe. Implementations should bail
     //fast (a couple of bbox comparisons) so the engine can call this
     //on every home-position change without measurable cost.

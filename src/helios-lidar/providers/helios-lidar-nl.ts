@@ -39,6 +39,8 @@ export const netherlandsAhn4: LidarSource =
 {
     id:   'nl-pdok-ahn4',
     name: 'PDOK AHN4 (Netherlands)',
+    //AHN4 dsm_05m / dtm_05m are published on a 0.5 m grid.
+    nativeCellPitchMeters: 0.5,
 
     covers(lat: number, lon: number): boolean
     {

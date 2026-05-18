@@ -39,6 +39,8 @@ export const spainPnoaLidar: LidarSource =
 {
     id:   'es-ign-pnoa-mdsn',
     name: 'IGN España PNOA-LiDAR MDSn (Spain)',
+    //IGN España PNOA-LiDAR MDSn coverages are published on a 2.5 m grid.
+    nativeCellPitchMeters: 2.5,
 
     covers(lat: number, lon: number): boolean
     {

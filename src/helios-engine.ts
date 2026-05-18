@@ -5,6 +5,7 @@ import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './
 import { fetchBuildingsAroundHome, type BuildingsResult } from './helios-buildings';
 import { projectExtrusionShadows } from './helios-shadows';
 import { resolveLidarSource } from './helios-lidar';
+import { RASTER_DEFAULTS } from './helios-lidar/helios-lidar-pipeline';
 
 //Public types
 
@@ -227,11 +228,18 @@ export interface HeliosConfig
     //LiDAR View overlay. When the user clicks the LiDAR View button
     //in the top-right of the card, the regular map UI fades out and
     //every raster cell currently loaded is projected to screen as a
-    //small dot. These three keys tune the look; none of them affect
-    //cast-shadow rendering. The visible disc radius reuses the
-    //existing `building-radius` (the "Display radius" knob), so the
-    //user has a single source of truth for how far around the home
-    //the card draws anything.
+    //small dot. These keys tune the look; none of them affect cast-
+    //shadow rendering.
+    //  lidar-view-radius       : metres (20..500). Optional. Overrides
+    //                            the building-radius for the dot cloud
+    //                            so a user can fetch a wide area for
+    //                            shadows but only paint a tight disc
+    //                            of points (frame-rate cap for big
+    //                            rasters / fullscreen layouts). Cells
+    //                            outside the radius are skipped at
+    //                            projection time, the underlying data
+    //                            and shadow features are untouched.
+    //                            Defaults to building-radius when unset.
     //  lidar-view-point-size   : pixels (1..6). Square side length per
     //                            point on the canvas. Default 1.5.
     //  lidar-view-point-color  : hex string. Default '#ffffff' (white
@@ -240,6 +248,7 @@ export interface HeliosConfig
     //  lidar-view-point-opacity: 0..1. Default 0.5. Combined with
     //                            point-size to control the perceptual
     //                            density of the cloud.
+    'lidar-view-radius'?:        unknown;
     'lidar-view-point-size'?:    unknown;
     'lidar-view-point-color'?:   unknown;
     'lidar-view-point-opacity'?: unknown;
@@ -251,22 +260,28 @@ export const DEFAULT_BUILDING_RADIUS_M         = 100;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
-//Shadow precision levels. Each level maps to a WMS raster size which
-//drives how finely the IGN LiDAR HD heightmap is sampled around the
-//home. Higher precision means finer shadow contours but a larger
-//payload and more work for the consolidation step. Only meaningful
-//when the home is inside a provider's coverage; outside, shadows
-//fall back to MapTiler footprints regardless of this setting.
+//Shadow precision levels. Each level is a multiplier on the active
+//provider's native cell pitch:
 //
-//  'low'    256 x 256 raster
-//  'medium' 512 x 512
-//  'high'   1024 x 1024 (close to IGN native ~50 cm sampling)
+//  'high'   1x native (one fetched cell per real source sample)
+//  'medium' 2x native (one fetched cell per 4 real samples)
+//  'low'    4x native (one fetched cell per 16 real samples)
+//
+//Pinning the request to the upstream's natural sampling means every
+//rendered point matches a real publication cell rather than a server-
+//side interpolation. Density grows with smaller pitches (e.g. France
+//0.5 m vs Spain 2.5 m) and with bigger radii. Only meaningful when
+//the home is inside a provider's coverage; outside, shadows fall
+//back to MapTiler footprints regardless of this setting.
 export type LidarPrecisionLevel = 'low' | 'medium' | 'high';
 export const DEFAULT_LIDAR_PRECISION: LidarPrecisionLevel = 'medium';
-export const LIDAR_PRECISION_RASTER: Record<LidarPrecisionLevel, number> = {
-    low:    256,
-    medium: 512,
-    high:   1024
+//Precision -> pitch multiplier. The fetched raster's effective cell
+//pitch is `nativePitch x multiplier`; rasterSize is derived from the
+//radius and that effective pitch, clamped by the pipeline defaults.
+export const LIDAR_PRECISION_PITCH_MULT: Record<LidarPrecisionLevel, number> = {
+    low:    4,
+    medium: 2,
+    high:   1
 };
 //Default opacity of the ground shadow layer when the user has not set
 //the `shadow-opacity` config option.
@@ -2547,8 +2562,19 @@ export class HeliosEngine
         }
 
         const level      = this._lidarPrecisionLevel();
-        const rasterSize = LIDAR_PRECISION_RASTER[level];
         const radius     = this._buildingRadiusMeters();
+        //rasterSize derives from the provider's native cell pitch, the
+        //precision multiplier and the requested radius, so each fetched
+        //cell maps to a real upstream sample rather than a server-side
+        //interpolation. Clamped to the pipeline's own [min, max] so a
+        //tiny radius can't ask for fewer cells than the flood fill
+        //needs and a huge radius can't blow the WMS payload.
+        const effectivePitch = provider.nativeCellPitchMeters * LIDAR_PRECISION_PITCH_MULT[level];
+        const rawCells       = Math.round((2 * radius) / Math.max(0.01, effectivePitch));
+        const rasterSize     = Math.min(
+            RASTER_DEFAULTS.maxRasterSize,
+            Math.max(RASTER_DEFAULTS.minRasterSize, rawCells)
+        );
         const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
         if (this._lidarShadowKey === key && this._lidarShadowFeatures) return;
 

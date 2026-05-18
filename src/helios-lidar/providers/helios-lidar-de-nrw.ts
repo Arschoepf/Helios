@@ -39,6 +39,8 @@ export const nrwLidarNdom: LidarSource =
 {
     id:   'de-nrw-ndom',
     name: 'Geobasis NRW nDOM (Nordrhein-Westfalen)',
+    //Geobasis NRW nDOM is published on a 1 m grid.
+    nativeCellPitchMeters: 1.0,
 
     covers(lat: number, lon: number): boolean
     {
