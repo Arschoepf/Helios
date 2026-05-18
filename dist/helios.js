@@ -30406,8 +30406,8 @@ class LidarViewLayer {
     if (this._uMatrix) gl.uniformMatrix4fv(this._uMatrix, false, this._shiftedMatrix);
     if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
     if (this._uRadius) gl.uniform1f(this._uRadius, this._radiusMeters);
-    const dpr = typeof window !== "undefined" && window.devicePixelRatio || 1;
-    if (this._uPointSize) gl.uniform1f(this._uPointSize, this._pointSizePx * dpr);
+    const pixelRatio = this._map?.getPixelRatio?.() ?? (typeof window !== "undefined" && window.devicePixelRatio || 1);
+    if (this._uPointSize) gl.uniform1f(this._uPointSize, this._pointSizePx * pixelRatio);
     if (this._uColor) gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
     if (this._uAlphaFade) gl.uniform1f(this._uAlphaFade, this._alphaFade);
     gl.enable(gl.BLEND);
@@ -37362,7 +37362,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.30"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.31"}`,
       labelStyle,
       versionStyle
     );
@@ -37383,7 +37383,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.30",
+        version: "1.6.0-alpha.31",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37391,7 +37391,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.30"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.31"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
