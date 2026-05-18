@@ -1165,12 +1165,11 @@ export class HeliosCard extends LitElement
                       instead of two competing spinners on opposite
                       sides of the card. Sits at the same 8 px edge
                       margin as the clock and the timeline.  -->
-                ${hasApiKey ? html`
+                ${hasApiKey && (lidarViewEnabled || this._lidarViewMode) ? html`
                     <div class="overlay-top-right">
                         <button
                             type="button"
                             class="lidar-view-btn ${this._lidarViewMode ? 'is-on' : ''}"
-                            ?disabled="${!lidarViewEnabled && !this._lidarViewMode}"
                             aria-label="${this._lidarViewMode ? 'Exit LiDAR View' : 'LiDAR View'}"
                             aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
                             @click="${() => toggleLidarView(this)}"

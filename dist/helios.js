@@ -2127,6 +2127,10 @@ const heliosCardStyles = i$3`
             them: the cap heights may differ by a px or two but the
             visual line under the digits matches across stats.    */
         align-items: end;
+        /*  Produced sits on the left, forecast on the right, so the
+            reader's eye can scan "actual / model" as two columns
+            across both the headline and the peak row below.      */
+        justify-content: space-between;
         gap: 18px;
         flex-wrap: wrap;
     }
@@ -2160,6 +2164,10 @@ const heliosCardStyles = i$3`
         display: flex;
         gap: 14px;
         flex-wrap: wrap;
+        /*  Same actual-left / forecast-right alignment as the
+            headline above so the eye scans the two columns
+            uniformly.                                          */
+        justify-content: space-between;
     }
     .dash-today-line
     {
@@ -2222,14 +2230,14 @@ const heliosCardStyles = i$3`
     {
         stroke: rgba(255, 255, 255, 0.12);
     }
-    /*  Both production curves animate as a stroke reveal on the
-        first paint: the path is normalised to pathLength=100 in
-        the SVG, the dasharray covers the full length with one
-        dash, and stroke-dashoffset rolls from 100 (hidden) to 0
-        (full). The animation runs once on element insertion, so
-        the curves only animate when the dashboard opens (which
-        re-creates the path elements) and stay stable on every
-        subsequent re-render (e.g. the 30 s clock tick).         */
+    /*  Both production curves are wrapped in a <g clip-path>; the
+        clip rectangle scales horizontally from 0 to full width
+        over 1 s on the first paint, producing a clean left → right
+        reveal regardless of the underlying path shape (the prior
+        stroke-dashoffset approach mis-rendered curves whose first
+        segments were a flat zero plateau, because the dash pattern
+        spent the early animation time on the invisible bottom
+        flat).                                                     */
     .dash-today-chart-actual,
     .dash-today-chart-predicted
     {
@@ -2237,9 +2245,6 @@ const heliosCardStyles = i$3`
         stroke-linecap: round;
         stroke-linejoin: round;
         vector-effect: non-scaling-stroke;
-        stroke-dasharray: 100;
-        stroke-dashoffset: 100;
-        animation: dash-chart-reveal 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
     .dash-today-chart-actual
     {
@@ -2251,9 +2256,16 @@ const heliosCardStyles = i$3`
         stroke-width: 1.4;
         opacity: 0.95;
     }
+    .dash-today-chart-reveal-rect
+    {
+        transform-box: fill-box;
+        transform-origin: 0% 50%;
+        animation: dash-chart-reveal 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
     @keyframes dash-chart-reveal
     {
-        to { stroke-dashoffset: 0; }
+        from { transform: scaleX(0); }
+        to   { transform: scaleX(1); }
     }
 
     /*  "Now" cursor: vertical dashed line in the configured sun
@@ -2269,6 +2281,31 @@ const heliosCardStyles = i$3`
         stroke-dasharray: 2 2;
         vector-effect: non-scaling-stroke;
         opacity: 0.75;
+        pointer-events: none;
+    }
+
+    /*  Sunrise / sunset markers: very faint dotted lines in the
+        configured sun colour at the morning / evening boundaries
+        of daylight, with a small mdi icon docked at the bottom
+        of the chart for each. The zero-length dash + round cap
+        renders as discrete dots, more discreet than the now
+        cursor's continuous dashes.                              */
+    .dash-today-chart-twilight
+    {
+        stroke-width: 1;
+        stroke-dasharray: 0 3;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+        opacity: 0.55;
+        pointer-events: none;
+    }
+    .dash-today-chart-twilight-icon
+    {
+        position: absolute;
+        bottom: 13px;
+        transform: translateX(-50%);
+        --mdc-icon-size: 12px;
+        opacity: 0.85;
         pointer-events: none;
     }
     .dash-today-chart-hover-line
@@ -2334,17 +2371,18 @@ const heliosCardStyles = i$3`
         font-variant-numeric: tabular-nums;
     }
 
-    /*  Hover tooltip floats OUTSIDE the chart frame, anchored to
-        the top edge with a small gap, so it never overlaps the
-        curves it's describing. Dark background in BOTH themes:
-        the lighter "predicted" colour would be unreadable on a
-        light bg, and a consistent dark pill keeps the visual
-        language stable across themes.                             */
+    /*  Hover tooltip floats next to the data point: above when the
+        cursor sits in the lower half of the chart (so it doesn't
+        cover the curves above), below when the cursor sits in the
+        upper half (so it doesn't cover the curves below). Dark
+        background in BOTH themes so the lighter "predicted"
+        colour stays readable.
+        Positioned via inline left + top (anchored to the actual
+        data point's Y); the -above / -below variant transforms
+        the tooltip relative to that anchor point.               */
     .dash-today-chart-tooltip
     {
         position: absolute;
-        bottom: calc(100% + 4px);
-        transform: translateX(-50%);
         background: rgba(0, 0, 0, 0.85);
         color: #ffffff;
         font-size: 10px;
@@ -2361,6 +2399,18 @@ const heliosCardStyles = i$3`
         line-height: 1.2;
         z-index: 2;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
+    }
+    .dash-today-chart-tooltip-above
+    {
+        /*  Anchor at data Y, then shift the whole tooltip above
+            it by its own height plus a small gap.              */
+        transform: translate(-50%, calc(-100% - 8px));
+    }
+    .dash-today-chart-tooltip-below
+    {
+        /*  Anchor at data Y, then drop the tooltip below with a
+            small gap.                                          */
+        transform: translate(-50%, 8px);
     }
     .dash-today-chart-tooltip-time
     {
@@ -37859,6 +37909,10 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
   const yStep = niceStep(yMax);
   const kwhTicks = [];
   for (let v2 = 0; v2 <= yMax + 1e-9; v2 += yStep) kwhTicks.push(v2);
+  const sunriseMs = host._sunScene?.sunrise?.time?.getTime() ?? null;
+  const sunsetMs = host._sunScene?.sunset?.time?.getTime() ?? null;
+  const showSunrise = sunriseMs !== null && sunriseMs >= startMs && sunriseMs < endMs;
+  const showSunset = sunsetMs !== null && sunsetMs >= startMs && sunsetMs < endMs;
   const hoverTs = host._dashChartHoverTs;
   let hoverActualKwh = null;
   let hoverPredictedKwh = null;
@@ -37877,6 +37931,11 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
     });
   }
   const showHover = hoverActualKwh !== null || hoverPredictedKwh !== null;
+  const referenceKwh = hoverActualKwh ?? hoverPredictedKwh;
+  const referenceY = referenceKwh !== null ? yFor(referenceKwh) : H2 / 2;
+  const referenceYPct = referenceY / H2 * 100;
+  const tooltipBelow = referenceY <= H2 / 2;
+  const clipId = `dash-today-chart-reveal-${host._instanceId}`;
   return b`
         <div class="dash-today-chart">
             <svg class="dash-today-chart-svg"
@@ -37885,6 +37944,13 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                  @pointermove="${(e2) => handleDashChartPointerMove(host, e2)}"
                  @pointerleave="${() => handleDashChartPointerLeave(host)}"
             >
+                <defs>
+                    <clipPath id="${clipId}">
+                        <rect class="dash-today-chart-reveal-rect"
+                              x="0" y="0"
+                              width="${W}" height="${H2}"/>
+                    </clipPath>
+                </defs>
                 ${kwhTicks.map((v2) => w`
                     <line class="dash-today-chart-grid"
                           x1="${PAD_L}"     y1="${yFor(v2).toFixed(2)}"
@@ -37899,18 +37965,30 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                               x2="${x2.toFixed(2)}" y2="${H2 - PAD_B}"/>
                     `;
   })}
-                ${predictedPath !== "" ? w`
-                    <path class="dash-today-chart-predicted"
-                          pathLength="100"
-                          d="${predictedPath}"
-                          stroke="${predictedColor}"/>
+                ${showSunrise ? w`
+                    <line class="dash-today-chart-twilight"
+                          x1="${xFor(sunriseMs).toFixed(2)}" x2="${xFor(sunriseMs).toFixed(2)}"
+                          y1="${PAD_T}" y2="${H2 - PAD_B}"
+                          stroke="${sunColor}"/>
                 ` : A}
-                ${actualPath !== "" ? w`
-                    <path class="dash-today-chart-actual"
-                          pathLength="100"
-                          d="${actualPath}"
-                          stroke="${pvColor}"/>
+                ${showSunset ? w`
+                    <line class="dash-today-chart-twilight"
+                          x1="${xFor(sunsetMs).toFixed(2)}" x2="${xFor(sunsetMs).toFixed(2)}"
+                          y1="${PAD_T}" y2="${H2 - PAD_B}"
+                          stroke="${sunColor}"/>
                 ` : A}
+                <g clip-path="url(#${clipId})">
+                    ${predictedPath !== "" ? w`
+                        <path class="dash-today-chart-predicted"
+                              d="${predictedPath}"
+                              stroke="${predictedColor}"/>
+                    ` : A}
+                    ${actualPath !== "" ? w`
+                        <path class="dash-today-chart-actual"
+                              d="${actualPath}"
+                              stroke="${pvColor}"/>
+                    ` : A}
+                </g>
                 ${nowMs >= startMs && nowMs < endMs ? w`
                     <line class="dash-today-chart-now"
                           x1="${xFor(nowMs).toFixed(2)}" x2="${xFor(nowMs).toFixed(2)}"
@@ -37951,9 +38029,21 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                     >${formatLocalisedNumber(host.hass, v2, yStep < 1 ? 1 : 0)}</span>
                 `)}
             </div>
+            ${showSunrise ? b`
+                <ha-icon class="dash-today-chart-twilight-icon"
+                         icon="mdi:weather-sunset-up"
+                         style="left: ${(xFor(sunriseMs) / W * 100).toFixed(2)}%; color: ${sunColor};"
+                ></ha-icon>
+            ` : A}
+            ${showSunset ? b`
+                <ha-icon class="dash-today-chart-twilight-icon"
+                         icon="mdi:weather-sunset-down"
+                         style="left: ${(xFor(sunsetMs) / W * 100).toFixed(2)}%; color: ${sunColor};"
+                ></ha-icon>
+            ` : A}
             ${showHover ? b`
-                <div class="dash-today-chart-tooltip"
-                     style="left: ${hoverFracX.toFixed(2)}%;"
+                <div class="dash-today-chart-tooltip dash-today-chart-tooltip-${tooltipBelow ? "below" : "above"}"
+                     style="left: ${hoverFracX.toFixed(2)}%; top: ${referenceYPct.toFixed(2)}%;"
                 >
                     <span class="dash-today-chart-tooltip-time">${hoverTimeLabel}</span>
                     ${hoverActualKwh !== null ? b`
@@ -39899,7 +39989,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.40"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.41"}`,
       labelStyle,
       versionStyle
     );
@@ -39920,7 +40010,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.40",
+        version: "1.6.0-alpha.41",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -39928,7 +40018,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.40"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.41"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -40403,12 +40493,11 @@ let HeliosCard = class extends i {
                       instead of two competing spinners on opposite
                       sides of the card. Sits at the same 8 px edge
                       margin as the clock and the timeline.  -->
-                ${hasApiKey ? b`
+                ${hasApiKey && (lidarViewEnabled || this._lidarViewMode) ? b`
                     <div class="overlay-top-right">
                         <button
                             type="button"
                             class="lidar-view-btn ${this._lidarViewMode ? "is-on" : ""}"
-                            ?disabled="${!lidarViewEnabled && !this._lidarViewMode}"
                             aria-label="${this._lidarViewMode ? "Exit LiDAR View" : "LiDAR View"}"
                             aria-pressed="${this._lidarViewMode ? "true" : "false"}"
                             @click="${() => toggleLidarView(this)}"

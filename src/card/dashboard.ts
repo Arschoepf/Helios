@@ -27,6 +27,7 @@ import
 } from './pv';
 import { computeBatteryToday, type BatteryHost } from './battery';
 import { type ChartHost } from './charts';
+import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
 
 
@@ -39,6 +40,7 @@ export interface DashboardHost extends ChartHost, BatteryHost
 {
     readonly _engine?:     HeliosEngine;
     readonly _instanceId:  string;
+    readonly _sunScene?:   SunScene | null;
 
     _detailMode:           boolean;
     _homeHover:            boolean;
@@ -620,6 +622,15 @@ export function renderDashTodayChart(
     const kwhTicks: number[] = [];
     for (let v = 0; v <= yMax + 1e-9; v += yStep) kwhTicks.push(v);
 
+    //Sunrise / sunset markers from the engine's projected sun
+    //scene. Only render the ones that fall inside today's window,
+    //the projection may carry "yesterday's sunset" or "tomorrow's
+    //sunrise" when the scrub time is near a midnight boundary.
+    const sunriseMs = host._sunScene?.sunrise?.time?.getTime() ?? null;
+    const sunsetMs  = host._sunScene?.sunset?.time?.getTime()  ?? null;
+    const showSunrise = sunriseMs !== null && sunriseMs >= startMs && sunriseMs < endMs;
+    const showSunset  = sunsetMs  !== null && sunsetMs  >= startMs && sunsetMs  < endMs;
+
     const hoverTs = host._dashChartHoverTs;
     let hoverActualKwh:    number | null = null;
     let hoverPredictedKwh: number | null = null;
@@ -638,6 +649,24 @@ export function renderDashTodayChart(
     }
     const showHover = hoverActualKwh !== null || hoverPredictedKwh !== null;
 
+    //Smart tooltip position: anchor on the actual data point when
+    //available (it's the primary reading), fall back to predicted
+    //otherwise. If the anchor sits in the lower half of the chart
+    //(yFor returns large Y values for low kWh, near the bottom)
+    //float the tooltip above the cursor so it doesn't cover the
+    //curves rising above. If the anchor is in the upper half,
+    //drop the tooltip below the cursor so it doesn't cover the
+    //curves below.
+    const referenceKwh = hoverActualKwh ?? hoverPredictedKwh;
+    const referenceY   = referenceKwh !== null ? yFor(referenceKwh) : H / 2;
+    const referenceYPct = (referenceY / H) * 100;
+    const tooltipBelow = referenceY <= H / 2;
+
+    //Unique clip-path id per instance so two cards on the same
+    //dashboard don't share a single rect (and one card's animation
+    //don't bleed into the other's).
+    const clipId = `dash-today-chart-reveal-${host._instanceId}`;
+
     return html`
         <div class="dash-today-chart">
             <svg class="dash-today-chart-svg"
@@ -646,6 +675,13 @@ export function renderDashTodayChart(
                  @pointermove="${(e: PointerEvent) => handleDashChartPointerMove(host, e)}"
                  @pointerleave="${() => handleDashChartPointerLeave(host)}"
             >
+                <defs>
+                    <clipPath id="${clipId}">
+                        <rect class="dash-today-chart-reveal-rect"
+                              x="0" y="0"
+                              width="${W}" height="${H}"/>
+                    </clipPath>
+                </defs>
                 ${kwhTicks.map(v => svg`
                     <line class="dash-today-chart-grid"
                           x1="${PAD_L}"     y1="${yFor(v).toFixed(2)}"
@@ -660,18 +696,30 @@ export function renderDashTodayChart(
                               x2="${x.toFixed(2)}" y2="${H - PAD_B}"/>
                     `;
                 })}
-                ${predictedPath !== '' ? svg`
-                    <path class="dash-today-chart-predicted"
-                          pathLength="100"
-                          d="${predictedPath}"
-                          stroke="${predictedColor}"/>
+                ${showSunrise ? svg`
+                    <line class="dash-today-chart-twilight"
+                          x1="${xFor(sunriseMs!).toFixed(2)}" x2="${xFor(sunriseMs!).toFixed(2)}"
+                          y1="${PAD_T}" y2="${H - PAD_B}"
+                          stroke="${sunColor}"/>
                 ` : nothing}
-                ${actualPath !== '' ? svg`
-                    <path class="dash-today-chart-actual"
-                          pathLength="100"
-                          d="${actualPath}"
-                          stroke="${pvColor}"/>
+                ${showSunset ? svg`
+                    <line class="dash-today-chart-twilight"
+                          x1="${xFor(sunsetMs!).toFixed(2)}" x2="${xFor(sunsetMs!).toFixed(2)}"
+                          y1="${PAD_T}" y2="${H - PAD_B}"
+                          stroke="${sunColor}"/>
                 ` : nothing}
+                <g clip-path="url(#${clipId})">
+                    ${predictedPath !== '' ? svg`
+                        <path class="dash-today-chart-predicted"
+                              d="${predictedPath}"
+                              stroke="${predictedColor}"/>
+                    ` : nothing}
+                    ${actualPath !== '' ? svg`
+                        <path class="dash-today-chart-actual"
+                              d="${actualPath}"
+                              stroke="${pvColor}"/>
+                    ` : nothing}
+                </g>
                 ${nowMs >= startMs && nowMs < endMs ? svg`
                     <line class="dash-today-chart-now"
                           x1="${xFor(nowMs).toFixed(2)}" x2="${xFor(nowMs).toFixed(2)}"
@@ -712,9 +760,21 @@ export function renderDashTodayChart(
                     >${formatLocalisedNumber(host.hass, v, yStep < 1 ? 1 : 0)}</span>
                 `)}
             </div>
+            ${showSunrise ? html`
+                <ha-icon class="dash-today-chart-twilight-icon"
+                         icon="mdi:weather-sunset-up"
+                         style="left: ${(xFor(sunriseMs!) / W * 100).toFixed(2)}%; color: ${sunColor};"
+                ></ha-icon>
+            ` : nothing}
+            ${showSunset ? html`
+                <ha-icon class="dash-today-chart-twilight-icon"
+                         icon="mdi:weather-sunset-down"
+                         style="left: ${(xFor(sunsetMs!) / W * 100).toFixed(2)}%; color: ${sunColor};"
+                ></ha-icon>
+            ` : nothing}
             ${showHover ? html`
-                <div class="dash-today-chart-tooltip"
-                     style="left: ${hoverFracX.toFixed(2)}%;"
+                <div class="dash-today-chart-tooltip dash-today-chart-tooltip-${tooltipBelow ? 'below' : 'above'}"
+                     style="left: ${hoverFracX.toFixed(2)}%; top: ${referenceYPct.toFixed(2)}%;"
                 >
                     <span class="dash-today-chart-tooltip-time">${hoverTimeLabel}</span>
                     ${hoverActualKwh !== null ? html`

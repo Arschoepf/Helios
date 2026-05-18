@@ -405,6 +405,10 @@ export const heliosCardStyles = css`
             them: the cap heights may differ by a px or two but the
             visual line under the digits matches across stats.    */
         align-items: end;
+        /*  Produced sits on the left, forecast on the right, so the
+            reader's eye can scan "actual / model" as two columns
+            across both the headline and the peak row below.      */
+        justify-content: space-between;
         gap: 18px;
         flex-wrap: wrap;
     }
@@ -438,6 +442,10 @@ export const heliosCardStyles = css`
         display: flex;
         gap: 14px;
         flex-wrap: wrap;
+        /*  Same actual-left / forecast-right alignment as the
+            headline above so the eye scans the two columns
+            uniformly.                                          */
+        justify-content: space-between;
     }
     .dash-today-line
     {
@@ -500,14 +508,14 @@ export const heliosCardStyles = css`
     {
         stroke: rgba(255, 255, 255, 0.12);
     }
-    /*  Both production curves animate as a stroke reveal on the
-        first paint: the path is normalised to pathLength=100 in
-        the SVG, the dasharray covers the full length with one
-        dash, and stroke-dashoffset rolls from 100 (hidden) to 0
-        (full). The animation runs once on element insertion, so
-        the curves only animate when the dashboard opens (which
-        re-creates the path elements) and stay stable on every
-        subsequent re-render (e.g. the 30 s clock tick).         */
+    /*  Both production curves are wrapped in a <g clip-path>; the
+        clip rectangle scales horizontally from 0 to full width
+        over 1 s on the first paint, producing a clean left → right
+        reveal regardless of the underlying path shape (the prior
+        stroke-dashoffset approach mis-rendered curves whose first
+        segments were a flat zero plateau, because the dash pattern
+        spent the early animation time on the invisible bottom
+        flat).                                                     */
     .dash-today-chart-actual,
     .dash-today-chart-predicted
     {
@@ -515,9 +523,6 @@ export const heliosCardStyles = css`
         stroke-linecap: round;
         stroke-linejoin: round;
         vector-effect: non-scaling-stroke;
-        stroke-dasharray: 100;
-        stroke-dashoffset: 100;
-        animation: dash-chart-reveal 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
     .dash-today-chart-actual
     {
@@ -529,9 +534,16 @@ export const heliosCardStyles = css`
         stroke-width: 1.4;
         opacity: 0.95;
     }
+    .dash-today-chart-reveal-rect
+    {
+        transform-box: fill-box;
+        transform-origin: 0% 50%;
+        animation: dash-chart-reveal 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
     @keyframes dash-chart-reveal
     {
-        to { stroke-dashoffset: 0; }
+        from { transform: scaleX(0); }
+        to   { transform: scaleX(1); }
     }
 
     /*  "Now" cursor: vertical dashed line in the configured sun
@@ -547,6 +559,31 @@ export const heliosCardStyles = css`
         stroke-dasharray: 2 2;
         vector-effect: non-scaling-stroke;
         opacity: 0.75;
+        pointer-events: none;
+    }
+
+    /*  Sunrise / sunset markers: very faint dotted lines in the
+        configured sun colour at the morning / evening boundaries
+        of daylight, with a small mdi icon docked at the bottom
+        of the chart for each. The zero-length dash + round cap
+        renders as discrete dots, more discreet than the now
+        cursor's continuous dashes.                              */
+    .dash-today-chart-twilight
+    {
+        stroke-width: 1;
+        stroke-dasharray: 0 3;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+        opacity: 0.55;
+        pointer-events: none;
+    }
+    .dash-today-chart-twilight-icon
+    {
+        position: absolute;
+        bottom: 13px;
+        transform: translateX(-50%);
+        --mdc-icon-size: 12px;
+        opacity: 0.85;
         pointer-events: none;
     }
     .dash-today-chart-hover-line
@@ -612,17 +649,18 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
     }
 
-    /*  Hover tooltip floats OUTSIDE the chart frame, anchored to
-        the top edge with a small gap, so it never overlaps the
-        curves it's describing. Dark background in BOTH themes:
-        the lighter "predicted" colour would be unreadable on a
-        light bg, and a consistent dark pill keeps the visual
-        language stable across themes.                             */
+    /*  Hover tooltip floats next to the data point: above when the
+        cursor sits in the lower half of the chart (so it doesn't
+        cover the curves above), below when the cursor sits in the
+        upper half (so it doesn't cover the curves below). Dark
+        background in BOTH themes so the lighter "predicted"
+        colour stays readable.
+        Positioned via inline left + top (anchored to the actual
+        data point's Y); the -above / -below variant transforms
+        the tooltip relative to that anchor point.               */
     .dash-today-chart-tooltip
     {
         position: absolute;
-        bottom: calc(100% + 4px);
-        transform: translateX(-50%);
         background: rgba(0, 0, 0, 0.85);
         color: #ffffff;
         font-size: 10px;
@@ -639,6 +677,18 @@ export const heliosCardStyles = css`
         line-height: 1.2;
         z-index: 2;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
+    }
+    .dash-today-chart-tooltip-above
+    {
+        /*  Anchor at data Y, then shift the whole tooltip above
+            it by its own height plus a small gap.              */
+        transform: translate(-50%, calc(-100% - 8px));
+    }
+    .dash-today-chart-tooltip-below
+    {
+        /*  Anchor at data Y, then drop the tooltip below with a
+            small gap.                                          */
+        transform: translate(-50%, 8px);
     }
     .dash-today-chart-tooltip-time
     {
