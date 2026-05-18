@@ -233,23 +233,45 @@ need to touch it.
 
 Source layout:
 
-| File | Purpose |
+| Path | Purpose |
 | :--- | :--- |
-| `src/helios-card.ts`        | Top-level Lit card, render(), state, lifecycle |
-| `src/helios-card-css.ts`    | Card styles |
-| `src/helios-config.ts`      | Visual editor + color picker + config helpers |
-| `src/helios-engine.ts`      | MapLibre orchestration, layers, projections |
-| `src/helios-buildings.ts`   | Self-sourced building tile fetch + radius / cluster filter |
-| `src/helios-shadows.ts`     | Ground-projected shadow polygons (flat-opacity raster pipeline) |
-| `src/helios-lidar.ts`       | `LidarSource` interface + provider registry |
-| `src/helios-lidar/helios-lidar-pipeline.ts` | Shared height-raster → shadow-polygon pipeline (flood fill + convex hull) |
-| `src/helios-lidar/helios-lidar-geotiff.ts`  | Float32 GeoTIFF fetch + decode + DSM-DTM math helpers |
-| `src/helios-lidar/providers/` | One file per country (`helios-lidar-fr.ts`, `-uk`, `-es`, `-nl`, `-no`) |
-| `src/helios-sun.ts`         | Solar position + Haurwitz / Kasten-Czeplak math |
-| `src/helios-weather.ts`     | Open-Meteo multi-model fetch + cache |
-| `src/i18n/`                 | 8-locale strict-typed translations (en/fr/de/es/it/nl/pt/no) |
-| `tools/`                    | Python helper scripts for local data preparation workflows |
-| `data/`                     | Local working datasets and derived outputs used by helper tooling |
+| `src/helios-card.ts`              | Top-level Lit element: render orchestrator + HA + Lit lifecycle |
+| `src/helios-engine.ts`            | Top-level engine class: MapLibre orchestration + projections |
+| `src/helios-config.ts`            | `HeliosConfig` schema + `DEFAULT_*` constants (shared) |
+| `src/card/pv.ts`                  | PV live state + history fetch + rate derivation + chip formatter |
+| `src/card/battery.ts`             | Battery SoC + power live + history + today aggregation |
+| `src/card/radiation.ts`           | Optional `solar-radiation-entity` bridge → engine override |
+| `src/card/charts.ts`              | Timeline SVG charts + cursors + day labels |
+| `src/card/dashboard.ts`           | Detail-mode panel (today, tomorrow, battery) |
+| `src/card/overlays.ts`            | Sun arc + cloud disc + home silhouette projections |
+| `src/card/timeline.ts`            | 30 s clock tick + scrub pointer handlers + config readers |
+| `src/card/lidar-view.ts`          | LiDAR View toggle + fade rAF loop |
+| `src/card/init.ts`                | Engine bootstrap + visibility observer + home-coords resolver |
+| `src/card/format.ts`              | cfgHex, formatDate, locale-aware number, hex colour helpers |
+| `src/card/editor.ts`              | `<helios-card-editor>` + `<helios-color-picker>` |
+| `src/engine/sun.ts`               | Solar position + Haurwitz / Kasten-Czeplak / Liu-Jordan math |
+| `src/engine/weather.ts`           | Open-Meteo multi-model fetch + cache + 429 back-off |
+| `src/engine/buildings.ts`         | OpenFreeMap planet tile fetch + radius / cluster filter |
+| `src/engine/shadows.ts`           | Ground-projected shadow polygons + Sutherland-Hodgman clip |
+| `src/engine/shadow-raster.ts`     | Offscreen canvas rasteriser feeding MapLibre's image source |
+| `src/engine/lighting.ts`          | Day-night colour math (night shade, building tint, light angle) |
+| `src/engine/auto-rotate.ts`       | Idle camera orbit rAF loop |
+| `src/engine/detail-mode.ts`       | Detail-mode camera dive (smoothstep zoom + pitch + bearing) |
+| `src/engine/lidar-view-layer.ts`  | MapLibre custom layer painting the LiDAR dot cloud |
+| `src/engine/lidar.ts`             | `LidarSource` interface + provider registry + BYO validator |
+| `src/engine/lidar/pipeline.ts`    | Shared flood-fill + convex-hull pipeline |
+| `src/engine/lidar/geotiff.ts`     | Float32 GeoTIFF fetch + DSM-DTM math helpers |
+| `src/engine/lidar/local-ndsm.ts`  | Generic BYO nDSM provider built from card config |
+| `src/engine/lidar/providers/`     | One file per country: `fr.ts`, `uk.ts`, `es.ts`, `nl.ts`, `no.ts`, `de-nrw.ts` |
+| `src/css/`                        | Card + editor style literals |
+| `src/i18n/`                       | 8-locale strict-typed translations (en/fr/de/es/it/nl/pt/no) |
+| `tools/`                          | Python helper scripts for local data preparation workflows |
+| `data/`                           | Local working datasets and derived outputs used by helper tooling |
+
+Each `card/*` and `engine/*` module exports plain functions; subsystems
+talk to the card / engine through a small structural host interface
+declared in the module itself. See [ARCHITECTURE.md](./ARCHITECTURE.md#code-organisation)
+for the full pattern.
 
 ---
 

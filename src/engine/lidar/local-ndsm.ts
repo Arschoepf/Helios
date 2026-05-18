@@ -26,16 +26,16 @@ import type {
     LidarSource,
     LidarShadowFetchOptions,
     LidarShadowResult
-} from '../helios-lidar';
+} from '../lidar';
 import {
     processHeightRaster,
     emptyResult,
     RASTER_DEFAULTS
-} from './helios-lidar-pipeline';
-import { fetchFloat32GeoTiffWithNoData } from './helios-lidar-geotiff';
+} from './pipeline';
+import { fetchFloat32GeoTiffWithNoData } from './geotiff';
 
 //Fully-validated local nDSM configuration. Produced by
-//validateLocalNdsmConfig() in helios-lidar.ts. The factory below
+//validateLocalNdsmConfig() in ../lidar.ts. The factory below
 //treats every field as already vetted (URL non-empty, bbox finite
 //and ordered, inside EPSG:4326 ranges).
 export interface LocalNdsmConfig

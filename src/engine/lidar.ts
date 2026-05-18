@@ -1,8 +1,8 @@
 //Common interface and registry for country-specific LiDAR providers.
 //
-//Adding a country = drop a new file under ./helios-lidar/ that exports
-//a LidarSource and register it in LIDAR_SOURCES below. No engine-side
-//changes needed.
+//Adding a country = drop a new file under ./lidar/providers/ that
+//exports a LidarSource and register it in LIDAR_SOURCES below. No
+//engine-side changes needed.
 //
 //Pipeline overview: when the user has shadows enabled AND a provider
 //covers the home, the engine calls fetchShadowRegions() with the home
@@ -98,17 +98,17 @@ export interface LidarShadowFetchOptions
     signal?:                  AbortSignal;
 }
 
-import { franceLidarHd }       from './helios-lidar/providers/helios-lidar-fr';
-import { englandLidarComposite } from './helios-lidar/providers/helios-lidar-uk';
-import { spainPnoaLidar }       from './helios-lidar/providers/helios-lidar-es';
-import { netherlandsAhn4 }      from './helios-lidar/providers/helios-lidar-nl';
-import { norwayKartverketNhm }  from './helios-lidar/providers/helios-lidar-no';
-import { nrwLidarNdom }         from './helios-lidar/providers/helios-lidar-de-nrw';
+import { franceLidarHd }       from './lidar/providers/fr';
+import { englandLidarComposite } from './lidar/providers/uk';
+import { spainPnoaLidar }       from './lidar/providers/es';
+import { netherlandsAhn4 }      from './lidar/providers/nl';
+import { norwayKartverketNhm }  from './lidar/providers/no';
+import { nrwLidarNdom }         from './lidar/providers/de-nrw';
 import {
     createLocalNdsmSource,
     type LocalNdsmConfig
-} from './helios-lidar/helios-lidar-local-ndsm';
-import type { HeliosConfig } from './helios-engine';
+} from './lidar/local-ndsm';
+import type { HeliosConfig } from '../helios-config';
 
 //Registered providers, ordered by preference. The first provider
 //whose covers() probe accepts the home position wins. Bbox checks

@@ -22,9 +22,9 @@ import type {
     LidarSource,
     LidarShadowFetchOptions,
     LidarShadowResult
-} from '../../helios-lidar';
-import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../helios-lidar-pipeline';
-import { fetchFloat32GeoTiff, maxRasters } from '../helios-lidar-geotiff';
+} from '../../lidar';
+import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../pipeline';
+import { fetchFloat32GeoTiff, maxRasters } from '../geotiff';
 
 const WCS_URL = 'https://wcs-mds.idee.es/mds';
 const COVERAGE_VEG  = 'mdsn_v025';

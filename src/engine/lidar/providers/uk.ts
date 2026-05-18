@@ -20,9 +20,9 @@ import type {
     LidarSource,
     LidarShadowFetchOptions,
     LidarShadowResult
-} from '../../helios-lidar';
-import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../helios-lidar-pipeline';
-import { fetchFloat32GeoTiff, subtractRasters } from '../helios-lidar-geotiff';
+} from '../../lidar';
+import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../pipeline';
+import { fetchFloat32GeoTiff, subtractRasters } from '../geotiff';
 
 const DSM_URL = 'https://environment.data.gov.uk/spatialdata/lidar-composite-digital-surface-model-last-return-dsm-1m-2022/wms';
 const DTM_URL = 'https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms';

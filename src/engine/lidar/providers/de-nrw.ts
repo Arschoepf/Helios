@@ -21,9 +21,9 @@ import type {
     LidarSource,
     LidarShadowFetchOptions,
     LidarShadowResult
-} from '../../helios-lidar';
-import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../helios-lidar-pipeline';
-import { fetchFloat32GeoTiff } from '../helios-lidar-geotiff';
+} from '../../lidar';
+import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../pipeline';
+import { fetchFloat32GeoTiff } from '../geotiff';
 
 const WCS_URL    = 'https://www.wcs.nrw.de/geobasis/wcs_nw_ndom';
 const COVERAGE   = 'nw_ndom';

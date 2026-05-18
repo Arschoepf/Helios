@@ -25,9 +25,9 @@ import type {
     LidarSource,
     LidarShadowFetchOptions,
     LidarShadowResult
-} from '../../helios-lidar';
-import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../helios-lidar-pipeline';
-import { fetchFloat32GeoTiff, subtractRasters } from '../helios-lidar-geotiff';
+} from '../../lidar';
+import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../pipeline';
+import { fetchFloat32GeoTiff, subtractRasters } from '../geotiff';
 
 const DTM_URL = 'https://hoydedata.no/arcgis/rest/services/DTM/ImageServer/exportImage';
 const DOM_URL = 'https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage';

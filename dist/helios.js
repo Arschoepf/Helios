@@ -569,6 +569,3930 @@ function n2(t2) {
 function r(r2) {
   return n2({ ...r2, state: true, attribute: false });
 }
+const DEFAULT_SUN_COLOR_HEX = "#EF9F27";
+const DEFAULT_CLOUD_COLOR_HEX = "#5A8DC4";
+const DEFAULT_PV_COLOR_HEX = "#27B36B";
+const DEFAULT_BATTERY_COLOR_HEX = "#FF5252";
+const DEFAULT_BUILDING_RADIUS_M = 100;
+const DEFAULT_BUILDING_OPACITY = 0.25;
+const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
+const DEFAULT_BUILDING_COLOR_HEX = "#d2d2d7";
+const DEFAULT_LIDAR_PRECISION = "medium";
+const LIDAR_PRECISION_PITCH_MULT = {
+  low: 4,
+  medium: 2,
+  high: 1
+};
+const DEFAULT_SHADOW_OPACITY = 0.32;
+const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1;
+const DEFAULT_LIDAR_VIEW_POINT_OPACITY = 0.3;
+const DEFAULT_LIDAR_VIEW_WIREFRAME = true;
+const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY = 0.25;
+function defaultLidarViewPointColor(cardTheme) {
+  const isDark = String(cardTheme ?? "light").toLowerCase() === "dark";
+  return isDark ? "#ffffff" : "#000000";
+}
+function defaultLidarViewWireframeColor(cardTheme) {
+  const isDark = String(cardTheme ?? "light").toLowerCase() === "dark";
+  return isDark ? "#d0d0d0" : "#404040";
+}
+const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
+const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
+const DEFAULT_TIMELINE_ENABLED = true;
+const DEFAULT_TIMELINE_WIDTH_PCT = 100;
+const DEFAULT_TIMELINE_CONSUMPTION_ENABLED = true;
+const en = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home",
+  detail: {
+    exitHint: "Tap anywhere to exit",
+    todayLabel: "Today",
+    todayForecast: "forecast",
+    todayPeak: "peak",
+    todayNotStartedYet: "production paused",
+    tomorrowLabel: "Tomorrow",
+    tomorrowPeak: "peak expected around",
+    batteryLabel: "Battery",
+    batteryCharged: "charged",
+    batteryDischarged: "discharged"
+  },
+  editor: {
+    locationSection: "Location",
+    homeLatitude: "Home latitude",
+    homeLongitude: "Home longitude",
+    locationHint: "Override the home address used as the card's center. Leave both fields empty to use Home Assistant's configured home. The override is only applied when BOTH fields are set to valid coordinates.",
+    mapSection: "Map",
+    mapStyle: "Map style",
+    mapStyleHint: "Two basemaps: Streets (sober, urban, with full labels) or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). The dark variant of the chosen style is used automatically when the card theme is set to dark.",
+    mapStyleStreet: "Streets",
+    cardTheme: "Card theme",
+    cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) and the 3D map basemap between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards.",
+    cardThemeLight: "Light",
+    cardThemeDark: "Dark",
+    showLabels: "Show labels",
+    showLabelsHint: "Toggles street names, building numbers, points of interest and place names on the basemap.",
+    labelsOn: "Shown",
+    labelsOff: "Hidden",
+    autoRotate: "Camera auto-rotation",
+    autoRotateHint: "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). A single-finger drag pauses it instantly and it resumes once you let go.",
+    autoRotateOn: "On",
+    autoRotateOff: "Off",
+    dateFormat: "Date format (default: mm-dd)",
+    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Examples:",
+    timeFormat: "Time format",
+    timeFormat12: "12 h",
+    timeFormat24: "24 h",
+    uiSection: "UI",
+    uiColorsHint: "One colour per metric, reused everywhere it appears. Sun: the arc, the sun disc and the upper area of the timeline. Cloud: the on-ground disc and the lower area of the timeline.",
+    sunColor: "Sun color",
+    cloudColor: "Cloud color",
+    pvSection: "Solar production",
+    pvHint: "Optional. When set, a chip appears near the home with the instant production (computed over the last minute) and a dedicated graph is added above the timeline. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).",
+    pvEntity: "Production entity",
+    pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
+    pvPeakPower: "Peak power (kWp)",
+    pvPeakPowerHelp: "Installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty to hide the forecast; observed production and the daily peak still render.",
+    pvArraysSection: "Panel orientation",
+    pvArraysHelp: "One entry per group of co-oriented panels. Leave a single entry with tilt 0 for a flat install. Add more entries when panels are split across multiple orientations (e.g. one row facing east, one facing west). The card forecasts each entry separately and weights the result by its share of the total kWp.",
+    pvArrayTitle: "Row {n}",
+    pvArrayName: "Name",
+    pvArrayNameHelp: 'Optional. A label for this row shown in the editor header (e.g. "South roof", "East garage"). Leave empty to fall back to the auto-numbered title.',
+    pvArrayTilt: "Tilt (°)",
+    pvArrayAzimuth: "Azimuth (°)",
+    pvArrayShare: "Share (%)",
+    pvArrayAdd: "+ Add row",
+    pvArrayRemove: "Remove",
+    pvArrayNormHint: "Shares don't add up to 100%, the forecast normalises them automatically.",
+    pvArrayTiltHelp: "Tilt of this row from horizontal, 0 to 90: 0 for a flat install, 30 to 45 for a typical pitched roof, 90 for a fully vertical setup such as a balcony. Combined with the azimuth, this drives the Liu-Jordan transposition that projects the predicted irradiance onto the panel plane.",
+    pvArrayAzimuthHelp: "Compass bearing this row faces, clockwise from north, 0 to 360: 0 = north, 90 = east, 180 = south, 270 = west.",
+    pvArrayShareHelp: "Relative weight of this row within the total kWp. Auto-normalised at compute time, so 50/50, 60/60 and 1/1 all produce the same forecast. Leave blank when there's only one row (it gets 100% by default).",
+    pvColor: "Production color",
+    batterySection: "Home battery",
+    batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional. The chip on its side appears as soon as the entity is set.",
+    batterySocEntity: "State of charge entity",
+    batterySocEntityHelp: 'Pick a battery State of Charge sensor (%, usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
+    batteryPowerEntity: "Power entity",
+    batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself (positive is interpreted as charging) and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
+    batteryPowerInvert: "Battery power sign",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Inverted",
+    batteryPowerInvertHelp: "Default (Standard): the battery entity already reports charging as positive and discharging as negative. Pick Inverted when your entity does the opposite (some GivEnergy / GivTCP setups), Helios will flip the value once at ingest so the chip readout, the leader arrow and the daily charged / discharged totals keep their meaning.",
+    batteryColor: "Battery color",
+    weatherSection: "Weather",
+    weatherHint: "Optional. Wire local weather entities to feed Helios with measurements taken at your home instead of the Open-Meteo model interpolated to your grid cell. Each entity is independently optional and only used when it carries a fresh value; missing or stale samples fall back to the model transparently.",
+    solarRadiationEntity: "Solar radiation entity",
+    solarRadiationEntityHelp: "Pick a sensor reporting global shortwave irradiance in W/m² (typical Ecowitt / Davis / personal weather station). When set, its current state and recorder history replace Open-Meteo for the live + past irradiance everywhere it appears (sun chip number, PV chart Y axis, sun arc colouring). Forecast hours always use Open-Meteo since a sensor only knows the present.",
+    buildingsSection: "Building",
+    buildingsHint: 'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
+    displayRadius: "Display radius",
+    displayRadiusHint: "Defines the visible area around the home. Anything past this radius is hidden: basemap, neighbouring buildings, shadows. Also drives the LiDAR fetch extent and the projected-shadow clip.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Show timeline",
+    timelineEnabledOn: "Show",
+    timelineEnabledOff: "Hide",
+    timelineEnabledHint: "Hides the entire bottom timeline (chart, day labels, scrub cursors). Useful when the card is embedded in a wider dashboard panel where another widget already shows the daily trend.",
+    timelineWidth: "Timeline width",
+    timelineWidthHint: "Shrinks the timeline horizontally while keeping it centred on the card. At 100 % it hugs the card edges; below that the bar pulls in proportionally on both sides.",
+    timelineConsumption: "Show daily consumption / forecast",
+    timelineConsumptionOn: "Show",
+    timelineConsumptionOff: "Hide",
+    timelineConsumptionHint: "Toggles the per-day kWh chip rendered next to each date on the timeline (observed for past days, forecast for today and ahead). Turn off if you only care about the live scene and want a cleaner chart.",
+    buildingClusterRadius: "Home cluster radius",
+    buildingOpacity: "Surrounding opacity",
+    buildingColor: "Building color",
+    pixelRatio: "Pixel ratio",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (default) uses your screen's native devicePixelRatio (capped at 2 on desktop, 1.25 on mobile) for crisp rendering. 1x forces the value to 1.0 for the cheapest possible per-frame fragment workload, useful on low-end devices or for long sessions where battery life / heat matters more than crispness.",
+    mapStyleMinimal: "Minimal",
+    shadowsSection: "Shading",
+    shadowsEnabled: "Show shadows",
+    shadowsEnabledOn: "Shown",
+    shadowsEnabledOff: "Hidden",
+    shadowsEnabledHint: "Master toggle for cast ground shadows. When hidden, no shadows are projected at all. When shown, the source picks itself: a LiDAR provider when one covers your location (buildings + vegetation), OpenFreeMap building footprints otherwise (buildings only).",
+    lidarPrecision: "LiDAR precision",
+    lidarPrecisionLow: "Low",
+    lidarPrecisionMedium: "Medium",
+    lidarPrecisionHigh: "High",
+    lidarPrecisionHint: "If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat OpenFreeMap building footprints and this setting has no effect. Higher precision pulls more cells from the source: the LiDAR view shows more points and weighs more on the GPU. The actual density depends on what the provider publishes for your area.",
+    shadowOpacity: "Shadow opacity",
+    shadowOpacityHint: "Opacity of the cast ground shadows.",
+    lidarViewSection: "LiDAR View",
+    lidarViewHint: "Click the LiDAR button in the top-right of the card to switch into a point-cloud view of your surroundings: every loaded LiDAR cell (ground, vegetation and buildings) is painted over the basemap. The button stays disabled when no provider covers the home. The view reuses the data already fetched at the current precision, no extra calls are made.",
+    lidarViewPointSize: "Point size (px)",
+    lidarViewPointColor: "Point color",
+    lidarViewPointOpacity: "Point opacity",
+    lidarViewWireframe: "Wireframe overlay",
+    lidarViewWireframeOn: "On",
+    lidarViewWireframeOff: "Off",
+    lidarViewWireframeHint: "Connects each finite LiDAR cell to its right and bottom neighbours with line segments, producing a mesh on top of the dot cloud. Dial the point size to 0 if you only want the lines. Heavy rasters at high precision are still drawn in a single GPU draw call, but the line count grows with the cell count, so older devices may slow down on big radii.",
+    lidarViewWireframeColor: "Wireframe color",
+    lidarViewWireframeOpacity: "Wireframe opacity",
+    localLidarSection: "Advanced — Local LiDAR (BYO)",
+    localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.",
+    localLidarToolsHint: "Need to prepare a raster from scratch? The Helios repo ships Python helper tools under `tools/lidar/`, see the README there for the full pipeline (system GDAL install, `uv` setup, inspect / convert / synthetic test commands).",
+    localLidarEnabled: "Use local data",
+    localLidarUrl: "GeoTIFF URL",
+    localLidarMinLat: "Min latitude",
+    localLidarMaxLat: "Max latitude",
+    localLidarMinLon: "Min longitude",
+    localLidarMaxLon: "Max longitude"
+  }
+};
+const fr = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel",
+  detail: {
+    exitHint: "Cliquez n'importe où pour quitter",
+    todayLabel: "Aujourd'hui",
+    todayForecast: "prévu",
+    todayPeak: "pic",
+    todayNotStartedYet: "production en pause",
+    tomorrowLabel: "Demain",
+    tomorrowPeak: "pic prévu vers",
+    batteryLabel: "Batterie",
+    batteryCharged: "chargé",
+    batteryDischarged: "déchargé"
+  },
+  editor: {
+    locationSection: "Localisation",
+    homeLatitude: "Latitude du domicile",
+    homeLongitude: "Longitude du domicile",
+    locationHint: "Remplace l'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides.",
+    mapSection: "Carte",
+    mapStyle: "Style de la carte",
+    mapStyleHint: "Deux fonds de carte : Rues (sobre, urbain, libellés complets) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
+    mapStyleStreet: "Rues",
+    cardTheme: "Thème de la carte",
+    cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) ainsi que le fond de carte 3D entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre.",
+    cardThemeLight: "Clair",
+    cardThemeDark: "Sombre",
+    showLabels: "Afficher les libellés",
+    showLabelsHint: "Affiche ou masque les noms de rues, numéros de bâtiments, points d'intérêt et noms de quartiers du fond de carte.",
+    labelsOn: "Affichés",
+    labelsOff: "Masqués",
+    autoRotate: "Rotation auto de la caméra",
+    autoRotateHint: "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que tu lâches.",
+    autoRotateOn: "Activée",
+    autoRotateOff: "Désactivée",
+    dateFormat: "Format de date (par défaut : mm-dd)",
+    dateFormatHelp: "Tokens : yyyy, yy, mm, dd. Exemples :",
+    timeFormat: "Format de l'heure",
+    timeFormat12: "12 h",
+    timeFormat24: "24 h",
+    uiSection: "UI",
+    uiColorsHint: "Une couleur par grandeur, réutilisée partout où elle apparaît. Soleil : l'arc, le disque solaire et la zone haute de la chronologie. Nuages : le disque au sol et la zone basse de la chronologie.",
+    sunColor: "Couleur du soleil",
+    cloudColor: "Couleur des nuages",
+    pvSection: "Production photovoltaïque",
+    pvHint: "Optionnel. Si renseigné, une pastille apparaît près de la maison avec la production instantanée (calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
+    pvEntity: "Entité de production",
+    pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
+    pvPeakPower: "Puissance crête (kWp)",
+    pvPeakPowerHelp: "Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.",
+    pvArraysSection: "Orientation des panneaux",
+    pvArraysHelp: "Une entrée par rangée de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat. Ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
+    pvArrayTitle: "Rangée {n}",
+    pvArrayName: "Nom",
+    pvArrayNameHelp: "Optionnel. Un libellé pour cette rangée affiché dans l'en-tête de l'éditeur (par exemple « Toit sud », « Garage est »). Laisse vide pour retomber sur le titre numéroté automatiquement.",
+    pvArrayTilt: "Inclinaison (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Part (%)",
+    pvArrayAdd: "+ Ajouter une rangée",
+    pvArrayRemove: "Supprimer",
+    pvArrayNormHint: "Les parts ne totalisent pas 100 %, la prévision les normalise automatiquement.",
+    pvArrayTiltHelp: "Inclinaison de cette rangée par rapport à l'horizontale, de 0 à 90 : 0 pour une installation à plat, 30 à 45 pour un toit incliné classique, 90 pour une installation verticale (par exemple un balcon). Combinée à l'azimut, elle pilote la transposition Liu-Jordan qui projette l'irradiance prévue sur le plan des panneaux.",
+    pvArrayAzimuthHelp: "Orientation à la boussole vers laquelle cette rangée est tournée, sens horaire depuis le nord, de 0 à 360 : 0 = nord, 90 = est, 180 = sud, 270 = ouest.",
+    pvArrayShareHelp: "Poids relatif de cette rangée dans le total des kWp. Normalisé automatiquement au calcul : 50/50, 60/60 et 1/1 donnent tous le même résultat. Laisse vide quand il n'y a qu'une seule rangée (elle prend 100 % par défaut).",
+    pvColor: "Couleur de production",
+    batterySection: "Batterie domestique",
+    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles. La pastille correspondante s'affiche dès que l'entité est renseignée.",
+    batterySocEntity: "Entité d'état de charge",
+    batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (%, typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
+    batteryPowerEntity: "Entité de puissance",
+    batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même (positif = en charge) et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
+    batteryPowerInvert: "Signe de la puissance batterie",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Inversé",
+    batteryPowerInvertHelp: "Par défaut (Standard) : ton capteur batterie rapporte déjà la charge en positif et la décharge en négatif. Passe sur Inversé si ton capteur fait l'inverse (certaines installations GivEnergy / GivTCP), Helios inverse alors la valeur une fois à la lecture pour que la pastille, la flèche du leader et les totaux journaliers charge / décharge gardent leur sens.",
+    batteryColor: "Couleur batterie",
+    weatherSection: "Météo",
+    weatherHint: "Optionnel. Branche des entités météo locales pour qu'Helios utilise des mesures prises chez toi plutôt que le modèle Open-Meteo interpolé à ta cellule de grille. Chaque entité est indépendamment optionnelle et n'est utilisée que lorsqu'elle remonte une valeur fraîche ; les échantillons manquants ou périmés retombent sur le modèle de manière transparente.",
+    solarRadiationEntity: "Entité d'irradiance solaire",
+    solarRadiationEntityHelp: "Choisis un capteur qui remonte l'irradiance solaire globale en W/m² (typiquement une station météo Ecowitt / Davis / perso). Quand il est défini, son état actuel et son historique recorder remplacent Open-Meteo pour les valeurs live + passées partout où elles apparaissent (nombre sur la pastille soleil, axe Y du graphique PV, coloration de l'arc solaire). Les heures de prévision continuent d'utiliser Open-Meteo, un capteur ne connaît que le présent.",
+    buildingsSection: "Bâtiment",
+    buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
+    displayRadius: "Rayon d'affichage",
+    displayRadiusHint: "Définit la zone visible autour de la maison. Tout ce qui se trouve au-delà de ce rayon est masqué : fond de carte, bâtiments voisins, ombres. Pilote également l'étendue du fetch LiDAR et le clip des ombres projetées.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Afficher la timeline",
+    timelineEnabledOn: "Afficher",
+    timelineEnabledOff: "Masquer",
+    timelineEnabledHint: "Masque toute la barre temporelle en bas (graphique, labels des jours, curseurs). Utile quand la card est intégrée dans un dashboard plus large où un autre widget montre déjà la tendance journalière.",
+    timelineWidth: "Largeur de la timeline",
+    timelineWidthHint: "Réduit la timeline horizontalement tout en la gardant centrée. À 100 %, elle colle aux bords de la card ; en dessous, la barre se rétracte proportionnellement des deux côtés.",
+    timelineConsumption: "Afficher la consommation / prédiction journalière",
+    timelineConsumptionOn: "Afficher",
+    timelineConsumptionOff: "Masquer",
+    timelineConsumptionHint: "Active la puce kWh affichée à côté de chaque date sur la timeline (observée pour les jours passés, prédiction pour aujourd'hui et la suite). Désactive si tu te concentres sur la scène live et veux un graphique plus propre.",
+    buildingClusterRadius: "Rayon de regroupement maison",
+    buildingOpacity: "Opacité des bâtiments voisins",
+    buildingColor: "Couleur des bâtiments",
+    pixelRatio: "Pixel ratio",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (par défaut) utilise la densité de pixels native de ton écran (plafonnée à 2 sur desktop, 1.25 sur mobile) pour un rendu net. 1x force la valeur à 1.0, le rendu est moins net mais le coût par frame est divisé d'autant : à privilégier sur appareils bas/moyen de gamme ou pour les longues sessions où l'autonomie / la chaleur compte plus que la finesse.",
+    mapStyleMinimal: "Minimal",
+    shadowsSection: "Ombrage",
+    shadowsEnabled: "Afficher les ombres",
+    shadowsEnabledOn: "Affichées",
+    shadowsEnabledOff: "Masquées",
+    shadowsEnabledHint: "Interrupteur principal des ombres projetées au sol. Si elles sont masquées, aucune ombre n'est calculée. Si elles sont affichées, la source est choisie automatiquement : provider LiDAR quand ta zone est couverte (bâtiments et végétation), empreintes plates des bâtiments OpenFreeMap sinon (bâtiments uniquement).",
+    lidarPrecision: "Précision LiDAR",
+    lidarPrecisionLow: "Basse",
+    lidarPrecisionMedium: "Moyenne",
+    lidarPrecisionHigh: "Haute",
+    lidarPrecisionHint: "Si ta zone est couverte par un provider LiDAR intégré à Helios, tu bénéficies d'ombres plus réalistes (bâtiments ET végétation). Des décalages peuvent apparaître entre les bâtiments affichés et leurs ombres : les données LiDAR sont enregistrées à un instant donné et ne reflètent pas toujours l'état actuel du terrain. Hors zone LiDAR, les ombres retombent sur les empreintes plates des bâtiments OpenFreeMap et cette option n'a aucun effet. Plus la précision est haute, plus on tire de cellules depuis la source : la vue LiDAR affiche davantage de points et pèse plus sur le GPU. La densité réelle dépend de ce que le provider expose pour ta zone.",
+    shadowOpacity: "Opacité des ombres",
+    shadowOpacityHint: "Opacité des ombres projetées au sol.",
+    lidarViewSection: "Vue LiDAR",
+    lidarViewHint: "Clique sur le bouton LiDAR en haut à droite de la carte pour basculer dans une vue en nuage de points de tes environs : chaque cellule LiDAR chargée (sol, végétation et bâtiments) est peinte par-dessus la carte de fond. Le bouton reste désactivé quand aucun provider ne couvre la maison. La vue réutilise les données déjà récupérées à la précision actuelle, aucun appel supplémentaire n'est fait.",
+    lidarViewPointSize: "Taille des points (px)",
+    lidarViewPointColor: "Couleur des points",
+    lidarViewPointOpacity: "Opacité des points",
+    lidarViewWireframe: "Fil de fer",
+    lidarViewWireframeOn: "Activé",
+    lidarViewWireframeOff: "Désactivé",
+    lidarViewWireframeHint: "Relie chaque cellule LiDAR finie à ses voisines droite et bas avec des segments, ce qui donne un maillage par-dessus le nuage de points. Met la taille des points à 0 si tu ne veux que les lignes. Les rasters lourds en haute précision tiennent toujours dans un seul draw call GPU, mais le nombre de lignes grandit avec le nombre de cellules, donc les vieux appareils peuvent ralentir sur les grands rayons.",
+    lidarViewWireframeColor: "Couleur du fil de fer",
+    lidarViewWireframeOpacity: "Opacité du fil de fer",
+    localLidarSection: "Avancé — LiDAR local (BYO)",
+    localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la zone définie, cette source remplace tout fournisseur national.",
+    localLidarToolsHint: "Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d'inspection / conversion / test synthétique).",
+    localLidarEnabled: "Utiliser les données locales",
+    localLidarUrl: "URL du GeoTIFF",
+    localLidarMinLat: "Latitude min",
+    localLidarMaxLat: "Latitude max",
+    localLidarMinLon: "Longitude min",
+    localLidarMaxLon: "Longitude max"
+  }
+};
+const de = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Sonne, Wolken, PV-Erzeugung, Batterie und LiDAR-Schatten am Haus, in 3D-Echtzeit",
+  detail: {
+    exitHint: "Tippe irgendwo, um zu schließen",
+    todayLabel: "Heute",
+    todayForecast: "Prognose",
+    todayPeak: "Spitze",
+    todayNotStartedYet: "Erzeugung pausiert",
+    tomorrowLabel: "Morgen",
+    tomorrowPeak: "Spitze erwartet gegen",
+    batteryLabel: "Batterie",
+    batteryCharged: "geladen",
+    batteryDischarged: "entladen"
+  },
+  editor: {
+    locationSection: "Standort",
+    homeLatitude: "Breitengrad des Zuhauses",
+    homeLongitude: "Längengrad des Zuhauses",
+    locationHint: "Überschreibt die Heimadresse, die als Mittelpunkt der Karte verwendet wird. Beide Felder leer lassen, um die in Home Assistant konfigurierte Adresse zu nutzen. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten.",
+    mapSection: "Karte",
+    mapStyle: "Kartenstil",
+    mapStyleHint: "Zwei Basiskarten: Straßen (nüchtern, urban, mit vollständigen Beschriftungen) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
+    mapStyleStreet: "Straßen",
+    cardTheme: "Karten-Thema",
+    cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) sowie die 3D-Grundkarte zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt.",
+    cardThemeLight: "Hell",
+    cardThemeDark: "Dunkel",
+    showLabels: "Beschriftungen anzeigen",
+    showLabelsHint: "Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.",
+    labelsOn: "Sichtbar",
+    labelsOff: "Ausgeblendet",
+    autoRotate: "Automatische Kamerarotation",
+    autoRotateHint: "Nach ein paar Sekunden Inaktivität kreist die Kamera langsam um das Haus (ca. 1,5°/s, gegenläufig zur scheinbaren Sonnenbahn). Eine Ein-Finger-Geste pausiert sie sofort; sie setzt fort, sobald du loslässt.",
+    autoRotateOn: "Ein",
+    autoRotateOff: "Aus",
+    dateFormat: "Datumsformat (Standard: mm-dd)",
+    dateFormatHelp: "Platzhalter: yyyy, yy, mm, dd. Beispiele:",
+    timeFormat: "Zeitformat",
+    timeFormat12: "12 h",
+    timeFormat24: "24 h",
+    uiSection: "UI",
+    uiColorsHint: "Eine Farbe pro Messgröße, überall einheitlich verwendet. Sonne: der Bogen, die Sonnenscheibe und der obere Bereich der Zeitachse. Wolken: die Bodenscheibe und der untere Bereich der Zeitachse.",
+    sunColor: "Sonnenfarbe",
+    cloudColor: "Wolkenfarbe",
+    pvSection: "Solarproduktion",
+    pvHint: "Optional. Wenn gesetzt, erscheint nahe dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
+    pvEntity: "Produktions-Entität",
+    pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
+    pvPeakPower: "Spitzenleistung (kWp)",
+    pvPeakPowerHelp: "Installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, um die Prognose auszublenden; gemessene Produktion und Tagesspitze werden weiter angezeigt.",
+    pvArraysSection: "Modulausrichtung",
+    pvArraysHelp: "Ein Eintrag pro Gruppe gleich ausgerichteter Module. Lasse einen einzigen Eintrag mit Neigung 0 für eine flache Installation. Füge weitere Einträge hinzu, wenn deine Module auf mehrere Ausrichtungen verteilt sind (zum Beispiel eine Reihe nach Osten, eine nach Westen). Die Prognose wird pro Eintrag berechnet und nach dem Anteil an der Gesamt-kWp gewichtet.",
+    pvArrayTitle: "Reihe {n}",
+    pvArrayName: "Name",
+    pvArrayNameHelp: 'Optional. Ein Label für diese Reihe, das im Editor-Header angezeigt wird (z. B. „Süddach", „Garage Ost"). Leer lassen, um auf den automatisch nummerierten Titel zurückzufallen.',
+    pvArrayTilt: "Neigung (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Anteil (%)",
+    pvArrayAdd: "+ Reihe hinzufügen",
+    pvArrayRemove: "Entfernen",
+    pvArrayNormHint: "Die Anteile ergeben nicht 100 %, die Prognose normalisiert sie automatisch.",
+    pvArrayTiltHelp: "Neigung dieser Reihe gegenüber der Horizontalen, 0 bis 90: 0 für eine flache Installation, 30 bis 45 für ein typisches Steildach, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Zusammen mit dem Azimut treibt die Neigung die Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert.",
+    pvArrayAzimuthHelp: "Kompassrichtung, in die diese Reihe zeigt, im Uhrzeigersinn ab Norden, 0 bis 360: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen.",
+    pvArrayShareHelp: "Relativer Anteil dieser Reihe an der Gesamt-kWp. Wird zum Berechnungszeitpunkt automatisch normalisiert, deshalb liefern 50/50, 60/60 und 1/1 dieselbe Prognose. Leer lassen, wenn nur eine Reihe existiert (sie bekommt standardmäßig 100 %).",
+    pvColor: "Produktionsfarbe",
+    batterySection: "Hausbatterie",
+    batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional. Der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
+    batterySocEntity: "Ladezustand-Entität",
+    batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (%, typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
+    batteryPowerEntity: "Leistungs-Entität",
+    batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst (positiv = Laden) und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
+    batteryPowerInvert: "Vorzeichen der Batterieleistung",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Invertiert",
+    batteryPowerInvertHelp: "Standardmäßig meldet die Batterie-Entität das Laden als positiv und das Entladen als negativ. Wähle Invertiert, wenn deine Entität es umgekehrt macht (einige GivEnergy- / GivTCP-Setups). Helios dreht den Wert dann einmal beim Einlesen um, damit Chip-Anzeige, Flusspfeil und tägliche Lade- / Entladesummen ihre Bedeutung behalten.",
+    batteryColor: "Batteriefarbe",
+    weatherSection: "Wetter",
+    weatherHint: "Optional. Verbinde lokale Wetter-Entitäten, damit Helios direkt bei dir gemessene Werte verwendet, statt das Open-Meteo-Modell, das auf deine Gitterzelle interpoliert wird. Jede Entität ist unabhängig optional und wird nur verwendet, wenn sie einen frischen Wert liefert; fehlende oder veraltete Messwerte fallen transparent auf das Modell zurück.",
+    solarRadiationEntity: "Solarstrahlungs-Entität",
+    solarRadiationEntityHelp: "Wähle einen Sensor, der die globale Kurzwellenstrahlung in W/m² meldet (typisch Ecowitt / Davis / private Wetterstation). Wenn gesetzt, ersetzt sein aktueller Zustand und sein Recorder-Verlauf Open-Meteo bei allen Live- und Vergangenheitswerten der Bestrahlungsstärke (Zahl an der Sonnenpastille, Y-Achse des PV-Charts, Färbung des Sonnenbogens). Vorhersagestunden verwenden weiterhin Open-Meteo, da ein Sensor nur die Gegenwart kennt.",
+    buildingsSection: "Gebäude",
+    buildingsHint: 'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
+    displayRadius: "Anzeigeradius",
+    displayRadiusHint: "Bestimmt den um das Zuhause sichtbaren Bereich. Alles jenseits dieses Radius bleibt verborgen: Grundkarte, Nachbargebäude, Schatten. Steuert zugleich den LiDAR-Fetch-Bereich und das Clipping der projizierten Schatten.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Timeline anzeigen",
+    timelineEnabledOn: "Anzeigen",
+    timelineEnabledOff: "Verbergen",
+    timelineEnabledHint: "Versteckt die gesamte untere Zeitleiste (Diagramm, Tageslabels, Scrub-Cursor). Hilfreich, wenn die Karte in ein breiteres Dashboard eingebettet ist, das den Tagesverlauf schon woanders zeigt.",
+    timelineWidth: "Breite der Timeline",
+    timelineWidthHint: "Schrumpft die Timeline horizontal und hält sie dabei auf der Karte zentriert. Bei 100 % schmiegt sie sich an die Kartenränder; darunter zieht die Leiste sich beidseitig proportional zurück.",
+    timelineConsumption: "Tägliche Verbrauch / Prognose anzeigen",
+    timelineConsumptionOn: "Anzeigen",
+    timelineConsumptionOff: "Verbergen",
+    timelineConsumptionHint: "Schaltet den kWh-Chip neben jedem Datum auf der Timeline (gemessen für vergangene Tage, Prognose für heute und später). Aus, wenn dir nur die Live-Szene zählt und das Diagramm aufgeräumter sein soll.",
+    buildingClusterRadius: "Cluster-Radius Zuhause",
+    buildingOpacity: "Deckkraft Nachbargebäude",
+    buildingColor: "Gebäudefarbe",
+    pixelRatio: "Pixel-Ratio",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (Standard) verwendet die native devicePixelRatio des Bildschirms (gedeckelt auf 2 am Desktop, 1.25 mobil) für eine scharfe Darstellung. 1x erzwingt 1.0, weniger scharf, dafür minimale Fragment-Last pro Frame, sinnvoll auf leistungsschwachen Geräten oder bei langen Sitzungen, wenn Akkulaufzeit / Wärme wichtiger sind als Schärfe.",
+    mapStyleMinimal: "Minimal",
+    shadowsSection: "Schattierung",
+    shadowsEnabled: "Schatten anzeigen",
+    shadowsEnabledOn: "Sichtbar",
+    shadowsEnabledOff: "Ausgeblendet",
+    shadowsEnabledHint: "Hauptschalter für die am Boden geworfenen Schatten. Ausgeblendet werden gar keine Schatten berechnet. Sichtbar wählt die Quelle automatisch: ein LiDAR-Provider, wenn er das Gebiet abdeckt (Gebäude und Vegetation), sonst die flachen OpenFreeMap-Gebäudegrundrisse (nur Gebäude).",
+    lidarPrecision: "LiDAR-Präzision",
+    lidarPrecisionLow: "Niedrig",
+    lidarPrecisionMedium: "Mittel",
+    lidarPrecisionHigh: "Hoch",
+    lidarPrecisionHint: "Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen OpenFreeMap-Gebäudegrundrisse, und diese Option bleibt wirkungslos. Bei höherer Präzision werden mehr Zellen aus der Quelle geladen: Die LiDAR-Ansicht zeigt mehr Punkte und belastet die GPU stärker. Die tatsächliche Dichte hängt davon ab, was der Anbieter für dein Gebiet bereitstellt.",
+    shadowOpacity: "Schatten-Deckkraft",
+    shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
+    lidarViewSection: "LiDAR-Ansicht",
+    lidarViewHint: "Klicke oben rechts auf die Karte auf die Schaltfläche LiDAR, um in eine Punktwolken-Ansicht deiner Umgebung zu wechseln: Jede geladene LiDAR-Zelle (Boden, Vegetation und Gebäude) wird über der Basiskarte gemalt. Die Schaltfläche bleibt deaktiviert, wenn kein Anbieter das Zuhause abdeckt. Die Ansicht verwendet die bereits in der aktuellen Präzision abgerufenen Daten wieder, es werden keine zusätzlichen Aufrufe gemacht.",
+    lidarViewPointSize: "Punktgröße (px)",
+    lidarViewPointColor: "Punktfarbe",
+    lidarViewPointOpacity: "Punktdeckkraft",
+    lidarViewWireframe: "Drahtgitter",
+    lidarViewWireframeOn: "An",
+    lidarViewWireframeOff: "Aus",
+    lidarViewWireframeHint: "Verbindet jede gültige LiDAR-Zelle mit ihren rechten und unteren Nachbarn durch Linien, das ergibt ein Drahtgitter über der Punktwolke. Setze die Punktgröße auf 0, wenn du nur die Linien sehen willst. Auch schwere Raster bei hoher Präzision laufen in einem einzigen GPU-Draw, aber die Linienzahl wächst mit der Zellzahl, ältere Geräte können bei großen Radien einbrechen.",
+    lidarViewWireframeColor: "Drahtgitter-Farbe",
+    lidarViewWireframeOpacity: "Drahtgitter-Deckkraft",
+    localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
+    localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb des definierten Bereichs ersetzt diese Quelle jeden nationalen Anbieter.",
+    localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).",
+    localLidarEnabled: "Lokale Daten verwenden",
+    localLidarUrl: "GeoTIFF-URL",
+    localLidarMinLat: "Min. Breitengrad",
+    localLidarMaxLat: "Max. Breitengrad",
+    localLidarMinLon: "Min. Längengrad",
+    localLidarMaxLon: "Max. Längengrad"
+  }
+};
+const es = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Sol, nubes, producción FV, batería y sombras LiDAR sobre tu casa, en 3D y tiempo real",
+  detail: {
+    exitHint: "Toca en cualquier lugar para salir",
+    todayLabel: "Hoy",
+    todayForecast: "previsto",
+    todayPeak: "pico",
+    todayNotStartedYet: "producción en pausa",
+    tomorrowLabel: "Mañana",
+    tomorrowPeak: "pico previsto sobre las",
+    batteryLabel: "Batería",
+    batteryCharged: "cargado",
+    batteryDischarged: "descargado"
+  },
+  editor: {
+    locationSection: "Ubicación",
+    homeLatitude: "Latitud del hogar",
+    homeLongitude: "Longitud del hogar",
+    locationHint: "Anula la dirección del hogar usada como centro de la tarjeta. Deja ambos campos vacíos para usar el hogar configurado en Home Assistant. La anulación se aplica solo cuando AMBOS campos contienen coordenadas válidas.",
+    mapSection: "Mapa",
+    mapStyle: "Estilo del mapa",
+    mapStyleHint: "Dos mapas base: Calles (sobrio, urbano, con etiquetas completas) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
+    mapStyleStreet: "Calles",
+    cardTheme: "Tema de la tarjeta",
+    cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) y el mapa 3D de fondo entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros.",
+    cardThemeLight: "Claro",
+    cardThemeDark: "Oscuro",
+    showLabels: "Mostrar etiquetas",
+    showLabelsHint: "Muestra u oculta los nombres de calles, números de edificios, puntos de interés y nombres de zonas en el mapa de fondo.",
+    labelsOn: "Visibles",
+    labelsOff: "Ocultas",
+    autoRotate: "Rotación automática de la cámara",
+    autoRotateHint: "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (aprox. 1,5°/s, en sentido contrario al movimiento aparente del sol). Un gesto con un dedo la pausa al instante; se reanuda cuando sueltas.",
+    autoRotateOn: "Activada",
+    autoRotateOff: "Desactivada",
+    dateFormat: "Formato de fecha (por defecto: mm-dd)",
+    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Ejemplos:",
+    timeFormat: "Formato de hora",
+    timeFormat12: "12 h",
+    timeFormat24: "24 h",
+    uiSection: "UI",
+    uiColorsHint: "Un color por magnitud, reutilizado donde aparezca. Sol: el arco, el disco solar y la zona superior de la línea de tiempo. Nubes: el disco en el suelo y la zona inferior de la línea de tiempo.",
+    sunColor: "Color del sol",
+    cloudColor: "Color de las nubes",
+    pvSection: "Producción solar",
+    pvHint: "Opcional. Si se define, aparece una pastilla cerca de la casa con la producción instantánea (calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
+    pvEntity: "Entidad de producción",
+    pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
+    pvPeakPower: "Potencia pico (kWp)",
+    pvPeakPowerHelp: "Potencia pico instalada de tu campo en kilovatios-pico. Controla la curva de previsión punteada en el gráfico PV y la saturación del flujo PV → casa. Déjalo vacío para ocultar la previsión; la producción observada y el pico del día siguen mostrándose.",
+    pvArraysSection: "Orientación de los paneles",
+    pvArraysHelp: "Una entrada por grupo de paneles con la misma orientación. Deja una sola entrada con inclinación 0 para una instalación plana. Añade más entradas cuando tus paneles estén repartidos en varias orientaciones (por ejemplo, una fila al este y otra al oeste). La previsión se calcula por entrada y se pondera por su parte del total de kWp.",
+    pvArrayTitle: "Hilera {n}",
+    pvArrayName: "Nombre",
+    pvArrayNameHelp: "Opcional. Una etiqueta para esta hilera mostrada en el encabezado del editor (por ejemplo «Tejado sur», «Garaje este»). Déjalo vacío para volver al título numerado automáticamente.",
+    pvArrayTilt: "Inclinación (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Parte (%)",
+    pvArrayAdd: "+ Añadir hilera",
+    pvArrayRemove: "Eliminar",
+    pvArrayNormHint: "Las partes no suman 100 %, la previsión las normaliza automáticamente.",
+    pvArrayTiltHelp: "Inclinación de esta hilera respecto a la horizontal, de 0 a 90: 0 para una instalación plana, 30 a 45 para un tejado inclinado clásico, 90 para una instalación vertical (por ejemplo balcón). Combinada con el azimut, dirige la transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel.",
+    pvArrayAzimuthHelp: "Orientación brújula a la que apunta esta hilera, en sentido horario desde el norte, de 0 a 360: 0 = norte, 90 = este, 180 = sur, 270 = oeste.",
+    pvArrayShareHelp: "Peso relativo de esta hilera en el total de kWp. Se normaliza automáticamente al calcular: 50/50, 60/60 y 1/1 producen el mismo resultado. Déjalo vacío cuando solo hay una hilera (recibe el 100 % por defecto).",
+    pvColor: "Color de producción",
+    batterySection: "Batería doméstica",
+    batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales. El chip correspondiente aparece en cuanto la entidad está definida.",
+    batterySocEntity: "Entidad de estado de carga",
+    batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (%, típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
+    batteryPowerEntity: "Entidad de potencia",
+    batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma (positivo = cargando) y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
+    batteryPowerInvert: "Signo de la potencia de la batería",
+    batteryPowerInvertStandard: "Estándar",
+    batteryPowerInvertInverted: "Invertido",
+    batteryPowerInvertHelp: "Por defecto (Estándar) tu entidad de batería ya informa la carga como positivo y la descarga como negativo. Cambia a Invertido si tu entidad hace lo contrario (algunas instalaciones GivEnergy / GivTCP), Helios invertirá el valor una vez en la lectura para que la pastilla, la flecha del flujo y los totales diarios de carga / descarga conserven su significado.",
+    batteryColor: "Color batería",
+    weatherSection: "Meteorología",
+    weatherHint: "Opcional. Conecta entidades meteo locales para que Helios use mediciones tomadas en tu casa en lugar del modelo Open-Meteo interpolado a tu celda de la malla. Cada entidad es opcional de forma independiente y solo se usa cuando reporta un valor reciente; las muestras ausentes o caducadas vuelven al modelo de forma transparente.",
+    solarRadiationEntity: "Entidad de radiación solar",
+    solarRadiationEntityHelp: "Elige un sensor que reporte irradiancia solar global en W/m² (típicamente una estación meteo Ecowitt / Davis / personal). Cuando está definido, su estado actual y su historial del recorder reemplazan a Open-Meteo en los valores live y pasados de irradiancia en todos los sitios donde aparecen (número de la pastilla sol, eje Y del gráfico FV, coloración del arco solar). Las horas de previsión siguen usando Open-Meteo, un sensor solo conoce el presente.",
+    buildingsSection: "Edificio",
+    buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».",
+    displayRadius: "Radio de visualización",
+    displayRadiusHint: "Define el área visible alrededor de la casa. Todo lo que esté más allá de este radio queda oculto: mapa base, edificios vecinos, sombras. También determina el ámbito del fetch LiDAR y el recorte de las sombras proyectadas.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Mostrar la timeline",
+    timelineEnabledOn: "Mostrar",
+    timelineEnabledOff: "Ocultar",
+    timelineEnabledHint: "Oculta toda la barra temporal inferior (gráfico, etiquetas de los días, cursores). Útil cuando la card está integrada en un dashboard más amplio donde otro widget ya muestra la tendencia diaria.",
+    timelineWidth: "Ancho de la timeline",
+    timelineWidthHint: "Reduce la timeline horizontalmente manteniéndola centrada en la card. Al 100 % se pega a los bordes; por debajo, la barra se recoge proporcionalmente por ambos lados.",
+    timelineConsumption: "Mostrar consumo / pronóstico diario",
+    timelineConsumptionOn: "Mostrar",
+    timelineConsumptionOff: "Ocultar",
+    timelineConsumptionHint: "Controla la insignia de kWh que aparece junto a cada fecha en la timeline (observado para días pasados, pronóstico para hoy y los siguientes). Apágalo si solo te importa la escena en vivo y prefieres un gráfico más limpio.",
+    buildingClusterRadius: "Radio del grupo de la casa",
+    buildingOpacity: "Opacidad de los vecinos",
+    buildingColor: "Color de los edificios",
+    pixelRatio: "Pixel ratio",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (por defecto) usa la densidad de píxeles nativa de tu pantalla (limitada a 2 en escritorio, 1.25 en móvil) para un renderizado nítido. 1x fuerza el valor a 1.0, menos nítido pero con la carga por frame mínima, ideal en dispositivos modestos o sesiones largas donde la batería / el calor importan más que la nitidez.",
+    mapStyleMinimal: "Mínimo",
+    shadowsSection: "Sombreado",
+    shadowsEnabled: "Mostrar sombras",
+    shadowsEnabledOn: "Mostradas",
+    shadowsEnabledOff: "Ocultas",
+    shadowsEnabledHint: "Interruptor principal de las sombras proyectadas en el suelo. Si están ocultas, no se calcula ninguna sombra. Si están mostradas, la fuente se elige sola: un proveedor LiDAR si cubre tu zona (edificios y vegetación), o las huellas planas de los edificios OpenFreeMap en caso contrario (solo edificios).",
+    lidarPrecision: "Precisión LiDAR",
+    lidarPrecisionLow: "Baja",
+    lidarPrecisionMedium: "Media",
+    lidarPrecisionHigh: "Alta",
+    lidarPrecisionHint: "Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de los edificios OpenFreeMap y esta opción no tiene efecto. A mayor precisión, más celdas se piden a la fuente: la vista LiDAR muestra más puntos y exige más a la GPU. La densidad real depende de lo que el proveedor publique para tu zona.",
+    shadowOpacity: "Opacidad de las sombras",
+    shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
+    lidarViewSection: "Vista LiDAR",
+    lidarViewHint: "Haz clic en el botón LiDAR arriba a la derecha de la tarjeta para cambiar a una vista en nube de puntos de tu entorno: cada celda LiDAR cargada (suelo, vegetación y edificios) se pinta sobre el mapa de fondo. El botón queda deshabilitado cuando ningún proveedor cubre la casa. La vista reutiliza los datos ya recuperados con la precisión actual, no se hacen llamadas adicionales.",
+    lidarViewPointSize: "Tamaño de puntos (px)",
+    lidarViewPointColor: "Color de puntos",
+    lidarViewPointOpacity: "Opacidad de puntos",
+    lidarViewWireframe: "Malla de alambre",
+    lidarViewWireframeOn: "Activado",
+    lidarViewWireframeOff: "Desactivado",
+    lidarViewWireframeHint: "Conecta cada celda LiDAR finita con sus vecinas a la derecha y abajo mediante segmentos, dando una malla sobre la nube de puntos. Pon el tamaño de los puntos a 0 si solo quieres las líneas. Los rasters densos en precisión alta siguen pintándose en una sola llamada GPU, pero el número de líneas crece con el número de celdas, los dispositivos antiguos pueden ralentizarse en radios grandes.",
+    lidarViewWireframeColor: "Color de la malla",
+    lidarViewWireframeOpacity: "Opacidad de la malla",
+    localLidarSection: "Avanzado — LiDAR local (BYO)",
+    localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del área definida, esta fuente reemplaza cualquier proveedor nacional.",
+    localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? El repositorio de Helios incluye herramientas Python en `tools/lidar/`, consulta el README de esa carpeta para el pipeline completo (instalación de GDAL de sistema, configuración de `uv`, comandos de inspección / conversión / prueba sintética).",
+    localLidarEnabled: "Usar datos locales",
+    localLidarUrl: "URL del GeoTIFF",
+    localLidarMinLat: "Latitud mín.",
+    localLidarMaxLat: "Latitud máx.",
+    localLidarMinLon: "Longitud mín.",
+    localLidarMaxLon: "Longitud máx."
+  }
+};
+const it = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Sole, nuvole, produzione FV, batteria e ombre LiDAR sulla tua casa, in 3D e tempo reale",
+  detail: {
+    exitHint: "Tocca un punto qualsiasi per uscire",
+    todayLabel: "Oggi",
+    todayForecast: "previsto",
+    todayPeak: "picco",
+    todayNotStartedYet: "produzione in pausa",
+    tomorrowLabel: "Domani",
+    tomorrowPeak: "picco previsto verso le",
+    batteryLabel: "Batteria",
+    batteryCharged: "caricato",
+    batteryDischarged: "scaricato"
+  },
+  editor: {
+    locationSection: "Posizione",
+    homeLatitude: "Latitudine di casa",
+    homeLongitude: "Longitudine di casa",
+    locationHint: "Sovrascrive l'indirizzo di casa usato come centro della scheda. Lascia entrambi i campi vuoti per usare l'indirizzo configurato in Home Assistant. La sovrascrittura è applicata solo quando ENTRAMBI i campi contengono coordinate valide.",
+    mapSection: "Mappa",
+    mapStyle: "Stile della mappa",
+    mapStyleHint: "Due mappe di base: Strade (sobria, urbana, con etichette complete) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
+    mapStyleStreet: "Strade",
+    cardTheme: "Tema della scheda",
+    cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) e la mappa 3D di sfondo tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri.",
+    cardThemeLight: "Chiaro",
+    cardThemeDark: "Scuro",
+    showLabels: "Mostra etichette",
+    showLabelsHint: "Mostra o nasconde i nomi delle vie, i numeri civici, i punti di interesse e i nomi dei quartieri sulla mappa di base.",
+    labelsOn: "Visibili",
+    labelsOff: "Nascoste",
+    autoRotate: "Rotazione automatica della camera",
+    autoRotateHint: "Dopo qualche secondo di inattività, la camera ruota lentamente attorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Un gesto con un dito la mette in pausa all'istante e riprende non appena rilasci.",
+    autoRotateOn: "Attiva",
+    autoRotateOff: "Disattiva",
+    dateFormat: "Formato data (predefinito: mm-dd)",
+    dateFormatHelp: "Token: yyyy, yy, mm, dd. Esempi:",
+    timeFormat: "Formato ora",
+    timeFormat12: "12 h",
+    timeFormat24: "24 h",
+    uiSection: "UI",
+    uiColorsHint: "Un colore per grandezza, riutilizzato ovunque appaia. Sole: l'arco, il disco solare e l'area superiore della cronologia. Nuvole: il disco al suolo e l'area inferiore della cronologia.",
+    sunColor: "Colore del sole",
+    cloudColor: "Colore delle nuvole",
+    pvSection: "Produzione solare",
+    pvHint: "Opzionale. Se impostato, una pastiglia appare vicino alla casa con la produzione istantanea (calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
+    pvEntity: "Entità di produzione",
+    pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
+    pvPeakPower: "Potenza di picco (kWp)",
+    pvPeakPowerHelp: "Potenza di picco installata del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata sul grafico PV e la saturazione del flusso PV → casa. Lascia vuoto per nascondere la previsione; la produzione osservata e il picco del giorno restano visibili.",
+    pvArraysSection: "Orientamento dei pannelli",
+    pvArraysHelp: "Una voce per ogni campo di pannelli con la stessa orientazione. Lascia una sola voce con inclinazione 0 per un'installazione piana. Aggiungi altre voci quando i pannelli sono distribuiti su più orientazioni (per esempio una fila a est e una a ovest). La previsione viene calcolata per ciascuna voce e pesata in base alla sua quota dei kWp totali.",
+    pvArrayTitle: "Fila {n}",
+    pvArrayName: "Nome",
+    pvArrayNameHelp: "Opzionale. Un'etichetta per questa fila mostrata nell'intestazione dell'editor (per esempio «Tetto sud», «Garage est»). Lascia vuoto per tornare al titolo numerato automaticamente.",
+    pvArrayTilt: "Inclinazione (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Quota (%)",
+    pvArrayAdd: "+ Aggiungi fila",
+    pvArrayRemove: "Rimuovi",
+    pvArrayNormHint: "Le quote non sommano a 100 %, la previsione le normalizza automaticamente.",
+    pvArrayTiltHelp: "Inclinazione di questa fila rispetto all'orizzontale, da 0 a 90: 0 per un'installazione piana, 30 a 45 per un tetto inclinato classico, 90 per un'installazione verticale (per esempio balcone). Combinata con l'azimut, guida la trasposizione Liu-Jordan che proietta l'irradianza prevista sul piano del pannello.",
+    pvArrayAzimuthHelp: "Orientamento bussola verso cui è rivolta questa fila, in senso orario da nord, da 0 a 360: 0 = nord, 90 = est, 180 = sud, 270 = ovest.",
+    pvArrayShareHelp: "Peso relativo di questa fila nel totale dei kWp. Normalizzato automaticamente al calcolo: 50/50, 60/60 e 1/1 danno lo stesso risultato. Lascia vuoto quando c'è una sola fila (prende il 100 % per default).",
+    pvColor: "Colore di produzione",
+    batterySection: "Batteria domestica",
+    batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali. La pastiglia corrispondente appare appena l'entità è impostata.",
+    batterySocEntity: "Entità stato di carica",
+    batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (%, tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
+    batteryPowerEntity: "Entità di potenza",
+    batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa (positivo = in carica) e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
+    batteryPowerInvert: "Segno della potenza della batteria",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Invertito",
+    batteryPowerInvertHelp: "Per impostazione predefinita (Standard) la tua entità batteria riporta la carica come positivo e la scarica come negativo. Scegli Invertito se la tua entità fa l'opposto (alcuni setup GivEnergy / GivTCP), Helios invertirà il valore una volta in lettura così che la pastiglia, la freccia del flusso e i totali giornalieri di carica / scarica mantengano il loro significato.",
+    batteryColor: "Colore batteria",
+    weatherSection: "Meteo",
+    weatherHint: "Opzionale. Collega entità meteo locali perché Helios usi misure prese a casa tua invece del modello Open-Meteo interpolato sulla tua cella di griglia. Ogni entità è indipendentemente opzionale e viene usata solo quando riporta un valore fresco; i campioni mancanti o stantii ricadono sul modello in modo trasparente.",
+    solarRadiationEntity: "Entità irradianza solare",
+    solarRadiationEntityHelp: "Scegli un sensore che riporti l'irradianza solare globale in W/m² (tipicamente una stazione meteo Ecowitt / Davis / personale). Quando è impostato, il suo stato attuale e la sua storia del recorder sostituiscono Open-Meteo per i valori live e passati di irradianza ovunque appaiano (numero sulla pastiglia sole, asse Y del grafico FV, colorazione dell'arco solare). Le ore di previsione continuano a usare Open-Meteo, un sensore conosce solo il presente.",
+    buildingsSection: "Edificio",
+    buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».",
+    displayRadius: "Raggio di visualizzazione",
+    displayRadiusHint: "Definisce l'area visibile attorno alla casa. Tutto ciò che è oltre questo raggio viene nascosto: mappa di base, edifici vicini, ombre. Determina anche l'estensione del fetch LiDAR e il taglio delle ombre proiettate.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Mostra la timeline",
+    timelineEnabledOn: "Mostra",
+    timelineEnabledOff: "Nascondi",
+    timelineEnabledHint: "Nasconde l'intera barra temporale in basso (grafico, etichette dei giorni, cursori). Utile quando la card è inserita in una dashboard più ampia dove un altro widget mostra già l'andamento giornaliero.",
+    timelineWidth: "Larghezza della timeline",
+    timelineWidthHint: "Riduce la timeline in orizzontale mantenendola centrata sulla card. Al 100 % aderisce ai bordi; sotto, la barra si ritira proporzionalmente da entrambi i lati.",
+    timelineConsumption: "Mostra consumo / previsione giornaliera",
+    timelineConsumptionOn: "Mostra",
+    timelineConsumptionOff: "Nascondi",
+    timelineConsumptionHint: "Attiva il chip kWh accanto a ogni data sulla timeline (osservato per i giorni passati, previsione per oggi e successivi). Disattivalo se ti interessa solo la scena live e vuoi un grafico più pulito.",
+    buildingClusterRadius: "Raggio del gruppo casa",
+    buildingOpacity: "Opacità degli edifici vicini",
+    buildingColor: "Colore degli edifici",
+    pixelRatio: "Pixel ratio",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (predefinito) usa la densità di pixel nativa dello schermo (limitata a 2 su desktop, 1.25 su mobile) per un rendering nitido. 1x forza il valore a 1.0, meno nitido ma con il carico per frame minimo, ideale su dispositivi modesti o sessioni lunghe in cui autonomia / calore contano più della nitidezza.",
+    mapStyleMinimal: "Minimale",
+    shadowsSection: "Ombreggiatura",
+    shadowsEnabled: "Mostrare le ombre",
+    shadowsEnabledOn: "Visibili",
+    shadowsEnabledOff: "Nascoste",
+    shadowsEnabledHint: "Interruttore principale delle ombre proiettate a terra. Se nascoste, non viene calcolata alcuna ombra. Se visibili, la sorgente viene scelta da sola: un provider LiDAR se copre la tua zona (edifici e vegetazione), altrimenti le impronte piatte degli edifici OpenFreeMap (solo edifici).",
+    lidarPrecision: "Precisione LiDAR",
+    lidarPrecisionLow: "Bassa",
+    lidarPrecisionMedium: "Media",
+    lidarPrecisionHigh: "Alta",
+    lidarPrecisionHint: "Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte degli edifici OpenFreeMap e questa opzione non ha alcun effetto. Più la precisione è alta, più celle vengono richieste alla sorgente: la vista LiDAR mostra più punti e pesa di più sulla GPU. La densità effettiva dipende da ciò che il provider espone per la tua zona.",
+    shadowOpacity: "Opacità delle ombre",
+    shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
+    lidarViewSection: "Vista LiDAR",
+    lidarViewHint: "Clicca sul pulsante LiDAR in alto a destra della scheda per passare a una vista a nuvola di punti dei tuoi dintorni: ogni cella LiDAR caricata (suolo, vegetazione ed edifici) viene dipinta sopra la mappa di base. Il pulsante resta disabilitato quando nessun provider copre la casa. La vista riutilizza i dati già recuperati alla precisione attuale, nessuna chiamata aggiuntiva viene fatta.",
+    lidarViewPointSize: "Dimensione punti (px)",
+    lidarViewPointColor: "Colore punti",
+    lidarViewPointOpacity: "Opacità punti",
+    lidarViewWireframe: "Reticolo",
+    lidarViewWireframeOn: "Attivo",
+    lidarViewWireframeOff: "Disattivo",
+    lidarViewWireframeHint: "Collega ogni cella LiDAR finita ai vicini a destra e in basso con segmenti, generando un reticolo sopra la nuvola di punti. Imposta la dimensione dei punti a 0 se vuoi solo le linee. I raster pesanti in alta precisione restano in una sola chiamata GPU, ma il numero di linee cresce con quello delle celle, i dispositivi più vecchi possono rallentare sui raggi grandi.",
+    lidarViewWireframeColor: "Colore del reticolo",
+    lidarViewWireframeOpacity: "Opacità del reticolo",
+    localLidarSection: "Avanzato — LiDAR locale (BYO)",
+    localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. All'interno dell'area definita, questa sorgente sostituisce qualsiasi provider nazionale.",
+    localLidarToolsHint: "Devi preparare un raster da zero? Il repository Helios include strumenti Python in `tools/lidar/`, vedi il README di quella cartella per la pipeline completa (installazione di GDAL di sistema, configurazione di `uv`, comandi di ispezione / conversione / test sintetico).",
+    localLidarEnabled: "Usa dati locali",
+    localLidarUrl: "URL del GeoTIFF",
+    localLidarMinLat: "Latitudine min",
+    localLidarMaxLat: "Latitudine max",
+    localLidarMinLon: "Longitudine min",
+    localLidarMaxLon: "Longitudine max"
+  }
+};
+const nl = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime",
+  detail: {
+    exitHint: "Tik ergens om te sluiten",
+    todayLabel: "Vandaag",
+    todayForecast: "verwacht",
+    todayPeak: "piek",
+    todayNotStartedYet: "opwekking gepauzeerd",
+    tomorrowLabel: "Morgen",
+    tomorrowPeak: "piek verwacht rond",
+    batteryLabel: "Batterij",
+    batteryCharged: "opgeladen",
+    batteryDischarged: "ontladen"
+  },
+  editor: {
+    locationSection: "Locatie",
+    homeLatitude: "Breedtegraad woning",
+    homeLongitude: "Lengtegraad woning",
+    locationHint: "Overschrijft het thuisadres dat als middelpunt van de kaart wordt gebruikt. Laat beide velden leeg om het in Home Assistant geconfigureerde adres te gebruiken. De override geldt alleen wanneer BEIDE velden geldige coördinaten bevatten.",
+    mapSection: "Kaart",
+    mapStyle: "Kaartstijl",
+    mapStyleHint: "Twee basiskaarten: Straten (sober, stedelijk, met volledige labels) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
+    mapStyleStreet: "Straten",
+    cardTheme: "Kaartthema",
+    cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) en de 3D-basemap tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards.",
+    cardThemeLight: "Licht",
+    cardThemeDark: "Donker",
+    showLabels: "Labels weergeven",
+    showLabelsHint: "Toont of verbergt straatnamen, huisnummers, points of interest en buurtnamen op de basiskaart.",
+    labelsOn: "Zichtbaar",
+    labelsOff: "Verborgen",
+    autoRotate: "Automatische camerarotatie",
+    autoRotateHint: "Na een paar seconden inactiviteit draait de camera langzaam rond het huis (ongeveer 1,5°/s, tegen de schijnbare beweging van de zon in). Een veeg met één vinger pauzeert de rotatie direct; ze hervat zodra je loslaat.",
+    autoRotateOn: "Aan",
+    autoRotateOff: "Uit",
+    dateFormat: "Datumformaat (standaard: mm-dd)",
+    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Voorbeelden:",
+    timeFormat: "Tijdformaat",
+    timeFormat12: "12 u",
+    timeFormat24: "24 u",
+    uiSection: "UI",
+    uiColorsHint: "Eén kleur per grootheid, overal hergebruikt. Zon: de boog, de zonneschijf en het bovenste deel van de tijdlijn. Wolken: de schijf op de grond en het onderste deel van de tijdlijn.",
+    sunColor: "Zonkleur",
+    cloudColor: "Wolkenkleur",
+    pvSection: "Zonneproductie",
+    pvHint: "Optioneel. Als ingesteld verschijnt bij het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
+    pvEntity: "Productie-entiteit",
+    pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
+    pvPeakPower: "Piekvermogen (kWp)",
+    pvPeakPowerHelp: "Geïnstalleerd piekvermogen van je panelen in kilowattpiek. Stuurt de gestippelde voorspellingslijn op de PV-grafiek en de stroomverzadiging van de PV → huis-leider. Laat leeg om de voorspelling te verbergen; gemeten productie en de dagelijkse piek blijven zichtbaar.",
+    pvArraysSection: "Paneeloriëntatie",
+    pvArraysHelp: "Eén item per veld panelen met dezelfde oriëntatie. Laat één item staan met hellingshoek 0 voor een platte opstelling. Voeg extra items toe wanneer je panelen over meerdere richtingen verdeeld zijn (bijvoorbeeld een rij oost, een rij west). De prognose wordt per item berekend en gewogen op basis van het percentage van het totale kWp.",
+    pvArrayTitle: "Rij {n}",
+    pvArrayName: "Naam",
+    pvArrayNameHelp: 'Optioneel. Een label voor deze rij dat in de editor-koptekst wordt getoond (bijvoorbeeld "Zuiddak", "Oostgarage"). Laat leeg om terug te vallen op de automatisch genummerde titel.',
+    pvArrayTilt: "Helling (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Aandeel (%)",
+    pvArrayAdd: "+ Rij toevoegen",
+    pvArrayRemove: "Verwijderen",
+    pvArrayNormHint: "De percentages komen niet uit op 100%, de prognose herschaalt ze automatisch.",
+    pvArrayTiltHelp: "Helling van deze rij ten opzichte van het horizontale vlak, 0 tot 90: 0 voor een platte opstelling, 30 tot 45 voor een klassiek schuin dak, 90 voor een volledig verticale opstelling (bijvoorbeeld een balkon). Samen met de azimut stuurt deze instelling de Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert.",
+    pvArrayAzimuthHelp: "Kompasrichting waarnaar deze rij wijst, met de klok mee vanaf het noorden, 0 tot 360: 0 = noord, 90 = oost, 180 = zuid, 270 = west.",
+    pvArrayShareHelp: "Relatief gewicht van deze rij in het totale kWp. Wordt op berekentijd automatisch genormaliseerd: 50/50, 60/60 en 1/1 leveren hetzelfde resultaat. Laat leeg wanneer er maar één rij is (krijgt standaard 100%).",
+    pvColor: "Productiekleur",
+    batterySection: "Thuisbatterij",
+    batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel. De bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
+    batterySocEntity: "Laadtoestand-entiteit",
+    batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (%, meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
+    batteryPowerEntity: "Vermogen-entiteit",
+    batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf (positief = opladen) en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
+    batteryPowerInvert: "Teken van het batterijvermogen",
+    batteryPowerInvertStandard: "Standaard",
+    batteryPowerInvertInverted: "Omgekeerd",
+    batteryPowerInvertHelp: "Standaard rapporteert je batterij-entiteit het laden als positief en het ontladen als negatief. Kies Omgekeerd als jouw entiteit het andersom doet (sommige GivEnergy- / GivTCP-installaties). Helios draait de waarde dan eenmalig om bij het inlezen, zodat de chip, de stroompijl en de dagelijkse laad- / ontlaadtotalen hun betekenis behouden.",
+    batteryColor: "Batterijkleur",
+    weatherSection: "Weer",
+    weatherHint: "Optioneel. Koppel lokale weerentiteiten zodat Helios metingen bij jou thuis gebruikt in plaats van het Open-Meteo-model dat geïnterpoleerd wordt naar je rastercel. Elke entiteit is onafhankelijk optioneel en wordt alleen gebruikt wanneer ze een verse waarde levert; ontbrekende of verouderde monsters vallen transparant terug op het model.",
+    solarRadiationEntity: "Entiteit zonnestraling",
+    solarRadiationEntityHelp: "Kies een sensor die de globale kortgolvige instraling rapporteert in W/m² (typisch een Ecowitt / Davis / persoonlijk weerstation). Wanneer ingesteld, vervangen de huidige status en de recorder-geschiedenis Open-Meteo voor de live + verleden instralingswaarden overal waar ze verschijnen (cijfer op de zonpastille, Y-as van de PV-grafiek, kleuring van de zonneboog). Voorspellingsuren blijven Open-Meteo gebruiken, een sensor kent alleen het heden.",
+    buildingsSection: "Gebouw",
+    buildingsHint: 'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
+    displayRadius: "Weergavestraal",
+    displayRadiusHint: "Bepaalt het zichtbare gebied rond het huis. Alles buiten deze straal wordt verborgen: basiskaart, naburige gebouwen, schaduwen. Stuurt ook de omvang van de LiDAR-fetch en de clip van de geprojecteerde schaduwen aan.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Timeline tonen",
+    timelineEnabledOn: "Tonen",
+    timelineEnabledOff: "Verbergen",
+    timelineEnabledHint: "Verbergt de hele tijdsbalk onderaan (grafiek, daglabels, cursors). Handig als de card in een breder dashboardpaneel zit waar een ander widget de dagtrend al toont.",
+    timelineWidth: "Breedte van de timeline",
+    timelineWidthHint: "Maakt de timeline horizontaal smaller terwijl ze gecentreerd blijft op de card. Bij 100 % loopt ze tot de randen; daaronder trekt de balk evenredig aan beide kanten in.",
+    timelineConsumption: "Dagelijks verbruik / voorspelling tonen",
+    timelineConsumptionOn: "Tonen",
+    timelineConsumptionOff: "Verbergen",
+    timelineConsumptionHint: "Schakelt de kWh-chip naast elke datum op de timeline (gemeten voor afgelopen dagen, voorspelling voor vandaag en later). Uit als je alleen om de live scène geeft en een rustigere grafiek wilt.",
+    buildingClusterRadius: "Cluster-straal huis",
+    buildingOpacity: "Dekking omliggende gebouwen",
+    buildingColor: "Gebouwkleur",
+    pixelRatio: "Pixel ratio",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (standaard) gebruikt de native devicePixelRatio van je scherm (begrensd op 2 op desktop, 1.25 op mobiel) voor een scherpe rendering. 1x forceert 1.0, minder scherp maar met de minimale fragment-belasting per frame, ideaal op bescheiden apparaten of lange sessies waar batterijduur / warmte zwaarder weegt dan scherpte.",
+    mapStyleMinimal: "Minimaal",
+    shadowsSection: "Schaduw",
+    shadowsEnabled: "Schaduwen tonen",
+    shadowsEnabledOn: "Zichtbaar",
+    shadowsEnabledOff: "Verborgen",
+    shadowsEnabledHint: "Hoofdschakelaar voor de op de grond geprojecteerde schaduwen. Verborgen betekent geen enkele schaduwberekening. Zichtbaar kiest de bron zelf: een LiDAR-provider als die je gebied dekt (gebouwen en vegetatie), anders de platte OpenFreeMap-gebouwomtreklijnen (alleen gebouwen).",
+    lidarPrecision: "LiDAR-precisie",
+    lidarPrecisionLow: "Laag",
+    lidarPrecisionMedium: "Middel",
+    lidarPrecisionHigh: "Hoog",
+    lidarPrecisionHint: "Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte OpenFreeMap-gebouwomtreklijnen en heeft deze optie geen effect. Hoe hoger de precisie, hoe meer cellen er bij de bron worden opgevraagd: de LiDAR-weergave toont meer punten en is zwaarder voor de GPU. De daadwerkelijke dichtheid hangt af van wat de provider voor jouw zone publiceert.",
+    shadowOpacity: "Schaduwdekking",
+    shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
+    lidarViewSection: "LiDAR-weergave",
+    lidarViewHint: "Klik rechtsboven in de kaart op de LiDAR-knop om over te schakelen naar een puntenwolk-weergave van je omgeving: elke geladen LiDAR-cel (grond, vegetatie en gebouwen) wordt over de basiskaart geschilderd. De knop blijft uitgeschakeld wanneer geen enkele provider het huis dekt. De weergave hergebruikt de data die al is opgehaald op de huidige precisie, er worden geen extra calls gedaan.",
+    lidarViewPointSize: "Puntgrootte (px)",
+    lidarViewPointColor: "Puntkleur",
+    lidarViewPointOpacity: "Puntdekking",
+    lidarViewWireframe: "Draadmodel",
+    lidarViewWireframeOn: "Aan",
+    lidarViewWireframeOff: "Uit",
+    lidarViewWireframeHint: "Verbindt elke geldige LiDAR-cel met haar rechter- en onderbuur via segmenten, wat een draadmodel over de puntwolk geeft. Zet de puntgrootte op 0 als je alleen de lijnen wilt. Zware rasters bij hoge precisie blijven in één GPU-call, maar het aantal lijnen groeit mee met het aantal cellen, oudere apparaten kunnen vertragen bij grote stralen.",
+    lidarViewWireframeColor: "Kleur van het draadmodel",
+    lidarViewWireframeOpacity: "Dekking van het draadmodel",
+    localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
+    localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen het gedefinieerde gebied vervangt deze bron elke nationale leverancier.",
+    localLidarToolsHint: "Een eigen raster nodig? De Helios-repository bevat Python-hulpmiddelen onder `tools/lidar/`, zie de README daar voor de volledige pipeline (installatie van de GDAL-systeembibliotheek, `uv`-setup, inspect / convert / synthetisch test-commando's).",
+    localLidarEnabled: "Lokale data gebruiken",
+    localLidarUrl: "GeoTIFF-URL",
+    localLidarMinLat: "Min. breedtegraad",
+    localLidarMaxLat: "Max. breedtegraad",
+    localLidarMinLon: "Min. lengtegraad",
+    localLidarMaxLon: "Max. lengtegraad"
+  }
+};
+const pt = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a tua casa, em 3D e tempo real",
+  detail: {
+    exitHint: "Toca em qualquer lugar para sair",
+    todayLabel: "Hoje",
+    todayForecast: "previsto",
+    todayPeak: "pico",
+    todayNotStartedYet: "produção em pausa",
+    tomorrowLabel: "Amanhã",
+    tomorrowPeak: "pico previsto por volta das",
+    batteryLabel: "Bateria",
+    batteryCharged: "carregado",
+    batteryDischarged: "descarregado"
+  },
+  editor: {
+    locationSection: "Localização",
+    homeLatitude: "Latitude de casa",
+    homeLongitude: "Longitude de casa",
+    locationHint: "Substitui o endereço de casa usado como centro do cartão. Deixe ambos os campos vazios para usar o endereço configurado no Home Assistant. A substituição só é aplicada quando AMBOS os campos contêm coordenadas válidas.",
+    mapSection: "Mapa",
+    mapStyle: "Estilo do mapa",
+    mapStyleHint: "Dois mapas base: Ruas (sóbrio, urbano, com etiquetas completas) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
+    mapStyleStreet: "Ruas",
+    cardTheme: "Tema do cartão",
+    cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) e o mapa 3D de fundo entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros.",
+    cardThemeLight: "Claro",
+    cardThemeDark: "Escuro",
+    showLabels: "Mostrar etiquetas",
+    showLabelsHint: "Mostra ou oculta os nomes das ruas, números de edifícios, pontos de interesse e nomes de bairros no mapa de fundo.",
+    labelsOn: "Visíveis",
+    labelsOff: "Ocultas",
+    autoRotate: "Rotação automática da câmara",
+    autoRotateHint: "Após alguns segundos de inatividade, a câmara orbita lentamente em torno da casa (cerca de 1,5°/s, em sentido oposto ao movimento aparente do sol). Um gesto com um dedo pausa-a instantaneamente; retoma assim que largas.",
+    autoRotateOn: "Ligada",
+    autoRotateOff: "Desligada",
+    dateFormat: "Formato de data (predefinição: mm-dd)",
+    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Exemplos:",
+    timeFormat: "Formato da hora",
+    timeFormat12: "12 h",
+    timeFormat24: "24 h",
+    uiSection: "UI",
+    uiColorsHint: "Uma cor por grandeza, reutilizada onde quer que apareça. Sol: o arco, o disco solar e a área superior da linha temporal. Nuvens: o disco no solo e a área inferior da linha temporal.",
+    sunColor: "Cor do sol",
+    cloudColor: "Cor das nuvens",
+    pvSection: "Produção solar",
+    pvHint: "Opcional. Quando definido, surge uma pastilha perto da casa com a produção instantânea (calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
+    pvEntity: "Entidade de produção",
+    pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
+    pvPeakPower: "Potência de pico (kWp)",
+    pvPeakPowerHelp: "Potência de pico instalada do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada no gráfico PV e a saturação do fluxo PV → casa. Deixa vazio para ocultar a previsão; a produção observada e o pico do dia continuam visíveis.",
+    pvArraysSection: "Orientação dos painéis",
+    pvArraysHelp: "Uma entrada por campo de painéis com a mesma orientação. Deixa uma única entrada com inclinação 0 para uma instalação plana. Acrescenta mais entradas quando os painéis estão repartidos por várias orientações (por exemplo uma fila a este e outra a oeste). A previsão é calculada por entrada e ponderada pela sua quota dos kWp totais.",
+    pvArrayTitle: "Fileira {n}",
+    pvArrayName: "Nome",
+    pvArrayNameHelp: "Opcional. Um rótulo para esta fileira mostrado no cabeçalho do editor (por exemplo «Telhado sul», «Garagem leste»). Deixa vazio para voltar ao título numerado automaticamente.",
+    pvArrayTilt: "Inclinação (°)",
+    pvArrayAzimuth: "Azimute (°)",
+    pvArrayShare: "Quota (%)",
+    pvArrayAdd: "+ Adicionar fileira",
+    pvArrayRemove: "Remover",
+    pvArrayNormHint: "As quotas não somam 100 %, a previsão normaliza-as automaticamente.",
+    pvArrayTiltHelp: "Inclinação desta fileira em relação à horizontal, de 0 a 90: 0 para uma instalação plana, 30 a 45 para um telhado inclinado clássico, 90 para uma instalação vertical (por exemplo varanda). Combinada com o azimute, conduz a transposição Liu-Jordan que projeta a irradiância prevista sobre o plano do painel.",
+    pvArrayAzimuthHelp: "Orientação na bússola para onde esta fileira aponta, no sentido horário a partir do norte, de 0 a 360: 0 = norte, 90 = este, 180 = sul, 270 = oeste.",
+    pvArrayShareHelp: "Peso relativo desta fileira no total dos kWp. Normalizado automaticamente no cálculo: 50/50, 60/60 e 1/1 produzem o mesmo resultado. Deixa vazio quando só existe uma fileira (recebe 100 % por predefinição).",
+    pvColor: "Cor de produção",
+    batterySection: "Bateria doméstica",
+    batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais. O chip correspondente aparece assim que a entidade é definida.",
+    batterySocEntity: "Entidade do estado de carga",
+    batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (%, normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
+    batteryPowerEntity: "Entidade de potência",
+    batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade (positivo = a carregar) e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
+    batteryPowerInvert: "Sinal da potência da bateria",
+    batteryPowerInvertStandard: "Padrão",
+    batteryPowerInvertInverted: "Invertido",
+    batteryPowerInvertHelp: "Por predefinição (Padrão) a tua entidade de bateria reporta a carga como positivo e a descarga como negativo. Escolhe Invertido se a tua entidade faz o oposto (alguns setups GivEnergy / GivTCP), o Helios inverte então o valor uma vez na leitura para que a pastilha, a seta do fluxo e os totais diários de carga / descarga mantenham o sentido.",
+    batteryColor: "Cor da bateria",
+    weatherSection: "Meteorologia",
+    weatherHint: "Opcional. Liga entidades meteo locais para que o Helios use medições feitas em tua casa em vez do modelo Open-Meteo interpolado à tua célula da grelha. Cada entidade é opcional de forma independente e só é usada quando reporta um valor fresco; amostras em falta ou desactualizadas voltam ao modelo de forma transparente.",
+    solarRadiationEntity: "Entidade de radiação solar",
+    solarRadiationEntityHelp: "Escolhe um sensor que reporte irradiância solar global em W/m² (tipicamente uma estação meteo Ecowitt / Davis / pessoal). Quando definido, o seu estado atual e o seu histórico do recorder substituem o Open-Meteo nos valores live + passados de irradiância em todos os sítios onde aparecem (número na pastilha sol, eixo Y do gráfico FV, coloração do arco solar). As horas de previsão continuam a usar Open-Meteo, um sensor só conhece o presente.",
+    buildingsSection: "Edifício",
+    buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».",
+    displayRadius: "Raio de visualização",
+    displayRadiusHint: "Define a área visível em torno da casa. Tudo o que estiver para além deste raio fica oculto: mapa base, edifícios vizinhos, sombras. Também controla o âmbito do fetch LiDAR e o corte das sombras projetadas.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Mostrar a timeline",
+    timelineEnabledOn: "Mostrar",
+    timelineEnabledOff: "Ocultar",
+    timelineEnabledHint: "Oculta toda a barra temporal em baixo (gráfico, etiquetas dos dias, cursores). Útil quando o card está integrado num dashboard mais largo onde outro widget já mostra a tendência diária.",
+    timelineWidth: "Largura da timeline",
+    timelineWidthHint: "Reduz a timeline na horizontal mantendo-a centrada na card. A 100 % cola às margens; abaixo disso, a barra recolhe-se proporcionalmente dos dois lados.",
+    timelineConsumption: "Mostrar consumo / previsão diária",
+    timelineConsumptionOn: "Mostrar",
+    timelineConsumptionOff: "Ocultar",
+    timelineConsumptionHint: "Liga o chip kWh ao lado de cada data na timeline (observado para dias passados, previsão para hoje e seguintes). Desliga se só te importa a cena ao vivo e queres um gráfico mais limpo.",
+    buildingClusterRadius: "Raio do grupo da casa",
+    buildingOpacity: "Opacidade dos vizinhos",
+    buildingColor: "Cor dos edifícios",
+    pixelRatio: "Pixel ratio",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (predefinição) usa a densidade de píxeis nativa do ecrã (limitada a 2 em desktop, 1.25 em mobile) para uma renderização nítida. 1x força o valor a 1.0, menos nítido mas com a carga por frame mínima, ideal em dispositivos modestos ou sessões longas em que a autonomia / o calor pesam mais que a nitidez.",
+    mapStyleMinimal: "Mínimo",
+    shadowsSection: "Sombreamento",
+    shadowsEnabled: "Mostrar sombras",
+    shadowsEnabledOn: "Visíveis",
+    shadowsEnabledOff: "Ocultas",
+    shadowsEnabledHint: "Interruptor principal das sombras projetadas no chão. Quando ocultas, nenhuma sombra é calculada. Quando visíveis, a fonte é escolhida automaticamente: um fornecedor LiDAR se cobrir a tua zona (edifícios e vegetação), caso contrário as impressões planas dos edifícios OpenFreeMap (apenas edifícios).",
+    lidarPrecision: "Precisão LiDAR",
+    lidarPrecisionLow: "Baixa",
+    lidarPrecisionMedium: "Média",
+    lidarPrecisionHigh: "Alta",
+    lidarPrecisionHint: "Se a tua zona é coberta por um fornecedor LiDAR integrado no Helios, beneficias de sombras mais realistas (edifícios E vegetação). Podem aparecer desfasamentos entre os edifícios desenhados e as suas sombras: os dados LiDAR são capturados num instante preciso e nem sempre refletem o estado atual do terreno. Fora da cobertura LiDAR, as sombras voltam às impressões planas dos edifícios OpenFreeMap e esta opção não tem qualquer efeito. Quanto maior a precisão, mais células são pedidas à fonte: a vista LiDAR mostra mais pontos e pesa mais na GPU. A densidade real depende do que o fornecedor publica para a tua zona.",
+    shadowOpacity: "Opacidade das sombras",
+    shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
+    lidarViewSection: "Vista LiDAR",
+    lidarViewHint: "Clica no botão LiDAR no canto superior direito da carta para alternar para uma vista em nuvem de pontos do teu ambiente: cada célula LiDAR carregada (solo, vegetação e edifícios) é pintada sobre o mapa de fundo. O botão fica desactivado quando nenhum provedor cobre a casa. A vista reutiliza os dados já obtidos com a precisão actual, nenhuma chamada adicional é feita.",
+    lidarViewPointSize: "Tamanho dos pontos (px)",
+    lidarViewPointColor: "Cor dos pontos",
+    lidarViewPointOpacity: "Opacidade dos pontos",
+    lidarViewWireframe: "Estrutura em arame",
+    lidarViewWireframeOn: "Ativo",
+    lidarViewWireframeOff: "Inativo",
+    lidarViewWireframeHint: "Liga cada célula LiDAR finita aos vizinhos à direita e abaixo com segmentos, criando uma malha sobre a nuvem de pontos. Coloca o tamanho dos pontos a 0 se só queres as linhas. Rasters densos em alta precisão continuam a desenhar-se numa única chamada GPU, mas o número de linhas cresce com o número de células, dispositivos antigos podem abrandar em raios grandes.",
+    lidarViewWireframeColor: "Cor da estrutura",
+    lidarViewWireframeOpacity: "Opacidade da estrutura",
+    localLidarSection: "Avançado — LiDAR local (BYO)",
+    localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da área definida, esta fonte substitui qualquer fornecedor nacional.",
+    localLidarToolsHint: "Precisas de preparar um raster do zero? O repositório Helios inclui ferramentas Python em `tools/lidar/`, consulta o README dessa pasta para o pipeline completo (instalação do GDAL de sistema, configuração do `uv`, comandos de inspeção / conversão / teste sintético).",
+    localLidarEnabled: "Usar dados locais",
+    localLidarUrl: "URL do GeoTIFF",
+    localLidarMinLat: "Latitude mín.",
+    localLidarMaxLat: "Latitude máx.",
+    localLidarMinLon: "Longitude mín.",
+    localLidarMaxLon: "Longitude máx."
+  }
+};
+const no = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid",
+  detail: {
+    exitHint: "Trykk hvor som helst for å gå ut",
+    todayLabel: "I dag",
+    todayForecast: "estimert",
+    todayPeak: "topp",
+    todayNotStartedYet: "produksjon pauset",
+    tomorrowLabel: "I morgen",
+    tomorrowPeak: "topp ventet rundt",
+    batteryLabel: "Batteri",
+    batteryCharged: "ladet",
+    batteryDischarged: "utladet"
+  },
+  editor: {
+    locationSection: "Sted",
+    homeLatitude: "Hjemmets breddegrad",
+    homeLongitude: "Hjemmets lengdegrad",
+    locationHint: "Overstyrer hjemmeadressen som brukes som kortets sentrum. La begge feltene være tomme for å bruke hjemmet som er konfigurert i Home Assistant. Overstyringen brukes kun når BEGGE feltene har gyldige koordinater.",
+    mapSection: "Kart",
+    mapStyle: "Kartstil",
+    mapStyleHint: "To grunnkart: Gater (nøkternt, urbant, med fulle etiketter) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.",
+    mapStyleStreet: "Gater",
+    cardTheme: "Korttema",
+    cardThemeHint: "Bytter kortets utseende (chips, grafer, knapper, verktøytips, scrub-overlegg) og 3D-grunnkartet mellom et lyst tema (standard, på hvit bakgrunn) og et mørkt tema (på nesten svart bakgrunn) slik at kortet passer rent inn i lyse eller mørke Home Assistant-dashbord.",
+    cardThemeLight: "Lyst",
+    cardThemeDark: "Mørkt",
+    showLabels: "Vis etiketter",
+    showLabelsHint: "Slår av eller på gatenavn, husnumre, interessepunkter og stedsnavn på grunnkartet.",
+    labelsOn: "Vist",
+    labelsOff: "Skjult",
+    autoRotate: "Automatisk kamerarotasjon",
+    autoRotateHint: "Etter noen sekunder uten aktivitet roterer kameraet sakte rundt huset (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). En enfingers-bevegelse pauser den umiddelbart, og den fortsetter så snart du slipper.",
+    autoRotateOn: "På",
+    autoRotateOff: "Av",
+    dateFormat: "Datoformat (standard: mm-dd)",
+    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Eksempler:",
+    timeFormat: "Klokkeformat",
+    timeFormat12: "12 t",
+    timeFormat24: "24 t",
+    uiSection: "UI",
+    uiColorsHint: "Én farge per måleverdi, gjenbrukt overalt der den vises. Sol: buen, solskiven og det øvre området på tidslinjen. Skyer: skiven på bakken og det nedre området på tidslinjen.",
+    sunColor: "Solfarge",
+    cloudColor: "Skyfarge",
+    pvSection: "Solproduksjon",
+    pvHint: "Valgfri. Når satt vises en chip nær huset med øyeblikkelig produksjon (beregnet over siste minutt), og en dedikert graf legges til over tidslinjen. Aksepterer enten en effektsensor (W/kW) eller en kumulativ energisensor (Wh/kWh).",
+    pvEntity: "Produksjons-entitet",
+    pvEntityHelp: "Velg en sensor for sol-effekt eller -energi (W, kW, Wh, kWh).",
+    pvPeakPower: "Toppeffekt (kWp)",
+    pvPeakPowerHelp: "Installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen i PV-grafen og strømningsmetningen for PV → hus-leaderen. La stå tom for å skjule prognosen; observert produksjon og dagens topp tegnes likevel.",
+    pvArraysSection: "Panelorientering",
+    pvArraysHelp: "Én oppføring per felt paneler med samme orientering. La én oppføring stå med helning 0 for en flat installasjon. Legg til flere oppføringer når panelene er fordelt på flere retninger (for eksempel en rad mot øst og en mot vest). Prognosen beregnes per oppføring og vektes etter prosenten av total kWp.",
+    pvArrayTitle: "Rad {n}",
+    pvArrayName: "Navn",
+    pvArrayNameHelp: "Valgfritt. En etikett for denne raden som vises i editor-overskriften (for eksempel «Sørtak», «Østgarasje»). La feltet stå tomt for å falle tilbake til den automatisk nummererte tittelen.",
+    pvArrayTilt: "Helning (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Andel (%)",
+    pvArrayAdd: "+ Legg til rad",
+    pvArrayRemove: "Fjern",
+    pvArrayNormHint: "Prosentene summerer ikke til 100 %, prognosen normaliserer dem automatisk.",
+    pvArrayTiltHelp: "Helningen til denne raden i forhold til vannrett, fra 0 til 90: 0 for flat installasjon, 30 til 45 for et typisk skråtak, 90 for en helt vertikal oppstilling (for eksempel balkong). Sammen med azimuten driver helningen Liu-Jordan-transposisjonen som projiserer forventet stråling på panelets plan.",
+    pvArrayAzimuthHelp: "Kompassretningen denne raden peker mot, med klokken fra nord, fra 0 til 360: 0 = nord, 90 = øst, 180 = sør, 270 = vest.",
+    pvArrayShareHelp: "Relativ vekt av denne raden i den totale kWp. Normaliseres automatisk ved beregning: 50/50, 60/60 og 1/1 gir samme resultat. La stå tomt når det bare finnes én rad (den får 100 % som standard).",
+    pvColor: "Produksjonsfarge",
+    batterySection: "Husbatteri",
+    batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie. Chipen på sin side vises så snart entiteten er satt.",
+    batterySocEntity: "Ladenivå-entitet",
+    batterySocEntityHelp: 'Velg en sensor for batteriets ladenivå (%, vanligvis med device_class "battery"). Vises som chip til venstre for PV-chipen med live prosent.',
+    batteryPowerEntity: "Effekt-entitet",
+    batteryPowerEntityHelp: "Velg en sensor for batterieffekt (W eller kW). Fortegnskonvensjonen følger entiteten selv (positiv tolkes som lading) og vises ordrett på chipen (f.eks. «+3,00 kW» ved lading, «−1,20 kW» ved utlading).",
+    batteryPowerInvert: "Fortegn på batterieffekt",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Invertert",
+    batteryPowerInvertHelp: "Som standard rapporterer batteri-enheten lading som positivt og utlading som negativt. Velg Invertert hvis enheten din gjør motsatt (noen GivEnergy- / GivTCP-oppsett). Helios snur da verdien én gang ved innlesing, slik at chipen, strømpilen og daglige lade- / utladesummer beholder betydningen sin.",
+    batteryColor: "Batterifarge",
+    weatherSection: "Vær",
+    weatherHint: "Valgfritt. Koble til lokale værentiteter slik at Helios bruker målinger tatt hjemme hos deg i stedet for Open-Meteo-modellen som interpoleres til rutecellen din. Hver entitet er uavhengig valgfri og brukes bare når den rapporterer en fersk verdi; manglende eller utdaterte prøver faller transparent tilbake til modellen.",
+    solarRadiationEntity: "Solinnstrålings-entitet",
+    solarRadiationEntityHelp: "Velg en sensor som rapporterer global kortbølget innstråling i W/m² (typisk en Ecowitt / Davis / personlig værstasjon). Når satt, erstatter dens nåværende tilstand og recorder-historikk Open-Meteo for live og tidligere innstrålingsverdier overalt der de vises (tall på solpastillen, Y-aksen i PV-grafen, fargen på solbuen). Prognose-timene bruker fortsatt Open-Meteo, en sensor kjenner bare nået.",
+    buildingsSection: "Bygning",
+    buildingsHint: "For å holde kortet flytende i tette urbane områder rendres bare bygninger innenfor konfigurert radius rundt huset i 3D. Selve huset holdes alltid på full opasitet; nabobygninger rendres med konfigurert opasitet for å gi urban kontekst uten å konkurrere med dataovergangene. Klyngeradiusen grupperer tilkoblede uthus (verandaer, garasjer, skur) i «hus»-settet.",
+    displayRadius: "Visningsradius",
+    displayRadiusHint: "Definerer det synlige området rundt huset. Alt utenfor denne radiusen skjules: grunnkart, nabobygninger, skygger. Styrer også LiDAR-hentingens omfang og klipp av projiserte skygger.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Vis timeline",
+    timelineEnabledOn: "Vis",
+    timelineEnabledOff: "Skjul",
+    timelineEnabledHint: "Skjuler hele tidslinjen nederst (graf, dagsetiketter, scrubmarkører). Nyttig når kortet sitter i et bredere dashboardpanel der en annen modul allerede viser dagstrenden.",
+    timelineWidth: "Bredde på timelinen",
+    timelineWidthHint: "Krymper timelinen horisontalt mens den holdes sentrert på kortet. Ved 100 % klistrer den seg til kantene; under det trekker stripen seg jevnt inn fra begge sider.",
+    timelineConsumption: "Vis daglig forbruk / prognose",
+    timelineConsumptionOn: "Vis",
+    timelineConsumptionOff: "Skjul",
+    timelineConsumptionHint: "Skrur av kWh-merket ved siden av hver dato på timelinen (målt for tidligere dager, prognose for i dag og framover). Av når du kun bryr deg om live-scenen og vil ha en renere graf.",
+    buildingClusterRadius: "Hus-klyngeradius",
+    buildingOpacity: "Opasitet for nabobygninger",
+    buildingColor: "Bygningsfarge",
+    pixelRatio: "Pikselforhold",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (standard) bruker skjermens native devicePixelRatio (begrenset til 2 på skrivebord, 1,25 på mobil) for skarp rendering. 1x tvinger verdien til 1,0 for det billigste mulige per-frame fragmentarbeidet, nyttig på lavtytende enheter eller for lange økter der batteritid / varme betyr mer enn skarphet.",
+    mapStyleMinimal: "Minimal",
+    shadowsSection: "Skygger",
+    shadowsEnabled: "Vis skygger",
+    shadowsEnabledOn: "Vist",
+    shadowsEnabledOff: "Skjult",
+    shadowsEnabledHint: "Hovedbryter for projiserte bakkeskygger. Når skjult beregnes ingen skygger i det hele tatt. Når vist velges kilden automatisk: en LiDAR-leverandør når én dekker området ditt (bygninger + vegetasjon), OpenFreeMap-bygningsfotavtrykk ellers (bare bygninger).",
+    lidarPrecision: "LiDAR-presisjon",
+    lidarPrecisionLow: "Lav",
+    lidarPrecisionMedium: "Middels",
+    lidarPrecisionHigh: "Høy",
+    lidarPrecisionHint: "Hvis huset ligger innenfor en LiDAR-leverandør integrert med Helios (Kartverket NHM for Norge), får du mer realistiske skygger (bygninger OG vegetasjon). Noe forskyvning kan oppstå mellom de viste bygningene og skyggene deres: LiDAR-undersøkelsen er fanget på en gitt dato og gjenspeiler kanskje ikke nåværende tilstand. Utenfor LiDAR-dekning faller skyggene tilbake til de flate OpenFreeMap-bygningsfotavtrykkene, og denne innstillingen har ingen effekt. Høyere presisjon henter flere celler fra kilden: LiDAR-visningen tegner flere punkter og er tyngre for GPU-en. Den faktiske tettheten avhenger av hva leverandøren publiserer for området ditt.",
+    shadowOpacity: "Skyggeopasitet",
+    shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
+    lidarViewSection: "LiDAR-visning",
+    lidarViewHint: "Klikk på LiDAR-knappen øverst til høyre på kortet for å bytte til en punktskyvisning av omgivelsene dine: hver lastet LiDAR-celle (bakke, vegetasjon og bygninger) males over grunnkartet. Knappen forblir deaktivert når ingen leverandør dekker hjemmet. Visningen gjenbruker dataen som allerede er hentet med gjeldende presisjon, ingen ekstra kall gjøres.",
+    lidarViewPointSize: "Punktstørrelse (px)",
+    lidarViewPointColor: "Punktfarge",
+    lidarViewPointOpacity: "Punktopasitet",
+    lidarViewWireframe: "Trådmodell",
+    lidarViewWireframeOn: "På",
+    lidarViewWireframeOff: "Av",
+    lidarViewWireframeHint: "Knytter hver gyldige LiDAR-celle til naboene til høyre og under med segmenter, og lager dermed et nett oppå punktskyen. Sett punktstørrelsen til 0 om du kun vil ha linjene. Tunge rastere ved høy presisjon kjøres fortsatt i ett GPU-kall, men antall linjer vokser med antall celler, eldre enheter kan bremse på store radier.",
+    lidarViewWireframeColor: "Trådmodell-farge",
+    lidarViewWireframeOpacity: "Trådmodell-opasitet",
+    localLidarSection: "Avansert — Lokal LiDAR (BYO)",
+    localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.",
+    localLidarToolsHint: "Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).",
+    localLidarEnabled: "Bruk lokale data",
+    localLidarUrl: "GeoTIFF-URL",
+    localLidarMinLat: "Min breddegrad",
+    localLidarMaxLat: "Maks breddegrad",
+    localLidarMinLon: "Min lengdegrad",
+    localLidarMaxLon: "Maks lengdegrad"
+  }
+};
+const LOCALES = { en, fr, de, es, it, nl, pt, no };
+const FALLBACK = en;
+function pickTranslations(haLanguage) {
+  if (!haLanguage) {
+    return FALLBACK;
+  }
+  const lower = haLanguage.toLowerCase();
+  if (LOCALES[lower]) {
+    return LOCALES[lower];
+  }
+  const root = lower.split("-")[0];
+  if (LOCALES[root]) {
+    return LOCALES[root];
+  }
+  return FALLBACK;
+}
+const maplibreCss = `.maplibregl-map{font:12px/20px Helvetica Neue,Arial,Helvetica,sans-serif;overflow:hidden;position:relative;-webkit-tap-highlight-color:rgb(0 0 0/0)}.maplibregl-canvas{left:0;position:absolute;top:0}.maplibregl-map:fullscreen{height:100%;width:100%}.maplibregl-ctrl-group button.maplibregl-ctrl-compass{touch-action:none}.maplibregl-canvas-container.maplibregl-interactive,.maplibregl-ctrl-group button.maplibregl-ctrl-compass{cursor:grab;-webkit-user-select:none;-moz-user-select:none;user-select:none}.maplibregl-canvas-container.maplibregl-interactive.maplibregl-track-pointer{cursor:pointer}.maplibregl-canvas-container.maplibregl-interactive:active,.maplibregl-ctrl-group button.maplibregl-ctrl-compass:active{cursor:grabbing}.maplibregl-canvas-container.maplibregl-touch-zoom-rotate,.maplibregl-canvas-container.maplibregl-touch-zoom-rotate .maplibregl-canvas{touch-action:pan-x pan-y}.maplibregl-canvas-container.maplibregl-touch-drag-pan,.maplibregl-canvas-container.maplibregl-touch-drag-pan .maplibregl-canvas{touch-action:pinch-zoom}.maplibregl-canvas-container.maplibregl-touch-zoom-rotate.maplibregl-touch-drag-pan,.maplibregl-canvas-container.maplibregl-touch-zoom-rotate.maplibregl-touch-drag-pan .maplibregl-canvas{touch-action:none}.maplibregl-canvas-container.maplibregl-touch-drag-pan.maplibregl-cooperative-gestures,.maplibregl-canvas-container.maplibregl-touch-drag-pan.maplibregl-cooperative-gestures .maplibregl-canvas{touch-action:pan-x pan-y}.maplibregl-ctrl-bottom-left,.maplibregl-ctrl-bottom-right,.maplibregl-ctrl-top-left,.maplibregl-ctrl-top-right{pointer-events:none;position:absolute;z-index:2}.maplibregl-ctrl-top-left{left:0;top:0}.maplibregl-ctrl-top-right{right:0;top:0}.maplibregl-ctrl-bottom-left{bottom:0;left:0}.maplibregl-ctrl-bottom-right{bottom:0;right:0}.maplibregl-ctrl{clear:both;pointer-events:auto;transform:translate(0)}.maplibregl-ctrl-top-left .maplibregl-ctrl{float:left;margin:10px 0 0 10px}.maplibregl-ctrl-top-right .maplibregl-ctrl{float:right;margin:10px 10px 0 0}.maplibregl-ctrl-bottom-left .maplibregl-ctrl{float:left;margin:0 0 10px 10px}.maplibregl-ctrl-bottom-right .maplibregl-ctrl{float:right;margin:0 10px 10px 0}.maplibregl-ctrl-group{background:#fff;border-radius:4px}.maplibregl-ctrl-group:not(:empty){box-shadow:0 0 0 2px #0000001a}@media (forced-colors:active){.maplibregl-ctrl-group:not(:empty){box-shadow:0 0 0 2px ButtonText}}.maplibregl-ctrl-group button{background-color:transparent;border:0;box-sizing:border-box;cursor:pointer;display:block;height:29px;outline:none;padding:0;width:29px}.maplibregl-ctrl-group button+button{border-top:1px solid #ddd}.maplibregl-ctrl button .maplibregl-ctrl-icon{background-position:50%;background-repeat:no-repeat;display:block;height:100%;width:100%}@media (forced-colors:active){.maplibregl-ctrl-icon{background-color:transparent}.maplibregl-ctrl-group button+button{border-top:1px solid ButtonText}}.maplibregl-ctrl button::-moz-focus-inner{border:0;padding:0}.maplibregl-ctrl-attrib-button:focus,.maplibregl-ctrl-group button:focus{box-shadow:0 0 2px 2px #0096ff}.maplibregl-ctrl button:disabled{cursor:not-allowed}.maplibregl-ctrl button:disabled .maplibregl-ctrl-icon{opacity:.25}@media (hover:hover){.maplibregl-ctrl button:not(:disabled):hover{background-color:#0000000d}}.maplibregl-ctrl button:not(:disabled):active{background-color:#0000000d}.maplibregl-ctrl-group button:focus:focus-visible{box-shadow:0 0 2px 2px #0096ff}.maplibregl-ctrl-group button:focus:not(:focus-visible){box-shadow:none}.maplibregl-ctrl-group button:focus:first-child{border-radius:4px 4px 0 0}.maplibregl-ctrl-group button:focus:last-child{border-radius:0 0 4px 4px}.maplibregl-ctrl-group button:focus:only-child{border-radius:inherit}.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E")}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E")}}.maplibregl-ctrl button.maplibregl-ctrl-fullscreen .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M24 16v5.5c0 1.75-.75 2.5-2.5 2.5H16v-1l3-1.5-4-5.5 1-1 5.5 4 1.5-3zM6 16l1.5 3 5.5-4 1 1-4 5.5 3 1.5v1H7.5C5.75 24 5 23.25 5 21.5V16zm7-11v1l-3 1.5 4 5.5-1 1-5.5-4L6 13H5V7.5C5 5.75 5.75 5 7.5 5zm11 2.5c0-1.75-.75-2.5-2.5-2.5H16v1l3 1.5-4 5.5 1 1 5.5-4 1.5 3h1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-shrink .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M18.5 16c-1.75 0-2.5.75-2.5 2.5V24h1l1.5-3 5.5 4 1-1-4-5.5 3-1.5v-1zM13 18.5c0-1.75-.75-2.5-2.5-2.5H5v1l3 1.5L4 24l1 1 5.5-4 1.5 3h1zm3-8c0 1.75.75 2.5 2.5 2.5H24v-1l-3-1.5L25 5l-1-1-5.5 4L17 5h-1zM10.5 13c1.75 0 2.5-.75 2.5-2.5V5h-1l-1.5 3L5 4 4 5l4 5.5L5 12v1z'/%3E%3C/svg%3E")}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-fullscreen .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M24 16v5.5c0 1.75-.75 2.5-2.5 2.5H16v-1l3-1.5-4-5.5 1-1 5.5 4 1.5-3zM6 16l1.5 3 5.5-4 1 1-4 5.5 3 1.5v1H7.5C5.75 24 5 23.25 5 21.5V16zm7-11v1l-3 1.5 4 5.5-1 1-5.5-4L6 13H5V7.5C5 5.75 5.75 5 7.5 5zm11 2.5c0-1.75-.75-2.5-2.5-2.5H16v1l3 1.5-4 5.5 1 1 5.5-4 1.5 3h1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-shrink .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M18.5 16c-1.75 0-2.5.75-2.5 2.5V24h1l1.5-3 5.5 4 1-1-4-5.5 3-1.5v-1zM13 18.5c0-1.75-.75-2.5-2.5-2.5H5v1l3 1.5L4 24l1 1 5.5-4 1.5 3h1zm3-8c0 1.75.75 2.5 2.5 2.5H24v-1l-3-1.5L25 5l-1-1-5.5 4L17 5h-1zM10.5 13c1.75 0 2.5-.75 2.5-2.5V5h-1l-1.5 3L5 4 4 5l4 5.5L5 12v1z'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-fullscreen .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M24 16v5.5c0 1.75-.75 2.5-2.5 2.5H16v-1l3-1.5-4-5.5 1-1 5.5 4 1.5-3zM6 16l1.5 3 5.5-4 1 1-4 5.5 3 1.5v1H7.5C5.75 24 5 23.25 5 21.5V16zm7-11v1l-3 1.5 4 5.5-1 1-5.5-4L6 13H5V7.5C5 5.75 5.75 5 7.5 5zm11 2.5c0-1.75-.75-2.5-2.5-2.5H16v1l3 1.5-4 5.5 1 1 5.5-4 1.5 3h1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-shrink .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M18.5 16c-1.75 0-2.5.75-2.5 2.5V24h1l1.5-3 5.5 4 1-1-4-5.5 3-1.5v-1zM13 18.5c0-1.75-.75-2.5-2.5-2.5H5v1l3 1.5L4 24l1 1 5.5-4 1.5 3h1zm3-8c0 1.75.75 2.5 2.5 2.5H24v-1l-3-1.5L25 5l-1-1-5.5 4L17 5h-1zM10.5 13c1.75 0 2.5-.75 2.5-2.5V5h-1l-1.5 3L5 4 4 5l4 5.5L5 12v1z'/%3E%3C/svg%3E")}}.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23ccc' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E")}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23ccc' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23ccc' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E")}}.maplibregl-ctrl button.maplibregl-ctrl-globe .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='none' stroke='%23333' viewBox='0 0 22 22'%3E%3Ccircle cx='11' cy='11' r='8.5'/%3E%3Cpath d='M17.5 11c0 4.819-3.02 8.5-6.5 8.5S4.5 15.819 4.5 11 7.52 2.5 11 2.5s6.5 3.681 6.5 8.5Z'/%3E%3Cpath d='M13.5 11c0 2.447-.331 4.64-.853 6.206-.262.785-.562 1.384-.872 1.777-.314.399-.58.517-.775.517s-.461-.118-.775-.517c-.31-.393-.61-.992-.872-1.777C8.831 15.64 8.5 13.446 8.5 11s.331-4.64.853-6.206c.262-.785.562-1.384.872-1.777.314-.399.58-.517.775-.517s.461.118.775.517c.31.393.61.992.872 1.777.522 1.565.853 3.76.853 6.206Z'/%3E%3Cpath d='M11 7.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138q.07-.058.224-.138c.299-.151.763-.302 1.379-.434C7.378 5.666 9.091 5.5 11 5.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138q-.07.058-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428ZM4.486 6.436ZM11 16.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138 1.3 1.3 0 0 1 .224-.138c.299-.151.763-.302 1.379-.434C7.378 14.666 9.091 14.5 11 14.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138a1.3 1.3 0 0 1-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428Zm-6.514-1.064ZM11 12.5c-2.46 0-4.672-.222-6.255-.574-.796-.177-1.406-.38-1.805-.59a1.5 1.5 0 0 1-.39-.272.3.3 0 0 1-.047-.064.3.3 0 0 1 .048-.064c.066-.073.189-.167.389-.272.399-.21 1.009-.413 1.805-.59C6.328 9.722 8.54 9.5 11 9.5s4.672.222 6.256.574c.795.177 1.405.38 1.804.59.2.105.323.2.39.272a.3.3 0 0 1 .047.064.3.3 0 0 1-.048.064 1.4 1.4 0 0 1-.389.272c-.399.21-1.009.413-1.804.59-1.584.352-3.796.574-6.256.574Zm-8.501-1.51v.002zm0 .018v.002zm17.002.002v-.002zm0-.018v-.002z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-globe-enabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='none' stroke='%2333b5e5' viewBox='0 0 22 22'%3E%3Ccircle cx='11' cy='11' r='8.5'/%3E%3Cpath d='M17.5 11c0 4.819-3.02 8.5-6.5 8.5S4.5 15.819 4.5 11 7.52 2.5 11 2.5s6.5 3.681 6.5 8.5Z'/%3E%3Cpath d='M13.5 11c0 2.447-.331 4.64-.853 6.206-.262.785-.562 1.384-.872 1.777-.314.399-.58.517-.775.517s-.461-.118-.775-.517c-.31-.393-.61-.992-.872-1.777C8.831 15.64 8.5 13.446 8.5 11s.331-4.64.853-6.206c.262-.785.562-1.384.872-1.777.314-.399.58-.517.775-.517s.461.118.775.517c.31.393.61.992.872 1.777.522 1.565.853 3.76.853 6.206Z'/%3E%3Cpath d='M11 7.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138q.07-.058.224-.138c.299-.151.763-.302 1.379-.434C7.378 5.666 9.091 5.5 11 5.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138q-.07.058-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428ZM4.486 6.436ZM11 16.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138 1.3 1.3 0 0 1 .224-.138c.299-.151.763-.302 1.379-.434C7.378 14.666 9.091 14.5 11 14.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138a1.3 1.3 0 0 1-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428Zm-6.514-1.064ZM11 12.5c-2.46 0-4.672-.222-6.255-.574-.796-.177-1.406-.38-1.805-.59a1.5 1.5 0 0 1-.39-.272.3.3 0 0 1-.047-.064.3.3 0 0 1 .048-.064c.066-.073.189-.167.389-.272.399-.21 1.009-.413 1.805-.59C6.328 9.722 8.54 9.5 11 9.5s4.672.222 6.256.574c.795.177 1.405.38 1.804.59.2.105.323.2.39.272a.3.3 0 0 1 .047.064.3.3 0 0 1-.048.064 1.4 1.4 0 0 1-.389.272c-.399.21-1.009.413-1.804.59-1.584.352-3.796.574-6.256.574Zm-8.501-1.51v.002zm0 .018v.002zm17.002.002v-.002zm0-.018v-.002z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-terrain .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='%23333' viewBox='0 0 22 22'%3E%3Cpath d='m1.754 13.406 4.453-4.851 3.09 3.09 3.281 3.277.969-.969-3.309-3.312 3.844-4.121 6.148 6.886h1.082v-.855l-7.207-8.07-4.84 5.187L6.169 6.57l-5.48 5.965v.871ZM.688 16.844h20.625v1.375H.688Zm0 0'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-terrain-enabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='%2333b5e5' viewBox='0 0 22 22'%3E%3Cpath d='m1.754 13.406 4.453-4.851 3.09 3.09 3.281 3.277.969-.969-3.309-3.312 3.844-4.121 6.148 6.886h1.082v-.855l-7.207-8.07-4.84 5.187L6.169 6.57l-5.48 5.965v.871ZM.688 16.844h20.625v1.375H.688Zm0 0'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate:disabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23aaa' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Cpath fill='red' d='m14 5 1 1-9 9-1-1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e58978' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e54e33' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-waiting .maplibregl-ctrl-icon{animation:maplibregl-spin 2s linear infinite}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate:disabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23999' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Cpath fill='red' d='m14 5 1 1-9 9-1-1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e58978' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e54e33' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate:disabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23666' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Cpath fill='red' d='m14 5 1 1-9 9-1-1z'/%3E%3C/svg%3E")}}@keyframes maplibregl-spin{0%{transform:rotate(0)}to{transform:rotate(1turn)}}a.maplibregl-ctrl-logo{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='23' fill='none'%3E%3Cpath fill='%23000' fill-opacity='.4' fill-rule='evenodd' d='M17.408 16.796h-1.827l2.501-12.095h.198l3.324 6.533.988 2.19.988-2.19 3.258-6.533h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.929 5.644h-.098l-2.914-5.644-.757-1.71-.345 1.71zm1.958-3.42-.726 3.663a1.255 1.255 0 0 1-1.232 1.011h-1.827a1.255 1.255 0 0 1-1.229-1.509l2.501-12.095a1.255 1.255 0 0 1 1.23-1.001h.197a1.25 1.25 0 0 1 1.12.685l3.19 6.273 3.125-6.263a1.25 1.25 0 0 1 1.123-.695h.181a1.255 1.255 0 0 1 1.227.991l1.443 6.71a5 5 0 0 1 .314-.787l.009-.016a4.6 4.6 0 0 1 1.777-1.887c.782-.46 1.668-.667 2.611-.667a4.6 4.6 0 0 1 1.7.32l.306.134c.21-.16.474-.256.759-.256h1.694a1.255 1.255 0 0 1 1.212.925 1.255 1.255 0 0 1 1.212-.925h1.711c.284 0 .545.094.755.252.613-.3 1.312-.45 2.075-.45 1.356 0 2.557.445 3.482 1.4q.47.48.763 1.064V4.701a1.255 1.255 0 0 1 1.255-1.255h1.86A1.255 1.255 0 0 1 54.44 4.7v9.194h2.217c.19 0 .37.043.532.118v-4.77c0-.356.147-.678.385-.906a2.42 2.42 0 0 1-.682-1.71c0-.665.267-1.253.735-1.7a2.45 2.45 0 0 1 1.722-.674 2.43 2.43 0 0 1 1.705.675q.318.302.504.683V4.7a1.255 1.255 0 0 1 1.255-1.255h1.744A1.255 1.255 0 0 1 65.812 4.7v3.335a4.8 4.8 0 0 1 1.526-.246c.938 0 1.817.214 2.59.69a4.47 4.47 0 0 1 1.67 1.743v-.98a1.255 1.255 0 0 1 1.256-1.256h1.777c.233 0 .451.064.639.174a3.4 3.4 0 0 1 1.567-.372c.346 0 .861.02 1.285.232a1.25 1.25 0 0 1 .689 1.004 4.7 4.7 0 0 1 .853-.588c.795-.44 1.675-.647 2.61-.647 1.385 0 2.65.39 3.525 1.396.836.938 1.168 2.173 1.168 3.528q-.001.515-.056 1.051a1.255 1.255 0 0 1-.947 1.09l.408.952a1.255 1.255 0 0 1-.477 1.552c-.418.268-.92.463-1.458.612-.613.171-1.304.244-2.049.244-1.06 0-2.043-.207-2.886-.698l-.015-.008c-.798-.48-1.419-1.135-1.818-1.963l-.004-.008a5.8 5.8 0 0 1-.548-2.512q0-.429.053-.843a1.3 1.3 0 0 1-.333-.086l-.166-.004c-.223 0-.426.062-.643.228-.03.024-.142.139-.142.59v3.883a1.255 1.255 0 0 1-1.256 1.256h-1.777a1.255 1.255 0 0 1-1.256-1.256V15.69l-.032.057a4.8 4.8 0 0 1-1.86 1.833 5.04 5.04 0 0 1-2.484.634 4.5 4.5 0 0 1-1.935-.424 1.25 1.25 0 0 1-.764.258h-1.71a1.255 1.255 0 0 1-1.256-1.255V7.687a2.4 2.4 0 0 1-.428.625c.253.23.412.561.412.93v7.553a1.255 1.255 0 0 1-1.256 1.255h-1.843a1.25 1.25 0 0 1-.894-.373c-.228.23-.544.373-.894.373H51.32a1.255 1.255 0 0 1-1.256-1.255v-1.251l-.061.117a4.7 4.7 0 0 1-1.782 1.884 4.77 4.77 0 0 1-2.485.67 5.6 5.6 0 0 1-1.485-.188l.009 2.764a1.255 1.255 0 0 1-1.255 1.259h-1.729a1.255 1.255 0 0 1-1.255-1.255v-3.537a1.255 1.255 0 0 1-1.167.793h-1.679a1.25 1.25 0 0 1-.77-.263 4.5 4.5 0 0 1-1.945.429c-.885 0-1.724-.21-2.495-.632l-.017-.01a5 5 0 0 1-1.081-.836 1.255 1.255 0 0 1-1.254 1.312h-1.81a1.255 1.255 0 0 1-1.228-.99l-.782-3.625-2.044 3.939a1.25 1.25 0 0 1-1.115.676h-.098a1.25 1.25 0 0 1-1.116-.68l-2.061-3.994zM35.92 16.63l.207-.114.223-.15q.493-.356.735-.785l.061-.118.033 1.332h1.678V9.242h-1.694l-.033 1.267q-.133-.329-.526-.658l-.032-.028a3.2 3.2 0 0 0-.668-.428l-.27-.12a3.3 3.3 0 0 0-1.235-.23q-1.136-.001-1.974.493a3.36 3.36 0 0 0-1.3 1.382q-.445.89-.444 2.074 0 1.2.51 2.107a3.8 3.8 0 0 0 1.382 1.381 3.9 3.9 0 0 0 1.893.477q.795 0 1.455-.33zm-2.789-5.38q-.576.675-.575 1.762 0 1.102.559 1.794.576.675 1.645.675a2.25 2.25 0 0 0 .934-.19 2.2 2.2 0 0 0 .468-.29l.178-.161a2.2 2.2 0 0 0 .397-.561q.244-.5.244-1.15v-.115q0-.708-.296-1.267l-.043-.077a2.2 2.2 0 0 0-.633-.709l-.13-.086-.047-.028a2.1 2.1 0 0 0-1.073-.285q-1.052 0-1.629.692zm2.316 2.706c.163-.17.28-.407.28-.83v-.114c0-.292-.06-.508-.15-.68a.96.96 0 0 0-.353-.389.85.85 0 0 0-.464-.127c-.4 0-.56.114-.664.239l-.01.012c-.148.174-.275.45-.275.945 0 .506.122.801.27.99.097.11.266.224.68.224.303 0 .504-.09.687-.269zm7.545 1.705a2.6 2.6 0 0 0 .331.423q.319.33.755.548l.173.074q.65.255 1.49.255 1.02 0 1.844-.493a3.45 3.45 0 0 0 1.316-1.4q.493-.904.493-2.089 0-1.909-.988-2.913-.988-1.02-2.584-1.02-.898 0-1.575.347a3 3 0 0 0-.415.262l-.199.166a3.4 3.4 0 0 0-.64.82V9.242h-1.712v11.553h1.729l-.017-5.134zm.53-1.138q.206.29.48.5l.155.11.053.034q.51.296 1.119.297 1.07 0 1.645-.675.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.435 0-.835.16a2 2 0 0 0-.284.136 2 2 0 0 0-.363.254 2.2 2.2 0 0 0-.46.569l-.082.162a2.6 2.6 0 0 0-.213 1.072v.115q0 .707.296 1.267l.135.211zm.964-.818a1.1 1.1 0 0 0 .367.385.94.94 0 0 0 .476.118c.423 0 .59-.117.687-.23.159-.194.28-.478.28-.95 0-.53-.133-.8-.266-.952l-.021-.025c-.078-.094-.231-.221-.68-.221a1 1 0 0 0-.503.135l-.012.007a.86.86 0 0 0-.335.343c-.073.133-.132.324-.132.614v.115a1.4 1.4 0 0 0 .14.66zm15.7-6.222q.347-.346.346-.856a1.05 1.05 0 0 0-.345-.79 1.18 1.18 0 0 0-.84-.329q-.51 0-.855.33a1.05 1.05 0 0 0-.346.79q0 .51.346.855.345.346.856.346.51 0 .839-.346zm4.337 9.314.033-1.332q.191.403.59.747l.098.081a4 4 0 0 0 .316.224l.223.122a3.2 3.2 0 0 0 1.44.322 3.8 3.8 0 0 0 1.875-.477 3.5 3.5 0 0 0 1.382-1.366q.527-.89.526-2.09 0-1.184-.444-2.073a3.24 3.24 0 0 0-1.283-1.399q-.823-.51-1.942-.51a3.5 3.5 0 0 0-1.527.344l-.086.043-.165.09a3 3 0 0 0-.33.214q-.432.315-.656.707a2 2 0 0 0-.099.198l.082-1.283V4.701h-1.744v12.095zm.473-2.509a2.5 2.5 0 0 0 .566.7q.117.098.245.18l.144.08a2.1 2.1 0 0 0 .975.232q1.07 0 1.645-.675.576-.69.576-1.778 0-1.102-.576-1.777-.56-.691-1.645-.692a2.2 2.2 0 0 0-1.015.235q-.22.113-.415.282l-.15.142a2.1 2.1 0 0 0-.42.594q-.223.479-.223 1.1v.115q0 .705.293 1.26zm2.616-.293c.157-.191.28-.479.28-.967 0-.51-.13-.79-.276-.961l-.021-.026c-.082-.1-.232-.225-.67-.225a.87.87 0 0 0-.681.279l-.012.011c-.154.155-.274.38-.274.807v.115c0 .285.057.499.144.669a1.1 1.1 0 0 0 .367.405c.137.082.28.123.455.123.423 0 .59-.118.686-.23zm8.266-3.013q.345-.13.724-.14l.069-.002q.493 0 .642.099l.247-1.794q-.196-.099-.717-.099a2.3 2.3 0 0 0-.545.063 2 2 0 0 0-.411.148 2.2 2.2 0 0 0-.4.249 2.5 2.5 0 0 0-.485.499 2.7 2.7 0 0 0-.32.581l-.05.137v-1.48h-1.778v7.553h1.777v-3.884q0-.546.159-.943a1.5 1.5 0 0 1 .466-.636 2.5 2.5 0 0 1 .399-.253 2 2 0 0 1 .224-.099zm9.784 2.656.05-.922q0-1.743-.856-2.698-.838-.97-2.584-.97-1.119-.001-2.007.493a3.46 3.46 0 0 0-1.4 1.382q-.493.906-.493 2.106 0 1.07.428 1.975.428.89 1.332 1.432.906.526 2.255.526.973 0 1.668-.185l.044-.012.135-.04q.613-.184.984-.421l-.542-1.267q-.3.162-.642.274l-.297.087q-.51.131-1.3.131-.954 0-1.497-.444a1.6 1.6 0 0 1-.192-.193q-.366-.44-.512-1.234l-.004-.021zm-5.427-1.256-.003.022h3.752v-.138q-.011-.727-.288-1.118a1 1 0 0 0-.156-.176q-.46-.428-1.316-.428-.986 0-1.494.604-.379.45-.494 1.234zm-27.053 2.77V4.7h-1.86v12.095h5.333V15.15zm7.103-5.908v7.553h-1.843V9.242h1.843z'/%3E%3Cpath fill='%23fff' d='m19.63 11.151-.757-1.71-.345 1.71-1.12 5.644h-1.827L18.083 4.7h.197l3.325 6.533.988 2.19.988-2.19L26.839 4.7h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.93 5.644h-.098l-2.913-5.644zm14.836 5.81q-1.02 0-1.893-.478a3.8 3.8 0 0 1-1.381-1.382q-.51-.906-.51-2.106 0-1.185.444-2.074a3.36 3.36 0 0 1 1.3-1.382q.839-.494 1.974-.494a3.3 3.3 0 0 1 1.234.231 3.3 3.3 0 0 1 .97.575q.396.33.527.659l.033-1.267h1.694v7.553H37.18l-.033-1.332q-.279.593-1.02 1.053a3.17 3.17 0 0 1-1.662.444zm.296-1.482q.938 0 1.58-.642.642-.66.642-1.711v-.115q0-.708-.296-1.267a2.2 2.2 0 0 0-.807-.872 2.1 2.1 0 0 0-1.119-.313q-1.053 0-1.629.692-.575.675-.575 1.76 0 1.103.559 1.795.577.675 1.645.675zm6.521-6.237h1.711v1.4q.906-1.597 2.83-1.597 1.596 0 2.584 1.02.988 1.005.988 2.914 0 1.185-.493 2.09a3.46 3.46 0 0 1-1.316 1.399 3.5 3.5 0 0 1-1.844.493q-.954 0-1.662-.329a2.67 2.67 0 0 1-1.086-.97l.017 5.134h-1.728zm4.048 6.22q1.07 0 1.645-.674.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.592 0-1.12.296-.51.28-.822.823-.296.527-.296 1.234v.115q0 .708.296 1.267.313.543.823.855.51.296 1.119.297z'/%3E%3Cpath fill='%23e1e3e9' d='M51.325 4.7h1.86v10.45h3.473v1.646h-5.333zm7.12 4.542h1.843v7.553h-1.843zm.905-1.415a1.16 1.16 0 0 1-.856-.346 1.17 1.17 0 0 1-.346-.856 1.05 1.05 0 0 1 .346-.79q.346-.329.856-.329.494 0 .839.33a1.05 1.05 0 0 1 .345.79 1.16 1.16 0 0 1-.345.855q-.33.346-.84.346zm7.875 9.133a3.17 3.17 0 0 1-1.662-.444q-.723-.46-1.004-1.053l-.033 1.332h-1.71V4.701h1.743v4.657l-.082 1.283q.279-.658 1.086-1.119a3.5 3.5 0 0 1 1.778-.477q1.119 0 1.942.51a3.24 3.24 0 0 1 1.283 1.4q.445.888.444 2.072 0 1.201-.526 2.09a3.5 3.5 0 0 1-1.382 1.366 3.8 3.8 0 0 1-1.876.477zm-.296-1.481q1.069 0 1.645-.675.577-.69.577-1.778 0-1.102-.577-1.776-.56-.691-1.645-.692a2.12 2.12 0 0 0-1.58.659q-.642.641-.642 1.694v.115q0 .71.296 1.267a2.4 2.4 0 0 0 .807.872 2.1 2.1 0 0 0 1.119.313zm5.927-6.237h1.777v1.481q.263-.757.856-1.217a2.14 2.14 0 0 1 1.349-.46q.527 0 .724.098l-.247 1.794q-.149-.099-.642-.099-.774 0-1.416.494-.626.493-.626 1.58v3.883h-1.777V9.242zm9.534 7.718q-1.35 0-2.255-.526-.904-.543-1.332-1.432a4.6 4.6 0 0 1-.428-1.975q0-1.2.493-2.106a3.46 3.46 0 0 1 1.4-1.382q.889-.495 2.007-.494 1.744 0 2.584.97.855.956.856 2.7 0 .444-.05.92h-5.43q.18 1.005.708 1.45.542.443 1.497.443.79 0 1.3-.131a4 4 0 0 0 .938-.362l.542 1.267q-.411.263-1.119.46-.708.198-1.711.197zm1.596-4.558q.016-1.02-.444-1.432-.46-.428-1.316-.428-1.728 0-1.991 1.86z'/%3E%3Cpath d='M5.074 15.948a.484.657 0 0 0-.486.659v1.84a.484.657 0 0 0 .486.659h4.101a.484.657 0 0 0 .486-.659v-1.84a.484.657 0 0 0-.486-.659zm3.56 1.16H5.617v.838h3.017z' style='fill:%23fff;fill-rule:evenodd;stroke-width:1.03600001'/%3E%3Cg style='stroke-width:1.12603545'%3E%3Cpath d='M-9.408-1.416c-3.833-.025-7.056 2.912-7.08 6.615-.02 3.08 1.653 4.832 3.107 6.268.903.892 1.721 1.74 2.32 2.902l-.525-.004c-.543-.003-.992.304-1.24.639a1.87 1.87 0 0 0-.362 1.121l-.011 1.877c-.003.402.104.787.347 1.125.244.338.688.653 1.23.656l4.142.028c.542.003.99-.306 1.238-.641a1.87 1.87 0 0 0 .363-1.121l.012-1.875a1.87 1.87 0 0 0-.348-1.127c-.243-.338-.688-.653-1.23-.656l-.518-.004c.597-1.145 1.425-1.983 2.348-2.87 1.473-1.414 3.18-3.149 3.2-6.226-.016-3.59-2.923-6.684-6.993-6.707m-.006 1.1v.002c3.274.02 5.92 2.532 5.9 5.6-.017 2.706-1.39 4.026-2.863 5.44-1.034.994-2.118 2.033-2.814 3.633-.018.041-.052.055-.075.065q-.013.004-.02.01a.34.34 0 0 1-.226.084.34.34 0 0 1-.224-.086l-.092-.077c-.699-1.615-1.768-2.669-2.781-3.67-1.454-1.435-2.797-2.762-2.78-5.478.02-3.067 2.7-5.545 5.975-5.523m-.02 2.826c-1.62-.01-2.944 1.315-2.955 2.96-.01 1.646 1.295 2.988 2.916 2.999h.002c1.621.01 2.943-1.316 2.953-2.961.011-1.646-1.294-2.988-2.916-2.998m-.005 1.1c1.017.006 1.829.83 1.822 1.89s-.83 1.874-1.848 1.867c-1.018-.006-1.829-.83-1.822-1.89s.83-1.874 1.848-1.868m-2.155 11.857 4.14.025c.271.002.49.305.487.676l-.013 1.875c-.003.37-.224.67-.495.668l-4.14-.025c-.27-.002-.487-.306-.485-.676l.012-1.875c.003-.37.224-.67.494-.668' style='color:%23000;font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:%23000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:evenodd;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:%23000;solid-opacity:1;vector-effect:none;fill:%23000;fill-opacity:.4;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-9.415-.316C-12.69-.338-15.37 2.14-15.39 5.207c-.017 2.716 1.326 4.041 2.78 5.477 1.013 1 2.081 2.055 2.78 3.67l.092.076a.34.34 0 0 0 .225.086.34.34 0 0 0 .227-.083l.019-.01c.022-.009.057-.024.074-.064.697-1.6 1.78-2.64 2.814-3.634 1.473-1.414 2.847-2.733 2.864-5.44.02-3.067-2.627-5.58-5.901-5.601m-.057 8.784c1.621.011 2.944-1.315 2.955-2.96.01-1.646-1.295-2.988-2.916-2.999-1.622-.01-2.945 1.315-2.955 2.96s1.295 2.989 2.916 3' style='clip-rule:evenodd;fill:%23e1e3e9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-11.594 15.465c-.27-.002-.492.297-.494.668l-.012 1.876c-.003.371.214.673.485.675l4.14.027c.271.002.492-.298.495-.668l.012-1.877c.003-.37-.215-.672-.485-.674z' style='clip-rule:evenodd;fill:%23fff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3C/g%3E%3C/svg%3E");background-repeat:no-repeat;cursor:pointer;display:block;height:23px;margin:0 0 -4px -4px;overflow:hidden;width:88px}a.maplibregl-ctrl-logo.maplibregl-compact{width:14px}@media (forced-colors:active){a.maplibregl-ctrl-logo{background-color:transparent;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='23' fill='none'%3E%3Cpath fill='%23000' fill-opacity='.4' fill-rule='evenodd' d='M17.408 16.796h-1.827l2.501-12.095h.198l3.324 6.533.988 2.19.988-2.19 3.258-6.533h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.929 5.644h-.098l-2.914-5.644-.757-1.71-.345 1.71zm1.958-3.42-.726 3.663a1.255 1.255 0 0 1-1.232 1.011h-1.827a1.255 1.255 0 0 1-1.229-1.509l2.501-12.095a1.255 1.255 0 0 1 1.23-1.001h.197a1.25 1.25 0 0 1 1.12.685l3.19 6.273 3.125-6.263a1.25 1.25 0 0 1 1.123-.695h.181a1.255 1.255 0 0 1 1.227.991l1.443 6.71a5 5 0 0 1 .314-.787l.009-.016a4.6 4.6 0 0 1 1.777-1.887c.782-.46 1.668-.667 2.611-.667a4.6 4.6 0 0 1 1.7.32l.306.134c.21-.16.474-.256.759-.256h1.694a1.255 1.255 0 0 1 1.212.925 1.255 1.255 0 0 1 1.212-.925h1.711c.284 0 .545.094.755.252.613-.3 1.312-.45 2.075-.45 1.356 0 2.557.445 3.482 1.4q.47.48.763 1.064V4.701a1.255 1.255 0 0 1 1.255-1.255h1.86A1.255 1.255 0 0 1 54.44 4.7v9.194h2.217c.19 0 .37.043.532.118v-4.77c0-.356.147-.678.385-.906a2.42 2.42 0 0 1-.682-1.71c0-.665.267-1.253.735-1.7a2.45 2.45 0 0 1 1.722-.674 2.43 2.43 0 0 1 1.705.675q.318.302.504.683V4.7a1.255 1.255 0 0 1 1.255-1.255h1.744A1.255 1.255 0 0 1 65.812 4.7v3.335a4.8 4.8 0 0 1 1.526-.246c.938 0 1.817.214 2.59.69a4.47 4.47 0 0 1 1.67 1.743v-.98a1.255 1.255 0 0 1 1.256-1.256h1.777c.233 0 .451.064.639.174a3.4 3.4 0 0 1 1.567-.372c.346 0 .861.02 1.285.232a1.25 1.25 0 0 1 .689 1.004 4.7 4.7 0 0 1 .853-.588c.795-.44 1.675-.647 2.61-.647 1.385 0 2.65.39 3.525 1.396.836.938 1.168 2.173 1.168 3.528q-.001.515-.056 1.051a1.255 1.255 0 0 1-.947 1.09l.408.952a1.255 1.255 0 0 1-.477 1.552c-.418.268-.92.463-1.458.612-.613.171-1.304.244-2.049.244-1.06 0-2.043-.207-2.886-.698l-.015-.008c-.798-.48-1.419-1.135-1.818-1.963l-.004-.008a5.8 5.8 0 0 1-.548-2.512q0-.429.053-.843a1.3 1.3 0 0 1-.333-.086l-.166-.004c-.223 0-.426.062-.643.228-.03.024-.142.139-.142.59v3.883a1.255 1.255 0 0 1-1.256 1.256h-1.777a1.255 1.255 0 0 1-1.256-1.256V15.69l-.032.057a4.8 4.8 0 0 1-1.86 1.833 5.04 5.04 0 0 1-2.484.634 4.5 4.5 0 0 1-1.935-.424 1.25 1.25 0 0 1-.764.258h-1.71a1.255 1.255 0 0 1-1.256-1.255V7.687a2.4 2.4 0 0 1-.428.625c.253.23.412.561.412.93v7.553a1.255 1.255 0 0 1-1.256 1.255h-1.843a1.25 1.25 0 0 1-.894-.373c-.228.23-.544.373-.894.373H51.32a1.255 1.255 0 0 1-1.256-1.255v-1.251l-.061.117a4.7 4.7 0 0 1-1.782 1.884 4.77 4.77 0 0 1-2.485.67 5.6 5.6 0 0 1-1.485-.188l.009 2.764a1.255 1.255 0 0 1-1.255 1.259h-1.729a1.255 1.255 0 0 1-1.255-1.255v-3.537a1.255 1.255 0 0 1-1.167.793h-1.679a1.25 1.25 0 0 1-.77-.263 4.5 4.5 0 0 1-1.945.429c-.885 0-1.724-.21-2.495-.632l-.017-.01a5 5 0 0 1-1.081-.836 1.255 1.255 0 0 1-1.254 1.312h-1.81a1.255 1.255 0 0 1-1.228-.99l-.782-3.625-2.044 3.939a1.25 1.25 0 0 1-1.115.676h-.098a1.25 1.25 0 0 1-1.116-.68l-2.061-3.994zM35.92 16.63l.207-.114.223-.15q.493-.356.735-.785l.061-.118.033 1.332h1.678V9.242h-1.694l-.033 1.267q-.133-.329-.526-.658l-.032-.028a3.2 3.2 0 0 0-.668-.428l-.27-.12a3.3 3.3 0 0 0-1.235-.23q-1.136-.001-1.974.493a3.36 3.36 0 0 0-1.3 1.382q-.445.89-.444 2.074 0 1.2.51 2.107a3.8 3.8 0 0 0 1.382 1.381 3.9 3.9 0 0 0 1.893.477q.795 0 1.455-.33zm-2.789-5.38q-.576.675-.575 1.762 0 1.102.559 1.794.576.675 1.645.675a2.25 2.25 0 0 0 .934-.19 2.2 2.2 0 0 0 .468-.29l.178-.161a2.2 2.2 0 0 0 .397-.561q.244-.5.244-1.15v-.115q0-.708-.296-1.267l-.043-.077a2.2 2.2 0 0 0-.633-.709l-.13-.086-.047-.028a2.1 2.1 0 0 0-1.073-.285q-1.052 0-1.629.692zm2.316 2.706c.163-.17.28-.407.28-.83v-.114c0-.292-.06-.508-.15-.68a.96.96 0 0 0-.353-.389.85.85 0 0 0-.464-.127c-.4 0-.56.114-.664.239l-.01.012c-.148.174-.275.45-.275.945 0 .506.122.801.27.99.097.11.266.224.68.224.303 0 .504-.09.687-.269zm7.545 1.705a2.6 2.6 0 0 0 .331.423q.319.33.755.548l.173.074q.65.255 1.49.255 1.02 0 1.844-.493a3.45 3.45 0 0 0 1.316-1.4q.493-.904.493-2.089 0-1.909-.988-2.913-.988-1.02-2.584-1.02-.898 0-1.575.347a3 3 0 0 0-.415.262l-.199.166a3.4 3.4 0 0 0-.64.82V9.242h-1.712v11.553h1.729l-.017-5.134zm.53-1.138q.206.29.48.5l.155.11.053.034q.51.296 1.119.297 1.07 0 1.645-.675.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.435 0-.835.16a2 2 0 0 0-.284.136 2 2 0 0 0-.363.254 2.2 2.2 0 0 0-.46.569l-.082.162a2.6 2.6 0 0 0-.213 1.072v.115q0 .707.296 1.267l.135.211zm.964-.818a1.1 1.1 0 0 0 .367.385.94.94 0 0 0 .476.118c.423 0 .59-.117.687-.23.159-.194.28-.478.28-.95 0-.53-.133-.8-.266-.952l-.021-.025c-.078-.094-.231-.221-.68-.221a1 1 0 0 0-.503.135l-.012.007a.86.86 0 0 0-.335.343c-.073.133-.132.324-.132.614v.115a1.4 1.4 0 0 0 .14.66zm15.7-6.222q.347-.346.346-.856a1.05 1.05 0 0 0-.345-.79 1.18 1.18 0 0 0-.84-.329q-.51 0-.855.33a1.05 1.05 0 0 0-.346.79q0 .51.346.855.345.346.856.346.51 0 .839-.346zm4.337 9.314.033-1.332q.191.403.59.747l.098.081a4 4 0 0 0 .316.224l.223.122a3.2 3.2 0 0 0 1.44.322 3.8 3.8 0 0 0 1.875-.477 3.5 3.5 0 0 0 1.382-1.366q.527-.89.526-2.09 0-1.184-.444-2.073a3.24 3.24 0 0 0-1.283-1.399q-.823-.51-1.942-.51a3.5 3.5 0 0 0-1.527.344l-.086.043-.165.09a3 3 0 0 0-.33.214q-.432.315-.656.707a2 2 0 0 0-.099.198l.082-1.283V4.701h-1.744v12.095zm.473-2.509a2.5 2.5 0 0 0 .566.7q.117.098.245.18l.144.08a2.1 2.1 0 0 0 .975.232q1.07 0 1.645-.675.576-.69.576-1.778 0-1.102-.576-1.777-.56-.691-1.645-.692a2.2 2.2 0 0 0-1.015.235q-.22.113-.415.282l-.15.142a2.1 2.1 0 0 0-.42.594q-.223.479-.223 1.1v.115q0 .705.293 1.26zm2.616-.293c.157-.191.28-.479.28-.967 0-.51-.13-.79-.276-.961l-.021-.026c-.082-.1-.232-.225-.67-.225a.87.87 0 0 0-.681.279l-.012.011c-.154.155-.274.38-.274.807v.115c0 .285.057.499.144.669a1.1 1.1 0 0 0 .367.405c.137.082.28.123.455.123.423 0 .59-.118.686-.23zm8.266-3.013q.345-.13.724-.14l.069-.002q.493 0 .642.099l.247-1.794q-.196-.099-.717-.099a2.3 2.3 0 0 0-.545.063 2 2 0 0 0-.411.148 2.2 2.2 0 0 0-.4.249 2.5 2.5 0 0 0-.485.499 2.7 2.7 0 0 0-.32.581l-.05.137v-1.48h-1.778v7.553h1.777v-3.884q0-.546.159-.943a1.5 1.5 0 0 1 .466-.636 2.5 2.5 0 0 1 .399-.253 2 2 0 0 1 .224-.099zm9.784 2.656.05-.922q0-1.743-.856-2.698-.838-.97-2.584-.97-1.119-.001-2.007.493a3.46 3.46 0 0 0-1.4 1.382q-.493.906-.493 2.106 0 1.07.428 1.975.428.89 1.332 1.432.906.526 2.255.526.973 0 1.668-.185l.044-.012.135-.04q.613-.184.984-.421l-.542-1.267q-.3.162-.642.274l-.297.087q-.51.131-1.3.131-.954 0-1.497-.444a1.6 1.6 0 0 1-.192-.193q-.366-.44-.512-1.234l-.004-.021zm-5.427-1.256-.003.022h3.752v-.138q-.011-.727-.288-1.118a1 1 0 0 0-.156-.176q-.46-.428-1.316-.428-.986 0-1.494.604-.379.45-.494 1.234zm-27.053 2.77V4.7h-1.86v12.095h5.333V15.15zm7.103-5.908v7.553h-1.843V9.242h1.843z'/%3E%3Cpath fill='%23fff' d='m19.63 11.151-.757-1.71-.345 1.71-1.12 5.644h-1.827L18.083 4.7h.197l3.325 6.533.988 2.19.988-2.19L26.839 4.7h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.93 5.644h-.098l-2.913-5.644zm14.836 5.81q-1.02 0-1.893-.478a3.8 3.8 0 0 1-1.381-1.382q-.51-.906-.51-2.106 0-1.185.444-2.074a3.36 3.36 0 0 1 1.3-1.382q.839-.494 1.974-.494a3.3 3.3 0 0 1 1.234.231 3.3 3.3 0 0 1 .97.575q.396.33.527.659l.033-1.267h1.694v7.553H37.18l-.033-1.332q-.279.593-1.02 1.053a3.17 3.17 0 0 1-1.662.444zm.296-1.482q.938 0 1.58-.642.642-.66.642-1.711v-.115q0-.708-.296-1.267a2.2 2.2 0 0 0-.807-.872 2.1 2.1 0 0 0-1.119-.313q-1.053 0-1.629.692-.575.675-.575 1.76 0 1.103.559 1.795.577.675 1.645.675zm6.521-6.237h1.711v1.4q.906-1.597 2.83-1.597 1.596 0 2.584 1.02.988 1.005.988 2.914 0 1.185-.493 2.09a3.46 3.46 0 0 1-1.316 1.399 3.5 3.5 0 0 1-1.844.493q-.954 0-1.662-.329a2.67 2.67 0 0 1-1.086-.97l.017 5.134h-1.728zm4.048 6.22q1.07 0 1.645-.674.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.592 0-1.12.296-.51.28-.822.823-.296.527-.296 1.234v.115q0 .708.296 1.267.313.543.823.855.51.296 1.119.297z'/%3E%3Cpath fill='%23e1e3e9' d='M51.325 4.7h1.86v10.45h3.473v1.646h-5.333zm7.12 4.542h1.843v7.553h-1.843zm.905-1.415a1.16 1.16 0 0 1-.856-.346 1.17 1.17 0 0 1-.346-.856 1.05 1.05 0 0 1 .346-.79q.346-.329.856-.329.494 0 .839.33a1.05 1.05 0 0 1 .345.79 1.16 1.16 0 0 1-.345.855q-.33.346-.84.346zm7.875 9.133a3.17 3.17 0 0 1-1.662-.444q-.723-.46-1.004-1.053l-.033 1.332h-1.71V4.701h1.743v4.657l-.082 1.283q.279-.658 1.086-1.119a3.5 3.5 0 0 1 1.778-.477q1.119 0 1.942.51a3.24 3.24 0 0 1 1.283 1.4q.445.888.444 2.072 0 1.201-.526 2.09a3.5 3.5 0 0 1-1.382 1.366 3.8 3.8 0 0 1-1.876.477zm-.296-1.481q1.069 0 1.645-.675.577-.69.577-1.778 0-1.102-.577-1.776-.56-.691-1.645-.692a2.12 2.12 0 0 0-1.58.659q-.642.641-.642 1.694v.115q0 .71.296 1.267a2.4 2.4 0 0 0 .807.872 2.1 2.1 0 0 0 1.119.313zm5.927-6.237h1.777v1.481q.263-.757.856-1.217a2.14 2.14 0 0 1 1.349-.46q.527 0 .724.098l-.247 1.794q-.149-.099-.642-.099-.774 0-1.416.494-.626.493-.626 1.58v3.883h-1.777V9.242zm9.534 7.718q-1.35 0-2.255-.526-.904-.543-1.332-1.432a4.6 4.6 0 0 1-.428-1.975q0-1.2.493-2.106a3.46 3.46 0 0 1 1.4-1.382q.889-.495 2.007-.494 1.744 0 2.584.97.855.956.856 2.7 0 .444-.05.92h-5.43q.18 1.005.708 1.45.542.443 1.497.443.79 0 1.3-.131a4 4 0 0 0 .938-.362l.542 1.267q-.411.263-1.119.46-.708.198-1.711.197zm1.596-4.558q.016-1.02-.444-1.432-.46-.428-1.316-.428-1.728 0-1.991 1.86z'/%3E%3Cpath d='M5.074 15.948a.484.657 0 0 0-.486.659v1.84a.484.657 0 0 0 .486.659h4.101a.484.657 0 0 0 .486-.659v-1.84a.484.657 0 0 0-.486-.659zm3.56 1.16H5.617v.838h3.017z' style='fill:%23fff;fill-rule:evenodd;stroke-width:1.03600001'/%3E%3Cg style='stroke-width:1.12603545'%3E%3Cpath d='M-9.408-1.416c-3.833-.025-7.056 2.912-7.08 6.615-.02 3.08 1.653 4.832 3.107 6.268.903.892 1.721 1.74 2.32 2.902l-.525-.004c-.543-.003-.992.304-1.24.639a1.87 1.87 0 0 0-.362 1.121l-.011 1.877c-.003.402.104.787.347 1.125.244.338.688.653 1.23.656l4.142.028c.542.003.99-.306 1.238-.641a1.87 1.87 0 0 0 .363-1.121l.012-1.875a1.87 1.87 0 0 0-.348-1.127c-.243-.338-.688-.653-1.23-.656l-.518-.004c.597-1.145 1.425-1.983 2.348-2.87 1.473-1.414 3.18-3.149 3.2-6.226-.016-3.59-2.923-6.684-6.993-6.707m-.006 1.1v.002c3.274.02 5.92 2.532 5.9 5.6-.017 2.706-1.39 4.026-2.863 5.44-1.034.994-2.118 2.033-2.814 3.633-.018.041-.052.055-.075.065q-.013.004-.02.01a.34.34 0 0 1-.226.084.34.34 0 0 1-.224-.086l-.092-.077c-.699-1.615-1.768-2.669-2.781-3.67-1.454-1.435-2.797-2.762-2.78-5.478.02-3.067 2.7-5.545 5.975-5.523m-.02 2.826c-1.62-.01-2.944 1.315-2.955 2.96-.01 1.646 1.295 2.988 2.916 2.999h.002c1.621.01 2.943-1.316 2.953-2.961.011-1.646-1.294-2.988-2.916-2.998m-.005 1.1c1.017.006 1.829.83 1.822 1.89s-.83 1.874-1.848 1.867c-1.018-.006-1.829-.83-1.822-1.89s.83-1.874 1.848-1.868m-2.155 11.857 4.14.025c.271.002.49.305.487.676l-.013 1.875c-.003.37-.224.67-.495.668l-4.14-.025c-.27-.002-.487-.306-.485-.676l.012-1.875c.003-.37.224-.67.494-.668' style='color:%23000;font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:%23000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:evenodd;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:%23000;solid-opacity:1;vector-effect:none;fill:%23000;fill-opacity:.4;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-9.415-.316C-12.69-.338-15.37 2.14-15.39 5.207c-.017 2.716 1.326 4.041 2.78 5.477 1.013 1 2.081 2.055 2.78 3.67l.092.076a.34.34 0 0 0 .225.086.34.34 0 0 0 .227-.083l.019-.01c.022-.009.057-.024.074-.064.697-1.6 1.78-2.64 2.814-3.634 1.473-1.414 2.847-2.733 2.864-5.44.02-3.067-2.627-5.58-5.901-5.601m-.057 8.784c1.621.011 2.944-1.315 2.955-2.96.01-1.646-1.295-2.988-2.916-2.999-1.622-.01-2.945 1.315-2.955 2.96s1.295 2.989 2.916 3' style='clip-rule:evenodd;fill:%23e1e3e9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-11.594 15.465c-.27-.002-.492.297-.494.668l-.012 1.876c-.003.371.214.673.485.675l4.14.027c.271.002.492-.298.495-.668l.012-1.877c.003-.37-.215-.672-.485-.674z' style='clip-rule:evenodd;fill:%23fff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3C/g%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){a.maplibregl-ctrl-logo{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='23' fill='none'%3E%3Cpath fill='%23000' fill-opacity='.4' fill-rule='evenodd' d='M17.408 16.796h-1.827l2.501-12.095h.198l3.324 6.533.988 2.19.988-2.19 3.258-6.533h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.929 5.644h-.098l-2.914-5.644-.757-1.71-.345 1.71zm1.958-3.42-.726 3.663a1.255 1.255 0 0 1-1.232 1.011h-1.827a1.255 1.255 0 0 1-1.229-1.509l2.501-12.095a1.255 1.255 0 0 1 1.23-1.001h.197a1.25 1.25 0 0 1 1.12.685l3.19 6.273 3.125-6.263a1.25 1.25 0 0 1 1.123-.695h.181a1.255 1.255 0 0 1 1.227.991l1.443 6.71a5 5 0 0 1 .314-.787l.009-.016a4.6 4.6 0 0 1 1.777-1.887c.782-.46 1.668-.667 2.611-.667a4.6 4.6 0 0 1 1.7.32l.306.134c.21-.16.474-.256.759-.256h1.694a1.255 1.255 0 0 1 1.212.925 1.255 1.255 0 0 1 1.212-.925h1.711c.284 0 .545.094.755.252.613-.3 1.312-.45 2.075-.45 1.356 0 2.557.445 3.482 1.4q.47.48.763 1.064V4.701a1.255 1.255 0 0 1 1.255-1.255h1.86A1.255 1.255 0 0 1 54.44 4.7v9.194h2.217c.19 0 .37.043.532.118v-4.77c0-.356.147-.678.385-.906a2.42 2.42 0 0 1-.682-1.71c0-.665.267-1.253.735-1.7a2.45 2.45 0 0 1 1.722-.674 2.43 2.43 0 0 1 1.705.675q.318.302.504.683V4.7a1.255 1.255 0 0 1 1.255-1.255h1.744A1.255 1.255 0 0 1 65.812 4.7v3.335a4.8 4.8 0 0 1 1.526-.246c.938 0 1.817.214 2.59.69a4.47 4.47 0 0 1 1.67 1.743v-.98a1.255 1.255 0 0 1 1.256-1.256h1.777c.233 0 .451.064.639.174a3.4 3.4 0 0 1 1.567-.372c.346 0 .861.02 1.285.232a1.25 1.25 0 0 1 .689 1.004 4.7 4.7 0 0 1 .853-.588c.795-.44 1.675-.647 2.61-.647 1.385 0 2.65.39 3.525 1.396.836.938 1.168 2.173 1.168 3.528q-.001.515-.056 1.051a1.255 1.255 0 0 1-.947 1.09l.408.952a1.255 1.255 0 0 1-.477 1.552c-.418.268-.92.463-1.458.612-.613.171-1.304.244-2.049.244-1.06 0-2.043-.207-2.886-.698l-.015-.008c-.798-.48-1.419-1.135-1.818-1.963l-.004-.008a5.8 5.8 0 0 1-.548-2.512q0-.429.053-.843a1.3 1.3 0 0 1-.333-.086l-.166-.004c-.223 0-.426.062-.643.228-.03.024-.142.139-.142.59v3.883a1.255 1.255 0 0 1-1.256 1.256h-1.777a1.255 1.255 0 0 1-1.256-1.256V15.69l-.032.057a4.8 4.8 0 0 1-1.86 1.833 5.04 5.04 0 0 1-2.484.634 4.5 4.5 0 0 1-1.935-.424 1.25 1.25 0 0 1-.764.258h-1.71a1.255 1.255 0 0 1-1.256-1.255V7.687a2.4 2.4 0 0 1-.428.625c.253.23.412.561.412.93v7.553a1.255 1.255 0 0 1-1.256 1.255h-1.843a1.25 1.25 0 0 1-.894-.373c-.228.23-.544.373-.894.373H51.32a1.255 1.255 0 0 1-1.256-1.255v-1.251l-.061.117a4.7 4.7 0 0 1-1.782 1.884 4.77 4.77 0 0 1-2.485.67 5.6 5.6 0 0 1-1.485-.188l.009 2.764a1.255 1.255 0 0 1-1.255 1.259h-1.729a1.255 1.255 0 0 1-1.255-1.255v-3.537a1.255 1.255 0 0 1-1.167.793h-1.679a1.25 1.25 0 0 1-.77-.263 4.5 4.5 0 0 1-1.945.429c-.885 0-1.724-.21-2.495-.632l-.017-.01a5 5 0 0 1-1.081-.836 1.255 1.255 0 0 1-1.254 1.312h-1.81a1.255 1.255 0 0 1-1.228-.99l-.782-3.625-2.044 3.939a1.25 1.25 0 0 1-1.115.676h-.098a1.25 1.25 0 0 1-1.116-.68l-2.061-3.994zM35.92 16.63l.207-.114.223-.15q.493-.356.735-.785l.061-.118.033 1.332h1.678V9.242h-1.694l-.033 1.267q-.133-.329-.526-.658l-.032-.028a3.2 3.2 0 0 0-.668-.428l-.27-.12a3.3 3.3 0 0 0-1.235-.23q-1.136-.001-1.974.493a3.36 3.36 0 0 0-1.3 1.382q-.445.89-.444 2.074 0 1.2.51 2.107a3.8 3.8 0 0 0 1.382 1.381 3.9 3.9 0 0 0 1.893.477q.795 0 1.455-.33zm-2.789-5.38q-.576.675-.575 1.762 0 1.102.559 1.794.576.675 1.645.675a2.25 2.25 0 0 0 .934-.19 2.2 2.2 0 0 0 .468-.29l.178-.161a2.2 2.2 0 0 0 .397-.561q.244-.5.244-1.15v-.115q0-.708-.296-1.267l-.043-.077a2.2 2.2 0 0 0-.633-.709l-.13-.086-.047-.028a2.1 2.1 0 0 0-1.073-.285q-1.052 0-1.629.692zm2.316 2.706c.163-.17.28-.407.28-.83v-.114c0-.292-.06-.508-.15-.68a.96.96 0 0 0-.353-.389.85.85 0 0 0-.464-.127c-.4 0-.56.114-.664.239l-.01.012c-.148.174-.275.45-.275.945 0 .506.122.801.27.99.097.11.266.224.68.224.303 0 .504-.09.687-.269zm7.545 1.705a2.6 2.6 0 0 0 .331.423q.319.33.755.548l.173.074q.65.255 1.49.255 1.02 0 1.844-.493a3.45 3.45 0 0 0 1.316-1.4q.493-.904.493-2.089 0-1.909-.988-2.913-.988-1.02-2.584-1.02-.898 0-1.575.347a3 3 0 0 0-.415.262l-.199.166a3.4 3.4 0 0 0-.64.82V9.242h-1.712v11.553h1.729l-.017-5.134zm.53-1.138q.206.29.48.5l.155.11.053.034q.51.296 1.119.297 1.07 0 1.645-.675.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.435 0-.835.16a2 2 0 0 0-.284.136 2 2 0 0 0-.363.254 2.2 2.2 0 0 0-.46.569l-.082.162a2.6 2.6 0 0 0-.213 1.072v.115q0 .707.296 1.267l.135.211zm.964-.818a1.1 1.1 0 0 0 .367.385.94.94 0 0 0 .476.118c.423 0 .59-.117.687-.23.159-.194.28-.478.28-.95 0-.53-.133-.8-.266-.952l-.021-.025c-.078-.094-.231-.221-.68-.221a1 1 0 0 0-.503.135l-.012.007a.86.86 0 0 0-.335.343c-.073.133-.132.324-.132.614v.115a1.4 1.4 0 0 0 .14.66zm15.7-6.222q.347-.346.346-.856a1.05 1.05 0 0 0-.345-.79 1.18 1.18 0 0 0-.84-.329q-.51 0-.855.33a1.05 1.05 0 0 0-.346.79q0 .51.346.855.345.346.856.346.51 0 .839-.346zm4.337 9.314.033-1.332q.191.403.59.747l.098.081a4 4 0 0 0 .316.224l.223.122a3.2 3.2 0 0 0 1.44.322 3.8 3.8 0 0 0 1.875-.477 3.5 3.5 0 0 0 1.382-1.366q.527-.89.526-2.09 0-1.184-.444-2.073a3.24 3.24 0 0 0-1.283-1.399q-.823-.51-1.942-.51a3.5 3.5 0 0 0-1.527.344l-.086.043-.165.09a3 3 0 0 0-.33.214q-.432.315-.656.707a2 2 0 0 0-.099.198l.082-1.283V4.701h-1.744v12.095zm.473-2.509a2.5 2.5 0 0 0 .566.7q.117.098.245.18l.144.08a2.1 2.1 0 0 0 .975.232q1.07 0 1.645-.675.576-.69.576-1.778 0-1.102-.576-1.777-.56-.691-1.645-.692a2.2 2.2 0 0 0-1.015.235q-.22.113-.415.282l-.15.142a2.1 2.1 0 0 0-.42.594q-.223.479-.223 1.1v.115q0 .705.293 1.26zm2.616-.293c.157-.191.28-.479.28-.967 0-.51-.13-.79-.276-.961l-.021-.026c-.082-.1-.232-.225-.67-.225a.87.87 0 0 0-.681.279l-.012.011c-.154.155-.274.38-.274.807v.115c0 .285.057.499.144.669a1.1 1.1 0 0 0 .367.405c.137.082.28.123.455.123.423 0 .59-.118.686-.23zm8.266-3.013q.345-.13.724-.14l.069-.002q.493 0 .642.099l.247-1.794q-.196-.099-.717-.099a2.3 2.3 0 0 0-.545.063 2 2 0 0 0-.411.148 2.2 2.2 0 0 0-.4.249 2.5 2.5 0 0 0-.485.499 2.7 2.7 0 0 0-.32.581l-.05.137v-1.48h-1.778v7.553h1.777v-3.884q0-.546.159-.943a1.5 1.5 0 0 1 .466-.636 2.5 2.5 0 0 1 .399-.253 2 2 0 0 1 .224-.099zm9.784 2.656.05-.922q0-1.743-.856-2.698-.838-.97-2.584-.97-1.119-.001-2.007.493a3.46 3.46 0 0 0-1.4 1.382q-.493.906-.493 2.106 0 1.07.428 1.975.428.89 1.332 1.432.906.526 2.255.526.973 0 1.668-.185l.044-.012.135-.04q.613-.184.984-.421l-.542-1.267q-.3.162-.642.274l-.297.087q-.51.131-1.3.131-.954 0-1.497-.444a1.6 1.6 0 0 1-.192-.193q-.366-.44-.512-1.234l-.004-.021zm-5.427-1.256-.003.022h3.752v-.138q-.011-.727-.288-1.118a1 1 0 0 0-.156-.176q-.46-.428-1.316-.428-.986 0-1.494.604-.379.45-.494 1.234zm-27.053 2.77V4.7h-1.86v12.095h5.333V15.15zm7.103-5.908v7.553h-1.843V9.242h1.843z'/%3E%3Cpath fill='%23fff' d='m19.63 11.151-.757-1.71-.345 1.71-1.12 5.644h-1.827L18.083 4.7h.197l3.325 6.533.988 2.19.988-2.19L26.839 4.7h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.93 5.644h-.098l-2.913-5.644zm14.836 5.81q-1.02 0-1.893-.478a3.8 3.8 0 0 1-1.381-1.382q-.51-.906-.51-2.106 0-1.185.444-2.074a3.36 3.36 0 0 1 1.3-1.382q.839-.494 1.974-.494a3.3 3.3 0 0 1 1.234.231 3.3 3.3 0 0 1 .97.575q.396.33.527.659l.033-1.267h1.694v7.553H37.18l-.033-1.332q-.279.593-1.02 1.053a3.17 3.17 0 0 1-1.662.444zm.296-1.482q.938 0 1.58-.642.642-.66.642-1.711v-.115q0-.708-.296-1.267a2.2 2.2 0 0 0-.807-.872 2.1 2.1 0 0 0-1.119-.313q-1.053 0-1.629.692-.575.675-.575 1.76 0 1.103.559 1.795.577.675 1.645.675zm6.521-6.237h1.711v1.4q.906-1.597 2.83-1.597 1.596 0 2.584 1.02.988 1.005.988 2.914 0 1.185-.493 2.09a3.46 3.46 0 0 1-1.316 1.399 3.5 3.5 0 0 1-1.844.493q-.954 0-1.662-.329a2.67 2.67 0 0 1-1.086-.97l.017 5.134h-1.728zm4.048 6.22q1.07 0 1.645-.674.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.592 0-1.12.296-.51.28-.822.823-.296.527-.296 1.234v.115q0 .708.296 1.267.313.543.823.855.51.296 1.119.297z'/%3E%3Cpath fill='%23e1e3e9' d='M51.325 4.7h1.86v10.45h3.473v1.646h-5.333zm7.12 4.542h1.843v7.553h-1.843zm.905-1.415a1.16 1.16 0 0 1-.856-.346 1.17 1.17 0 0 1-.346-.856 1.05 1.05 0 0 1 .346-.79q.346-.329.856-.329.494 0 .839.33a1.05 1.05 0 0 1 .345.79 1.16 1.16 0 0 1-.345.855q-.33.346-.84.346zm7.875 9.133a3.17 3.17 0 0 1-1.662-.444q-.723-.46-1.004-1.053l-.033 1.332h-1.71V4.701h1.743v4.657l-.082 1.283q.279-.658 1.086-1.119a3.5 3.5 0 0 1 1.778-.477q1.119 0 1.942.51a3.24 3.24 0 0 1 1.283 1.4q.445.888.444 2.072 0 1.201-.526 2.09a3.5 3.5 0 0 1-1.382 1.366 3.8 3.8 0 0 1-1.876.477zm-.296-1.481q1.069 0 1.645-.675.577-.69.577-1.778 0-1.102-.577-1.776-.56-.691-1.645-.692a2.12 2.12 0 0 0-1.58.659q-.642.641-.642 1.694v.115q0 .71.296 1.267a2.4 2.4 0 0 0 .807.872 2.1 2.1 0 0 0 1.119.313zm5.927-6.237h1.777v1.481q.263-.757.856-1.217a2.14 2.14 0 0 1 1.349-.46q.527 0 .724.098l-.247 1.794q-.149-.099-.642-.099-.774 0-1.416.494-.626.493-.626 1.58v3.883h-1.777V9.242zm9.534 7.718q-1.35 0-2.255-.526-.904-.543-1.332-1.432a4.6 4.6 0 0 1-.428-1.975q0-1.2.493-2.106a3.46 3.46 0 0 1 1.4-1.382q.889-.495 2.007-.494 1.744 0 2.584.97.855.956.856 2.7 0 .444-.05.92h-5.43q.18 1.005.708 1.45.542.443 1.497.443.79 0 1.3-.131a4 4 0 0 0 .938-.362l.542 1.267q-.411.263-1.119.46-.708.198-1.711.197zm1.596-4.558q.016-1.02-.444-1.432-.46-.428-1.316-.428-1.728 0-1.991 1.86z'/%3E%3Cpath d='M5.074 15.948a.484.657 0 0 0-.486.659v1.84a.484.657 0 0 0 .486.659h4.101a.484.657 0 0 0 .486-.659v-1.84a.484.657 0 0 0-.486-.659zm3.56 1.16H5.617v.838h3.017z' style='fill:%23fff;fill-rule:evenodd;stroke-width:1.03600001'/%3E%3Cg style='stroke-width:1.12603545'%3E%3Cpath d='M-9.408-1.416c-3.833-.025-7.056 2.912-7.08 6.615-.02 3.08 1.653 4.832 3.107 6.268.903.892 1.721 1.74 2.32 2.902l-.525-.004c-.543-.003-.992.304-1.24.639a1.87 1.87 0 0 0-.362 1.121l-.011 1.877c-.003.402.104.787.347 1.125.244.338.688.653 1.23.656l4.142.028c.542.003.99-.306 1.238-.641a1.87 1.87 0 0 0 .363-1.121l.012-1.875a1.87 1.87 0 0 0-.348-1.127c-.243-.338-.688-.653-1.23-.656l-.518-.004c.597-1.145 1.425-1.983 2.348-2.87 1.473-1.414 3.18-3.149 3.2-6.226-.016-3.59-2.923-6.684-6.993-6.707m-.006 1.1v.002c3.274.02 5.92 2.532 5.9 5.6-.017 2.706-1.39 4.026-2.863 5.44-1.034.994-2.118 2.033-2.814 3.633-.018.041-.052.055-.075.065q-.013.004-.02.01a.34.34 0 0 1-.226.084.34.34 0 0 1-.224-.086l-.092-.077c-.699-1.615-1.768-2.669-2.781-3.67-1.454-1.435-2.797-2.762-2.78-5.478.02-3.067 2.7-5.545 5.975-5.523m-.02 2.826c-1.62-.01-2.944 1.315-2.955 2.96-.01 1.646 1.295 2.988 2.916 2.999h.002c1.621.01 2.943-1.316 2.953-2.961.011-1.646-1.294-2.988-2.916-2.998m-.005 1.1c1.017.006 1.829.83 1.822 1.89s-.83 1.874-1.848 1.867c-1.018-.006-1.829-.83-1.822-1.89s.83-1.874 1.848-1.868m-2.155 11.857 4.14.025c.271.002.49.305.487.676l-.013 1.875c-.003.37-.224.67-.495.668l-4.14-.025c-.27-.002-.487-.306-.485-.676l.012-1.875c.003-.37.224-.67.494-.668' style='color:%23000;font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:%23000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:evenodd;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:%23000;solid-opacity:1;vector-effect:none;fill:%23000;fill-opacity:.4;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-9.415-.316C-12.69-.338-15.37 2.14-15.39 5.207c-.017 2.716 1.326 4.041 2.78 5.477 1.013 1 2.081 2.055 2.78 3.67l.092.076a.34.34 0 0 0 .225.086.34.34 0 0 0 .227-.083l.019-.01c.022-.009.057-.024.074-.064.697-1.6 1.78-2.64 2.814-3.634 1.473-1.414 2.847-2.733 2.864-5.44.02-3.067-2.627-5.58-5.901-5.601m-.057 8.784c1.621.011 2.944-1.315 2.955-2.96.01-1.646-1.295-2.988-2.916-2.999-1.622-.01-2.945 1.315-2.955 2.96s1.295 2.989 2.916 3' style='clip-rule:evenodd;fill:%23e1e3e9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-11.594 15.465c-.27-.002-.492.297-.494.668l-.012 1.876c-.003.371.214.673.485.675l4.14.027c.271.002.492-.298.495-.668l.012-1.877c.003-.37-.215-.672-.485-.674z' style='clip-rule:evenodd;fill:%23fff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3C/g%3E%3C/svg%3E")}}.maplibregl-ctrl.maplibregl-ctrl-attrib{background-color:#ffffff80;margin:0;padding:0 5px}@media screen{.maplibregl-ctrl-attrib.maplibregl-compact{background-color:#fff;border-radius:12px;box-sizing:content-box;color:#000;margin:10px;min-height:20px;padding:2px 24px 2px 0;position:relative}.maplibregl-ctrl-attrib.maplibregl-compact-show{padding:2px 28px 2px 8px;visibility:visible}.maplibregl-ctrl-bottom-left>.maplibregl-ctrl-attrib.maplibregl-compact-show,.maplibregl-ctrl-top-left>.maplibregl-ctrl-attrib.maplibregl-compact-show{border-radius:12px;padding:2px 8px 2px 28px}.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-inner{display:none}.maplibregl-ctrl-attrib-button{background-color:#ffffff80;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E");border:0;border-radius:12px;box-sizing:border-box;cursor:pointer;display:none;height:24px;outline:none;position:absolute;right:0;top:0;width:24px}.maplibregl-ctrl-attrib summary.maplibregl-ctrl-attrib-button{-webkit-appearance:none;-moz-appearance:none;appearance:none;list-style:none}.maplibregl-ctrl-attrib summary.maplibregl-ctrl-attrib-button::-webkit-details-marker{display:none}.maplibregl-ctrl-bottom-left .maplibregl-ctrl-attrib-button,.maplibregl-ctrl-top-left .maplibregl-ctrl-attrib-button{left:0}.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button,.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner{display:block}.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button{background-color:#0000000d}.maplibregl-ctrl-bottom-right>.maplibregl-ctrl-attrib.maplibregl-compact:after{bottom:0;right:0}.maplibregl-ctrl-top-right>.maplibregl-ctrl-attrib.maplibregl-compact:after{right:0;top:0}.maplibregl-ctrl-top-left>.maplibregl-ctrl-attrib.maplibregl-compact:after{left:0;top:0}.maplibregl-ctrl-bottom-left>.maplibregl-ctrl-attrib.maplibregl-compact:after{bottom:0;left:0}}@media screen and (forced-colors:active){.maplibregl-ctrl-attrib.maplibregl-compact:after{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='%23fff' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E")}}@media screen and (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl-attrib.maplibregl-compact:after{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E")}}.maplibregl-ctrl-attrib a{color:#000000bf;text-decoration:none}.maplibregl-ctrl-attrib a:hover{color:inherit;text-decoration:underline}.maplibregl-attrib-empty{display:none}.maplibregl-ctrl-scale{background-color:#ffffffbf;border:2px solid #333;border-top:#333;box-sizing:border-box;color:#333;font-size:10px;padding:0 5px;white-space:nowrap}.maplibregl-popup{display:flex;left:0;pointer-events:none;position:absolute;top:0;will-change:transform}.maplibregl-popup-anchor-top,.maplibregl-popup-anchor-top-left,.maplibregl-popup-anchor-top-right{flex-direction:column}.maplibregl-popup-anchor-bottom,.maplibregl-popup-anchor-bottom-left,.maplibregl-popup-anchor-bottom-right{flex-direction:column-reverse}.maplibregl-popup-anchor-left{flex-direction:row}.maplibregl-popup-anchor-right{flex-direction:row-reverse}.maplibregl-popup-tip{border:10px solid transparent;height:0;width:0;z-index:1}.maplibregl-popup-anchor-top .maplibregl-popup-tip{align-self:center;border-bottom-color:#fff;border-top:none}.maplibregl-popup-anchor-top-left .maplibregl-popup-tip{align-self:flex-start;border-bottom-color:#fff;border-left:none;border-top:none}.maplibregl-popup-anchor-top-right .maplibregl-popup-tip{align-self:flex-end;border-bottom-color:#fff;border-right:none;border-top:none}.maplibregl-popup-anchor-bottom .maplibregl-popup-tip{align-self:center;border-bottom:none;border-top-color:#fff}.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip{align-self:flex-start;border-bottom:none;border-left:none;border-top-color:#fff}.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip{align-self:flex-end;border-bottom:none;border-right:none;border-top-color:#fff}.maplibregl-popup-anchor-left .maplibregl-popup-tip{align-self:center;border-left:none;border-right-color:#fff}.maplibregl-popup-anchor-right .maplibregl-popup-tip{align-self:center;border-left-color:#fff;border-right:none}[dir=rtl] .maplibregl-popup-anchor-left{flex-direction:row-reverse}[dir=rtl] .maplibregl-popup-anchor-right{flex-direction:row}[dir=rtl] .maplibregl-popup-anchor-top-left .maplibregl-popup-tip{align-self:flex-end}[dir=rtl] .maplibregl-popup-anchor-top-right .maplibregl-popup-tip{align-self:flex-start}[dir=rtl] .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip{align-self:flex-end}[dir=rtl] .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip{align-self:flex-start}.maplibregl-popup-close-button{background-color:transparent;border:0;border-radius:0 3px 0 0;cursor:pointer;position:absolute;right:0;top:0}.maplibregl-popup-close-button:hover{background-color:#0000000d}.maplibregl-popup-content{background:#fff;border-radius:3px;box-shadow:0 1px 2px #0000001a;padding:15px 10px;pointer-events:auto;position:relative}.maplibregl-popup-anchor-top-left .maplibregl-popup-content{border-top-left-radius:0}.maplibregl-popup-anchor-top-right .maplibregl-popup-content{border-top-right-radius:0}.maplibregl-popup-anchor-bottom-left .maplibregl-popup-content{border-bottom-left-radius:0}.maplibregl-popup-anchor-bottom-right .maplibregl-popup-content{border-bottom-right-radius:0}.maplibregl-popup-track-pointer{display:none}.maplibregl-popup-track-pointer *{pointer-events:none;-webkit-user-select:none;-moz-user-select:none;user-select:none}.maplibregl-map:hover .maplibregl-popup-track-pointer{display:flex}.maplibregl-map:active .maplibregl-popup-track-pointer{display:none}.maplibregl-marker{left:0;position:absolute;top:0;transition:opacity .2s;will-change:transform}.maplibregl-user-location-dot,.maplibregl-user-location-dot:before{background-color:#1da1f2;border-radius:50%;height:15px;width:15px}.maplibregl-user-location-dot:before{animation:maplibregl-user-location-dot-pulse 2s infinite;content:"";position:absolute}.maplibregl-user-location-dot:after{border:2px solid #fff;border-radius:50%;box-shadow:0 0 3px #00000059;box-sizing:border-box;content:"";height:19px;left:-2px;position:absolute;top:-2px;width:19px}@media (prefers-reduced-motion:reduce){.maplibregl-user-location-dot:before{animation:none}}@keyframes maplibregl-user-location-dot-pulse{0%{opacity:1;transform:scale(1)}70%{opacity:0;transform:scale(3)}to{opacity:0;transform:scale(1)}}.maplibregl-user-location-dot-stale{background-color:#aaa}.maplibregl-user-location-dot-stale:after{display:none}.maplibregl-user-location-accuracy-circle{background-color:#1da1f233;border-radius:100%;height:1px;width:1px}.maplibregl-crosshair,.maplibregl-crosshair .maplibregl-interactive,.maplibregl-crosshair .maplibregl-interactive:active{cursor:crosshair}.maplibregl-boxzoom{background:#fff;border:2px dotted #202020;height:0;left:0;opacity:.5;position:absolute;top:0;width:0}.maplibregl-cooperative-gesture-screen{align-items:center;background:#0006;color:#fff;display:flex;font-size:1.4em;inset:0;justify-content:center;line-height:1.2;opacity:0;padding:1rem;pointer-events:none;position:absolute;transition:opacity 1s ease 1s;z-index:99999}.maplibregl-cooperative-gesture-screen.maplibregl-show{opacity:1;transition:opacity .05s}.maplibregl-cooperative-gesture-screen .maplibregl-mobile-message{display:none}@media (hover:none),(pointer:coarse){.maplibregl-cooperative-gesture-screen .maplibregl-desktop-message{display:none}.maplibregl-cooperative-gesture-screen .maplibregl-mobile-message{display:block}}.maplibregl-pseudo-fullscreen{height:100%!important;left:0!important;position:fixed!important;top:0!important;width:100%!important;z-index:99999}`;
+const heliosCardStyles = i$3`
+    ${r$4(maplibreCss)}
+
+    :host
+    {
+        display: block;
+        height:  100%;
+    }
+
+    ha-card
+    {
+        position: relative;
+        overflow: hidden;
+        background: #000;
+        border-radius: var(--ha-card-border-radius, 12px);
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        height:     100%;
+        width:      100%;
+        /*  Floor that survives dashboard layouts where the parent
+            doesn't apply an explicit height (vertical-stack, panel
+            view, some custom dashboards like Mushroom-based grids).
+            Without this floor, height:100% resolves to the children's
+            intrinsic height, which means only the timeline chart's
+            ~150 px contributes and the 3D map area collapses out of
+            view. 480 px leaves the chart its natural height and gives
+            the map area ~330 px which is enough to read the home and
+            its surroundings. Layouts that DO pass an explicit height
+            (masonry via getCardSize, sections view via getGridOptions)
+            override this freely.                                       */
+        min-height: 480px;
+        /*  New stacking context so absolute children with z-index
+            stay scoped to the card instead of escaping above HA's
+            dashboard chrome on scroll. */
+        isolation: isolate;
+    }
+
+    #map-container
+    {
+        width: 100%;
+        height: 100%;
+        position: relative;
+    }
+
+    /*  Force-hide the MapLibre attribution rail. attributionControl
+        compact: true is meant to collapse it to an icon, but MapLibre
+        auto-expands the full bar above 640 px viewport width which
+        most dashboard cards exceed. We hide it outright via CSS, the
+        attribution credit (MapLibre + OpenFreeMap + OpenMapTiles +
+        OpenStreetMap data) lives in the README and the HACS info pane
+        so the license obligation stays satisfied through documentation
+        rather than chrome real estate. */
+    .maplibregl-ctrl-attrib,
+    .maplibregl-ctrl-bottom-right,
+    .maplibregl-ctrl-bottom-left
+    {
+        display: none !important;
+    }
+
+
+    /*  Home hitbox, invisible circular click target centred on the
+        home's projected screen position. Sits above every overlay
+        SVG (z 12) but below the detail panel (z 60) so a click
+        always reaches it, regardless of which chip / leader happens
+        to sit underneath at that moment. */
+    .home-hitbox
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        width:  72px;
+        height: 72px;
+        border-radius: 50%;
+        background: transparent;
+        cursor: pointer;
+        pointer-events: auto;
+        z-index: 12;
+    }
+
+    /*  Home hover glow. Same base + top + side-quad polygons as the
+        cloud-disc mask (so it tracks rotation pixel-for-pixel with
+        the building extrusion), painted in the configured sun colour
+        with a CSS drop-shadow bloom. Opacity is the only thing that
+        animates so the fade is GPU-cheap, the geometry comes back
+        every frame from the engine without re-rendering this SVG. */
+    .home-glow-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 11;
+        opacity: 0;
+        transition: opacity 0.18s ease;
+        /* Single soft drop-shadow, the bloom hints "interactive"
+           without overpowering the building underneath. */
+        filter: drop-shadow(0 0 6px var(--helios-sun-color, #f59e0b));
+    }
+    .home-glow-svg.is-hovered { opacity: 0.7; }
+
+    /*  Touch devices have no hover state, mouseenter / mouseleave
+        never fire, so the .is-hovered class is never applied. Show
+        the glow permanently at a softer opacity so the user still
+        gets a visual hint that the home is tappable. The detail-
+        mode fade rule (specificity 0,2,0) wins over this (0,1,0)
+        so the glow still fades out when the dashboard opens. */
+    @media (hover: none)
+    {
+        .home-glow-svg { opacity: 0.45; }
+    }
+    .home-glow-svg .home-glow-shape
+    {
+        fill: var(--helios-sun-color, #f59e0b);
+        fill-opacity: 0.08;
+        stroke: var(--helios-sun-color, #f59e0b);
+        stroke-width: 1;
+        stroke-linejoin: round;
+        pointer-events: none;
+    }
+
+
+    /*  Detail mode, while ha-card carries .detail-active every
+        pre-existing overlay fades out and stops intercepting
+        pointer events. The transition rides at 0.35 s ease so the
+        fade matches the eye-pleasing pacing of the camera ease in
+        the engine (0.8 s total, but the fade should land before the
+        camera settles so the panel can come in clean on top).
+
+        IMPORTANT: the transition declaration sits on the BASE
+        selector, not inside the .detail-active rule. CSS only
+        animates between two states when both states share the
+        transition property, declaring it inside .detail-active
+        only would mean removing the class snaps opacity back to 1
+        with no fade-in. */
+    .cloud-svg,
+    .cloud-leader-svg,
+    .cloud-pct-label,
+    .solar-svg,
+    .solar-pct-label,
+    .solar-horizon-icon,
+    .pv-home-leader-svg,
+    .pv-pct-label,
+    .battery-leader-svg,
+    .battery-pct-label,
+    .home-hitbox,
+    .home-glow-svg,
+    .time-bar,
+    .clock,
+    .live-return-btn,
+    .shadow-busy-chip
+    {
+        transition: opacity 0.35s ease;
+    }
+    ha-card.detail-active .cloud-svg,
+    ha-card.detail-active .cloud-leader-svg,
+    ha-card.detail-active .cloud-pct-label,
+    ha-card.detail-active .solar-svg,
+    ha-card.detail-active .solar-pct-label,
+    ha-card.detail-active .solar-horizon-icon,
+    ha-card.detail-active .pv-home-leader-svg,
+    ha-card.detail-active .pv-pct-label,
+    ha-card.detail-active .battery-leader-svg,
+    ha-card.detail-active .battery-pct-label,
+    ha-card.detail-active .home-hitbox,
+    ha-card.detail-active .home-glow-svg,
+    ha-card.detail-active .time-bar,
+    ha-card.detail-active .clock,
+    ha-card.detail-active .live-return-btn,
+    ha-card.detail-active .shadow-busy-chip
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    /*  Detail panel, takes over the card while detail mode is on.
+        Hosts the four-section dashboard (today / week / tomorrow /
+        battery). The backdrop is a soft scrim + blur so the basemap
+        behind stays readable (the camera is zoomed and pitched
+        underneath) without competing with the panel content. The
+        panel itself no longer dismisses on a stray click; the
+        dedicated close button in the corner handles exit, since the
+        sections are scrollable on small viewports and a global
+        click-to-dismiss would close the panel on every internal
+        touch. */
+    .detail-panel
+    {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        z-index: 60;
+        opacity: 0;
+        animation: detail-panel-fade-in 0.25s ease forwards;
+        display: flex;
+        flex-direction: column;
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+    }
+    @keyframes detail-panel-fade-in
+    {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    .detail-close-btn
+    {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width:  28px;
+        height: 28px;
+        padding: 0;
+        background: #ffffff;
+        border: 1px solid #000000;
+        border-radius: 50%;
+        color: #000000;
+        cursor: pointer;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        transition: transform 0.12s;
+    }
+    .detail-close-btn:hover  { transform: scale(1.05); }
+    .detail-close-btn:active { transform: scale(0.95); }
+    .detail-close-btn ha-icon { --mdc-icon-size: 16px; color: inherit; }
+    ha-card.theme-dark .detail-close-btn
+    {
+        background: #191a1b;
+        color:      #e6e6e6;
+        border-color: rgba(255, 255, 255, 0.20);
+    }
+
+    .detail-panel-inner
+    {
+        flex: 1;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    /*  Each dashboard section is a chip-style card: same visual
+        language as the on-map readouts (white plate, 1 px black
+        border, soft shadow). Compact, dense, readable at-a-glance.
+        Sections appear sequentially with a short stagger so the eye
+        lands on each one in turn without dragging the reveal. */
+    .dash-card
+    {
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        padding: 10px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        opacity: 0;
+        transform: translateY(8px);
+        animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    .dash-card:nth-of-type(1) { animation-delay: 0.00s; }
+    .dash-card:nth-of-type(2) { animation-delay: 0.18s; }
+    .dash-card:nth-of-type(3) { animation-delay: 0.36s; }
+    .dash-card:nth-of-type(4) { animation-delay: 0.54s; }
+    @keyframes dash-card-in
+    {
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    ha-card.theme-dark .dash-card
+    {
+        background: #191a1b;
+        color:      #e6e6e6;
+        border-color: rgba(255, 255, 255, 0.20);
+    }
+
+    .dash-card-header
+    {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .dash-card-icon
+    {
+        --mdc-icon-size: 16px;
+        flex-shrink: 0;
+    }
+    .dash-card-label
+    {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        opacity: 0.65;
+    }
+    .dash-card-trailing
+    {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: baseline;
+        gap: 3px;
+    }
+    .dash-card-trailing-forecast
+    {
+        font-style: italic;
+        opacity: 0.85;
+    }
+    .dash-stat-value
+    {
+        font-size: 28px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        letter-spacing: -0.5px;
+    }
+    .dash-stat-unit
+    {
+        font-size: 13px;
+        font-weight: 500;
+        opacity: 0.65;
+        margin-left: 3px;
+    }
+    .dash-stat-value-sm
+    {
+        font-size: 18px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+    }
+    .dash-stat-unit-sm
+    {
+        font-size: 11px;
+        font-weight: 500;
+        opacity: 0.65;
+    }
+
+    /*  Section: today                                                  */
+
+    /*  Container queries: the cumulative chart is rendered only when   */
+    /*  the section is wide enough to read comfortably (>= 380px).     */
+    /*  Below that, the chart is hidden via display:none and the       */
+    /*  side stack reclaims the layout space.                          */
+    .dash-section.dash-today
+    {
+        container-type: inline-size;
+        container-name: dash-today;
+    }
+    .dash-today-body
+    {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 2px 0;
+    }
+    .dash-today-produced
+    {
+        display: inline-flex;
+        align-items: baseline;
+    }
+    .dash-today-side
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        flex: 0 0 auto;
+    }
+    .dash-today-line
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .dash-today-line ha-icon { --mdc-icon-size: 14px; }
+    .dash-today-line .dash-line-arrow { font-size: 14px; opacity: 0.65; font-weight: 600; }
+    .dash-today-line .dash-line-value { font-weight: 700; }
+    .dash-today-line .dash-line-label
+    {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.55;
+    }
+    .dash-today-forecast .dash-line-value { font-style: italic; }
+
+    /*  Cumulative production sparkline. Hidden on narrow cards via    */
+    /*  the container query so we never display a squashed graph.      */
+    /*  Sits to the right of the side stack, takes the remaining       */
+    /*  horizontal space, and has its own slightly darker panel +      */
+    /*  hairline border so it reads as a distinct chart frame.         */
+    .dash-today-chart
+    {
+        display: none;
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        height: 60px;
+        align-self: stretch;
+        background: rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 4px;
+        /*  No overflow:hidden, the SVG fills the frame exactly with
+            no visual bleed and the tooltip needs to be free to
+            extend beyond the chart edges (otherwise it gets clipped
+            when the cursor sits on either end of the curve).        */
+    }
+    ha-card.theme-dark .dash-today-chart
+    {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    @container dash-today (min-width: 380px)
+    {
+        .dash-today-chart
+        {
+            display: block;
+        }
+    }
+    .dash-today-chart-svg
+    {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    .dash-today-chart-past
+    {
+        fill: none;
+        stroke-width: 1.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        opacity: 0.95;
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-today-chart-future
+    {
+        fill: none;
+        stroke-width: 1.2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 3 2;
+        opacity: 0.7;
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-today-chart-dot
+    {
+        opacity: 0.9;
+    }
+    .dash-today-chart-hover-line
+    {
+        stroke: rgba(0, 0, 0, 0.45);
+        stroke-width: 1;
+        stroke-dasharray: 2 2;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .dash-today-chart-hover-line
+    {
+        stroke: rgba(255, 255, 255, 0.45);
+    }
+    .dash-today-chart-hover-dot
+    {
+        stroke: #ffffff;
+        stroke-width: 1;
+        paint-order: stroke fill;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .dash-today-chart-hover-dot
+    {
+        stroke: #191a1b;
+    }
+    .dash-today-chart-tooltip
+    {
+        position: absolute;
+        top: 4px;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.78);
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        white-space: nowrap;
+        pointer-events: none;
+        font-variant-numeric: tabular-nums;
+    }
+    ha-card.theme-dark .dash-today-chart-tooltip
+    {
+        background: rgba(255, 255, 255, 0.92);
+        color: #111111;
+    }
+
+    /*  Status line under the produced value when the day's            */
+    /*  production hasn't started yet (produced ~ 0, peak still in     */
+    /*  the future). Discreet, small, italic, full row.                */
+    .dash-today-status
+    {
+        font-size: 11px;
+        opacity: 0.6;
+        font-style: italic;
+        margin-top: 4px;
+    }
+
+    /*  Skeleton placeholder shown in place of the produced value      */
+    /*  while the HA history fetch is in flight. Same footprint as     */
+    /*  ".dash-stat-value" so layout stays stable when the data        */
+    /*  arrives. The shimmer pulse is purely cosmetic.                 */
+    .dash-stat-skeleton
+    {
+        display: inline-block;
+        width: 88px;
+        height: 28px;
+        border-radius: 4px;
+        background: linear-gradient(
+            90deg,
+            rgba(0, 0, 0, 0.08) 0%,
+            rgba(0, 0, 0, 0.18) 50%,
+            rgba(0, 0, 0, 0.08) 100%
+        );
+        background-size: 200% 100%;
+        animation: dash-skeleton-pulse 1.4s ease-in-out infinite;
+        vertical-align: middle;
+    }
+    ha-card.theme-dark .dash-stat-skeleton
+    {
+        background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.06) 0%,
+            rgba(255, 255, 255, 0.18) 50%,
+            rgba(255, 255, 255, 0.06) 100%
+        );
+        background-size: 200% 100%;
+    }
+    @keyframes dash-skeleton-pulse
+    {
+        0%   { background-position: 100% 0; }
+        100% { background-position: -100% 0; }
+    }
+
+    /*  Section: tomorrow                                               */
+
+    .dash-tomorrow-peak
+    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+    }
+    .dash-tomorrow-peak ha-icon { --mdc-icon-size: 14px; }
+    .dash-tomorrow-peak .dash-line-label
+    {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.55;
+    }
+    .dash-tomorrow-peak .dash-line-value { font-weight: 700; }
+
+    /*  Section: battery                                                */
+
+    .dash-battery-body
+    {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .dash-battery-vessel
+    {
+        width: 44px;
+        height: 72px;
+        flex-shrink: 0;
+        display: block;
+    }
+    .dash-battery-vessel .dash-batt-shell,
+    .dash-battery-vessel .dash-batt-cap
+    {
+        fill: rgba(0, 0, 0, 0.04);
+        stroke: rgba(0, 0, 0, 0.30);
+        stroke-width: 1;
+    }
+    ha-card.theme-dark .dash-battery-vessel .dash-batt-shell,
+    ha-card.theme-dark .dash-battery-vessel .dash-batt-cap
+    {
+        fill: rgba(255, 255, 255, 0.04);
+        stroke: rgba(255, 255, 255, 0.30);
+    }
+    .dash-battery-flows
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+        min-width: 0;
+    }
+    .dash-battery-flow
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .dash-battery-flow ha-icon { --mdc-icon-size: 14px; }
+    .dash-battery-flow-charge    ha-icon { color: #22c55e; }
+    .dash-battery-flow-discharge ha-icon { color: #ef4444; }
+    .dash-flow-value { font-weight: 700; }
+    .dash-flow-label
+    {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        opacity: 0.55;
+    }
+
+
+    /*  Timeline, pinned to the bottom of the card with uniform
+        breathing space. The whole bar accepts pointer events for
+        scrub. */
+
+    .time-bar
+    {
+        position: absolute;
+        bottom: 8px;
+        /*  Width is derived from --timeline-width-frac (0.5..1, set
+            inline by the renderer). At 1 the bar hugs the card edges
+            with the original 8 px breathing on each side. Below 1 it
+            shrinks proportionally and stays centred via the
+            translateX trick. The inset hooks (left / right: 8 px)
+            from the legacy layout are dropped, the new horizontal
+            placement uses left: 50 % + translate. */
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc((100% - 16px) * var(--timeline-width-frac, 1));
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+    .time-bar:active
+    {
+        cursor: grabbing;
+    }
+
+    /*  Chart card, bordered white panel hosting the area chart,
+        day-label chips on the midline, dotted day separators and
+        the live + scrub HTML cursor overlays. */
+    .tb-chart-card
+    {
+        position: relative;
+        background: #ffffff;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        height: 64px;
+        overflow: hidden;
+    }
+
+    .hc-chart-svg
+    {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+
+    /*  Stroke-only outline on top of the filled area so peaks read
+        cleanly even where the gradient fades towards the midline. */
+    .hc-chart-line
+    {
+        fill: none;
+        stroke-width: 1.4;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+        opacity: 0.95;
+        pointer-events: none;
+    }
+
+    /*  PV prediction line, overlays the observed PV chart for hours
+        past "now" using the user-configured peak power (pv-peak-kwp)
+        scaled by the clear-sky model. Dashed + half opacity makes it
+        visually distinct from the recorded curve while staying in
+        the configured PV colour so it reads as "the same quantity,
+        projected". */
+    .hc-chart-predicted
+    {
+        stroke-dasharray: 4 3;
+        opacity: 0.55;
+    }
+
+
+
+    /*  Faint dotted day separators inside the chart card. */
+    .hc-day-sep
+    {
+        stroke: rgba(0, 0, 0, 0.30);
+        stroke-width: 1;
+        stroke-dasharray: 1.5 2.5;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+
+    /*  Solid black midline splitting irradiance (top) from cloud
+        cover (bottom). Day-label chips overlay it. */
+    .hc-chart-mid
+    {
+        stroke: #000000;
+        stroke-width: 1.4;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+
+    /*  Tiny hour ticks centred on the midline. Discreet enough to
+        read as ambient texture rather than a primary feature. */
+    .hc-hour-tick
+    {
+        stroke: rgba(0, 0, 0, 0.35);
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+
+    /*  Live cursor: thin discreet line spanning the full chart with
+        a small triangle handle at the top. Stays subtle on purpose,
+        the user is in live mode, the cursor is a passive "where now
+        is on the timeline" reference, not a focus target. */
+    .tb-cursor-now
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: rgba(0, 0, 0, 0.45);
+        transform: translateX(-50%);
+        pointer-events: none;
+        z-index: 4;
+    }
+
+    .tb-cursor-now::after
+    {
+        content: '';
+        position: absolute;
+        top: -1px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left:   3px solid transparent;
+        border-right:  3px solid transparent;
+        border-top:    4px solid rgba(0, 0, 0, 0.55);
+    }
+
+    /*  Scrub cursor: prominent solid blue line spanning the full
+        chart, with a wider triangle handle at the top. Now that the
+        scrub-time chip is gone, this cursor IS the primary feedback
+        during a drag, so it has to read instantly without scrutiny.
+        Same blue as the clock-chip scrub theme so the user spatially
+        links the two: drag here, time updates over there. */
+    .tb-cursor-sel
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: rgba(31, 111, 235, 0.95);
+        transform: translateX(-50%);
+        pointer-events: none;
+        z-index: 4;
+        box-shadow: 0 0 4px rgba(31, 111, 235, 0.4);
+    }
+
+    .tb-cursor-sel::after
+    {
+        content: '';
+        position: absolute;
+        top: -3px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left:   6px solid transparent;
+        border-right:  6px solid transparent;
+        border-top:    8px solid rgba(31, 111, 235, 0.95);
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+    }
+
+    /*  Day labels, small white chips overlaying the chart midline.
+        Same chip language as the on-map cloud and W/m² readouts. */
+    .tb-day-labels
+    {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+    }
+
+    .tb-day-label
+    {
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 3px;
+        padding: 1px 5px;
+        font-size:    9px;
+        font-weight:  600;
+        line-height:  1.2;
+        letter-spacing: 0.2px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        z-index: 2;
+    }
+
+    .tb-day-label-today
+    {
+        font-weight: 800;
+    }
+
+    /*  Daily kWh total appended next to the date. Lighter weight +
+        smaller separator dot so the date stays the primary read.
+        Forecast variant (today's remainder + future days) is
+        italicised so the user can tell observation from estimate
+        at a glance, same convention the PV chip uses for predicted
+        values. */
+    .tb-day-label-kwh
+    {
+        font-weight: 500;
+        opacity: 0.75;
+    }
+    .tb-day-label-kwh::before
+    {
+        content: "·";
+        margin-right: 4px;
+        opacity: 0.5;
+    }
+    .tb-day-label-kwh.is-forecast
+    {
+        font-style: italic;
+    }
+
+    /*  Optional PV graph card stacked above the main chart. Half
+        the main height so the irradiance and PV areas balance. */
+    .tb-pv-card
+    {
+        height: 32px;
+    }
+
+
+    /*  Spinner, centred on the map while a fetch is in flight. */
+
+    .spinner-center
+    {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 50;
+        width: 40px;
+        height: 40px;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        pointer-events: none;
+    }
+
+    .spinner-center.spinning
+    {
+        opacity: 1;
+    }
+
+    /*  Helios brand spinner: the SVG sun, no border, no background,
+        no shadow. Only the ray bundle rotates; the inner disc stays
+        still so the brand colour reads as a steady centre while the
+        rays sweep around it. */
+    .spinner-sun
+    {
+        width:  100%;
+        height: 100%;
+        display: block;
+    }
+    .spinner-sun-rays
+    {
+        transform-origin: 32px 32px;
+        transform-box: view-box;
+        animation: helios-spin 1.6s linear infinite;
+    }
+
+    @keyframes helios-spin
+    {
+        to { transform: rotate(360deg); }
+    }
+
+
+    /*  LiDAR View toggle button, lives in the .overlay-top-right
+        column. Sized to mirror the .clock chip on the left so the
+        two corners read as a symmetric pair. Stays at fixed width
+        when toggled on/off so neighbour chips don't jump. */
+    .lidar-view-btn
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        /*  Sized to mirror the .clock chip on the opposite rail
+            (~80 px wide with the default "mm-dd HH:MM" content, at
+            12 px / weight 600). justify-content: center balances the
+            icon + label inside that fixed width so the toggle reads
+            as a symmetric counterweight to the date chip.            */
+        min-width: 80px;
+        height: 22px;
+        box-sizing: border-box;
+        padding: 0 8px;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        line-height: 1;
+        cursor: pointer;
+        /*  Force full opacity at every state except :disabled (which
+            sets its own 0.35 for the visual "not available" hint).
+            The transition only covers background + color so a state
+            change (active / inactive) doesn't briefly pass through a
+            translucent state. */
+        opacity: 1;
+        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        /*  The parent .overlay-top-right rail has pointer-events: none
+            (so the rail itself never steals map interactions when
+            empty). The button has to opt back in explicitly so its
+            click reaches the @click handler, mirroring what
+            .clock / .live-return-btn do on the opposite (top-left)
+            rail. Without this the button visually renders enabled but
+            ignores every click.
+
+            z-index: 50 puts the button above the LiDAR View canvas
+            overlay (z 30) so the toggle stays clickable while the
+            View is open, otherwise the canvas would swallow the
+            click that exits the mode. */
+        pointer-events: auto;
+        position: relative;
+        z-index: 50;
+    }
+    /*  Roboto cap glyphs at small sizes inside line-height: 1 sit
+        slightly low in the em-box once the descender slack is gone,
+        so flex-centering still leaves the visual centre of "LIDAR"
+        a hair below the chip's geometric centre against a 14 px icon
+        glyph. translateY(-1px) on the label nudges it back up into
+        true centre. The icon itself stays at the geometric centre,
+        ha-icon is a square box without ascender/descender asymmetry. */
+    .lidar-view-btn-label
+    {
+        display: inline-block;
+        line-height: 1;
+        transform: translateY(-1px);
+    }
+    .lidar-view-btn ha-icon
+    {
+        --mdc-icon-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+    .lidar-view-btn:disabled
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .lidar-view-btn.is-on
+    {
+        background: #1f6feb;
+        color: #ffffff;
+        border-color: #1f6feb;
+    }
+
+
+    /*  When LiDAR View is active, fade out every overlay layer so
+        the dot cloud reads on its own against a quiet basemap. The
+        toggle button itself is opted back in (selector below) so
+        the user can always exit. The map container stays visible
+        so the dots are projected onto a real basemap.
+
+        Selector list mirrors what .detail-active fades earlier in
+        this file, plus the corners (top-left clock + top-right rail
+        minus the LiDAR button itself), the home hitbox / glow, and
+        the timeline. Easier to audit if any future overlay needs
+        to be hidden in LiDAR View by looking at this single block. */
+    ha-card.lidar-view-active .overlay-top-left,
+    ha-card.lidar-view-active .home-glow-svg,
+    ha-card.lidar-view-active .home-hitbox,
+    ha-card.lidar-view-active .home-silhouette-svg,
+    ha-card.lidar-view-active .time-bar,
+    ha-card.lidar-view-active .solar-svg,
+    ha-card.lidar-view-active .solar-pct-label,
+    ha-card.lidar-view-active .solar-horizon-icon,
+    ha-card.lidar-view-active .cloud-svg,
+    ha-card.lidar-view-active .cloud-leader-svg,
+    ha-card.lidar-view-active .cloud-pct-label,
+    ha-card.lidar-view-active .pv-home-leader-svg,
+    ha-card.lidar-view-active .pv-pct-label,
+    ha-card.lidar-view-active .battery-leader-svg,
+    ha-card.lidar-view-active .battery-pct-label
+    {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+    ha-card.lidar-view-active .overlay-top-right
+    {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+
+    /*  Top corner overlays. Date/time chip on the left; back-to-live
+        + LiDAR busy chip column on the right. Both rails sit 8 px
+        from the card edge so they read as a paired pair anchored
+        to the frame, mirroring the timeline's edge margin. */
+
+    /*  Date/time chip, same chip language as the on-map readouts.
+        Explicit height (border-box) so the chip and the back-to-
+        live button next to it share the exact same vertical
+        footprint, no align-items: center shift in the parent flex
+        container. */
+    .clock
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 22px;
+        box-sizing: border-box;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 3px;
+        padding: 2px 6px;
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size:    12px;
+        font-weight:  600;
+        line-height:  1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+        position: relative;
+        z-index: 2;
+    }
+
+    .clock-date { opacity: 0.75; }
+    .clock-time { opacity: 1;    }
+
+    /*  Scrub-mode theme for the clock chip. Same chip flips to a
+        white-on-blue look so it doubles as the "you're not in live
+        mode" signal. The blue matches the timeline scrub cursor so
+        the user spatially links the top-left chip with the timeline
+        marker driving it. The chip's right corners are also squared
+        in scrub mode so it physically fuses with the back-to-live
+        button rendered next to it: same blue plate, shared seam,
+        zero visual gap, the pair reads as one composite control.
+
+        Both selectors are listed so the rule beats the dark-theme
+        override (ha-card.theme-dark .clock, specificity 0,2,1) in
+        both light and dark contexts; without the second selector
+        the dark-theme rule keeps the chip grey when scrubbing. */
+    .clock.is-scrub,
+    ha-card.theme-dark .clock.is-scrub
+    {
+        background: rgba(31, 111, 235, 0.95);
+        color: #ffffff;
+        border-color: rgba(20, 78, 168, 0.95);
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+    .clock.is-scrub .clock-date,
+    ha-card.theme-dark .clock.is-scrub .clock-date { opacity: 0.95; color: #ffffff; }
+    .clock.is-scrub .clock-time,
+    ha-card.theme-dark .clock.is-scrub .clock-time { opacity: 1;    color: #ffffff; }
+
+    /*  "Back to live" button, lives next to the clock chip in the
+        top-left cluster while scrubbing. Square 22 x 22 to match
+        the clock chip height exactly (so the parent flex container
+        doesn't need vertical centering compensation), with the
+        same scrub-blue plate as the on-chart scrub cursor and the
+        clock chip's scrub theme so the cluster reads as one unit.
+        Icon kept small (12 px in a 22 px square = 5 px ring of
+        breathing room) so the chip frame dominates over the
+        glyph, consistent with the chip-language used everywhere
+        else on the card. */
+    .live-return-btn
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  22px;
+        height: 22px;
+        box-sizing: border-box;
+        padding: 0;
+        background: rgba(31, 111, 235, 0.95);
+        color: white;
+        border: 1px solid rgba(20, 78, 168, 0.95);
+        /*  Square left corners + drop the left border so the chip's
+            right border serves as the shared seam, no double 2 px
+            stroke at the join. The pair reads as one continuous
+            blue plate. */
+        border-radius: 0 3px 3px 0;
+        border-left: 0;
+        cursor: pointer;
+        pointer-events: auto;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        transition: background 0.12s;
+    }
+
+    .live-return-btn:hover  { background: rgba(24, 92, 199, 0.95); }
+    .live-return-btn:active { background: rgba(20, 78, 168, 0.95); }
+
+    .live-return-btn ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: white;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  Top-right overlay rail. Hosts the LiDAR View toggle button.
+        Mirrors the clock's top spacing on the opposite edge so the
+        two overlays sit at the same height.
+
+        z-index: 60 puts the rail (and therefore the button) above
+        the LiDAR View canvas (z 30) AND above the centre spinner
+        (z 50), so the toggle is always reachable. Pointer events
+        off on the rail itself so the empty rail never steals map
+        interactions; the button opts back in (.lidar-view-btn has
+        its own pointer-events: auto). Stacking contexts: because
+        we set z-index on this absolute container, children's own
+        z-index values are scoped to this rail; the rail's z-index
+        is the one that competes with siblings in ha-card. */
+    .overlay-top-right
+    {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 60;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        pointer-events: none;
+    }
+
+    /*  Top-left rail, mirrors overlay-top-right on the opposite edge
+        so the corner overlays sit at matching heights. Hosts the
+        date/time clock chip plus, when scrubbing, the back-to-live
+        button right next to it (both relate to "where am I in
+        time"). Laid out as a flex row with a small gap. Pointer
+        events are off on the rail by default, the button re-enables
+        them on itself so clicks reach it without the rail stealing
+        unrelated map interactions. */
+    .overlay-top-left
+    {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        /*  No gap, the clock chip and the back-to-live button (when
+            scrubbing) physically touch so the pair reads as one
+            composite "time + control" widget rather than two
+            independent chips. Border radii are squared on the
+            facing edges below so the seam is invisible. */
+        gap: 0;
+        pointer-events: none;
+    }
+
+
+    /*  "LiDAR shadow computing" indicator. Stripped to the spinning
+        sun glyph alone, no chip plate, no border, no shadow, matches
+        the clean spinner-sun aesthetic at the centre of the map: a
+        pure on-brand mark in the foreground that doesn't compete
+        with the chips and buttons around it. */
+    .shadow-busy-chip
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  22px;
+        height: 22px;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+    }
+
+    /*  Rotating sun glyph used as the busy indicator. Themed through
+        the configured sun colour so themed installs stay on-brand,
+        with the brand orange as the fallback. */
+    .shadow-busy-sun
+    {
+        --mdc-icon-size: 18px;
+        color: var(--helios-sun-color, #EF9F27);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        animation: helios-shadow-spin 1.4s linear infinite;
+    }
+
+    @keyframes helios-shadow-spin
+    {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+    }
+
+    /*  Cloud-cover percentage chip, floating above the cloud disc
+        on the ground with a leader line down to its feature. */
+    .cloud-pct-label
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 6;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 3px;
+        padding: 2px 6px 2px 4px;
+        font-size:    12px;
+        font-weight:  600;
+        line-height:  1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+
+    .cloud-pct-label ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: #000000;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  Photovoltaic production chip, same frame as cloud/W/m² but
+        tinted in the user-configured production colour (border +
+        text + icon) for instant identification.
+        --pv-leader-color is set inline by the renderer. The
+        min-width / centred text are shared with the SoC and Power
+        battery chips so the visible gap on each side of the PV
+        chip is identical regardless of how wide each value reads
+        ("26 %" vs "+12.34 kW" otherwise produce visibly unequal
+        leader gaps). */
+    .pv-pct-label
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 6;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        min-width: 76px;
+        box-sizing: border-box;
+        background: #ffffff;
+        color:      var(--pv-leader-color, #27B36B);
+        border:     1px solid var(--pv-leader-color, #27B36B);
+        border-radius: 3px;
+        padding: 2px 6px 2px 4px;
+        font-size:    12px;
+        font-weight:  600;
+        line-height:  1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+    }
+
+    .pv-pct-label ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  Predicted PV chip, shown when scrubbing into the future. The
+        value comes from the kWp × clear-sky model, not a measured
+        reading, so we semi-transparency the whole chip and rely on
+        the leading "≈" character (set by the card's render) to
+        signal "estimate" textually. */
+    .pv-pct-label.is-predicted
+    {
+        opacity: 0.55;
+        font-style: italic;
+    }
+
+    /*  Battery chips (SoC on the left of PV, Power on the right) ,
+        same frame as the PV chip, tinted in the user-configured
+        battery colour. Shares min-width and centred text with the
+        PV chip so the visible dotted-leader gap on each side of PV
+        is identical regardless of the value's content width.
+        --battery-leader-color is set inline by the renderer. */
+    .battery-pct-label
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 6;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        min-width: 76px;
+        box-sizing: border-box;
+        background: #ffffff;
+        color:      var(--battery-leader-color, #D32F2F);
+        border:     1px solid var(--battery-leader-color, #D32F2F);
+        border-radius: 3px;
+        padding: 2px 6px 2px 4px;
+        font-size:    12px;
+        font-weight:  600;
+        line-height:  1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+    }
+
+    .battery-pct-label ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  PV → home leader. Vertical dashed line from the PV chip's
+        bottom edge down to the home marker, painted in the configured
+        PV colour. Same dash vocabulary as the battery leader so the
+        two flows read as one coherent visual language. Animation runs
+        only when current production is positive; idle state keeps the
+        line static. Sits at z 5, BELOW the chip cluster (z 6) so the
+        dashes pass behind the PV / SoC / Power chips. */
+    .pv-home-leader-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    .pv-home-leader-line
+    {
+        stroke: var(--pv-leader-color, #27B36B);
+        stroke-width: 1.5;
+        stroke-opacity: 0.85;
+        stroke-linecap: round;
+        fill: none;
+    }
+
+    /*  Moving bead, a small filled disc rides the leader at a
+        speed proportional to live production. Same vocabulary as
+        the Home Assistant energy-distribution card. */
+    .pv-home-leader-bead
+    {
+        opacity: 0.95;
+        stroke: #ffffff;
+        stroke-width: 1;
+        stroke-opacity: 0.85;
+        paint-order: stroke fill;
+    }
+    ha-card.theme-dark .pv-home-leader-bead
+    {
+        stroke: #191a1b;
+        stroke-opacity: 0.95;
+    }
+
+
+    /*  Battery leaders.
+        Both SoC ↔ PV and PV ↔ Power share the exact same visual
+        vocabulary: solid L-shaped path with a rounded fillet at
+        the bend, matching the Home Assistant energy-distribution
+        card. The PV ↔ Power leader carries a small filled bead
+        riding along the path (animateMotion in card.ts) at a
+        speed proportional to |P|; the bead's path is flipped
+        inline by the renderer when discharging so its travel
+        direction matches the energy flow. The SoC leader is
+        static, no bead: SoC is a level, not a flow. */
+    .battery-leader-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    .battery-leader-line
+    {
+        stroke: var(--battery-leader-color, #D32F2F);
+        stroke-width: 1.5;
+        stroke-opacity: 0.85;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
+    }
+
+    .battery-leader-bead
+    {
+        opacity: 0.95;
+        stroke: #ffffff;
+        stroke-width: 1;
+        stroke-opacity: 0.85;
+        paint-order: stroke fill;
+    }
+    ha-card.theme-dark .battery-leader-bead
+    {
+        stroke: #191a1b;
+        stroke-opacity: 0.95;
+    }
+
+    /*  Cloud-cover leader line, black hairline from chip to disc. */
+    .cloud-leader-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 5;
+    }
+
+    .cloud-leader-svg line
+    {
+        stroke: #000000;
+        stroke-width: 1;
+        stroke-opacity: 0.55;
+    }
+
+
+    /*  Solar overlay, split into two passes so chips never occlude
+        the live sun while the night portion of the loop still reads
+        as background:
+          - .solar-svg-back paints only the dotted below-horizon
+            segments and stacks BELOW the home chip cluster (z 4)
+            so the home + readouts sit clearly on top of the night
+            half of the orbit.
+          - .solar-svg-front paints the above-horizon arc, the
+            incidence ray, and the sun disc, and stacks ABOVE the
+            chips (z 7) so the live sun always dominates the stack.
+            The card is named Helios, the sun must win the stack. */
+    .solar-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        /* Daylight fade is fed via the --solar-daylight CSS variable
+           (set inline per render, ranges 0..1) instead of an inline
+           opacity, so the .detail-active fade rule below can win
+           cleanly without fighting an inline style. */
+        opacity: var(--solar-daylight, 1);
+        transition: opacity 600ms ease-out;
+    }
+    .solar-svg-back  { z-index: 4; }
+    .solar-svg-front { z-index: 7; }
+
+    /*  Cloud-cover overlay. Two polygons (the filled disc sized by
+        the live cloud %, the fixed 100 % reference ring outline)
+        projected from a geographic circle around the home through
+        the engine's anchor-at-home pipeline, so they stay a true
+        circle whatever the terrain mesh does underneath. Sits below
+        the solar overlay in stacking order (z-index 3 vs 4) so the
+        sun arc + sun disc draw on top. */
+    .cloud-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 3;
+    }
+    /*  Each band is a fully-opaque concentric disc; the outermost
+        (high cloud, dark shade) renders first, then mid (normal
+        shade), then low (light shade) on top. The visual banding
+        comes from each smaller disc covering the centre of the
+        larger one — no SVG mask or clip-path needed. */
+    .cloud-svg .cloud-disc
+    {
+        pointer-events: none;
+    }
+    /*  Thin separator outlines drawn on the inner band boundaries
+        (low ↔ mid and mid ↔ high). Stroke-only, no fill so the
+        band colours behind stay untouched. The outermost edge
+        (high ↔ outside) is already painted by .cloud-ring. */
+    .cloud-svg .cloud-band-sep
+    {
+        fill: none;
+        stroke: rgba(0, 0, 0, 0.35);
+        stroke-width: 0.75;
+        pointer-events: none;
+    }
+    .cloud-svg .cloud-ring
+    {
+        fill: none;
+        stroke: rgba(0, 0, 0, 0.4);
+        stroke-width: 2;
+        pointer-events: none;
+    }
+
+    /*  Arc, first pass paints a dark outline for legibility on
+        light basemaps; second pass paints the configured sun
+        colour on top. Stroke widths are set inline per segment. */
+    .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
+    .solar-svg .solar-arc-segment { stroke-linecap: round; }
+
+    /*  Sunrise / sunset markers. ha-icon glyphs (mdi:weather-sunset-up
+        / -down) centred on the horizon crossings of the day's solar
+        arc, coloured in the configured sun colour via inline style.
+        The icon shape itself communicates "rising" vs "setting" so
+        no label or rotation is needed. */
+    .solar-horizon-icon
+    {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        --mdc-icon-size: 18px;
+        pointer-events: none;
+        z-index: 6;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+    }
+
+
+    /*  Below-horizon segments, round dots at fixed spacing so the
+        eye reads "this is happening underground" without colour or
+        depth scaling having to carry the signal. dasharray "0 N"
+        with linecap round renders true circles on every browser. */
+    .solar-svg .solar-arc-night
+    {
+        stroke-linecap: round;
+        stroke-dasharray: 0 8;
+    }
+
+    /*  Incidence ray, dashes flow from the sun toward the home at
+        a speed proportional to live irradiance. */
+    .solar-svg .solar-ray
+    {
+        stroke-width: 1.5;
+        stroke-dasharray: 5 5;
+        stroke-opacity: 0.55;
+        stroke-linecap: round;
+        animation: solar-ray-flow var(--sun-flow-duration, 30s) linear infinite;
+    }
+
+    @keyframes solar-ray-flow
+    {
+        from { stroke-dashoffset: 0;  }
+        to   { stroke-dashoffset: -10; }
+    }
+
+    /*  Solar ray arrow, tiny triangle riding the incidence ray
+        toward the home, animated via SVG <animateMotion> at the
+        same duration as the dash flow so the arrow advances in
+        lockstep with the pointillé. rotate="auto" keeps the tip
+        pointing forward along the path (sun → home). */
+    .solar-svg .solar-ray-arrow
+    {
+        opacity: 0.85;
+    }
+
+
+    /*  Solar irradiance label, chip pinned above the live sun
+        position, same chip language as the cloud and PV chips.
+        Sits in the front layer (z 7) so it stacks on top of every
+        home-anchored chip, matching the front-pass solar overlay. */
+    .solar-pct-label
+    {
+        position: absolute;
+        transform: translate(-50%, -100%);
+        pointer-events: none;
+        z-index: 7;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 3px;
+        padding: 2px 6px 2px 4px;
+        font-size:    12px;
+        font-weight:  600;
+        line-height:  1.2;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        white-space: nowrap;
+    }
+
+    .solar-pct-label ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: #000000;
+        display: inline-flex;
+        align-items: center;
+    }
+
+
+    /*  ============================================================
+        Dark theme, opt-in via the \`card-theme: dark\` config.
+
+        The whole card is already painted on top of a 3D map, so
+        "dark mode" here is really about the chrome (chips, charts,
+        cursors, day labels, leader lines, tooltips), the basemap
+        keeps its own colours. Strategy:
+
+          - chip surfaces flip from a solid white plate to a solid
+            near-black plate, so the chip itself reads as a clean
+            darkened tile over the map instead of a
+            bright sticker.
+          - chip text / borders / icons go from black to a soft
+            light-grey (#e6e6e6 text, #cccccc borders), pure white
+            would clip detail against bright basemap patches.
+          - chart hairlines (midline, day separators, hour ticks,
+            live cursor) flip from black-on-white to white-on-near-
+            black with the same opacity envelopes as the light skin
+            so the visual weight stays balanced.
+          - chart fills (PV / cloud / irradiance) are user-coloured
+            and unchanged, they read fine on both surfaces.
+          - the scrub blue (#1f6feb) and the live tooltip dark
+            plate already read on dark backgrounds, so they're left
+            alone.
+        ============================================================ */
+
+    /*  Cards (chart panels) and hairlines on the chart. */
+    ha-card.theme-dark .tb-chart-card
+    {
+        background: #191a1b;
+        border-color: #4a4d55;
+    }
+
+    ha-card.theme-dark .hc-day-sep
+    {
+        stroke: rgba(255, 255, 255, 0.30);
+    }
+
+    ha-card.theme-dark .hc-chart-mid
+    {
+        stroke: #cccccc;
+    }
+
+    ha-card.theme-dark .hc-hour-tick
+    {
+        stroke: rgba(255, 255, 255, 0.35);
+    }
+
+    ha-card.theme-dark .tb-cursor-now
+    {
+        background: rgba(255, 255, 255, 0.55);
+    }
+
+    ha-card.theme-dark .tb-cursor-now::after
+    {
+        border-top-color: #ffffff;
+    }
+
+    /*  Chips that don't carry a user-configured colour: clock, day
+        labels, live button, cloud %, solar W/m². These all share
+        the "white plate, black ink" base recipe in light mode, so
+        they get the same dark override. */
+    ha-card.theme-dark .clock,
+    ha-card.theme-dark .tl-live-btn,
+    ha-card.theme-dark .tb-day-label,
+    ha-card.theme-dark .cloud-pct-label,
+    ha-card.theme-dark .solar-pct-label,
+    ha-card.theme-dark .map-btn:not(.map-btn-on),
+    ha-card.theme-dark .lidar-view-btn:not(.is-on)
+    {
+        background: #191a1b;
+        color:       #e6e6e6;
+        /*  Light-mode borders are pure black on a white plate ,
+            high contrast but visually contained because the plate
+            and the basemap below it are both bright. In dark mode
+            the same 1 px ring at #cccccc reads as the brightest
+            ink on the card and dominates the chip. Drop the
+            opacity so the border behaves as a delimiter rather
+            than a focal element. Matches the chart-card and
+            segmented-toggle borders elsewhere in dark mode. */
+        border-color: rgba(255, 255, 255, 0.20);
+    }
+
+    ha-card.theme-dark .tb-day-label
+    {
+        background: #1f2021;
+    }
+
+    ha-card.theme-dark .tl-live-btn ha-icon,
+    ha-card.theme-dark .cloud-pct-label ha-icon,
+    ha-card.theme-dark .solar-pct-label ha-icon,
+    ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
+    ha-card.theme-dark .lidar-view-btn:not(.is-on) ha-icon
+    {
+        color: #e6e6e6;
+    }
+
+    ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
+    ha-card.theme-dark .tl-live-btn:active { background: #353637; }
+    ha-card.theme-dark .map-btn:not(.map-btn-on):hover  { background: #292a2b; }
+    ha-card.theme-dark .map-btn:not(.map-btn-on):active { background: #353637; }
+
+    /*  PV and battery chips, they keep the user-configured tint
+        on the border / text / icon (so a green PV chip reads as
+        green on either skin), but the surface flips to the dark
+        plate so the tint stays readable. The border drops to 50 %
+        opacity of the configured colour: at full saturation the
+        ring would dominate the chip against a near-black plate
+        and a darkened map, fighting the value just like the
+        neutral-chip border above. The text and icon stay at full
+        saturation so the colour identity is carried by the
+        readable elements, not the frame. */
+    ha-card.theme-dark .pv-pct-label
+    {
+        background: #191a1b;
+        border-color: color-mix(in srgb, var(--pv-leader-color, #27B36B) 50%, transparent);
+    }
+    ha-card.theme-dark .battery-pct-label
+    {
+        background: #191a1b;
+        border-color: color-mix(in srgb, var(--battery-leader-color, #D32F2F) 50%, transparent);
+    }
+
+    /*  Cloud-cover leader (chip → disc) flips polarity so it's
+        visible against a dark plate and a darkened map. */
+    ha-card.theme-dark .cloud-leader-svg line
+    {
+        stroke: #e6e6e6;
+        stroke-opacity: 0.55;
+    }
+
+    /*  Solar arc outline, the light skin paints a black halo
+        behind the configured sun colour for legibility on bright
+        basemaps; in dark mode that halo would disappear into the
+        map, so we paint a faint white halo instead. The arc and
+        sun disc themselves keep their configured colour. */
+    ha-card.theme-dark .solar-svg .solar-arc-outline
+    {
+        stroke: rgba(255, 255, 255, 0.45);
+    }
+
+
+    /*  ---------------------------------------------------------
+        Animation perf hooks
+        ---------------------------------------------------------
+
+        1. .helios-paused, set on the host element by the card's
+           IntersectionObserver when the card scrolls out of the
+           viewport. Pauses every CSS animation (SVG dash-flow,
+           offset-path arrow flow) until the card returns. SMIL
+           <animateMotion> is paused in parallel via
+           svg.pauseAnimations() in the card script.
+
+        2. prefers-reduced-motion, respects the user's system
+           setting. When the user has asked for reduced motion at
+           the OS level, every helios animation and transition is
+           disabled. The card still functions; it just doesn't move.
+    */
+    :host(.helios-paused) *,
+    :host(.helios-paused) *::before,
+    :host(.helios-paused) *::after
+    {
+        animation-play-state: paused !important;
+    }
+
+    @media (prefers-reduced-motion: reduce)
+    {
+        *, *::before, *::after
+        {
+            animation-duration:         0ms !important;
+            animation-iteration-count:  1   !important;
+            transition-duration:        0ms !important;
+        }
+    }
+`;
+function formatLocalisedNumber(hass, value, fractionDigits, integer = false) {
+  const locale = hass?.locale?.language ?? hass?.language ?? void 0;
+  const opts = integer ? { maximumFractionDigits: 0 } : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits };
+  try {
+    return new Intl.NumberFormat(locale, opts).format(value);
+  } catch (_2) {
+    return integer ? Math.round(value).toString() : value.toFixed(fractionDigits);
+  }
+}
+function darkenHex(hex, factor) {
+  const f2 = 1 - Math.max(0, Math.min(1, factor));
+  const r2 = Math.round(parseInt(hex.slice(1, 3), 16) * f2);
+  const g2 = Math.round(parseInt(hex.slice(3, 5), 16) * f2);
+  const b2 = Math.round(parseInt(hex.slice(5, 7), 16) * f2);
+  const h2 = (n3) => n3.toString(16).padStart(2, "0");
+  return `#${h2(r2)}${h2(g2)}${h2(b2)}`;
+}
+function lerpHexToward(a2, b2, t2) {
+  const u2 = Math.max(0, Math.min(1, t2));
+  const ar = parseInt(a2.slice(1, 3), 16);
+  const ag = parseInt(a2.slice(3, 5), 16);
+  const ab = parseInt(a2.slice(5, 7), 16);
+  const br = parseInt(b2.slice(1, 3), 16);
+  const bg = parseInt(b2.slice(3, 5), 16);
+  const bb = parseInt(b2.slice(5, 7), 16);
+  const r2 = Math.round(ar + (br - ar) * u2);
+  const g2 = Math.round(ag + (bg - ag) * u2);
+  const bl = Math.round(ab + (bb - ab) * u2);
+  const h2 = (n3) => n3.toString(16).padStart(2, "0");
+  return `#${h2(r2)}${h2(g2)}${h2(bl)}`;
+}
+function cfgHex(v2, fallback) {
+  if (v2 == null) {
+    return fallback;
+  }
+  const s2 = String(v2).trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(s2)) {
+    return s2;
+  }
+  return fallback;
+}
+const VALID_DATE_FORMAT_RE = /^[\-\/\. _:0-9A-Za-z]+$/;
+const DATE_TOKEN_RE = /yyyy|yy|mm|dd/g;
+function formatDate(d2, rawFormat) {
+  let fmt = typeof rawFormat === "string" ? rawFormat.trim() : "";
+  if (!fmt || !VALID_DATE_FORMAT_RE.test(fmt) || !DATE_TOKEN_RE.test(fmt)) {
+    fmt = "mm-dd";
+  }
+  DATE_TOKEN_RE.lastIndex = 0;
+  const yyyy = String(d2.getFullYear());
+  const yy = yyyy.slice(-2);
+  const mm = String(d2.getMonth() + 1).padStart(2, "0");
+  const dd = String(d2.getDate()).padStart(2, "0");
+  return fmt.replace(DATE_TOKEN_RE, (tok) => {
+    switch (tok) {
+      case "yyyy":
+        return yyyy;
+      case "yy":
+        return yy;
+      case "mm":
+        return mm;
+      case "dd":
+        return dd;
+    }
+    return tok;
+  });
+}
+let _sunCacheKey = null;
+let _sunCacheValue = null;
+function getSunPosition(date, lat, lon) {
+  const key = `${date.getTime()}|${lat.toFixed(6)}|${lon.toFixed(6)}`;
+  if (key === _sunCacheKey && _sunCacheValue !== null) {
+    return _sunCacheValue;
+  }
+  const D2 = Math.PI / 180;
+  const H2 = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+  const doy = Math.floor((date.getTime() - Date.UTC(date.getUTCFullYear(), 0, 0)) / 864e5);
+  const decl = 23.45 * Math.sin(D2 * (360 / 365) * (doy - 81));
+  const B2 = D2 * (360 / 365) * (doy - 81);
+  const eot = 9.87 * Math.sin(2 * B2) - 7.53 * Math.cos(B2) - 1.5 * Math.sin(B2);
+  let ha = 15 * (H2 + lon / 15 + eot / 60 - 12);
+  ha = ((ha + 180) % 360 + 360) % 360 - 180;
+  const sinA = Math.sin(D2 * lat) * Math.sin(D2 * decl) + Math.cos(D2 * lat) * Math.cos(D2 * decl) * Math.cos(D2 * ha);
+  const alt = Math.asin(Math.max(-1, Math.min(1, sinA))) / D2;
+  const cAlt = Math.cos(alt * D2);
+  const cAz = cAlt > 1e-4 ? (Math.sin(D2 * decl) - Math.sin(D2 * lat) * sinA) / (Math.cos(D2 * lat) * cAlt) : 0;
+  let az = Math.acos(Math.max(-1, Math.min(1, cAz))) / D2;
+  if (ha > 0) {
+    az = 360 - az;
+  }
+  const result = { altitude: alt, azimuth: az };
+  _sunCacheKey = key;
+  _sunCacheValue = result;
+  return result;
+}
+function computePvPower(date, lat, lon, cloudCoverPct, panel) {
+  const sun = getSunPosition(date, lat, lon);
+  const alt = sun.altitude;
+  if (alt <= 0) return 0;
+  const D2 = Math.PI / 180;
+  const cosZ = Math.sin(alt * D2);
+  const ghiClear = 1098 * cosZ * Math.exp(-0.059 / cosZ);
+  const cc = Math.max(0, Math.min(100, cloudCoverPct)) / 100;
+  const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
+  const ghiEff = ghiClear * kCloud;
+  if (!panel || panel.tiltDeg <= 0) {
+    return Math.max(0, Math.min(100, ghiEff / 1e3 * 100));
+  }
+  const beta = panel.tiltDeg * D2;
+  const dAz = (sun.azimuth - panel.azimuthDeg) * D2;
+  const altR = alt * D2;
+  const cosTheta = Math.sin(altR) * Math.cos(beta) + Math.cos(altR) * Math.sin(beta) * Math.cos(dAz);
+  const directFraction = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
+  const diffuseFraction = 1 - directFraction;
+  const Rb = cosTheta > 0 ? Math.max(0, cosTheta) / Math.max(0.087, cosZ) : 0;
+  const directPoa = ghiEff * directFraction * Rb;
+  const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
+  const groundPoa = ghiEff * 0.2 * (1 - Math.cos(beta)) / 2;
+  const poaEff = directPoa + diffusePoa + groundPoa;
+  return Math.max(0, Math.min(100, poaEff / 1e3 * 100));
+}
+function computeIrradianceWm2(date, lat, lon, cloudCoverPct) {
+  const sun = getSunPosition(date, lat, lon);
+  const alt = sun.altitude;
+  if (alt <= 0) return 0;
+  const D2 = Math.PI / 180;
+  const cosZ = Math.sin(alt * D2);
+  const ghiClear = 1098 * cosZ * Math.exp(-0.059 / cosZ);
+  const cc = Math.max(0, Math.min(100, cloudCoverPct)) / 100;
+  const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
+  return Math.max(0, ghiClear * kCloud);
+}
+const PV_CALIB_WIPE_FLAG_KEY = "helios-pv-calib:wiped-v1";
+function refreshPv(host) {
+  const entity = String(host.config?.["pv-power-entity"] ?? "").trim();
+  if (!entity || !host.hass) {
+    if (host._pvCurrent !== null || host._pvHistory !== null) {
+      host._pvCurrent = null;
+      host._pvHistory = null;
+      host._pvUnit = "";
+    }
+    host._pvFetchKey = "";
+    return;
+  }
+  const stateObj = host.hass.states?.[entity];
+  if (stateObj) {
+    const v2 = parseFloat(stateObj.state);
+    const next3 = isFinite(v2) ? v2 : null;
+    if (next3 !== host._pvCurrent) {
+      host._pvCurrent = next3;
+    }
+    const unit = stateObj.attributes?.unit_of_measurement ?? "";
+    if (unit !== host._pvUnit) {
+      host._pvUnit = unit;
+    }
+    if (next3 !== null) {
+      const ts = stateObj.last_updated ? new Date(stateObj.last_updated).getTime() : Date.now();
+      const buf = host._pvSampleBuffer;
+      const last = buf.length > 0 ? buf[buf.length - 1] : null;
+      if (!last || ts > last.t) {
+        buf.push({ t: ts, v: next3 });
+        const cutoff = Date.now() - 5 * 60 * 1e3;
+        while (buf.length > 1 && buf[0].t < cutoff) {
+          buf.shift();
+        }
+      }
+    }
+  } else {
+    if (host._pvCurrent !== null) {
+      host._pvCurrent = null;
+    }
+    if (host._pvSampleBuffer.length > 0) {
+      host._pvSampleBuffer = [];
+    }
+  }
+  if (!host._timeRange || host._pvFetching) {
+    return;
+  }
+  const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
+  const fetchKey = `${entity}@${rangeKey}`;
+  if (fetchKey === host._pvFetchKey) {
+    return;
+  }
+  host._pvFetchKey = fetchKey;
+  fetchPvHistory(host, entity, host._timeRange.start, host._timeRange.end);
+}
+async function fetchPvHistory(host, entityId, start, end) {
+  if (!host.hass?.callWS) {
+    return;
+  }
+  host._pvFetching = true;
+  try {
+    const now = /* @__PURE__ */ new Date();
+    const fetchEnd = end > now ? now : end;
+    if (start >= fetchEnd) {
+      host._pvHistory = { times: [], values: [] };
+      return;
+    }
+    const result = await host.hass.callWS({
+      type: "history/history_during_period",
+      start_time: start.toISOString(),
+      end_time: fetchEnd.toISOString(),
+      entity_ids: [entityId],
+      minimal_response: true,
+      no_attributes: true
+    });
+    const arr = (result && result[entityId]) ?? [];
+    const times = [];
+    const values2 = [];
+    let lastTsMs = null;
+    for (const item of arr) {
+      const sRaw = item?.s ?? item?.state;
+      if (sRaw === null || sRaw === void 0 || sRaw === "unavailable" || sRaw === "unknown" || sRaw === "") {
+        continue;
+      }
+      const v2 = parseFloat(String(sRaw));
+      if (!isFinite(v2)) {
+        continue;
+      }
+      let ts = null;
+      const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+      if (typeof tsRaw === "number") {
+        ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1e3);
+      } else if (typeof tsRaw === "string") {
+        const asNum = Number(tsRaw);
+        if (Number.isFinite(asNum) && asNum > 1e9) {
+          ts = new Date(asNum > 1e12 ? asNum : asNum * 1e3);
+        } else {
+          ts = new Date(tsRaw);
+        }
+      }
+      if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) {
+        ts = new Date(lastTsMs);
+      }
+      if (!ts || isNaN(ts.getTime())) {
+        continue;
+      }
+      lastTsMs = ts.getTime();
+      times.push(ts);
+      values2.push(v2);
+    }
+    host._pvHistory = { times, values: values2 };
+    host._pvHistoryDiagnostics = {
+      rawEntries: arr.length,
+      samples: times.length,
+      windowH: Number(((fetchEnd.getTime() - start.getTime()) / 36e5).toFixed(1))
+    };
+  } catch (e2) {
+    console.warn("[HELIOS] PV history fetch failed:", e2);
+    host._pvHistory = { times: [], values: [] };
+  } finally {
+    host._pvFetching = false;
+  }
+}
+function pvRateAtTime(host, time) {
+  const hist = host._pvHistory;
+  if (!hist || hist.times.length === 0) {
+    return null;
+  }
+  const tMs = time.getTime();
+  const firstMs = hist.times[0].getTime();
+  const lastMs = hist.times[hist.times.length - 1].getTime();
+  if (tMs < firstMs || tMs > lastMs + 6e4) {
+    return null;
+  }
+  const entity = String(host.config?.["pv-power-entity"] ?? "").trim();
+  const stateObj = host.hass?.states?.[entity];
+  const sc = String(stateObj?.attributes?.state_class ?? "").toLowerCase();
+  const dc = String(stateObj?.attributes?.device_class ?? "").toLowerCase();
+  const u2 = (host._pvUnit || "").trim();
+  const lu = u2.toLowerCase();
+  let isCumulative;
+  if (sc === "total_increasing" || sc === "total") isCumulative = true;
+  else if (sc === "measurement") isCumulative = false;
+  else if (dc === "energy") isCumulative = true;
+  else if (dc === "power") isCumulative = false;
+  else isCumulative = lu === "wh" || lu === "kwh" || lu === "mwh";
+  let rateUnit;
+  if (lu === "wh") rateUnit = "W";
+  else if (lu === "kwh") rateUnit = "kW";
+  else if (lu === "mwh") rateUnit = "MW";
+  else rateUnit = u2 ? `${u2}/h` : "";
+  let idx = hist.times.length - 1;
+  for (let i2 = 0; i2 < hist.times.length; i2++) {
+    if (hist.times[i2].getTime() > tMs) {
+      idx = i2 - 1;
+      break;
+    }
+  }
+  if (idx < 0) {
+    idx = 0;
+  }
+  if (!isCumulative) {
+    return { value: hist.values[idx], unit: u2 };
+  }
+  let lo = idx;
+  let hi = idx + 1 < hist.times.length ? idx + 1 : idx;
+  if (lo === hi) {
+    lo = Math.max(0, idx - 1);
+    hi = idx;
+  }
+  if (lo === hi) {
+    return { value: 0, unit: rateUnit };
+  }
+  const dtH = (hist.times[hi].getTime() - hist.times[lo].getTime()) / 36e5;
+  if (dtH <= 0) {
+    return { value: 0, unit: rateUnit };
+  }
+  const dv = hist.values[hi] - hist.values[lo];
+  if (dv < 0) {
+    return { value: 0, unit: rateUnit };
+  }
+  return { value: dv / dtH, unit: rateUnit };
+}
+function currentPvRate(host) {
+  if (host._pvCurrent === null) {
+    return null;
+  }
+  const entity = String(host.config?.["pv-power-entity"] ?? "").trim();
+  const stateObj = host.hass?.states?.[entity];
+  const sc = String(stateObj?.attributes?.state_class ?? "").toLowerCase();
+  const dc = String(stateObj?.attributes?.device_class ?? "").toLowerCase();
+  const u2 = (host._pvUnit || "").trim();
+  const lu = u2.toLowerCase();
+  let isCumulative;
+  if (sc === "total_increasing" || sc === "total") {
+    isCumulative = true;
+  } else if (sc === "measurement") {
+    isCumulative = false;
+  } else if (dc === "energy") {
+    isCumulative = true;
+  } else if (dc === "power") {
+    isCumulative = false;
+  } else {
+    isCumulative = lu === "wh" || lu === "kwh" || lu === "mwh";
+  }
+  if (!isCumulative) {
+    return { value: host._pvCurrent, unit: u2 };
+  }
+  let rateUnit;
+  if (lu === "wh") rateUnit = "W";
+  else if (lu === "kwh") rateUnit = "kW";
+  else if (lu === "mwh") rateUnit = "MW";
+  else rateUnit = u2 ? `${u2}/h` : "";
+  const buf = host._pvSampleBuffer;
+  if (buf.length >= 2) {
+    const last = buf[buf.length - 1];
+    const target = last.t - 6e4;
+    let prev = buf[0];
+    for (const s2 of buf) {
+      if (s2.t <= target) {
+        prev = s2;
+      } else {
+        break;
+      }
+    }
+    const dtH = (last.t - prev.t) / 36e5;
+    if (dtH > 0) {
+      const dv = last.v - prev.v;
+      if (dv < 0) {
+        host._pvSampleBuffer = [last];
+        return { value: 0, unit: rateUnit };
+      }
+      return { value: dv / dtH, unit: rateUnit };
+    }
+  }
+  const lastUpdatedMs = stateObj?.last_updated ? new Date(stateObj.last_updated).getTime() : null;
+  if (lastUpdatedMs !== null && Date.now() - lastUpdatedMs >= 6e4) {
+    return { value: 0, unit: rateUnit };
+  }
+  const hist = host._pvHistory;
+  if (hist && hist.times.length >= 2) {
+    const lastIdx = hist.times.length - 1;
+    const prevIdx = lastIdx - 1;
+    const dtH = (hist.times[lastIdx].getTime() - hist.times[prevIdx].getTime()) / 36e5;
+    if (dtH > 0) {
+      const dv = hist.values[lastIdx] - hist.values[prevIdx];
+      if (dv < 0) {
+        return { value: 0, unit: rateUnit };
+      }
+      return { value: dv / dtH, unit: rateUnit };
+    }
+  }
+  return { value: 0, unit: rateUnit };
+}
+function pvNormalizeToWatts(value, unit) {
+  const lu = (unit || "").toLowerCase();
+  if (lu === "kw") return value * 1e3;
+  if (lu === "mw") return value * 1e6;
+  if (lu === "w") return value;
+  return 0;
+}
+function pvCalibK(config) {
+  const raw2 = config?.["pv-peak-kwp"];
+  const kwp = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+  if (!isFinite(kwp) || kwp <= 0) return null;
+  return kwp * 10;
+}
+function wipeLegacyPvCalibStorage(hass, coords) {
+  try {
+    if (window.localStorage?.getItem(PV_CALIB_WIPE_FLAG_KEY) === "1") {
+      return;
+    }
+  } catch (_2) {
+    return;
+  }
+  try {
+    const ls = window.localStorage;
+    if (ls) {
+      const stale = [];
+      for (let i2 = 0; i2 < ls.length; i2++) {
+        const k2 = ls.key(i2);
+        if (k2 && k2.startsWith("helios-pv-calib:") && k2 !== PV_CALIB_WIPE_FLAG_KEY) {
+          stale.push(k2);
+        }
+      }
+      for (const k2 of stale) ls.removeItem(k2);
+      ls.setItem(PV_CALIB_WIPE_FLAG_KEY, "1");
+    }
+  } catch (_2) {
+  }
+  if (coords && hass?.callWS) {
+    const haKey = `helios-pv-calib:${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
+    hass.callWS({ type: "frontend/set_user_data", key: haKey, value: null }).catch(() => {
+    });
+  }
+}
+function pvArrays(config) {
+  const out = [];
+  const sh = [];
+  const rawList = config?.["pv-arrays"];
+  if (Array.isArray(rawList) && rawList.length > 0) {
+    for (const entry of rawList) {
+      if (!entry || typeof entry !== "object") continue;
+      const e2 = entry;
+      const rawTilt = e2["tilt"];
+      const tiltRaw = typeof rawTilt === "number" ? rawTilt : parseFloat(String(rawTilt ?? ""));
+      const tilt = isFinite(tiltRaw) ? tiltRaw : 0;
+      const rawAz = e2["azimuth"];
+      const az = typeof rawAz === "number" ? rawAz : parseFloat(String(rawAz ?? ""));
+      const azDeg = isFinite(az) ? (az % 360 + 360) % 360 : 180;
+      const rawShare = e2["share"];
+      let share;
+      if (rawShare === void 0 || rawShare === null || rawShare === "") {
+        share = NaN;
+      } else {
+        const s2 = typeof rawShare === "number" ? rawShare : parseFloat(String(rawShare));
+        if (!isFinite(s2) || s2 <= 0) continue;
+        share = s2;
+      }
+      out.push({
+        tiltDeg: Math.max(0, Math.min(90, tilt)),
+        azimuthDeg: azDeg
+      });
+      sh.push(share);
+    }
+    const explicit = sh.filter((s2) => isFinite(s2));
+    const fillVal = explicit.length > 0 ? explicit.reduce((a2, b2) => a2 + b2, 0) / explicit.length : 1;
+    for (let i2 = 0; i2 < sh.length; i2++) {
+      if (!isFinite(sh[i2])) sh[i2] = fillVal;
+    }
+  }
+  if (out.length === 0) {
+    const rawTilt = config?.["pv-tilt"];
+    const tilt = typeof rawTilt === "number" ? rawTilt : parseFloat(String(rawTilt ?? ""));
+    if (isFinite(tilt) && tilt > 0) {
+      const rawAz = config?.["pv-azimuth"];
+      const az = typeof rawAz === "number" ? rawAz : parseFloat(String(rawAz ?? ""));
+      out.push({
+        tiltDeg: Math.max(0, Math.min(90, tilt)),
+        azimuthDeg: isFinite(az) ? (az % 360 + 360) % 360 : 180
+      });
+      sh.push(1);
+    }
+  }
+  const total = sh.reduce((a2, b2) => a2 + b2, 0);
+  if (total > 0) {
+    for (let i2 = 0; i2 < sh.length; i2++) sh[i2] /= total;
+  }
+  return { orientations: out, shares: sh };
+}
+function computePvPowerWeighted(config, t2, lat, lon, cloudPct) {
+  const { orientations, shares } = pvArrays(config);
+  if (orientations.length === 0) {
+    return computePvPower(t2, lat, lon, cloudPct);
+  }
+  let acc = 0;
+  for (let i2 = 0; i2 < orientations.length; i2++) {
+    acc += computePvPower(t2, lat, lon, cloudPct, orientations[i2]) * shares[i2];
+  }
+  return acc;
+}
+function formatPvValue(hass, value, unit) {
+  const u2 = (unit || "").trim();
+  const lu = u2.toLowerCase();
+  if (lu === "w" && Math.abs(value) >= 1e3) {
+    return `${formatLocalisedNumber(hass, value / 1e3, 2)} kW`;
+  }
+  if (lu === "w") {
+    return `${formatLocalisedNumber(hass, value, 0, true)} W`;
+  }
+  if (lu === "kw") {
+    return `${formatLocalisedNumber(hass, value, 2)} kW`;
+  }
+  if (lu === "wh") {
+    if (Math.abs(value) >= 1e3) {
+      return `${formatLocalisedNumber(hass, value / 1e3, 1)} kWh`;
+    }
+    return `${formatLocalisedNumber(hass, value, 0, true)} Wh`;
+  }
+  if (lu === "kwh" || lu === "mwh") {
+    return `${formatLocalisedNumber(hass, value, 1)} ${u2}`;
+  }
+  const formatted = Math.abs(value) >= 100 ? formatLocalisedNumber(hass, value, 0, true) : formatLocalisedNumber(hass, value, 1);
+  return u2 ? `${formatted} ${u2}` : formatted;
+}
+function batteryPowerInvert(config) {
+  return config?.["battery-power-invert"] === true;
+}
+function refreshBattery(host) {
+  if (!host.hass) {
+    return;
+  }
+  const socEntity = String(host.config?.["battery-soc-entity"] ?? "").trim();
+  const powerEntity = String(host.config?.["battery-power-entity"] ?? "").trim();
+  let nextSoc = null;
+  if (socEntity) {
+    const so = host.hass.states?.[socEntity];
+    const v2 = so ? parseFloat(so.state) : NaN;
+    if (isFinite(v2)) {
+      nextSoc = Math.max(0, Math.min(100, v2));
+    }
+  }
+  if (nextSoc !== host._batterySoc) {
+    host._batterySoc = nextSoc;
+  }
+  let nextPower = null;
+  let nextUnit = "";
+  if (powerEntity) {
+    const so = host.hass.states?.[powerEntity];
+    const v2 = so ? parseFloat(so.state) : NaN;
+    if (isFinite(v2)) {
+      nextPower = batteryPowerInvert(host.config) ? -v2 : v2;
+      nextUnit = so.attributes?.unit_of_measurement ?? "";
+    }
+  }
+  if (nextPower !== host._batteryPower) {
+    host._batteryPower = nextPower;
+  }
+  if (nextUnit !== host._batteryPowerUnit) {
+    host._batteryPowerUnit = nextUnit;
+  }
+  if (!socEntity && !powerEntity) {
+    if (host._batterySocHistory !== null) {
+      host._batterySocHistory = null;
+    }
+    if (host._batteryPowerHistory !== null) {
+      host._batteryPowerHistory = null;
+    }
+    host._batteryFetchKey = "";
+    return;
+  }
+  if (!host._timeRange || host._batteryFetching) {
+    return;
+  }
+  const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
+  const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}@inv=${batteryPowerInvert(host.config) ? 1 : 0}`;
+  if (fetchKey === host._batteryFetchKey) {
+    return;
+  }
+  host._batteryFetchKey = fetchKey;
+  fetchBatteryHistory(host, socEntity, powerEntity, host._timeRange.start, host._timeRange.end);
+}
+async function fetchBatteryHistory(host, socEntity, powerEntity, start, end) {
+  if (!host.hass?.callWS) {
+    return;
+  }
+  host._batteryFetching = true;
+  try {
+    const now = /* @__PURE__ */ new Date();
+    const fetchEnd = end > now ? now : end;
+    if (start >= fetchEnd) {
+      if (socEntity) {
+        host._batterySocHistory = { times: [], values: [] };
+      }
+      if (powerEntity) {
+        host._batteryPowerHistory = { times: [], values: [] };
+      }
+      return;
+    }
+    const ids = [];
+    if (socEntity) {
+      ids.push(socEntity);
+    }
+    if (powerEntity) {
+      ids.push(powerEntity);
+    }
+    const result = await host.hass.callWS({
+      type: "history/history_during_period",
+      start_time: start.toISOString(),
+      end_time: fetchEnd.toISOString(),
+      entity_ids: ids,
+      minimal_response: true,
+      no_attributes: true
+    });
+    const parseSeries = (arr) => {
+      const times = [];
+      const values2 = [];
+      for (const item of arr ?? []) {
+        const stateStr = typeof item?.s === "string" ? item.s : typeof item?.state === "string" ? item.state : null;
+        if (stateStr === null || stateStr === "unavailable" || stateStr === "unknown" || stateStr === "") {
+          continue;
+        }
+        const v2 = parseFloat(stateStr);
+        if (!isFinite(v2)) {
+          continue;
+        }
+        let ts = null;
+        if (typeof item?.lu === "number") {
+          ts = new Date(item.lu * 1e3);
+        } else if (typeof item?.last_updated === "string") {
+          ts = new Date(item.last_updated);
+        } else if (typeof item?.last_changed === "string") {
+          ts = new Date(item.last_changed);
+        }
+        if (!ts || isNaN(ts.getTime())) {
+          continue;
+        }
+        times.push(ts);
+        values2.push(v2);
+      }
+      return { times, values: values2 };
+    };
+    if (socEntity) {
+      const series = parseSeries(result?.[socEntity] ?? []);
+      series.values = series.values.map((v2) => Math.max(0, Math.min(100, v2)));
+      host._batterySocHistory = series;
+    } else {
+      host._batterySocHistory = null;
+    }
+    if (powerEntity) {
+      const series = parseSeries(result?.[powerEntity] ?? []);
+      if (batteryPowerInvert(host.config)) {
+        series.values = series.values.map((v2) => -v2);
+      }
+      host._batteryPowerHistory = series;
+    } else {
+      host._batteryPowerHistory = null;
+    }
+  } catch (e2) {
+    console.warn("[HELIOS] battery history fetch failed:", e2);
+    host._batterySocHistory = { times: [], values: [] };
+    host._batteryPowerHistory = { times: [], values: [] };
+  } finally {
+    host._batteryFetching = false;
+  }
+}
+function batterySampleAtTime(hist, time) {
+  if (!hist || hist.times.length === 0) {
+    return null;
+  }
+  const tMs = time.getTime();
+  const firstMs = hist.times[0].getTime();
+  const lastMs = hist.times[hist.times.length - 1].getTime();
+  if (tMs < firstMs || tMs > lastMs + 6e4) {
+    return null;
+  }
+  let idx = hist.times.length - 1;
+  for (let i2 = 0; i2 < hist.times.length; i2++) {
+    if (hist.times[i2].getTime() > tMs) {
+      idx = i2 - 1;
+      break;
+    }
+  }
+  if (idx < 0) {
+    idx = 0;
+  }
+  return hist.values[idx];
+}
+function formatBatteryPower(hass, value, unit) {
+  const lu = (unit || "").trim().toLowerCase();
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  const abs = Math.abs(value);
+  if (lu === "w" && abs >= 1e3) {
+    return `${sign}${formatLocalisedNumber(hass, abs / 1e3, 2)} kW`;
+  }
+  if (lu === "w") {
+    return `${sign}${formatLocalisedNumber(hass, abs, 0, true)} W`;
+  }
+  if (lu === "kw") {
+    return `${sign}${formatLocalisedNumber(hass, abs, 2)} kW`;
+  }
+  return `${sign}${formatLocalisedNumber(hass, abs, 1)}${unit ? " " + unit : ""}`;
+}
+function computeBatteryToday(host) {
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const startMs = today0.getTime();
+  const endMs = Date.now();
+  let chargedKwh = 0;
+  let dischargedKwh = 0;
+  const hist = host._batteryPowerHistory;
+  if (hist && hist.times.length >= 2) {
+    for (let i2 = 1; i2 < hist.times.length; i2++) {
+      const tMs = hist.times[i2].getTime();
+      if (tMs < startMs || tMs > endMs) continue;
+      const dtH = (tMs - hist.times[i2 - 1].getTime()) / 36e5;
+      if (dtH <= 0 || dtH > 6) continue;
+      const wAvg = (pvNormalizeToWatts(hist.values[i2 - 1], host._batteryPowerUnit) + pvNormalizeToWatts(hist.values[i2], host._batteryPowerUnit)) / 2;
+      const kwh = wAvg * dtH / 1e3;
+      if (kwh > 0) chargedKwh += kwh;
+      else dischargedKwh += -kwh;
+    }
+  }
+  return {
+    socNow: host._batterySoc,
+    chargedKwh,
+    dischargedKwh
+  };
+}
+function refreshSolarRadiation(host) {
+  const entity = String(host.config?.["solar-radiation-entity"] ?? "").trim();
+  if (!entity || !host.hass) {
+    if (host._solarRadiationHistory !== null) {
+      host._solarRadiationHistory = null;
+    }
+    host._solarRadiationFetchKey = "";
+    host._engine?.setSolarRadiationSamples(null);
+    return;
+  }
+  pushSolarRadiationToEngine(host);
+  if (!host._timeRange || host._solarRadiationFetching) {
+    return;
+  }
+  const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
+  const fetchKey = `${entity}@${rangeKey}`;
+  if (fetchKey === host._solarRadiationFetchKey) {
+    return;
+  }
+  host._solarRadiationFetchKey = fetchKey;
+  fetchSolarRadiationHistory(host, entity, host._timeRange.start, host._timeRange.end);
+}
+function pushSolarRadiationToEngine(host) {
+  if (!host._engine) return;
+  const entity = String(host.config?.["solar-radiation-entity"] ?? "").trim();
+  if (!entity || !host.hass) {
+    host._engine.setSolarRadiationSamples(null);
+    return;
+  }
+  const samples = [];
+  const hist = host._solarRadiationHistory;
+  if (hist) {
+    for (let i2 = 0; i2 < hist.times.length; i2++) {
+      samples.push({ time: hist.times[i2], wm2: hist.values[i2] });
+    }
+  }
+  const stateObj = host.hass.states?.[entity];
+  if (stateObj) {
+    const v2 = parseFloat(stateObj.state);
+    if (isFinite(v2) && v2 >= 0) {
+      const ts = stateObj.last_updated ? new Date(stateObj.last_updated) : /* @__PURE__ */ new Date();
+      samples.push({ time: ts, wm2: v2 });
+    }
+  }
+  host._engine.setSolarRadiationSamples(samples.length > 0 ? samples : null);
+}
+async function fetchSolarRadiationHistory(host, entityId, start, end) {
+  if (!host.hass?.callWS) {
+    return;
+  }
+  host._solarRadiationFetching = true;
+  try {
+    const now = /* @__PURE__ */ new Date();
+    const fetchEnd = end > now ? now : end;
+    if (start >= fetchEnd) {
+      host._solarRadiationHistory = { times: [], values: [] };
+      pushSolarRadiationToEngine(host);
+      return;
+    }
+    const result = await host.hass.callWS({
+      type: "history/history_during_period",
+      start_time: start.toISOString(),
+      end_time: fetchEnd.toISOString(),
+      entity_ids: [entityId],
+      minimal_response: true,
+      no_attributes: true
+    });
+    const arr = (result && result[entityId]) ?? [];
+    const times = [];
+    const values2 = [];
+    let lastTsMs = null;
+    for (const item of arr) {
+      const sRaw = item?.s ?? item?.state;
+      if (sRaw === null || sRaw === void 0 || sRaw === "unavailable" || sRaw === "unknown" || sRaw === "") {
+        continue;
+      }
+      const v2 = parseFloat(String(sRaw));
+      if (!isFinite(v2) || v2 < 0) {
+        continue;
+      }
+      let ts = null;
+      const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+      if (typeof tsRaw === "number") {
+        ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1e3);
+      } else if (typeof tsRaw === "string") {
+        const asNum = Number(tsRaw);
+        if (Number.isFinite(asNum) && asNum > 1e9) {
+          ts = new Date(asNum > 1e12 ? asNum : asNum * 1e3);
+        } else {
+          ts = new Date(tsRaw);
+        }
+      }
+      if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) {
+        ts = new Date(lastTsMs);
+      }
+      if (!ts || isNaN(ts.getTime())) {
+        continue;
+      }
+      lastTsMs = ts.getTime();
+      times.push(ts);
+      values2.push(v2);
+    }
+    host._solarRadiationHistory = { times, values: values2 };
+    pushSolarRadiationToEngine(host);
+  } catch (e2) {
+    console.warn("[HELIOS] Solar radiation history fetch failed:", e2);
+    host._solarRadiationHistory = { times: [], values: [] };
+    pushSolarRadiationToEngine(host);
+  } finally {
+    host._solarRadiationFetching = false;
+  }
+}
+function refreshOverlays(host) {
+  host._labelLayout = host._engine?.projectHomeLabelLayout() ?? null;
+  const t2 = host._selectedTime ?? host._now;
+  host._sunScene = host._engine ? host._engine.projectSunScene(t2) : null;
+  host._cloudScene = host._engine ? host._engine.projectCloudScene() : null;
+  host._homeSilhouettes = host._engine ? host._engine.projectHomeFootprints() : [];
+}
+function setAnimationsPaused(host, paused) {
+  host.classList.toggle("helios-paused", paused);
+  const root = host.shadowRoot;
+  if (!root) return;
+  const svgs = root.querySelectorAll("svg");
+  for (const svg of Array.from(svgs)) {
+    const s2 = svg;
+    try {
+      if (paused) s2.pauseAnimations?.();
+      else s2.unpauseAnimations?.();
+    } catch (_2) {
+    }
+  }
+}
+function buildArcSegments(arc, sunColor) {
+  const out = [];
+  for (let i2 = 0; i2 < arc.length - 1; i2++) {
+    const a2 = arc[i2];
+    const b2 = arc[i2 + 1];
+    out.push({
+      x1: a2.x,
+      y1: a2.y,
+      x2: b2.x,
+      y2: b2.y,
+      color: sunColor,
+      nearness: 0.5 * (a2.nearness + b2.nearness),
+      belowHorizon: a2.belowHorizon || b2.belowHorizon
+    });
+  }
+  return out;
+}
+function flowDuration(rate, saturation, minDuration = 0.4) {
+  if (!isFinite(rate) || rate <= 0) {
+    return 30;
+  }
+  const f2 = Math.min(1, rate / saturation);
+  const eased = 1 - Math.pow(1 - f2, 3);
+  return 30 - (30 - minDuration) * eased;
+}
+function tick(host) {
+  host._now = /* @__PURE__ */ new Date();
+  refreshOverlays(host);
+}
+function onTimelinePointerDown(host, e2) {
+  if (!host._timeRange) {
+    return;
+  }
+  if (host._engine?.isUserGestureSuppressed()) {
+    return;
+  }
+  const track = e2.currentTarget;
+  track.setPointerCapture(e2.pointerId);
+  host._trackElement = track;
+  host._trackPointerId = e2.pointerId;
+  track.addEventListener("pointermove", host._boundPointerMove);
+  track.addEventListener("pointerup", host._boundPointerUp);
+  track.addEventListener("pointercancel", host._boundPointerUp);
+  applyTimelinePointer(host, e2);
+}
+function onTimelinePointerMove(host, e2) {
+  if (e2.pointerId !== host._trackPointerId) {
+    return;
+  }
+  applyTimelinePointer(host, e2);
+}
+function onTimelinePointerUp(host, e2) {
+  if (e2.pointerId !== host._trackPointerId) {
+    return;
+  }
+  const track = host._trackElement;
+  if (track) {
+    try {
+      track.releasePointerCapture(e2.pointerId);
+    } catch (_2) {
+    }
+    track.removeEventListener("pointermove", host._boundPointerMove);
+    track.removeEventListener("pointerup", host._boundPointerUp);
+    track.removeEventListener("pointercancel", host._boundPointerUp);
+  }
+  host._trackElement = null;
+  host._trackPointerId = null;
+}
+function applyTimelinePointer(host, e2) {
+  if (!host._timeRange) {
+    return;
+  }
+  const track = e2.currentTarget;
+  const rect = track.getBoundingClientRect();
+  const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
+  const rangeMs = host._timeRange.end.getTime() - host._timeRange.start.getTime();
+  const t2 = new Date(host._timeRange.start.getTime() + frac * rangeMs);
+  if (host._selectedTime && host._selectedTime.getTime() === t2.getTime()) {
+    return;
+  }
+  host._selectedTime = t2;
+  host._isLiveMode = false;
+  host._engine?.setSelectedTime(t2);
+}
+function resetToLive(host) {
+  host._selectedTime = null;
+  host._isLiveMode = true;
+  host._engine?.setSelectedTime(null);
+}
+function timelineEnabled(config) {
+  const raw2 = config?.["timeline-enabled"];
+  if (typeof raw2 === "boolean") return raw2;
+  if (typeof raw2 === "string") {
+    const s2 = raw2.trim().toLowerCase();
+    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+  }
+  return DEFAULT_TIMELINE_ENABLED;
+}
+function timelineWidthPct(config) {
+  const raw2 = config?.["timeline-width-pct"];
+  const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+  if (!isFinite(n3)) return DEFAULT_TIMELINE_WIDTH_PCT;
+  return Math.min(100, Math.max(50, n3));
+}
+function timelineConsumptionEnabled(config) {
+  const raw2 = config?.["timeline-consumption-enabled"];
+  if (typeof raw2 === "boolean") return raw2;
+  if (typeof raw2 === "string") {
+    const s2 = raw2.trim().toLowerCase();
+    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+  }
+  return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
+}
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getDefaultExportFromCjs(x2) {
   return x2 && x2.__esModule && Object.prototype.hasOwnProperty.call(x2, "default") ? x2["default"] : x2;
@@ -24526,71 +28450,6 @@ ${n4.shaderPreludeCode.vertexSource}`, define: n4.shaderDefine }, defaultProject
 })(maplibreGl);
 var maplibreGlExports = maplibreGl.exports;
 const maplibregl = /* @__PURE__ */ getDefaultExportFromCjs(maplibreGlExports);
-let _sunCacheKey = null;
-let _sunCacheValue = null;
-function getSunPosition(date, lat, lon) {
-  const key = `${date.getTime()}|${lat.toFixed(6)}|${lon.toFixed(6)}`;
-  if (key === _sunCacheKey && _sunCacheValue !== null) {
-    return _sunCacheValue;
-  }
-  const D2 = Math.PI / 180;
-  const H2 = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
-  const doy = Math.floor((date.getTime() - Date.UTC(date.getUTCFullYear(), 0, 0)) / 864e5);
-  const decl = 23.45 * Math.sin(D2 * (360 / 365) * (doy - 81));
-  const B2 = D2 * (360 / 365) * (doy - 81);
-  const eot = 9.87 * Math.sin(2 * B2) - 7.53 * Math.cos(B2) - 1.5 * Math.sin(B2);
-  let ha = 15 * (H2 + lon / 15 + eot / 60 - 12);
-  ha = ((ha + 180) % 360 + 360) % 360 - 180;
-  const sinA = Math.sin(D2 * lat) * Math.sin(D2 * decl) + Math.cos(D2 * lat) * Math.cos(D2 * decl) * Math.cos(D2 * ha);
-  const alt = Math.asin(Math.max(-1, Math.min(1, sinA))) / D2;
-  const cAlt = Math.cos(alt * D2);
-  const cAz = cAlt > 1e-4 ? (Math.sin(D2 * decl) - Math.sin(D2 * lat) * sinA) / (Math.cos(D2 * lat) * cAlt) : 0;
-  let az = Math.acos(Math.max(-1, Math.min(1, cAz))) / D2;
-  if (ha > 0) {
-    az = 360 - az;
-  }
-  const result = { altitude: alt, azimuth: az };
-  _sunCacheKey = key;
-  _sunCacheValue = result;
-  return result;
-}
-function computePvPower(date, lat, lon, cloudCoverPct, panel) {
-  const sun = getSunPosition(date, lat, lon);
-  const alt = sun.altitude;
-  if (alt <= 0) return 0;
-  const D2 = Math.PI / 180;
-  const cosZ = Math.sin(alt * D2);
-  const ghiClear = 1098 * cosZ * Math.exp(-0.059 / cosZ);
-  const cc = Math.max(0, Math.min(100, cloudCoverPct)) / 100;
-  const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
-  const ghiEff = ghiClear * kCloud;
-  if (!panel || panel.tiltDeg <= 0) {
-    return Math.max(0, Math.min(100, ghiEff / 1e3 * 100));
-  }
-  const beta = panel.tiltDeg * D2;
-  const dAz = (sun.azimuth - panel.azimuthDeg) * D2;
-  const altR = alt * D2;
-  const cosTheta = Math.sin(altR) * Math.cos(beta) + Math.cos(altR) * Math.sin(beta) * Math.cos(dAz);
-  const directFraction = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
-  const diffuseFraction = 1 - directFraction;
-  const Rb = cosTheta > 0 ? Math.max(0, cosTheta) / Math.max(0.087, cosZ) : 0;
-  const directPoa = ghiEff * directFraction * Rb;
-  const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
-  const groundPoa = ghiEff * 0.2 * (1 - Math.cos(beta)) / 2;
-  const poaEff = directPoa + diffusePoa + groundPoa;
-  return Math.max(0, Math.min(100, poaEff / 1e3 * 100));
-}
-function computeIrradianceWm2(date, lat, lon, cloudCoverPct) {
-  const sun = getSunPosition(date, lat, lon);
-  const alt = sun.altitude;
-  if (alt <= 0) return 0;
-  const D2 = Math.PI / 180;
-  const cosZ = Math.sin(alt * D2);
-  const ghiClear = 1098 * cosZ * Math.exp(-0.059 / cosZ);
-  const cc = Math.max(0, Math.min(100, cloudCoverPct)) / 100;
-  const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
-  return Math.max(0, ghiClear * kCloud);
-}
 const PAST_DAYS = 2;
 const FORECAST_DAYS = 3;
 const RATE_LIMIT_BACKOFF_MS = [
@@ -27412,7 +31271,7 @@ function resampleNearest(valueArrays, inWidth, inHeight, outWidth, outHeight) {
     return newArray;
   });
 }
-function lerp(v0, v1, t2) {
+function lerp$1(v0, v1, t2) {
   return (1 - t2) * v0 + t2 * v1;
 }
 function resampleBilinear(valueArrays, inWidth, inHeight, outWidth, outHeight) {
@@ -27433,7 +31292,7 @@ function resampleBilinear(valueArrays, inWidth, inHeight, outWidth, outHeight) {
         const hl = array[yl * inWidth + xh];
         const lh = array[yh * inWidth + xl];
         const hh = array[yh * inWidth + xh];
-        const value = lerp(lerp(ll, hl, tx), lerp(lh, hh, tx), rawY % 1);
+        const value = lerp$1(lerp$1(ll, hl, tx), lerp$1(lh, hh, tx), rawY % 1);
         newArray[y3 * outWidth + x2] = value;
       }
     }
@@ -27485,7 +31344,7 @@ function resampleBilinearInterleaved(valueArray, inWidth, inHeight, outWidth, ou
         const hl = valueArray[yl * inWidth * samples + xh * samples + i2];
         const lh = valueArray[yh * inWidth * samples + xl * samples + i2];
         const hh = valueArray[yh * inWidth * samples + xh * samples + i2];
-        const value = lerp(lerp(ll, hl, tx), lerp(lh, hh, tx), rawY % 1);
+        const value = lerp$1(lerp$1(ll, hl, tx), lerp$1(lh, hh, tx), rawY % 1);
         newArray[y3 * outWidth * samples + x2 * samples + i2] = value;
       }
     }
@@ -30577,39 +34436,236 @@ class LidarViewLayer {
     return sh;
   }
 }
-const DEFAULT_BUILDING_RADIUS_M = 100;
-const DEFAULT_BUILDING_OPACITY = 0.25;
-const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
-const DEFAULT_BUILDING_COLOR_HEX = "#d2d2d7";
-const DEFAULT_LIDAR_PRECISION = "medium";
-const LIDAR_PRECISION_PITCH_MULT = {
-  low: 4,
-  medium: 2,
-  high: 1
-};
-const DEFAULT_SHADOW_OPACITY = 0.32;
-const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1;
-const DEFAULT_LIDAR_VIEW_POINT_OPACITY = 0.3;
-const DEFAULT_LIDAR_VIEW_WIREFRAME = true;
-const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY = 0.25;
-function defaultLidarViewPointColor(cardTheme) {
-  const isDark = String(cardTheme ?? "light").toLowerCase() === "dark";
-  return isDark ? "#ffffff" : "#000000";
+const AUTO_ROTATE_DEG_PER_SEC = 1.5;
+const AUTO_ROTATE_INACTIVITY_MS = 5e3;
+function startAutoRotateLoop(host) {
+  if (host._autoRotateRaf !== void 0 || !host.map) {
+    return;
+  }
+  host._autoRotateLastFrame = performance.now();
+  host._autoRotateLastUserAction = 0;
+  const tick2 = (t2) => {
+    if (!host.map) {
+      host._autoRotateRaf = void 0;
+      return;
+    }
+    const dt = Math.max(0, t2 - host._autoRotateLastFrame) / 1e3;
+    host._autoRotateLastFrame = t2;
+    const sinceUser = Date.now() - host._autoRotateLastUserAction;
+    const autoRotateEnabled = host.cfg["auto-rotate-enabled"] === true;
+    if (autoRotateEnabled && !host._detailMode && sinceUser >= AUTO_ROTATE_INACTIVITY_MS) {
+      const next3 = host.map.getBearing() - AUTO_ROTATE_DEG_PER_SEC * dt;
+      host.map.setBearing(next3);
+    }
+    host._autoRotateRaf = requestAnimationFrame(tick2);
+  };
+  host._autoRotateRaf = requestAnimationFrame(tick2);
 }
-function defaultLidarViewWireframeColor(cardTheme) {
-  const isDark = String(cardTheme ?? "light").toLowerCase() === "dark";
-  return isDark ? "#d0d0d0" : "#404040";
+const DETAIL_MODE_ZOOM_TARGET = 19.5;
+const DETAIL_MODE_PITCH_TARGET = 80;
+const DETAIL_MODE_TRANSITION_MS = 800;
+const POST_EXIT_COOLDOWN_MS = 600;
+function setDetailMode(host, on) {
+  if (!host.map || host._detailMode === on) {
+    return;
+  }
+  host._detailMode = on;
+  host._autoRotateLastUserAction = Date.now();
+  host.map.stop();
+  if (on) {
+    try {
+      host.map.setMaxZoom(DETAIL_MODE_ZOOM_TARGET);
+    } catch (_2) {
+    }
+    diveCamera(
+      host,
+      DETAIL_MODE_ZOOM_TARGET,
+      DETAIL_MODE_PITCH_TARGET,
+      0,
+      true
+    );
+  } else {
+    host._postExitCooldownUntil = Date.now() + POST_EXIT_COOLDOWN_MS;
+    diveCamera(
+      host,
+      18,
+      55,
+      -0,
+      false,
+      () => {
+        if (!host._detailMode) {
+          try {
+            host.map?.setMaxZoom(18);
+          } catch (_2) {
+          }
+        }
+      }
+    );
+  }
 }
-const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
-const DEFAULT_TIMELINE_ENABLED = true;
-const DEFAULT_TIMELINE_WIDTH_PCT = 100;
-const DEFAULT_TIMELINE_CONSUMPTION_ENABLED = true;
-const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
+function diveCamera(host, targetZoom, targetPitch, bearingSweep, targetMode, onComplete) {
+  if (!host.map) return;
+  if (host._detailDiveRaf !== void 0) {
+    cancelAnimationFrame(host._detailDiveRaf);
+    host._detailDiveRaf = void 0;
+  }
+  const startTime = performance.now();
+  const duration = DETAIL_MODE_TRANSITION_MS;
+  const startZoom = host.map.getZoom();
+  const startPitch = host.map.getPitch();
+  const startBearing = host.map.getBearing();
+  const easeSmoothstep = (t2) => t2 * t2 * (3 - 2 * t2);
+  const tick2 = (now) => {
+    if (!host.map || host._detailMode !== targetMode) {
+      host._detailDiveRaf = void 0;
+      return;
+    }
+    const u2 = Math.min(1, (now - startTime) / duration);
+    const e2 = easeSmoothstep(u2);
+    host.map.jumpTo({
+      center: [host.homeLon, host.homeLat],
+      zoom: startZoom + (targetZoom - startZoom) * e2,
+      pitch: startPitch + (targetPitch - startPitch) * e2,
+      bearing: startBearing + bearingSweep * e2
+    });
+    if (u2 < 1) {
+      host._detailDiveRaf = requestAnimationFrame(tick2);
+    } else {
+      host._detailDiveRaf = void 0;
+      onComplete?.();
+    }
+  };
+  host._detailDiveRaf = requestAnimationFrame(tick2);
+}
+const SHADOW_RASTER_SIZE = 1024;
+const BLANK_SHADOW_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
+function shadowBoundsCornersLL(homeLat, homeLon, radiusMeters) {
+  const cosLat = Math.cos(homeLat * Math.PI / 180);
+  const dLat = radiusMeters / 111320;
+  const dLon = radiusMeters / (111320 * cosLat);
+  const minLon = homeLon - dLon;
+  const maxLon = homeLon + dLon;
+  const minLat = homeLat - dLat;
+  const maxLat = homeLat + dLat;
+  return [
+    [minLon, maxLat],
+    // NW
+    [maxLon, maxLat],
+    // NE
+    [maxLon, minLat],
+    // SE
+    [minLon, minLat]
+    // SW
+  ];
+}
+function paintShadowRaster(map, canvas, features, corners) {
+  const src = map.getSource("helios-building-shadows-src");
+  if (!src) return;
+  const minLon = corners[0][0], maxLat = corners[0][1];
+  const maxLon = corners[1][0], minLat = corners[2][1];
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const size = canvas.width;
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = "#000000";
+  const lonSpan = maxLon - minLon;
+  const latSpan = maxLat - minLat;
+  const lonToPx = (lon) => (lon - minLon) / lonSpan * size;
+  const latToPx = (lat) => (maxLat - lat) / latSpan * size;
+  for (const feat of features.features) {
+    const geom = feat.geometry;
+    if (!geom) continue;
+    let polygons = null;
+    if (geom.type === "Polygon") polygons = [geom.coordinates];
+    else if (geom.type === "MultiPolygon") polygons = geom.coordinates;
+    if (!polygons) continue;
+    for (const poly of polygons) {
+      if (!poly.length) continue;
+      const outer = poly[0];
+      if (outer.length < 3) continue;
+      ctx.beginPath();
+      ctx.moveTo(lonToPx(outer[0][0]), latToPx(outer[0][1]));
+      for (let i2 = 1; i2 < outer.length; i2++) {
+        ctx.lineTo(lonToPx(outer[i2][0]), latToPx(outer[i2][1]));
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  try {
+    src.setCoordinates(corners);
+  } catch (_2) {
+  }
+  try {
+    const dataUrl = canvas.toDataURL("image/png");
+    src.updateImage({ url: dataUrl });
+  } catch (_2) {
+  }
+}
+function lerp(a2, b2, t2) {
+  return a2 + (b2 - a2) * t2;
+}
+function lerpHex(a2, b2, t2) {
+  const pa = parseInt(a2.replace("#", ""), 16);
+  const pb = parseInt(b2.replace("#", ""), 16);
+  const ar = pa >> 16 & 255, ag = pa >> 8 & 255, ab = pa & 255;
+  const br = pb >> 16 & 255, bg = pb >> 8 & 255, bb = pb & 255;
+  const r2 = Math.round(ar + (br - ar) * t2);
+  const g2 = Math.round(ag + (bg - ag) * t2);
+  const b22 = Math.round(ab + (bb - ab) * t2);
+  return "#" + r2.toString(16).padStart(2, "0") + g2.toString(16).padStart(2, "0") + b22.toString(16).padStart(2, "0");
+}
+function nightShadeForAltitude(altitudeDeg) {
+  if (altitudeDeg < -12) {
+    return { color: "#02040c", opacity: 0.68 };
+  }
+  if (altitudeDeg < -6) {
+    const u2 = (-altitudeDeg - 6) / 6;
+    return { color: "#040824", opacity: lerp(0.5, 0.68, u2) };
+  }
+  if (altitudeDeg < 0) {
+    const u2 = (altitudeDeg + 6) / 6;
+    return { color: "#0a1240", opacity: lerp(0.5, 0.3, u2) };
+  }
+  if (altitudeDeg < 6) {
+    const u2 = altitudeDeg / 6;
+    return { color: "#3a1408", opacity: lerp(0.3, 0.1, u2) };
+  }
+  if (altitudeDeg < 20) {
+    const u2 = (altitudeDeg - 6) / 14;
+    return { color: "#3a1408", opacity: lerp(0.1, 0, u2) };
+  }
+  return { color: "#000000", opacity: 0 };
+}
+function buildingColorForAltitude(baseHex, altitudeDeg) {
+  if (altitudeDeg < -6) {
+    return lerpHex(baseHex, "#0a0e1a", 0.85);
+  }
+  if (altitudeDeg < 0) {
+    const u2 = (altitudeDeg + 6) / 6;
+    const dark = lerpHex(baseHex, "#0a0e1a", 0.85);
+    const dusk = lerpHex(baseHex, "#2a2540", 0.55);
+    return lerpHex(dark, dusk, u2);
+  }
+  if (altitudeDeg < 6) {
+    const u2 = altitudeDeg / 6;
+    const dusk = lerpHex(baseHex, "#2a2540", 0.55);
+    const warm = lerpHex(baseHex, "#5a3220", 0.35);
+    return lerpHex(dusk, warm, u2);
+  }
+  if (altitudeDeg < 20) {
+    const u2 = (altitudeDeg - 6) / 14;
+    const warm = lerpHex(baseHex, "#5a3220", 0.35);
+    return lerpHex(warm, baseHex, u2);
+  }
+  return baseHex;
+}
+function sunLightPolarFromAltitude(altitudeDeg) {
+  return altitudeDeg > 0 ? Math.max(0, Math.min(89, 90 - altitudeDeg)) : 89;
+}
 const SHADOW_LAYER_IDS = [
   "helios-building-shadows"
 ];
-const SHADOW_RASTER_SIZE = 1024;
-const BLANK_SHADOW_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
 function bumpStat(key) {
   if (typeof window === "undefined") return;
   const w2 = window;
@@ -30657,10 +34713,6 @@ function parseHex(v2, fallback) {
   }
   return [r2, g2, b2];
 }
-const DEFAULT_SUN_COLOR_HEX = "#EF9F27";
-const DEFAULT_CLOUD_COLOR_HEX = "#5A8DC4";
-const DEFAULT_PV_COLOR_HEX = "#27B36B";
-const DEFAULT_BATTERY_COLOR_HEX = "#FF5252";
 const DEFAULT_CLOUD_RGB = [90, 141, 196];
 function geoDistM(lat1, lon1, lat2, lon2) {
   const R2 = 6371e3;
@@ -30817,7 +34869,7 @@ const _HeliosEngine = class _HeliosEngine {
     this.map.on("style.load", this._mapStyleLoadHandler);
     this._mapLoadHandler = () => {
       this.map?.resize();
-      this._startAutoRotateLoop();
+      startAutoRotateLoop(this);
     };
     this.map.on("load", this._mapLoadHandler);
     this.map.on("styleimagemissing", (e2) => {
@@ -30988,7 +35040,7 @@ const _HeliosEngine = class _HeliosEngine {
   //  map-style: minimal  + card-theme: dark  → fiord
   //
   //All styles use the same vector tile source backing the buildings
-  //fetch in helios-buildings.ts, so a style change keeps the home
+  //fetch in engine/buildings.ts, so a style change keeps the home
   //and surroundings GeoJSON cache intact.
   _resolveMapStyle() {
     const raw2 = String(this.cfg["map-style"] ?? "streets").toLowerCase();
@@ -31033,87 +35085,6 @@ const _HeliosEngine = class _HeliosEngine {
     const raw2 = Number(this.cfg["shadow-opacity"]);
     if (!Number.isFinite(raw2)) return DEFAULT_SHADOW_OPACITY;
     return Math.max(0, Math.min(1, raw2));
-  }
-  //Lat/lon corners of the shadow image source, in [NW, NE, SE, SW]
-  //order (the convention MapLibre image sources expect). Sides are
-  //the building visibility radius in metres, converted to degrees
-  //with the standard cos(lat) longitude correction.
-  _shadowBoundsCornersLL() {
-    const radius = this._buildingRadiusMeters();
-    const cosLat = Math.cos(this.homeLat * Math.PI / 180);
-    const dLat = radius / 111320;
-    const dLon = radius / (111320 * cosLat);
-    const minLon = this.homeLon - dLon;
-    const maxLon = this.homeLon + dLon;
-    const minLat = this.homeLat - dLat;
-    const maxLat = this.homeLat + dLat;
-    return [
-      [minLon, maxLat],
-      // NW
-      [maxLon, maxLat],
-      // NE
-      [maxLon, minLat],
-      // SE
-      [minLon, minLat]
-      // SW
-    ];
-  }
-  //Rasterise the cast-shadow polygons onto an offscreen canvas and
-  //push the result to the image source backing the shadow layer.
-  //Painting every polygon at solid black means overlapping regions
-  //stay black (no alpha stacking); the layer's `raster-opacity`
-  //then applies a single per-pixel opacity that matches the user
-  //setting exactly, no matter how many shadow polygons overlapped.
-  _paintShadowRaster(features) {
-    if (!this.map) return;
-    const src = this.map.getSource("helios-building-shadows-src");
-    if (!src) return;
-    const corners = this._shadowBoundsCornersLL();
-    const minLon = corners[0][0], maxLat = corners[0][1];
-    const maxLon = corners[1][0], minLat = corners[2][1];
-    if (!this._shadowCanvas) {
-      this._shadowCanvas = document.createElement("canvas");
-      this._shadowCanvas.width = SHADOW_RASTER_SIZE;
-      this._shadowCanvas.height = SHADOW_RASTER_SIZE;
-    }
-    const canvas = this._shadowCanvas;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, SHADOW_RASTER_SIZE, SHADOW_RASTER_SIZE);
-    ctx.fillStyle = "#000000";
-    const lonSpan = maxLon - minLon;
-    const latSpan = maxLat - minLat;
-    const lonToPx = (lon) => (lon - minLon) / lonSpan * SHADOW_RASTER_SIZE;
-    const latToPx = (lat) => (maxLat - lat) / latSpan * SHADOW_RASTER_SIZE;
-    for (const feat of features.features) {
-      const geom = feat.geometry;
-      if (!geom) continue;
-      let polygons = null;
-      if (geom.type === "Polygon") polygons = [geom.coordinates];
-      else if (geom.type === "MultiPolygon") polygons = geom.coordinates;
-      if (!polygons) continue;
-      for (const poly of polygons) {
-        if (!poly.length) continue;
-        const outer = poly[0];
-        if (outer.length < 3) continue;
-        ctx.beginPath();
-        ctx.moveTo(lonToPx(outer[0][0]), latToPx(outer[0][1]));
-        for (let i2 = 1; i2 < outer.length; i2++) {
-          ctx.lineTo(lonToPx(outer[i2][0]), latToPx(outer[i2][1]));
-        }
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-    try {
-      src.setCoordinates(corners);
-    } catch (_2) {
-    }
-    try {
-      const dataUrl = canvas.toDataURL("image/png");
-      src.updateImage({ url: dataUrl });
-    } catch (_2) {
-    }
   }
   _findHourIndex(t2) {
     const home = this._homeHourlyData;
@@ -31716,7 +35687,7 @@ const _HeliosEngine = class _HeliosEngine {
   //    Reads as the focal point.
   //
   //The building GeoJSON is fetched once per (home, radius) combo
-  //in helios-buildings.ts; subsequent calls (e.g. on theme switch,
+  //in engine/buildings.ts; subsequent calls (e.g. on theme switch,
   //which rebuilds the whole style) reuse the cached data.
   _addBuildings() {
     bumpStat("addBuildingsCalls");
@@ -31824,7 +35795,7 @@ const _HeliosEngine = class _HeliosEngine {
     } else {
       this.map.getSource("helios-buildings-home-src").setData(homeData);
     }
-    const shadowBounds = this._shadowBoundsCornersLL();
+    const shadowBounds = shadowBoundsCornersLL(this.homeLat, this.homeLon, this._buildingRadiusMeters());
     if (!this.map.getSource("helios-building-shadows-src")) {
       this.map.addSource(
         "helios-building-shadows-src",
@@ -31933,7 +35904,7 @@ const _HeliosEngine = class _HeliosEngine {
   //change.
   //
   //  - Resolves the country provider that covers the home (France
-  //    HD only for now, see helios-lidar.ts).
+  //    HD only for now, see engine/lidar.ts).
   //  - When shadows are enabled AND a provider matches, fires one
   //    radius-based fetch against the provider; the result is a
   //    FeatureCollection of consolidated shadow polygons fed to the
@@ -32012,27 +35983,6 @@ const _HeliosEngine = class _HeliosEngine {
     homeSrc?.setData(this._buildingsData?.home ?? empty);
     surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
   }
-  //Linear interpolation between two RGB hex strings.
-  _lerpHex(a2, b2, t2) {
-    const pa = parseInt(a2.replace("#", ""), 16);
-    const pb = parseInt(b2.replace("#", ""), 16);
-    const ar = pa >> 16 & 255, ag = pa >> 8 & 255, ab = pa & 255;
-    const br = pb >> 16 & 255, bg = pb >> 8 & 255, bb = pb & 255;
-    const r2 = Math.round(ar + (br - ar) * t2);
-    const g2 = Math.round(ag + (bg - ag) * t2);
-    const b22 = Math.round(ab + (bb - ab) * t2);
-    return "#" + r2.toString(16).padStart(2, "0") + g2.toString(16).padStart(2, "0") + b22.toString(16).padStart(2, "0");
-  }
-  //Blend two hex colors by amount t (0..1). t=0 returns `a`, t=1 returns
-  //`b`. Same math as _lerpHex but kept under a clearer name when used
-  //semantically as a wash/tint rather than a phase transition.
-  _mixHex(a2, b2, t2) {
-    return this._lerpHex(a2, b2, t2);
-  }
-  //Linear interpolation between two scalars
-  _lerp(a2, b2, t2) {
-    return a2 + (b2 - a2) * t2;
-  }
   //Repaint hillshade direction, satellite raster, night-shade overlay,
   //fog and building tints to match the current sun altitude. Phases
   //blend continuously rather than at hard thresholds so dawn/dusk,
@@ -32063,58 +36013,14 @@ const _HeliosEngine = class _HeliosEngine {
     this._lastAtmosphereAlt = altitude;
     if (this.map.getLayer("helios-night-shade")) {
       try {
-        let nsColor;
-        let nsOpacity;
-        if (altitude < -12) {
-          nsColor = "#02040c";
-          nsOpacity = 0.68;
-        } else if (altitude < -6) {
-          const u2 = (-altitude - 6) / 6;
-          nsColor = "#040824";
-          nsOpacity = this._lerp(0.5, 0.68, u2);
-        } else if (altitude < 0) {
-          const u2 = (altitude + 6) / 6;
-          nsColor = "#0a1240";
-          nsOpacity = this._lerp(0.5, 0.3, u2);
-        } else if (altitude < 6) {
-          const u2 = altitude / 6;
-          nsColor = "#3a1408";
-          nsOpacity = this._lerp(0.3, 0.1, u2);
-        } else if (altitude < 20) {
-          const u2 = (altitude - 6) / 14;
-          nsColor = "#3a1408";
-          nsOpacity = this._lerp(0.1, 0, u2);
-        } else {
-          nsColor = "#000000";
-          nsOpacity = 0;
-        }
-        this.map.setPaintProperty("helios-night-shade", "fill-color", nsColor);
-        this.map.setPaintProperty("helios-night-shade", "fill-opacity", nsOpacity);
+        const ns = nightShadeForAltitude(altitude);
+        this.map.setPaintProperty("helios-night-shade", "fill-color", ns.color);
+        this.map.setPaintProperty("helios-night-shade", "fill-opacity", ns.opacity);
       } catch (_2) {
       }
     }
     try {
-      const baseHex = this._buildingColor();
-      let buildingHex;
-      if (altitude < -6) {
-        buildingHex = this._mixHex(baseHex, "#0a0e1a", 0.85);
-      } else if (altitude < 0) {
-        const u2 = (altitude + 6) / 6;
-        const dark = this._mixHex(baseHex, "#0a0e1a", 0.85);
-        const dusk = this._mixHex(baseHex, "#2a2540", 0.55);
-        buildingHex = this._lerpHex(dark, dusk, u2);
-      } else if (altitude < 6) {
-        const u2 = altitude / 6;
-        const dusk = this._mixHex(baseHex, "#2a2540", 0.55);
-        const warm = this._mixHex(baseHex, "#5a3220", 0.35);
-        buildingHex = this._lerpHex(dusk, warm, u2);
-      } else if (altitude < 20) {
-        const u2 = (altitude - 6) / 14;
-        const warm = this._mixHex(baseHex, "#5a3220", 0.35);
-        buildingHex = this._lerpHex(warm, baseHex, u2);
-      } else {
-        buildingHex = baseHex;
-      }
+      const buildingHex = buildingColorForAltitude(this._buildingColor(), altitude);
       for (const lid of ["helios-buildings-surroundings", "helios-buildings-home"]) {
         if (this.map.getLayer(lid)) {
           this.map.setPaintProperty(lid, "fill-extrusion-color", buildingHex);
@@ -32123,11 +36029,10 @@ const _HeliosEngine = class _HeliosEngine {
     } catch (_2) {
     }
     try {
-      const polar = altitude > 0 ? Math.max(0, Math.min(89, 90 - altitude)) : 89;
       this.map.setLight(
         {
           anchor: "map",
-          position: [1.15, azimuth, polar],
+          position: [1.15, azimuth, sunLightPolarFromAltitude(altitude)],
           color: "#ffffff",
           intensity: 0.5
         }
@@ -32168,7 +36073,19 @@ const _HeliosEngine = class _HeliosEngine {
             clipRadiusMeters: radius
           }
         );
-        this._paintShadowRaster(projected);
+        if (this.map) {
+          if (!this._shadowCanvas) {
+            this._shadowCanvas = document.createElement("canvas");
+            this._shadowCanvas.width = SHADOW_RASTER_SIZE;
+            this._shadowCanvas.height = SHADOW_RASTER_SIZE;
+          }
+          paintShadowRaster(
+            this.map,
+            this._shadowCanvas,
+            projected,
+            shadowBoundsCornersLL(this.homeLat, this.homeLon, this._buildingRadiusMeters())
+          );
+        }
       }
     } catch (_2) {
     }
@@ -32255,42 +36172,7 @@ const _HeliosEngine = class _HeliosEngine {
     );
   }
   setDetailMode(on) {
-    if (!this.map || this._detailMode === on) {
-      return;
-    }
-    this._detailMode = on;
-    this._autoRotateLastUserAction = Date.now();
-    this.map.stop();
-    if (on) {
-      try {
-        this.map.setMaxZoom(_HeliosEngine.DETAIL_MODE_ZOOM_TARGET);
-      } catch (_2) {
-      }
-      this._diveCamera(
-        _HeliosEngine.DETAIL_MODE_ZOOM_TARGET,
-        _HeliosEngine.DETAIL_MODE_PITCH_TARGET,
-        +_HeliosEngine.DETAIL_MODE_BEARING_SWEEP,
-        /*targetMode=*/
-        true
-      );
-    } else {
-      this._postExitCooldownUntil = Date.now() + _HeliosEngine.POST_EXIT_COOLDOWN_MS;
-      this._diveCamera(
-        18,
-        55,
-        -_HeliosEngine.DETAIL_MODE_BEARING_SWEEP,
-        /*targetMode=*/
-        false,
-        () => {
-          if (!this._detailMode) {
-            try {
-              this.map?.setMaxZoom(18);
-            } catch (_2) {
-            }
-          }
-        }
-      );
-    }
+    setDetailMode(this, on);
   }
   //True while the post-exit cooldown is active. The card consults
   //this to gate timeline scrubs; the engine consults it internally
@@ -32298,49 +36180,6 @@ const _HeliosEngine = class _HeliosEngine {
   //the suppression window is symmetric across input sources.
   isUserGestureSuppressed() {
     return Date.now() < this._postExitCooldownUntil;
-  }
-  //Custom rAF tween over the WHOLE dive so zoom, pitch and bearing
-  //share a single smoothstep curve. A previous chained-easeTo
-  //implementation produced a visible mid-animation hiccup at the
-  //seam between phase 1's deceleration and phase 2's acceleration,
-  //plus a one-frame scheduling gap from the moveend → easeTo
-  //handoff. Driving the camera with jumpTo on every rAF tick
-  //sidesteps both, and bypasses MapLibre's easeTo bearing
-  //normalisation (which would collapse a 270° request to its
-  //shortest -90° equivalent).
-  _diveCamera(targetZoom, targetPitch, bearingSweep, targetMode, onComplete) {
-    if (!this.map) return;
-    if (this._detailDiveRaf !== void 0) {
-      cancelAnimationFrame(this._detailDiveRaf);
-      this._detailDiveRaf = void 0;
-    }
-    const startTime = performance.now();
-    const duration = _HeliosEngine.DETAIL_MODE_TRANSITION_MS;
-    const startZoom = this.map.getZoom();
-    const startPitch = this.map.getPitch();
-    const startBearing = this.map.getBearing();
-    const easeSmoothstep = (t2) => t2 * t2 * (3 - 2 * t2);
-    const tick = (now) => {
-      if (!this.map || this._detailMode !== targetMode) {
-        this._detailDiveRaf = void 0;
-        return;
-      }
-      const u2 = Math.min(1, (now - startTime) / duration);
-      const e2 = easeSmoothstep(u2);
-      this.map.jumpTo({
-        center: [this.homeLon, this.homeLat],
-        zoom: startZoom + (targetZoom - startZoom) * e2,
-        pitch: startPitch + (targetPitch - startPitch) * e2,
-        bearing: startBearing + bearingSweep * e2
-      });
-      if (u2 < 1) {
-        this._detailDiveRaf = requestAnimationFrame(tick);
-      } else {
-        this._detailDiveRaf = void 0;
-        onComplete?.();
-      }
-    };
-    this._detailDiveRaf = requestAnimationFrame(tick);
   }
   isDetailMode() {
     return this._detailMode;
@@ -32891,29 +36730,6 @@ const _HeliosEngine = class _HeliosEngine {
       this._renderForCurrentSelection();
     }
   }
-  _startAutoRotateLoop() {
-    if (this._autoRotateRaf !== void 0 || !this.map) {
-      return;
-    }
-    this._autoRotateLastFrame = performance.now();
-    this._autoRotateLastUserAction = 0;
-    const tick = (t2) => {
-      if (!this.map) {
-        this._autoRotateRaf = void 0;
-        return;
-      }
-      const dt = Math.max(0, t2 - this._autoRotateLastFrame) / 1e3;
-      this._autoRotateLastFrame = t2;
-      const sinceUser = Date.now() - this._autoRotateLastUserAction;
-      const autoRotateEnabled = this.cfg["auto-rotate-enabled"] === true;
-      if (autoRotateEnabled && !this._detailMode && sinceUser >= _HeliosEngine.AUTO_ROTATE_INACTIVITY_MS) {
-        const next3 = this.map.getBearing() - _HeliosEngine.AUTO_ROTATE_DEG_PER_SEC * dt;
-        this.map.setBearing(next3);
-      }
-      this._autoRotateRaf = requestAnimationFrame(tick);
-    };
-    this._autoRotateRaf = requestAnimationFrame(tick);
-  }
   cleanup() {
     bumpStat("enginesCleanedUp");
     _liveEngines.delete(this);
@@ -33036,2938 +36852,1107 @@ const _HeliosEngine = class _HeliosEngine {
   }
 };
 _HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS = 30 * 60 * 1e3;
-_HeliosEngine.DETAIL_MODE_ZOOM_TARGET = 19.5;
-_HeliosEngine.DETAIL_MODE_PITCH_TARGET = 80;
-_HeliosEngine.DETAIL_MODE_TRANSITION_MS = 800;
-_HeliosEngine.POST_EXIT_COOLDOWN_MS = 600;
-_HeliosEngine.DETAIL_MODE_BEARING_SWEEP = 0;
-_HeliosEngine.AUTO_ROTATE_DEG_PER_SEC = 1.5;
-_HeliosEngine.AUTO_ROTATE_INACTIVITY_MS = 5e3;
 let HeliosEngine = _HeliosEngine;
-const en = {
-  cardName: "HELIOS",
-  cardDescription: "☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home",
-  detail: {
-    exitHint: "Tap anywhere to exit",
-    todayLabel: "Today",
-    todayForecast: "forecast",
-    todayPeak: "peak",
-    todayNotStartedYet: "production paused",
-    tomorrowLabel: "Tomorrow",
-    tomorrowPeak: "peak expected around",
-    batteryLabel: "Battery",
-    batteryCharged: "charged",
-    batteryDischarged: "discharged"
-  },
-  editor: {
-    locationSection: "Location",
-    homeLatitude: "Home latitude",
-    homeLongitude: "Home longitude",
-    locationHint: "Override the home address used as the card's center. Leave both fields empty to use Home Assistant's configured home. The override is only applied when BOTH fields are set to valid coordinates.",
-    mapSection: "Map",
-    mapStyle: "Map style",
-    mapStyleHint: "Two basemaps: Streets (sober, urban, with full labels) or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). The dark variant of the chosen style is used automatically when the card theme is set to dark.",
-    mapStyleStreet: "Streets",
-    cardTheme: "Card theme",
-    cardThemeHint: "Switches the card chrome (chips, charts, buttons, tooltips, scrub overlay) and the 3D map basemap between a light skin (default, on a white surface) and a dark skin (on a near-black surface) so the card sits cleanly inside light or dark Home Assistant dashboards.",
-    cardThemeLight: "Light",
-    cardThemeDark: "Dark",
-    showLabels: "Show labels",
-    showLabelsHint: "Toggles street names, building numbers, points of interest and place names on the basemap.",
-    labelsOn: "Shown",
-    labelsOff: "Hidden",
-    autoRotate: "Camera auto-rotation",
-    autoRotateHint: "When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun's apparent motion). A single-finger drag pauses it instantly and it resumes once you let go.",
-    autoRotateOn: "On",
-    autoRotateOff: "Off",
-    dateFormat: "Date format (default: mm-dd)",
-    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Examples:",
-    timeFormat: "Time format",
-    timeFormat12: "12 h",
-    timeFormat24: "24 h",
-    uiSection: "UI",
-    uiColorsHint: "One colour per metric, reused everywhere it appears. Sun: the arc, the sun disc and the upper area of the timeline. Cloud: the on-ground disc and the lower area of the timeline.",
-    sunColor: "Sun color",
-    cloudColor: "Cloud color",
-    pvSection: "Solar production",
-    pvHint: "Optional. When set, a chip appears near the home with the instant production (computed over the last minute) and a dedicated graph is added above the timeline. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).",
-    pvEntity: "Production entity",
-    pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
-    pvPeakPower: "Peak power (kWp)",
-    pvPeakPowerHelp: "Installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty to hide the forecast; observed production and the daily peak still render.",
-    pvArraysSection: "Panel orientation",
-    pvArraysHelp: "One entry per group of co-oriented panels. Leave a single entry with tilt 0 for a flat install. Add more entries when panels are split across multiple orientations (e.g. one row facing east, one facing west). The card forecasts each entry separately and weights the result by its share of the total kWp.",
-    pvArrayTitle: "Row {n}",
-    pvArrayName: "Name",
-    pvArrayNameHelp: 'Optional. A label for this row shown in the editor header (e.g. "South roof", "East garage"). Leave empty to fall back to the auto-numbered title.',
-    pvArrayTilt: "Tilt (°)",
-    pvArrayAzimuth: "Azimuth (°)",
-    pvArrayShare: "Share (%)",
-    pvArrayAdd: "+ Add row",
-    pvArrayRemove: "Remove",
-    pvArrayNormHint: "Shares don't add up to 100%, the forecast normalises them automatically.",
-    pvArrayTiltHelp: "Tilt of this row from horizontal, 0 to 90: 0 for a flat install, 30 to 45 for a typical pitched roof, 90 for a fully vertical setup such as a balcony. Combined with the azimuth, this drives the Liu-Jordan transposition that projects the predicted irradiance onto the panel plane.",
-    pvArrayAzimuthHelp: "Compass bearing this row faces, clockwise from north, 0 to 360: 0 = north, 90 = east, 180 = south, 270 = west.",
-    pvArrayShareHelp: "Relative weight of this row within the total kWp. Auto-normalised at compute time, so 50/50, 60/60 and 1/1 all produce the same forecast. Leave blank when there's only one row (it gets 100% by default).",
-    pvColor: "Production color",
-    batterySection: "Home battery",
-    batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional. The chip on its side appears as soon as the entity is set.",
-    batterySocEntity: "State of charge entity",
-    batterySocEntityHelp: 'Pick a battery State of Charge sensor (%, usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
-    batteryPowerEntity: "Power entity",
-    batteryPowerEntityHelp: 'Pick a battery power sensor (W or kW). Sign convention follows the entity itself (positive is interpreted as charging) and is shown verbatim on the chip (e.g. "+3.00 kW" charging, "-1.20 kW" discharging).',
-    batteryPowerInvert: "Battery power sign",
-    batteryPowerInvertStandard: "Standard",
-    batteryPowerInvertInverted: "Inverted",
-    batteryPowerInvertHelp: "Default (Standard): the battery entity already reports charging as positive and discharging as negative. Pick Inverted when your entity does the opposite (some GivEnergy / GivTCP setups), Helios will flip the value once at ingest so the chip readout, the leader arrow and the daily charged / discharged totals keep their meaning.",
-    batteryColor: "Battery color",
-    weatherSection: "Weather",
-    weatherHint: "Optional. Wire local weather entities to feed Helios with measurements taken at your home instead of the Open-Meteo model interpolated to your grid cell. Each entity is independently optional and only used when it carries a fresh value; missing or stale samples fall back to the model transparently.",
-    solarRadiationEntity: "Solar radiation entity",
-    solarRadiationEntityHelp: "Pick a sensor reporting global shortwave irradiance in W/m² (typical Ecowitt / Davis / personal weather station). When set, its current state and recorder history replace Open-Meteo for the live + past irradiance everywhere it appears (sun chip number, PV chart Y axis, sun arc colouring). Forecast hours always use Open-Meteo since a sensor only knows the present.",
-    buildingsSection: "Building",
-    buildingsHint: 'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
-    displayRadius: "Display radius",
-    displayRadiusHint: "Defines the visible area around the home. Anything past this radius is hidden: basemap, neighbouring buildings, shadows. Also drives the LiDAR fetch extent and the projected-shadow clip.",
-    timelineSection: "Timeline",
-    timelineEnabled: "Show timeline",
-    timelineEnabledOn: "Show",
-    timelineEnabledOff: "Hide",
-    timelineEnabledHint: "Hides the entire bottom timeline (chart, day labels, scrub cursors). Useful when the card is embedded in a wider dashboard panel where another widget already shows the daily trend.",
-    timelineWidth: "Timeline width",
-    timelineWidthHint: "Shrinks the timeline horizontally while keeping it centred on the card. At 100 % it hugs the card edges; below that the bar pulls in proportionally on both sides.",
-    timelineConsumption: "Show daily consumption / forecast",
-    timelineConsumptionOn: "Show",
-    timelineConsumptionOff: "Hide",
-    timelineConsumptionHint: "Toggles the per-day kWh chip rendered next to each date on the timeline (observed for past days, forecast for today and ahead). Turn off if you only care about the live scene and want a cleaner chart.",
-    buildingClusterRadius: "Home cluster radius",
-    buildingOpacity: "Surrounding opacity",
-    buildingColor: "Building color",
-    pixelRatio: "Pixel ratio",
-    pixelRatioAuto: "Auto",
-    pixelRatio1x: "1x",
-    pixelRatioHint: "Auto (default) uses your screen's native devicePixelRatio (capped at 2 on desktop, 1.25 on mobile) for crisp rendering. 1x forces the value to 1.0 for the cheapest possible per-frame fragment workload, useful on low-end devices or for long sessions where battery life / heat matters more than crispness.",
-    mapStyleMinimal: "Minimal",
-    shadowsSection: "Shading",
-    shadowsEnabled: "Show shadows",
-    shadowsEnabledOn: "Shown",
-    shadowsEnabledOff: "Hidden",
-    shadowsEnabledHint: "Master toggle for cast ground shadows. When hidden, no shadows are projected at all. When shown, the source picks itself: a LiDAR provider when one covers your location (buildings + vegetation), OpenFreeMap building footprints otherwise (buildings only).",
-    lidarPrecision: "LiDAR precision",
-    lidarPrecisionLow: "Low",
-    lidarPrecisionMedium: "Medium",
-    lidarPrecisionHigh: "High",
-    lidarPrecisionHint: "If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat OpenFreeMap building footprints and this setting has no effect. Higher precision pulls more cells from the source: the LiDAR view shows more points and weighs more on the GPU. The actual density depends on what the provider publishes for your area.",
-    shadowOpacity: "Shadow opacity",
-    shadowOpacityHint: "Opacity of the cast ground shadows.",
-    lidarViewSection: "LiDAR View",
-    lidarViewHint: "Click the LiDAR button in the top-right of the card to switch into a point-cloud view of your surroundings: every loaded LiDAR cell (ground, vegetation and buildings) is painted over the basemap. The button stays disabled when no provider covers the home. The view reuses the data already fetched at the current precision, no extra calls are made.",
-    lidarViewPointSize: "Point size (px)",
-    lidarViewPointColor: "Point color",
-    lidarViewPointOpacity: "Point opacity",
-    lidarViewWireframe: "Wireframe overlay",
-    lidarViewWireframeOn: "On",
-    lidarViewWireframeOff: "Off",
-    lidarViewWireframeHint: "Connects each finite LiDAR cell to its right and bottom neighbours with line segments, producing a mesh on top of the dot cloud. Dial the point size to 0 if you only want the lines. Heavy rasters at high precision are still drawn in a single GPU draw call, but the line count grows with the cell count, so older devices may slow down on big radii.",
-    lidarViewWireframeColor: "Wireframe color",
-    lidarViewWireframeOpacity: "Wireframe opacity",
-    localLidarSection: "Advanced — Local LiDAR (BYO)",
-    localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.",
-    localLidarToolsHint: "Need to prepare a raster from scratch? The Helios repo ships Python helper tools under `tools/lidar/`, see the README there for the full pipeline (system GDAL install, `uv` setup, inspect / convert / synthetic test commands).",
-    localLidarEnabled: "Use local data",
-    localLidarUrl: "GeoTIFF URL",
-    localLidarMinLat: "Min latitude",
-    localLidarMaxLat: "Max latitude",
-    localLidarMinLon: "Min longitude",
-    localLidarMaxLon: "Max longitude"
+const VISUAL_CONFIG_KEYS = [
+  "show-labels",
+  "sun-color",
+  "cloud-color",
+  //pv-color is card-level; included so the sig changes and Lit
+  //re-renders the chart. pv-power-entity triggers a fresh fetch.
+  "pv-color",
+  "pv-power-entity",
+  //map-style triggers a MapLibre setStyle(), the engine reloads
+  //the cloud disc, buildings and labels on the resulting
+  //`style.load`.
+  "map-style",
+  "battery-soc-entity",
+  "battery-power-entity",
+  "battery-color",
+  //solar-radiation-entity, when set, feeds the engine sensor
+  //samples that override Open-Meteo for the live + past
+  //irradiance values. A change must refresh the engine so
+  //the override (or its absence) is picked up immediately.
+  "solar-radiation-entity",
+  //card-theme is card-level (light/dark skin) but must be in the
+  //sig so Lit re-renders when the user toggles it.
+  "card-theme",
+  //building-radius / cluster-radius invalidate cache and refetch;
+  //opacity / color are cheap paint-property updates.
+  "building-radius",
+  "building-cluster-radius",
+  "building-opacity",
+  "building-color",
+  "pixel-ratio",
+  //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must
+  //invalidate the engine sig so the shadow pipeline reruns
+  //against the new provider config (toggle, URL or bbox).
+  "lidar-local-ndsm-enabled",
+  "lidar-local-ndsm-url",
+  "lidar-local-ndsm-min-lat",
+  "lidar-local-ndsm-max-lat",
+  "lidar-local-ndsm-min-lon",
+  "lidar-local-ndsm-max-lon"
+];
+const INIT_DEBOUNCE_MS = 500;
+function parseConfigCoord(raw2) {
+  if (typeof raw2 === "number") {
+    return isFinite(raw2) ? raw2 : null;
   }
-};
-const fr = {
-  cardName: "HELIOS",
-  cardDescription: "☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel",
-  detail: {
-    exitHint: "Cliquez n'importe où pour quitter",
-    todayLabel: "Aujourd'hui",
-    todayForecast: "prévu",
-    todayPeak: "pic",
-    todayNotStartedYet: "production en pause",
-    tomorrowLabel: "Demain",
-    tomorrowPeak: "pic prévu vers",
-    batteryLabel: "Batterie",
-    batteryCharged: "chargé",
-    batteryDischarged: "déchargé"
-  },
-  editor: {
-    locationSection: "Localisation",
-    homeLatitude: "Latitude du domicile",
-    homeLongitude: "Longitude du domicile",
-    locationHint: "Remplace l'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides.",
-    mapSection: "Carte",
-    mapStyle: "Style de la carte",
-    mapStyleHint: "Deux fonds de carte : Rues (sobre, urbain, libellés complets) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.",
-    mapStyleStreet: "Rues",
-    cardTheme: "Thème de la carte",
-    cardThemeHint: "Bascule l'habillage de la carte (pastilles, graphiques, boutons, infobulles, surlignage du scrub) ainsi que le fond de carte 3D entre un thème clair (par défaut, sur fond blanc) et un thème sombre (sur fond presque noir) pour que la carte s'intègre proprement dans un tableau de bord Home Assistant clair ou sombre.",
-    cardThemeLight: "Clair",
-    cardThemeDark: "Sombre",
-    showLabels: "Afficher les libellés",
-    showLabelsHint: "Affiche ou masque les noms de rues, numéros de bâtiments, points d'intérêt et noms de quartiers du fond de carte.",
-    labelsOn: "Affichés",
-    labelsOff: "Masqués",
-    autoRotate: "Rotation auto de la caméra",
-    autoRotateHint: "Après quelques secondes d'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que tu lâches.",
-    autoRotateOn: "Activée",
-    autoRotateOff: "Désactivée",
-    dateFormat: "Format de date (par défaut : mm-dd)",
-    dateFormatHelp: "Tokens : yyyy, yy, mm, dd. Exemples :",
-    timeFormat: "Format de l'heure",
-    timeFormat12: "12 h",
-    timeFormat24: "24 h",
-    uiSection: "UI",
-    uiColorsHint: "Une couleur par grandeur, réutilisée partout où elle apparaît. Soleil : l'arc, le disque solaire et la zone haute de la chronologie. Nuages : le disque au sol et la zone basse de la chronologie.",
-    sunColor: "Couleur du soleil",
-    cloudColor: "Couleur des nuages",
-    pvSection: "Production photovoltaïque",
-    pvHint: "Optionnel. Si renseigné, une pastille apparaît près de la maison avec la production instantanée (calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
-    pvEntity: "Entité de production",
-    pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
-    pvPeakPower: "Puissance crête (kWp)",
-    pvPeakPowerHelp: "Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.",
-    pvArraysSection: "Orientation des panneaux",
-    pvArraysHelp: "Une entrée par rangée de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat. Ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
-    pvArrayTitle: "Rangée {n}",
-    pvArrayName: "Nom",
-    pvArrayNameHelp: "Optionnel. Un libellé pour cette rangée affiché dans l'en-tête de l'éditeur (par exemple « Toit sud », « Garage est »). Laisse vide pour retomber sur le titre numéroté automatiquement.",
-    pvArrayTilt: "Inclinaison (°)",
-    pvArrayAzimuth: "Azimut (°)",
-    pvArrayShare: "Part (%)",
-    pvArrayAdd: "+ Ajouter une rangée",
-    pvArrayRemove: "Supprimer",
-    pvArrayNormHint: "Les parts ne totalisent pas 100 %, la prévision les normalise automatiquement.",
-    pvArrayTiltHelp: "Inclinaison de cette rangée par rapport à l'horizontale, de 0 à 90 : 0 pour une installation à plat, 30 à 45 pour un toit incliné classique, 90 pour une installation verticale (par exemple un balcon). Combinée à l'azimut, elle pilote la transposition Liu-Jordan qui projette l'irradiance prévue sur le plan des panneaux.",
-    pvArrayAzimuthHelp: "Orientation à la boussole vers laquelle cette rangée est tournée, sens horaire depuis le nord, de 0 à 360 : 0 = nord, 90 = est, 180 = sud, 270 = ouest.",
-    pvArrayShareHelp: "Poids relatif de cette rangée dans le total des kWp. Normalisé automatiquement au calcul : 50/50, 60/60 et 1/1 donnent tous le même résultat. Laisse vide quand il n'y a qu'une seule rangée (elle prend 100 % par défaut).",
-    pvColor: "Couleur de production",
-    batterySection: "Batterie domestique",
-    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles. La pastille correspondante s'affiche dès que l'entité est renseignée.",
-    batterySocEntity: "Entité d'état de charge",
-    batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (%, typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
-    batteryPowerEntity: "Entité de puissance",
-    batteryPowerEntityHelp: "Choisis un capteur de puissance batterie (W ou kW). La convention de signe suit l'entité elle-même (positif = en charge) et est affiché tel quel sur la pastille (par ex. « +3.00 kW » en charge, « −1.20 kW » en décharge).",
-    batteryPowerInvert: "Signe de la puissance batterie",
-    batteryPowerInvertStandard: "Standard",
-    batteryPowerInvertInverted: "Inversé",
-    batteryPowerInvertHelp: "Par défaut (Standard) : ton capteur batterie rapporte déjà la charge en positif et la décharge en négatif. Passe sur Inversé si ton capteur fait l'inverse (certaines installations GivEnergy / GivTCP), Helios inverse alors la valeur une fois à la lecture pour que la pastille, la flèche du leader et les totaux journaliers charge / décharge gardent leur sens.",
-    batteryColor: "Couleur batterie",
-    weatherSection: "Météo",
-    weatherHint: "Optionnel. Branche des entités météo locales pour qu'Helios utilise des mesures prises chez toi plutôt que le modèle Open-Meteo interpolé à ta cellule de grille. Chaque entité est indépendamment optionnelle et n'est utilisée que lorsqu'elle remonte une valeur fraîche ; les échantillons manquants ou périmés retombent sur le modèle de manière transparente.",
-    solarRadiationEntity: "Entité d'irradiance solaire",
-    solarRadiationEntityHelp: "Choisis un capteur qui remonte l'irradiance solaire globale en W/m² (typiquement une station météo Ecowitt / Davis / perso). Quand il est défini, son état actuel et son historique recorder remplacent Open-Meteo pour les valeurs live + passées partout où elles apparaissent (nombre sur la pastille soleil, axe Y du graphique PV, coloration de l'arc solaire). Les heures de prévision continuent d'utiliser Open-Meteo, un capteur ne connaît que le présent.",
-    buildingsSection: "Bâtiment",
-    buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
-    displayRadius: "Rayon d'affichage",
-    displayRadiusHint: "Définit la zone visible autour de la maison. Tout ce qui se trouve au-delà de ce rayon est masqué : fond de carte, bâtiments voisins, ombres. Pilote également l'étendue du fetch LiDAR et le clip des ombres projetées.",
-    timelineSection: "Timeline",
-    timelineEnabled: "Afficher la timeline",
-    timelineEnabledOn: "Afficher",
-    timelineEnabledOff: "Masquer",
-    timelineEnabledHint: "Masque toute la barre temporelle en bas (graphique, labels des jours, curseurs). Utile quand la card est intégrée dans un dashboard plus large où un autre widget montre déjà la tendance journalière.",
-    timelineWidth: "Largeur de la timeline",
-    timelineWidthHint: "Réduit la timeline horizontalement tout en la gardant centrée. À 100 %, elle colle aux bords de la card ; en dessous, la barre se rétracte proportionnellement des deux côtés.",
-    timelineConsumption: "Afficher la consommation / prédiction journalière",
-    timelineConsumptionOn: "Afficher",
-    timelineConsumptionOff: "Masquer",
-    timelineConsumptionHint: "Active la puce kWh affichée à côté de chaque date sur la timeline (observée pour les jours passés, prédiction pour aujourd'hui et la suite). Désactive si tu te concentres sur la scène live et veux un graphique plus propre.",
-    buildingClusterRadius: "Rayon de regroupement maison",
-    buildingOpacity: "Opacité des bâtiments voisins",
-    buildingColor: "Couleur des bâtiments",
-    pixelRatio: "Pixel ratio",
-    pixelRatioAuto: "Auto",
-    pixelRatio1x: "1x",
-    pixelRatioHint: "Auto (par défaut) utilise la densité de pixels native de ton écran (plafonnée à 2 sur desktop, 1.25 sur mobile) pour un rendu net. 1x force la valeur à 1.0, le rendu est moins net mais le coût par frame est divisé d'autant : à privilégier sur appareils bas/moyen de gamme ou pour les longues sessions où l'autonomie / la chaleur compte plus que la finesse.",
-    mapStyleMinimal: "Minimal",
-    shadowsSection: "Ombrage",
-    shadowsEnabled: "Afficher les ombres",
-    shadowsEnabledOn: "Affichées",
-    shadowsEnabledOff: "Masquées",
-    shadowsEnabledHint: "Interrupteur principal des ombres projetées au sol. Si elles sont masquées, aucune ombre n'est calculée. Si elles sont affichées, la source est choisie automatiquement : provider LiDAR quand ta zone est couverte (bâtiments et végétation), empreintes plates des bâtiments OpenFreeMap sinon (bâtiments uniquement).",
-    lidarPrecision: "Précision LiDAR",
-    lidarPrecisionLow: "Basse",
-    lidarPrecisionMedium: "Moyenne",
-    lidarPrecisionHigh: "Haute",
-    lidarPrecisionHint: "Si ta zone est couverte par un provider LiDAR intégré à Helios, tu bénéficies d'ombres plus réalistes (bâtiments ET végétation). Des décalages peuvent apparaître entre les bâtiments affichés et leurs ombres : les données LiDAR sont enregistrées à un instant donné et ne reflètent pas toujours l'état actuel du terrain. Hors zone LiDAR, les ombres retombent sur les empreintes plates des bâtiments OpenFreeMap et cette option n'a aucun effet. Plus la précision est haute, plus on tire de cellules depuis la source : la vue LiDAR affiche davantage de points et pèse plus sur le GPU. La densité réelle dépend de ce que le provider expose pour ta zone.",
-    shadowOpacity: "Opacité des ombres",
-    shadowOpacityHint: "Opacité des ombres projetées au sol.",
-    lidarViewSection: "Vue LiDAR",
-    lidarViewHint: "Clique sur le bouton LiDAR en haut à droite de la carte pour basculer dans une vue en nuage de points de tes environs : chaque cellule LiDAR chargée (sol, végétation et bâtiments) est peinte par-dessus la carte de fond. Le bouton reste désactivé quand aucun provider ne couvre la maison. La vue réutilise les données déjà récupérées à la précision actuelle, aucun appel supplémentaire n'est fait.",
-    lidarViewPointSize: "Taille des points (px)",
-    lidarViewPointColor: "Couleur des points",
-    lidarViewPointOpacity: "Opacité des points",
-    lidarViewWireframe: "Fil de fer",
-    lidarViewWireframeOn: "Activé",
-    lidarViewWireframeOff: "Désactivé",
-    lidarViewWireframeHint: "Relie chaque cellule LiDAR finie à ses voisines droite et bas avec des segments, ce qui donne un maillage par-dessus le nuage de points. Met la taille des points à 0 si tu ne veux que les lignes. Les rasters lourds en haute précision tiennent toujours dans un seul draw call GPU, mais le nombre de lignes grandit avec le nombre de cellules, donc les vieux appareils peuvent ralentir sur les grands rayons.",
-    lidarViewWireframeColor: "Couleur du fil de fer",
-    lidarViewWireframeOpacity: "Opacité du fil de fer",
-    localLidarSection: "Avancé — LiDAR local (BYO)",
-    localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la zone définie, cette source remplace tout fournisseur national.",
-    localLidarToolsHint: "Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d'inspection / conversion / test synthétique).",
-    localLidarEnabled: "Utiliser les données locales",
-    localLidarUrl: "URL du GeoTIFF",
-    localLidarMinLat: "Latitude min",
-    localLidarMaxLat: "Latitude max",
-    localLidarMinLon: "Longitude min",
-    localLidarMaxLon: "Longitude max"
+  if (typeof raw2 === "string") {
+    const trimmed = raw2.trim();
+    if (trimmed === "") return null;
+    const n3 = Number(trimmed);
+    return isFinite(n3) ? n3 : null;
   }
-};
-const de = {
-  cardName: "HELIOS",
-  cardDescription: "☀️ Sonne, Wolken, PV-Erzeugung, Batterie und LiDAR-Schatten am Haus, in 3D-Echtzeit",
-  detail: {
-    exitHint: "Tippe irgendwo, um zu schließen",
-    todayLabel: "Heute",
-    todayForecast: "Prognose",
-    todayPeak: "Spitze",
-    todayNotStartedYet: "Erzeugung pausiert",
-    tomorrowLabel: "Morgen",
-    tomorrowPeak: "Spitze erwartet gegen",
-    batteryLabel: "Batterie",
-    batteryCharged: "geladen",
-    batteryDischarged: "entladen"
-  },
-  editor: {
-    locationSection: "Standort",
-    homeLatitude: "Breitengrad des Zuhauses",
-    homeLongitude: "Längengrad des Zuhauses",
-    locationHint: "Überschreibt die Heimadresse, die als Mittelpunkt der Karte verwendet wird. Beide Felder leer lassen, um die in Home Assistant konfigurierte Adresse zu nutzen. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten.",
-    mapSection: "Karte",
-    mapStyle: "Kartenstil",
-    mapStyleHint: "Zwei Basiskarten: Straßen (nüchtern, urban, mit vollständigen Beschriftungen) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.",
-    mapStyleStreet: "Straßen",
-    cardTheme: "Karten-Thema",
-    cardThemeHint: "Wechselt das Karten-Chrome (Chips, Diagramme, Schaltflächen, Tooltips, Scrub-Overlay) sowie die 3D-Grundkarte zwischen einem hellen Skin (Standard, auf weißer Fläche) und einem dunklen Skin (auf nahezu schwarzer Fläche), damit sich die Karte sauber in helle oder dunkle Home-Assistant-Dashboards einfügt.",
-    cardThemeLight: "Hell",
-    cardThemeDark: "Dunkel",
-    showLabels: "Beschriftungen anzeigen",
-    showLabelsHint: "Zeigt oder verbirgt Straßennamen, Hausnummern, POIs und Ortsnamen auf der Grundkarte.",
-    labelsOn: "Sichtbar",
-    labelsOff: "Ausgeblendet",
-    autoRotate: "Automatische Kamerarotation",
-    autoRotateHint: "Nach ein paar Sekunden Inaktivität kreist die Kamera langsam um das Haus (ca. 1,5°/s, gegenläufig zur scheinbaren Sonnenbahn). Eine Ein-Finger-Geste pausiert sie sofort; sie setzt fort, sobald du loslässt.",
-    autoRotateOn: "Ein",
-    autoRotateOff: "Aus",
-    dateFormat: "Datumsformat (Standard: mm-dd)",
-    dateFormatHelp: "Platzhalter: yyyy, yy, mm, dd. Beispiele:",
-    timeFormat: "Zeitformat",
-    timeFormat12: "12 h",
-    timeFormat24: "24 h",
-    uiSection: "UI",
-    uiColorsHint: "Eine Farbe pro Messgröße, überall einheitlich verwendet. Sonne: der Bogen, die Sonnenscheibe und der obere Bereich der Zeitachse. Wolken: die Bodenscheibe und der untere Bereich der Zeitachse.",
-    sunColor: "Sonnenfarbe",
-    cloudColor: "Wolkenfarbe",
-    pvSection: "Solarproduktion",
-    pvHint: "Optional. Wenn gesetzt, erscheint nahe dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
-    pvEntity: "Produktions-Entität",
-    pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
-    pvPeakPower: "Spitzenleistung (kWp)",
-    pvPeakPowerHelp: "Installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, um die Prognose auszublenden; gemessene Produktion und Tagesspitze werden weiter angezeigt.",
-    pvArraysSection: "Modulausrichtung",
-    pvArraysHelp: "Ein Eintrag pro Gruppe gleich ausgerichteter Module. Lasse einen einzigen Eintrag mit Neigung 0 für eine flache Installation. Füge weitere Einträge hinzu, wenn deine Module auf mehrere Ausrichtungen verteilt sind (zum Beispiel eine Reihe nach Osten, eine nach Westen). Die Prognose wird pro Eintrag berechnet und nach dem Anteil an der Gesamt-kWp gewichtet.",
-    pvArrayTitle: "Reihe {n}",
-    pvArrayName: "Name",
-    pvArrayNameHelp: 'Optional. Ein Label für diese Reihe, das im Editor-Header angezeigt wird (z. B. „Süddach", „Garage Ost"). Leer lassen, um auf den automatisch nummerierten Titel zurückzufallen.',
-    pvArrayTilt: "Neigung (°)",
-    pvArrayAzimuth: "Azimut (°)",
-    pvArrayShare: "Anteil (%)",
-    pvArrayAdd: "+ Reihe hinzufügen",
-    pvArrayRemove: "Entfernen",
-    pvArrayNormHint: "Die Anteile ergeben nicht 100 %, die Prognose normalisiert sie automatisch.",
-    pvArrayTiltHelp: "Neigung dieser Reihe gegenüber der Horizontalen, 0 bis 90: 0 für eine flache Installation, 30 bis 45 für ein typisches Steildach, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Zusammen mit dem Azimut treibt die Neigung die Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert.",
-    pvArrayAzimuthHelp: "Kompassrichtung, in die diese Reihe zeigt, im Uhrzeigersinn ab Norden, 0 bis 360: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen.",
-    pvArrayShareHelp: "Relativer Anteil dieser Reihe an der Gesamt-kWp. Wird zum Berechnungszeitpunkt automatisch normalisiert, deshalb liefern 50/50, 60/60 und 1/1 dieselbe Prognose. Leer lassen, wenn nur eine Reihe existiert (sie bekommt standardmäßig 100 %).",
-    pvColor: "Produktionsfarbe",
-    batterySection: "Hausbatterie",
-    batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional. Der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
-    batterySocEntity: "Ladezustand-Entität",
-    batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (%, typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
-    batteryPowerEntity: "Leistungs-Entität",
-    batteryPowerEntityHelp: 'Wähle einen Batterie-Leistungssensor (W oder kW). Vorzeichenkonvention folgt der Entität selbst (positiv = Laden) und wird wörtlich auf dem Chip angezeigt (z. B. „+3.00 kW" beim Laden, „−1.20 kW" beim Entladen).',
-    batteryPowerInvert: "Vorzeichen der Batterieleistung",
-    batteryPowerInvertStandard: "Standard",
-    batteryPowerInvertInverted: "Invertiert",
-    batteryPowerInvertHelp: "Standardmäßig meldet die Batterie-Entität das Laden als positiv und das Entladen als negativ. Wähle Invertiert, wenn deine Entität es umgekehrt macht (einige GivEnergy- / GivTCP-Setups). Helios dreht den Wert dann einmal beim Einlesen um, damit Chip-Anzeige, Flusspfeil und tägliche Lade- / Entladesummen ihre Bedeutung behalten.",
-    batteryColor: "Batteriefarbe",
-    weatherSection: "Wetter",
-    weatherHint: "Optional. Verbinde lokale Wetter-Entitäten, damit Helios direkt bei dir gemessene Werte verwendet, statt das Open-Meteo-Modell, das auf deine Gitterzelle interpoliert wird. Jede Entität ist unabhängig optional und wird nur verwendet, wenn sie einen frischen Wert liefert; fehlende oder veraltete Messwerte fallen transparent auf das Modell zurück.",
-    solarRadiationEntity: "Solarstrahlungs-Entität",
-    solarRadiationEntityHelp: "Wähle einen Sensor, der die globale Kurzwellenstrahlung in W/m² meldet (typisch Ecowitt / Davis / private Wetterstation). Wenn gesetzt, ersetzt sein aktueller Zustand und sein Recorder-Verlauf Open-Meteo bei allen Live- und Vergangenheitswerten der Bestrahlungsstärke (Zahl an der Sonnenpastille, Y-Achse des PV-Charts, Färbung des Sonnenbogens). Vorhersagestunden verwenden weiterhin Open-Meteo, da ein Sensor nur die Gegenwart kennt.",
-    buildingsSection: "Gebäude",
-    buildingsHint: 'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
-    displayRadius: "Anzeigeradius",
-    displayRadiusHint: "Bestimmt den um das Zuhause sichtbaren Bereich. Alles jenseits dieses Radius bleibt verborgen: Grundkarte, Nachbargebäude, Schatten. Steuert zugleich den LiDAR-Fetch-Bereich und das Clipping der projizierten Schatten.",
-    timelineSection: "Timeline",
-    timelineEnabled: "Timeline anzeigen",
-    timelineEnabledOn: "Anzeigen",
-    timelineEnabledOff: "Verbergen",
-    timelineEnabledHint: "Versteckt die gesamte untere Zeitleiste (Diagramm, Tageslabels, Scrub-Cursor). Hilfreich, wenn die Karte in ein breiteres Dashboard eingebettet ist, das den Tagesverlauf schon woanders zeigt.",
-    timelineWidth: "Breite der Timeline",
-    timelineWidthHint: "Schrumpft die Timeline horizontal und hält sie dabei auf der Karte zentriert. Bei 100 % schmiegt sie sich an die Kartenränder; darunter zieht die Leiste sich beidseitig proportional zurück.",
-    timelineConsumption: "Tägliche Verbrauch / Prognose anzeigen",
-    timelineConsumptionOn: "Anzeigen",
-    timelineConsumptionOff: "Verbergen",
-    timelineConsumptionHint: "Schaltet den kWh-Chip neben jedem Datum auf der Timeline (gemessen für vergangene Tage, Prognose für heute und später). Aus, wenn dir nur die Live-Szene zählt und das Diagramm aufgeräumter sein soll.",
-    buildingClusterRadius: "Cluster-Radius Zuhause",
-    buildingOpacity: "Deckkraft Nachbargebäude",
-    buildingColor: "Gebäudefarbe",
-    pixelRatio: "Pixel-Ratio",
-    pixelRatioAuto: "Auto",
-    pixelRatio1x: "1x",
-    pixelRatioHint: "Auto (Standard) verwendet die native devicePixelRatio des Bildschirms (gedeckelt auf 2 am Desktop, 1.25 mobil) für eine scharfe Darstellung. 1x erzwingt 1.0, weniger scharf, dafür minimale Fragment-Last pro Frame, sinnvoll auf leistungsschwachen Geräten oder bei langen Sitzungen, wenn Akkulaufzeit / Wärme wichtiger sind als Schärfe.",
-    mapStyleMinimal: "Minimal",
-    shadowsSection: "Schattierung",
-    shadowsEnabled: "Schatten anzeigen",
-    shadowsEnabledOn: "Sichtbar",
-    shadowsEnabledOff: "Ausgeblendet",
-    shadowsEnabledHint: "Hauptschalter für die am Boden geworfenen Schatten. Ausgeblendet werden gar keine Schatten berechnet. Sichtbar wählt die Quelle automatisch: ein LiDAR-Provider, wenn er das Gebiet abdeckt (Gebäude und Vegetation), sonst die flachen OpenFreeMap-Gebäudegrundrisse (nur Gebäude).",
-    lidarPrecision: "LiDAR-Präzision",
-    lidarPrecisionLow: "Niedrig",
-    lidarPrecisionMedium: "Mittel",
-    lidarPrecisionHigh: "Hoch",
-    lidarPrecisionHint: "Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen OpenFreeMap-Gebäudegrundrisse, und diese Option bleibt wirkungslos. Bei höherer Präzision werden mehr Zellen aus der Quelle geladen: Die LiDAR-Ansicht zeigt mehr Punkte und belastet die GPU stärker. Die tatsächliche Dichte hängt davon ab, was der Anbieter für dein Gebiet bereitstellt.",
-    shadowOpacity: "Schatten-Deckkraft",
-    shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
-    lidarViewSection: "LiDAR-Ansicht",
-    lidarViewHint: "Klicke oben rechts auf die Karte auf die Schaltfläche LiDAR, um in eine Punktwolken-Ansicht deiner Umgebung zu wechseln: Jede geladene LiDAR-Zelle (Boden, Vegetation und Gebäude) wird über der Basiskarte gemalt. Die Schaltfläche bleibt deaktiviert, wenn kein Anbieter das Zuhause abdeckt. Die Ansicht verwendet die bereits in der aktuellen Präzision abgerufenen Daten wieder, es werden keine zusätzlichen Aufrufe gemacht.",
-    lidarViewPointSize: "Punktgröße (px)",
-    lidarViewPointColor: "Punktfarbe",
-    lidarViewPointOpacity: "Punktdeckkraft",
-    lidarViewWireframe: "Drahtgitter",
-    lidarViewWireframeOn: "An",
-    lidarViewWireframeOff: "Aus",
-    lidarViewWireframeHint: "Verbindet jede gültige LiDAR-Zelle mit ihren rechten und unteren Nachbarn durch Linien, das ergibt ein Drahtgitter über der Punktwolke. Setze die Punktgröße auf 0, wenn du nur die Linien sehen willst. Auch schwere Raster bei hoher Präzision laufen in einem einzigen GPU-Draw, aber die Linienzahl wächst mit der Zellzahl, ältere Geräte können bei großen Radien einbrechen.",
-    lidarViewWireframeColor: "Drahtgitter-Farbe",
-    lidarViewWireframeOpacity: "Drahtgitter-Deckkraft",
-    localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
-    localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb des definierten Bereichs ersetzt diese Quelle jeden nationalen Anbieter.",
-    localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).",
-    localLidarEnabled: "Lokale Daten verwenden",
-    localLidarUrl: "GeoTIFF-URL",
-    localLidarMinLat: "Min. Breitengrad",
-    localLidarMaxLat: "Max. Breitengrad",
-    localLidarMinLon: "Min. Längengrad",
-    localLidarMaxLon: "Max. Längengrad"
-  }
-};
-const es = {
-  cardName: "HELIOS",
-  cardDescription: "☀️ Sol, nubes, producción FV, batería y sombras LiDAR sobre tu casa, en 3D y tiempo real",
-  detail: {
-    exitHint: "Toca en cualquier lugar para salir",
-    todayLabel: "Hoy",
-    todayForecast: "previsto",
-    todayPeak: "pico",
-    todayNotStartedYet: "producción en pausa",
-    tomorrowLabel: "Mañana",
-    tomorrowPeak: "pico previsto sobre las",
-    batteryLabel: "Batería",
-    batteryCharged: "cargado",
-    batteryDischarged: "descargado"
-  },
-  editor: {
-    locationSection: "Ubicación",
-    homeLatitude: "Latitud del hogar",
-    homeLongitude: "Longitud del hogar",
-    locationHint: "Anula la dirección del hogar usada como centro de la tarjeta. Deja ambos campos vacíos para usar el hogar configurado en Home Assistant. La anulación se aplica solo cuando AMBOS campos contienen coordenadas válidas.",
-    mapSection: "Mapa",
-    mapStyle: "Estilo del mapa",
-    mapStyleHint: "Dos mapas base: Calles (sobrio, urbano, con etiquetas completas) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.",
-    mapStyleStreet: "Calles",
-    cardTheme: "Tema de la tarjeta",
-    cardThemeHint: "Cambia los elementos de la tarjeta (chips, gráficos, botones, tooltips, superposición del scrub) y el mapa 3D de fondo entre un tema claro (por defecto, sobre fondo blanco) y un tema oscuro (sobre fondo casi negro) para que la tarjeta encaje limpiamente en paneles de Home Assistant claros u oscuros.",
-    cardThemeLight: "Claro",
-    cardThemeDark: "Oscuro",
-    showLabels: "Mostrar etiquetas",
-    showLabelsHint: "Muestra u oculta los nombres de calles, números de edificios, puntos de interés y nombres de zonas en el mapa de fondo.",
-    labelsOn: "Visibles",
-    labelsOff: "Ocultas",
-    autoRotate: "Rotación automática de la cámara",
-    autoRotateHint: "Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (aprox. 1,5°/s, en sentido contrario al movimiento aparente del sol). Un gesto con un dedo la pausa al instante; se reanuda cuando sueltas.",
-    autoRotateOn: "Activada",
-    autoRotateOff: "Desactivada",
-    dateFormat: "Formato de fecha (por defecto: mm-dd)",
-    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Ejemplos:",
-    timeFormat: "Formato de hora",
-    timeFormat12: "12 h",
-    timeFormat24: "24 h",
-    uiSection: "UI",
-    uiColorsHint: "Un color por magnitud, reutilizado donde aparezca. Sol: el arco, el disco solar y la zona superior de la línea de tiempo. Nubes: el disco en el suelo y la zona inferior de la línea de tiempo.",
-    sunColor: "Color del sol",
-    cloudColor: "Color de las nubes",
-    pvSection: "Producción solar",
-    pvHint: "Opcional. Si se define, aparece una pastilla cerca de la casa con la producción instantánea (calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
-    pvEntity: "Entidad de producción",
-    pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
-    pvPeakPower: "Potencia pico (kWp)",
-    pvPeakPowerHelp: "Potencia pico instalada de tu campo en kilovatios-pico. Controla la curva de previsión punteada en el gráfico PV y la saturación del flujo PV → casa. Déjalo vacío para ocultar la previsión; la producción observada y el pico del día siguen mostrándose.",
-    pvArraysSection: "Orientación de los paneles",
-    pvArraysHelp: "Una entrada por grupo de paneles con la misma orientación. Deja una sola entrada con inclinación 0 para una instalación plana. Añade más entradas cuando tus paneles estén repartidos en varias orientaciones (por ejemplo, una fila al este y otra al oeste). La previsión se calcula por entrada y se pondera por su parte del total de kWp.",
-    pvArrayTitle: "Hilera {n}",
-    pvArrayName: "Nombre",
-    pvArrayNameHelp: "Opcional. Una etiqueta para esta hilera mostrada en el encabezado del editor (por ejemplo «Tejado sur», «Garaje este»). Déjalo vacío para volver al título numerado automáticamente.",
-    pvArrayTilt: "Inclinación (°)",
-    pvArrayAzimuth: "Azimut (°)",
-    pvArrayShare: "Parte (%)",
-    pvArrayAdd: "+ Añadir hilera",
-    pvArrayRemove: "Eliminar",
-    pvArrayNormHint: "Las partes no suman 100 %, la previsión las normaliza automáticamente.",
-    pvArrayTiltHelp: "Inclinación de esta hilera respecto a la horizontal, de 0 a 90: 0 para una instalación plana, 30 a 45 para un tejado inclinado clásico, 90 para una instalación vertical (por ejemplo balcón). Combinada con el azimut, dirige la transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel.",
-    pvArrayAzimuthHelp: "Orientación brújula a la que apunta esta hilera, en sentido horario desde el norte, de 0 a 360: 0 = norte, 90 = este, 180 = sur, 270 = oeste.",
-    pvArrayShareHelp: "Peso relativo de esta hilera en el total de kWp. Se normaliza automáticamente al calcular: 50/50, 60/60 y 1/1 producen el mismo resultado. Déjalo vacío cuando solo hay una hilera (recibe el 100 % por defecto).",
-    pvColor: "Color de producción",
-    batterySection: "Batería doméstica",
-    batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales. El chip correspondiente aparece en cuanto la entidad está definida.",
-    batterySocEntity: "Entidad de estado de carga",
-    batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (%, típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
-    batteryPowerEntity: "Entidad de potencia",
-    batteryPowerEntityHelp: "Elige un sensor de potencia de la batería (W o kW). La convención de signo sigue la entidad misma (positivo = cargando) y se muestra tal cual en el chip (p. ej. «+3.00 kW» en carga, «−1.20 kW» en descarga).",
-    batteryPowerInvert: "Signo de la potencia de la batería",
-    batteryPowerInvertStandard: "Estándar",
-    batteryPowerInvertInverted: "Invertido",
-    batteryPowerInvertHelp: "Por defecto (Estándar) tu entidad de batería ya informa la carga como positivo y la descarga como negativo. Cambia a Invertido si tu entidad hace lo contrario (algunas instalaciones GivEnergy / GivTCP), Helios invertirá el valor una vez en la lectura para que la pastilla, la flecha del flujo y los totales diarios de carga / descarga conserven su significado.",
-    batteryColor: "Color batería",
-    weatherSection: "Meteorología",
-    weatherHint: "Opcional. Conecta entidades meteo locales para que Helios use mediciones tomadas en tu casa en lugar del modelo Open-Meteo interpolado a tu celda de la malla. Cada entidad es opcional de forma independiente y solo se usa cuando reporta un valor reciente; las muestras ausentes o caducadas vuelven al modelo de forma transparente.",
-    solarRadiationEntity: "Entidad de radiación solar",
-    solarRadiationEntityHelp: "Elige un sensor que reporte irradiancia solar global en W/m² (típicamente una estación meteo Ecowitt / Davis / personal). Cuando está definido, su estado actual y su historial del recorder reemplazan a Open-Meteo en los valores live y pasados de irradiancia en todos los sitios donde aparecen (número de la pastilla sol, eje Y del gráfico FV, coloración del arco solar). Las horas de previsión siguen usando Open-Meteo, un sensor solo conoce el presente.",
-    buildingsSection: "Edificio",
-    buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».",
-    displayRadius: "Radio de visualización",
-    displayRadiusHint: "Define el área visible alrededor de la casa. Todo lo que esté más allá de este radio queda oculto: mapa base, edificios vecinos, sombras. También determina el ámbito del fetch LiDAR y el recorte de las sombras proyectadas.",
-    timelineSection: "Timeline",
-    timelineEnabled: "Mostrar la timeline",
-    timelineEnabledOn: "Mostrar",
-    timelineEnabledOff: "Ocultar",
-    timelineEnabledHint: "Oculta toda la barra temporal inferior (gráfico, etiquetas de los días, cursores). Útil cuando la card está integrada en un dashboard más amplio donde otro widget ya muestra la tendencia diaria.",
-    timelineWidth: "Ancho de la timeline",
-    timelineWidthHint: "Reduce la timeline horizontalmente manteniéndola centrada en la card. Al 100 % se pega a los bordes; por debajo, la barra se recoge proporcionalmente por ambos lados.",
-    timelineConsumption: "Mostrar consumo / pronóstico diario",
-    timelineConsumptionOn: "Mostrar",
-    timelineConsumptionOff: "Ocultar",
-    timelineConsumptionHint: "Controla la insignia de kWh que aparece junto a cada fecha en la timeline (observado para días pasados, pronóstico para hoy y los siguientes). Apágalo si solo te importa la escena en vivo y prefieres un gráfico más limpio.",
-    buildingClusterRadius: "Radio del grupo de la casa",
-    buildingOpacity: "Opacidad de los vecinos",
-    buildingColor: "Color de los edificios",
-    pixelRatio: "Pixel ratio",
-    pixelRatioAuto: "Auto",
-    pixelRatio1x: "1x",
-    pixelRatioHint: "Auto (por defecto) usa la densidad de píxeles nativa de tu pantalla (limitada a 2 en escritorio, 1.25 en móvil) para un renderizado nítido. 1x fuerza el valor a 1.0, menos nítido pero con la carga por frame mínima, ideal en dispositivos modestos o sesiones largas donde la batería / el calor importan más que la nitidez.",
-    mapStyleMinimal: "Mínimo",
-    shadowsSection: "Sombreado",
-    shadowsEnabled: "Mostrar sombras",
-    shadowsEnabledOn: "Mostradas",
-    shadowsEnabledOff: "Ocultas",
-    shadowsEnabledHint: "Interruptor principal de las sombras proyectadas en el suelo. Si están ocultas, no se calcula ninguna sombra. Si están mostradas, la fuente se elige sola: un proveedor LiDAR si cubre tu zona (edificios y vegetación), o las huellas planas de los edificios OpenFreeMap en caso contrario (solo edificios).",
-    lidarPrecision: "Precisión LiDAR",
-    lidarPrecisionLow: "Baja",
-    lidarPrecisionMedium: "Media",
-    lidarPrecisionHigh: "Alta",
-    lidarPrecisionHint: "Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de los edificios OpenFreeMap y esta opción no tiene efecto. A mayor precisión, más celdas se piden a la fuente: la vista LiDAR muestra más puntos y exige más a la GPU. La densidad real depende de lo que el proveedor publique para tu zona.",
-    shadowOpacity: "Opacidad de las sombras",
-    shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
-    lidarViewSection: "Vista LiDAR",
-    lidarViewHint: "Haz clic en el botón LiDAR arriba a la derecha de la tarjeta para cambiar a una vista en nube de puntos de tu entorno: cada celda LiDAR cargada (suelo, vegetación y edificios) se pinta sobre el mapa de fondo. El botón queda deshabilitado cuando ningún proveedor cubre la casa. La vista reutiliza los datos ya recuperados con la precisión actual, no se hacen llamadas adicionales.",
-    lidarViewPointSize: "Tamaño de puntos (px)",
-    lidarViewPointColor: "Color de puntos",
-    lidarViewPointOpacity: "Opacidad de puntos",
-    lidarViewWireframe: "Malla de alambre",
-    lidarViewWireframeOn: "Activado",
-    lidarViewWireframeOff: "Desactivado",
-    lidarViewWireframeHint: "Conecta cada celda LiDAR finita con sus vecinas a la derecha y abajo mediante segmentos, dando una malla sobre la nube de puntos. Pon el tamaño de los puntos a 0 si solo quieres las líneas. Los rasters densos en precisión alta siguen pintándose en una sola llamada GPU, pero el número de líneas crece con el número de celdas, los dispositivos antiguos pueden ralentizarse en radios grandes.",
-    lidarViewWireframeColor: "Color de la malla",
-    lidarViewWireframeOpacity: "Opacidad de la malla",
-    localLidarSection: "Avanzado — LiDAR local (BYO)",
-    localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del área definida, esta fuente reemplaza cualquier proveedor nacional.",
-    localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? El repositorio de Helios incluye herramientas Python en `tools/lidar/`, consulta el README de esa carpeta para el pipeline completo (instalación de GDAL de sistema, configuración de `uv`, comandos de inspección / conversión / prueba sintética).",
-    localLidarEnabled: "Usar datos locales",
-    localLidarUrl: "URL del GeoTIFF",
-    localLidarMinLat: "Latitud mín.",
-    localLidarMaxLat: "Latitud máx.",
-    localLidarMinLon: "Longitud mín.",
-    localLidarMaxLon: "Longitud máx."
-  }
-};
-const it = {
-  cardName: "HELIOS",
-  cardDescription: "☀️ Sole, nuvole, produzione FV, batteria e ombre LiDAR sulla tua casa, in 3D e tempo reale",
-  detail: {
-    exitHint: "Tocca un punto qualsiasi per uscire",
-    todayLabel: "Oggi",
-    todayForecast: "previsto",
-    todayPeak: "picco",
-    todayNotStartedYet: "produzione in pausa",
-    tomorrowLabel: "Domani",
-    tomorrowPeak: "picco previsto verso le",
-    batteryLabel: "Batteria",
-    batteryCharged: "caricato",
-    batteryDischarged: "scaricato"
-  },
-  editor: {
-    locationSection: "Posizione",
-    homeLatitude: "Latitudine di casa",
-    homeLongitude: "Longitudine di casa",
-    locationHint: "Sovrascrive l'indirizzo di casa usato come centro della scheda. Lascia entrambi i campi vuoti per usare l'indirizzo configurato in Home Assistant. La sovrascrittura è applicata solo quando ENTRAMBI i campi contengono coordinate valide.",
-    mapSection: "Mappa",
-    mapStyle: "Stile della mappa",
-    mapStyleHint: "Due mappe di base: Strade (sobria, urbana, con etichette complete) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.",
-    mapStyleStreet: "Strade",
-    cardTheme: "Tema della scheda",
-    cardThemeHint: "Cambia gli elementi della scheda (pastiglie, grafici, pulsanti, tooltip, sovrapposizione dello scrub) e la mappa 3D di sfondo tra un tema chiaro (predefinito, su sfondo bianco) e un tema scuro (su sfondo quasi nero) in modo che la scheda si integri pulitamente nei dashboard di Home Assistant chiari o scuri.",
-    cardThemeLight: "Chiaro",
-    cardThemeDark: "Scuro",
-    showLabels: "Mostra etichette",
-    showLabelsHint: "Mostra o nasconde i nomi delle vie, i numeri civici, i punti di interesse e i nomi dei quartieri sulla mappa di base.",
-    labelsOn: "Visibili",
-    labelsOff: "Nascoste",
-    autoRotate: "Rotazione automatica della camera",
-    autoRotateHint: "Dopo qualche secondo di inattività, la camera ruota lentamente attorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Un gesto con un dito la mette in pausa all'istante e riprende non appena rilasci.",
-    autoRotateOn: "Attiva",
-    autoRotateOff: "Disattiva",
-    dateFormat: "Formato data (predefinito: mm-dd)",
-    dateFormatHelp: "Token: yyyy, yy, mm, dd. Esempi:",
-    timeFormat: "Formato ora",
-    timeFormat12: "12 h",
-    timeFormat24: "24 h",
-    uiSection: "UI",
-    uiColorsHint: "Un colore per grandezza, riutilizzato ovunque appaia. Sole: l'arco, il disco solare e l'area superiore della cronologia. Nuvole: il disco al suolo e l'area inferiore della cronologia.",
-    sunColor: "Colore del sole",
-    cloudColor: "Colore delle nuvole",
-    pvSection: "Produzione solare",
-    pvHint: "Opzionale. Se impostato, una pastiglia appare vicino alla casa con la produzione istantanea (calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
-    pvEntity: "Entità di produzione",
-    pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
-    pvPeakPower: "Potenza di picco (kWp)",
-    pvPeakPowerHelp: "Potenza di picco installata del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata sul grafico PV e la saturazione del flusso PV → casa. Lascia vuoto per nascondere la previsione; la produzione osservata e il picco del giorno restano visibili.",
-    pvArraysSection: "Orientamento dei pannelli",
-    pvArraysHelp: "Una voce per ogni campo di pannelli con la stessa orientazione. Lascia una sola voce con inclinazione 0 per un'installazione piana. Aggiungi altre voci quando i pannelli sono distribuiti su più orientazioni (per esempio una fila a est e una a ovest). La previsione viene calcolata per ciascuna voce e pesata in base alla sua quota dei kWp totali.",
-    pvArrayTitle: "Fila {n}",
-    pvArrayName: "Nome",
-    pvArrayNameHelp: "Opzionale. Un'etichetta per questa fila mostrata nell'intestazione dell'editor (per esempio «Tetto sud», «Garage est»). Lascia vuoto per tornare al titolo numerato automaticamente.",
-    pvArrayTilt: "Inclinazione (°)",
-    pvArrayAzimuth: "Azimut (°)",
-    pvArrayShare: "Quota (%)",
-    pvArrayAdd: "+ Aggiungi fila",
-    pvArrayRemove: "Rimuovi",
-    pvArrayNormHint: "Le quote non sommano a 100 %, la previsione le normalizza automaticamente.",
-    pvArrayTiltHelp: "Inclinazione di questa fila rispetto all'orizzontale, da 0 a 90: 0 per un'installazione piana, 30 a 45 per un tetto inclinato classico, 90 per un'installazione verticale (per esempio balcone). Combinata con l'azimut, guida la trasposizione Liu-Jordan che proietta l'irradianza prevista sul piano del pannello.",
-    pvArrayAzimuthHelp: "Orientamento bussola verso cui è rivolta questa fila, in senso orario da nord, da 0 a 360: 0 = nord, 90 = est, 180 = sud, 270 = ovest.",
-    pvArrayShareHelp: "Peso relativo di questa fila nel totale dei kWp. Normalizzato automaticamente al calcolo: 50/50, 60/60 e 1/1 danno lo stesso risultato. Lascia vuoto quando c'è una sola fila (prende il 100 % per default).",
-    pvColor: "Colore di produzione",
-    batterySection: "Batteria domestica",
-    batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali. La pastiglia corrispondente appare appena l'entità è impostata.",
-    batterySocEntity: "Entità stato di carica",
-    batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (%, tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
-    batteryPowerEntity: "Entità di potenza",
-    batteryPowerEntityHelp: "Scegli un sensore di potenza della batteria (W o kW). La convenzione del segno segue l'entità stessa (positivo = in carica) e viene mostrato testualmente sulla pastiglia (es. «+3.00 kW» in carica, «−1.20 kW» in scarica).",
-    batteryPowerInvert: "Segno della potenza della batteria",
-    batteryPowerInvertStandard: "Standard",
-    batteryPowerInvertInverted: "Invertito",
-    batteryPowerInvertHelp: "Per impostazione predefinita (Standard) la tua entità batteria riporta la carica come positivo e la scarica come negativo. Scegli Invertito se la tua entità fa l'opposto (alcuni setup GivEnergy / GivTCP), Helios invertirà il valore una volta in lettura così che la pastiglia, la freccia del flusso e i totali giornalieri di carica / scarica mantengano il loro significato.",
-    batteryColor: "Colore batteria",
-    weatherSection: "Meteo",
-    weatherHint: "Opzionale. Collega entità meteo locali perché Helios usi misure prese a casa tua invece del modello Open-Meteo interpolato sulla tua cella di griglia. Ogni entità è indipendentemente opzionale e viene usata solo quando riporta un valore fresco; i campioni mancanti o stantii ricadono sul modello in modo trasparente.",
-    solarRadiationEntity: "Entità irradianza solare",
-    solarRadiationEntityHelp: "Scegli un sensore che riporti l'irradianza solare globale in W/m² (tipicamente una stazione meteo Ecowitt / Davis / personale). Quando è impostato, il suo stato attuale e la sua storia del recorder sostituiscono Open-Meteo per i valori live e passati di irradianza ovunque appaiano (numero sulla pastiglia sole, asse Y del grafico FV, colorazione dell'arco solare). Le ore di previsione continuano a usare Open-Meteo, un sensore conosce solo il presente.",
-    buildingsSection: "Edificio",
-    buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».",
-    displayRadius: "Raggio di visualizzazione",
-    displayRadiusHint: "Definisce l'area visibile attorno alla casa. Tutto ciò che è oltre questo raggio viene nascosto: mappa di base, edifici vicini, ombre. Determina anche l'estensione del fetch LiDAR e il taglio delle ombre proiettate.",
-    timelineSection: "Timeline",
-    timelineEnabled: "Mostra la timeline",
-    timelineEnabledOn: "Mostra",
-    timelineEnabledOff: "Nascondi",
-    timelineEnabledHint: "Nasconde l'intera barra temporale in basso (grafico, etichette dei giorni, cursori). Utile quando la card è inserita in una dashboard più ampia dove un altro widget mostra già l'andamento giornaliero.",
-    timelineWidth: "Larghezza della timeline",
-    timelineWidthHint: "Riduce la timeline in orizzontale mantenendola centrata sulla card. Al 100 % aderisce ai bordi; sotto, la barra si ritira proporzionalmente da entrambi i lati.",
-    timelineConsumption: "Mostra consumo / previsione giornaliera",
-    timelineConsumptionOn: "Mostra",
-    timelineConsumptionOff: "Nascondi",
-    timelineConsumptionHint: "Attiva il chip kWh accanto a ogni data sulla timeline (osservato per i giorni passati, previsione per oggi e successivi). Disattivalo se ti interessa solo la scena live e vuoi un grafico più pulito.",
-    buildingClusterRadius: "Raggio del gruppo casa",
-    buildingOpacity: "Opacità degli edifici vicini",
-    buildingColor: "Colore degli edifici",
-    pixelRatio: "Pixel ratio",
-    pixelRatioAuto: "Auto",
-    pixelRatio1x: "1x",
-    pixelRatioHint: "Auto (predefinito) usa la densità di pixel nativa dello schermo (limitata a 2 su desktop, 1.25 su mobile) per un rendering nitido. 1x forza il valore a 1.0, meno nitido ma con il carico per frame minimo, ideale su dispositivi modesti o sessioni lunghe in cui autonomia / calore contano più della nitidezza.",
-    mapStyleMinimal: "Minimale",
-    shadowsSection: "Ombreggiatura",
-    shadowsEnabled: "Mostrare le ombre",
-    shadowsEnabledOn: "Visibili",
-    shadowsEnabledOff: "Nascoste",
-    shadowsEnabledHint: "Interruttore principale delle ombre proiettate a terra. Se nascoste, non viene calcolata alcuna ombra. Se visibili, la sorgente viene scelta da sola: un provider LiDAR se copre la tua zona (edifici e vegetazione), altrimenti le impronte piatte degli edifici OpenFreeMap (solo edifici).",
-    lidarPrecision: "Precisione LiDAR",
-    lidarPrecisionLow: "Bassa",
-    lidarPrecisionMedium: "Media",
-    lidarPrecisionHigh: "Alta",
-    lidarPrecisionHint: "Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte degli edifici OpenFreeMap e questa opzione non ha alcun effetto. Più la precisione è alta, più celle vengono richieste alla sorgente: la vista LiDAR mostra più punti e pesa di più sulla GPU. La densità effettiva dipende da ciò che il provider espone per la tua zona.",
-    shadowOpacity: "Opacità delle ombre",
-    shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
-    lidarViewSection: "Vista LiDAR",
-    lidarViewHint: "Clicca sul pulsante LiDAR in alto a destra della scheda per passare a una vista a nuvola di punti dei tuoi dintorni: ogni cella LiDAR caricata (suolo, vegetazione ed edifici) viene dipinta sopra la mappa di base. Il pulsante resta disabilitato quando nessun provider copre la casa. La vista riutilizza i dati già recuperati alla precisione attuale, nessuna chiamata aggiuntiva viene fatta.",
-    lidarViewPointSize: "Dimensione punti (px)",
-    lidarViewPointColor: "Colore punti",
-    lidarViewPointOpacity: "Opacità punti",
-    lidarViewWireframe: "Reticolo",
-    lidarViewWireframeOn: "Attivo",
-    lidarViewWireframeOff: "Disattivo",
-    lidarViewWireframeHint: "Collega ogni cella LiDAR finita ai vicini a destra e in basso con segmenti, generando un reticolo sopra la nuvola di punti. Imposta la dimensione dei punti a 0 se vuoi solo le linee. I raster pesanti in alta precisione restano in una sola chiamata GPU, ma il numero di linee cresce con quello delle celle, i dispositivi più vecchi possono rallentare sui raggi grandi.",
-    lidarViewWireframeColor: "Colore del reticolo",
-    lidarViewWireframeOpacity: "Opacità del reticolo",
-    localLidarSection: "Avanzato — LiDAR locale (BYO)",
-    localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. All'interno dell'area definita, questa sorgente sostituisce qualsiasi provider nazionale.",
-    localLidarToolsHint: "Devi preparare un raster da zero? Il repository Helios include strumenti Python in `tools/lidar/`, vedi il README di quella cartella per la pipeline completa (installazione di GDAL di sistema, configurazione di `uv`, comandi di ispezione / conversione / test sintetico).",
-    localLidarEnabled: "Usa dati locali",
-    localLidarUrl: "URL del GeoTIFF",
-    localLidarMinLat: "Latitudine min",
-    localLidarMaxLat: "Latitudine max",
-    localLidarMinLon: "Longitudine min",
-    localLidarMaxLon: "Longitudine max"
-  }
-};
-const nl = {
-  cardName: "HELIOS",
-  cardDescription: "☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime",
-  detail: {
-    exitHint: "Tik ergens om te sluiten",
-    todayLabel: "Vandaag",
-    todayForecast: "verwacht",
-    todayPeak: "piek",
-    todayNotStartedYet: "opwekking gepauzeerd",
-    tomorrowLabel: "Morgen",
-    tomorrowPeak: "piek verwacht rond",
-    batteryLabel: "Batterij",
-    batteryCharged: "opgeladen",
-    batteryDischarged: "ontladen"
-  },
-  editor: {
-    locationSection: "Locatie",
-    homeLatitude: "Breedtegraad woning",
-    homeLongitude: "Lengtegraad woning",
-    locationHint: "Overschrijft het thuisadres dat als middelpunt van de kaart wordt gebruikt. Laat beide velden leeg om het in Home Assistant geconfigureerde adres te gebruiken. De override geldt alleen wanneer BEIDE velden geldige coördinaten bevatten.",
-    mapSection: "Kaart",
-    mapStyle: "Kaartstijl",
-    mapStyleHint: "Twee basiskaarten: Straten (sober, stedelijk, met volledige labels) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.",
-    mapStyleStreet: "Straten",
-    cardTheme: "Kaartthema",
-    cardThemeHint: "Schakelt de kaartelementen (chips, grafieken, knoppen, tooltips, scrub-overlay) en de 3D-basemap tussen een licht thema (standaard, op een witte achtergrond) en een donker thema (op een bijna zwarte achtergrond), zodat de kaart netjes past in lichte of donkere Home Assistant-dashboards.",
-    cardThemeLight: "Licht",
-    cardThemeDark: "Donker",
-    showLabels: "Labels weergeven",
-    showLabelsHint: "Toont of verbergt straatnamen, huisnummers, points of interest en buurtnamen op de basiskaart.",
-    labelsOn: "Zichtbaar",
-    labelsOff: "Verborgen",
-    autoRotate: "Automatische camerarotatie",
-    autoRotateHint: "Na een paar seconden inactiviteit draait de camera langzaam rond het huis (ongeveer 1,5°/s, tegen de schijnbare beweging van de zon in). Een veeg met één vinger pauzeert de rotatie direct; ze hervat zodra je loslaat.",
-    autoRotateOn: "Aan",
-    autoRotateOff: "Uit",
-    dateFormat: "Datumformaat (standaard: mm-dd)",
-    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Voorbeelden:",
-    timeFormat: "Tijdformaat",
-    timeFormat12: "12 u",
-    timeFormat24: "24 u",
-    uiSection: "UI",
-    uiColorsHint: "Eén kleur per grootheid, overal hergebruikt. Zon: de boog, de zonneschijf en het bovenste deel van de tijdlijn. Wolken: de schijf op de grond en het onderste deel van de tijdlijn.",
-    sunColor: "Zonkleur",
-    cloudColor: "Wolkenkleur",
-    pvSection: "Zonneproductie",
-    pvHint: "Optioneel. Als ingesteld verschijnt bij het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
-    pvEntity: "Productie-entiteit",
-    pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
-    pvPeakPower: "Piekvermogen (kWp)",
-    pvPeakPowerHelp: "Geïnstalleerd piekvermogen van je panelen in kilowattpiek. Stuurt de gestippelde voorspellingslijn op de PV-grafiek en de stroomverzadiging van de PV → huis-leider. Laat leeg om de voorspelling te verbergen; gemeten productie en de dagelijkse piek blijven zichtbaar.",
-    pvArraysSection: "Paneeloriëntatie",
-    pvArraysHelp: "Eén item per veld panelen met dezelfde oriëntatie. Laat één item staan met hellingshoek 0 voor een platte opstelling. Voeg extra items toe wanneer je panelen over meerdere richtingen verdeeld zijn (bijvoorbeeld een rij oost, een rij west). De prognose wordt per item berekend en gewogen op basis van het percentage van het totale kWp.",
-    pvArrayTitle: "Rij {n}",
-    pvArrayName: "Naam",
-    pvArrayNameHelp: 'Optioneel. Een label voor deze rij dat in de editor-koptekst wordt getoond (bijvoorbeeld "Zuiddak", "Oostgarage"). Laat leeg om terug te vallen op de automatisch genummerde titel.',
-    pvArrayTilt: "Helling (°)",
-    pvArrayAzimuth: "Azimut (°)",
-    pvArrayShare: "Aandeel (%)",
-    pvArrayAdd: "+ Rij toevoegen",
-    pvArrayRemove: "Verwijderen",
-    pvArrayNormHint: "De percentages komen niet uit op 100%, de prognose herschaalt ze automatisch.",
-    pvArrayTiltHelp: "Helling van deze rij ten opzichte van het horizontale vlak, 0 tot 90: 0 voor een platte opstelling, 30 tot 45 voor een klassiek schuin dak, 90 voor een volledig verticale opstelling (bijvoorbeeld een balkon). Samen met de azimut stuurt deze instelling de Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert.",
-    pvArrayAzimuthHelp: "Kompasrichting waarnaar deze rij wijst, met de klok mee vanaf het noorden, 0 tot 360: 0 = noord, 90 = oost, 180 = zuid, 270 = west.",
-    pvArrayShareHelp: "Relatief gewicht van deze rij in het totale kWp. Wordt op berekentijd automatisch genormaliseerd: 50/50, 60/60 en 1/1 leveren hetzelfde resultaat. Laat leeg wanneer er maar één rij is (krijgt standaard 100%).",
-    pvColor: "Productiekleur",
-    batterySection: "Thuisbatterij",
-    batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel. De bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
-    batterySocEntity: "Laadtoestand-entiteit",
-    batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (%, meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
-    batteryPowerEntity: "Vermogen-entiteit",
-    batteryPowerEntityHelp: 'Kies een batterijvermogen-sensor (W of kW). De tekenconventie volgt de entiteit zelf (positief = opladen) en wordt letterlijk op de chip weergegeven (bv. „+3.00 kW" bij laden, „−1.20 kW" bij ontladen).',
-    batteryPowerInvert: "Teken van het batterijvermogen",
-    batteryPowerInvertStandard: "Standaard",
-    batteryPowerInvertInverted: "Omgekeerd",
-    batteryPowerInvertHelp: "Standaard rapporteert je batterij-entiteit het laden als positief en het ontladen als negatief. Kies Omgekeerd als jouw entiteit het andersom doet (sommige GivEnergy- / GivTCP-installaties). Helios draait de waarde dan eenmalig om bij het inlezen, zodat de chip, de stroompijl en de dagelijkse laad- / ontlaadtotalen hun betekenis behouden.",
-    batteryColor: "Batterijkleur",
-    weatherSection: "Weer",
-    weatherHint: "Optioneel. Koppel lokale weerentiteiten zodat Helios metingen bij jou thuis gebruikt in plaats van het Open-Meteo-model dat geïnterpoleerd wordt naar je rastercel. Elke entiteit is onafhankelijk optioneel en wordt alleen gebruikt wanneer ze een verse waarde levert; ontbrekende of verouderde monsters vallen transparant terug op het model.",
-    solarRadiationEntity: "Entiteit zonnestraling",
-    solarRadiationEntityHelp: "Kies een sensor die de globale kortgolvige instraling rapporteert in W/m² (typisch een Ecowitt / Davis / persoonlijk weerstation). Wanneer ingesteld, vervangen de huidige status en de recorder-geschiedenis Open-Meteo voor de live + verleden instralingswaarden overal waar ze verschijnen (cijfer op de zonpastille, Y-as van de PV-grafiek, kleuring van de zonneboog). Voorspellingsuren blijven Open-Meteo gebruiken, een sensor kent alleen het heden.",
-    buildingsSection: "Gebouw",
-    buildingsHint: 'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
-    displayRadius: "Weergavestraal",
-    displayRadiusHint: "Bepaalt het zichtbare gebied rond het huis. Alles buiten deze straal wordt verborgen: basiskaart, naburige gebouwen, schaduwen. Stuurt ook de omvang van de LiDAR-fetch en de clip van de geprojecteerde schaduwen aan.",
-    timelineSection: "Timeline",
-    timelineEnabled: "Timeline tonen",
-    timelineEnabledOn: "Tonen",
-    timelineEnabledOff: "Verbergen",
-    timelineEnabledHint: "Verbergt de hele tijdsbalk onderaan (grafiek, daglabels, cursors). Handig als de card in een breder dashboardpaneel zit waar een ander widget de dagtrend al toont.",
-    timelineWidth: "Breedte van de timeline",
-    timelineWidthHint: "Maakt de timeline horizontaal smaller terwijl ze gecentreerd blijft op de card. Bij 100 % loopt ze tot de randen; daaronder trekt de balk evenredig aan beide kanten in.",
-    timelineConsumption: "Dagelijks verbruik / voorspelling tonen",
-    timelineConsumptionOn: "Tonen",
-    timelineConsumptionOff: "Verbergen",
-    timelineConsumptionHint: "Schakelt de kWh-chip naast elke datum op de timeline (gemeten voor afgelopen dagen, voorspelling voor vandaag en later). Uit als je alleen om de live scène geeft en een rustigere grafiek wilt.",
-    buildingClusterRadius: "Cluster-straal huis",
-    buildingOpacity: "Dekking omliggende gebouwen",
-    buildingColor: "Gebouwkleur",
-    pixelRatio: "Pixel ratio",
-    pixelRatioAuto: "Auto",
-    pixelRatio1x: "1x",
-    pixelRatioHint: "Auto (standaard) gebruikt de native devicePixelRatio van je scherm (begrensd op 2 op desktop, 1.25 op mobiel) voor een scherpe rendering. 1x forceert 1.0, minder scherp maar met de minimale fragment-belasting per frame, ideaal op bescheiden apparaten of lange sessies waar batterijduur / warmte zwaarder weegt dan scherpte.",
-    mapStyleMinimal: "Minimaal",
-    shadowsSection: "Schaduw",
-    shadowsEnabled: "Schaduwen tonen",
-    shadowsEnabledOn: "Zichtbaar",
-    shadowsEnabledOff: "Verborgen",
-    shadowsEnabledHint: "Hoofdschakelaar voor de op de grond geprojecteerde schaduwen. Verborgen betekent geen enkele schaduwberekening. Zichtbaar kiest de bron zelf: een LiDAR-provider als die je gebied dekt (gebouwen en vegetatie), anders de platte OpenFreeMap-gebouwomtreklijnen (alleen gebouwen).",
-    lidarPrecision: "LiDAR-precisie",
-    lidarPrecisionLow: "Laag",
-    lidarPrecisionMedium: "Middel",
-    lidarPrecisionHigh: "Hoog",
-    lidarPrecisionHint: "Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte OpenFreeMap-gebouwomtreklijnen en heeft deze optie geen effect. Hoe hoger de precisie, hoe meer cellen er bij de bron worden opgevraagd: de LiDAR-weergave toont meer punten en is zwaarder voor de GPU. De daadwerkelijke dichtheid hangt af van wat de provider voor jouw zone publiceert.",
-    shadowOpacity: "Schaduwdekking",
-    shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
-    lidarViewSection: "LiDAR-weergave",
-    lidarViewHint: "Klik rechtsboven in de kaart op de LiDAR-knop om over te schakelen naar een puntenwolk-weergave van je omgeving: elke geladen LiDAR-cel (grond, vegetatie en gebouwen) wordt over de basiskaart geschilderd. De knop blijft uitgeschakeld wanneer geen enkele provider het huis dekt. De weergave hergebruikt de data die al is opgehaald op de huidige precisie, er worden geen extra calls gedaan.",
-    lidarViewPointSize: "Puntgrootte (px)",
-    lidarViewPointColor: "Puntkleur",
-    lidarViewPointOpacity: "Puntdekking",
-    lidarViewWireframe: "Draadmodel",
-    lidarViewWireframeOn: "Aan",
-    lidarViewWireframeOff: "Uit",
-    lidarViewWireframeHint: "Verbindt elke geldige LiDAR-cel met haar rechter- en onderbuur via segmenten, wat een draadmodel over de puntwolk geeft. Zet de puntgrootte op 0 als je alleen de lijnen wilt. Zware rasters bij hoge precisie blijven in één GPU-call, maar het aantal lijnen groeit mee met het aantal cellen, oudere apparaten kunnen vertragen bij grote stralen.",
-    lidarViewWireframeColor: "Kleur van het draadmodel",
-    lidarViewWireframeOpacity: "Dekking van het draadmodel",
-    localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
-    localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen het gedefinieerde gebied vervangt deze bron elke nationale leverancier.",
-    localLidarToolsHint: "Een eigen raster nodig? De Helios-repository bevat Python-hulpmiddelen onder `tools/lidar/`, zie de README daar voor de volledige pipeline (installatie van de GDAL-systeembibliotheek, `uv`-setup, inspect / convert / synthetisch test-commando's).",
-    localLidarEnabled: "Lokale data gebruiken",
-    localLidarUrl: "GeoTIFF-URL",
-    localLidarMinLat: "Min. breedtegraad",
-    localLidarMaxLat: "Max. breedtegraad",
-    localLidarMinLon: "Min. lengtegraad",
-    localLidarMaxLon: "Max. lengtegraad"
-  }
-};
-const pt = {
-  cardName: "HELIOS",
-  cardDescription: "☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a tua casa, em 3D e tempo real",
-  detail: {
-    exitHint: "Toca em qualquer lugar para sair",
-    todayLabel: "Hoje",
-    todayForecast: "previsto",
-    todayPeak: "pico",
-    todayNotStartedYet: "produção em pausa",
-    tomorrowLabel: "Amanhã",
-    tomorrowPeak: "pico previsto por volta das",
-    batteryLabel: "Bateria",
-    batteryCharged: "carregado",
-    batteryDischarged: "descarregado"
-  },
-  editor: {
-    locationSection: "Localização",
-    homeLatitude: "Latitude de casa",
-    homeLongitude: "Longitude de casa",
-    locationHint: "Substitui o endereço de casa usado como centro do cartão. Deixe ambos os campos vazios para usar o endereço configurado no Home Assistant. A substituição só é aplicada quando AMBOS os campos contêm coordenadas válidas.",
-    mapSection: "Mapa",
-    mapStyle: "Estilo do mapa",
-    mapStyleHint: "Dois mapas base: Ruas (sóbrio, urbano, com etiquetas completas) ou Minimal (carrega Ruas e remove todas as etiquetas, ícones POI e sinalética viária supérflua para um rendering mais rápido). A variante escura do estilo escolhido é usada automaticamente quando o tema do cartão está em escuro.",
-    mapStyleStreet: "Ruas",
-    cardTheme: "Tema do cartão",
-    cardThemeHint: "Alterna os elementos do cartão (chips, gráficos, botões, tooltips, sobreposição do scrub) e o mapa 3D de fundo entre um tema claro (predefinição, sobre fundo branco) e um tema escuro (sobre fundo quase preto) para que o cartão se integre limpamente em painéis Home Assistant claros ou escuros.",
-    cardThemeLight: "Claro",
-    cardThemeDark: "Escuro",
-    showLabels: "Mostrar etiquetas",
-    showLabelsHint: "Mostra ou oculta os nomes das ruas, números de edifícios, pontos de interesse e nomes de bairros no mapa de fundo.",
-    labelsOn: "Visíveis",
-    labelsOff: "Ocultas",
-    autoRotate: "Rotação automática da câmara",
-    autoRotateHint: "Após alguns segundos de inatividade, a câmara orbita lentamente em torno da casa (cerca de 1,5°/s, em sentido oposto ao movimento aparente do sol). Um gesto com um dedo pausa-a instantaneamente; retoma assim que largas.",
-    autoRotateOn: "Ligada",
-    autoRotateOff: "Desligada",
-    dateFormat: "Formato de data (predefinição: mm-dd)",
-    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Exemplos:",
-    timeFormat: "Formato da hora",
-    timeFormat12: "12 h",
-    timeFormat24: "24 h",
-    uiSection: "UI",
-    uiColorsHint: "Uma cor por grandeza, reutilizada onde quer que apareça. Sol: o arco, o disco solar e a área superior da linha temporal. Nuvens: o disco no solo e a área inferior da linha temporal.",
-    sunColor: "Cor do sol",
-    cloudColor: "Cor das nuvens",
-    pvSection: "Produção solar",
-    pvHint: "Opcional. Quando definido, surge uma pastilha perto da casa com a produção instantânea (calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
-    pvEntity: "Entidade de produção",
-    pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
-    pvPeakPower: "Potência de pico (kWp)",
-    pvPeakPowerHelp: "Potência de pico instalada do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada no gráfico PV e a saturação do fluxo PV → casa. Deixa vazio para ocultar a previsão; a produção observada e o pico do dia continuam visíveis.",
-    pvArraysSection: "Orientação dos painéis",
-    pvArraysHelp: "Uma entrada por campo de painéis com a mesma orientação. Deixa uma única entrada com inclinação 0 para uma instalação plana. Acrescenta mais entradas quando os painéis estão repartidos por várias orientações (por exemplo uma fila a este e outra a oeste). A previsão é calculada por entrada e ponderada pela sua quota dos kWp totais.",
-    pvArrayTitle: "Fileira {n}",
-    pvArrayName: "Nome",
-    pvArrayNameHelp: "Opcional. Um rótulo para esta fileira mostrado no cabeçalho do editor (por exemplo «Telhado sul», «Garagem leste»). Deixa vazio para voltar ao título numerado automaticamente.",
-    pvArrayTilt: "Inclinação (°)",
-    pvArrayAzimuth: "Azimute (°)",
-    pvArrayShare: "Quota (%)",
-    pvArrayAdd: "+ Adicionar fileira",
-    pvArrayRemove: "Remover",
-    pvArrayNormHint: "As quotas não somam 100 %, a previsão normaliza-as automaticamente.",
-    pvArrayTiltHelp: "Inclinação desta fileira em relação à horizontal, de 0 a 90: 0 para uma instalação plana, 30 a 45 para um telhado inclinado clássico, 90 para uma instalação vertical (por exemplo varanda). Combinada com o azimute, conduz a transposição Liu-Jordan que projeta a irradiância prevista sobre o plano do painel.",
-    pvArrayAzimuthHelp: "Orientação na bússola para onde esta fileira aponta, no sentido horário a partir do norte, de 0 a 360: 0 = norte, 90 = este, 180 = sul, 270 = oeste.",
-    pvArrayShareHelp: "Peso relativo desta fileira no total dos kWp. Normalizado automaticamente no cálculo: 50/50, 60/60 e 1/1 produzem o mesmo resultado. Deixa vazio quando só existe uma fileira (recebe 100 % por predefinição).",
-    pvColor: "Cor de produção",
-    batterySection: "Bateria doméstica",
-    batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais. O chip correspondente aparece assim que a entidade é definida.",
-    batterySocEntity: "Entidade do estado de carga",
-    batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (%, normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
-    batteryPowerEntity: "Entidade de potência",
-    batteryPowerEntityHelp: "Escolhe um sensor de potência da bateria (W ou kW). A convenção de sinal segue a própria entidade (positivo = a carregar) e é mostrado literalmente no chip (ex. «+3.00 kW» a carregar, «−1.20 kW» a descarregar).",
-    batteryPowerInvert: "Sinal da potência da bateria",
-    batteryPowerInvertStandard: "Padrão",
-    batteryPowerInvertInverted: "Invertido",
-    batteryPowerInvertHelp: "Por predefinição (Padrão) a tua entidade de bateria reporta a carga como positivo e a descarga como negativo. Escolhe Invertido se a tua entidade faz o oposto (alguns setups GivEnergy / GivTCP), o Helios inverte então o valor uma vez na leitura para que a pastilha, a seta do fluxo e os totais diários de carga / descarga mantenham o sentido.",
-    batteryColor: "Cor da bateria",
-    weatherSection: "Meteorologia",
-    weatherHint: "Opcional. Liga entidades meteo locais para que o Helios use medições feitas em tua casa em vez do modelo Open-Meteo interpolado à tua célula da grelha. Cada entidade é opcional de forma independente e só é usada quando reporta um valor fresco; amostras em falta ou desactualizadas voltam ao modelo de forma transparente.",
-    solarRadiationEntity: "Entidade de radiação solar",
-    solarRadiationEntityHelp: "Escolhe um sensor que reporte irradiância solar global em W/m² (tipicamente uma estação meteo Ecowitt / Davis / pessoal). Quando definido, o seu estado atual e o seu histórico do recorder substituem o Open-Meteo nos valores live + passados de irradiância em todos os sítios onde aparecem (número na pastilha sol, eixo Y do gráfico FV, coloração do arco solar). As horas de previsão continuam a usar Open-Meteo, um sensor só conhece o presente.",
-    buildingsSection: "Edifício",
-    buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».",
-    displayRadius: "Raio de visualização",
-    displayRadiusHint: "Define a área visível em torno da casa. Tudo o que estiver para além deste raio fica oculto: mapa base, edifícios vizinhos, sombras. Também controla o âmbito do fetch LiDAR e o corte das sombras projetadas.",
-    timelineSection: "Timeline",
-    timelineEnabled: "Mostrar a timeline",
-    timelineEnabledOn: "Mostrar",
-    timelineEnabledOff: "Ocultar",
-    timelineEnabledHint: "Oculta toda a barra temporal em baixo (gráfico, etiquetas dos dias, cursores). Útil quando o card está integrado num dashboard mais largo onde outro widget já mostra a tendência diária.",
-    timelineWidth: "Largura da timeline",
-    timelineWidthHint: "Reduz a timeline na horizontal mantendo-a centrada na card. A 100 % cola às margens; abaixo disso, a barra recolhe-se proporcionalmente dos dois lados.",
-    timelineConsumption: "Mostrar consumo / previsão diária",
-    timelineConsumptionOn: "Mostrar",
-    timelineConsumptionOff: "Ocultar",
-    timelineConsumptionHint: "Liga o chip kWh ao lado de cada data na timeline (observado para dias passados, previsão para hoje e seguintes). Desliga se só te importa a cena ao vivo e queres um gráfico mais limpo.",
-    buildingClusterRadius: "Raio do grupo da casa",
-    buildingOpacity: "Opacidade dos vizinhos",
-    buildingColor: "Cor dos edifícios",
-    pixelRatio: "Pixel ratio",
-    pixelRatioAuto: "Auto",
-    pixelRatio1x: "1x",
-    pixelRatioHint: "Auto (predefinição) usa a densidade de píxeis nativa do ecrã (limitada a 2 em desktop, 1.25 em mobile) para uma renderização nítida. 1x força o valor a 1.0, menos nítido mas com a carga por frame mínima, ideal em dispositivos modestos ou sessões longas em que a autonomia / o calor pesam mais que a nitidez.",
-    mapStyleMinimal: "Mínimo",
-    shadowsSection: "Sombreamento",
-    shadowsEnabled: "Mostrar sombras",
-    shadowsEnabledOn: "Visíveis",
-    shadowsEnabledOff: "Ocultas",
-    shadowsEnabledHint: "Interruptor principal das sombras projetadas no chão. Quando ocultas, nenhuma sombra é calculada. Quando visíveis, a fonte é escolhida automaticamente: um fornecedor LiDAR se cobrir a tua zona (edifícios e vegetação), caso contrário as impressões planas dos edifícios OpenFreeMap (apenas edifícios).",
-    lidarPrecision: "Precisão LiDAR",
-    lidarPrecisionLow: "Baixa",
-    lidarPrecisionMedium: "Média",
-    lidarPrecisionHigh: "Alta",
-    lidarPrecisionHint: "Se a tua zona é coberta por um fornecedor LiDAR integrado no Helios, beneficias de sombras mais realistas (edifícios E vegetação). Podem aparecer desfasamentos entre os edifícios desenhados e as suas sombras: os dados LiDAR são capturados num instante preciso e nem sempre refletem o estado atual do terreno. Fora da cobertura LiDAR, as sombras voltam às impressões planas dos edifícios OpenFreeMap e esta opção não tem qualquer efeito. Quanto maior a precisão, mais células são pedidas à fonte: a vista LiDAR mostra mais pontos e pesa mais na GPU. A densidade real depende do que o fornecedor publica para a tua zona.",
-    shadowOpacity: "Opacidade das sombras",
-    shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
-    lidarViewSection: "Vista LiDAR",
-    lidarViewHint: "Clica no botão LiDAR no canto superior direito da carta para alternar para uma vista em nuvem de pontos do teu ambiente: cada célula LiDAR carregada (solo, vegetação e edifícios) é pintada sobre o mapa de fundo. O botão fica desactivado quando nenhum provedor cobre a casa. A vista reutiliza os dados já obtidos com a precisão actual, nenhuma chamada adicional é feita.",
-    lidarViewPointSize: "Tamanho dos pontos (px)",
-    lidarViewPointColor: "Cor dos pontos",
-    lidarViewPointOpacity: "Opacidade dos pontos",
-    lidarViewWireframe: "Estrutura em arame",
-    lidarViewWireframeOn: "Ativo",
-    lidarViewWireframeOff: "Inativo",
-    lidarViewWireframeHint: "Liga cada célula LiDAR finita aos vizinhos à direita e abaixo com segmentos, criando uma malha sobre a nuvem de pontos. Coloca o tamanho dos pontos a 0 se só queres as linhas. Rasters densos em alta precisão continuam a desenhar-se numa única chamada GPU, mas o número de linhas cresce com o número de células, dispositivos antigos podem abrandar em raios grandes.",
-    lidarViewWireframeColor: "Cor da estrutura",
-    lidarViewWireframeOpacity: "Opacidade da estrutura",
-    localLidarSection: "Avançado — LiDAR local (BYO)",
-    localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da área definida, esta fonte substitui qualquer fornecedor nacional.",
-    localLidarToolsHint: "Precisas de preparar um raster do zero? O repositório Helios inclui ferramentas Python em `tools/lidar/`, consulta o README dessa pasta para o pipeline completo (instalação do GDAL de sistema, configuração do `uv`, comandos de inspeção / conversão / teste sintético).",
-    localLidarEnabled: "Usar dados locais",
-    localLidarUrl: "URL do GeoTIFF",
-    localLidarMinLat: "Latitude mín.",
-    localLidarMaxLat: "Latitude máx.",
-    localLidarMinLon: "Longitude mín.",
-    localLidarMaxLon: "Longitude máx."
-  }
-};
-const no = {
-  cardName: "HELIOS",
-  cardDescription: "☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid",
-  detail: {
-    exitHint: "Trykk hvor som helst for å gå ut",
-    todayLabel: "I dag",
-    todayForecast: "estimert",
-    todayPeak: "topp",
-    todayNotStartedYet: "produksjon pauset",
-    tomorrowLabel: "I morgen",
-    tomorrowPeak: "topp ventet rundt",
-    batteryLabel: "Batteri",
-    batteryCharged: "ladet",
-    batteryDischarged: "utladet"
-  },
-  editor: {
-    locationSection: "Sted",
-    homeLatitude: "Hjemmets breddegrad",
-    homeLongitude: "Hjemmets lengdegrad",
-    locationHint: "Overstyrer hjemmeadressen som brukes som kortets sentrum. La begge feltene være tomme for å bruke hjemmet som er konfigurert i Home Assistant. Overstyringen brukes kun når BEGGE feltene har gyldige koordinater.",
-    mapSection: "Kart",
-    mapStyle: "Kartstil",
-    mapStyleHint: "To grunnkart: Gater (nøkternt, urbant, med fulle etiketter) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.",
-    mapStyleStreet: "Gater",
-    cardTheme: "Korttema",
-    cardThemeHint: "Bytter kortets utseende (chips, grafer, knapper, verktøytips, scrub-overlegg) og 3D-grunnkartet mellom et lyst tema (standard, på hvit bakgrunn) og et mørkt tema (på nesten svart bakgrunn) slik at kortet passer rent inn i lyse eller mørke Home Assistant-dashbord.",
-    cardThemeLight: "Lyst",
-    cardThemeDark: "Mørkt",
-    showLabels: "Vis etiketter",
-    showLabelsHint: "Slår av eller på gatenavn, husnumre, interessepunkter og stedsnavn på grunnkartet.",
-    labelsOn: "Vist",
-    labelsOff: "Skjult",
-    autoRotate: "Automatisk kamerarotasjon",
-    autoRotateHint: "Etter noen sekunder uten aktivitet roterer kameraet sakte rundt huset (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). En enfingers-bevegelse pauser den umiddelbart, og den fortsetter så snart du slipper.",
-    autoRotateOn: "På",
-    autoRotateOff: "Av",
-    dateFormat: "Datoformat (standard: mm-dd)",
-    dateFormatHelp: "Tokens: yyyy, yy, mm, dd. Eksempler:",
-    timeFormat: "Klokkeformat",
-    timeFormat12: "12 t",
-    timeFormat24: "24 t",
-    uiSection: "UI",
-    uiColorsHint: "Én farge per måleverdi, gjenbrukt overalt der den vises. Sol: buen, solskiven og det øvre området på tidslinjen. Skyer: skiven på bakken og det nedre området på tidslinjen.",
-    sunColor: "Solfarge",
-    cloudColor: "Skyfarge",
-    pvSection: "Solproduksjon",
-    pvHint: "Valgfri. Når satt vises en chip nær huset med øyeblikkelig produksjon (beregnet over siste minutt), og en dedikert graf legges til over tidslinjen. Aksepterer enten en effektsensor (W/kW) eller en kumulativ energisensor (Wh/kWh).",
-    pvEntity: "Produksjons-entitet",
-    pvEntityHelp: "Velg en sensor for sol-effekt eller -energi (W, kW, Wh, kWh).",
-    pvPeakPower: "Toppeffekt (kWp)",
-    pvPeakPowerHelp: "Installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen i PV-grafen og strømningsmetningen for PV → hus-leaderen. La stå tom for å skjule prognosen; observert produksjon og dagens topp tegnes likevel.",
-    pvArraysSection: "Panelorientering",
-    pvArraysHelp: "Én oppføring per felt paneler med samme orientering. La én oppføring stå med helning 0 for en flat installasjon. Legg til flere oppføringer når panelene er fordelt på flere retninger (for eksempel en rad mot øst og en mot vest). Prognosen beregnes per oppføring og vektes etter prosenten av total kWp.",
-    pvArrayTitle: "Rad {n}",
-    pvArrayName: "Navn",
-    pvArrayNameHelp: "Valgfritt. En etikett for denne raden som vises i editor-overskriften (for eksempel «Sørtak», «Østgarasje»). La feltet stå tomt for å falle tilbake til den automatisk nummererte tittelen.",
-    pvArrayTilt: "Helning (°)",
-    pvArrayAzimuth: "Azimut (°)",
-    pvArrayShare: "Andel (%)",
-    pvArrayAdd: "+ Legg til rad",
-    pvArrayRemove: "Fjern",
-    pvArrayNormHint: "Prosentene summerer ikke til 100 %, prognosen normaliserer dem automatisk.",
-    pvArrayTiltHelp: "Helningen til denne raden i forhold til vannrett, fra 0 til 90: 0 for flat installasjon, 30 til 45 for et typisk skråtak, 90 for en helt vertikal oppstilling (for eksempel balkong). Sammen med azimuten driver helningen Liu-Jordan-transposisjonen som projiserer forventet stråling på panelets plan.",
-    pvArrayAzimuthHelp: "Kompassretningen denne raden peker mot, med klokken fra nord, fra 0 til 360: 0 = nord, 90 = øst, 180 = sør, 270 = vest.",
-    pvArrayShareHelp: "Relativ vekt av denne raden i den totale kWp. Normaliseres automatisk ved beregning: 50/50, 60/60 og 1/1 gir samme resultat. La stå tomt når det bare finnes én rad (den får 100 % som standard).",
-    pvColor: "Produksjonsfarge",
-    batterySection: "Husbatteri",
-    batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie. Chipen på sin side vises så snart entiteten er satt.",
-    batterySocEntity: "Ladenivå-entitet",
-    batterySocEntityHelp: 'Velg en sensor for batteriets ladenivå (%, vanligvis med device_class "battery"). Vises som chip til venstre for PV-chipen med live prosent.',
-    batteryPowerEntity: "Effekt-entitet",
-    batteryPowerEntityHelp: "Velg en sensor for batterieffekt (W eller kW). Fortegnskonvensjonen følger entiteten selv (positiv tolkes som lading) og vises ordrett på chipen (f.eks. «+3,00 kW» ved lading, «−1,20 kW» ved utlading).",
-    batteryPowerInvert: "Fortegn på batterieffekt",
-    batteryPowerInvertStandard: "Standard",
-    batteryPowerInvertInverted: "Invertert",
-    batteryPowerInvertHelp: "Som standard rapporterer batteri-enheten lading som positivt og utlading som negativt. Velg Invertert hvis enheten din gjør motsatt (noen GivEnergy- / GivTCP-oppsett). Helios snur da verdien én gang ved innlesing, slik at chipen, strømpilen og daglige lade- / utladesummer beholder betydningen sin.",
-    batteryColor: "Batterifarge",
-    weatherSection: "Vær",
-    weatherHint: "Valgfritt. Koble til lokale værentiteter slik at Helios bruker målinger tatt hjemme hos deg i stedet for Open-Meteo-modellen som interpoleres til rutecellen din. Hver entitet er uavhengig valgfri og brukes bare når den rapporterer en fersk verdi; manglende eller utdaterte prøver faller transparent tilbake til modellen.",
-    solarRadiationEntity: "Solinnstrålings-entitet",
-    solarRadiationEntityHelp: "Velg en sensor som rapporterer global kortbølget innstråling i W/m² (typisk en Ecowitt / Davis / personlig værstasjon). Når satt, erstatter dens nåværende tilstand og recorder-historikk Open-Meteo for live og tidligere innstrålingsverdier overalt der de vises (tall på solpastillen, Y-aksen i PV-grafen, fargen på solbuen). Prognose-timene bruker fortsatt Open-Meteo, en sensor kjenner bare nået.",
-    buildingsSection: "Bygning",
-    buildingsHint: "For å holde kortet flytende i tette urbane områder rendres bare bygninger innenfor konfigurert radius rundt huset i 3D. Selve huset holdes alltid på full opasitet; nabobygninger rendres med konfigurert opasitet for å gi urban kontekst uten å konkurrere med dataovergangene. Klyngeradiusen grupperer tilkoblede uthus (verandaer, garasjer, skur) i «hus»-settet.",
-    displayRadius: "Visningsradius",
-    displayRadiusHint: "Definerer det synlige området rundt huset. Alt utenfor denne radiusen skjules: grunnkart, nabobygninger, skygger. Styrer også LiDAR-hentingens omfang og klipp av projiserte skygger.",
-    timelineSection: "Timeline",
-    timelineEnabled: "Vis timeline",
-    timelineEnabledOn: "Vis",
-    timelineEnabledOff: "Skjul",
-    timelineEnabledHint: "Skjuler hele tidslinjen nederst (graf, dagsetiketter, scrubmarkører). Nyttig når kortet sitter i et bredere dashboardpanel der en annen modul allerede viser dagstrenden.",
-    timelineWidth: "Bredde på timelinen",
-    timelineWidthHint: "Krymper timelinen horisontalt mens den holdes sentrert på kortet. Ved 100 % klistrer den seg til kantene; under det trekker stripen seg jevnt inn fra begge sider.",
-    timelineConsumption: "Vis daglig forbruk / prognose",
-    timelineConsumptionOn: "Vis",
-    timelineConsumptionOff: "Skjul",
-    timelineConsumptionHint: "Skrur av kWh-merket ved siden av hver dato på timelinen (målt for tidligere dager, prognose for i dag og framover). Av når du kun bryr deg om live-scenen og vil ha en renere graf.",
-    buildingClusterRadius: "Hus-klyngeradius",
-    buildingOpacity: "Opasitet for nabobygninger",
-    buildingColor: "Bygningsfarge",
-    pixelRatio: "Pikselforhold",
-    pixelRatioAuto: "Auto",
-    pixelRatio1x: "1x",
-    pixelRatioHint: "Auto (standard) bruker skjermens native devicePixelRatio (begrenset til 2 på skrivebord, 1,25 på mobil) for skarp rendering. 1x tvinger verdien til 1,0 for det billigste mulige per-frame fragmentarbeidet, nyttig på lavtytende enheter eller for lange økter der batteritid / varme betyr mer enn skarphet.",
-    mapStyleMinimal: "Minimal",
-    shadowsSection: "Skygger",
-    shadowsEnabled: "Vis skygger",
-    shadowsEnabledOn: "Vist",
-    shadowsEnabledOff: "Skjult",
-    shadowsEnabledHint: "Hovedbryter for projiserte bakkeskygger. Når skjult beregnes ingen skygger i det hele tatt. Når vist velges kilden automatisk: en LiDAR-leverandør når én dekker området ditt (bygninger + vegetasjon), OpenFreeMap-bygningsfotavtrykk ellers (bare bygninger).",
-    lidarPrecision: "LiDAR-presisjon",
-    lidarPrecisionLow: "Lav",
-    lidarPrecisionMedium: "Middels",
-    lidarPrecisionHigh: "Høy",
-    lidarPrecisionHint: "Hvis huset ligger innenfor en LiDAR-leverandør integrert med Helios (Kartverket NHM for Norge), får du mer realistiske skygger (bygninger OG vegetasjon). Noe forskyvning kan oppstå mellom de viste bygningene og skyggene deres: LiDAR-undersøkelsen er fanget på en gitt dato og gjenspeiler kanskje ikke nåværende tilstand. Utenfor LiDAR-dekning faller skyggene tilbake til de flate OpenFreeMap-bygningsfotavtrykkene, og denne innstillingen har ingen effekt. Høyere presisjon henter flere celler fra kilden: LiDAR-visningen tegner flere punkter og er tyngre for GPU-en. Den faktiske tettheten avhenger av hva leverandøren publiserer for området ditt.",
-    shadowOpacity: "Skyggeopasitet",
-    shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
-    lidarViewSection: "LiDAR-visning",
-    lidarViewHint: "Klikk på LiDAR-knappen øverst til høyre på kortet for å bytte til en punktskyvisning av omgivelsene dine: hver lastet LiDAR-celle (bakke, vegetasjon og bygninger) males over grunnkartet. Knappen forblir deaktivert når ingen leverandør dekker hjemmet. Visningen gjenbruker dataen som allerede er hentet med gjeldende presisjon, ingen ekstra kall gjøres.",
-    lidarViewPointSize: "Punktstørrelse (px)",
-    lidarViewPointColor: "Punktfarge",
-    lidarViewPointOpacity: "Punktopasitet",
-    lidarViewWireframe: "Trådmodell",
-    lidarViewWireframeOn: "På",
-    lidarViewWireframeOff: "Av",
-    lidarViewWireframeHint: "Knytter hver gyldige LiDAR-celle til naboene til høyre og under med segmenter, og lager dermed et nett oppå punktskyen. Sett punktstørrelsen til 0 om du kun vil ha linjene. Tunge rastere ved høy presisjon kjøres fortsatt i ett GPU-kall, men antall linjer vokser med antall celler, eldre enheter kan bremse på store radier.",
-    lidarViewWireframeColor: "Trådmodell-farge",
-    lidarViewWireframeOpacity: "Trådmodell-opasitet",
-    localLidarSection: "Avansert — Lokal LiDAR (BYO)",
-    localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.",
-    localLidarToolsHint: "Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).",
-    localLidarEnabled: "Bruk lokale data",
-    localLidarUrl: "GeoTIFF-URL",
-    localLidarMinLat: "Min breddegrad",
-    localLidarMaxLat: "Maks breddegrad",
-    localLidarMinLon: "Min lengdegrad",
-    localLidarMaxLon: "Maks lengdegrad"
-  }
-};
-const LOCALES = { en, fr, de, es, it, nl, pt, no };
-const FALLBACK = en;
-function pickTranslations(haLanguage) {
-  if (!haLanguage) {
-    return FALLBACK;
-  }
-  const lower = haLanguage.toLowerCase();
-  if (LOCALES[lower]) {
-    return LOCALES[lower];
-  }
-  const root = lower.split("-")[0];
-  if (LOCALES[root]) {
-    return LOCALES[root];
-  }
-  return FALLBACK;
+  return null;
 }
-const maplibreCss = `.maplibregl-map{font:12px/20px Helvetica Neue,Arial,Helvetica,sans-serif;overflow:hidden;position:relative;-webkit-tap-highlight-color:rgb(0 0 0/0)}.maplibregl-canvas{left:0;position:absolute;top:0}.maplibregl-map:fullscreen{height:100%;width:100%}.maplibregl-ctrl-group button.maplibregl-ctrl-compass{touch-action:none}.maplibregl-canvas-container.maplibregl-interactive,.maplibregl-ctrl-group button.maplibregl-ctrl-compass{cursor:grab;-webkit-user-select:none;-moz-user-select:none;user-select:none}.maplibregl-canvas-container.maplibregl-interactive.maplibregl-track-pointer{cursor:pointer}.maplibregl-canvas-container.maplibregl-interactive:active,.maplibregl-ctrl-group button.maplibregl-ctrl-compass:active{cursor:grabbing}.maplibregl-canvas-container.maplibregl-touch-zoom-rotate,.maplibregl-canvas-container.maplibregl-touch-zoom-rotate .maplibregl-canvas{touch-action:pan-x pan-y}.maplibregl-canvas-container.maplibregl-touch-drag-pan,.maplibregl-canvas-container.maplibregl-touch-drag-pan .maplibregl-canvas{touch-action:pinch-zoom}.maplibregl-canvas-container.maplibregl-touch-zoom-rotate.maplibregl-touch-drag-pan,.maplibregl-canvas-container.maplibregl-touch-zoom-rotate.maplibregl-touch-drag-pan .maplibregl-canvas{touch-action:none}.maplibregl-canvas-container.maplibregl-touch-drag-pan.maplibregl-cooperative-gestures,.maplibregl-canvas-container.maplibregl-touch-drag-pan.maplibregl-cooperative-gestures .maplibregl-canvas{touch-action:pan-x pan-y}.maplibregl-ctrl-bottom-left,.maplibregl-ctrl-bottom-right,.maplibregl-ctrl-top-left,.maplibregl-ctrl-top-right{pointer-events:none;position:absolute;z-index:2}.maplibregl-ctrl-top-left{left:0;top:0}.maplibregl-ctrl-top-right{right:0;top:0}.maplibregl-ctrl-bottom-left{bottom:0;left:0}.maplibregl-ctrl-bottom-right{bottom:0;right:0}.maplibregl-ctrl{clear:both;pointer-events:auto;transform:translate(0)}.maplibregl-ctrl-top-left .maplibregl-ctrl{float:left;margin:10px 0 0 10px}.maplibregl-ctrl-top-right .maplibregl-ctrl{float:right;margin:10px 10px 0 0}.maplibregl-ctrl-bottom-left .maplibregl-ctrl{float:left;margin:0 0 10px 10px}.maplibregl-ctrl-bottom-right .maplibregl-ctrl{float:right;margin:0 10px 10px 0}.maplibregl-ctrl-group{background:#fff;border-radius:4px}.maplibregl-ctrl-group:not(:empty){box-shadow:0 0 0 2px #0000001a}@media (forced-colors:active){.maplibregl-ctrl-group:not(:empty){box-shadow:0 0 0 2px ButtonText}}.maplibregl-ctrl-group button{background-color:transparent;border:0;box-sizing:border-box;cursor:pointer;display:block;height:29px;outline:none;padding:0;width:29px}.maplibregl-ctrl-group button+button{border-top:1px solid #ddd}.maplibregl-ctrl button .maplibregl-ctrl-icon{background-position:50%;background-repeat:no-repeat;display:block;height:100%;width:100%}@media (forced-colors:active){.maplibregl-ctrl-icon{background-color:transparent}.maplibregl-ctrl-group button+button{border-top:1px solid ButtonText}}.maplibregl-ctrl button::-moz-focus-inner{border:0;padding:0}.maplibregl-ctrl-attrib-button:focus,.maplibregl-ctrl-group button:focus{box-shadow:0 0 2px 2px #0096ff}.maplibregl-ctrl button:disabled{cursor:not-allowed}.maplibregl-ctrl button:disabled .maplibregl-ctrl-icon{opacity:.25}@media (hover:hover){.maplibregl-ctrl button:not(:disabled):hover{background-color:#0000000d}}.maplibregl-ctrl button:not(:disabled):active{background-color:#0000000d}.maplibregl-ctrl-group button:focus:focus-visible{box-shadow:0 0 2px 2px #0096ff}.maplibregl-ctrl-group button:focus:not(:focus-visible){box-shadow:none}.maplibregl-ctrl-group button:focus:first-child{border-radius:4px 4px 0 0}.maplibregl-ctrl-group button:focus:last-child{border-radius:0 0 4px 4px}.maplibregl-ctrl-group button:focus:only-child{border-radius:inherit}.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E")}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M10 13c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h9c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M14.5 8.5c-.75 0-1.5.75-1.5 1.5v3h-3c-.75 0-1.5.75-1.5 1.5S9.25 16 10 16h3v3c0 .75.75 1.5 1.5 1.5S16 19.75 16 19v-3h3c.75 0 1.5-.75 1.5-1.5S19.75 13 19 13h-3v-3c0-.75-.75-1.5-1.5-1.5'/%3E%3C/svg%3E")}}.maplibregl-ctrl button.maplibregl-ctrl-fullscreen .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='M24 16v5.5c0 1.75-.75 2.5-2.5 2.5H16v-1l3-1.5-4-5.5 1-1 5.5 4 1.5-3zM6 16l1.5 3 5.5-4 1 1-4 5.5 3 1.5v1H7.5C5.75 24 5 23.25 5 21.5V16zm7-11v1l-3 1.5 4 5.5-1 1-5.5-4L6 13H5V7.5C5 5.75 5.75 5 7.5 5zm11 2.5c0-1.75-.75-2.5-2.5-2.5H16v1l3 1.5-4 5.5 1 1 5.5-4 1.5 3h1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-shrink .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M18.5 16c-1.75 0-2.5.75-2.5 2.5V24h1l1.5-3 5.5 4 1-1-4-5.5 3-1.5v-1zM13 18.5c0-1.75-.75-2.5-2.5-2.5H5v1l3 1.5L4 24l1 1 5.5-4 1.5 3h1zm3-8c0 1.75.75 2.5 2.5 2.5H24v-1l-3-1.5L25 5l-1-1-5.5 4L17 5h-1zM10.5 13c1.75 0 2.5-.75 2.5-2.5V5h-1l-1.5 3L5 4 4 5l4 5.5L5 12v1z'/%3E%3C/svg%3E")}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-fullscreen .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M24 16v5.5c0 1.75-.75 2.5-2.5 2.5H16v-1l3-1.5-4-5.5 1-1 5.5 4 1.5-3zM6 16l1.5 3 5.5-4 1 1-4 5.5 3 1.5v1H7.5C5.75 24 5 23.25 5 21.5V16zm7-11v1l-3 1.5 4 5.5-1 1-5.5-4L6 13H5V7.5C5 5.75 5.75 5 7.5 5zm11 2.5c0-1.75-.75-2.5-2.5-2.5H16v1l3 1.5-4 5.5 1 1 5.5-4 1.5 3h1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-shrink .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='M18.5 16c-1.75 0-2.5.75-2.5 2.5V24h1l1.5-3 5.5 4 1-1-4-5.5 3-1.5v-1zM13 18.5c0-1.75-.75-2.5-2.5-2.5H5v1l3 1.5L4 24l1 1 5.5-4 1.5 3h1zm3-8c0 1.75.75 2.5 2.5 2.5H24v-1l-3-1.5L25 5l-1-1-5.5 4L17 5h-1zM10.5 13c1.75 0 2.5-.75 2.5-2.5V5h-1l-1.5 3L5 4 4 5l4 5.5L5 12v1z'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-fullscreen .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M24 16v5.5c0 1.75-.75 2.5-2.5 2.5H16v-1l3-1.5-4-5.5 1-1 5.5 4 1.5-3zM6 16l1.5 3 5.5-4 1 1-4 5.5 3 1.5v1H7.5C5.75 24 5 23.25 5 21.5V16zm7-11v1l-3 1.5 4 5.5-1 1-5.5-4L6 13H5V7.5C5 5.75 5.75 5 7.5 5zm11 2.5c0-1.75-.75-2.5-2.5-2.5H16v1l3 1.5-4 5.5 1 1 5.5-4 1.5 3h1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-shrink .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='M18.5 16c-1.75 0-2.5.75-2.5 2.5V24h1l1.5-3 5.5 4 1-1-4-5.5 3-1.5v-1zM13 18.5c0-1.75-.75-2.5-2.5-2.5H5v1l3 1.5L4 24l1 1 5.5-4 1.5 3h1zm3-8c0 1.75.75 2.5 2.5 2.5H24v-1l-3-1.5L25 5l-1-1-5.5 4L17 5h-1zM10.5 13c1.75 0 2.5-.75 2.5-2.5V5h-1l-1.5 3L5 4 4 5l4 5.5L5 12v1z'/%3E%3C/svg%3E")}}.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 29 29'%3E%3Cpath d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23ccc' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E")}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 29 29'%3E%3Cpath d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23ccc' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-compass .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 29 29'%3E%3Cpath d='m10.5 14 4-8 4 8z'/%3E%3Cpath fill='%23ccc' d='m10.5 16 4 8 4-8z'/%3E%3C/svg%3E")}}.maplibregl-ctrl button.maplibregl-ctrl-globe .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='none' stroke='%23333' viewBox='0 0 22 22'%3E%3Ccircle cx='11' cy='11' r='8.5'/%3E%3Cpath d='M17.5 11c0 4.819-3.02 8.5-6.5 8.5S4.5 15.819 4.5 11 7.52 2.5 11 2.5s6.5 3.681 6.5 8.5Z'/%3E%3Cpath d='M13.5 11c0 2.447-.331 4.64-.853 6.206-.262.785-.562 1.384-.872 1.777-.314.399-.58.517-.775.517s-.461-.118-.775-.517c-.31-.393-.61-.992-.872-1.777C8.831 15.64 8.5 13.446 8.5 11s.331-4.64.853-6.206c.262-.785.562-1.384.872-1.777.314-.399.58-.517.775-.517s.461.118.775.517c.31.393.61.992.872 1.777.522 1.565.853 3.76.853 6.206Z'/%3E%3Cpath d='M11 7.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138q.07-.058.224-.138c.299-.151.763-.302 1.379-.434C7.378 5.666 9.091 5.5 11 5.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138q-.07.058-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428ZM4.486 6.436ZM11 16.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138 1.3 1.3 0 0 1 .224-.138c.299-.151.763-.302 1.379-.434C7.378 14.666 9.091 14.5 11 14.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138a1.3 1.3 0 0 1-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428Zm-6.514-1.064ZM11 12.5c-2.46 0-4.672-.222-6.255-.574-.796-.177-1.406-.38-1.805-.59a1.5 1.5 0 0 1-.39-.272.3.3 0 0 1-.047-.064.3.3 0 0 1 .048-.064c.066-.073.189-.167.389-.272.399-.21 1.009-.413 1.805-.59C6.328 9.722 8.54 9.5 11 9.5s4.672.222 6.256.574c.795.177 1.405.38 1.804.59.2.105.323.2.39.272a.3.3 0 0 1 .047.064.3.3 0 0 1-.048.064 1.4 1.4 0 0 1-.389.272c-.399.21-1.009.413-1.804.59-1.584.352-3.796.574-6.256.574Zm-8.501-1.51v.002zm0 .018v.002zm17.002.002v-.002zm0-.018v-.002z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-globe-enabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='none' stroke='%2333b5e5' viewBox='0 0 22 22'%3E%3Ccircle cx='11' cy='11' r='8.5'/%3E%3Cpath d='M17.5 11c0 4.819-3.02 8.5-6.5 8.5S4.5 15.819 4.5 11 7.52 2.5 11 2.5s6.5 3.681 6.5 8.5Z'/%3E%3Cpath d='M13.5 11c0 2.447-.331 4.64-.853 6.206-.262.785-.562 1.384-.872 1.777-.314.399-.58.517-.775.517s-.461-.118-.775-.517c-.31-.393-.61-.992-.872-1.777C8.831 15.64 8.5 13.446 8.5 11s.331-4.64.853-6.206c.262-.785.562-1.384.872-1.777.314-.399.58-.517.775-.517s.461.118.775.517c.31.393.61.992.872 1.777.522 1.565.853 3.76.853 6.206Z'/%3E%3Cpath d='M11 7.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138q.07-.058.224-.138c.299-.151.763-.302 1.379-.434C7.378 5.666 9.091 5.5 11 5.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138q-.07.058-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428ZM4.486 6.436ZM11 16.5c-1.909 0-3.622-.166-4.845-.428-.616-.132-1.08-.283-1.379-.434a1.3 1.3 0 0 1-.224-.138 1.3 1.3 0 0 1 .224-.138c.299-.151.763-.302 1.379-.434C7.378 14.666 9.091 14.5 11 14.5s3.622.166 4.845.428c.616.132 1.08.283 1.379.434.105.053.177.1.224.138a1.3 1.3 0 0 1-.224.138c-.299.151-.763.302-1.379.434-1.223.262-2.936.428-4.845.428Zm-6.514-1.064ZM11 12.5c-2.46 0-4.672-.222-6.255-.574-.796-.177-1.406-.38-1.805-.59a1.5 1.5 0 0 1-.39-.272.3.3 0 0 1-.047-.064.3.3 0 0 1 .048-.064c.066-.073.189-.167.389-.272.399-.21 1.009-.413 1.805-.59C6.328 9.722 8.54 9.5 11 9.5s4.672.222 6.256.574c.795.177 1.405.38 1.804.59.2.105.323.2.39.272a.3.3 0 0 1 .047.064.3.3 0 0 1-.048.064 1.4 1.4 0 0 1-.389.272c-.399.21-1.009.413-1.804.59-1.584.352-3.796.574-6.256.574Zm-8.501-1.51v.002zm0 .018v.002zm17.002.002v-.002zm0-.018v-.002z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-terrain .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='%23333' viewBox='0 0 22 22'%3E%3Cpath d='m1.754 13.406 4.453-4.851 3.09 3.09 3.281 3.277.969-.969-3.309-3.312 3.844-4.121 6.148 6.886h1.082v-.855l-7.207-8.07-4.84 5.187L6.169 6.57l-5.48 5.965v.871ZM.688 16.844h20.625v1.375H.688Zm0 0'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-terrain-enabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' fill='%2333b5e5' viewBox='0 0 22 22'%3E%3Cpath d='m1.754 13.406 4.453-4.851 3.09 3.09 3.281 3.277.969-.969-3.309-3.312 3.844-4.121 6.148 6.886h1.082v-.855l-7.207-8.07-4.84 5.187L6.169 6.57l-5.48 5.965v.871ZM.688 16.844h20.625v1.375H.688Zm0 0'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23333' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate:disabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23aaa' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Cpath fill='red' d='m14 5 1 1-9 9-1-1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e58978' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e54e33' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-waiting .maplibregl-ctrl-icon{animation:maplibregl-spin 2s linear infinite}@media (forced-colors:active){.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23fff' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate:disabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23999' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Cpath fill='red' d='m14 5 1 1-9 9-1-1z'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e58978' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%2333b5e5' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23e54e33' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl button.maplibregl-ctrl-geolocate .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3C/svg%3E")}.maplibregl-ctrl button.maplibregl-ctrl-geolocate:disabled .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='29' height='29' fill='%23666' viewBox='0 0 20 20'%3E%3Cpath d='M10 4C9 4 9 5 9 5v.1A5 5 0 0 0 5.1 9H5s-1 0-1 1 1 1 1 1h.1A5 5 0 0 0 9 14.9v.1s0 1 1 1 1-1 1-1v-.1a5 5 0 0 0 3.9-3.9h.1s1 0 1-1-1-1-1-1h-.1A5 5 0 0 0 11 5.1V5s0-1-1-1m0 2.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 1 1 0-7'/%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Cpath fill='red' d='m14 5 1 1-9 9-1-1z'/%3E%3C/svg%3E")}}@keyframes maplibregl-spin{0%{transform:rotate(0)}to{transform:rotate(1turn)}}a.maplibregl-ctrl-logo{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='23' fill='none'%3E%3Cpath fill='%23000' fill-opacity='.4' fill-rule='evenodd' d='M17.408 16.796h-1.827l2.501-12.095h.198l3.324 6.533.988 2.19.988-2.19 3.258-6.533h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.929 5.644h-.098l-2.914-5.644-.757-1.71-.345 1.71zm1.958-3.42-.726 3.663a1.255 1.255 0 0 1-1.232 1.011h-1.827a1.255 1.255 0 0 1-1.229-1.509l2.501-12.095a1.255 1.255 0 0 1 1.23-1.001h.197a1.25 1.25 0 0 1 1.12.685l3.19 6.273 3.125-6.263a1.25 1.25 0 0 1 1.123-.695h.181a1.255 1.255 0 0 1 1.227.991l1.443 6.71a5 5 0 0 1 .314-.787l.009-.016a4.6 4.6 0 0 1 1.777-1.887c.782-.46 1.668-.667 2.611-.667a4.6 4.6 0 0 1 1.7.32l.306.134c.21-.16.474-.256.759-.256h1.694a1.255 1.255 0 0 1 1.212.925 1.255 1.255 0 0 1 1.212-.925h1.711c.284 0 .545.094.755.252.613-.3 1.312-.45 2.075-.45 1.356 0 2.557.445 3.482 1.4q.47.48.763 1.064V4.701a1.255 1.255 0 0 1 1.255-1.255h1.86A1.255 1.255 0 0 1 54.44 4.7v9.194h2.217c.19 0 .37.043.532.118v-4.77c0-.356.147-.678.385-.906a2.42 2.42 0 0 1-.682-1.71c0-.665.267-1.253.735-1.7a2.45 2.45 0 0 1 1.722-.674 2.43 2.43 0 0 1 1.705.675q.318.302.504.683V4.7a1.255 1.255 0 0 1 1.255-1.255h1.744A1.255 1.255 0 0 1 65.812 4.7v3.335a4.8 4.8 0 0 1 1.526-.246c.938 0 1.817.214 2.59.69a4.47 4.47 0 0 1 1.67 1.743v-.98a1.255 1.255 0 0 1 1.256-1.256h1.777c.233 0 .451.064.639.174a3.4 3.4 0 0 1 1.567-.372c.346 0 .861.02 1.285.232a1.25 1.25 0 0 1 .689 1.004 4.7 4.7 0 0 1 .853-.588c.795-.44 1.675-.647 2.61-.647 1.385 0 2.65.39 3.525 1.396.836.938 1.168 2.173 1.168 3.528q-.001.515-.056 1.051a1.255 1.255 0 0 1-.947 1.09l.408.952a1.255 1.255 0 0 1-.477 1.552c-.418.268-.92.463-1.458.612-.613.171-1.304.244-2.049.244-1.06 0-2.043-.207-2.886-.698l-.015-.008c-.798-.48-1.419-1.135-1.818-1.963l-.004-.008a5.8 5.8 0 0 1-.548-2.512q0-.429.053-.843a1.3 1.3 0 0 1-.333-.086l-.166-.004c-.223 0-.426.062-.643.228-.03.024-.142.139-.142.59v3.883a1.255 1.255 0 0 1-1.256 1.256h-1.777a1.255 1.255 0 0 1-1.256-1.256V15.69l-.032.057a4.8 4.8 0 0 1-1.86 1.833 5.04 5.04 0 0 1-2.484.634 4.5 4.5 0 0 1-1.935-.424 1.25 1.25 0 0 1-.764.258h-1.71a1.255 1.255 0 0 1-1.256-1.255V7.687a2.4 2.4 0 0 1-.428.625c.253.23.412.561.412.93v7.553a1.255 1.255 0 0 1-1.256 1.255h-1.843a1.25 1.25 0 0 1-.894-.373c-.228.23-.544.373-.894.373H51.32a1.255 1.255 0 0 1-1.256-1.255v-1.251l-.061.117a4.7 4.7 0 0 1-1.782 1.884 4.77 4.77 0 0 1-2.485.67 5.6 5.6 0 0 1-1.485-.188l.009 2.764a1.255 1.255 0 0 1-1.255 1.259h-1.729a1.255 1.255 0 0 1-1.255-1.255v-3.537a1.255 1.255 0 0 1-1.167.793h-1.679a1.25 1.25 0 0 1-.77-.263 4.5 4.5 0 0 1-1.945.429c-.885 0-1.724-.21-2.495-.632l-.017-.01a5 5 0 0 1-1.081-.836 1.255 1.255 0 0 1-1.254 1.312h-1.81a1.255 1.255 0 0 1-1.228-.99l-.782-3.625-2.044 3.939a1.25 1.25 0 0 1-1.115.676h-.098a1.25 1.25 0 0 1-1.116-.68l-2.061-3.994zM35.92 16.63l.207-.114.223-.15q.493-.356.735-.785l.061-.118.033 1.332h1.678V9.242h-1.694l-.033 1.267q-.133-.329-.526-.658l-.032-.028a3.2 3.2 0 0 0-.668-.428l-.27-.12a3.3 3.3 0 0 0-1.235-.23q-1.136-.001-1.974.493a3.36 3.36 0 0 0-1.3 1.382q-.445.89-.444 2.074 0 1.2.51 2.107a3.8 3.8 0 0 0 1.382 1.381 3.9 3.9 0 0 0 1.893.477q.795 0 1.455-.33zm-2.789-5.38q-.576.675-.575 1.762 0 1.102.559 1.794.576.675 1.645.675a2.25 2.25 0 0 0 .934-.19 2.2 2.2 0 0 0 .468-.29l.178-.161a2.2 2.2 0 0 0 .397-.561q.244-.5.244-1.15v-.115q0-.708-.296-1.267l-.043-.077a2.2 2.2 0 0 0-.633-.709l-.13-.086-.047-.028a2.1 2.1 0 0 0-1.073-.285q-1.052 0-1.629.692zm2.316 2.706c.163-.17.28-.407.28-.83v-.114c0-.292-.06-.508-.15-.68a.96.96 0 0 0-.353-.389.85.85 0 0 0-.464-.127c-.4 0-.56.114-.664.239l-.01.012c-.148.174-.275.45-.275.945 0 .506.122.801.27.99.097.11.266.224.68.224.303 0 .504-.09.687-.269zm7.545 1.705a2.6 2.6 0 0 0 .331.423q.319.33.755.548l.173.074q.65.255 1.49.255 1.02 0 1.844-.493a3.45 3.45 0 0 0 1.316-1.4q.493-.904.493-2.089 0-1.909-.988-2.913-.988-1.02-2.584-1.02-.898 0-1.575.347a3 3 0 0 0-.415.262l-.199.166a3.4 3.4 0 0 0-.64.82V9.242h-1.712v11.553h1.729l-.017-5.134zm.53-1.138q.206.29.48.5l.155.11.053.034q.51.296 1.119.297 1.07 0 1.645-.675.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.435 0-.835.16a2 2 0 0 0-.284.136 2 2 0 0 0-.363.254 2.2 2.2 0 0 0-.46.569l-.082.162a2.6 2.6 0 0 0-.213 1.072v.115q0 .707.296 1.267l.135.211zm.964-.818a1.1 1.1 0 0 0 .367.385.94.94 0 0 0 .476.118c.423 0 .59-.117.687-.23.159-.194.28-.478.28-.95 0-.53-.133-.8-.266-.952l-.021-.025c-.078-.094-.231-.221-.68-.221a1 1 0 0 0-.503.135l-.012.007a.86.86 0 0 0-.335.343c-.073.133-.132.324-.132.614v.115a1.4 1.4 0 0 0 .14.66zm15.7-6.222q.347-.346.346-.856a1.05 1.05 0 0 0-.345-.79 1.18 1.18 0 0 0-.84-.329q-.51 0-.855.33a1.05 1.05 0 0 0-.346.79q0 .51.346.855.345.346.856.346.51 0 .839-.346zm4.337 9.314.033-1.332q.191.403.59.747l.098.081a4 4 0 0 0 .316.224l.223.122a3.2 3.2 0 0 0 1.44.322 3.8 3.8 0 0 0 1.875-.477 3.5 3.5 0 0 0 1.382-1.366q.527-.89.526-2.09 0-1.184-.444-2.073a3.24 3.24 0 0 0-1.283-1.399q-.823-.51-1.942-.51a3.5 3.5 0 0 0-1.527.344l-.086.043-.165.09a3 3 0 0 0-.33.214q-.432.315-.656.707a2 2 0 0 0-.099.198l.082-1.283V4.701h-1.744v12.095zm.473-2.509a2.5 2.5 0 0 0 .566.7q.117.098.245.18l.144.08a2.1 2.1 0 0 0 .975.232q1.07 0 1.645-.675.576-.69.576-1.778 0-1.102-.576-1.777-.56-.691-1.645-.692a2.2 2.2 0 0 0-1.015.235q-.22.113-.415.282l-.15.142a2.1 2.1 0 0 0-.42.594q-.223.479-.223 1.1v.115q0 .705.293 1.26zm2.616-.293c.157-.191.28-.479.28-.967 0-.51-.13-.79-.276-.961l-.021-.026c-.082-.1-.232-.225-.67-.225a.87.87 0 0 0-.681.279l-.012.011c-.154.155-.274.38-.274.807v.115c0 .285.057.499.144.669a1.1 1.1 0 0 0 .367.405c.137.082.28.123.455.123.423 0 .59-.118.686-.23zm8.266-3.013q.345-.13.724-.14l.069-.002q.493 0 .642.099l.247-1.794q-.196-.099-.717-.099a2.3 2.3 0 0 0-.545.063 2 2 0 0 0-.411.148 2.2 2.2 0 0 0-.4.249 2.5 2.5 0 0 0-.485.499 2.7 2.7 0 0 0-.32.581l-.05.137v-1.48h-1.778v7.553h1.777v-3.884q0-.546.159-.943a1.5 1.5 0 0 1 .466-.636 2.5 2.5 0 0 1 .399-.253 2 2 0 0 1 .224-.099zm9.784 2.656.05-.922q0-1.743-.856-2.698-.838-.97-2.584-.97-1.119-.001-2.007.493a3.46 3.46 0 0 0-1.4 1.382q-.493.906-.493 2.106 0 1.07.428 1.975.428.89 1.332 1.432.906.526 2.255.526.973 0 1.668-.185l.044-.012.135-.04q.613-.184.984-.421l-.542-1.267q-.3.162-.642.274l-.297.087q-.51.131-1.3.131-.954 0-1.497-.444a1.6 1.6 0 0 1-.192-.193q-.366-.44-.512-1.234l-.004-.021zm-5.427-1.256-.003.022h3.752v-.138q-.011-.727-.288-1.118a1 1 0 0 0-.156-.176q-.46-.428-1.316-.428-.986 0-1.494.604-.379.45-.494 1.234zm-27.053 2.77V4.7h-1.86v12.095h5.333V15.15zm7.103-5.908v7.553h-1.843V9.242h1.843z'/%3E%3Cpath fill='%23fff' d='m19.63 11.151-.757-1.71-.345 1.71-1.12 5.644h-1.827L18.083 4.7h.197l3.325 6.533.988 2.19.988-2.19L26.839 4.7h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.93 5.644h-.098l-2.913-5.644zm14.836 5.81q-1.02 0-1.893-.478a3.8 3.8 0 0 1-1.381-1.382q-.51-.906-.51-2.106 0-1.185.444-2.074a3.36 3.36 0 0 1 1.3-1.382q.839-.494 1.974-.494a3.3 3.3 0 0 1 1.234.231 3.3 3.3 0 0 1 .97.575q.396.33.527.659l.033-1.267h1.694v7.553H37.18l-.033-1.332q-.279.593-1.02 1.053a3.17 3.17 0 0 1-1.662.444zm.296-1.482q.938 0 1.58-.642.642-.66.642-1.711v-.115q0-.708-.296-1.267a2.2 2.2 0 0 0-.807-.872 2.1 2.1 0 0 0-1.119-.313q-1.053 0-1.629.692-.575.675-.575 1.76 0 1.103.559 1.795.577.675 1.645.675zm6.521-6.237h1.711v1.4q.906-1.597 2.83-1.597 1.596 0 2.584 1.02.988 1.005.988 2.914 0 1.185-.493 2.09a3.46 3.46 0 0 1-1.316 1.399 3.5 3.5 0 0 1-1.844.493q-.954 0-1.662-.329a2.67 2.67 0 0 1-1.086-.97l.017 5.134h-1.728zm4.048 6.22q1.07 0 1.645-.674.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.592 0-1.12.296-.51.28-.822.823-.296.527-.296 1.234v.115q0 .708.296 1.267.313.543.823.855.51.296 1.119.297z'/%3E%3Cpath fill='%23e1e3e9' d='M51.325 4.7h1.86v10.45h3.473v1.646h-5.333zm7.12 4.542h1.843v7.553h-1.843zm.905-1.415a1.16 1.16 0 0 1-.856-.346 1.17 1.17 0 0 1-.346-.856 1.05 1.05 0 0 1 .346-.79q.346-.329.856-.329.494 0 .839.33a1.05 1.05 0 0 1 .345.79 1.16 1.16 0 0 1-.345.855q-.33.346-.84.346zm7.875 9.133a3.17 3.17 0 0 1-1.662-.444q-.723-.46-1.004-1.053l-.033 1.332h-1.71V4.701h1.743v4.657l-.082 1.283q.279-.658 1.086-1.119a3.5 3.5 0 0 1 1.778-.477q1.119 0 1.942.51a3.24 3.24 0 0 1 1.283 1.4q.445.888.444 2.072 0 1.201-.526 2.09a3.5 3.5 0 0 1-1.382 1.366 3.8 3.8 0 0 1-1.876.477zm-.296-1.481q1.069 0 1.645-.675.577-.69.577-1.778 0-1.102-.577-1.776-.56-.691-1.645-.692a2.12 2.12 0 0 0-1.58.659q-.642.641-.642 1.694v.115q0 .71.296 1.267a2.4 2.4 0 0 0 .807.872 2.1 2.1 0 0 0 1.119.313zm5.927-6.237h1.777v1.481q.263-.757.856-1.217a2.14 2.14 0 0 1 1.349-.46q.527 0 .724.098l-.247 1.794q-.149-.099-.642-.099-.774 0-1.416.494-.626.493-.626 1.58v3.883h-1.777V9.242zm9.534 7.718q-1.35 0-2.255-.526-.904-.543-1.332-1.432a4.6 4.6 0 0 1-.428-1.975q0-1.2.493-2.106a3.46 3.46 0 0 1 1.4-1.382q.889-.495 2.007-.494 1.744 0 2.584.97.855.956.856 2.7 0 .444-.05.92h-5.43q.18 1.005.708 1.45.542.443 1.497.443.79 0 1.3-.131a4 4 0 0 0 .938-.362l.542 1.267q-.411.263-1.119.46-.708.198-1.711.197zm1.596-4.558q.016-1.02-.444-1.432-.46-.428-1.316-.428-1.728 0-1.991 1.86z'/%3E%3Cpath d='M5.074 15.948a.484.657 0 0 0-.486.659v1.84a.484.657 0 0 0 .486.659h4.101a.484.657 0 0 0 .486-.659v-1.84a.484.657 0 0 0-.486-.659zm3.56 1.16H5.617v.838h3.017z' style='fill:%23fff;fill-rule:evenodd;stroke-width:1.03600001'/%3E%3Cg style='stroke-width:1.12603545'%3E%3Cpath d='M-9.408-1.416c-3.833-.025-7.056 2.912-7.08 6.615-.02 3.08 1.653 4.832 3.107 6.268.903.892 1.721 1.74 2.32 2.902l-.525-.004c-.543-.003-.992.304-1.24.639a1.87 1.87 0 0 0-.362 1.121l-.011 1.877c-.003.402.104.787.347 1.125.244.338.688.653 1.23.656l4.142.028c.542.003.99-.306 1.238-.641a1.87 1.87 0 0 0 .363-1.121l.012-1.875a1.87 1.87 0 0 0-.348-1.127c-.243-.338-.688-.653-1.23-.656l-.518-.004c.597-1.145 1.425-1.983 2.348-2.87 1.473-1.414 3.18-3.149 3.2-6.226-.016-3.59-2.923-6.684-6.993-6.707m-.006 1.1v.002c3.274.02 5.92 2.532 5.9 5.6-.017 2.706-1.39 4.026-2.863 5.44-1.034.994-2.118 2.033-2.814 3.633-.018.041-.052.055-.075.065q-.013.004-.02.01a.34.34 0 0 1-.226.084.34.34 0 0 1-.224-.086l-.092-.077c-.699-1.615-1.768-2.669-2.781-3.67-1.454-1.435-2.797-2.762-2.78-5.478.02-3.067 2.7-5.545 5.975-5.523m-.02 2.826c-1.62-.01-2.944 1.315-2.955 2.96-.01 1.646 1.295 2.988 2.916 2.999h.002c1.621.01 2.943-1.316 2.953-2.961.011-1.646-1.294-2.988-2.916-2.998m-.005 1.1c1.017.006 1.829.83 1.822 1.89s-.83 1.874-1.848 1.867c-1.018-.006-1.829-.83-1.822-1.89s.83-1.874 1.848-1.868m-2.155 11.857 4.14.025c.271.002.49.305.487.676l-.013 1.875c-.003.37-.224.67-.495.668l-4.14-.025c-.27-.002-.487-.306-.485-.676l.012-1.875c.003-.37.224-.67.494-.668' style='color:%23000;font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:%23000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:evenodd;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:%23000;solid-opacity:1;vector-effect:none;fill:%23000;fill-opacity:.4;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-9.415-.316C-12.69-.338-15.37 2.14-15.39 5.207c-.017 2.716 1.326 4.041 2.78 5.477 1.013 1 2.081 2.055 2.78 3.67l.092.076a.34.34 0 0 0 .225.086.34.34 0 0 0 .227-.083l.019-.01c.022-.009.057-.024.074-.064.697-1.6 1.78-2.64 2.814-3.634 1.473-1.414 2.847-2.733 2.864-5.44.02-3.067-2.627-5.58-5.901-5.601m-.057 8.784c1.621.011 2.944-1.315 2.955-2.96.01-1.646-1.295-2.988-2.916-2.999-1.622-.01-2.945 1.315-2.955 2.96s1.295 2.989 2.916 3' style='clip-rule:evenodd;fill:%23e1e3e9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-11.594 15.465c-.27-.002-.492.297-.494.668l-.012 1.876c-.003.371.214.673.485.675l4.14.027c.271.002.492-.298.495-.668l.012-1.877c.003-.37-.215-.672-.485-.674z' style='clip-rule:evenodd;fill:%23fff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3C/g%3E%3C/svg%3E");background-repeat:no-repeat;cursor:pointer;display:block;height:23px;margin:0 0 -4px -4px;overflow:hidden;width:88px}a.maplibregl-ctrl-logo.maplibregl-compact{width:14px}@media (forced-colors:active){a.maplibregl-ctrl-logo{background-color:transparent;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='23' fill='none'%3E%3Cpath fill='%23000' fill-opacity='.4' fill-rule='evenodd' d='M17.408 16.796h-1.827l2.501-12.095h.198l3.324 6.533.988 2.19.988-2.19 3.258-6.533h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.929 5.644h-.098l-2.914-5.644-.757-1.71-.345 1.71zm1.958-3.42-.726 3.663a1.255 1.255 0 0 1-1.232 1.011h-1.827a1.255 1.255 0 0 1-1.229-1.509l2.501-12.095a1.255 1.255 0 0 1 1.23-1.001h.197a1.25 1.25 0 0 1 1.12.685l3.19 6.273 3.125-6.263a1.25 1.25 0 0 1 1.123-.695h.181a1.255 1.255 0 0 1 1.227.991l1.443 6.71a5 5 0 0 1 .314-.787l.009-.016a4.6 4.6 0 0 1 1.777-1.887c.782-.46 1.668-.667 2.611-.667a4.6 4.6 0 0 1 1.7.32l.306.134c.21-.16.474-.256.759-.256h1.694a1.255 1.255 0 0 1 1.212.925 1.255 1.255 0 0 1 1.212-.925h1.711c.284 0 .545.094.755.252.613-.3 1.312-.45 2.075-.45 1.356 0 2.557.445 3.482 1.4q.47.48.763 1.064V4.701a1.255 1.255 0 0 1 1.255-1.255h1.86A1.255 1.255 0 0 1 54.44 4.7v9.194h2.217c.19 0 .37.043.532.118v-4.77c0-.356.147-.678.385-.906a2.42 2.42 0 0 1-.682-1.71c0-.665.267-1.253.735-1.7a2.45 2.45 0 0 1 1.722-.674 2.43 2.43 0 0 1 1.705.675q.318.302.504.683V4.7a1.255 1.255 0 0 1 1.255-1.255h1.744A1.255 1.255 0 0 1 65.812 4.7v3.335a4.8 4.8 0 0 1 1.526-.246c.938 0 1.817.214 2.59.69a4.47 4.47 0 0 1 1.67 1.743v-.98a1.255 1.255 0 0 1 1.256-1.256h1.777c.233 0 .451.064.639.174a3.4 3.4 0 0 1 1.567-.372c.346 0 .861.02 1.285.232a1.25 1.25 0 0 1 .689 1.004 4.7 4.7 0 0 1 .853-.588c.795-.44 1.675-.647 2.61-.647 1.385 0 2.65.39 3.525 1.396.836.938 1.168 2.173 1.168 3.528q-.001.515-.056 1.051a1.255 1.255 0 0 1-.947 1.09l.408.952a1.255 1.255 0 0 1-.477 1.552c-.418.268-.92.463-1.458.612-.613.171-1.304.244-2.049.244-1.06 0-2.043-.207-2.886-.698l-.015-.008c-.798-.48-1.419-1.135-1.818-1.963l-.004-.008a5.8 5.8 0 0 1-.548-2.512q0-.429.053-.843a1.3 1.3 0 0 1-.333-.086l-.166-.004c-.223 0-.426.062-.643.228-.03.024-.142.139-.142.59v3.883a1.255 1.255 0 0 1-1.256 1.256h-1.777a1.255 1.255 0 0 1-1.256-1.256V15.69l-.032.057a4.8 4.8 0 0 1-1.86 1.833 5.04 5.04 0 0 1-2.484.634 4.5 4.5 0 0 1-1.935-.424 1.25 1.25 0 0 1-.764.258h-1.71a1.255 1.255 0 0 1-1.256-1.255V7.687a2.4 2.4 0 0 1-.428.625c.253.23.412.561.412.93v7.553a1.255 1.255 0 0 1-1.256 1.255h-1.843a1.25 1.25 0 0 1-.894-.373c-.228.23-.544.373-.894.373H51.32a1.255 1.255 0 0 1-1.256-1.255v-1.251l-.061.117a4.7 4.7 0 0 1-1.782 1.884 4.77 4.77 0 0 1-2.485.67 5.6 5.6 0 0 1-1.485-.188l.009 2.764a1.255 1.255 0 0 1-1.255 1.259h-1.729a1.255 1.255 0 0 1-1.255-1.255v-3.537a1.255 1.255 0 0 1-1.167.793h-1.679a1.25 1.25 0 0 1-.77-.263 4.5 4.5 0 0 1-1.945.429c-.885 0-1.724-.21-2.495-.632l-.017-.01a5 5 0 0 1-1.081-.836 1.255 1.255 0 0 1-1.254 1.312h-1.81a1.255 1.255 0 0 1-1.228-.99l-.782-3.625-2.044 3.939a1.25 1.25 0 0 1-1.115.676h-.098a1.25 1.25 0 0 1-1.116-.68l-2.061-3.994zM35.92 16.63l.207-.114.223-.15q.493-.356.735-.785l.061-.118.033 1.332h1.678V9.242h-1.694l-.033 1.267q-.133-.329-.526-.658l-.032-.028a3.2 3.2 0 0 0-.668-.428l-.27-.12a3.3 3.3 0 0 0-1.235-.23q-1.136-.001-1.974.493a3.36 3.36 0 0 0-1.3 1.382q-.445.89-.444 2.074 0 1.2.51 2.107a3.8 3.8 0 0 0 1.382 1.381 3.9 3.9 0 0 0 1.893.477q.795 0 1.455-.33zm-2.789-5.38q-.576.675-.575 1.762 0 1.102.559 1.794.576.675 1.645.675a2.25 2.25 0 0 0 .934-.19 2.2 2.2 0 0 0 .468-.29l.178-.161a2.2 2.2 0 0 0 .397-.561q.244-.5.244-1.15v-.115q0-.708-.296-1.267l-.043-.077a2.2 2.2 0 0 0-.633-.709l-.13-.086-.047-.028a2.1 2.1 0 0 0-1.073-.285q-1.052 0-1.629.692zm2.316 2.706c.163-.17.28-.407.28-.83v-.114c0-.292-.06-.508-.15-.68a.96.96 0 0 0-.353-.389.85.85 0 0 0-.464-.127c-.4 0-.56.114-.664.239l-.01.012c-.148.174-.275.45-.275.945 0 .506.122.801.27.99.097.11.266.224.68.224.303 0 .504-.09.687-.269zm7.545 1.705a2.6 2.6 0 0 0 .331.423q.319.33.755.548l.173.074q.65.255 1.49.255 1.02 0 1.844-.493a3.45 3.45 0 0 0 1.316-1.4q.493-.904.493-2.089 0-1.909-.988-2.913-.988-1.02-2.584-1.02-.898 0-1.575.347a3 3 0 0 0-.415.262l-.199.166a3.4 3.4 0 0 0-.64.82V9.242h-1.712v11.553h1.729l-.017-5.134zm.53-1.138q.206.29.48.5l.155.11.053.034q.51.296 1.119.297 1.07 0 1.645-.675.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.435 0-.835.16a2 2 0 0 0-.284.136 2 2 0 0 0-.363.254 2.2 2.2 0 0 0-.46.569l-.082.162a2.6 2.6 0 0 0-.213 1.072v.115q0 .707.296 1.267l.135.211zm.964-.818a1.1 1.1 0 0 0 .367.385.94.94 0 0 0 .476.118c.423 0 .59-.117.687-.23.159-.194.28-.478.28-.95 0-.53-.133-.8-.266-.952l-.021-.025c-.078-.094-.231-.221-.68-.221a1 1 0 0 0-.503.135l-.012.007a.86.86 0 0 0-.335.343c-.073.133-.132.324-.132.614v.115a1.4 1.4 0 0 0 .14.66zm15.7-6.222q.347-.346.346-.856a1.05 1.05 0 0 0-.345-.79 1.18 1.18 0 0 0-.84-.329q-.51 0-.855.33a1.05 1.05 0 0 0-.346.79q0 .51.346.855.345.346.856.346.51 0 .839-.346zm4.337 9.314.033-1.332q.191.403.59.747l.098.081a4 4 0 0 0 .316.224l.223.122a3.2 3.2 0 0 0 1.44.322 3.8 3.8 0 0 0 1.875-.477 3.5 3.5 0 0 0 1.382-1.366q.527-.89.526-2.09 0-1.184-.444-2.073a3.24 3.24 0 0 0-1.283-1.399q-.823-.51-1.942-.51a3.5 3.5 0 0 0-1.527.344l-.086.043-.165.09a3 3 0 0 0-.33.214q-.432.315-.656.707a2 2 0 0 0-.099.198l.082-1.283V4.701h-1.744v12.095zm.473-2.509a2.5 2.5 0 0 0 .566.7q.117.098.245.18l.144.08a2.1 2.1 0 0 0 .975.232q1.07 0 1.645-.675.576-.69.576-1.778 0-1.102-.576-1.777-.56-.691-1.645-.692a2.2 2.2 0 0 0-1.015.235q-.22.113-.415.282l-.15.142a2.1 2.1 0 0 0-.42.594q-.223.479-.223 1.1v.115q0 .705.293 1.26zm2.616-.293c.157-.191.28-.479.28-.967 0-.51-.13-.79-.276-.961l-.021-.026c-.082-.1-.232-.225-.67-.225a.87.87 0 0 0-.681.279l-.012.011c-.154.155-.274.38-.274.807v.115c0 .285.057.499.144.669a1.1 1.1 0 0 0 .367.405c.137.082.28.123.455.123.423 0 .59-.118.686-.23zm8.266-3.013q.345-.13.724-.14l.069-.002q.493 0 .642.099l.247-1.794q-.196-.099-.717-.099a2.3 2.3 0 0 0-.545.063 2 2 0 0 0-.411.148 2.2 2.2 0 0 0-.4.249 2.5 2.5 0 0 0-.485.499 2.7 2.7 0 0 0-.32.581l-.05.137v-1.48h-1.778v7.553h1.777v-3.884q0-.546.159-.943a1.5 1.5 0 0 1 .466-.636 2.5 2.5 0 0 1 .399-.253 2 2 0 0 1 .224-.099zm9.784 2.656.05-.922q0-1.743-.856-2.698-.838-.97-2.584-.97-1.119-.001-2.007.493a3.46 3.46 0 0 0-1.4 1.382q-.493.906-.493 2.106 0 1.07.428 1.975.428.89 1.332 1.432.906.526 2.255.526.973 0 1.668-.185l.044-.012.135-.04q.613-.184.984-.421l-.542-1.267q-.3.162-.642.274l-.297.087q-.51.131-1.3.131-.954 0-1.497-.444a1.6 1.6 0 0 1-.192-.193q-.366-.44-.512-1.234l-.004-.021zm-5.427-1.256-.003.022h3.752v-.138q-.011-.727-.288-1.118a1 1 0 0 0-.156-.176q-.46-.428-1.316-.428-.986 0-1.494.604-.379.45-.494 1.234zm-27.053 2.77V4.7h-1.86v12.095h5.333V15.15zm7.103-5.908v7.553h-1.843V9.242h1.843z'/%3E%3Cpath fill='%23fff' d='m19.63 11.151-.757-1.71-.345 1.71-1.12 5.644h-1.827L18.083 4.7h.197l3.325 6.533.988 2.19.988-2.19L26.839 4.7h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.93 5.644h-.098l-2.913-5.644zm14.836 5.81q-1.02 0-1.893-.478a3.8 3.8 0 0 1-1.381-1.382q-.51-.906-.51-2.106 0-1.185.444-2.074a3.36 3.36 0 0 1 1.3-1.382q.839-.494 1.974-.494a3.3 3.3 0 0 1 1.234.231 3.3 3.3 0 0 1 .97.575q.396.33.527.659l.033-1.267h1.694v7.553H37.18l-.033-1.332q-.279.593-1.02 1.053a3.17 3.17 0 0 1-1.662.444zm.296-1.482q.938 0 1.58-.642.642-.66.642-1.711v-.115q0-.708-.296-1.267a2.2 2.2 0 0 0-.807-.872 2.1 2.1 0 0 0-1.119-.313q-1.053 0-1.629.692-.575.675-.575 1.76 0 1.103.559 1.795.577.675 1.645.675zm6.521-6.237h1.711v1.4q.906-1.597 2.83-1.597 1.596 0 2.584 1.02.988 1.005.988 2.914 0 1.185-.493 2.09a3.46 3.46 0 0 1-1.316 1.399 3.5 3.5 0 0 1-1.844.493q-.954 0-1.662-.329a2.67 2.67 0 0 1-1.086-.97l.017 5.134h-1.728zm4.048 6.22q1.07 0 1.645-.674.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.592 0-1.12.296-.51.28-.822.823-.296.527-.296 1.234v.115q0 .708.296 1.267.313.543.823.855.51.296 1.119.297z'/%3E%3Cpath fill='%23e1e3e9' d='M51.325 4.7h1.86v10.45h3.473v1.646h-5.333zm7.12 4.542h1.843v7.553h-1.843zm.905-1.415a1.16 1.16 0 0 1-.856-.346 1.17 1.17 0 0 1-.346-.856 1.05 1.05 0 0 1 .346-.79q.346-.329.856-.329.494 0 .839.33a1.05 1.05 0 0 1 .345.79 1.16 1.16 0 0 1-.345.855q-.33.346-.84.346zm7.875 9.133a3.17 3.17 0 0 1-1.662-.444q-.723-.46-1.004-1.053l-.033 1.332h-1.71V4.701h1.743v4.657l-.082 1.283q.279-.658 1.086-1.119a3.5 3.5 0 0 1 1.778-.477q1.119 0 1.942.51a3.24 3.24 0 0 1 1.283 1.4q.445.888.444 2.072 0 1.201-.526 2.09a3.5 3.5 0 0 1-1.382 1.366 3.8 3.8 0 0 1-1.876.477zm-.296-1.481q1.069 0 1.645-.675.577-.69.577-1.778 0-1.102-.577-1.776-.56-.691-1.645-.692a2.12 2.12 0 0 0-1.58.659q-.642.641-.642 1.694v.115q0 .71.296 1.267a2.4 2.4 0 0 0 .807.872 2.1 2.1 0 0 0 1.119.313zm5.927-6.237h1.777v1.481q.263-.757.856-1.217a2.14 2.14 0 0 1 1.349-.46q.527 0 .724.098l-.247 1.794q-.149-.099-.642-.099-.774 0-1.416.494-.626.493-.626 1.58v3.883h-1.777V9.242zm9.534 7.718q-1.35 0-2.255-.526-.904-.543-1.332-1.432a4.6 4.6 0 0 1-.428-1.975q0-1.2.493-2.106a3.46 3.46 0 0 1 1.4-1.382q.889-.495 2.007-.494 1.744 0 2.584.97.855.956.856 2.7 0 .444-.05.92h-5.43q.18 1.005.708 1.45.542.443 1.497.443.79 0 1.3-.131a4 4 0 0 0 .938-.362l.542 1.267q-.411.263-1.119.46-.708.198-1.711.197zm1.596-4.558q.016-1.02-.444-1.432-.46-.428-1.316-.428-1.728 0-1.991 1.86z'/%3E%3Cpath d='M5.074 15.948a.484.657 0 0 0-.486.659v1.84a.484.657 0 0 0 .486.659h4.101a.484.657 0 0 0 .486-.659v-1.84a.484.657 0 0 0-.486-.659zm3.56 1.16H5.617v.838h3.017z' style='fill:%23fff;fill-rule:evenodd;stroke-width:1.03600001'/%3E%3Cg style='stroke-width:1.12603545'%3E%3Cpath d='M-9.408-1.416c-3.833-.025-7.056 2.912-7.08 6.615-.02 3.08 1.653 4.832 3.107 6.268.903.892 1.721 1.74 2.32 2.902l-.525-.004c-.543-.003-.992.304-1.24.639a1.87 1.87 0 0 0-.362 1.121l-.011 1.877c-.003.402.104.787.347 1.125.244.338.688.653 1.23.656l4.142.028c.542.003.99-.306 1.238-.641a1.87 1.87 0 0 0 .363-1.121l.012-1.875a1.87 1.87 0 0 0-.348-1.127c-.243-.338-.688-.653-1.23-.656l-.518-.004c.597-1.145 1.425-1.983 2.348-2.87 1.473-1.414 3.18-3.149 3.2-6.226-.016-3.59-2.923-6.684-6.993-6.707m-.006 1.1v.002c3.274.02 5.92 2.532 5.9 5.6-.017 2.706-1.39 4.026-2.863 5.44-1.034.994-2.118 2.033-2.814 3.633-.018.041-.052.055-.075.065q-.013.004-.02.01a.34.34 0 0 1-.226.084.34.34 0 0 1-.224-.086l-.092-.077c-.699-1.615-1.768-2.669-2.781-3.67-1.454-1.435-2.797-2.762-2.78-5.478.02-3.067 2.7-5.545 5.975-5.523m-.02 2.826c-1.62-.01-2.944 1.315-2.955 2.96-.01 1.646 1.295 2.988 2.916 2.999h.002c1.621.01 2.943-1.316 2.953-2.961.011-1.646-1.294-2.988-2.916-2.998m-.005 1.1c1.017.006 1.829.83 1.822 1.89s-.83 1.874-1.848 1.867c-1.018-.006-1.829-.83-1.822-1.89s.83-1.874 1.848-1.868m-2.155 11.857 4.14.025c.271.002.49.305.487.676l-.013 1.875c-.003.37-.224.67-.495.668l-4.14-.025c-.27-.002-.487-.306-.485-.676l.012-1.875c.003-.37.224-.67.494-.668' style='color:%23000;font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:%23000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:evenodd;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:%23000;solid-opacity:1;vector-effect:none;fill:%23000;fill-opacity:.4;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-9.415-.316C-12.69-.338-15.37 2.14-15.39 5.207c-.017 2.716 1.326 4.041 2.78 5.477 1.013 1 2.081 2.055 2.78 3.67l.092.076a.34.34 0 0 0 .225.086.34.34 0 0 0 .227-.083l.019-.01c.022-.009.057-.024.074-.064.697-1.6 1.78-2.64 2.814-3.634 1.473-1.414 2.847-2.733 2.864-5.44.02-3.067-2.627-5.58-5.901-5.601m-.057 8.784c1.621.011 2.944-1.315 2.955-2.96.01-1.646-1.295-2.988-2.916-2.999-1.622-.01-2.945 1.315-2.955 2.96s1.295 2.989 2.916 3' style='clip-rule:evenodd;fill:%23e1e3e9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-11.594 15.465c-.27-.002-.492.297-.494.668l-.012 1.876c-.003.371.214.673.485.675l4.14.027c.271.002.492-.298.495-.668l.012-1.877c.003-.37-.215-.672-.485-.674z' style='clip-rule:evenodd;fill:%23fff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3C/g%3E%3C/svg%3E")}}@media (forced-colors:active) and (prefers-color-scheme:light){a.maplibregl-ctrl-logo{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='23' fill='none'%3E%3Cpath fill='%23000' fill-opacity='.4' fill-rule='evenodd' d='M17.408 16.796h-1.827l2.501-12.095h.198l3.324 6.533.988 2.19.988-2.19 3.258-6.533h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.929 5.644h-.098l-2.914-5.644-.757-1.71-.345 1.71zm1.958-3.42-.726 3.663a1.255 1.255 0 0 1-1.232 1.011h-1.827a1.255 1.255 0 0 1-1.229-1.509l2.501-12.095a1.255 1.255 0 0 1 1.23-1.001h.197a1.25 1.25 0 0 1 1.12.685l3.19 6.273 3.125-6.263a1.25 1.25 0 0 1 1.123-.695h.181a1.255 1.255 0 0 1 1.227.991l1.443 6.71a5 5 0 0 1 .314-.787l.009-.016a4.6 4.6 0 0 1 1.777-1.887c.782-.46 1.668-.667 2.611-.667a4.6 4.6 0 0 1 1.7.32l.306.134c.21-.16.474-.256.759-.256h1.694a1.255 1.255 0 0 1 1.212.925 1.255 1.255 0 0 1 1.212-.925h1.711c.284 0 .545.094.755.252.613-.3 1.312-.45 2.075-.45 1.356 0 2.557.445 3.482 1.4q.47.48.763 1.064V4.701a1.255 1.255 0 0 1 1.255-1.255h1.86A1.255 1.255 0 0 1 54.44 4.7v9.194h2.217c.19 0 .37.043.532.118v-4.77c0-.356.147-.678.385-.906a2.42 2.42 0 0 1-.682-1.71c0-.665.267-1.253.735-1.7a2.45 2.45 0 0 1 1.722-.674 2.43 2.43 0 0 1 1.705.675q.318.302.504.683V4.7a1.255 1.255 0 0 1 1.255-1.255h1.744A1.255 1.255 0 0 1 65.812 4.7v3.335a4.8 4.8 0 0 1 1.526-.246c.938 0 1.817.214 2.59.69a4.47 4.47 0 0 1 1.67 1.743v-.98a1.255 1.255 0 0 1 1.256-1.256h1.777c.233 0 .451.064.639.174a3.4 3.4 0 0 1 1.567-.372c.346 0 .861.02 1.285.232a1.25 1.25 0 0 1 .689 1.004 4.7 4.7 0 0 1 .853-.588c.795-.44 1.675-.647 2.61-.647 1.385 0 2.65.39 3.525 1.396.836.938 1.168 2.173 1.168 3.528q-.001.515-.056 1.051a1.255 1.255 0 0 1-.947 1.09l.408.952a1.255 1.255 0 0 1-.477 1.552c-.418.268-.92.463-1.458.612-.613.171-1.304.244-2.049.244-1.06 0-2.043-.207-2.886-.698l-.015-.008c-.798-.48-1.419-1.135-1.818-1.963l-.004-.008a5.8 5.8 0 0 1-.548-2.512q0-.429.053-.843a1.3 1.3 0 0 1-.333-.086l-.166-.004c-.223 0-.426.062-.643.228-.03.024-.142.139-.142.59v3.883a1.255 1.255 0 0 1-1.256 1.256h-1.777a1.255 1.255 0 0 1-1.256-1.256V15.69l-.032.057a4.8 4.8 0 0 1-1.86 1.833 5.04 5.04 0 0 1-2.484.634 4.5 4.5 0 0 1-1.935-.424 1.25 1.25 0 0 1-.764.258h-1.71a1.255 1.255 0 0 1-1.256-1.255V7.687a2.4 2.4 0 0 1-.428.625c.253.23.412.561.412.93v7.553a1.255 1.255 0 0 1-1.256 1.255h-1.843a1.25 1.25 0 0 1-.894-.373c-.228.23-.544.373-.894.373H51.32a1.255 1.255 0 0 1-1.256-1.255v-1.251l-.061.117a4.7 4.7 0 0 1-1.782 1.884 4.77 4.77 0 0 1-2.485.67 5.6 5.6 0 0 1-1.485-.188l.009 2.764a1.255 1.255 0 0 1-1.255 1.259h-1.729a1.255 1.255 0 0 1-1.255-1.255v-3.537a1.255 1.255 0 0 1-1.167.793h-1.679a1.25 1.25 0 0 1-.77-.263 4.5 4.5 0 0 1-1.945.429c-.885 0-1.724-.21-2.495-.632l-.017-.01a5 5 0 0 1-1.081-.836 1.255 1.255 0 0 1-1.254 1.312h-1.81a1.255 1.255 0 0 1-1.228-.99l-.782-3.625-2.044 3.939a1.25 1.25 0 0 1-1.115.676h-.098a1.25 1.25 0 0 1-1.116-.68l-2.061-3.994zM35.92 16.63l.207-.114.223-.15q.493-.356.735-.785l.061-.118.033 1.332h1.678V9.242h-1.694l-.033 1.267q-.133-.329-.526-.658l-.032-.028a3.2 3.2 0 0 0-.668-.428l-.27-.12a3.3 3.3 0 0 0-1.235-.23q-1.136-.001-1.974.493a3.36 3.36 0 0 0-1.3 1.382q-.445.89-.444 2.074 0 1.2.51 2.107a3.8 3.8 0 0 0 1.382 1.381 3.9 3.9 0 0 0 1.893.477q.795 0 1.455-.33zm-2.789-5.38q-.576.675-.575 1.762 0 1.102.559 1.794.576.675 1.645.675a2.25 2.25 0 0 0 .934-.19 2.2 2.2 0 0 0 .468-.29l.178-.161a2.2 2.2 0 0 0 .397-.561q.244-.5.244-1.15v-.115q0-.708-.296-1.267l-.043-.077a2.2 2.2 0 0 0-.633-.709l-.13-.086-.047-.028a2.1 2.1 0 0 0-1.073-.285q-1.052 0-1.629.692zm2.316 2.706c.163-.17.28-.407.28-.83v-.114c0-.292-.06-.508-.15-.68a.96.96 0 0 0-.353-.389.85.85 0 0 0-.464-.127c-.4 0-.56.114-.664.239l-.01.012c-.148.174-.275.45-.275.945 0 .506.122.801.27.99.097.11.266.224.68.224.303 0 .504-.09.687-.269zm7.545 1.705a2.6 2.6 0 0 0 .331.423q.319.33.755.548l.173.074q.65.255 1.49.255 1.02 0 1.844-.493a3.45 3.45 0 0 0 1.316-1.4q.493-.904.493-2.089 0-1.909-.988-2.913-.988-1.02-2.584-1.02-.898 0-1.575.347a3 3 0 0 0-.415.262l-.199.166a3.4 3.4 0 0 0-.64.82V9.242h-1.712v11.553h1.729l-.017-5.134zm.53-1.138q.206.29.48.5l.155.11.053.034q.51.296 1.119.297 1.07 0 1.645-.675.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.435 0-.835.16a2 2 0 0 0-.284.136 2 2 0 0 0-.363.254 2.2 2.2 0 0 0-.46.569l-.082.162a2.6 2.6 0 0 0-.213 1.072v.115q0 .707.296 1.267l.135.211zm.964-.818a1.1 1.1 0 0 0 .367.385.94.94 0 0 0 .476.118c.423 0 .59-.117.687-.23.159-.194.28-.478.28-.95 0-.53-.133-.8-.266-.952l-.021-.025c-.078-.094-.231-.221-.68-.221a1 1 0 0 0-.503.135l-.012.007a.86.86 0 0 0-.335.343c-.073.133-.132.324-.132.614v.115a1.4 1.4 0 0 0 .14.66zm15.7-6.222q.347-.346.346-.856a1.05 1.05 0 0 0-.345-.79 1.18 1.18 0 0 0-.84-.329q-.51 0-.855.33a1.05 1.05 0 0 0-.346.79q0 .51.346.855.345.346.856.346.51 0 .839-.346zm4.337 9.314.033-1.332q.191.403.59.747l.098.081a4 4 0 0 0 .316.224l.223.122a3.2 3.2 0 0 0 1.44.322 3.8 3.8 0 0 0 1.875-.477 3.5 3.5 0 0 0 1.382-1.366q.527-.89.526-2.09 0-1.184-.444-2.073a3.24 3.24 0 0 0-1.283-1.399q-.823-.51-1.942-.51a3.5 3.5 0 0 0-1.527.344l-.086.043-.165.09a3 3 0 0 0-.33.214q-.432.315-.656.707a2 2 0 0 0-.099.198l.082-1.283V4.701h-1.744v12.095zm.473-2.509a2.5 2.5 0 0 0 .566.7q.117.098.245.18l.144.08a2.1 2.1 0 0 0 .975.232q1.07 0 1.645-.675.576-.69.576-1.778 0-1.102-.576-1.777-.56-.691-1.645-.692a2.2 2.2 0 0 0-1.015.235q-.22.113-.415.282l-.15.142a2.1 2.1 0 0 0-.42.594q-.223.479-.223 1.1v.115q0 .705.293 1.26zm2.616-.293c.157-.191.28-.479.28-.967 0-.51-.13-.79-.276-.961l-.021-.026c-.082-.1-.232-.225-.67-.225a.87.87 0 0 0-.681.279l-.012.011c-.154.155-.274.38-.274.807v.115c0 .285.057.499.144.669a1.1 1.1 0 0 0 .367.405c.137.082.28.123.455.123.423 0 .59-.118.686-.23zm8.266-3.013q.345-.13.724-.14l.069-.002q.493 0 .642.099l.247-1.794q-.196-.099-.717-.099a2.3 2.3 0 0 0-.545.063 2 2 0 0 0-.411.148 2.2 2.2 0 0 0-.4.249 2.5 2.5 0 0 0-.485.499 2.7 2.7 0 0 0-.32.581l-.05.137v-1.48h-1.778v7.553h1.777v-3.884q0-.546.159-.943a1.5 1.5 0 0 1 .466-.636 2.5 2.5 0 0 1 .399-.253 2 2 0 0 1 .224-.099zm9.784 2.656.05-.922q0-1.743-.856-2.698-.838-.97-2.584-.97-1.119-.001-2.007.493a3.46 3.46 0 0 0-1.4 1.382q-.493.906-.493 2.106 0 1.07.428 1.975.428.89 1.332 1.432.906.526 2.255.526.973 0 1.668-.185l.044-.012.135-.04q.613-.184.984-.421l-.542-1.267q-.3.162-.642.274l-.297.087q-.51.131-1.3.131-.954 0-1.497-.444a1.6 1.6 0 0 1-.192-.193q-.366-.44-.512-1.234l-.004-.021zm-5.427-1.256-.003.022h3.752v-.138q-.011-.727-.288-1.118a1 1 0 0 0-.156-.176q-.46-.428-1.316-.428-.986 0-1.494.604-.379.45-.494 1.234zm-27.053 2.77V4.7h-1.86v12.095h5.333V15.15zm7.103-5.908v7.553h-1.843V9.242h1.843z'/%3E%3Cpath fill='%23fff' d='m19.63 11.151-.757-1.71-.345 1.71-1.12 5.644h-1.827L18.083 4.7h.197l3.325 6.533.988 2.19.988-2.19L26.839 4.7h.181l2.6 12.095h-1.81l-1.218-5.644-.362-1.71-.658 1.71-2.93 5.644h-.098l-2.913-5.644zm14.836 5.81q-1.02 0-1.893-.478a3.8 3.8 0 0 1-1.381-1.382q-.51-.906-.51-2.106 0-1.185.444-2.074a3.36 3.36 0 0 1 1.3-1.382q.839-.494 1.974-.494a3.3 3.3 0 0 1 1.234.231 3.3 3.3 0 0 1 .97.575q.396.33.527.659l.033-1.267h1.694v7.553H37.18l-.033-1.332q-.279.593-1.02 1.053a3.17 3.17 0 0 1-1.662.444zm.296-1.482q.938 0 1.58-.642.642-.66.642-1.711v-.115q0-.708-.296-1.267a2.2 2.2 0 0 0-.807-.872 2.1 2.1 0 0 0-1.119-.313q-1.053 0-1.629.692-.575.675-.575 1.76 0 1.103.559 1.795.577.675 1.645.675zm6.521-6.237h1.711v1.4q.906-1.597 2.83-1.597 1.596 0 2.584 1.02.988 1.005.988 2.914 0 1.185-.493 2.09a3.46 3.46 0 0 1-1.316 1.399 3.5 3.5 0 0 1-1.844.493q-.954 0-1.662-.329a2.67 2.67 0 0 1-1.086-.97l.017 5.134h-1.728zm4.048 6.22q1.07 0 1.645-.674.577-.69.576-1.762 0-1.119-.576-1.777-.558-.675-1.645-.675-.592 0-1.12.296-.51.28-.822.823-.296.527-.296 1.234v.115q0 .708.296 1.267.313.543.823.855.51.296 1.119.297z'/%3E%3Cpath fill='%23e1e3e9' d='M51.325 4.7h1.86v10.45h3.473v1.646h-5.333zm7.12 4.542h1.843v7.553h-1.843zm.905-1.415a1.16 1.16 0 0 1-.856-.346 1.17 1.17 0 0 1-.346-.856 1.05 1.05 0 0 1 .346-.79q.346-.329.856-.329.494 0 .839.33a1.05 1.05 0 0 1 .345.79 1.16 1.16 0 0 1-.345.855q-.33.346-.84.346zm7.875 9.133a3.17 3.17 0 0 1-1.662-.444q-.723-.46-1.004-1.053l-.033 1.332h-1.71V4.701h1.743v4.657l-.082 1.283q.279-.658 1.086-1.119a3.5 3.5 0 0 1 1.778-.477q1.119 0 1.942.51a3.24 3.24 0 0 1 1.283 1.4q.445.888.444 2.072 0 1.201-.526 2.09a3.5 3.5 0 0 1-1.382 1.366 3.8 3.8 0 0 1-1.876.477zm-.296-1.481q1.069 0 1.645-.675.577-.69.577-1.778 0-1.102-.577-1.776-.56-.691-1.645-.692a2.12 2.12 0 0 0-1.58.659q-.642.641-.642 1.694v.115q0 .71.296 1.267a2.4 2.4 0 0 0 .807.872 2.1 2.1 0 0 0 1.119.313zm5.927-6.237h1.777v1.481q.263-.757.856-1.217a2.14 2.14 0 0 1 1.349-.46q.527 0 .724.098l-.247 1.794q-.149-.099-.642-.099-.774 0-1.416.494-.626.493-.626 1.58v3.883h-1.777V9.242zm9.534 7.718q-1.35 0-2.255-.526-.904-.543-1.332-1.432a4.6 4.6 0 0 1-.428-1.975q0-1.2.493-2.106a3.46 3.46 0 0 1 1.4-1.382q.889-.495 2.007-.494 1.744 0 2.584.97.855.956.856 2.7 0 .444-.05.92h-5.43q.18 1.005.708 1.45.542.443 1.497.443.79 0 1.3-.131a4 4 0 0 0 .938-.362l.542 1.267q-.411.263-1.119.46-.708.198-1.711.197zm1.596-4.558q.016-1.02-.444-1.432-.46-.428-1.316-.428-1.728 0-1.991 1.86z'/%3E%3Cpath d='M5.074 15.948a.484.657 0 0 0-.486.659v1.84a.484.657 0 0 0 .486.659h4.101a.484.657 0 0 0 .486-.659v-1.84a.484.657 0 0 0-.486-.659zm3.56 1.16H5.617v.838h3.017z' style='fill:%23fff;fill-rule:evenodd;stroke-width:1.03600001'/%3E%3Cg style='stroke-width:1.12603545'%3E%3Cpath d='M-9.408-1.416c-3.833-.025-7.056 2.912-7.08 6.615-.02 3.08 1.653 4.832 3.107 6.268.903.892 1.721 1.74 2.32 2.902l-.525-.004c-.543-.003-.992.304-1.24.639a1.87 1.87 0 0 0-.362 1.121l-.011 1.877c-.003.402.104.787.347 1.125.244.338.688.653 1.23.656l4.142.028c.542.003.99-.306 1.238-.641a1.87 1.87 0 0 0 .363-1.121l.012-1.875a1.87 1.87 0 0 0-.348-1.127c-.243-.338-.688-.653-1.23-.656l-.518-.004c.597-1.145 1.425-1.983 2.348-2.87 1.473-1.414 3.18-3.149 3.2-6.226-.016-3.59-2.923-6.684-6.993-6.707m-.006 1.1v.002c3.274.02 5.92 2.532 5.9 5.6-.017 2.706-1.39 4.026-2.863 5.44-1.034.994-2.118 2.033-2.814 3.633-.018.041-.052.055-.075.065q-.013.004-.02.01a.34.34 0 0 1-.226.084.34.34 0 0 1-.224-.086l-.092-.077c-.699-1.615-1.768-2.669-2.781-3.67-1.454-1.435-2.797-2.762-2.78-5.478.02-3.067 2.7-5.545 5.975-5.523m-.02 2.826c-1.62-.01-2.944 1.315-2.955 2.96-.01 1.646 1.295 2.988 2.916 2.999h.002c1.621.01 2.943-1.316 2.953-2.961.011-1.646-1.294-2.988-2.916-2.998m-.005 1.1c1.017.006 1.829.83 1.822 1.89s-.83 1.874-1.848 1.867c-1.018-.006-1.829-.83-1.822-1.89s.83-1.874 1.848-1.868m-2.155 11.857 4.14.025c.271.002.49.305.487.676l-.013 1.875c-.003.37-.224.67-.495.668l-4.14-.025c-.27-.002-.487-.306-.485-.676l.012-1.875c.003-.37.224-.67.494-.668' style='color:%23000;font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:%23000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:evenodd;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:%23000;solid-opacity:1;vector-effect:none;fill:%23000;fill-opacity:.4;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-9.415-.316C-12.69-.338-15.37 2.14-15.39 5.207c-.017 2.716 1.326 4.041 2.78 5.477 1.013 1 2.081 2.055 2.78 3.67l.092.076a.34.34 0 0 0 .225.086.34.34 0 0 0 .227-.083l.019-.01c.022-.009.057-.024.074-.064.697-1.6 1.78-2.64 2.814-3.634 1.473-1.414 2.847-2.733 2.864-5.44.02-3.067-2.627-5.58-5.901-5.601m-.057 8.784c1.621.011 2.944-1.315 2.955-2.96.01-1.646-1.295-2.988-2.916-2.999-1.622-.01-2.945 1.315-2.955 2.96s1.295 2.989 2.916 3' style='clip-rule:evenodd;fill:%23e1e3e9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3Cpath d='M-11.594 15.465c-.27-.002-.492.297-.494.668l-.012 1.876c-.003.371.214.673.485.675l4.14.027c.271.002.492-.298.495-.668l.012-1.877c.003-.37-.215-.672-.485-.674z' style='clip-rule:evenodd;fill:%23fff;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:2.47727823;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:.4' transform='translate(15.553 2.85)scale(.88807)'/%3E%3C/g%3E%3C/svg%3E")}}.maplibregl-ctrl.maplibregl-ctrl-attrib{background-color:#ffffff80;margin:0;padding:0 5px}@media screen{.maplibregl-ctrl-attrib.maplibregl-compact{background-color:#fff;border-radius:12px;box-sizing:content-box;color:#000;margin:10px;min-height:20px;padding:2px 24px 2px 0;position:relative}.maplibregl-ctrl-attrib.maplibregl-compact-show{padding:2px 28px 2px 8px;visibility:visible}.maplibregl-ctrl-bottom-left>.maplibregl-ctrl-attrib.maplibregl-compact-show,.maplibregl-ctrl-top-left>.maplibregl-ctrl-attrib.maplibregl-compact-show{border-radius:12px;padding:2px 8px 2px 28px}.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-inner{display:none}.maplibregl-ctrl-attrib-button{background-color:#ffffff80;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E");border:0;border-radius:12px;box-sizing:border-box;cursor:pointer;display:none;height:24px;outline:none;position:absolute;right:0;top:0;width:24px}.maplibregl-ctrl-attrib summary.maplibregl-ctrl-attrib-button{-webkit-appearance:none;-moz-appearance:none;appearance:none;list-style:none}.maplibregl-ctrl-attrib summary.maplibregl-ctrl-attrib-button::-webkit-details-marker{display:none}.maplibregl-ctrl-bottom-left .maplibregl-ctrl-attrib-button,.maplibregl-ctrl-top-left .maplibregl-ctrl-attrib-button{left:0}.maplibregl-ctrl-attrib.maplibregl-compact .maplibregl-ctrl-attrib-button,.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner{display:block}.maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button{background-color:#0000000d}.maplibregl-ctrl-bottom-right>.maplibregl-ctrl-attrib.maplibregl-compact:after{bottom:0;right:0}.maplibregl-ctrl-top-right>.maplibregl-ctrl-attrib.maplibregl-compact:after{right:0;top:0}.maplibregl-ctrl-top-left>.maplibregl-ctrl-attrib.maplibregl-compact:after{left:0;top:0}.maplibregl-ctrl-bottom-left>.maplibregl-ctrl-attrib.maplibregl-compact:after{bottom:0;left:0}}@media screen and (forced-colors:active){.maplibregl-ctrl-attrib.maplibregl-compact:after{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='%23fff' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E")}}@media screen and (forced-colors:active) and (prefers-color-scheme:light){.maplibregl-ctrl-attrib.maplibregl-compact:after{background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill-rule='evenodd' viewBox='0 0 20 20'%3E%3Cpath d='M4 10a6 6 0 1 0 12 0 6 6 0 1 0-12 0m5-3a1 1 0 1 0 2 0 1 1 0 1 0-2 0m0 3a1 1 0 1 1 2 0v3a1 1 0 1 1-2 0'/%3E%3C/svg%3E")}}.maplibregl-ctrl-attrib a{color:#000000bf;text-decoration:none}.maplibregl-ctrl-attrib a:hover{color:inherit;text-decoration:underline}.maplibregl-attrib-empty{display:none}.maplibregl-ctrl-scale{background-color:#ffffffbf;border:2px solid #333;border-top:#333;box-sizing:border-box;color:#333;font-size:10px;padding:0 5px;white-space:nowrap}.maplibregl-popup{display:flex;left:0;pointer-events:none;position:absolute;top:0;will-change:transform}.maplibregl-popup-anchor-top,.maplibregl-popup-anchor-top-left,.maplibregl-popup-anchor-top-right{flex-direction:column}.maplibregl-popup-anchor-bottom,.maplibregl-popup-anchor-bottom-left,.maplibregl-popup-anchor-bottom-right{flex-direction:column-reverse}.maplibregl-popup-anchor-left{flex-direction:row}.maplibregl-popup-anchor-right{flex-direction:row-reverse}.maplibregl-popup-tip{border:10px solid transparent;height:0;width:0;z-index:1}.maplibregl-popup-anchor-top .maplibregl-popup-tip{align-self:center;border-bottom-color:#fff;border-top:none}.maplibregl-popup-anchor-top-left .maplibregl-popup-tip{align-self:flex-start;border-bottom-color:#fff;border-left:none;border-top:none}.maplibregl-popup-anchor-top-right .maplibregl-popup-tip{align-self:flex-end;border-bottom-color:#fff;border-right:none;border-top:none}.maplibregl-popup-anchor-bottom .maplibregl-popup-tip{align-self:center;border-bottom:none;border-top-color:#fff}.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip{align-self:flex-start;border-bottom:none;border-left:none;border-top-color:#fff}.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip{align-self:flex-end;border-bottom:none;border-right:none;border-top-color:#fff}.maplibregl-popup-anchor-left .maplibregl-popup-tip{align-self:center;border-left:none;border-right-color:#fff}.maplibregl-popup-anchor-right .maplibregl-popup-tip{align-self:center;border-left-color:#fff;border-right:none}[dir=rtl] .maplibregl-popup-anchor-left{flex-direction:row-reverse}[dir=rtl] .maplibregl-popup-anchor-right{flex-direction:row}[dir=rtl] .maplibregl-popup-anchor-top-left .maplibregl-popup-tip{align-self:flex-end}[dir=rtl] .maplibregl-popup-anchor-top-right .maplibregl-popup-tip{align-self:flex-start}[dir=rtl] .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip{align-self:flex-end}[dir=rtl] .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip{align-self:flex-start}.maplibregl-popup-close-button{background-color:transparent;border:0;border-radius:0 3px 0 0;cursor:pointer;position:absolute;right:0;top:0}.maplibregl-popup-close-button:hover{background-color:#0000000d}.maplibregl-popup-content{background:#fff;border-radius:3px;box-shadow:0 1px 2px #0000001a;padding:15px 10px;pointer-events:auto;position:relative}.maplibregl-popup-anchor-top-left .maplibregl-popup-content{border-top-left-radius:0}.maplibregl-popup-anchor-top-right .maplibregl-popup-content{border-top-right-radius:0}.maplibregl-popup-anchor-bottom-left .maplibregl-popup-content{border-bottom-left-radius:0}.maplibregl-popup-anchor-bottom-right .maplibregl-popup-content{border-bottom-right-radius:0}.maplibregl-popup-track-pointer{display:none}.maplibregl-popup-track-pointer *{pointer-events:none;-webkit-user-select:none;-moz-user-select:none;user-select:none}.maplibregl-map:hover .maplibregl-popup-track-pointer{display:flex}.maplibregl-map:active .maplibregl-popup-track-pointer{display:none}.maplibregl-marker{left:0;position:absolute;top:0;transition:opacity .2s;will-change:transform}.maplibregl-user-location-dot,.maplibregl-user-location-dot:before{background-color:#1da1f2;border-radius:50%;height:15px;width:15px}.maplibregl-user-location-dot:before{animation:maplibregl-user-location-dot-pulse 2s infinite;content:"";position:absolute}.maplibregl-user-location-dot:after{border:2px solid #fff;border-radius:50%;box-shadow:0 0 3px #00000059;box-sizing:border-box;content:"";height:19px;left:-2px;position:absolute;top:-2px;width:19px}@media (prefers-reduced-motion:reduce){.maplibregl-user-location-dot:before{animation:none}}@keyframes maplibregl-user-location-dot-pulse{0%{opacity:1;transform:scale(1)}70%{opacity:0;transform:scale(3)}to{opacity:0;transform:scale(1)}}.maplibregl-user-location-dot-stale{background-color:#aaa}.maplibregl-user-location-dot-stale:after{display:none}.maplibregl-user-location-accuracy-circle{background-color:#1da1f233;border-radius:100%;height:1px;width:1px}.maplibregl-crosshair,.maplibregl-crosshair .maplibregl-interactive,.maplibregl-crosshair .maplibregl-interactive:active{cursor:crosshair}.maplibregl-boxzoom{background:#fff;border:2px dotted #202020;height:0;left:0;opacity:.5;position:absolute;top:0;width:0}.maplibregl-cooperative-gesture-screen{align-items:center;background:#0006;color:#fff;display:flex;font-size:1.4em;inset:0;justify-content:center;line-height:1.2;opacity:0;padding:1rem;pointer-events:none;position:absolute;transition:opacity 1s ease 1s;z-index:99999}.maplibregl-cooperative-gesture-screen.maplibregl-show{opacity:1;transition:opacity .05s}.maplibregl-cooperative-gesture-screen .maplibregl-mobile-message{display:none}@media (hover:none),(pointer:coarse){.maplibregl-cooperative-gesture-screen .maplibregl-desktop-message{display:none}.maplibregl-cooperative-gesture-screen .maplibregl-mobile-message{display:block}}.maplibregl-pseudo-fullscreen{height:100%!important;left:0!important;position:fixed!important;top:0!important;width:100%!important;z-index:99999}`;
-const heliosCardStyles = i$3`
-    ${r$4(maplibreCss)}
-
-    :host
-    {
-        display: block;
-        height:  100%;
+function getHomeCoords(config, hass) {
+  const w2 = window;
+  const o2 = w2.__heliosLocationOverride;
+  if (o2 && typeof o2.lat === "number" && typeof o2.lon === "number" && isFinite(o2.lat) && isFinite(o2.lon)) {
+    return { lat: o2.lat, lon: o2.lon };
+  }
+  const cfgLat = parseConfigCoord(config?.["home-latitude"]);
+  const cfgLon = parseConfigCoord(config?.["home-longitude"]);
+  if (cfgLat !== null && cfgLon !== null && cfgLat >= -90 && cfgLat <= 90 && cfgLon >= -180 && cfgLon <= 180) {
+    return { lat: cfgLat, lon: cfgLon };
+  }
+  const lat = hass?.config?.latitude;
+  const lon = hass?.config?.longitude;
+  if (typeof lat !== "number" || typeof lon !== "number") return null;
+  return { lat, lon };
+}
+function computeConfigSig(config) {
+  if (!config) {
+    return "";
+  }
+  return VISUAL_CONFIG_KEYS.map((k2) => `${k2}=${config[k2] ?? ""}`).join("|");
+}
+function initVisibilityObserver(host) {
+  if (host._visibilityObserver || typeof IntersectionObserver === "undefined") {
+    return;
+  }
+  host._visibilityObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      setAnimationsPaused(host, !entry.isIntersecting);
     }
-
-    ha-card
-    {
-        position: relative;
-        overflow: hidden;
-        background: #000;
-        border-radius: var(--ha-card-border-radius, 12px);
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        height:     100%;
-        width:      100%;
-        /*  Floor that survives dashboard layouts where the parent
-            doesn't apply an explicit height (vertical-stack, panel
-            view, some custom dashboards like Mushroom-based grids).
-            Without this floor, height:100% resolves to the children's
-            intrinsic height, which means only the timeline chart's
-            ~150 px contributes and the 3D map area collapses out of
-            view. 480 px leaves the chart its natural height and gives
-            the map area ~330 px which is enough to read the home and
-            its surroundings. Layouts that DO pass an explicit height
-            (masonry via getCardSize, sections view via getGridOptions)
-            override this freely.                                       */
-        min-height: 480px;
-        /*  New stacking context so absolute children with z-index
-            stay scoped to the card instead of escaping above HA's
-            dashboard chrome on scroll. */
-        isolation: isolate;
+  }, { threshold: 0 });
+  host._visibilityObserver.observe(host);
+}
+function initEngine(host) {
+  host._initInflight = true;
+  if (host._initDebounceTimer !== void 0) {
+    window.clearTimeout(host._initDebounceTimer);
+  }
+  host._initDebounceTimer = window.setTimeout(() => {
+    host._initDebounceTimer = void 0;
+    initEngineNow(host);
+  }, INIT_DEBOUNCE_MS);
+}
+function initEngineNow(host) {
+  requestAnimationFrame(() => {
+    const cardEl = host;
+    const container = cardEl.shadowRoot?.getElementById("map-container");
+    if (!container || !host.config || !host.hass?.config) {
+      host._initInflight = false;
+      return;
     }
-
-    #map-container
-    {
-        width: 100%;
-        height: 100%;
-        position: relative;
+    const coords = getHomeCoords(host.config, host.hass);
+    if (!coords) {
+      host._initInflight = false;
+      return;
     }
-
-    /*  Force-hide the MapLibre attribution rail. attributionControl
-        compact: true is meant to collapse it to an icon, but MapLibre
-        auto-expands the full bar above 640 px viewport width which
-        most dashboard cards exceed. We hide it outright via CSS, the
-        attribution credit (MapLibre + OpenFreeMap + OpenMapTiles +
-        OpenStreetMap data) lives in the README and the HACS info pane
-        so the license obligation stays satisfied through documentation
-        rather than chrome real estate. */
-    .maplibregl-ctrl-attrib,
-    .maplibregl-ctrl-bottom-right,
-    .maplibregl-ctrl-bottom-left
-    {
-        display: none !important;
+    const { lat, lon } = coords;
+    const elevation = host.hass.config.elevation;
+    host._engine?.cleanup();
+    while (container.firstChild) {
+      container.removeChild(container.firstChild);
     }
-
-
-    /*  Home hitbox, invisible circular click target centred on the
-        home's projected screen position. Sits above every overlay
-        SVG (z 12) but below the detail panel (z 60) so a click
-        always reaches it, regardless of which chip / leader happens
-        to sit underneath at that moment. */
-    .home-hitbox
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        width:  72px;
-        height: 72px;
-        border-radius: 50%;
-        background: transparent;
-        cursor: pointer;
-        pointer-events: auto;
-        z-index: 12;
+    host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
+    host.requestUpdate();
+    host._engine.onFetchStart = () => {
+      host._fetching = true;
+    };
+    host._engine.onFetchEnd = () => {
+      host._fetching = false;
+    };
+    host._engine.onWeatherUpdate = (data) => {
+      host._cloudCover = data.cloudCover;
+      host._timeRange = data.timeRange;
+      host._isLiveMode = data.isLiveTime;
+      host._chartSeries = host._engine?.getTimelineSeries() ?? null;
+      refreshOverlays(host);
+    };
+    host._engine.onMapTransform = () => {
+      refreshOverlays(host);
+    };
+    host._engine.onContextLost = () => {
+      host._lastHomeKey = "";
+      if (!host._initInflight) initEngine(host);
+    };
+    host._engine.onShadowComputeStart = () => {
+      host._shadowBusy = true;
+    };
+    host._engine.onShadowComputeEnd = () => {
+      host._shadowBusy = false;
+    };
+    host._initInflight = false;
+  });
+}
+function renderChart(host) {
+  const series = host._chartSeries;
+  const range = host._timeRange;
+  if (!series || !range || series.times.length < 2) {
+    return b`<svg class="hc-chart-svg" viewBox="0 0 1000 100" preserveAspectRatio="none"></svg>`;
+  }
+  const W = 1e3;
+  const H2 = 100;
+  const MID = H2 / 2;
+  const HALF = H2 / 2;
+  const startMs = range.start.getTime();
+  const rangeMs = range.end.getTime() - startMs;
+  if (rangeMs <= 0) {
+    return b`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="none"></svg>`;
+  }
+  const xOf = (t2) => (t2.getTime() - startMs) / rangeMs * W;
+  const yIrr = (w2) => MID - Math.max(0, Math.min(1, w2 / 1e3)) * HALF;
+  const yCloud = (pct) => MID + Math.max(0, Math.min(1, pct / 100)) * HALF;
+  const irrPoints = series.times.map((t2, i2) => `${xOf(t2).toFixed(2)},${yIrr(series.irradiance[i2] ?? 0).toFixed(2)}`);
+  const cloudPoints = series.times.map((t2, i2) => `${xOf(t2).toFixed(2)},${yCloud(series.cloud[i2] ?? 0).toFixed(2)}`);
+  const x0 = xOf(series.times[0]);
+  const xN = xOf(series.times[series.times.length - 1]);
+  const irrArea = `M ${x0},${MID} L ${irrPoints.join(" L ")} L ${xN},${MID} Z`;
+  const cloudArea = `M ${x0},${MID} L ${cloudPoints.join(" L ")} L ${xN},${MID} Z`;
+  const irrLine = `M ${irrPoints.join(" L ")}`;
+  const cloudLine = `M ${cloudPoints.join(" L ")}`;
+  const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
+  const cloudColor = cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
+  const startMsAbs = range.start.getTime();
+  const endMsAbs = range.end.getTime();
+  const dayXs = [];
+  const dCursor = new Date(range.start);
+  dCursor.setHours(0, 0, 0, 0);
+  while (dCursor.getTime() <= endMsAbs) {
+    const next3 = new Date(dCursor);
+    next3.setDate(next3.getDate() + 1);
+    if (dCursor.getTime() > startMsAbs && dCursor.getTime() < endMsAbs) {
+      dayXs.push(xOf(dCursor));
     }
-
-    /*  Home hover glow. Same base + top + side-quad polygons as the
-        cloud-disc mask (so it tracks rotation pixel-for-pixel with
-        the building extrusion), painted in the configured sun colour
-        with a CSS drop-shadow bloom. Opacity is the only thing that
-        animates so the fade is GPU-cheap, the geometry comes back
-        every frame from the engine without re-rendering this SVG. */
-    .home-glow-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 11;
-        opacity: 0;
-        transition: opacity 0.18s ease;
-        /* Single soft drop-shadow, the bloom hints "interactive"
-           without overpowering the building underneath. */
-        filter: drop-shadow(0 0 6px var(--helios-sun-color, #f59e0b));
+    dCursor.setTime(next3.getTime());
+  }
+  const hourXs = [];
+  const hCursor = new Date(range.start);
+  hCursor.setMinutes(0, 0, 0);
+  hCursor.setHours(hCursor.getHours() + 1);
+  while (hCursor.getTime() <= endMsAbs) {
+    if (hCursor.getTime() > startMsAbs && hCursor.getHours() !== 0) {
+      hourXs.push(xOf(hCursor));
     }
-    .home-glow-svg.is-hovered { opacity: 0.7; }
-
-    /*  Touch devices have no hover state, mouseenter / mouseleave
-        never fire, so the .is-hovered class is never applied. Show
-        the glow permanently at a softer opacity so the user still
-        gets a visual hint that the home is tappable. The detail-
-        mode fade rule (specificity 0,2,0) wins over this (0,1,0)
-        so the glow still fades out when the dashboard opens. */
-    @media (hover: none)
-    {
-        .home-glow-svg { opacity: 0.45; }
+    hCursor.setHours(hCursor.getHours() + 1);
+  }
+  const HOUR_TICK_HALF = 3;
+  return b`
+        <svg
+            class="hc-chart-svg"
+            viewBox="0 0 ${W} ${H2}"
+            preserveAspectRatio="none"
+        >
+            <path
+                d="${irrArea}"
+                fill="${sunColor}"
+                fill-opacity="0.5"
+            ></path>
+            <path
+                d="${cloudArea}"
+                fill="${cloudColor}"
+                fill-opacity="0.5"
+            ></path>
+            <path
+                class="hc-chart-line"
+                d="${irrLine}"
+                stroke="${sunColor}"
+            ></path>
+            <path
+                class="hc-chart-line"
+                d="${cloudLine}"
+                stroke="${cloudColor}"
+            ></path>
+            ${dayXs.map((x2) => w`
+                <line
+                    class="hc-day-sep"
+                    x1="${x2.toFixed(2)}" y1="0"
+                    x2="${x2.toFixed(2)}" y2="${H2}"
+                ></line>
+            `)}
+            <line
+                class="hc-chart-mid"
+                x1="0" y1="${MID}"
+                x2="${W}" y2="${MID}"
+            ></line>
+            ${hourXs.map((x2) => w`
+                <line
+                    class="hc-hour-tick"
+                    x1="${x2.toFixed(2)}" y1="${MID - HOUR_TICK_HALF}"
+                    x2="${x2.toFixed(2)}" y2="${MID + HOUR_TICK_HALF}"
+                ></line>
+            `)}
+        </svg>
+    `;
+}
+function renderPvChart(host) {
+  const range = host._timeRange;
+  const hist = host._pvHistory;
+  const W = 1e3;
+  const H2 = 100;
+  if (!range) {
+    return b`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="none"></svg>`;
+  }
+  const startMs = range.start.getTime();
+  const rangeMs = range.end.getTime() - startMs;
+  if (rangeMs <= 0) {
+    return b`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="none"></svg>`;
+  }
+  const pvColor = cfgHex(host.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
+  const endMsAbs = range.end.getTime();
+  const dayXs = [];
+  const dCursor = new Date(range.start);
+  dCursor.setHours(0, 0, 0, 0);
+  while (dCursor.getTime() <= endMsAbs) {
+    const next3 = new Date(dCursor);
+    next3.setDate(next3.getDate() + 1);
+    if (dCursor.getTime() > startMs && dCursor.getTime() < endMsAbs) {
+      dayXs.push((dCursor.getTime() - startMs) / rangeMs * W);
     }
-    .home-glow-svg .home-glow-shape
-    {
-        fill: var(--helios-sun-color, #f59e0b);
-        fill-opacity: 0.08;
-        stroke: var(--helios-sun-color, #f59e0b);
-        stroke-width: 1;
-        stroke-linejoin: round;
-        pointer-events: none;
+    dCursor.setTime(next3.getTime());
+  }
+  const lu = (host._pvUnit || "").toLowerCase();
+  const isCumulativeEnergy = lu === "wh" || lu === "kwh" || lu === "mwh";
+  let rawTimes = hist?.times ?? [];
+  let rawValues = hist?.values ?? [];
+  if (isCumulativeEnergy && rawTimes.length >= 2) {
+    const dTimes = [];
+    const dValues = [];
+    for (let i2 = 1; i2 < rawTimes.length; i2++) {
+      const dtH = (rawTimes[i2].getTime() - rawTimes[i2 - 1].getTime()) / 36e5;
+      if (dtH <= 0 || dtH > 6) {
+        continue;
+      }
+      const dv = rawValues[i2] - rawValues[i2 - 1];
+      if (dv < 0) {
+        continue;
+      }
+      dTimes.push(rawTimes[i2]);
+      dValues.push(dv / dtH);
     }
-
-
-    /*  Detail mode, while ha-card carries .detail-active every
-        pre-existing overlay fades out and stops intercepting
-        pointer events. The transition rides at 0.35 s ease so the
-        fade matches the eye-pleasing pacing of the camera ease in
-        the engine (0.8 s total, but the fade should land before the
-        camera settles so the panel can come in clean on top).
-
-        IMPORTANT: the transition declaration sits on the BASE
-        selector, not inside the .detail-active rule. CSS only
-        animates between two states when both states share the
-        transition property, declaring it inside .detail-active
-        only would mean removing the class snaps opacity back to 1
-        with no fade-in. */
-    .cloud-svg,
-    .cloud-leader-svg,
-    .cloud-pct-label,
-    .solar-svg,
-    .solar-pct-label,
-    .solar-horizon-icon,
-    .pv-home-leader-svg,
-    .pv-pct-label,
-    .battery-leader-svg,
-    .battery-pct-label,
-    .home-hitbox,
-    .home-glow-svg,
-    .time-bar,
-    .clock,
-    .live-return-btn,
-    .shadow-busy-chip
-    {
-        transition: opacity 0.35s ease;
+    rawTimes = dTimes;
+    rawValues = dValues;
+  }
+  const samples = [];
+  for (let i2 = 0; i2 < rawTimes.length; i2++) {
+    const t2 = rawTimes[i2];
+    const v2 = rawValues[i2];
+    if (t2.getTime() < startMs || t2.getTime() > endMsAbs) {
+      continue;
     }
-    ha-card.detail-active .cloud-svg,
-    ha-card.detail-active .cloud-leader-svg,
-    ha-card.detail-active .cloud-pct-label,
-    ha-card.detail-active .solar-svg,
-    ha-card.detail-active .solar-pct-label,
-    ha-card.detail-active .solar-horizon-icon,
-    ha-card.detail-active .pv-home-leader-svg,
-    ha-card.detail-active .pv-pct-label,
-    ha-card.detail-active .battery-leader-svg,
-    ha-card.detail-active .battery-pct-label,
-    ha-card.detail-active .home-hitbox,
-    ha-card.detail-active .home-glow-svg,
-    ha-card.detail-active .time-bar,
-    ha-card.detail-active .clock,
-    ha-card.detail-active .live-return-btn,
-    ha-card.detail-active .shadow-busy-chip
-    {
-        opacity: 0;
-        pointer-events: none;
+    if (!isFinite(v2)) {
+      continue;
     }
-
-    /*  Detail panel, takes over the card while detail mode is on.
-        Hosts the four-section dashboard (today / week / tomorrow /
-        battery). The backdrop is a soft scrim + blur so the basemap
-        behind stays readable (the camera is zoomed and pitched
-        underneath) without competing with the panel content. The
-        panel itself no longer dismisses on a stray click; the
-        dedicated close button in the corner handles exit, since the
-        sections are scrollable on small viewports and a global
-        click-to-dismiss would close the panel on every internal
-        touch. */
-    .detail-panel
-    {
-        position: absolute;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.35);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        z-index: 60;
-        opacity: 0;
-        animation: detail-panel-fade-in 0.25s ease forwards;
-        display: flex;
-        flex-direction: column;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+    samples.push({ t: t2, v: v2 });
+  }
+  const xOf = (t2) => (t2.getTime() - startMs) / rangeMs * W;
+  const nativeFromW = (() => {
+    const native = isCumulativeEnergy ? lu === "kwh" ? "kw" : lu === "mwh" ? "mw" : lu === "wh" ? "w" : "" : lu;
+    if (native === "kw") return 1 / 1e3;
+    if (native === "mw") return 1 / 1e6;
+    return 1;
+  })();
+  const k2 = pvCalibK(host.config);
+  const coords = getHomeCoords(host.config, host.hass);
+  const lat = coords?.lat;
+  const lon = coords?.lon;
+  const series = host._chartSeries;
+  const predictedSamples = [];
+  if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
+    const nowMs = Date.now();
+    for (let i2 = 0; i2 < series.times.length; i2++) {
+      const tMs = series.times[i2].getTime();
+      if (tMs < nowMs) continue;
+      if (tMs < startMs) continue;
+      if (tMs > endMsAbs) continue;
+      const pct = computePvPowerWeighted(host.config, series.times[i2], lat, lon, series.cloud[i2] ?? 0);
+      if (pct <= 0) continue;
+      predictedSamples.push({ t: series.times[i2], v: pct * k2 * nativeFromW });
     }
-    @keyframes detail-panel-fade-in
-    {
-        from { opacity: 0; }
-        to   { opacity: 1; }
+  }
+  let yMax = 1;
+  for (const s2 of samples) {
+    if (s2.v > yMax) yMax = s2.v;
+  }
+  for (const s2 of predictedSamples) {
+    if (s2.v > yMax) yMax = s2.v;
+  }
+  const yOf = (v2) => H2 - Math.max(0, Math.min(1, v2 / yMax)) * H2;
+  const points = samples.map((s2) => `${xOf(s2.t).toFixed(2)},${yOf(s2.v).toFixed(2)}`);
+  let area = "";
+  let line = "";
+  if (points.length >= 2) {
+    const x0 = xOf(samples[0].t);
+    const xN = xOf(samples[samples.length - 1].t);
+    area = `M ${x0},${H2} L ${points.join(" L ")} L ${xN},${H2} Z`;
+    line = `M ${points.join(" L ")}`;
+  }
+  let predictedLine = "";
+  if (predictedSamples.length >= 2) {
+    const pPoints = predictedSamples.map((s2) => `${xOf(s2.t).toFixed(2)},${yOf(s2.v).toFixed(2)}`);
+    predictedLine = `M ${pPoints.join(" L ")}`;
+  }
+  return b`
+        <svg
+            class="hc-chart-svg"
+            viewBox="0 0 ${W} ${H2}"
+            preserveAspectRatio="none"
+        >
+            ${dayXs.map((x2) => w`
+                <line
+                    class="hc-day-sep"
+                    x1="${x2.toFixed(2)}" y1="0"
+                    x2="${x2.toFixed(2)}" y2="${H2}"
+                ></line>
+            `)}
+            ${area ? w`
+                <path
+                    d="${area}"
+                    fill="${pvColor}"
+                    fill-opacity="0.5"
+                ></path>
+                <path
+                    class="hc-chart-line"
+                    d="${line}"
+                    stroke="${pvColor}"
+                ></path>
+            ` : A}
+            ${predictedLine ? w`
+                <path
+                    class="hc-chart-line hc-chart-predicted"
+                    d="${predictedLine}"
+                    stroke="${pvColor}"
+                ></path>
+            ` : A}
+        </svg>
+    `;
+}
+function renderTimelineTicks(host) {
+  if (!host._timeRange) {
+    return b``;
+  }
+  const { start, end } = host._timeRange;
+  const rangeMs = end.getTime() - start.getTime();
+  const now = /* @__PURE__ */ new Date();
+  const toPct = (d2) => Math.max(0, Math.min(100, (d2.getTime() - start.getTime()) / rangeMs * 100));
+  const nowPct = toPct(now);
+  const showSelected = !host._isLiveMode && host._selectedTime !== null;
+  const selPct = showSelected ? toPct(host._selectedTime) : 0;
+  return b`
+        <div class="tb-cursor-now" style="left:${nowPct}%"></div>
+        ${showSelected ? b`
+            <div class="tb-cursor-sel" style="left:${selPct}%"></div>
+        ` : A}
+    `;
+}
+function renderTimelineDayLabels(host) {
+  if (!host._timeRange) {
+    return b``;
+  }
+  const { start, end } = host._timeRange;
+  const rangeMs = end.getTime() - start.getTime();
+  const now = /* @__PURE__ */ new Date();
+  const toPct = (d2) => Math.max(0, Math.min(100, (d2.getTime() - start.getTime()) / rangeMs * 100));
+  const today0 = new Date(now);
+  today0.setHours(0, 0, 0, 0);
+  const showConsumption = timelineConsumptionEnabled(host.config);
+  const dailyKwh = showConsumption ? computeDailyKwhTotals(host) : /* @__PURE__ */ new Map();
+  const labels = [];
+  const cursor = new Date(start);
+  cursor.setHours(0, 0, 0, 0);
+  while (cursor.getTime() <= end.getTime()) {
+    const next3 = new Date(cursor);
+    next3.setDate(next3.getDate() + 1);
+    const segStart = Math.max(start.getTime(), cursor.getTime());
+    const segEnd = Math.min(end.getTime(), next3.getTime());
+    if (segEnd > segStart) {
+      const pStart = toPct(new Date(segStart));
+      const pEnd = toPct(new Date(segEnd));
+      const w2 = pEnd - pStart;
+      const dayDelta = Math.round((cursor.getTime() - today0.getTime()) / 864e5);
+      const isToday = dayDelta === 0;
+      const label = formatDate(cursor, host.config?.["date-format"]);
+      const centre = pStart + w2 / 2;
+      const labelPct = Math.min(Math.max(centre, 6), 94);
+      const kwh = dailyKwh.get(cursor.getTime());
+      const isForecast = kwh !== void 0 && cursor.getTime() > today0.getTime();
+      const kwhText = kwh !== void 0 && isFinite(kwh) && kwh >= 0.05 ? formatLocalisedNumber(host.hass, kwh, 1) + " kWh" : "";
+      labels.push(b`
+                <div
+                    class="tb-day-label ${isToday ? "tb-day-label-today" : ""}"
+                    style="left:${labelPct}%"
+                >
+                    <span class="tb-day-label-date">${label}</span>
+                    ${kwhText ? b`
+                        <span class="tb-day-label-kwh ${isForecast ? "is-forecast" : ""}">${kwhText}</span>
+                    ` : A}
+                </div>
+            `);
     }
-
-    .detail-close-btn
-    {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        width:  28px;
-        height: 28px;
-        padding: 0;
-        background: #ffffff;
-        border: 1px solid #000000;
-        border-radius: 50%;
-        color: #000000;
-        cursor: pointer;
-        z-index: 1;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        transition: transform 0.12s;
+    cursor.setTime(next3.getTime());
+  }
+  return b`<div class="tb-day-labels">${labels}</div>`;
+}
+function computeDailyKwhTotals(host) {
+  const out = /* @__PURE__ */ new Map();
+  if (!host._timeRange) return out;
+  const { start, end } = host._timeRange;
+  const startMs = start.getTime();
+  const endMsAbs = end.getTime();
+  const dayKey = (ms) => {
+    const d2 = new Date(ms);
+    d2.setHours(0, 0, 0, 0);
+    return d2.getTime();
+  };
+  const hist = host._pvHistory;
+  if (hist && hist.times.length >= 2) {
+    const unit = (host._pvUnit || "").toLowerCase();
+    const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
+    if (isCumulativeEnergy) {
+      for (let i2 = 1; i2 < hist.times.length; i2++) {
+        const tMs = hist.times[i2].getTime();
+        if (tMs < startMs || tMs > endMsAbs) continue;
+        const dv = hist.values[i2] - hist.values[i2 - 1];
+        if (!isFinite(dv) || dv < 0) continue;
+        const kwh = unit === "mwh" ? dv * 1e3 : unit === "wh" ? dv / 1e3 : dv;
+        const k22 = dayKey(tMs);
+        out.set(k22, (out.get(k22) ?? 0) + kwh);
+      }
+    } else {
+      for (let i2 = 1; i2 < hist.times.length; i2++) {
+        const tCurrMs = hist.times[i2].getTime();
+        if (tCurrMs < startMs || tCurrMs > endMsAbs) continue;
+        const tPrevMs = hist.times[i2 - 1].getTime();
+        const dtH = (tCurrMs - tPrevMs) / 36e5;
+        if (dtH <= 0 || dtH > 6) continue;
+        const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], host._pvUnit);
+        const wCurr = pvNormalizeToWatts(hist.values[i2], host._pvUnit);
+        if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+        const kwh = (wPrev + wCurr) / 2 * dtH / 1e3;
+        const k22 = dayKey(tCurrMs);
+        out.set(k22, (out.get(k22) ?? 0) + kwh);
+      }
     }
-    .detail-close-btn:hover  { transform: scale(1.05); }
-    .detail-close-btn:active { transform: scale(0.95); }
-    .detail-close-btn ha-icon { --mdc-icon-size: 16px; color: inherit; }
-    ha-card.theme-dark .detail-close-btn
-    {
-        background: #191a1b;
-        color:      #e6e6e6;
-        border-color: rgba(255, 255, 255, 0.20);
+  }
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 !== null && k2 > 0 && series && coords) {
+    const nowMs = Date.now();
+    for (let i2 = 0; i2 < series.times.length; i2++) {
+      const tMs = series.times[i2].getTime();
+      if (tMs < startMs || tMs > endMsAbs) continue;
+      if (tMs < nowMs) continue;
+      const cloud = series.cloud[i2] ?? 0;
+      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud);
+      if (pct <= 0) continue;
+      const kwh = pct * k2 / 1e3;
+      const dk = dayKey(tMs);
+      out.set(dk, (out.get(dk) ?? 0) + kwh);
     }
-
-    .detail-panel-inner
-    {
-        flex: 1;
-        padding: 14px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        overflow-y: auto;
-        overflow-x: hidden;
+  }
+  return out;
+}
+function renderDashboard(host) {
+  const t2 = pickTranslations(host.hass?.language);
+  const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
+  cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
+  const pvColor = cfgHex(host.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
+  const batteryColor = cfgHex(host.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
+  const hasBattery = String(host.config?.["battery-soc-entity"] ?? "").trim() !== "" || String(host.config?.["battery-power-entity"] ?? "").trim() !== "";
+  return b`
+        <div class="detail-panel">
+            <button
+                class="detail-close-btn"
+                @click="${(e2) => handleExitDetail(host, e2)}"
+                aria-label="${t2.detail.exitHint}"
+            >
+                <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+            <div class="detail-panel-inner">
+                ${renderDashTodaySection(host, t2, pvColor, sunColor)}
+                ${renderDashTomorrowSection(host, t2, sunColor)}
+                ${hasBattery ? renderDashBatterySection(host, t2, batteryColor) : A}
+            </div>
+        </div>
+    `;
+}
+function computeTodayHourly(host) {
+  const HOUR_MS = 36e5;
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const startMs = today0.getTime();
+  const endMs = startMs + 24 * HOUR_MS;
+  const nowMs = Date.now();
+  const bins = [];
+  for (let h2 = 0; h2 < 24; h2++) {
+    bins.push({
+      hourTs: startMs + h2 * HOUR_MS,
+      observedW: null,
+      forecastW: null
+    });
+  }
+  const hist = host._pvHistory;
+  if (hist && hist.times.length > 0) {
+    const unit = (host._pvUnit || "").toLowerCase();
+    const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
+    let times = hist.times;
+    let values2 = hist.values;
+    if (isCumulativeEnergy && times.length >= 2) {
+      const dT = [];
+      const dV = [];
+      for (let i2 = 1; i2 < times.length; i2++) {
+        const dtH = (times[i2].getTime() - times[i2 - 1].getTime()) / 36e5;
+        if (dtH <= 0 || dtH > 6) continue;
+        const dv = values2[i2] - values2[i2 - 1];
+        if (dv < 0) continue;
+        dT.push(times[i2]);
+        dV.push(dv / dtH);
+      }
+      times = dT;
+      values2 = dV;
     }
-
-    /*  Each dashboard section is a chip-style card: same visual
-        language as the on-map readouts (white plate, 1 px black
-        border, soft shadow). Compact, dense, readable at-a-glance.
-        Sections appear sequentially with a short stagger so the eye
-        lands on each one in turn without dragging the reveal. */
-    .dash-card
-    {
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 4px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        padding: 10px 14px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        opacity: 0;
-        transform: translateY(8px);
-        animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    const sums = /* @__PURE__ */ new Map();
+    const counts = /* @__PURE__ */ new Map();
+    for (let i2 = 0; i2 < times.length; i2++) {
+      const tMs = times[i2].getTime();
+      if (tMs < startMs || tMs >= endMs) continue;
+      const w2 = isCumulativeEnergy ? values2[i2] * 1e3 : pvNormalizeToWatts(values2[i2], host._pvUnit);
+      if (!isFinite(w2)) continue;
+      const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+      sums.set(hourTs, (sums.get(hourTs) ?? 0) + w2);
+      counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
     }
-    .dash-card:nth-of-type(1) { animation-delay: 0.00s; }
-    .dash-card:nth-of-type(2) { animation-delay: 0.18s; }
-    .dash-card:nth-of-type(3) { animation-delay: 0.36s; }
-    .dash-card:nth-of-type(4) { animation-delay: 0.54s; }
-    @keyframes dash-card-in
-    {
-        to { opacity: 1; transform: translateY(0); }
+    for (let h2 = 0; h2 < 24; h2++) {
+      const sum2 = sums.get(bins[h2].hourTs);
+      const cnt = counts.get(bins[h2].hourTs);
+      if (sum2 !== void 0 && cnt && cnt > 0) {
+        bins[h2].observedW = sum2 / cnt;
+      }
     }
-
-    ha-card.theme-dark .dash-card
-    {
-        background: #191a1b;
-        color:      #e6e6e6;
-        border-color: rgba(255, 255, 255, 0.20);
+  }
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 !== null && k2 > 0 && series && coords) {
+    for (let i2 = 0; i2 < series.times.length; i2++) {
+      const tMs = series.times[i2].getTime();
+      if (tMs < startMs || tMs >= endMs) continue;
+      const cloud = series.cloud[i2] ?? 0;
+      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud);
+      if (pct < 0) continue;
+      const watts = pct * k2;
+      const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+      const idx = (hourTs - startMs) / HOUR_MS;
+      if (idx >= 0 && idx < 24) {
+        bins[idx].forecastW = watts;
+      }
     }
-
-    .dash-card-header
-    {
-        display: flex;
-        align-items: center;
-        gap: 8px;
+  }
+  let peakW = 0;
+  let peakHourTs = null;
+  let producedKwh = 0;
+  let forecastKwh = 0;
+  for (const b2 of bins) {
+    const w2 = b2.observedW ?? b2.forecastW ?? 0;
+    if (w2 > peakW) {
+      peakW = w2;
+      peakHourTs = b2.hourTs;
     }
-    .dash-card-icon
-    {
-        --mdc-icon-size: 16px;
-        flex-shrink: 0;
+    if (b2.observedW !== null) producedKwh += b2.observedW / 1e3;
+    if (b2.hourTs + HOUR_MS <= nowMs) {
+      if (b2.observedW !== null) forecastKwh += b2.observedW / 1e3;
+    } else if (b2.hourTs > nowMs) {
+      if (b2.forecastW !== null) forecastKwh += b2.forecastW / 1e3;
+    } else {
+      forecastKwh += (b2.observedW ?? b2.forecastW ?? 0) / 1e3;
     }
-    .dash-card-label
-    {
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 1.5px;
-        text-transform: uppercase;
-        opacity: 0.65;
-    }
-    .dash-card-trailing
-    {
-        margin-left: auto;
-        display: inline-flex;
-        align-items: baseline;
-        gap: 3px;
-    }
-    .dash-card-trailing-forecast
-    {
-        font-style: italic;
-        opacity: 0.85;
-    }
-    .dash-stat-value
-    {
-        font-size: 28px;
-        font-weight: 800;
-        font-variant-numeric: tabular-nums;
-        line-height: 1;
-        letter-spacing: -0.5px;
-    }
-    .dash-stat-unit
-    {
-        font-size: 13px;
-        font-weight: 500;
-        opacity: 0.65;
-        margin-left: 3px;
-    }
-    .dash-stat-value-sm
-    {
-        font-size: 18px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-        line-height: 1;
-    }
-    .dash-stat-unit-sm
-    {
-        font-size: 11px;
-        font-weight: 500;
-        opacity: 0.65;
-    }
-
-    /*  Section: today                                                  */
-
-    /*  Container queries: the cumulative chart is rendered only when   */
-    /*  the section is wide enough to read comfortably (>= 380px).     */
-    /*  Below that, the chart is hidden via display:none and the       */
-    /*  side stack reclaims the layout space.                          */
-    .dash-section.dash-today
-    {
-        container-type: inline-size;
-        container-name: dash-today;
-    }
-    .dash-today-body
-    {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 2px 0;
-    }
-    .dash-today-produced
-    {
-        display: inline-flex;
-        align-items: baseline;
-    }
-    .dash-today-side
-    {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        min-width: 0;
-        flex: 0 0 auto;
-    }
-    .dash-today-line
-    {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-    }
-    .dash-today-line ha-icon { --mdc-icon-size: 14px; }
-    .dash-today-line .dash-line-arrow { font-size: 14px; opacity: 0.65; font-weight: 600; }
-    .dash-today-line .dash-line-value { font-weight: 700; }
-    .dash-today-line .dash-line-label
-    {
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        opacity: 0.55;
-    }
-    .dash-today-forecast .dash-line-value { font-style: italic; }
-
-    /*  Cumulative production sparkline. Hidden on narrow cards via    */
-    /*  the container query so we never display a squashed graph.      */
-    /*  Sits to the right of the side stack, takes the remaining       */
-    /*  horizontal space, and has its own slightly darker panel +      */
-    /*  hairline border so it reads as a distinct chart frame.         */
-    .dash-today-chart
-    {
-        display: none;
-        position: relative;
-        flex: 1;
-        min-width: 0;
-        height: 60px;
-        align-self: stretch;
-        background: rgba(0, 0, 0, 0.05);
-        border: 1px solid rgba(0, 0, 0, 0.12);
-        border-radius: 4px;
-        /*  No overflow:hidden, the SVG fills the frame exactly with
-            no visual bleed and the tooltip needs to be free to
-            extend beyond the chart edges (otherwise it gets clipped
-            when the cursor sits on either end of the curve).        */
-    }
-    ha-card.theme-dark .dash-today-chart
-    {
-        background: rgba(255, 255, 255, 0.06);
-        border-color: rgba(255, 255, 255, 0.15);
-    }
-    @container dash-today (min-width: 380px)
-    {
-        .dash-today-chart
-        {
-            display: block;
+  }
+  return { bins, peakHourTs, peakW, producedKwh, forecastKwh };
+}
+function computeTodayCumulative(host) {
+  const HOUR_MS = 36e5;
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const startMs = today0.getTime();
+  const endMs = startMs + 24 * HOUR_MS;
+  const nowMs = Date.now();
+  const samples = [];
+  samples.push({ tMs: startMs, kwh: 0 });
+  let cumKwh = 0;
+  let pastEndMs = startMs;
+  const hist = host._pvHistory;
+  if (hist && hist.times.length > 0) {
+    const unit = (host._pvUnit || "").toLowerCase();
+    const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
+    const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
+    let baseline = null;
+    let prevT = null;
+    let prevW = null;
+    for (let i2 = 0; i2 < hist.times.length; i2++) {
+      const tMs = hist.times[i2].getTime();
+      if (tMs < startMs || tMs >= endMs) continue;
+      if (isCumulativeEnergy) {
+        const v2 = hist.values[i2] * energyFactor;
+        if (baseline === null) baseline = v2;
+        const kwh = Math.max(0, v2 - baseline);
+        samples.push({ tMs, kwh });
+        cumKwh = kwh;
+      } else {
+        const w2 = pvNormalizeToWatts(hist.values[i2], host._pvUnit);
+        if (!isFinite(w2)) continue;
+        if (prevT !== null && prevW !== null) {
+          const dh = (tMs - prevT) / HOUR_MS;
+          if (dh > 0 && dh <= 6) {
+            cumKwh += (prevW + w2) / 2 / 1e3 * dh;
+          }
         }
-    }
-    .dash-today-chart-svg
-    {
-        display: block;
-        width: 100%;
-        height: 100%;
-    }
-    .dash-today-chart-past
-    {
-        fill: none;
-        stroke-width: 1.2;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        opacity: 0.95;
-        vector-effect: non-scaling-stroke;
-    }
-    .dash-today-chart-future
-    {
-        fill: none;
-        stroke-width: 1.2;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        stroke-dasharray: 3 2;
-        opacity: 0.7;
-        vector-effect: non-scaling-stroke;
-    }
-    .dash-today-chart-dot
-    {
-        opacity: 0.9;
-    }
-    .dash-today-chart-hover-line
-    {
-        stroke: rgba(0, 0, 0, 0.45);
-        stroke-width: 1;
-        stroke-dasharray: 2 2;
-        vector-effect: non-scaling-stroke;
-        pointer-events: none;
-    }
-    ha-card.theme-dark .dash-today-chart-hover-line
-    {
-        stroke: rgba(255, 255, 255, 0.45);
-    }
-    .dash-today-chart-hover-dot
-    {
-        stroke: #ffffff;
-        stroke-width: 1;
-        paint-order: stroke fill;
-        pointer-events: none;
-    }
-    ha-card.theme-dark .dash-today-chart-hover-dot
-    {
-        stroke: #191a1b;
-    }
-    .dash-today-chart-tooltip
-    {
-        position: absolute;
-        top: 4px;
-        transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.78);
-        color: #ffffff;
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.2px;
-        padding: 2px 6px;
-        border-radius: 3px;
-        white-space: nowrap;
-        pointer-events: none;
-        font-variant-numeric: tabular-nums;
-    }
-    ha-card.theme-dark .dash-today-chart-tooltip
-    {
-        background: rgba(255, 255, 255, 0.92);
-        color: #111111;
-    }
-
-    /*  Status line under the produced value when the day's            */
-    /*  production hasn't started yet (produced ~ 0, peak still in     */
-    /*  the future). Discreet, small, italic, full row.                */
-    .dash-today-status
-    {
-        font-size: 11px;
-        opacity: 0.6;
-        font-style: italic;
-        margin-top: 4px;
-    }
-
-    /*  Skeleton placeholder shown in place of the produced value      */
-    /*  while the HA history fetch is in flight. Same footprint as     */
-    /*  ".dash-stat-value" so layout stays stable when the data        */
-    /*  arrives. The shimmer pulse is purely cosmetic.                 */
-    .dash-stat-skeleton
-    {
-        display: inline-block;
-        width: 88px;
-        height: 28px;
-        border-radius: 4px;
-        background: linear-gradient(
-            90deg,
-            rgba(0, 0, 0, 0.08) 0%,
-            rgba(0, 0, 0, 0.18) 50%,
-            rgba(0, 0, 0, 0.08) 100%
-        );
-        background-size: 200% 100%;
-        animation: dash-skeleton-pulse 1.4s ease-in-out infinite;
-        vertical-align: middle;
-    }
-    ha-card.theme-dark .dash-stat-skeleton
-    {
-        background: linear-gradient(
-            90deg,
-            rgba(255, 255, 255, 0.06) 0%,
-            rgba(255, 255, 255, 0.18) 50%,
-            rgba(255, 255, 255, 0.06) 100%
-        );
-        background-size: 200% 100%;
-    }
-    @keyframes dash-skeleton-pulse
-    {
-        0%   { background-position: 100% 0; }
-        100% { background-position: -100% 0; }
-    }
-
-    /*  Section: tomorrow                                               */
-
-    .dash-tomorrow-peak
-    {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        font-variant-numeric: tabular-nums;
-    }
-    .dash-tomorrow-peak ha-icon { --mdc-icon-size: 14px; }
-    .dash-tomorrow-peak .dash-line-label
-    {
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        opacity: 0.55;
-    }
-    .dash-tomorrow-peak .dash-line-value { font-weight: 700; }
-
-    /*  Section: battery                                                */
-
-    .dash-battery-body
-    {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    .dash-battery-vessel
-    {
-        width: 44px;
-        height: 72px;
-        flex-shrink: 0;
-        display: block;
-    }
-    .dash-battery-vessel .dash-batt-shell,
-    .dash-battery-vessel .dash-batt-cap
-    {
-        fill: rgba(0, 0, 0, 0.04);
-        stroke: rgba(0, 0, 0, 0.30);
-        stroke-width: 1;
-    }
-    ha-card.theme-dark .dash-battery-vessel .dash-batt-shell,
-    ha-card.theme-dark .dash-battery-vessel .dash-batt-cap
-    {
-        fill: rgba(255, 255, 255, 0.04);
-        stroke: rgba(255, 255, 255, 0.30);
-    }
-    .dash-battery-flows
-    {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        flex: 1;
-        min-width: 0;
-    }
-    .dash-battery-flow
-    {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-    }
-    .dash-battery-flow ha-icon { --mdc-icon-size: 14px; }
-    .dash-battery-flow-charge    ha-icon { color: #22c55e; }
-    .dash-battery-flow-discharge ha-icon { color: #ef4444; }
-    .dash-flow-value { font-weight: 700; }
-    .dash-flow-label
-    {
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        opacity: 0.55;
-    }
-
-
-    /*  Timeline, pinned to the bottom of the card with uniform
-        breathing space. The whole bar accepts pointer events for
-        scrub. */
-
-    .time-bar
-    {
-        position: absolute;
-        bottom: 8px;
-        /*  Width is derived from --timeline-width-frac (0.5..1, set
-            inline by the renderer). At 1 the bar hugs the card edges
-            with the original 8 px breathing on each side. Below 1 it
-            shrinks proportionally and stays centred via the
-            translateX trick. The inset hooks (left / right: 8 px)
-            from the legacy layout are dropped, the new horizontal
-            placement uses left: 50 % + translate. */
-        left: 50%;
-        transform: translateX(-50%);
-        width: calc((100% - 16px) * var(--timeline-width-frac, 1));
-        z-index: 10;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        min-width: 0;
-        cursor: grab;
-        touch-action: none;
-        user-select: none;
-        -webkit-user-select: none;
-    }
-
-    .time-bar:active
-    {
-        cursor: grabbing;
-    }
-
-    /*  Chart card, bordered white panel hosting the area chart,
-        day-label chips on the midline, dotted day separators and
-        the live + scrub HTML cursor overlays. */
-    .tb-chart-card
-    {
-        position: relative;
-        background: #ffffff;
-        border: 1px solid #000000;
-        border-radius: 3px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        height: 64px;
-        overflow: hidden;
-    }
-
-    .hc-chart-svg
-    {
-        display: block;
-        width: 100%;
-        height: 100%;
-    }
-
-    /*  Stroke-only outline on top of the filled area so peaks read
-        cleanly even where the gradient fades towards the midline. */
-    .hc-chart-line
-    {
-        fill: none;
-        stroke-width: 1.4;
-        stroke-linejoin: round;
-        stroke-linecap: round;
-        vector-effect: non-scaling-stroke;
-        opacity: 0.95;
-        pointer-events: none;
-    }
-
-    /*  PV prediction line, overlays the observed PV chart for hours
-        past "now" using the user-configured peak power (pv-peak-kwp)
-        scaled by the clear-sky model. Dashed + half opacity makes it
-        visually distinct from the recorded curve while staying in
-        the configured PV colour so it reads as "the same quantity,
-        projected". */
-    .hc-chart-predicted
-    {
-        stroke-dasharray: 4 3;
-        opacity: 0.55;
-    }
-
-
-
-    /*  Faint dotted day separators inside the chart card. */
-    .hc-day-sep
-    {
-        stroke: rgba(0, 0, 0, 0.30);
-        stroke-width: 1;
-        stroke-dasharray: 1.5 2.5;
-        vector-effect: non-scaling-stroke;
-        pointer-events: none;
-    }
-
-    /*  Solid black midline splitting irradiance (top) from cloud
-        cover (bottom). Day-label chips overlay it. */
-    .hc-chart-mid
-    {
-        stroke: #000000;
-        stroke-width: 1.4;
-        vector-effect: non-scaling-stroke;
-        pointer-events: none;
-    }
-
-    /*  Tiny hour ticks centred on the midline. Discreet enough to
-        read as ambient texture rather than a primary feature. */
-    .hc-hour-tick
-    {
-        stroke: rgba(0, 0, 0, 0.35);
-        stroke-width: 1;
-        vector-effect: non-scaling-stroke;
-        pointer-events: none;
-    }
-
-    /*  Live cursor: thin discreet line spanning the full chart with
-        a small triangle handle at the top. Stays subtle on purpose,
-        the user is in live mode, the cursor is a passive "where now
-        is on the timeline" reference, not a focus target. */
-    .tb-cursor-now
-    {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 1px;
-        background: rgba(0, 0, 0, 0.45);
-        transform: translateX(-50%);
-        pointer-events: none;
-        z-index: 4;
-    }
-
-    .tb-cursor-now::after
-    {
-        content: '';
-        position: absolute;
-        top: -1px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 0;
-        height: 0;
-        border-left:   3px solid transparent;
-        border-right:  3px solid transparent;
-        border-top:    4px solid rgba(0, 0, 0, 0.55);
-    }
-
-    /*  Scrub cursor: prominent solid blue line spanning the full
-        chart, with a wider triangle handle at the top. Now that the
-        scrub-time chip is gone, this cursor IS the primary feedback
-        during a drag, so it has to read instantly without scrutiny.
-        Same blue as the clock-chip scrub theme so the user spatially
-        links the two: drag here, time updates over there. */
-    .tb-cursor-sel
-    {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 2px;
-        background: rgba(31, 111, 235, 0.95);
-        transform: translateX(-50%);
-        pointer-events: none;
-        z-index: 4;
-        box-shadow: 0 0 4px rgba(31, 111, 235, 0.4);
-    }
-
-    .tb-cursor-sel::after
-    {
-        content: '';
-        position: absolute;
-        top: -3px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 0;
-        height: 0;
-        border-left:   6px solid transparent;
-        border-right:  6px solid transparent;
-        border-top:    8px solid rgba(31, 111, 235, 0.95);
-        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
-    }
-
-    /*  Day labels, small white chips overlaying the chart midline.
-        Same chip language as the on-map cloud and W/m² readouts. */
-    .tb-day-labels
-    {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-    }
-
-    .tb-day-label
-    {
-        position: absolute;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 1px 5px;
-        font-size:    9px;
-        font-weight:  600;
-        line-height:  1.2;
-        letter-spacing: 0.2px;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-        z-index: 2;
-    }
-
-    .tb-day-label-today
-    {
-        font-weight: 800;
-    }
-
-    /*  Daily kWh total appended next to the date. Lighter weight +
-        smaller separator dot so the date stays the primary read.
-        Forecast variant (today's remainder + future days) is
-        italicised so the user can tell observation from estimate
-        at a glance, same convention the PV chip uses for predicted
-        values. */
-    .tb-day-label-kwh
-    {
-        font-weight: 500;
-        opacity: 0.75;
-    }
-    .tb-day-label-kwh::before
-    {
-        content: "·";
-        margin-right: 4px;
-        opacity: 0.5;
-    }
-    .tb-day-label-kwh.is-forecast
-    {
-        font-style: italic;
-    }
-
-    /*  Optional PV graph card stacked above the main chart. Half
-        the main height so the irradiance and PV areas balance. */
-    .tb-pv-card
-    {
-        height: 32px;
-    }
-
-
-    /*  Spinner, centred on the map while a fetch is in flight. */
-
-    .spinner-center
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        z-index: 50;
-        width: 40px;
-        height: 40px;
-        opacity: 0;
-        transition: opacity 0.15s ease;
-        pointer-events: none;
-    }
-
-    .spinner-center.spinning
-    {
-        opacity: 1;
-    }
-
-    /*  Helios brand spinner: the SVG sun, no border, no background,
-        no shadow. Only the ray bundle rotates; the inner disc stays
-        still so the brand colour reads as a steady centre while the
-        rays sweep around it. */
-    .spinner-sun
-    {
-        width:  100%;
-        height: 100%;
-        display: block;
-    }
-    .spinner-sun-rays
-    {
-        transform-origin: 32px 32px;
-        transform-box: view-box;
-        animation: helios-spin 1.6s linear infinite;
-    }
-
-    @keyframes helios-spin
-    {
-        to { transform: rotate(360deg); }
-    }
-
-
-    /*  LiDAR View toggle button, lives in the .overlay-top-right
-        column. Sized to mirror the .clock chip on the left so the
-        two corners read as a symmetric pair. Stays at fixed width
-        when toggled on/off so neighbour chips don't jump. */
-    .lidar-view-btn
-    {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        /*  Sized to mirror the .clock chip on the opposite rail
-            (~80 px wide with the default "mm-dd HH:MM" content, at
-            12 px / weight 600). justify-content: center balances the
-            icon + label inside that fixed width so the toggle reads
-            as a symmetric counterweight to the date chip.            */
-        min-width: 80px;
-        height: 22px;
-        box-sizing: border-box;
-        padding: 0 8px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        line-height: 1;
-        cursor: pointer;
-        /*  Force full opacity at every state except :disabled (which
-            sets its own 0.35 for the visual "not available" hint).
-            The transition only covers background + color so a state
-            change (active / inactive) doesn't briefly pass through a
-            translucent state. */
-        opacity: 1;
-        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-        /*  The parent .overlay-top-right rail has pointer-events: none
-            (so the rail itself never steals map interactions when
-            empty). The button has to opt back in explicitly so its
-            click reaches the @click handler, mirroring what
-            .clock / .live-return-btn do on the opposite (top-left)
-            rail. Without this the button visually renders enabled but
-            ignores every click.
-
-            z-index: 50 puts the button above the LiDAR View canvas
-            overlay (z 30) so the toggle stays clickable while the
-            View is open, otherwise the canvas would swallow the
-            click that exits the mode. */
-        pointer-events: auto;
-        position: relative;
-        z-index: 50;
-    }
-    /*  Roboto cap glyphs at small sizes inside line-height: 1 sit
-        slightly low in the em-box once the descender slack is gone,
-        so flex-centering still leaves the visual centre of "LIDAR"
-        a hair below the chip's geometric centre against a 14 px icon
-        glyph. translateY(-1px) on the label nudges it back up into
-        true centre. The icon itself stays at the geometric centre,
-        ha-icon is a square box without ascender/descender asymmetry. */
-    .lidar-view-btn-label
-    {
-        display: inline-block;
-        line-height: 1;
-        transform: translateY(-1px);
-    }
-    .lidar-view-btn ha-icon
-    {
-        --mdc-icon-size: 14px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
-    }
-    .lidar-view-btn:disabled
-    {
-        opacity: 0.35;
-        cursor: not-allowed;
-    }
-    .lidar-view-btn.is-on
-    {
-        background: #1f6feb;
-        color: #ffffff;
-        border-color: #1f6feb;
-    }
-
-
-    /*  When LiDAR View is active, fade out every overlay layer so
-        the dot cloud reads on its own against a quiet basemap. The
-        toggle button itself is opted back in (selector below) so
-        the user can always exit. The map container stays visible
-        so the dots are projected onto a real basemap.
-
-        Selector list mirrors what .detail-active fades earlier in
-        this file, plus the corners (top-left clock + top-right rail
-        minus the LiDAR button itself), the home hitbox / glow, and
-        the timeline. Easier to audit if any future overlay needs
-        to be hidden in LiDAR View by looking at this single block. */
-    ha-card.lidar-view-active .overlay-top-left,
-    ha-card.lidar-view-active .home-glow-svg,
-    ha-card.lidar-view-active .home-hitbox,
-    ha-card.lidar-view-active .home-silhouette-svg,
-    ha-card.lidar-view-active .time-bar,
-    ha-card.lidar-view-active .solar-svg,
-    ha-card.lidar-view-active .solar-pct-label,
-    ha-card.lidar-view-active .solar-horizon-icon,
-    ha-card.lidar-view-active .cloud-svg,
-    ha-card.lidar-view-active .cloud-leader-svg,
-    ha-card.lidar-view-active .cloud-pct-label,
-    ha-card.lidar-view-active .pv-home-leader-svg,
-    ha-card.lidar-view-active .pv-pct-label,
-    ha-card.lidar-view-active .battery-leader-svg,
-    ha-card.lidar-view-active .battery-pct-label
-    {
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.25s ease;
-    }
-    ha-card.lidar-view-active .overlay-top-right
-    {
-        opacity: 1;
-        pointer-events: auto;
-    }
-
-
-    /*  Top corner overlays. Date/time chip on the left; back-to-live
-        + LiDAR busy chip column on the right. Both rails sit 8 px
-        from the card edge so they read as a paired pair anchored
-        to the frame, mirroring the timeline's edge margin. */
-
-    /*  Date/time chip, same chip language as the on-map readouts.
-        Explicit height (border-box) so the chip and the back-to-
-        live button next to it share the exact same vertical
-        footprint, no align-items: center shift in the parent flex
-        container. */
-    .clock
-    {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        height: 22px;
-        box-sizing: border-box;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 2px 6px;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size:    12px;
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        white-space: nowrap;
-        position: relative;
-        z-index: 2;
-    }
-
-    .clock-date { opacity: 0.75; }
-    .clock-time { opacity: 1;    }
-
-    /*  Scrub-mode theme for the clock chip. Same chip flips to a
-        white-on-blue look so it doubles as the "you're not in live
-        mode" signal. The blue matches the timeline scrub cursor so
-        the user spatially links the top-left chip with the timeline
-        marker driving it. The chip's right corners are also squared
-        in scrub mode so it physically fuses with the back-to-live
-        button rendered next to it: same blue plate, shared seam,
-        zero visual gap, the pair reads as one composite control.
-
-        Both selectors are listed so the rule beats the dark-theme
-        override (ha-card.theme-dark .clock, specificity 0,2,1) in
-        both light and dark contexts; without the second selector
-        the dark-theme rule keeps the chip grey when scrubbing. */
-    .clock.is-scrub,
-    ha-card.theme-dark .clock.is-scrub
-    {
-        background: rgba(31, 111, 235, 0.95);
-        color: #ffffff;
-        border-color: rgba(20, 78, 168, 0.95);
-        border-top-right-radius: 0;
-        border-bottom-right-radius: 0;
-    }
-    .clock.is-scrub .clock-date,
-    ha-card.theme-dark .clock.is-scrub .clock-date { opacity: 0.95; color: #ffffff; }
-    .clock.is-scrub .clock-time,
-    ha-card.theme-dark .clock.is-scrub .clock-time { opacity: 1;    color: #ffffff; }
-
-    /*  "Back to live" button, lives next to the clock chip in the
-        top-left cluster while scrubbing. Square 22 x 22 to match
-        the clock chip height exactly (so the parent flex container
-        doesn't need vertical centering compensation), with the
-        same scrub-blue plate as the on-chart scrub cursor and the
-        clock chip's scrub theme so the cluster reads as one unit.
-        Icon kept small (12 px in a 22 px square = 5 px ring of
-        breathing room) so the chip frame dominates over the
-        glyph, consistent with the chip-language used everywhere
-        else on the card. */
-    .live-return-btn
-    {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width:  22px;
-        height: 22px;
-        box-sizing: border-box;
-        padding: 0;
-        background: rgba(31, 111, 235, 0.95);
-        color: white;
-        border: 1px solid rgba(20, 78, 168, 0.95);
-        /*  Square left corners + drop the left border so the chip's
-            right border serves as the shared seam, no double 2 px
-            stroke at the join. The pair reads as one continuous
-            blue plate. */
-        border-radius: 0 3px 3px 0;
-        border-left: 0;
-        cursor: pointer;
-        pointer-events: auto;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        transition: background 0.12s;
-    }
-
-    .live-return-btn:hover  { background: rgba(24, 92, 199, 0.95); }
-    .live-return-btn:active { background: rgba(20, 78, 168, 0.95); }
-
-    .live-return-btn ha-icon
-    {
-        --mdc-icon-size: 12px;
-        color: white;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    /*  Top-right overlay rail. Hosts the LiDAR View toggle button.
-        Mirrors the clock's top spacing on the opposite edge so the
-        two overlays sit at the same height.
-
-        z-index: 60 puts the rail (and therefore the button) above
-        the LiDAR View canvas (z 30) AND above the centre spinner
-        (z 50), so the toggle is always reachable. Pointer events
-        off on the rail itself so the empty rail never steals map
-        interactions; the button opts back in (.lidar-view-btn has
-        its own pointer-events: auto). Stacking contexts: because
-        we set z-index on this absolute container, children's own
-        z-index values are scoped to this rail; the rail's z-index
-        is the one that competes with siblings in ha-card. */
-    .overlay-top-right
-    {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        z-index: 60;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        pointer-events: none;
-    }
-
-    /*  Top-left rail, mirrors overlay-top-right on the opposite edge
-        so the corner overlays sit at matching heights. Hosts the
-        date/time clock chip plus, when scrubbing, the back-to-live
-        button right next to it (both relate to "where am I in
-        time"). Laid out as a flex row with a small gap. Pointer
-        events are off on the rail by default, the button re-enables
-        them on itself so clicks reach it without the rail stealing
-        unrelated map interactions. */
-    .overlay-top-left
-    {
-        position: absolute;
-        top: 8px;
-        left: 8px;
-        z-index: 5;
-        display: flex;
-        align-items: center;
-        /*  No gap, the clock chip and the back-to-live button (when
-            scrubbing) physically touch so the pair reads as one
-            composite "time + control" widget rather than two
-            independent chips. Border radii are squared on the
-            facing edges below so the seam is invisible. */
-        gap: 0;
-        pointer-events: none;
-    }
-
-
-    /*  "LiDAR shadow computing" indicator. Stripped to the spinning
-        sun glyph alone, no chip plate, no border, no shadow, matches
-        the clean spinner-sun aesthetic at the centre of the map: a
-        pure on-brand mark in the foreground that doesn't compete
-        with the chips and buttons around it. */
-    .shadow-busy-chip
-    {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width:  22px;
-        height: 22px;
-        background: transparent;
-        border: 0;
-        box-shadow: none;
-    }
-
-    /*  Rotating sun glyph used as the busy indicator. Themed through
-        the configured sun colour so themed installs stay on-brand,
-        with the brand orange as the fallback. */
-    .shadow-busy-sun
-    {
-        --mdc-icon-size: 18px;
-        color: var(--helios-sun-color, #EF9F27);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        animation: helios-shadow-spin 1.4s linear infinite;
-    }
-
-    @keyframes helios-shadow-spin
-    {
-        from { transform: rotate(0deg); }
-        to   { transform: rotate(360deg); }
-    }
-
-    /*  Cloud-cover percentage chip, floating above the cloud disc
-        on the ground with a leader line down to its feature. */
-    .cloud-pct-label
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-        z-index: 6;
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 2px 6px 2px 4px;
-        font-size:    12px;
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-    }
-
-    .cloud-pct-label ha-icon
-    {
-        --mdc-icon-size: 12px;
-        color: #000000;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    /*  Photovoltaic production chip, same frame as cloud/W/m² but
-        tinted in the user-configured production colour (border +
-        text + icon) for instant identification.
-        --pv-leader-color is set inline by the renderer. The
-        min-width / centred text are shared with the SoC and Power
-        battery chips so the visible gap on each side of the PV
-        chip is identical regardless of how wide each value reads
-        ("26 %" vs "+12.34 kW" otherwise produce visibly unequal
-        leader gaps). */
-    .pv-pct-label
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-        z-index: 6;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 3px;
-        min-width: 76px;
-        box-sizing: border-box;
-        background: #ffffff;
-        color:      var(--pv-leader-color, #27B36B);
-        border:     1px solid var(--pv-leader-color, #27B36B);
-        border-radius: 3px;
-        padding: 2px 6px 2px 4px;
-        font-size:    12px;
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        white-space: nowrap;
-    }
-
-    .pv-pct-label ha-icon
-    {
-        --mdc-icon-size: 12px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    /*  Predicted PV chip, shown when scrubbing into the future. The
-        value comes from the kWp × clear-sky model, not a measured
-        reading, so we semi-transparency the whole chip and rely on
-        the leading "≈" character (set by the card's render) to
-        signal "estimate" textually. */
-    .pv-pct-label.is-predicted
-    {
-        opacity: 0.55;
-        font-style: italic;
-    }
-
-    /*  Battery chips (SoC on the left of PV, Power on the right) ,
-        same frame as the PV chip, tinted in the user-configured
-        battery colour. Shares min-width and centred text with the
-        PV chip so the visible dotted-leader gap on each side of PV
-        is identical regardless of the value's content width.
-        --battery-leader-color is set inline by the renderer. */
-    .battery-pct-label
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-        z-index: 6;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 3px;
-        min-width: 76px;
-        box-sizing: border-box;
-        background: #ffffff;
-        color:      var(--battery-leader-color, #D32F2F);
-        border:     1px solid var(--battery-leader-color, #D32F2F);
-        border-radius: 3px;
-        padding: 2px 6px 2px 4px;
-        font-size:    12px;
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        white-space: nowrap;
-    }
-
-    .battery-pct-label ha-icon
-    {
-        --mdc-icon-size: 12px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    /*  PV → home leader. Vertical dashed line from the PV chip's
-        bottom edge down to the home marker, painted in the configured
-        PV colour. Same dash vocabulary as the battery leader so the
-        two flows read as one coherent visual language. Animation runs
-        only when current production is positive; idle state keeps the
-        line static. Sits at z 5, BELOW the chip cluster (z 6) so the
-        dashes pass behind the PV / SoC / Power chips. */
-    .pv-home-leader-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 5;
-    }
-
-    .pv-home-leader-line
-    {
-        stroke: var(--pv-leader-color, #27B36B);
-        stroke-width: 1.5;
-        stroke-opacity: 0.85;
-        stroke-linecap: round;
-        fill: none;
-    }
-
-    /*  Moving bead, a small filled disc rides the leader at a
-        speed proportional to live production. Same vocabulary as
-        the Home Assistant energy-distribution card. */
-    .pv-home-leader-bead
-    {
-        opacity: 0.95;
-        stroke: #ffffff;
-        stroke-width: 1;
-        stroke-opacity: 0.85;
-        paint-order: stroke fill;
-    }
-    ha-card.theme-dark .pv-home-leader-bead
-    {
-        stroke: #191a1b;
-        stroke-opacity: 0.95;
-    }
-
-
-    /*  Battery leaders.
-        Both SoC ↔ PV and PV ↔ Power share the exact same visual
-        vocabulary: solid L-shaped path with a rounded fillet at
-        the bend, matching the Home Assistant energy-distribution
-        card. The PV ↔ Power leader carries a small filled bead
-        riding along the path (animateMotion in card.ts) at a
-        speed proportional to |P|; the bead's path is flipped
-        inline by the renderer when discharging so its travel
-        direction matches the energy flow. The SoC leader is
-        static, no bead: SoC is a level, not a flow. */
-    .battery-leader-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 5;
-    }
-
-    .battery-leader-line
-    {
-        stroke: var(--battery-leader-color, #D32F2F);
-        stroke-width: 1.5;
-        stroke-opacity: 0.85;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        fill: none;
-    }
-
-    .battery-leader-bead
-    {
-        opacity: 0.95;
-        stroke: #ffffff;
-        stroke-width: 1;
-        stroke-opacity: 0.85;
-        paint-order: stroke fill;
-    }
-    ha-card.theme-dark .battery-leader-bead
-    {
-        stroke: #191a1b;
-        stroke-opacity: 0.95;
-    }
-
-    /*  Cloud-cover leader line, black hairline from chip to disc. */
-    .cloud-leader-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 5;
-    }
-
-    .cloud-leader-svg line
-    {
-        stroke: #000000;
-        stroke-width: 1;
-        stroke-opacity: 0.55;
-    }
-
-
-    /*  Solar overlay, split into two passes so chips never occlude
-        the live sun while the night portion of the loop still reads
-        as background:
-          - .solar-svg-back paints only the dotted below-horizon
-            segments and stacks BELOW the home chip cluster (z 4)
-            so the home + readouts sit clearly on top of the night
-            half of the orbit.
-          - .solar-svg-front paints the above-horizon arc, the
-            incidence ray, and the sun disc, and stacks ABOVE the
-            chips (z 7) so the live sun always dominates the stack.
-            The card is named Helios, the sun must win the stack. */
-    .solar-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        /* Daylight fade is fed via the --solar-daylight CSS variable
-           (set inline per render, ranges 0..1) instead of an inline
-           opacity, so the .detail-active fade rule below can win
-           cleanly without fighting an inline style. */
-        opacity: var(--solar-daylight, 1);
-        transition: opacity 600ms ease-out;
-    }
-    .solar-svg-back  { z-index: 4; }
-    .solar-svg-front { z-index: 7; }
-
-    /*  Cloud-cover overlay. Two polygons (the filled disc sized by
-        the live cloud %, the fixed 100 % reference ring outline)
-        projected from a geographic circle around the home through
-        the engine's anchor-at-home pipeline, so they stay a true
-        circle whatever the terrain mesh does underneath. Sits below
-        the solar overlay in stacking order (z-index 3 vs 4) so the
-        sun arc + sun disc draw on top. */
-    .cloud-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 3;
-    }
-    /*  Each band is a fully-opaque concentric disc; the outermost
-        (high cloud, dark shade) renders first, then mid (normal
-        shade), then low (light shade) on top. The visual banding
-        comes from each smaller disc covering the centre of the
-        larger one — no SVG mask or clip-path needed. */
-    .cloud-svg .cloud-disc
-    {
-        pointer-events: none;
-    }
-    /*  Thin separator outlines drawn on the inner band boundaries
-        (low ↔ mid and mid ↔ high). Stroke-only, no fill so the
-        band colours behind stay untouched. The outermost edge
-        (high ↔ outside) is already painted by .cloud-ring. */
-    .cloud-svg .cloud-band-sep
-    {
-        fill: none;
-        stroke: rgba(0, 0, 0, 0.35);
-        stroke-width: 0.75;
-        pointer-events: none;
-    }
-    .cloud-svg .cloud-ring
-    {
-        fill: none;
-        stroke: rgba(0, 0, 0, 0.4);
-        stroke-width: 2;
-        pointer-events: none;
-    }
-
-    /*  Arc, first pass paints a dark outline for legibility on
-        light basemaps; second pass paints the configured sun
-        colour on top. Stroke widths are set inline per segment. */
-    .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
-    .solar-svg .solar-arc-segment { stroke-linecap: round; }
-
-    /*  Sunrise / sunset markers. ha-icon glyphs (mdi:weather-sunset-up
-        / -down) centred on the horizon crossings of the day's solar
-        arc, coloured in the configured sun colour via inline style.
-        The icon shape itself communicates "rising" vs "setting" so
-        no label or rotation is needed. */
-    .solar-horizon-icon
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        --mdc-icon-size: 18px;
-        pointer-events: none;
-        z-index: 6;
-        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
-    }
-
-
-    /*  Below-horizon segments, round dots at fixed spacing so the
-        eye reads "this is happening underground" without colour or
-        depth scaling having to carry the signal. dasharray "0 N"
-        with linecap round renders true circles on every browser. */
-    .solar-svg .solar-arc-night
-    {
-        stroke-linecap: round;
-        stroke-dasharray: 0 8;
-    }
-
-    /*  Incidence ray, dashes flow from the sun toward the home at
-        a speed proportional to live irradiance. */
-    .solar-svg .solar-ray
-    {
-        stroke-width: 1.5;
-        stroke-dasharray: 5 5;
-        stroke-opacity: 0.55;
-        stroke-linecap: round;
-        animation: solar-ray-flow var(--sun-flow-duration, 30s) linear infinite;
-    }
-
-    @keyframes solar-ray-flow
-    {
-        from { stroke-dashoffset: 0;  }
-        to   { stroke-dashoffset: -10; }
-    }
-
-    /*  Solar ray arrow, tiny triangle riding the incidence ray
-        toward the home, animated via SVG <animateMotion> at the
-        same duration as the dash flow so the arrow advances in
-        lockstep with the pointillé. rotate="auto" keeps the tip
-        pointing forward along the path (sun → home). */
-    .solar-svg .solar-ray-arrow
-    {
-        opacity: 0.85;
-    }
-
-
-    /*  Solar irradiance label, chip pinned above the live sun
-        position, same chip language as the cloud and PV chips.
-        Sits in the front layer (z 7) so it stacks on top of every
-        home-anchored chip, matching the front-pass solar overlay. */
-    .solar-pct-label
-    {
-        position: absolute;
-        transform: translate(-50%, -100%);
-        pointer-events: none;
-        z-index: 7;
-        display: inline-flex;
-        align-items: center;
-        gap: 3px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 2px 6px 2px 4px;
-        font-size:    12px;
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        white-space: nowrap;
-    }
-
-    .solar-pct-label ha-icon
-    {
-        --mdc-icon-size: 12px;
-        color: #000000;
-        display: inline-flex;
-        align-items: center;
-    }
-
-
-    /*  ============================================================
-        Dark theme, opt-in via the \`card-theme: dark\` config.
-
-        The whole card is already painted on top of a 3D map, so
-        "dark mode" here is really about the chrome (chips, charts,
-        cursors, day labels, leader lines, tooltips), the basemap
-        keeps its own colours. Strategy:
-
-          - chip surfaces flip from a solid white plate to a solid
-            near-black plate, so the chip itself reads as a clean
-            darkened tile over the map instead of a
-            bright sticker.
-          - chip text / borders / icons go from black to a soft
-            light-grey (#e6e6e6 text, #cccccc borders), pure white
-            would clip detail against bright basemap patches.
-          - chart hairlines (midline, day separators, hour ticks,
-            live cursor) flip from black-on-white to white-on-near-
-            black with the same opacity envelopes as the light skin
-            so the visual weight stays balanced.
-          - chart fills (PV / cloud / irradiance) are user-coloured
-            and unchanged, they read fine on both surfaces.
-          - the scrub blue (#1f6feb) and the live tooltip dark
-            plate already read on dark backgrounds, so they're left
-            alone.
-        ============================================================ */
-
-    /*  Cards (chart panels) and hairlines on the chart. */
-    ha-card.theme-dark .tb-chart-card
-    {
-        background: #191a1b;
-        border-color: #4a4d55;
-    }
-
-    ha-card.theme-dark .hc-day-sep
-    {
-        stroke: rgba(255, 255, 255, 0.30);
-    }
-
-    ha-card.theme-dark .hc-chart-mid
-    {
-        stroke: #cccccc;
-    }
-
-    ha-card.theme-dark .hc-hour-tick
-    {
-        stroke: rgba(255, 255, 255, 0.35);
-    }
-
-    ha-card.theme-dark .tb-cursor-now
-    {
-        background: rgba(255, 255, 255, 0.55);
-    }
-
-    ha-card.theme-dark .tb-cursor-now::after
-    {
-        border-top-color: #ffffff;
-    }
-
-    /*  Chips that don't carry a user-configured colour: clock, day
-        labels, live button, cloud %, solar W/m². These all share
-        the "white plate, black ink" base recipe in light mode, so
-        they get the same dark override. */
-    ha-card.theme-dark .clock,
-    ha-card.theme-dark .tl-live-btn,
-    ha-card.theme-dark .tb-day-label,
-    ha-card.theme-dark .cloud-pct-label,
-    ha-card.theme-dark .solar-pct-label,
-    ha-card.theme-dark .map-btn:not(.map-btn-on),
-    ha-card.theme-dark .lidar-view-btn:not(.is-on)
-    {
-        background: #191a1b;
-        color:       #e6e6e6;
-        /*  Light-mode borders are pure black on a white plate ,
-            high contrast but visually contained because the plate
-            and the basemap below it are both bright. In dark mode
-            the same 1 px ring at #cccccc reads as the brightest
-            ink on the card and dominates the chip. Drop the
-            opacity so the border behaves as a delimiter rather
-            than a focal element. Matches the chart-card and
-            segmented-toggle borders elsewhere in dark mode. */
-        border-color: rgba(255, 255, 255, 0.20);
-    }
-
-    ha-card.theme-dark .tb-day-label
-    {
-        background: #1f2021;
-    }
-
-    ha-card.theme-dark .tl-live-btn ha-icon,
-    ha-card.theme-dark .cloud-pct-label ha-icon,
-    ha-card.theme-dark .solar-pct-label ha-icon,
-    ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
-    ha-card.theme-dark .lidar-view-btn:not(.is-on) ha-icon
-    {
-        color: #e6e6e6;
-    }
-
-    ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
-    ha-card.theme-dark .tl-live-btn:active { background: #353637; }
-    ha-card.theme-dark .map-btn:not(.map-btn-on):hover  { background: #292a2b; }
-    ha-card.theme-dark .map-btn:not(.map-btn-on):active { background: #353637; }
-
-    /*  PV and battery chips, they keep the user-configured tint
-        on the border / text / icon (so a green PV chip reads as
-        green on either skin), but the surface flips to the dark
-        plate so the tint stays readable. The border drops to 50 %
-        opacity of the configured colour: at full saturation the
-        ring would dominate the chip against a near-black plate
-        and a darkened map, fighting the value just like the
-        neutral-chip border above. The text and icon stay at full
-        saturation so the colour identity is carried by the
-        readable elements, not the frame. */
-    ha-card.theme-dark .pv-pct-label
-    {
-        background: #191a1b;
-        border-color: color-mix(in srgb, var(--pv-leader-color, #27B36B) 50%, transparent);
-    }
-    ha-card.theme-dark .battery-pct-label
-    {
-        background: #191a1b;
-        border-color: color-mix(in srgb, var(--battery-leader-color, #D32F2F) 50%, transparent);
-    }
-
-    /*  Cloud-cover leader (chip → disc) flips polarity so it's
-        visible against a dark plate and a darkened map. */
-    ha-card.theme-dark .cloud-leader-svg line
-    {
-        stroke: #e6e6e6;
-        stroke-opacity: 0.55;
-    }
-
-    /*  Solar arc outline, the light skin paints a black halo
-        behind the configured sun colour for legibility on bright
-        basemaps; in dark mode that halo would disappear into the
-        map, so we paint a faint white halo instead. The arc and
-        sun disc themselves keep their configured colour. */
-    ha-card.theme-dark .solar-svg .solar-arc-outline
-    {
-        stroke: rgba(255, 255, 255, 0.45);
-    }
-
-
-    /*  ---------------------------------------------------------
-        Animation perf hooks
-        ---------------------------------------------------------
-
-        1. .helios-paused, set on the host element by the card's
-           IntersectionObserver when the card scrolls out of the
-           viewport. Pauses every CSS animation (SVG dash-flow,
-           offset-path arrow flow) until the card returns. SMIL
-           <animateMotion> is paused in parallel via
-           svg.pauseAnimations() in the card script.
-
-        2. prefers-reduced-motion, respects the user's system
-           setting. When the user has asked for reduced motion at
-           the OS level, every helios animation and transition is
-           disabled. The card still functions; it just doesn't move.
-    */
-    :host(.helios-paused) *,
-    :host(.helios-paused) *::before,
-    :host(.helios-paused) *::after
-    {
-        animation-play-state: paused !important;
-    }
-
-    @media (prefers-reduced-motion: reduce)
-    {
-        *, *::before, *::after
-        {
-            animation-duration:         0ms !important;
-            animation-iteration-count:  1   !important;
-            transition-duration:        0ms !important;
+        samples.push({ tMs, kwh: cumKwh });
+        prevT = tMs;
+        prevW = w2;
+      }
+      pastEndMs = tMs;
+    }
+  }
+  if (pastEndMs < nowMs && nowMs < endMs) {
+    samples.push({ tMs: nowMs, kwh: cumKwh });
+    pastEndMs = nowMs;
+  }
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 !== null && k2 > 0 && series && coords) {
+    for (let i2 = 0; i2 < series.times.length; i2++) {
+      const tMs = series.times[i2].getTime();
+      if (tMs < startMs || tMs >= endMs) continue;
+      const binStart = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+      const binEnd = binStart + HOUR_MS;
+      if (binEnd <= nowMs) continue;
+      const cloud = series.cloud[i2] ?? 0;
+      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud);
+      if (pct < 0) continue;
+      const futureStart = Math.max(binStart, nowMs);
+      const fraction = Math.min(1, (binEnd - futureStart) / HOUR_MS);
+      cumKwh += pct * k2 / 1e3 * fraction;
+      samples.push({ tMs: binEnd, kwh: cumKwh });
+    }
+  }
+  const lookup = (t2) => {
+    if (samples.length === 0) return 0;
+    if (t2 <= samples[0].tMs) return samples[0].kwh;
+    if (t2 >= samples[samples.length - 1].tMs) return samples[samples.length - 1].kwh;
+    let lo = 0, hi = samples.length - 1;
+    while (lo < hi - 1) {
+      const mid = lo + hi >> 1;
+      if (samples[mid].tMs <= t2) lo = mid;
+      else hi = mid;
+    }
+    const a2 = samples[lo], b2 = samples[hi];
+    if (b2.tMs === a2.tMs) return a2.kwh;
+    return a2.kwh + (t2 - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
+  };
+  const hourMarks = [];
+  for (let h2 = 0; h2 <= 24; h2++) {
+    const tMs = startMs + h2 * HOUR_MS;
+    hourMarks.push({ tMs, kwh: lookup(tMs) });
+  }
+  let maxKwh = 0;
+  for (const s2 of samples) if (s2.kwh > maxKwh) maxKwh = s2.kwh;
+  return { samples, hourMarks, pastEndMs, maxKwh };
+}
+function renderDashTodaySection(host, t2, pvColor, sunColor) {
+  const data = computeTodayHourly(host);
+  const HOUR_MS = 36e5;
+  const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }) : "";
+  const peakValueLabel = formatPvWatts(host.hass, data.peakW);
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const todayMs = today0.getTime();
+  const dailyKwh = computeDailyKwhTotals(host);
+  const forecastKwh = dailyKwh.get(todayMs) ?? data.forecastKwh;
+  const showForecast = forecastKwh > data.producedKwh + 0.05;
+  const showPeak = data.peakHourTs !== null && data.peakW > 50;
+  const pvConfigured = String(host.config?.["pv-power-entity"] ?? "").trim() !== "";
+  const historyLoading = pvConfigured && host._pvHistory === null;
+  const notStartedYet = !historyLoading && data.producedKwh < 0.05 && data.peakHourTs !== null && data.peakHourTs > Date.now();
+  return b`
+        <section class="dash-section dash-card dash-today">
+            <header class="dash-card-header">
+                <ha-icon class="dash-card-icon" icon="mdi:weather-sunny" style="color:${sunColor}"></ha-icon>
+                <span class="dash-card-label">${t2.detail.todayLabel}</span>
+            </header>
+            <div class="dash-today-body">
+                <div class="dash-today-produced" style="color:${pvColor}">
+                    ${historyLoading ? b`
+                        <span class="dash-stat-skeleton" aria-hidden="true"></span>
+                    ` : b`
+                        <span class="dash-stat-value">${formatLocalisedNumber(host.hass, data.producedKwh, 1)}</span>
+                        <span class="dash-stat-unit">kWh</span>
+                    `}
+                </div>
+                <div class="dash-today-side">
+                    ${showForecast ? b`
+                        <div class="dash-today-line dash-today-forecast">
+                            <span class="dash-line-arrow">→</span>
+                            <span class="dash-line-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)} kWh</span>
+                            <span class="dash-line-label">${t2.detail.todayForecast}</span>
+                        </div>
+                    ` : A}
+                    ${showPeak ? b`
+                        <div class="dash-today-line dash-today-peak">
+                            <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
+                            <span class="dash-line-value">${peakTimeLabel} · ${peakValueLabel}</span>
+                            <span class="dash-line-label">${t2.detail.todayPeak}</span>
+                        </div>
+                    ` : A}
+                </div>
+                ${historyLoading ? A : renderDashTodayChart(host, pvColor)}
+            </div>
+            ${notStartedYet ? b`
+                <div class="dash-today-status">${t2.detail.todayNotStartedYet}</div>
+            ` : A}
+        </section>
+    `;
+}
+function renderDashTodayChart(host, pvColor) {
+  const cum = computeTodayCumulative(host);
+  if (cum.maxKwh < 0.05) return A;
+  const HOUR_MS = 36e5;
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const startMs = today0.getTime();
+  const endMs = startMs + 24 * HOUR_MS;
+  const W = 240, H2 = 60;
+  const PAD_X = 4, PAD_T = 4, PAD_B = 6;
+  const yMax = Math.max(cum.maxKwh, 0.1) * 1.05;
+  const xFor = (t2) => PAD_X + (t2 - startMs) / (endMs - startMs) * (W - 2 * PAD_X);
+  const yFor = (kwh) => H2 - PAD_B - kwh / yMax * (H2 - PAD_T - PAD_B);
+  const buildPath = (pts) => {
+    if (pts.length < 2) return "";
+    return "M " + pts.map(
+      (p2) => `${xFor(p2.tMs).toFixed(2)} ${yFor(p2.kwh).toFixed(2)}`
+    ).join(" L ");
+  };
+  const pastSamples = cum.samples.filter((s2) => s2.tMs <= cum.pastEndMs);
+  const futureSamples = cum.samples.filter((s2) => s2.tMs >= cum.pastEndMs);
+  const pastPath = buildPath(pastSamples);
+  const futurePath = buildPath(futureSamples);
+  const hoverTs = host._dashChartHoverTs;
+  let hoverKwh = null;
+  let hoverX = 0;
+  let hoverFracX = 0;
+  let hoverTimeLabel = "";
+  if (hoverTs !== null && hoverTs >= startMs && hoverTs < endMs) {
+    const samples = cum.samples;
+    if (samples.length > 0) {
+      if (hoverTs <= samples[0].tMs) {
+        hoverKwh = samples[0].kwh;
+      } else if (hoverTs >= samples[samples.length - 1].tMs) {
+        hoverKwh = samples[samples.length - 1].kwh;
+      } else {
+        let lo = 0, hi = samples.length - 1;
+        while (lo < hi - 1) {
+          const mid = lo + hi >> 1;
+          if (samples[mid].tMs <= hoverTs) lo = mid;
+          else hi = mid;
         }
+        const a2 = samples[lo], b2 = samples[hi];
+        hoverKwh = a2.tMs === b2.tMs ? a2.kwh : a2.kwh + (hoverTs - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
+      }
+      hoverX = xFor(hoverTs);
+      hoverFracX = hoverX / W * 100;
+      hoverTimeLabel = new Date(hoverTs).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23"
+      });
     }
-`;
+  }
+  return b`
+        <div class="dash-today-chart">
+            <svg class="dash-today-chart-svg"
+                 viewBox="0 0 ${W} ${H2}"
+                 preserveAspectRatio="none"
+                 @pointermove="${(e2) => handleDashChartPointerMove(host, e2)}"
+                 @pointerleave="${() => handleDashChartPointerLeave(host)}"
+            >
+                ${pastPath !== "" ? w`
+                    <path class="dash-today-chart-past"
+                          d="${pastPath}"
+                          stroke="${pvColor}"/>
+                ` : A}
+                ${futurePath !== "" ? w`
+                    <path class="dash-today-chart-future"
+                          d="${futurePath}"
+                          stroke="${pvColor}"/>
+                ` : A}
+                ${cum.hourMarks.map((m2) => w`
+                    <circle class="dash-today-chart-dot"
+                            cx="${xFor(m2.tMs).toFixed(2)}"
+                            cy="${yFor(m2.kwh).toFixed(2)}"
+                            r="1.4"
+                            fill="${pvColor}"/>
+                `)}
+                ${hoverKwh !== null ? w`
+                    <line class="dash-today-chart-hover-line"
+                          x1="${hoverX.toFixed(2)}" x2="${hoverX.toFixed(2)}"
+                          y1="${PAD_T}" y2="${H2 - PAD_B}"/>
+                    <circle class="dash-today-chart-hover-dot"
+                            cx="${hoverX.toFixed(2)}"
+                            cy="${yFor(hoverKwh).toFixed(2)}"
+                            r="2.2"
+                            fill="${pvColor}"/>
+                ` : A}
+            </svg>
+            ${hoverKwh !== null ? b`
+                <div class="dash-today-chart-tooltip"
+                     style="left: ${hoverFracX.toFixed(2)}%;"
+                >
+                    ${hoverTimeLabel} · ${formatLocalisedNumber(host.hass, hoverKwh, 1)} kWh
+                </div>
+            ` : A}
+        </div>
+    `;
+}
+function formatPvWatts(hass, w2) {
+  if (!isFinite(w2) || w2 < 0) return "0 W";
+  if (w2 >= 1e3) return formatLocalisedNumber(hass, w2 / 1e3, 2) + " kW";
+  return Math.round(w2) + " W";
+}
+function computeTomorrow(host) {
+  const HOUR_MS = 36e5;
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const tomorrowMs = today0.getTime() + 24 * HOUR_MS;
+  const endMs = tomorrowMs + 24 * HOUR_MS;
+  const series = host._chartSeries;
+  const coords = getHomeCoords(host.config, host.hass);
+  const k2 = pvCalibK(host.config);
+  let totalKwh = 0;
+  let peakHourTs = null;
+  let peakW = 0;
+  let cloudSum = 0;
+  let cloudWeight = 0;
+  if (series && coords) {
+    for (let i2 = 0; i2 < series.times.length; i2++) {
+      const tMs = series.times[i2].getTime();
+      if (tMs < tomorrowMs || tMs >= endMs) continue;
+      const cloud = series.cloud[i2] ?? 0;
+      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud);
+      if (pct > 0 && k2 !== null) {
+        const watts = pct * k2;
+        totalKwh += watts / 1e3;
+        if (watts > peakW) {
+          peakW = watts;
+          peakHourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+        }
+        cloudSum += cloud * pct;
+        cloudWeight += pct;
+      }
+    }
+  }
+  const avgCloud = cloudWeight > 0 ? cloudSum / cloudWeight : 0;
+  return { totalKwh, peakHourTs, peakW, avgCloud };
+}
+function renderDashTomorrowSection(host, t2, sunColor, _cloudColor) {
+  const data = computeTomorrow(host);
+  const HOUR_MS = 36e5;
+  const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }) : "";
+  return b`
+        <section class="dash-section dash-card dash-tomorrow">
+            <header class="dash-card-header">
+                <ha-icon class="dash-card-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
+                <span class="dash-card-label">${t2.detail.tomorrowLabel}</span>
+                <span class="dash-card-trailing dash-card-trailing-forecast">
+                    <span class="dash-stat-value-sm">≈ ${formatLocalisedNumber(host.hass, data.totalKwh, 1)}</span>
+                    <span class="dash-stat-unit-sm">kWh</span>
+                </span>
+            </header>
+            ${data.peakHourTs !== null ? b`
+                <div class="dash-tomorrow-peak">
+                    <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
+                    <span class="dash-line-label">${t2.detail.tomorrowPeak}</span>
+                    <span class="dash-line-value">${peakTimeLabel}</span>
+                </div>
+            ` : A}
+        </section>
+    `;
+}
+function renderDashBatterySection(host, t2, batteryColor) {
+  const data = computeBatteryToday(host);
+  const soc = data.socNow ?? 0;
+  const W = 60;
+  const H2 = 100;
+  const capW = 18, capH = 6;
+  const cellX = 8, cellY = 12;
+  const cellW = W - 2 * cellX, cellH = H2 - cellY - 6;
+  const liquidH = Math.max(0, Math.min(100, soc)) / 100 * (cellH - 4);
+  const liquidY = cellY + cellH - 2 - liquidH;
+  const liquidX = cellX + 2;
+  const liquidW = cellW - 4;
+  return b`
+        <section class="dash-section dash-card dash-battery">
+            <header class="dash-card-header">
+                <ha-icon class="dash-card-icon" icon="mdi:battery" style="color:${batteryColor}"></ha-icon>
+                <span class="dash-card-label">${t2.detail.batteryLabel}</span>
+                <span class="dash-card-trailing">
+                    <span class="dash-stat-value-sm">${Math.round(soc)}</span>
+                    <span class="dash-stat-unit-sm">%</span>
+                </span>
+            </header>
+            <div class="dash-battery-body">
+                <svg class="dash-battery-vessel" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                        <linearGradient id="dash-batt-grad-${host._instanceId}" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%"   stop-color="${batteryColor}" stop-opacity="0.95"/>
+                            <stop offset="100%" stop-color="${batteryColor}" stop-opacity="0.6"/>
+                        </linearGradient>
+                    </defs>
+                    ${(() => {
+    const capLx = (W - capW) / 2;
+    const capRx = (W + capW) / 2;
+    const capTy = cellY - capH;
+    const capBy = cellY;
+    const r2 = 1.5;
+    const capPath = [
+      `M ${capLx} ${capBy}`,
+      `L ${capLx} ${capTy + r2}`,
+      `Q ${capLx} ${capTy} ${capLx + r2} ${capTy}`,
+      `L ${capRx - r2} ${capTy}`,
+      `Q ${capRx} ${capTy} ${capRx} ${capTy + r2}`,
+      `L ${capRx} ${capBy}`
+    ].join(" ");
+    return w`<path class="dash-batt-cap" d="${capPath}"/>`;
+  })()}
+                    <rect class="dash-batt-shell"
+                          x="${cellX}" y="${cellY}"
+                          width="${cellW}" height="${cellH}" rx="3"/>
+                    ${liquidH > 0 ? w`
+                        <rect class="dash-batt-liquid"
+                              x="${liquidX}" y="${liquidY}"
+                              width="${liquidW}" height="${liquidH}"
+                              rx="2"
+                              fill="url(#dash-batt-grad-${host._instanceId})"/>
+                    ` : A}
+                </svg>
+                <div class="dash-battery-flows">
+                    <div class="dash-battery-flow dash-battery-flow-charge">
+                        <ha-icon icon="mdi:arrow-up-bold"></ha-icon>
+                        <span class="dash-flow-value">${formatLocalisedNumber(host.hass, data.chargedKwh, 1)} kWh</span>
+                        <span class="dash-flow-label">${t2.detail.batteryCharged}</span>
+                    </div>
+                    <div class="dash-battery-flow dash-battery-flow-discharge">
+                        <ha-icon icon="mdi:arrow-down-bold"></ha-icon>
+                        <span class="dash-flow-value">${formatLocalisedNumber(host.hass, data.dischargedKwh, 1)} kWh</span>
+                        <span class="dash-flow-label">${t2.detail.batteryDischarged}</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    `;
+}
+function handleHomeClick(host, e2) {
+  e2.stopPropagation();
+  if (host._detailMode) {
+    return;
+  }
+  host._homeHover = false;
+  host._detailMode = true;
+  host._engine?.setDetailMode(true);
+}
+function handleExitDetail(host, e2) {
+  e2.stopPropagation();
+  if (!host._detailMode) {
+    return;
+  }
+  host._detailMode = false;
+  host._engine?.setDetailMode(false);
+}
+function handleDashChartPointerMove(host, e2) {
+  const svgEl = e2.currentTarget;
+  if (!svgEl) return;
+  const rect = svgEl.getBoundingClientRect();
+  if (rect.width <= 0) return;
+  const W = 240, PAD_X = 4;
+  const fracPx = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
+  const xLogical = fracPx * W;
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const startMs = today0.getTime();
+  const endMs = startMs + 24 * 36e5;
+  const tFrac = (xLogical - PAD_X) / (W - 2 * PAD_X);
+  host._dashChartHoverTs = startMs + Math.max(0, Math.min(1, tFrac)) * (endMs - startMs);
+}
+function handleDashChartPointerLeave(host) {
+  host._dashChartHoverTs = null;
+}
+const LIDAR_FADE_IN_MS = 380;
+const LIDAR_FADE_OUT_MS = 280;
+function toggleLidarView(host) {
+  if (!host._engine) return;
+  if (!host._lidarViewMode && host._engine.getActiveLidarSourceId() === null) return;
+  if (!host._lidarViewMode) {
+    host._lidarFadeOutStartMs = null;
+    host._lidarFadeInStartMs = performance.now();
+    host._lidarViewMode = true;
+    host._engine.setLidarViewActive(true);
+    refreshOverlays(host);
+    startLidarFadeLoop(host);
+  } else {
+    host._lidarFadeInStartMs = null;
+    host._lidarFadeOutStartMs = performance.now();
+    startLidarFadeLoop(host);
+  }
+}
+function startLidarFadeLoop(host) {
+  if (host._lidarFadeRaf !== void 0) return;
+  const tick2 = () => {
+    const now = performance.now();
+    const inStart = host._lidarFadeInStartMs;
+    const outStart = host._lidarFadeOutStartMs;
+    if (outStart !== null && now - outStart >= LIDAR_FADE_OUT_MS) {
+      host._lidarFadeOutStartMs = null;
+      host._lidarViewMode = false;
+      host._engine?.setLidarViewFadeAlpha(0);
+      host._engine?.setLidarViewActive(false);
+    }
+    if (inStart !== null && now - inStart >= LIDAR_FADE_IN_MS) {
+      host._lidarFadeInStartMs = null;
+    }
+    const inT = host._lidarFadeInStartMs !== null ? Math.max(0, Math.min(1, (now - host._lidarFadeInStartMs) / LIDAR_FADE_IN_MS)) : 1;
+    const outT = host._lidarFadeOutStartMs !== null ? Math.max(0, Math.min(1, (now - host._lidarFadeOutStartMs) / LIDAR_FADE_OUT_MS)) : 0;
+    const alpha = (host._lidarFadeInStartMs !== null ? inT : host._lidarViewMode ? 1 : 0) * (host._lidarFadeOutStartMs !== null ? 1 - outT : 1);
+    host._engine?.setLidarViewFadeAlpha(alpha);
+    if (host._lidarFadeInStartMs !== null || host._lidarFadeOutStartMs !== null) {
+      host._lidarFadeRaf = requestAnimationFrame(tick2);
+    } else {
+      host._lidarFadeRaf = void 0;
+    }
+  };
+  host._lidarFadeRaf = requestAnimationFrame(tick2);
+}
 const colorPickerStyles = i$3`
     :host { position: relative; display: inline-block; }
 
@@ -36456,42 +38441,6 @@ var __decorateClass$1 = (decorators, target, key, kind) => {
   if (kind && result) __defProp$1(target, key, result);
   return result;
 };
-function cfgHex(v2, fallback) {
-  if (v2 == null) {
-    return fallback;
-  }
-  const s2 = String(v2).trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(s2)) {
-    return s2;
-  }
-  return fallback;
-}
-const VALID_DATE_FORMAT_RE = /^[\-\/\. _:0-9A-Za-z]+$/;
-const DATE_TOKEN_RE = /yyyy|yy|mm|dd/g;
-function formatDate(d2, rawFormat) {
-  let fmt = typeof rawFormat === "string" ? rawFormat.trim() : "";
-  if (!fmt || !VALID_DATE_FORMAT_RE.test(fmt) || !DATE_TOKEN_RE.test(fmt)) {
-    fmt = "mm-dd";
-  }
-  DATE_TOKEN_RE.lastIndex = 0;
-  const yyyy = String(d2.getFullYear());
-  const yy = yyyy.slice(-2);
-  const mm = String(d2.getMonth() + 1).padStart(2, "0");
-  const dd = String(d2.getDate()).padStart(2, "0");
-  return fmt.replace(DATE_TOKEN_RE, (tok) => {
-    switch (tok) {
-      case "yyyy":
-        return yyyy;
-      case "yy":
-        return yy;
-      case "mm":
-        return mm;
-      case "dd":
-        return dd;
-    }
-    return tok;
-  });
-}
 let HeliosColorPicker = class extends i {
   constructor() {
     super(...arguments);
@@ -37706,7 +39655,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.36"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.37"}`,
       labelStyle,
       versionStyle
     );
@@ -37727,7 +39676,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.36",
+        version: "1.6.0-alpha.37",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37735,7 +39684,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.36"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.37"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -37829,44 +39778,10 @@ let HeliosCard = class extends i {
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
-    this._toggleLidarView = () => {
-      if (!this._engine) return;
-      if (!this._lidarViewMode && this._engine.getActiveLidarSourceId() === null) return;
-      if (!this._lidarViewMode) {
-        this._lidarFadeOutStartMs = null;
-        this._lidarFadeInStartMs = performance.now();
-        this._lidarViewMode = true;
-        this._engine.setLidarViewActive(true);
-        this._refreshOverlays();
-        this._startLidarFadeLoop();
-      } else {
-        this._lidarFadeInStartMs = null;
-        this._lidarFadeOutStartMs = performance.now();
-        this._startLidarFadeLoop();
-      }
-    };
     this._trackElement = null;
     this._trackPointerId = null;
-    this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
-    this._boundPointerUp = (e2) => this._onTimelinePointerUp(e2);
-    this._onDashChartPointerMove = (e2) => {
-      const svg2 = e2.currentTarget;
-      if (!svg2) return;
-      const rect = svg2.getBoundingClientRect();
-      if (rect.width <= 0) return;
-      const W = 240, PAD_X = 4;
-      const fracPx = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
-      const xLogical = fracPx * W;
-      const today0 = /* @__PURE__ */ new Date();
-      today0.setHours(0, 0, 0, 0);
-      const startMs = today0.getTime();
-      const endMs = startMs + 24 * 36e5;
-      const tFrac = (xLogical - PAD_X) / (W - 2 * PAD_X);
-      this._dashChartHoverTs = startMs + Math.max(0, Math.min(1, tFrac)) * (endMs - startMs);
-    };
-    this._onDashChartPointerLeave = () => {
-      this._dashChartHoverTs = null;
-    };
+    this._boundPointerMove = (e2) => onTimelinePointerMove(this, e2);
+    this._boundPointerUp = (e2) => onTimelinePointerUp(this, e2);
     this._instanceId = `h${Math.floor(Math.random() * 1e9).toString(36)}`;
     this._onHomeEnter = () => {
       this._homeHover = true;
@@ -37874,14 +39789,6 @@ let HeliosCard = class extends i {
     this._onHomeLeave = () => {
       this._homeHover = false;
     };
-  }
-  //Cheap stable signature of the visual config, used to skip
-  //updateConfig() when nothing the engine cares about has changed.
-  _computeConfigSig() {
-    if (!this.config) {
-      return "";
-    }
-    return HeliosCard._VISUAL_CONFIG_KEYS.map((k2) => `${k2}=${this.config[k2] ?? ""}`).join("|");
   }
   //HA card lifecycle
   setConfig(config) {
@@ -37919,7 +39826,7 @@ let HeliosCard = class extends i {
         entityConfigured: typeof this.config?.["pv-power-entity"] === "string" && this.config["pv-power-entity"].length > 0,
         unit: this._pvUnit || null,
         lastHistory: this._pvHistoryDiagnostics,
-        calibrationK: this._pvCalibK()
+        calibrationK: pvCalibK(this.config)
       }
     };
   }
@@ -37936,56 +39843,6 @@ let HeliosCard = class extends i {
   invalidateLocation() {
     this._lastHomeKey = "";
     this.requestUpdate();
-  }
-  //Resolves the home coordinates. Three-tier precedence, in order:
-  //  1. `window.__heliosLocationOverride` , the debug helper set via
-  //     the global `setHeliosLocation()` console function. Highest
-  //     priority so a developer can always force a location regardless
-  //     of card config.
-  //  2. The card config keys `home-latitude` / `home-longitude`.
-  //     Applied only when BOTH parse as numbers (or numeric strings)
-  //     that are finite and in valid range (lat -90..90, lon
-  //     -180..180). Anything else , including missing, partial, the
-  //     empty string, booleans or arrays which `Number()` would
-  //     happily coerce to 0 , is silently rejected so a half-edited
-  //     YAML never warps the card to {0,0}.
-  //  3. Home Assistant's configured home at
-  //     hass.config.{latitude,longitude}.
-  //Returns null only when none of the three has a usable pair.
-  _getHomeCoords() {
-    const w2 = window;
-    const o2 = w2.__heliosLocationOverride;
-    if (o2 && typeof o2.lat === "number" && typeof o2.lon === "number" && isFinite(o2.lat) && isFinite(o2.lon)) {
-      return { lat: o2.lat, lon: o2.lon };
-    }
-    const cfgLat = this._parseConfigCoord(this.config?.["home-latitude"]);
-    const cfgLon = this._parseConfigCoord(this.config?.["home-longitude"]);
-    if (cfgLat !== null && cfgLon !== null && cfgLat >= -90 && cfgLat <= 90 && cfgLon >= -180 && cfgLon <= 180) {
-      return { lat: cfgLat, lon: cfgLon };
-    }
-    const lat = this.hass?.config?.latitude;
-    const lon = this.hass?.config?.longitude;
-    if (typeof lat !== "number" || typeof lon !== "number") return null;
-    return { lat, lon };
-  }
-  //Defensive parser for `home-latitude` / `home-longitude` raw values
-  //coming out of the card config. The config is typed `unknown`, so
-  //bare `Number()` is unsafe: `Number('')`, `Number(false)`, `Number([])`,
-  //`Number(null)` all return 0, which is a finite, in-range latitude
-  //(Atlantic Ocean off the Gulf of Guinea) and would silently win the
-  //range check in `_getHomeCoords`. Accept numbers as-is and parse
-  //strings that look like a decimal number; reject everything else.
-  _parseConfigCoord(raw2) {
-    if (typeof raw2 === "number") {
-      return isFinite(raw2) ? raw2 : null;
-    }
-    if (typeof raw2 === "string") {
-      const trimmed = raw2.trim();
-      if (trimmed === "") return null;
-      const n3 = Number(trimmed);
-      return isFinite(n3) ? n3 : null;
-    }
-    return null;
   }
   //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
   getCardSize() {
@@ -38023,9 +39880,9 @@ let HeliosCard = class extends i {
   connectedCallback() {
     super.connectedCallback();
     _liveCards.add(this);
-    this._tick();
-    this._timer = window.setInterval(() => this._tick(), 3e4);
-    this._initVisibilityObserver();
+    tick(this);
+    this._timer = window.setInterval(() => tick(this), 3e4);
+    initVisibilityObserver(this);
   }
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -38045,31 +39902,6 @@ let HeliosCard = class extends i {
     this._engine?.cleanup();
     this._engine = void 0;
   }
-  _initVisibilityObserver() {
-    if (this._visibilityObserver || typeof IntersectionObserver === "undefined") {
-      return;
-    }
-    this._visibilityObserver = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        this._setAnimationsPaused(!entry.isIntersecting);
-      }
-    }, { threshold: 0 });
-    this._visibilityObserver.observe(this);
-  }
-  _setAnimationsPaused(paused) {
-    this.classList.toggle("helios-paused", paused);
-    const root = this.shadowRoot;
-    if (!root) return;
-    const svgs = root.querySelectorAll("svg");
-    for (const svg2 of Array.from(svgs)) {
-      const s2 = svg2;
-      try {
-        if (paused) s2.pauseAnimations?.();
-        else s2.unpauseAnimations?.();
-      } catch (_2) {
-      }
-    }
-  }
   //Engine init policy: re-init only when one of the *identity inputs*
   //changes (API key, home coordinates, map style). We resize the
   //existing engine when the container reflows, we never tear down
@@ -38080,12 +39912,12 @@ let HeliosCard = class extends i {
     if (!this.hass?.config || !this.config) {
       return;
     }
-    const coords = this._getHomeCoords();
+    const coords = getHomeCoords(this.config, this.hass);
     if (!coords) return;
     const { lat, lon } = coords;
     if (!this._pvCalibWiped) {
       this._pvCalibWiped = true;
-      this._wipeLegacyPvCalibStorage();
+      wipeLegacyPvCalibStorage(this.hass, getHomeCoords(this.config, this.hass));
     }
     const homeKey = `${lat.toFixed(5)},${lon.toFixed(5)}`;
     const identityChanged = homeKey !== this._lastHomeKey;
@@ -38094,1528 +39926,22 @@ let HeliosCard = class extends i {
         return;
       }
       this._lastHomeKey = homeKey;
-      this._lastConfigSig = this._computeConfigSig();
-      this._initEngine();
+      this._lastConfigSig = computeConfigSig(this.config);
+      initEngine(this);
       return;
     }
-    const sig = this._computeConfigSig();
+    const sig = computeConfigSig(this.config);
     if (sig !== this._lastConfigSig) {
       this._lastConfigSig = sig;
       this._engine.updateConfig(this.config);
     }
-    this._refreshPv();
-    this._refreshBattery();
-    this._refreshSolarRadiation();
-  }
-  //Photovoltaic production
-  //
-  //When the user configures `pv-power-entity`, the card pulls two
-  //flavours of data from Home Assistant:
-  //  - the entity's current state (read synchronously from
-  //    hass.states on every render cycle), shown as a chip below
-  //    the home with a leader line back to the marker.
-  //  - the entity's historical state changes over the active time
-  //    range (fetched asynchronously via the history WebSocket
-  //    command), plotted on the dedicated graph above the main
-  //    timeline. Only past + current data is fetched, the future
-  //    half of the timeline range is intentionally left blank
-  //    because production data simply doesn't exist yet.
-  _refreshPv() {
-    const entity = String(this.config?.["pv-power-entity"] ?? "").trim();
-    if (!entity || !this.hass) {
-      if (this._pvCurrent !== null || this._pvHistory !== null) {
-        this._pvCurrent = null;
-        this._pvHistory = null;
-        this._pvUnit = "";
-      }
-      this._pvFetchKey = "";
-      return;
-    }
-    const stateObj = this.hass.states?.[entity];
-    if (stateObj) {
-      const v2 = parseFloat(stateObj.state);
-      const next3 = isFinite(v2) ? v2 : null;
-      if (next3 !== this._pvCurrent) {
-        this._pvCurrent = next3;
-      }
-      const unit = stateObj.attributes?.unit_of_measurement ?? "";
-      if (unit !== this._pvUnit) {
-        this._pvUnit = unit;
-      }
-      if (next3 !== null) {
-        const ts = stateObj.last_updated ? new Date(stateObj.last_updated).getTime() : Date.now();
-        const buf = this._pvSampleBuffer;
-        const last = buf.length > 0 ? buf[buf.length - 1] : null;
-        if (!last || ts > last.t) {
-          buf.push({ t: ts, v: next3 });
-          const cutoff = Date.now() - 5 * 60 * 1e3;
-          while (buf.length > 1 && buf[0].t < cutoff) {
-            buf.shift();
-          }
-        }
-      }
-    } else {
-      if (this._pvCurrent !== null) {
-        this._pvCurrent = null;
-      }
-      if (this._pvSampleBuffer.length > 0) {
-        this._pvSampleBuffer = [];
-      }
-    }
-    if (!this._timeRange || this._pvFetching) {
-      return;
-    }
-    const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
-    const fetchKey = `${entity}@${rangeKey}`;
-    if (fetchKey === this._pvFetchKey) {
-      return;
-    }
-    this._pvFetchKey = fetchKey;
-    this._fetchPvHistory(entity, this._timeRange.start, this._timeRange.end);
-  }
-  //Battery overlay, pulls live state from hass.states on every Lit
-  //cycle (no rolling buffer like PV, battery entities are typically
-  //power sensors that already expose an instantaneous reading) and,
-  //when at least one entity is configured AND the timeline range is
-  //set, fetches a historical series so the chip can show what the
-  //battery was doing at any past instant the user scrubs to. The
-  //fetch is gated on a `(socEntity, powerEntity, range)` tuple so
-  //we don't reissue the WS call on every render cycle.
-  _refreshBattery() {
-    if (!this.hass) {
-      return;
-    }
-    const socEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
-    const powerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
-    let nextSoc = null;
-    if (socEntity) {
-      const so = this.hass.states?.[socEntity];
-      const v2 = so ? parseFloat(so.state) : NaN;
-      if (isFinite(v2)) {
-        nextSoc = Math.max(0, Math.min(100, v2));
-      }
-    }
-    if (nextSoc !== this._batterySoc) {
-      this._batterySoc = nextSoc;
-    }
-    let nextPower = null;
-    let nextUnit = "";
-    if (powerEntity) {
-      const so = this.hass.states?.[powerEntity];
-      const v2 = so ? parseFloat(so.state) : NaN;
-      if (isFinite(v2)) {
-        nextPower = this._batteryPowerInvert() ? -v2 : v2;
-        nextUnit = so.attributes?.unit_of_measurement ?? "";
-      }
-    }
-    if (nextPower !== this._batteryPower) {
-      this._batteryPower = nextPower;
-    }
-    if (nextUnit !== this._batteryPowerUnit) {
-      this._batteryPowerUnit = nextUnit;
-    }
-    if (!socEntity && !powerEntity) {
-      if (this._batterySocHistory !== null) {
-        this._batterySocHistory = null;
-      }
-      if (this._batteryPowerHistory !== null) {
-        this._batteryPowerHistory = null;
-      }
-      this._batteryFetchKey = "";
-      return;
-    }
-    if (!this._timeRange || this._batteryFetching) {
-      return;
-    }
-    const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
-    const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}@inv=${this._batteryPowerInvert() ? 1 : 0}`;
-    if (fetchKey === this._batteryFetchKey) {
-      return;
-    }
-    this._batteryFetchKey = fetchKey;
-    this._fetchBatteryHistory(socEntity, powerEntity, this._timeRange.start, this._timeRange.end);
-  }
-  //Solar-radiation override.
-  //
-  //When the user wires `solar-radiation-entity` to a physical
-  //W/m² sensor (typical Ecowitt / Davis / personal weather station),
-  //its samples beat Open-Meteo for the live + past portions of the
-  //irradiance pipeline. The card pulls two flavours of data on every
-  //refresh cycle, exactly like the PV / battery hooks:
-  //  - the entity's current state, read synchronously from
-  //    hass.states, gives a fresh "now" sample.
-  //  - the entity's historical state changes over the active time
-  //    range, fetched via the history WebSocket command, fill the
-  //    past portion of the timeline.
-  //Future hours never get a sample (the sensor doesn't know what
-  //tomorrow will look like) so the forecast half of the chart
-  //naturally falls through to Open-Meteo on the engine side.
-  _refreshSolarRadiation() {
-    const entity = String(this.config?.["solar-radiation-entity"] ?? "").trim();
-    if (!entity || !this.hass) {
-      if (this._solarRadiationHistory !== null) {
-        this._solarRadiationHistory = null;
-      }
-      this._solarRadiationFetchKey = "";
-      this._engine?.setSolarRadiationSamples(null);
-      return;
-    }
-    this._pushSolarRadiationToEngine();
-    if (!this._timeRange || this._solarRadiationFetching) {
-      return;
-    }
-    const rangeKey = `${this._timeRange.start.getTime()}|${this._timeRange.end.getTime()}`;
-    const fetchKey = `${entity}@${rangeKey}`;
-    if (fetchKey === this._solarRadiationFetchKey) {
-      return;
-    }
-    this._solarRadiationFetchKey = fetchKey;
-    this._fetchSolarRadiationHistory(entity, this._timeRange.start, this._timeRange.end);
-  }
-  //Merge the cached recorder history with the live state and push the
-  //result down to the engine. Called both on every refresh cycle (so
-  //the latest live sample is always in there) and once a history
-  //fetch lands. Cheap, just an array concat + a setter that runs an
-  //O(n log n) sort once.
-  _pushSolarRadiationToEngine() {
-    if (!this._engine) return;
-    const entity = String(this.config?.["solar-radiation-entity"] ?? "").trim();
-    if (!entity || !this.hass) {
-      this._engine.setSolarRadiationSamples(null);
-      return;
-    }
-    const samples = [];
-    const hist = this._solarRadiationHistory;
-    if (hist) {
-      for (let i2 = 0; i2 < hist.times.length; i2++) {
-        samples.push({ time: hist.times[i2], wm2: hist.values[i2] });
-      }
-    }
-    const stateObj = this.hass.states?.[entity];
-    if (stateObj) {
-      const v2 = parseFloat(stateObj.state);
-      if (isFinite(v2) && v2 >= 0) {
-        const ts = stateObj.last_updated ? new Date(stateObj.last_updated) : /* @__PURE__ */ new Date();
-        samples.push({ time: ts, wm2: v2 });
-      }
-    }
-    this._engine.setSolarRadiationSamples(samples.length > 0 ? samples : null);
-  }
-  //Mirrors _fetchPvHistory: same payload shape, same defensive
-  //parsing across HA's compaction / minimal_response variants.
-  //W/m² values are taken as-is; the sensor is expected to expose
-  //solar irradiance in the same unit the engine consumes, no
-  //normalisation step.
-  async _fetchSolarRadiationHistory(entityId, start, end) {
-    if (!this.hass?.callWS) {
-      return;
-    }
-    this._solarRadiationFetching = true;
-    try {
-      const now = /* @__PURE__ */ new Date();
-      const fetchEnd = end > now ? now : end;
-      if (start >= fetchEnd) {
-        this._solarRadiationHistory = { times: [], values: [] };
-        this._pushSolarRadiationToEngine();
-        return;
-      }
-      const result = await this.hass.callWS({
-        type: "history/history_during_period",
-        start_time: start.toISOString(),
-        end_time: fetchEnd.toISOString(),
-        entity_ids: [entityId],
-        minimal_response: true,
-        no_attributes: true
-      });
-      const arr = (result && result[entityId]) ?? [];
-      const times = [];
-      const values2 = [];
-      let lastTsMs = null;
-      for (const item of arr) {
-        const sRaw = item?.s ?? item?.state;
-        if (sRaw === null || sRaw === void 0 || sRaw === "unavailable" || sRaw === "unknown" || sRaw === "") {
-          continue;
-        }
-        const v2 = parseFloat(String(sRaw));
-        if (!isFinite(v2) || v2 < 0) {
-          continue;
-        }
-        let ts = null;
-        const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
-        if (typeof tsRaw === "number") {
-          ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1e3);
-        } else if (typeof tsRaw === "string") {
-          const asNum = Number(tsRaw);
-          if (Number.isFinite(asNum) && asNum > 1e9) {
-            ts = new Date(asNum > 1e12 ? asNum : asNum * 1e3);
-          } else {
-            ts = new Date(tsRaw);
-          }
-        }
-        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) {
-          ts = new Date(lastTsMs);
-        }
-        if (!ts || isNaN(ts.getTime())) {
-          continue;
-        }
-        lastTsMs = ts.getTime();
-        times.push(ts);
-        values2.push(v2);
-      }
-      this._solarRadiationHistory = { times, values: values2 };
-      this._pushSolarRadiationToEngine();
-    } catch (e2) {
-      console.warn("[HELIOS] Solar radiation history fetch failed:", e2);
-      this._solarRadiationHistory = { times: [], values: [] };
-      this._pushSolarRadiationToEngine();
-    } finally {
-      this._solarRadiationFetching = false;
-    }
-  }
-  //Single-call history fetch for the battery overlay. Both entities
-  //(when configured) are bundled into one `entity_ids` array so we
-  //pay one WS roundtrip instead of two. Either side of the result
-  //may end up empty (entity not yet existing, no state changes in
-  //range, etc.) and that's fine, the chip will show only the side
-  //that did return data.
-  async _fetchBatteryHistory(socEntity, powerEntity, start, end) {
-    if (!this.hass?.callWS) {
-      return;
-    }
-    this._batteryFetching = true;
-    try {
-      const now = /* @__PURE__ */ new Date();
-      const fetchEnd = end > now ? now : end;
-      if (start >= fetchEnd) {
-        if (socEntity) {
-          this._batterySocHistory = { times: [], values: [] };
-        }
-        if (powerEntity) {
-          this._batteryPowerHistory = { times: [], values: [] };
-        }
-        return;
-      }
-      const ids = [];
-      if (socEntity) {
-        ids.push(socEntity);
-      }
-      if (powerEntity) {
-        ids.push(powerEntity);
-      }
-      const result = await this.hass.callWS({
-        type: "history/history_during_period",
-        start_time: start.toISOString(),
-        end_time: fetchEnd.toISOString(),
-        entity_ids: ids,
-        minimal_response: true,
-        no_attributes: true
-      });
-      const parseSeries = (arr) => {
-        const times = [];
-        const values2 = [];
-        for (const item of arr ?? []) {
-          const stateStr = typeof item?.s === "string" ? item.s : typeof item?.state === "string" ? item.state : null;
-          if (stateStr === null || stateStr === "unavailable" || stateStr === "unknown" || stateStr === "") {
-            continue;
-          }
-          const v2 = parseFloat(stateStr);
-          if (!isFinite(v2)) {
-            continue;
-          }
-          let ts = null;
-          if (typeof item?.lu === "number") {
-            ts = new Date(item.lu * 1e3);
-          } else if (typeof item?.last_updated === "string") {
-            ts = new Date(item.last_updated);
-          } else if (typeof item?.last_changed === "string") {
-            ts = new Date(item.last_changed);
-          }
-          if (!ts || isNaN(ts.getTime())) {
-            continue;
-          }
-          times.push(ts);
-          values2.push(v2);
-        }
-        return { times, values: values2 };
-      };
-      if (socEntity) {
-        const series = parseSeries(result?.[socEntity] ?? []);
-        series.values = series.values.map((v2) => Math.max(0, Math.min(100, v2)));
-        this._batterySocHistory = series;
-      } else {
-        this._batterySocHistory = null;
-      }
-      if (powerEntity) {
-        const series = parseSeries(result?.[powerEntity] ?? []);
-        if (this._batteryPowerInvert()) {
-          series.values = series.values.map((v2) => -v2);
-        }
-        this._batteryPowerHistory = series;
-      } else {
-        this._batteryPowerHistory = null;
-      }
-    } catch (e2) {
-      console.warn("[HELIOS] battery history fetch failed:", e2);
-      this._batterySocHistory = { times: [], values: [] };
-      this._batteryPowerHistory = { times: [], values: [] };
-    } finally {
-      this._batteryFetching = false;
-    }
-  }
-  //Locate the history sample at or before `time` and return its
-  //value, or null if the time falls outside the fetched window. A
-  //60 s grace at the tail keeps "scrub to live" resolving cleanly
-  //(same convention as the PV chip).
-  _batterySampleAtTime(hist, time) {
-    if (!hist || hist.times.length === 0) {
-      return null;
-    }
-    const tMs = time.getTime();
-    const firstMs = hist.times[0].getTime();
-    const lastMs = hist.times[hist.times.length - 1].getTime();
-    if (tMs < firstMs || tMs > lastMs + 6e4) {
-      return null;
-    }
-    let idx = hist.times.length - 1;
-    for (let i2 = 0; i2 < hist.times.length; i2++) {
-      if (hist.times[i2].getTime() > tMs) {
-        idx = i2 - 1;
-        break;
-      }
-    }
-    if (idx < 0) {
-      idx = 0;
-    }
-    return hist.values[idx];
-  }
-  //Locale-aware number formatter for the user-facing chips.
-  //Honours the Home Assistant user's language (e.g. `fr-FR` →
-  //`1,29` with a comma decimal, `en-US` → `1.29` with a period)
-  //via Intl.NumberFormat. Falls back to plain .toFixed / round
-  //on the rare browser that lacks Intl (very old WebViews).
-  //
-  //We don't honour hass.locale.number_format here on purpose:
-  //that key exposes user overrides ("comma_decimal", "decimal_
-  //comma", "language_defaults", ...) which would require their
-  //own mapping table; the language tag covers ~99 % of cases
-  //correctly because the browser's CLDR data tracks each
-  //locale's conventions.
-  _formatLocalisedNumber(value, fractionDigits, integer = false) {
-    const locale = this.hass?.locale?.language ?? this.hass?.language ?? void 0;
-    const opts = integer ? { maximumFractionDigits: 0 } : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits };
-    try {
-      return new Intl.NumberFormat(locale, opts).format(value);
-    } catch (_2) {
-      return integer ? Math.round(value).toString() : value.toFixed(fractionDigits);
-    }
-  }
-  //Format a signed battery power value for the chip. Mirrors
-  //_formatPvValue's W ↔ kW switching but always prefixes a sign so
-  //the user can tell charging from discharging at a glance.
-  _formatBatteryPower(value, unit) {
-    const lu = (unit || "").trim().toLowerCase();
-    const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-    const abs = Math.abs(value);
-    if (lu === "w" && abs >= 1e3) {
-      return `${sign}${this._formatLocalisedNumber(abs / 1e3, 2)} kW`;
-    }
-    if (lu === "w") {
-      return `${sign}${this._formatLocalisedNumber(abs, 0, true)} W`;
-    }
-    if (lu === "kw") {
-      return `${sign}${this._formatLocalisedNumber(abs, 2)} kW`;
-    }
-    return `${sign}${this._formatLocalisedNumber(abs, 1)}${unit ? " " + unit : ""}`;
-  }
-  async _fetchPvHistory(entityId, start, end) {
-    if (!this.hass?.callWS) {
-      return;
-    }
-    this._pvFetching = true;
-    try {
-      const now = /* @__PURE__ */ new Date();
-      const fetchEnd = end > now ? now : end;
-      if (start >= fetchEnd) {
-        this._pvHistory = { times: [], values: [] };
-        return;
-      }
-      const result = await this.hass.callWS({
-        type: "history/history_during_period",
-        start_time: start.toISOString(),
-        end_time: fetchEnd.toISOString(),
-        entity_ids: [entityId],
-        minimal_response: true,
-        no_attributes: true
-      });
-      const arr = (result && result[entityId]) ?? [];
-      const times = [];
-      const values2 = [];
-      let lastTsMs = null;
-      for (const item of arr) {
-        const sRaw = item?.s ?? item?.state;
-        if (sRaw === null || sRaw === void 0 || sRaw === "unavailable" || sRaw === "unknown" || sRaw === "") {
-          continue;
-        }
-        const v2 = parseFloat(String(sRaw));
-        if (!isFinite(v2)) {
-          continue;
-        }
-        let ts = null;
-        const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
-        if (typeof tsRaw === "number") {
-          ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1e3);
-        } else if (typeof tsRaw === "string") {
-          const asNum = Number(tsRaw);
-          if (Number.isFinite(asNum) && asNum > 1e9) {
-            ts = new Date(asNum > 1e12 ? asNum : asNum * 1e3);
-          } else {
-            ts = new Date(tsRaw);
-          }
-        }
-        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) {
-          ts = new Date(lastTsMs);
-        }
-        if (!ts || isNaN(ts.getTime())) {
-          continue;
-        }
-        lastTsMs = ts.getTime();
-        times.push(ts);
-        values2.push(v2);
-      }
-      this._pvHistory = { times, values: values2 };
-      this._pvHistoryDiagnostics = {
-        rawEntries: arr.length,
-        samples: times.length,
-        windowH: Number(((fetchEnd.getTime() - start.getTime()) / 36e5).toFixed(1))
-      };
-    } catch (e2) {
-      console.warn("[HELIOS] PV history fetch failed:", e2);
-      this._pvHistory = { times: [], values: [] };
-    } finally {
-      this._pvFetching = false;
-    }
-  }
-  _initEngine() {
-    this._initInflight = true;
-    if (this._initDebounceTimer !== void 0) {
-      window.clearTimeout(this._initDebounceTimer);
-    }
-    this._initDebounceTimer = window.setTimeout(() => {
-      this._initDebounceTimer = void 0;
-      this._initEngineNow();
-    }, HeliosCard.INIT_DEBOUNCE_MS);
-  }
-  _initEngineNow() {
-    requestAnimationFrame(() => {
-      const container = this.shadowRoot?.getElementById("map-container");
-      if (!container || !this.config || !this.hass?.config) {
-        this._initInflight = false;
-        return;
-      }
-      const coords = this._getHomeCoords();
-      if (!coords) {
-        this._initInflight = false;
-        return;
-      }
-      const { lat, lon } = coords;
-      const elevation = this.hass.config.elevation;
-      this._engine?.cleanup();
-      while (container.firstChild) {
-        container.removeChild(container.firstChild);
-      }
-      this._engine = new HeliosEngine(container, this.config, [lon, lat], elevation);
-      this.requestUpdate();
-      this._engine.onFetchStart = () => {
-        this._fetching = true;
-      };
-      this._engine.onFetchEnd = () => {
-        this._fetching = false;
-      };
-      this._engine.onWeatherUpdate = (data) => {
-        this._cloudCover = data.cloudCover;
-        this._timeRange = data.timeRange;
-        this._isLiveMode = data.isLiveTime;
-        this._chartSeries = this._engine?.getTimelineSeries() ?? null;
-        this._refreshOverlays();
-      };
-      this._engine.onMapTransform = () => {
-        this._refreshOverlays();
-      };
-      this._engine.onContextLost = () => {
-        this._lastHomeKey = "";
-        if (!this._initInflight) this._initEngine();
-      };
-      this._engine.onShadowComputeStart = () => {
-        this._shadowBusy = true;
-      };
-      this._engine.onShadowComputeEnd = () => {
-        this._shadowBusy = false;
-      };
-      this._initInflight = false;
-    });
-  }
-  //Pull fresh screen-space layouts from the engine for both the
-  //cloud-cover percentage label and the solar-arc / sun / ray.
-  //Called on every map transform broadcast by the engine, plus
-  //once at first weather update (the engine's projection matrix
-  //is only ready after the style has loaded), plus on every clock
-  //tick when in live mode (the sun position depends on the time).
-  _refreshOverlays() {
-    const layout = this._engine?.projectHomeLabelLayout() ?? null;
-    this._labelLayout = layout;
-    const t2 = this._selectedTime ?? this._now;
-    this._sunScene = this._engine ? this._engine.projectSunScene(t2) : null;
-    this._cloudScene = this._engine ? this._engine.projectCloudScene() : null;
-    this._homeSilhouettes = this._engine ? this._engine.projectHomeFootprints() : [];
-  }
-  //Drives the fade alpha while a fade is in flight. Each tick
-  //computes the current alpha multiplier and pushes it to the
-  //engine; the WebGL layer composites the dot cloud with that alpha
-  //next time MapLibre repaints. Self-terminates when both fades are
-  //null (idle stable state) so the rAF cost stays at zero during
-  //regular viewing.
-  _startLidarFadeLoop() {
-    if (this._lidarFadeRaf !== void 0) return;
-    const tick = () => {
-      const now = performance.now();
-      const inStart = this._lidarFadeInStartMs;
-      const outStart = this._lidarFadeOutStartMs;
-      if (outStart !== null && now - outStart >= HeliosCard._LIDAR_FADE_OUT_MS) {
-        this._lidarFadeOutStartMs = null;
-        this._lidarViewMode = false;
-        this._engine?.setLidarViewFadeAlpha(0);
-        this._engine?.setLidarViewActive(false);
-      }
-      if (inStart !== null && now - inStart >= HeliosCard._LIDAR_FADE_IN_MS) {
-        this._lidarFadeInStartMs = null;
-      }
-      const inT = this._lidarFadeInStartMs !== null ? Math.max(0, Math.min(1, (now - this._lidarFadeInStartMs) / HeliosCard._LIDAR_FADE_IN_MS)) : 1;
-      const outT = this._lidarFadeOutStartMs !== null ? Math.max(0, Math.min(1, (now - this._lidarFadeOutStartMs) / HeliosCard._LIDAR_FADE_OUT_MS)) : 0;
-      const alpha = (this._lidarFadeInStartMs !== null ? inT : this._lidarViewMode ? 1 : 0) * (this._lidarFadeOutStartMs !== null ? 1 - outT : 1);
-      this._engine?.setLidarViewFadeAlpha(alpha);
-      if (this._lidarFadeInStartMs !== null || this._lidarFadeOutStartMs !== null) {
-        this._lidarFadeRaf = requestAnimationFrame(tick);
-      } else {
-        this._lidarFadeRaf = void 0;
-      }
-    };
-    this._lidarFadeRaf = requestAnimationFrame(tick);
-  }
-  //Segments now share one fixed colour (the configured sun
-  //colour). Depth perception comes entirely from the per-segment
-  //stroke width modulated by `nearness`, kept untouched: it is the
-  //2D-on-3D cue we explicitly chose not to overload with another
-  //dimension. Irradiance is still kept on the segment shape, the
-  //caller doesn't use it any more, but removing it would broaden
-  //the change surface unnecessarily; we just stop *colouring* with
-  //it.
-  _buildArcSegments(arc, sunColor) {
-    const out = [];
-    for (let i2 = 0; i2 < arc.length - 1; i2++) {
-      const a2 = arc[i2];
-      const b2 = arc[i2 + 1];
-      out.push({
-        x1: a2.x,
-        y1: a2.y,
-        x2: b2.x,
-        y2: b2.y,
-        color: sunColor,
-        nearness: 0.5 * (a2.nearness + b2.nearness),
-        belowHorizon: a2.belowHorizon || b2.belowHorizon
-      });
-    }
-    return out;
-  }
-  //Re-renders the card every 30 seconds.
-  //  - In live mode this advances both the HH:MM clock display
-  //    (seconds were dropped to allow the slower cadence) and the
-  //    live cursor on the timeline.
-  //  - In scrubbed mode the clock shows the selected instant and the
-  //    live cursor still continues to move underneath as wall-clock
-  //    time progresses.
-  //PV and battery live readings update on Home Assistant state
-  //changes, not on this tick, so they stay real-time regardless.
-  _tick() {
-    this._now = /* @__PURE__ */ new Date();
-    this._refreshOverlays();
-  }
-  _onTimelinePointerDown(e2) {
-    if (!this._timeRange) {
-      return;
-    }
-    if (this._engine?.isUserGestureSuppressed()) {
-      return;
-    }
-    const track = e2.currentTarget;
-    track.setPointerCapture(e2.pointerId);
-    this._trackElement = track;
-    this._trackPointerId = e2.pointerId;
-    track.addEventListener("pointermove", this._boundPointerMove);
-    track.addEventListener("pointerup", this._boundPointerUp);
-    track.addEventListener("pointercancel", this._boundPointerUp);
-    this._applyTimelinePointer(e2);
-  }
-  _onTimelinePointerMove(e2) {
-    if (e2.pointerId !== this._trackPointerId) {
-      return;
-    }
-    this._applyTimelinePointer(e2);
-  }
-  _onTimelinePointerUp(e2) {
-    if (e2.pointerId !== this._trackPointerId) {
-      return;
-    }
-    const track = this._trackElement;
-    if (track) {
-      try {
-        track.releasePointerCapture(e2.pointerId);
-      } catch (_2) {
-      }
-      track.removeEventListener("pointermove", this._boundPointerMove);
-      track.removeEventListener("pointerup", this._boundPointerUp);
-      track.removeEventListener("pointercancel", this._boundPointerUp);
-    }
-    this._trackElement = null;
-    this._trackPointerId = null;
-  }
-  _applyTimelinePointer(e2) {
-    if (!this._timeRange) {
-      return;
-    }
-    const track = e2.currentTarget;
-    const rect = track.getBoundingClientRect();
-    const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
-    const rangeMs = this._timeRange.end.getTime() - this._timeRange.start.getTime();
-    const t2 = new Date(this._timeRange.start.getTime() + frac * rangeMs);
-    if (this._selectedTime && this._selectedTime.getTime() === t2.getTime()) {
-      return;
-    }
-    this._selectedTime = t2;
-    this._isLiveMode = false;
-    this._engine?.setSelectedTime(t2);
-  }
-  _resetToLive() {
-    this._selectedTime = null;
-    this._isLiveMode = true;
-    this._engine?.setSelectedTime(null);
-  }
-  //Timeline rendering
-  //Build the SVG chart of the chart card: irradiance W/m² as a
-  //gradient-filled area, cloud cover as a translucent grey area
-  //layered on top, plus a scrub cursor line that mirrors the
-  //selected instant (or "now" in live mode).
-  //
-  //The chart uses a fixed-resolution viewBox (1000 × 100) with
-  //preserveAspectRatio="none", so it stretches horizontally
-  //with the container while keeping vertical proportions intact.
-  //All path coordinates are computed against this viewBox and
-  //the browser handles the actual scaling.
-  //Mirror chart.
-  //
-  //Two areas sharing a horizontal midline:
-  //  - top half: irradiance W/m², "the sun pushes upward". Filled
-  //    with the configured sun colour, gradient-faded toward the
-  //    midline so the chart never feels flat.
-  //  - bottom half: cloud cover %, "the clouds press down". Filled
-  //    with the configured cloud colour, mirrored gradient.
-  //
-  //The metaphor maps the user's mental model: when the sun pushes
-  //past what the clouds press in, production is high; when the
-  //clouds reach further than the sun's push, production is low.
-  //The two areas inhabit non-overlapping pixel rows, so we never
-  //have to worry about z-order or transparency stacking.
-  _renderChart() {
-    const series = this._chartSeries;
-    const range = this._timeRange;
-    if (!series || !range || series.times.length < 2) {
-      return b`<svg class="hc-chart-svg" viewBox="0 0 1000 100" preserveAspectRatio="none"></svg>`;
-    }
-    const W = 1e3;
-    const H2 = 100;
-    const MID = H2 / 2;
-    const HALF = H2 / 2;
-    const startMs = range.start.getTime();
-    const rangeMs = range.end.getTime() - startMs;
-    if (rangeMs <= 0) {
-      return b`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="none"></svg>`;
-    }
-    const xOf = (t2) => (t2.getTime() - startMs) / rangeMs * W;
-    const yIrr = (w2) => MID - Math.max(0, Math.min(1, w2 / 1e3)) * HALF;
-    const yCloud = (pct) => MID + Math.max(0, Math.min(1, pct / 100)) * HALF;
-    const irrPoints = series.times.map((t2, i2) => `${xOf(t2).toFixed(2)},${yIrr(series.irradiance[i2] ?? 0).toFixed(2)}`);
-    const cloudPoints = series.times.map((t2, i2) => `${xOf(t2).toFixed(2)},${yCloud(series.cloud[i2] ?? 0).toFixed(2)}`);
-    const x0 = xOf(series.times[0]);
-    const xN = xOf(series.times[series.times.length - 1]);
-    const irrArea = `M ${x0},${MID} L ${irrPoints.join(" L ")} L ${xN},${MID} Z`;
-    const cloudArea = `M ${x0},${MID} L ${cloudPoints.join(" L ")} L ${xN},${MID} Z`;
-    const irrLine = `M ${irrPoints.join(" L ")}`;
-    const cloudLine = `M ${cloudPoints.join(" L ")}`;
-    const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
-    const cloudColor = cfgHex(this.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
-    const startMsAbs = range.start.getTime();
-    const endMsAbs = range.end.getTime();
-    const dayXs = [];
-    const dCursor = new Date(range.start);
-    dCursor.setHours(0, 0, 0, 0);
-    while (dCursor.getTime() <= endMsAbs) {
-      const next3 = new Date(dCursor);
-      next3.setDate(next3.getDate() + 1);
-      if (dCursor.getTime() > startMsAbs && dCursor.getTime() < endMsAbs) {
-        dayXs.push(xOf(dCursor));
-      }
-      dCursor.setTime(next3.getTime());
-    }
-    const hourXs = [];
-    const hCursor = new Date(range.start);
-    hCursor.setMinutes(0, 0, 0);
-    hCursor.setHours(hCursor.getHours() + 1);
-    while (hCursor.getTime() <= endMsAbs) {
-      if (hCursor.getTime() > startMsAbs && hCursor.getHours() !== 0) {
-        hourXs.push(xOf(hCursor));
-      }
-      hCursor.setHours(hCursor.getHours() + 1);
-    }
-    const HOUR_TICK_HALF = 3;
-    return b`
-            <svg
-                class="hc-chart-svg"
-                viewBox="0 0 ${W} ${H2}"
-                preserveAspectRatio="none"
-            >
-                <path
-                    d="${irrArea}"
-                    fill="${sunColor}"
-                    fill-opacity="0.5"
-                ></path>
-                <path
-                    d="${cloudArea}"
-                    fill="${cloudColor}"
-                    fill-opacity="0.5"
-                ></path>
-                <path
-                    class="hc-chart-line"
-                    d="${irrLine}"
-                    stroke="${sunColor}"
-                ></path>
-                <path
-                    class="hc-chart-line"
-                    d="${cloudLine}"
-                    stroke="${cloudColor}"
-                ></path>
-                ${dayXs.map((x2) => w`
-                    <line
-                        class="hc-day-sep"
-                        x1="${x2.toFixed(2)}" y1="0"
-                        x2="${x2.toFixed(2)}" y2="${H2}"
-                    ></line>
-                `)}
-                <line
-                    class="hc-chart-mid"
-                    x1="0" y1="${MID}"
-                    x2="${W}" y2="${MID}"
-                ></line>
-                ${hourXs.map((x2) => w`
-                    <line
-                        class="hc-hour-tick"
-                        x1="${x2.toFixed(2)}" y1="${MID - HOUR_TICK_HALF}"
-                        x2="${x2.toFixed(2)}" y2="${MID + HOUR_TICK_HALF}"
-                    ></line>
-                `)}
-            </svg>
-        `;
-  }
-  //Render the optional photovoltaic production graph that sits
-  //above the main timeline chart. Same X axis as the main chart
-  //(time range pulled from this._timeRange) so day boundaries and
-  //the scrub cursor line up vertically across both blocks. The
-  //curve is plotted from this._pvHistory (fetched via the HA
-  //history WebSocket command); future data is intentionally left
-  //blank, the curve naturally stops at the last recorded sample
-  //since there's no production data after "now".
-  _renderPvChart() {
-    const range = this._timeRange;
-    const hist = this._pvHistory;
-    const W = 1e3;
-    const H2 = 100;
-    if (!range) {
-      return b`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="none"></svg>`;
-    }
-    const startMs = range.start.getTime();
-    const rangeMs = range.end.getTime() - startMs;
-    if (rangeMs <= 0) {
-      return b`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="none"></svg>`;
-    }
-    const pvColor = cfgHex(this.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
-    const endMsAbs = range.end.getTime();
-    const dayXs = [];
-    const dCursor = new Date(range.start);
-    dCursor.setHours(0, 0, 0, 0);
-    while (dCursor.getTime() <= endMsAbs) {
-      const next3 = new Date(dCursor);
-      next3.setDate(next3.getDate() + 1);
-      if (dCursor.getTime() > startMs && dCursor.getTime() < endMsAbs) {
-        dayXs.push((dCursor.getTime() - startMs) / rangeMs * W);
-      }
-      dCursor.setTime(next3.getTime());
-    }
-    const lu = (this._pvUnit || "").toLowerCase();
-    const isCumulativeEnergy = lu === "wh" || lu === "kwh" || lu === "mwh";
-    let rawTimes = hist?.times ?? [];
-    let rawValues = hist?.values ?? [];
-    if (isCumulativeEnergy && rawTimes.length >= 2) {
-      const dTimes = [];
-      const dValues = [];
-      for (let i2 = 1; i2 < rawTimes.length; i2++) {
-        const dtH = (rawTimes[i2].getTime() - rawTimes[i2 - 1].getTime()) / 36e5;
-        if (dtH <= 0 || dtH > 6) {
-          continue;
-        }
-        const dv = rawValues[i2] - rawValues[i2 - 1];
-        if (dv < 0) {
-          continue;
-        }
-        dTimes.push(rawTimes[i2]);
-        dValues.push(dv / dtH);
-      }
-      rawTimes = dTimes;
-      rawValues = dValues;
-    }
-    const samples = [];
-    for (let i2 = 0; i2 < rawTimes.length; i2++) {
-      const t2 = rawTimes[i2];
-      const v2 = rawValues[i2];
-      if (t2.getTime() < startMs || t2.getTime() > endMsAbs) {
-        continue;
-      }
-      if (!isFinite(v2)) {
-        continue;
-      }
-      samples.push({ t: t2, v: v2 });
-    }
-    const xOf = (t2) => (t2.getTime() - startMs) / rangeMs * W;
-    const nativeFromW = (() => {
-      const native = isCumulativeEnergy ? lu === "kwh" ? "kw" : lu === "mwh" ? "mw" : lu === "wh" ? "w" : "" : lu;
-      if (native === "kw") return 1 / 1e3;
-      if (native === "mw") return 1 / 1e6;
-      return 1;
-    })();
-    const k2 = this._pvCalibK();
-    const coords = this._getHomeCoords();
-    const lat = coords?.lat;
-    const lon = coords?.lon;
-    const series = this._chartSeries;
-    const predictedSamples = [];
-    if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
-      const nowMs = Date.now();
-      for (let i2 = 0; i2 < series.times.length; i2++) {
-        const tMs = series.times[i2].getTime();
-        if (tMs < nowMs) continue;
-        if (tMs < startMs) continue;
-        if (tMs > endMsAbs) continue;
-        const pct = this._computePvPowerWeighted(series.times[i2], lat, lon, series.cloud[i2] ?? 0);
-        if (pct <= 0) continue;
-        predictedSamples.push({ t: series.times[i2], v: pct * k2 * nativeFromW });
-      }
-    }
-    let yMax = 1;
-    for (const s2 of samples) {
-      if (s2.v > yMax) yMax = s2.v;
-    }
-    for (const s2 of predictedSamples) {
-      if (s2.v > yMax) yMax = s2.v;
-    }
-    const yOf = (v2) => H2 - Math.max(0, Math.min(1, v2 / yMax)) * H2;
-    const points = samples.map((s2) => `${xOf(s2.t).toFixed(2)},${yOf(s2.v).toFixed(2)}`);
-    let area = "";
-    let line = "";
-    if (points.length >= 2) {
-      const x0 = xOf(samples[0].t);
-      const xN = xOf(samples[samples.length - 1].t);
-      area = `M ${x0},${H2} L ${points.join(" L ")} L ${xN},${H2} Z`;
-      line = `M ${points.join(" L ")}`;
-    }
-    let predictedLine = "";
-    if (predictedSamples.length >= 2) {
-      const pPoints = predictedSamples.map((s2) => `${xOf(s2.t).toFixed(2)},${yOf(s2.v).toFixed(2)}`);
-      predictedLine = `M ${pPoints.join(" L ")}`;
-    }
-    return b`
-            <svg
-                class="hc-chart-svg"
-                viewBox="0 0 ${W} ${H2}"
-                preserveAspectRatio="none"
-            >
-                ${dayXs.map((x2) => w`
-                    <line
-                        class="hc-day-sep"
-                        x1="${x2.toFixed(2)}" y1="0"
-                        x2="${x2.toFixed(2)}" y2="${H2}"
-                    ></line>
-                `)}
-                ${area ? w`
-                    <path
-                        d="${area}"
-                        fill="${pvColor}"
-                        fill-opacity="0.5"
-                    ></path>
-                    <path
-                        class="hc-chart-line"
-                        d="${line}"
-                        stroke="${pvColor}"
-                    ></path>
-                ` : A}
-                ${predictedLine ? w`
-                    <path
-                        class="hc-chart-line hc-chart-predicted"
-                        d="${predictedLine}"
-                        stroke="${pvColor}"
-                    ></path>
-                ` : A}
-            </svg>
-        `;
-  }
-  //The thin track now carries only the cursors. Day
-  //separators live inside the chart card SVG (dotted vertical
-  //lines) and the scrub time label has been promoted to a chip
-  //above the chart card.
-  _renderTimelineTicks() {
-    if (!this._timeRange) {
-      return b``;
-    }
-    const { start, end } = this._timeRange;
-    const rangeMs = end.getTime() - start.getTime();
-    const now = /* @__PURE__ */ new Date();
-    const toPct = (d2) => Math.max(0, Math.min(100, (d2.getTime() - start.getTime()) / rangeMs * 100));
-    const nowPct = toPct(now);
-    const showSelected = !this._isLiveMode && this._selectedTime !== null;
-    const selPct = showSelected ? toPct(this._selectedTime) : 0;
-    return b`
-            <div class="tb-cursor-now" style="left:${nowPct}%"></div>
-            ${showSelected ? b`
-                <div class="tb-cursor-sel" style="left:${selPct}%"></div>
-            ` : A}
-        `;
-  }
-  //Day labels rendered as small white chips overlaying the chart
-  //card on its midline (between the irradiance and cloud halves).
-  //Same chip styling as the on-map cloud and W/m² readouts, so all
-  //three feel like the same family. Each chip is centred on the
-  //middle of its day's segment in the time range.
-  _renderTimelineDayLabels() {
-    if (!this._timeRange) {
-      return b``;
-    }
-    const { start, end } = this._timeRange;
-    const rangeMs = end.getTime() - start.getTime();
-    const now = /* @__PURE__ */ new Date();
-    const toPct = (d2) => Math.max(0, Math.min(100, (d2.getTime() - start.getTime()) / rangeMs * 100));
-    const today0 = new Date(now);
-    today0.setHours(0, 0, 0, 0);
-    const showConsumption = this._timelineConsumptionEnabled();
-    const dailyKwh = showConsumption ? this._computeDailyKwhTotals() : /* @__PURE__ */ new Map();
-    const labels = [];
-    const cursor = new Date(start);
-    cursor.setHours(0, 0, 0, 0);
-    while (cursor.getTime() <= end.getTime()) {
-      const next3 = new Date(cursor);
-      next3.setDate(next3.getDate() + 1);
-      const segStart = Math.max(start.getTime(), cursor.getTime());
-      const segEnd = Math.min(end.getTime(), next3.getTime());
-      if (segEnd > segStart) {
-        const pStart = toPct(new Date(segStart));
-        const pEnd = toPct(new Date(segEnd));
-        const w2 = pEnd - pStart;
-        const dayDelta = Math.round((cursor.getTime() - today0.getTime()) / 864e5);
-        const isToday = dayDelta === 0;
-        const label = formatDate(cursor, this.config?.["date-format"]);
-        const centre = pStart + w2 / 2;
-        const labelPct = Math.min(Math.max(centre, 6), 94);
-        const kwh = dailyKwh.get(cursor.getTime());
-        const isForecast = kwh !== void 0 && cursor.getTime() > today0.getTime();
-        const kwhText = kwh !== void 0 && isFinite(kwh) && kwh >= 0.05 ? this._formatLocalisedNumber(kwh, 1) + " kWh" : "";
-        labels.push(b`
-                    <div
-                        class="tb-day-label ${isToday ? "tb-day-label-today" : ""}"
-                        style="left:${labelPct}%"
-                    >
-                        <span class="tb-day-label-date">${label}</span>
-                        ${kwhText ? b`
-                            <span class="tb-day-label-kwh ${isForecast ? "is-forecast" : ""}">${kwhText}</span>
-                        ` : A}
-                    </div>
-                `);
-      }
-      cursor.setTime(next3.getTime());
-    }
-    return b`<div class="tb-day-labels">${labels}</div>`;
-  }
-  //Compute kWh-per-day totals over the active timeline range. The
-  //helper integrates two sources:
-  //
-  //  - Past + today-so-far: sum of the observed PV history (from
-  //    `_pvHistory`), respecting the entity's unit (W/kW power
-  //    sensors are integrated by trapezoidal rule; cumulative
-  //    energy sensors are differenced and summed).
-  //  - Today-remainder + future: integration of the kWp × clear-
-  //    sky × cloud model, hour by hour, using the engine's
-  //    weather series.
-  //
-  //Returns a Map keyed by each day's local-midnight ms, with
-  //values in kWh. Days that fall outside the active range or
-  //carry no usable data are omitted.
-  _computeDailyKwhTotals() {
-    const out = /* @__PURE__ */ new Map();
-    if (!this._timeRange) return out;
-    const { start, end } = this._timeRange;
-    const startMs = start.getTime();
-    const endMsAbs = end.getTime();
-    const dayKey = (ms) => {
-      const d2 = new Date(ms);
-      d2.setHours(0, 0, 0, 0);
-      return d2.getTime();
-    };
-    const hist = this._pvHistory;
-    if (hist && hist.times.length >= 2) {
-      const unit = (this._pvUnit || "").toLowerCase();
-      const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
-      if (isCumulativeEnergy) {
-        for (let i2 = 1; i2 < hist.times.length; i2++) {
-          const tMs = hist.times[i2].getTime();
-          if (tMs < startMs || tMs > endMsAbs) continue;
-          const dv = hist.values[i2] - hist.values[i2 - 1];
-          if (!isFinite(dv) || dv < 0) continue;
-          const kwh = unit === "mwh" ? dv * 1e3 : unit === "wh" ? dv / 1e3 : dv;
-          const k22 = dayKey(tMs);
-          out.set(k22, (out.get(k22) ?? 0) + kwh);
-        }
-      } else {
-        for (let i2 = 1; i2 < hist.times.length; i2++) {
-          const tCurrMs = hist.times[i2].getTime();
-          if (tCurrMs < startMs || tCurrMs > endMsAbs) continue;
-          const tPrevMs = hist.times[i2 - 1].getTime();
-          const dtH = (tCurrMs - tPrevMs) / 36e5;
-          if (dtH <= 0 || dtH > 6) continue;
-          const wPrev = this._pvNormalizeToWatts(hist.values[i2 - 1], this._pvUnit);
-          const wCurr = this._pvNormalizeToWatts(hist.values[i2], this._pvUnit);
-          if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
-          const kwh = (wPrev + wCurr) / 2 * dtH / 1e3;
-          const k22 = dayKey(tCurrMs);
-          out.set(k22, (out.get(k22) ?? 0) + kwh);
-        }
-      }
-    }
-    const k2 = this._pvCalibK();
-    const series = this._chartSeries;
-    const coords = this._getHomeCoords();
-    if (k2 !== null && k2 > 0 && series && coords) {
-      const nowMs = Date.now();
-      for (let i2 = 0; i2 < series.times.length; i2++) {
-        const tMs = series.times[i2].getTime();
-        if (tMs < startMs || tMs > endMsAbs) continue;
-        if (tMs < nowMs) continue;
-        const cloud = series.cloud[i2] ?? 0;
-        const pct = this._computePvPowerWeighted(series.times[i2], coords.lat, coords.lon, cloud);
-        if (pct <= 0) continue;
-        const kwh = pct * k2 / 1e3;
-        const dk = dayKey(tMs);
-        out.set(dk, (out.get(dk) ?? 0) + kwh);
-      }
-    }
-    return out;
-  }
-  //Compute the production rate at an arbitrary historical time
-  //(used when the user scrubs the timeline into the past). For
-  //a cumulative entity we differentiate the two history samples
-  //bracketing the requested instant; for a power entity we just
-  //return the value of the closest historical sample. Returns
-  //null when the requested time falls outside the fetched
-  //history window, the chip is then hidden by the caller, which
-  //is the right behaviour for the future half of the timeline
-  //(no production data exists there yet).
-  _pvRateAtTime(time) {
-    const hist = this._pvHistory;
-    if (!hist || hist.times.length === 0) {
-      return null;
-    }
-    const tMs = time.getTime();
-    const firstMs = hist.times[0].getTime();
-    const lastMs = hist.times[hist.times.length - 1].getTime();
-    if (tMs < firstMs || tMs > lastMs + 6e4) {
-      return null;
-    }
-    const entity = String(this.config?.["pv-power-entity"] ?? "").trim();
-    const stateObj = this.hass?.states?.[entity];
-    const sc = String(stateObj?.attributes?.state_class ?? "").toLowerCase();
-    const dc = String(stateObj?.attributes?.device_class ?? "").toLowerCase();
-    const u2 = (this._pvUnit || "").trim();
-    const lu = u2.toLowerCase();
-    let isCumulative;
-    if (sc === "total_increasing" || sc === "total") isCumulative = true;
-    else if (sc === "measurement") isCumulative = false;
-    else if (dc === "energy") isCumulative = true;
-    else if (dc === "power") isCumulative = false;
-    else isCumulative = lu === "wh" || lu === "kwh" || lu === "mwh";
-    let rateUnit;
-    if (lu === "wh") rateUnit = "W";
-    else if (lu === "kwh") rateUnit = "kW";
-    else if (lu === "mwh") rateUnit = "MW";
-    else rateUnit = u2 ? `${u2}/h` : "";
-    let idx = hist.times.length - 1;
-    for (let i2 = 0; i2 < hist.times.length; i2++) {
-      if (hist.times[i2].getTime() > tMs) {
-        idx = i2 - 1;
-        break;
-      }
-    }
-    if (idx < 0) {
-      idx = 0;
-    }
-    if (!isCumulative) {
-      return { value: hist.values[idx], unit: u2 };
-    }
-    let lo = idx;
-    let hi = idx + 1 < hist.times.length ? idx + 1 : idx;
-    if (lo === hi) {
-      lo = Math.max(0, idx - 1);
-      hi = idx;
-    }
-    if (lo === hi) {
-      return { value: 0, unit: rateUnit };
-    }
-    const dtH = (hist.times[hi].getTime() - hist.times[lo].getTime()) / 36e5;
-    if (dtH <= 0) {
-      return { value: 0, unit: rateUnit };
-    }
-    const dv = hist.values[hi] - hist.values[lo];
-    if (dv < 0) {
-      return { value: 0, unit: rateUnit };
-    }
-    return { value: dv / dtH, unit: rateUnit };
-  }
-  //Compute the instantaneous PV production rate for "now".
-  //
-  //  - Cumulative entity (state_class total_increasing|total,
-  //    device_class energy, or unit Wh/kWh/MWh) → differentiate
-  //    over the rolling sample buffer (which is filled live each
-  //    Lit cycle), anchored on the sample closest to ~60 s ago
-  //    so the readout reflects the last minute of production.
-  //  - Instantaneous entity (anything else) → the entity's own
-  //    state value already IS the rate.
-  //
-  //Returns null when no usable rate can be derived (no entity,
-  //no buffer yet, counter reset). The caller falls back to the
-  //raw current state in that case so the chip stays populated.
-  _currentPvRate() {
-    if (this._pvCurrent === null) {
-      return null;
-    }
-    const entity = String(this.config?.["pv-power-entity"] ?? "").trim();
-    const stateObj = this.hass?.states?.[entity];
-    const sc = String(stateObj?.attributes?.state_class ?? "").toLowerCase();
-    const dc = String(stateObj?.attributes?.device_class ?? "").toLowerCase();
-    const u2 = (this._pvUnit || "").trim();
-    const lu = u2.toLowerCase();
-    let isCumulative;
-    if (sc === "total_increasing" || sc === "total") {
-      isCumulative = true;
-    } else if (sc === "measurement") {
-      isCumulative = false;
-    } else if (dc === "energy") {
-      isCumulative = true;
-    } else if (dc === "power") {
-      isCumulative = false;
-    } else {
-      isCumulative = lu === "wh" || lu === "kwh" || lu === "mwh";
-    }
-    if (!isCumulative) {
-      return { value: this._pvCurrent, unit: u2 };
-    }
-    let rateUnit;
-    if (lu === "wh") rateUnit = "W";
-    else if (lu === "kwh") rateUnit = "kW";
-    else if (lu === "mwh") rateUnit = "MW";
-    else rateUnit = u2 ? `${u2}/h` : "";
-    const buf = this._pvSampleBuffer;
-    if (buf.length >= 2) {
-      const last = buf[buf.length - 1];
-      const target = last.t - 6e4;
-      let prev = buf[0];
-      for (const s2 of buf) {
-        if (s2.t <= target) {
-          prev = s2;
-        } else {
-          break;
-        }
-      }
-      const dtH = (last.t - prev.t) / 36e5;
-      if (dtH > 0) {
-        const dv = last.v - prev.v;
-        if (dv < 0) {
-          this._pvSampleBuffer = [last];
-          return { value: 0, unit: rateUnit };
-        }
-        return { value: dv / dtH, unit: rateUnit };
-      }
-    }
-    const lastUpdatedMs = stateObj?.last_updated ? new Date(stateObj.last_updated).getTime() : null;
-    if (lastUpdatedMs !== null && Date.now() - lastUpdatedMs >= 6e4) {
-      return { value: 0, unit: rateUnit };
-    }
-    const hist = this._pvHistory;
-    if (hist && hist.times.length >= 2) {
-      const lastIdx = hist.times.length - 1;
-      const prevIdx = lastIdx - 1;
-      const dtH = (hist.times[lastIdx].getTime() - hist.times[prevIdx].getTime()) / 36e5;
-      if (dtH > 0) {
-        const dv = hist.values[lastIdx] - hist.values[prevIdx];
-        if (dv < 0) {
-          return { value: 0, unit: rateUnit };
-        }
-        return { value: dv / dtH, unit: rateUnit };
-      }
-    }
-    return { value: 0, unit: rateUnit };
-  }
-  //Convert a PV rate into watts. Used to drive animation speeds on
-  //a unit-agnostic scale, the leader-line dash flow saturates at a
-  //fixed wattage no matter what unit the user's sensor is in.
-  _pvNormalizeToWatts(value, unit) {
-    const lu = (unit || "").toLowerCase();
-    if (lu === "kw") return value * 1e3;
-    if (lu === "mw") return value * 1e6;
-    if (lu === "w") return value;
-    return 0;
-  }
-  //Manual PV peak power.
-  //
-  //The user enters their installed array's peak power (kWp) in the
-  //card editor. We convert that to a calibration scalar k (W per
-  //percent of STC) by k = kWp * 1000 / 100 = kWp * 10, then
-  //multiply by the clear-sky percentage to draw the dotted forecast
-  //line on the PV chart. No history scan, no auto-fit, no rolling
-  //buffer, the user knows their install best.
-  //
-  //Returns null when `pv-peak-kwp` is unset or invalid; callers
-  //then skip the prediction line and the peak-of-day highlights
-  //for future days.
-  _pvCalibK() {
-    const raw2 = this.config?.["pv-peak-kwp"];
-    const kwp = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-    if (!isFinite(kwp) || kwp <= 0) return null;
-    return kwp * 10;
-  }
-  //True when the user has opted to invert the battery power sign.
-  //Applied once at ingest (live + history) so every downstream
-  //consumer (chip readout, flow arrow direction, charged /
-  //discharged sums) keeps its "positive = charging" assumption
-  //without an inline ternary at each call site.
-  _batteryPowerInvert() {
-    return this.config?.["battery-power-invert"] === true;
-  }
-  //Read the timeline visibility toggle. Default true so a fresh
-  //card config keeps showing the chart.
-  _timelineEnabled() {
-    const raw2 = this.config?.["timeline-enabled"];
-    if (typeof raw2 === "boolean") return raw2;
-    if (typeof raw2 === "string") {
-      const s2 = raw2.trim().toLowerCase();
-      if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
-      if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
-    }
-    return DEFAULT_TIMELINE_ENABLED;
-  }
-  //Read the timeline width as a percentage [50..100]. Clamped so
-  //a hand-edited YAML can't shrink the bar into uselessness or
-  //overflow the card edge.
-  _timelineWidthPct() {
-    const raw2 = this.config?.["timeline-width-pct"];
-    const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-    if (!isFinite(n3)) return DEFAULT_TIMELINE_WIDTH_PCT;
-    return Math.min(100, Math.max(50, n3));
-  }
-  //Read the per-day consumption chip toggle. Default true so the
-  //existing kWh readouts stay visible on legacy configs.
-  _timelineConsumptionEnabled() {
-    const raw2 = this.config?.["timeline-consumption-enabled"];
-    if (typeof raw2 === "boolean") return raw2;
-    if (typeof raw2 === "string") {
-      const s2 = raw2.trim().toLowerCase();
-      if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
-      if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
-    }
-    return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
-  }
-  //Resolves the configured PV layout into a flat list of panel
-  //orientations + pre-normalised shares (sum to 1.0).
-  //
-  //Read order, first match wins:
-  //  1. `pv-arrays`: non-empty array, each entry parsed as
-  //     { tilt: 0–90, azimuth: 0–360, share: weight }. Missing
-  //     tilt defaults to 0 (horizontal fast path inside
-  //     computePvPower, no transposition applied for that entry).
-  //     Missing azimuth defaults to 180. Missing share triggers
-  //     equal-split with siblings. Entries with share ≤ 0 are
-  //     dropped. Shares are normalised so they sum to 1.0 before
-  //     the caller weights them, so 50/50, 60/60 and 1/1 all
-  //     produce the same forecast (forgives user typos).
-  //  2. Legacy `pv-tilt` + `pv-azimuth`: read as a single entry
-  //     with share = 1.0, but only when `pv-tilt` > 0 (matches the
-  //     historical behaviour where tilt = 0 / unset skipped the
-  //     transposition entirely).
-  //  3. Otherwise empty result, caller uses the horizontal-panel
-  //     fast path inside computePvPower.
-  _pvArrays() {
-    const out = [];
-    const sh = [];
-    const rawList = this.config?.["pv-arrays"];
-    if (Array.isArray(rawList) && rawList.length > 0) {
-      for (const entry of rawList) {
-        if (!entry || typeof entry !== "object") continue;
-        const e2 = entry;
-        const rawTilt = e2["tilt"];
-        const tiltRaw = typeof rawTilt === "number" ? rawTilt : parseFloat(String(rawTilt ?? ""));
-        const tilt = isFinite(tiltRaw) ? tiltRaw : 0;
-        const rawAz = e2["azimuth"];
-        const az = typeof rawAz === "number" ? rawAz : parseFloat(String(rawAz ?? ""));
-        const azDeg = isFinite(az) ? (az % 360 + 360) % 360 : 180;
-        const rawShare = e2["share"];
-        let share;
-        if (rawShare === void 0 || rawShare === null || rawShare === "") {
-          share = NaN;
-        } else {
-          const s2 = typeof rawShare === "number" ? rawShare : parseFloat(String(rawShare));
-          if (!isFinite(s2) || s2 <= 0) continue;
-          share = s2;
-        }
-        out.push({
-          tiltDeg: Math.max(0, Math.min(90, tilt)),
-          azimuthDeg: azDeg
-        });
-        sh.push(share);
-      }
-      const explicit = sh.filter((s2) => isFinite(s2));
-      const fillVal = explicit.length > 0 ? explicit.reduce((a2, b2) => a2 + b2, 0) / explicit.length : 1;
-      for (let i2 = 0; i2 < sh.length; i2++) {
-        if (!isFinite(sh[i2])) sh[i2] = fillVal;
-      }
-    }
-    if (out.length === 0) {
-      const rawTilt = this.config?.["pv-tilt"];
-      const tilt = typeof rawTilt === "number" ? rawTilt : parseFloat(String(rawTilt ?? ""));
-      if (isFinite(tilt) && tilt > 0) {
-        const rawAz = this.config?.["pv-azimuth"];
-        const az = typeof rawAz === "number" ? rawAz : parseFloat(String(rawAz ?? ""));
-        out.push({
-          tiltDeg: Math.max(0, Math.min(90, tilt)),
-          azimuthDeg: isFinite(az) ? (az % 360 + 360) % 360 : 180
-        });
-        sh.push(1);
-      }
-    }
-    const total = sh.reduce((a2, b2) => a2 + b2, 0);
-    if (total > 0) {
-      for (let i2 = 0; i2 < sh.length; i2++) sh[i2] /= total;
-    }
-    return { orientations: out, shares: sh };
-  }
-  //Forecast PV percentage at a single sample, summed across every
-  //configured array weighted by its share of the total kWp. Falls
-  //through to the horizontal-panel fast path inside computePvPower
-  //when no array is configured (returns the GHI-normalised value
-  //the legacy code used to produce).
-  _computePvPowerWeighted(t2, lat, lon, cloudPct) {
-    const { orientations, shares } = this._pvArrays();
-    if (orientations.length === 0) {
-      return computePvPower(t2, lat, lon, cloudPct);
-    }
-    let acc = 0;
-    for (let i2 = 0; i2 < orientations.length; i2++) {
-      acc += computePvPower(t2, lat, lon, cloudPct, orientations[i2]) * shares[i2];
-    }
-    return acc;
-  }
-  _wipeLegacyPvCalibStorage() {
-    try {
-      if (window.localStorage?.getItem(HeliosCard.PV_CALIB_WIPE_FLAG_KEY) === "1") {
-        return;
-      }
-    } catch (_2) {
-      return;
-    }
-    try {
-      const ls = window.localStorage;
-      if (ls) {
-        const stale = [];
-        for (let i2 = 0; i2 < ls.length; i2++) {
-          const k2 = ls.key(i2);
-          if (k2 && k2.startsWith("helios-pv-calib:") && k2 !== HeliosCard.PV_CALIB_WIPE_FLAG_KEY) {
-            stale.push(k2);
-          }
-        }
-        for (const k2 of stale) ls.removeItem(k2);
-        ls.setItem(HeliosCard.PV_CALIB_WIPE_FLAG_KEY, "1");
-      }
-    } catch (_2) {
-    }
-    const coords = this._getHomeCoords();
-    if (coords && this.hass?.callWS) {
-      const haKey = `helios-pv-calib:${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
-      this.hass.callWS({ type: "frontend/set_user_data", key: haKey, value: null }).catch(() => {
-      });
-    }
-  }
-  //Map a "rate" magnitude to an animation duration in seconds.
-  //  rate <= 0           → 30 s        (paused, night / no production)
-  //  rate  = saturation  → minDuration (fastest, full power)
-  //
-  //Ease-out cubic ramp: half-saturation already feels meaningfully
-  //faster than the night baseline, which gives the user the
-  //feeling of raw power pushing through the line. The minDuration
-  //is exposed so callers can tune the saturated-end pace per
-  //channel, the sun ray spans the full map and benefits from a
-  //slightly slower flow than the PV leader, which is short and
-  //local.
-  static _flowDuration(rate, saturation, minDuration = 0.4) {
-    if (!isFinite(rate) || rate <= 0) {
-      return 30;
-    }
-    const f2 = Math.min(1, rate / saturation);
-    const eased = 1 - Math.pow(1 - f2, 3);
-    return 30 - (30 - minDuration) * eased;
-  }
-  //Format a PV reading for the chip below the home. The display
-  //auto-rescales W → kW when the magnitude crosses a threshold so
-  //a 4500 W reading prints as "4.5 kW" rather than the noisier
-  //"4500 W". Energy units (kWh / Wh) keep their native unit and
-  //get a single decimal, daily totals usually sit in the 0–50 kWh
-  //band where one decimal is the right amount of precision.
-  _formatPvValue(value, unit) {
-    const u2 = (unit || "").trim();
-    const lu = u2.toLowerCase();
-    if (lu === "w" && Math.abs(value) >= 1e3) {
-      return `${this._formatLocalisedNumber(value / 1e3, 2)} kW`;
-    }
-    if (lu === "w") {
-      return `${this._formatLocalisedNumber(value, 0, true)} W`;
-    }
-    if (lu === "kw") {
-      return `${this._formatLocalisedNumber(value, 2)} kW`;
-    }
-    if (lu === "wh") {
-      if (Math.abs(value) >= 1e3) {
-        return `${this._formatLocalisedNumber(value / 1e3, 1)} kWh`;
-      }
-      return `${this._formatLocalisedNumber(value, 0, true)} Wh`;
-    }
-    if (lu === "kwh" || lu === "mwh") {
-      return `${this._formatLocalisedNumber(value, 1)} ${u2}`;
-    }
-    const formatted = Math.abs(value) >= 100 ? this._formatLocalisedNumber(value, 0, true) : this._formatLocalisedNumber(value, 1);
-    return u2 ? `${formatted} ${u2}` : formatted;
+    refreshPv(this);
+    refreshBattery(this);
+    refreshSolarRadiation(this);
   }
   //Render
   render() {
-    const hasApiKey = this._getHomeCoords() !== null;
+    const hasApiKey = getHomeCoords(this.config, this.hass) !== null;
     const displayDate = !this._isLiveMode && this._selectedTime ? this._selectedTime : this._now;
     const displayDateLabel = formatDate(displayDate, this.config?.["date-format"]);
     const is12h = String(this.config?.["time-format"] ?? "24h").toLowerCase() === "12h";
@@ -39631,11 +39957,11 @@ let HeliosCard = class extends i {
     const pvColor = cfgHex(this.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
     const pvScrubbing = !this._isLiveMode && this._selectedTime !== null;
     const pvScrubFuture = pvScrubbing && this._selectedTime.getTime() > Date.now() + 6e4;
-    const pvRate = pvEntityId !== "" && layout !== null ? pvScrubbing ? this._pvRateAtTime(this._selectedTime) : this._pvCurrent !== null ? this._currentPvRate() : null : null;
+    const pvRate = pvEntityId !== "" && layout !== null ? pvScrubbing ? pvRateAtTime(this, this._selectedTime) : this._pvCurrent !== null ? currentPvRate(this) : null : null;
     let pvPredictedRate = null;
     if (pvScrubFuture && pvEntityId !== "" && layout !== null) {
-      const k2 = this._pvCalibK();
-      const coords = this._getHomeCoords();
+      const k2 = pvCalibK(this.config);
+      const coords = getHomeCoords(this.config, this.hass);
       const series = this._chartSeries;
       if (k2 !== null && coords && series && series.times.length > 0) {
         const targetMs = this._selectedTime.getTime();
@@ -39649,7 +39975,7 @@ let HeliosCard = class extends i {
           }
         }
         const cloud = series.cloud[best] ?? 0;
-        const pct = this._computePvPowerWeighted(this._selectedTime, coords.lat, coords.lon, cloud);
+        const pct = computePvPowerWeighted(this.config, this._selectedTime, coords.lat, coords.lon, cloud);
         if (pct > 0) {
           pvPredictedRate = { value: pct * k2, unit: "W" };
         }
@@ -39658,28 +39984,28 @@ let HeliosCard = class extends i {
     const isPvPredicted = pvScrubFuture && pvPredictedRate !== null;
     const pvActiveRate = isPvPredicted ? pvPredictedRate : pvRate;
     const showPvLabel = hasApiKey && layout !== null && pvEntityId !== "" && pvActiveRate !== null && (!pvScrubFuture || isPvPredicted);
-    const pvDisplayValue = showPvLabel ? (isPvPredicted ? "≈ " : "") + this._formatPvValue(pvActiveRate.value, pvActiveRate.unit) : "";
-    const pvWattsNow = pvRate !== null ? this._pvNormalizeToWatts(pvRate.value, pvRate.unit) : 0;
-    const pvCalibKVal = this._pvCalibK();
+    const pvDisplayValue = showPvLabel ? (isPvPredicted ? "≈ " : "") + formatPvValue(this.hass, pvActiveRate.value, pvActiveRate.unit) : "";
+    const pvWattsNow = pvRate !== null ? pvNormalizeToWatts(pvRate.value, pvRate.unit) : 0;
+    const pvCalibKVal = pvCalibK(this.config);
     const pvPeakRefW = pvCalibKVal !== null && pvCalibKVal > 0 ? pvCalibKVal * 100 : 5e3;
-    const pvFlowDuration = HeliosCard._flowDuration(pvWattsNow, pvPeakRefW, 0.5);
+    const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
     const pvIdle = !(pvWattsNow > 0);
     const batterySocEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
     const batteryPowerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
     const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
     const batteryScrubbing = !this._isLiveMode && this._selectedTime !== null;
     const batteryScrubFuture = batteryScrubbing && this._selectedTime.getTime() > Date.now() + 6e4;
-    const activeBatterySoc = batteryScrubbing ? this._batterySampleAtTime(this._batterySocHistory, this._selectedTime) : this._batterySoc;
-    const activeBatteryPower = batteryScrubbing ? this._batterySampleAtTime(this._batteryPowerHistory, this._selectedTime) : this._batteryPower;
+    const activeBatterySoc = batteryScrubbing ? batterySampleAtTime(this._batterySocHistory, this._selectedTime) : this._batterySoc;
+    const activeBatteryPower = batteryScrubbing ? batterySampleAtTime(this._batteryPowerHistory, this._selectedTime) : this._batteryPower;
     const activeBatteryUnit = this._batteryPowerUnit;
     const showSocChip = hasApiKey && layout !== null && !batteryScrubFuture && batterySocEntity !== "" && activeBatterySoc !== null;
     const showPowerChip = hasApiKey && layout !== null && !batteryScrubFuture && batteryPowerEntity !== "" && activeBatteryPower !== null;
     const batterySocText = showSocChip ? `${Math.round(activeBatterySoc)} %` : "";
-    const batteryPowerText = showPowerChip ? this._formatBatteryPower(activeBatteryPower, activeBatteryUnit) : "";
+    const batteryPowerText = showPowerChip ? formatBatteryPower(this.hass, activeBatteryPower, activeBatteryUnit) : "";
     const batteryCharging = showPowerChip && activeBatteryPower > 0;
-    const batteryWattsForFlow = showPowerChip ? Math.abs(this._pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
+    const batteryWattsForFlow = showPowerChip ? Math.abs(pvNormalizeToWatts(activeBatteryPower, activeBatteryUnit)) : 0;
     const batteryIdle = showPowerChip && batteryWattsForFlow < 5;
-    const batteryFlowDuration = HeliosCard._flowDuration(batteryWattsForFlow, 5e3);
+    const batteryFlowDuration = flowDuration(batteryWattsForFlow, 5e3);
     const PV_LEG_OFFSET_PX = 19;
     const PV_HALF_HEIGHT_PX = 11;
     const PV_HALF_WIDTH_PX = 38;
@@ -39713,8 +40039,8 @@ let HeliosCard = class extends i {
     const sunScene = this._sunScene;
     const showSun = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
     const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
-    const sunRimColor = this._darkenHex(sunColor, 0.2);
-    const arcSegments = showSun ? this._buildArcSegments(sunScene.arc, sunColor) : [];
+    const sunRimColor = darkenHex(sunColor, 0.2);
+    const arcSegments = showSun ? buildArcSegments(sunScene.arc, sunColor) : [];
     const arcSegmentsBack = arcSegments.filter((s2) => s2.belowHorizon);
     const arcSegmentsFront = arcSegments.filter((s2) => !s2.belowHorizon);
     const showRay = showSun && sunScene.sun.altitude > 0;
@@ -39722,7 +40048,7 @@ let HeliosCard = class extends i {
     const sunWm2Round = Math.round(sunWm2);
     const sunFillRatio = Math.sqrt(Math.max(0, Math.min(1, sunWm2 / 1e3)));
     const showSunLabel = showSun && sunScene.sun.altitude > 0;
-    const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1e3, 0.8);
+    const sunFlowDuration = flowDuration(sunWm2, 1e3, 0.8);
     let sunRayTargetX = sunScene?.home.x ?? 0;
     let sunRayTargetY = sunScene?.home.y ?? 0;
     if (layout && sunScene && pvEntityId) {
@@ -39759,11 +40085,11 @@ let HeliosCard = class extends i {
 
                 <div id="map-container"></div>
 
-                ${hasApiKey && this._timeRange && this._timelineEnabled() ? b`
+                ${hasApiKey && this._timeRange && timelineEnabled(this.config) ? b`
                     <div
                         class="time-bar"
-                        style="--timeline-width-frac:${this._timelineWidthPct() / 100}"
-                        @pointerdown="${this._onTimelinePointerDown}"
+                        style="--timeline-width-frac:${timelineWidthPct(this.config) / 100}"
+                        @pointerdown="${(e2) => onTimelinePointerDown(this, e2)}"
                     >
                         <!--  Optional PV production graph, only
                               rendered when the user has set the
@@ -39777,8 +40103,8 @@ let HeliosCard = class extends i {
                               each other.  -->
                         ${pvEntityId ? b`
                             <div class="tb-chart-card tb-pv-card">
-                                ${this._renderPvChart()}
-                                ${this._renderTimelineTicks()}
+                                ${renderPvChart(this)}
+                                ${renderTimelineTicks(this)}
                             </div>
                         ` : A}
 
@@ -39787,9 +40113,9 @@ let HeliosCard = class extends i {
                               chips on the midline, and the live +
                               scrub cursors as HTML overlays.  -->
                         <div class="tb-chart-card">
-                            ${this._renderChart()}
-                            ${this._renderTimelineDayLabels()}
-                            ${this._renderTimelineTicks()}
+                            ${renderChart(this)}
+                            ${renderTimelineDayLabels(this)}
+                            ${renderTimelineTicks(this)}
                         </div>
                     </div>
                 ` : A}
@@ -39841,7 +40167,7 @@ let HeliosCard = class extends i {
                             ?disabled="${!lidarViewEnabled && !this._lidarViewMode}"
                             aria-label="${this._lidarViewMode ? "Exit LiDAR View" : "LiDAR View"}"
                             aria-pressed="${this._lidarViewMode ? "true" : "false"}"
-                            @click="${this._toggleLidarView}"
+                            @click="${() => toggleLidarView(this)}"
                         >
                             <ha-icon icon="mdi:dots-grid"></ha-icon>
                             <span class="lidar-view-btn-label">LiDAR</span>
@@ -39865,7 +40191,7 @@ let HeliosCard = class extends i {
                         ${!this._isLiveMode ? b`
                             <button
                                 class="live-return-btn"
-                                @click="${this._resetToLive}"
+                                @click="${() => resetToLive(this)}"
                                 aria-label="Back to live"
                             >
                                 <ha-icon icon="mdi:restore"></ha-icon>
@@ -39880,8 +40206,8 @@ let HeliosCard = class extends i {
       const midPts = cs.discMid.length >= 3 ? cs.discMid.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
       const highPts = cs.discHigh.length >= 3 ? cs.discHigh.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
       const ringPts = cs.ring.length >= 3 ? cs.ring.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
-      const cloudLight = this._lerpHexToward(cs.cloudHex, "#ffffff", 0.55);
-      const cloudDark = this._lerpHexToward(cs.cloudHex, "#000000", 0.4);
+      const cloudLight = lerpHexToward(cs.cloudHex, "#ffffff", 0.55);
+      const cloudDark = lerpHexToward(cs.cloudHex, "#000000", 0.4);
       const silhouettes = this._homeSilhouettes;
       const maskId = "helios-cloud-home-mask";
       return b`
@@ -40350,7 +40676,7 @@ let HeliosCard = class extends i {
                     <div
                         class="home-hitbox"
                         style="left:${layout.home.x}px; top:${layout.home.y}px"
-                        @click="${this._onHomeClick}"
+                        @click="${(e2) => handleHomeClick(this, e2)}"
                         @mouseenter="${this._onHomeEnter}"
                         @mouseleave="${this._onHomeLeave}"
                     ></div>
@@ -40365,627 +40691,10 @@ let HeliosCard = class extends i {
                       would fire on every internal scroll / tap),
                       a dedicated close button in the corner handles
                       exit.  -->
-                ${this._detailMode ? this._renderDashboard() : A}
+                ${this._detailMode ? renderDashboard(this) : A}
 
             </ha-card>
         `;
-  }
-  //Darken a #rrggbb hex by a factor in [0, 1] (0 = unchanged,
-  //1 = pure black). Multiplicative on each channel, keeps the
-  //hue intact, just lowers the value. Used to derive the slightly
-  //darker rim colour around the sun disc from the configured sun
-  //colour, so the rim stays visible against the disc fill without
-  //the user having to configure two colours.
-  _darkenHex(hex, factor) {
-    const f2 = 1 - Math.max(0, Math.min(1, factor));
-    const r2 = Math.round(parseInt(hex.slice(1, 3), 16) * f2);
-    const g2 = Math.round(parseInt(hex.slice(3, 5), 16) * f2);
-    const b2 = Math.round(parseInt(hex.slice(5, 7), 16) * f2);
-    const h2 = (n3) => n3.toString(16).padStart(2, "0");
-    return `#${h2(r2)}${h2(g2)}${h2(b2)}`;
-  }
-  //Linear blend between two #rrggbb hex colours. `t` = 0 returns
-  //`a` unchanged, `t` = 1 returns `b`. Used by the cloud disc to
-  //derive the light (low) and dark (high) band shades from the
-  //configured cloud colour without needing a second / third
-  //config key.
-  _lerpHexToward(a2, b2, t2) {
-    const u2 = Math.max(0, Math.min(1, t2));
-    const ar = parseInt(a2.slice(1, 3), 16);
-    const ag = parseInt(a2.slice(3, 5), 16);
-    const ab = parseInt(a2.slice(5, 7), 16);
-    const br = parseInt(b2.slice(1, 3), 16);
-    const bg = parseInt(b2.slice(3, 5), 16);
-    const bb = parseInt(b2.slice(5, 7), 16);
-    const r2 = Math.round(ar + (br - ar) * u2);
-    const g2 = Math.round(ag + (bg - ag) * u2);
-    const bl = Math.round(ab + (bb - ab) * u2);
-    const h2 = (n3) => n3.toString(16).padStart(2, "0");
-    return `#${h2(r2)}${h2(g2)}${h2(bl)}`;
-  }
-  //Detail-mode toggles. Driven by the home click (off → on) and a
-  //click anywhere on the detail panel (on → off). The engine
-  //handles the eased camera transition; we just flip the state
-  //and let the CSS .detail-active class fade out the overlays.
-  _onHomeClick(e2) {
-    e2.stopPropagation();
-    if (this._detailMode) {
-      return;
-    }
-    this._homeHover = false;
-    this._detailMode = true;
-    this._engine?.setDetailMode(true);
-  }
-  //----------------------------------------------------------------- Dashboard
-  //Renders the detail-mode panel: 4 stacked sections (today, week,
-  //tomorrow, battery) plus a close button. Each section uses one
-  //big SVG illustration that IS the data; numbers are annotations
-  //around the illustration, not the centerpiece. Battery section is
-  //skipped silently when neither battery entity is configured.
-  //
-  //The panel uses the configured colour palette (sun / cloud / pv /
-  //battery) so the dashboard reads as the same product the user
-  //already knows from the card itself.
-  _renderDashboard() {
-    const t2 = pickTranslations(this.hass?.language);
-    const sunColor = cfgHex(this.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
-    const cloudColor = cfgHex(this.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
-    const pvColor = cfgHex(this.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
-    const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
-    const hasBattery = String(this.config?.["battery-soc-entity"] ?? "").trim() !== "" || String(this.config?.["battery-power-entity"] ?? "").trim() !== "";
-    return b`
-            <div class="detail-panel">
-                <button
-                    class="detail-close-btn"
-                    @click="${this._onExitDetail}"
-                    aria-label="${t2.detail.exitHint}"
-                >
-                    <ha-icon icon="mdi:close"></ha-icon>
-                </button>
-                <div class="detail-panel-inner">
-                    ${this._renderDashTodaySection(t2, pvColor, sunColor)}
-                    ${this._renderDashTomorrowSection(t2, sunColor, cloudColor)}
-                    ${hasBattery ? this._renderDashBatterySection(t2, batteryColor) : A}
-                </div>
-            </div>
-        `;
-  }
-  //--------------------------------------- Section: Aujourd'hui (today)
-  //Computes hourly production for today, splitting observed (past
-  //+ now) from forecast (now → midnight). Returns one bin per hour
-  //of the day [0..23], with watts at the hour's midpoint. Bins
-  //missing observed data fall back to the forecast value where
-  //available; truly empty bins (no kWp configured + before sensor
-  //has started) get 0 W.
-  _computeTodayHourly() {
-    const HOUR_MS = 36e5;
-    const today0 = /* @__PURE__ */ new Date();
-    today0.setHours(0, 0, 0, 0);
-    const startMs = today0.getTime();
-    const endMs = startMs + 24 * HOUR_MS;
-    const nowMs = Date.now();
-    const bins = [];
-    for (let h2 = 0; h2 < 24; h2++) {
-      bins.push({
-        hourTs: startMs + h2 * HOUR_MS,
-        observedW: null,
-        forecastW: null
-      });
-    }
-    const hist = this._pvHistory;
-    if (hist && hist.times.length > 0) {
-      const unit = (this._pvUnit || "").toLowerCase();
-      const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
-      let times = hist.times;
-      let values2 = hist.values;
-      if (isCumulativeEnergy && times.length >= 2) {
-        const dT = [];
-        const dV = [];
-        for (let i2 = 1; i2 < times.length; i2++) {
-          const dtH = (times[i2].getTime() - times[i2 - 1].getTime()) / 36e5;
-          if (dtH <= 0 || dtH > 6) continue;
-          const dv = values2[i2] - values2[i2 - 1];
-          if (dv < 0) continue;
-          dT.push(times[i2]);
-          dV.push(dv / dtH);
-        }
-        times = dT;
-        values2 = dV;
-      }
-      const sums = /* @__PURE__ */ new Map();
-      const counts = /* @__PURE__ */ new Map();
-      for (let i2 = 0; i2 < times.length; i2++) {
-        const tMs = times[i2].getTime();
-        if (tMs < startMs || tMs >= endMs) continue;
-        const w2 = isCumulativeEnergy ? values2[i2] * 1e3 : this._pvNormalizeToWatts(values2[i2], this._pvUnit);
-        if (!isFinite(w2)) continue;
-        const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-        sums.set(hourTs, (sums.get(hourTs) ?? 0) + w2);
-        counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
-      }
-      for (let h2 = 0; h2 < 24; h2++) {
-        const sum2 = sums.get(bins[h2].hourTs);
-        const cnt = counts.get(bins[h2].hourTs);
-        if (sum2 !== void 0 && cnt && cnt > 0) {
-          bins[h2].observedW = sum2 / cnt;
-        }
-      }
-    }
-    const k2 = this._pvCalibK();
-    const series = this._chartSeries;
-    const coords = this._getHomeCoords();
-    if (k2 !== null && k2 > 0 && series && coords) {
-      for (let i2 = 0; i2 < series.times.length; i2++) {
-        const tMs = series.times[i2].getTime();
-        if (tMs < startMs || tMs >= endMs) continue;
-        const cloud = series.cloud[i2] ?? 0;
-        const pct = this._computePvPowerWeighted(series.times[i2], coords.lat, coords.lon, cloud);
-        if (pct < 0) continue;
-        const watts = pct * k2;
-        const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-        const idx = (hourTs - startMs) / HOUR_MS;
-        if (idx >= 0 && idx < 24) {
-          bins[idx].forecastW = watts;
-        }
-      }
-    }
-    let peakW = 0;
-    let peakHourTs = null;
-    let producedKwh = 0;
-    let forecastKwh = 0;
-    for (const b2 of bins) {
-      const w2 = b2.observedW ?? b2.forecastW ?? 0;
-      if (w2 > peakW) {
-        peakW = w2;
-        peakHourTs = b2.hourTs;
-      }
-      if (b2.observedW !== null) producedKwh += b2.observedW / 1e3;
-      if (b2.hourTs + HOUR_MS <= nowMs) {
-        if (b2.observedW !== null) forecastKwh += b2.observedW / 1e3;
-      } else if (b2.hourTs > nowMs) {
-        if (b2.forecastW !== null) forecastKwh += b2.forecastW / 1e3;
-      } else {
-        forecastKwh += (b2.observedW ?? b2.forecastW ?? 0) / 1e3;
-      }
-    }
-    return { bins, peakHourTs, peakW, producedKwh, forecastKwh };
-  }
-  //Time-ordered cumulative production samples for today's chart.
-  //Past portion comes from the raw PV history (cumulative-energy
-  //sensors: subtract the day's baseline; power sensors: trapezoidal
-  //integration), future portion extends with the hourly forecast
-  //model. Hour marks are interpolated at every full hour so the
-  //chart can render a dot per hour without snapping the curve.
-  _computeTodayCumulative() {
-    const HOUR_MS = 36e5;
-    const today0 = /* @__PURE__ */ new Date();
-    today0.setHours(0, 0, 0, 0);
-    const startMs = today0.getTime();
-    const endMs = startMs + 24 * HOUR_MS;
-    const nowMs = Date.now();
-    const samples = [];
-    samples.push({ tMs: startMs, kwh: 0 });
-    let cumKwh = 0;
-    let pastEndMs = startMs;
-    const hist = this._pvHistory;
-    if (hist && hist.times.length > 0) {
-      const unit = (this._pvUnit || "").toLowerCase();
-      const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
-      const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
-      let baseline = null;
-      let prevT = null;
-      let prevW = null;
-      for (let i2 = 0; i2 < hist.times.length; i2++) {
-        const tMs = hist.times[i2].getTime();
-        if (tMs < startMs || tMs >= endMs) continue;
-        if (isCumulativeEnergy) {
-          const v2 = hist.values[i2] * energyFactor;
-          if (baseline === null) baseline = v2;
-          const kwh = Math.max(0, v2 - baseline);
-          samples.push({ tMs, kwh });
-          cumKwh = kwh;
-        } else {
-          const w2 = this._pvNormalizeToWatts(hist.values[i2], this._pvUnit);
-          if (!isFinite(w2)) continue;
-          if (prevT !== null && prevW !== null) {
-            const dh = (tMs - prevT) / HOUR_MS;
-            if (dh > 0 && dh <= 6) {
-              cumKwh += (prevW + w2) / 2 / 1e3 * dh;
-            }
-          }
-          samples.push({ tMs, kwh: cumKwh });
-          prevT = tMs;
-          prevW = w2;
-        }
-        pastEndMs = tMs;
-      }
-    }
-    if (pastEndMs < nowMs && nowMs < endMs) {
-      samples.push({ tMs: nowMs, kwh: cumKwh });
-      pastEndMs = nowMs;
-    }
-    const k2 = this._pvCalibK();
-    const series = this._chartSeries;
-    const coords = this._getHomeCoords();
-    if (k2 !== null && k2 > 0 && series && coords) {
-      for (let i2 = 0; i2 < series.times.length; i2++) {
-        const tMs = series.times[i2].getTime();
-        if (tMs < startMs || tMs >= endMs) continue;
-        const binStart = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-        const binEnd = binStart + HOUR_MS;
-        if (binEnd <= nowMs) continue;
-        const cloud = series.cloud[i2] ?? 0;
-        const pct = this._computePvPowerWeighted(series.times[i2], coords.lat, coords.lon, cloud);
-        if (pct < 0) continue;
-        const futureStart = Math.max(binStart, nowMs);
-        const fraction = Math.min(1, (binEnd - futureStart) / HOUR_MS);
-        cumKwh += pct * k2 / 1e3 * fraction;
-        samples.push({ tMs: binEnd, kwh: cumKwh });
-      }
-    }
-    const lookup = (t2) => {
-      if (samples.length === 0) return 0;
-      if (t2 <= samples[0].tMs) return samples[0].kwh;
-      if (t2 >= samples[samples.length - 1].tMs) return samples[samples.length - 1].kwh;
-      let lo = 0, hi = samples.length - 1;
-      while (lo < hi - 1) {
-        const mid = lo + hi >> 1;
-        if (samples[mid].tMs <= t2) lo = mid;
-        else hi = mid;
-      }
-      const a2 = samples[lo], b2 = samples[hi];
-      if (b2.tMs === a2.tMs) return a2.kwh;
-      return a2.kwh + (t2 - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
-    };
-    const hourMarks = [];
-    for (let h2 = 0; h2 <= 24; h2++) {
-      const tMs = startMs + h2 * HOUR_MS;
-      hourMarks.push({ tMs, kwh: lookup(tMs) });
-    }
-    let maxKwh = 0;
-    for (const s2 of samples) if (s2.kwh > maxKwh) maxKwh = s2.kwh;
-    return { samples, hourMarks, pastEndMs, maxKwh };
-  }
-  _renderDashTodaySection(t2, pvColor, sunColor) {
-    const data = this._computeTodayHourly();
-    const HOUR_MS = 36e5;
-    const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23"
-    }) : "";
-    const peakValueLabel = this._formatPvWatts(data.peakW);
-    const today0 = /* @__PURE__ */ new Date();
-    today0.setHours(0, 0, 0, 0);
-    const todayMs = today0.getTime();
-    const dailyKwh = this._computeDailyKwhTotals();
-    const forecastKwh = dailyKwh.get(todayMs) ?? data.forecastKwh;
-    const showForecast = forecastKwh > data.producedKwh + 0.05;
-    const showPeak = data.peakHourTs !== null && data.peakW > 50;
-    const pvConfigured = String(this.config?.["pv-power-entity"] ?? "").trim() !== "";
-    const historyLoading = pvConfigured && this._pvHistory === null;
-    const notStartedYet = !historyLoading && data.producedKwh < 0.05 && data.peakHourTs !== null && data.peakHourTs > Date.now();
-    return b`
-            <section class="dash-section dash-card dash-today">
-                <header class="dash-card-header">
-                    <ha-icon class="dash-card-icon" icon="mdi:weather-sunny" style="color:${sunColor}"></ha-icon>
-                    <span class="dash-card-label">${t2.detail.todayLabel}</span>
-                </header>
-                <div class="dash-today-body">
-                    <div class="dash-today-produced" style="color:${pvColor}">
-                        ${historyLoading ? b`
-                            <span class="dash-stat-skeleton" aria-hidden="true"></span>
-                        ` : b`
-                            <span class="dash-stat-value">${this._formatLocalisedNumber(data.producedKwh, 1)}</span>
-                            <span class="dash-stat-unit">kWh</span>
-                        `}
-                    </div>
-                    <div class="dash-today-side">
-                        ${showForecast ? b`
-                            <div class="dash-today-line dash-today-forecast">
-                                <span class="dash-line-arrow">→</span>
-                                <span class="dash-line-value">${this._formatLocalisedNumber(forecastKwh, 1)} kWh</span>
-                                <span class="dash-line-label">${t2.detail.todayForecast}</span>
-                            </div>
-                        ` : A}
-                        ${showPeak ? b`
-                            <div class="dash-today-line dash-today-peak">
-                                <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
-                                <span class="dash-line-value">${peakTimeLabel} · ${peakValueLabel}</span>
-                                <span class="dash-line-label">${t2.detail.todayPeak}</span>
-                            </div>
-                        ` : A}
-                    </div>
-                    ${historyLoading ? A : this._renderDashTodayChart(pvColor)}
-                </div>
-                ${notStartedYet ? b`
-                    <div class="dash-today-status">${t2.detail.todayNotStartedYet}</div>
-                ` : A}
-            </section>
-        `;
-  }
-  //Cumulative production sparkline for the today card. Hidden via
-  //a container query when the card isn't wide enough to render the
-  //curve without squashing it (see helios-card-css.ts). When the
-  //user hovers, a vertical guideline + travelling dot reveal a
-  //tooltip showing the cumulative kWh at that exact minute.
-  _renderDashTodayChart(pvColor) {
-    const cum = this._computeTodayCumulative();
-    if (cum.maxKwh < 0.05) return A;
-    const HOUR_MS = 36e5;
-    const today0 = /* @__PURE__ */ new Date();
-    today0.setHours(0, 0, 0, 0);
-    const startMs = today0.getTime();
-    const endMs = startMs + 24 * HOUR_MS;
-    const W = 240, H2 = 60;
-    const PAD_X = 4, PAD_T = 4, PAD_B = 6;
-    const yMax = Math.max(cum.maxKwh, 0.1) * 1.05;
-    const xFor = (t2) => PAD_X + (t2 - startMs) / (endMs - startMs) * (W - 2 * PAD_X);
-    const yFor = (kwh) => H2 - PAD_B - kwh / yMax * (H2 - PAD_T - PAD_B);
-    const buildPath = (pts) => {
-      if (pts.length < 2) return "";
-      return "M " + pts.map(
-        (p2) => `${xFor(p2.tMs).toFixed(2)} ${yFor(p2.kwh).toFixed(2)}`
-      ).join(" L ");
-    };
-    const pastSamples = cum.samples.filter((s2) => s2.tMs <= cum.pastEndMs);
-    const futureSamples = cum.samples.filter((s2) => s2.tMs >= cum.pastEndMs);
-    const pastPath = buildPath(pastSamples);
-    const futurePath = buildPath(futureSamples);
-    const hoverTs = this._dashChartHoverTs;
-    let hoverKwh = null;
-    let hoverX = 0;
-    let hoverFracX = 0;
-    let hoverTimeLabel = "";
-    if (hoverTs !== null && hoverTs >= startMs && hoverTs < endMs) {
-      const samples = cum.samples;
-      if (samples.length > 0) {
-        if (hoverTs <= samples[0].tMs) {
-          hoverKwh = samples[0].kwh;
-        } else if (hoverTs >= samples[samples.length - 1].tMs) {
-          hoverKwh = samples[samples.length - 1].kwh;
-        } else {
-          let lo = 0, hi = samples.length - 1;
-          while (lo < hi - 1) {
-            const mid = lo + hi >> 1;
-            if (samples[mid].tMs <= hoverTs) lo = mid;
-            else hi = mid;
-          }
-          const a2 = samples[lo], b2 = samples[hi];
-          hoverKwh = a2.tMs === b2.tMs ? a2.kwh : a2.kwh + (hoverTs - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
-        }
-        hoverX = xFor(hoverTs);
-        hoverFracX = hoverX / W * 100;
-        hoverTimeLabel = new Date(hoverTs).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-          hourCycle: "h23"
-        });
-      }
-    }
-    return b`
-            <div class="dash-today-chart">
-                <svg class="dash-today-chart-svg"
-                     viewBox="0 0 ${W} ${H2}"
-                     preserveAspectRatio="none"
-                     @pointermove="${this._onDashChartPointerMove}"
-                     @pointerleave="${this._onDashChartPointerLeave}"
-                >
-                    ${pastPath !== "" ? w`
-                        <path class="dash-today-chart-past"
-                              d="${pastPath}"
-                              stroke="${pvColor}"/>
-                    ` : A}
-                    ${futurePath !== "" ? w`
-                        <path class="dash-today-chart-future"
-                              d="${futurePath}"
-                              stroke="${pvColor}"/>
-                    ` : A}
-                    ${cum.hourMarks.map((m2) => w`
-                        <circle class="dash-today-chart-dot"
-                                cx="${xFor(m2.tMs).toFixed(2)}"
-                                cy="${yFor(m2.kwh).toFixed(2)}"
-                                r="1.4"
-                                fill="${pvColor}"/>
-                    `)}
-                    ${hoverKwh !== null ? w`
-                        <line class="dash-today-chart-hover-line"
-                              x1="${hoverX.toFixed(2)}" x2="${hoverX.toFixed(2)}"
-                              y1="${PAD_T}" y2="${H2 - PAD_B}"/>
-                        <circle class="dash-today-chart-hover-dot"
-                                cx="${hoverX.toFixed(2)}"
-                                cy="${yFor(hoverKwh).toFixed(2)}"
-                                r="2.2"
-                                fill="${pvColor}"/>
-                    ` : A}
-                </svg>
-                ${hoverKwh !== null ? b`
-                    <div class="dash-today-chart-tooltip"
-                         style="left: ${hoverFracX.toFixed(2)}%;"
-                    >
-                        ${hoverTimeLabel} · ${this._formatLocalisedNumber(hoverKwh, 1)} kWh
-                    </div>
-                ` : A}
-            </div>
-        `;
-  }
-  //Helper: format a wattage value as a short label (W or kW).
-  _formatPvWatts(w2) {
-    if (!isFinite(w2) || w2 < 0) return "0 W";
-    if (w2 >= 1e3) return this._formatLocalisedNumber(w2 / 1e3, 2) + " kW";
-    return Math.round(w2) + " W";
-  }
-  //--------------------------------------- Section: Demain (tomorrow)
-  _computeTomorrow() {
-    const HOUR_MS = 36e5;
-    const today0 = /* @__PURE__ */ new Date();
-    today0.setHours(0, 0, 0, 0);
-    const tomorrowMs = today0.getTime() + 24 * HOUR_MS;
-    const endMs = tomorrowMs + 24 * HOUR_MS;
-    const series = this._chartSeries;
-    const coords = this._getHomeCoords();
-    const k2 = this._pvCalibK();
-    let totalKwh = 0;
-    let peakHourTs = null;
-    let peakW = 0;
-    let cloudSum = 0;
-    let cloudWeight = 0;
-    if (series && coords) {
-      for (let i2 = 0; i2 < series.times.length; i2++) {
-        const tMs = series.times[i2].getTime();
-        if (tMs < tomorrowMs || tMs >= endMs) continue;
-        const cloud = series.cloud[i2] ?? 0;
-        const pct = this._computePvPowerWeighted(series.times[i2], coords.lat, coords.lon, cloud);
-        if (pct > 0 && k2 !== null) {
-          const watts = pct * k2;
-          totalKwh += watts / 1e3;
-          if (watts > peakW) {
-            peakW = watts;
-            peakHourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-          }
-          cloudSum += cloud * pct;
-          cloudWeight += pct;
-        }
-      }
-    }
-    const avgCloud = cloudWeight > 0 ? cloudSum / cloudWeight : 0;
-    return { totalKwh, peakHourTs, peakW, avgCloud };
-  }
-  _renderDashTomorrowSection(t2, sunColor, _cloudColor) {
-    const data = this._computeTomorrow();
-    const HOUR_MS = 36e5;
-    const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23"
-    }) : "";
-    return b`
-            <section class="dash-section dash-card dash-tomorrow">
-                <header class="dash-card-header">
-                    <ha-icon class="dash-card-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
-                    <span class="dash-card-label">${t2.detail.tomorrowLabel}</span>
-                    <span class="dash-card-trailing dash-card-trailing-forecast">
-                        <span class="dash-stat-value-sm">≈ ${this._formatLocalisedNumber(data.totalKwh, 1)}</span>
-                        <span class="dash-stat-unit-sm">kWh</span>
-                    </span>
-                </header>
-                ${data.peakHourTs !== null ? b`
-                    <div class="dash-tomorrow-peak">
-                        <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
-                        <span class="dash-line-label">${t2.detail.tomorrowPeak}</span>
-                        <span class="dash-line-value">${peakTimeLabel}</span>
-                    </div>
-                ` : A}
-            </section>
-        `;
-  }
-  //--------------------------------------- Section: Batterie (battery)
-  _computeBatteryToday() {
-    const today0 = /* @__PURE__ */ new Date();
-    today0.setHours(0, 0, 0, 0);
-    const startMs = today0.getTime();
-    const endMs = Date.now();
-    let chargedKwh = 0;
-    let dischargedKwh = 0;
-    const hist = this._batteryPowerHistory;
-    if (hist && hist.times.length >= 2) {
-      for (let i2 = 1; i2 < hist.times.length; i2++) {
-        const tMs = hist.times[i2].getTime();
-        if (tMs < startMs || tMs > endMs) continue;
-        const dtH = (tMs - hist.times[i2 - 1].getTime()) / 36e5;
-        if (dtH <= 0 || dtH > 6) continue;
-        const wAvg = (this._pvNormalizeToWatts(hist.values[i2 - 1], this._batteryPowerUnit) + this._pvNormalizeToWatts(hist.values[i2], this._batteryPowerUnit)) / 2;
-        const kwh = wAvg * dtH / 1e3;
-        if (kwh > 0) chargedKwh += kwh;
-        else dischargedKwh += -kwh;
-      }
-    }
-    return {
-      socNow: this._batterySoc,
-      chargedKwh,
-      dischargedKwh
-    };
-  }
-  _renderDashBatterySection(t2, batteryColor) {
-    const data = this._computeBatteryToday();
-    const soc = data.socNow ?? 0;
-    const W = 60;
-    const H2 = 100;
-    const capW = 18, capH = 6;
-    const cellX = 8, cellY = 12;
-    const cellW = W - 2 * cellX, cellH = H2 - cellY - 6;
-    const liquidH = Math.max(0, Math.min(100, soc)) / 100 * (cellH - 4);
-    const liquidY = cellY + cellH - 2 - liquidH;
-    const liquidX = cellX + 2;
-    const liquidW = cellW - 4;
-    return b`
-            <section class="dash-section dash-card dash-battery">
-                <header class="dash-card-header">
-                    <ha-icon class="dash-card-icon" icon="mdi:battery" style="color:${batteryColor}"></ha-icon>
-                    <span class="dash-card-label">${t2.detail.batteryLabel}</span>
-                    <span class="dash-card-trailing">
-                        <span class="dash-stat-value-sm">${Math.round(soc)}</span>
-                        <span class="dash-stat-unit-sm">%</span>
-                    </span>
-                </header>
-                <div class="dash-battery-body">
-                    <svg class="dash-battery-vessel" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="xMidYMid meet">
-                        <defs>
-                            <linearGradient id="dash-batt-grad-${this._instanceId}" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%"   stop-color="${batteryColor}" stop-opacity="0.95"/>
-                                <stop offset="100%" stop-color="${batteryColor}" stop-opacity="0.6"/>
-                            </linearGradient>
-                        </defs>
-                        ${(() => {
-      const capLx = (W - capW) / 2;
-      const capRx = (W + capW) / 2;
-      const capTy = cellY - capH;
-      const capBy = cellY;
-      const r2 = 1.5;
-      const capPath = [
-        `M ${capLx} ${capBy}`,
-        `L ${capLx} ${capTy + r2}`,
-        `Q ${capLx} ${capTy} ${capLx + r2} ${capTy}`,
-        `L ${capRx - r2} ${capTy}`,
-        `Q ${capRx} ${capTy} ${capRx} ${capTy + r2}`,
-        `L ${capRx} ${capBy}`
-      ].join(" ");
-      return w`<path class="dash-batt-cap" d="${capPath}"/>`;
-    })()}
-                        <rect class="dash-batt-shell"
-                              x="${cellX}" y="${cellY}"
-                              width="${cellW}" height="${cellH}" rx="3"/>
-                        ${liquidH > 0 ? w`
-                            <rect class="dash-batt-liquid"
-                                  x="${liquidX}" y="${liquidY}"
-                                  width="${liquidW}" height="${liquidH}"
-                                  rx="2"
-                                  fill="url(#dash-batt-grad-${this._instanceId})"/>
-                        ` : A}
-                    </svg>
-                    <div class="dash-battery-flows">
-                        <div class="dash-battery-flow dash-battery-flow-charge">
-                            <ha-icon icon="mdi:arrow-up-bold"></ha-icon>
-                            <span class="dash-flow-value">${this._formatLocalisedNumber(data.chargedKwh, 1)} kWh</span>
-                            <span class="dash-flow-label">${t2.detail.batteryCharged}</span>
-                        </div>
-                        <div class="dash-battery-flow dash-battery-flow-discharge">
-                            <ha-icon icon="mdi:arrow-down-bold"></ha-icon>
-                            <span class="dash-flow-value">${this._formatLocalisedNumber(data.dischargedKwh, 1)} kWh</span>
-                            <span class="dash-flow-label">${t2.detail.batteryDischarged}</span>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        `;
-  }
-  _onExitDetail(e2) {
-    e2.stopPropagation();
-    if (!this._detailMode) {
-      return;
-    }
-    this._detailMode = false;
-    this._engine?.setDetailMode(false);
   }
 };
 HeliosCard.OUTLINE_FAR = 1.5;
@@ -40997,50 +40706,6 @@ HeliosCard.SUN_R_NEAR = 20;
 HeliosCard.SUN_RIM_WIDTH = 1.5;
 HeliosCard.SUN_FILL_OPACITY_BG = 0.2;
 HeliosCard.NIGHT_STROKE_FACTOR = 0.5;
-HeliosCard._LIDAR_FADE_IN_MS = 380;
-HeliosCard._LIDAR_FADE_OUT_MS = 280;
-HeliosCard._VISUAL_CONFIG_KEYS = [
-  "show-labels",
-  "sun-color",
-  "cloud-color",
-  //pv-color is card-level; included so the sig changes and Lit
-  //re-renders the chart. pv-power-entity triggers a fresh fetch.
-  "pv-color",
-  "pv-power-entity",
-  //map-style triggers a MapLibre setStyle(), the engine reloads
-  //the cloud disc, buildings and labels on the resulting
-  //`style.load`.
-  "map-style",
-  "battery-soc-entity",
-  "battery-power-entity",
-  "battery-color",
-  //solar-radiation-entity, when set, feeds the engine sensor
-  //samples that override Open-Meteo for the live + past
-  //irradiance values. A change must refresh the engine so
-  //the override (or its absence) is picked up immediately.
-  "solar-radiation-entity",
-  //card-theme is card-level (light/dark skin) but must be in the
-  //sig so Lit re-renders when the user toggles it.
-  "card-theme",
-  //building-radius / cluster-radius invalidate cache and refetch;
-  //opacity / color are cheap paint-property updates.
-  "building-radius",
-  "building-cluster-radius",
-  "building-opacity",
-  "building-color",
-  "pixel-ratio",
-  //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must
-  //invalidate the engine sig so the shadow pipeline reruns
-  //against the new provider config (toggle, URL or bbox).
-  "lidar-local-ndsm-enabled",
-  "lidar-local-ndsm-url",
-  "lidar-local-ndsm-min-lat",
-  "lidar-local-ndsm-max-lat",
-  "lidar-local-ndsm-min-lon",
-  "lidar-local-ndsm-max-lon"
-];
-HeliosCard.INIT_DEBOUNCE_MS = 500;
-HeliosCard.PV_CALIB_WIPE_FLAG_KEY = "helios-pv-calib:wiped-v1";
 HeliosCard.styles = heliosCardStyles;
 __decorateClass([
   n2({ attribute: false })

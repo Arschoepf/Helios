@@ -22,9 +22,9 @@ import type {
     LidarSource,
     LidarShadowFetchOptions,
     LidarShadowResult
-} from '../../helios-lidar';
-import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../helios-lidar-pipeline';
-import { fetchFloat32GeoTiff, subtractRasters } from '../helios-lidar-geotiff';
+} from '../../lidar';
+import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../pipeline';
+import { fetchFloat32GeoTiff, subtractRasters } from '../geotiff';
 
 const WCS_URL = 'https://service.pdok.nl/rws/ahn/wcs/v1_0';
 const COVERAGE_DSM = 'dsm_05m';

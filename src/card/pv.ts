@@ -1,0 +1,837 @@
+//Photovoltaic data subsystem: live state polling, history fetch,
+//rolling-buffer sampling, instantaneous-rate derivation, calibration
+//helpers, and the chip / chart value formatter.
+//
+//The functions in here operate against a "host" object (the card)
+//that owns the `@state` PV fields. Lit reactivity is preserved by
+//writing back to the same setters the card declares, so calling
+//refreshPv(this) from a card lifecycle hook still triggers a
+//re-render exactly as the inline version did.
+
+import type { HeliosConfig } from '../helios-config';
+import { computePvPower, type PanelOrientation } from '../engine/sun';
+import { formatLocalisedNumber } from './format';
+
+
+//Time + value pair stored in the rolling live-sample buffer used to
+//derive an instantaneous rate from a cumulative energy entity.
+export interface PvSample
+{
+    t: number;
+    v: number;
+}
+
+//Fetched historical series, parallel times[] / values[] arrays so a
+//binary or linear search can locate a sample by timestamp without
+//re-allocating wrapper objects.
+export interface PvHistory
+{
+    times:  Date[];
+    values: number[];
+}
+
+//Result of a rate computation. `unit` matches what the user's PV
+//chip should print after the value (W / kW / MW / "<unit>/h").
+export interface PvRate
+{
+    value: number;
+    unit:  string;
+}
+
+//Structural surface the host card exposes to this module. The
+//mutable `_pv*` fields are typed non-readonly so the refresh / fetch
+//helpers can assign them; Lit's @state reactivity is preserved
+//because the assignment hits the same setter the decorator installed.
+export interface PvHost
+{
+    readonly config:     HeliosConfig | undefined;
+    readonly hass:       any;
+    readonly _timeRange: { start: Date; end: Date } | null;
+
+    _pvCurrent:             number | null;
+    _pvUnit:                string;
+    _pvHistory:             PvHistory | null;
+    _pvSampleBuffer:        PvSample[];
+    _pvFetchKey:            string;
+    _pvFetching:            boolean;
+    _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
+}
+
+
+//Per-instance flag key used by wipeLegacyPvCalibStorage to mark the
+//one-time cleanup as done. Stored alongside the calibration entries
+//it sweeps so a stale read from another browser still triggers a
+//fresh cleanup on first load.
+const PV_CALIB_WIPE_FLAG_KEY = 'helios-pv-calib:wiped-v1';
+
+
+//Live + history refresh, called from the card on every lifecycle
+//cycle. Cheap fast paths exit early when no entity is configured or
+//when the (entity, range) tuple matches the last successful fetch.
+export function refreshPv(host: PvHost): void
+{
+    const entity = String(host.config?.['pv-power-entity'] ?? '').trim();
+
+    if (!entity || !host.hass)
+    {
+        //Reset everything when the user clears the entity field
+        //so the chip and graph immediately disappear instead of
+        //sticking around with stale data.
+        if (host._pvCurrent !== null || host._pvHistory !== null)
+        {
+            host._pvCurrent = null;
+            host._pvHistory = null;
+            host._pvUnit    = '';
+        }
+        host._pvFetchKey = '';
+        return;
+    }
+
+    //Live state read, always cheap, runs on every Lit cycle.
+    const stateObj = host.hass.states?.[entity];
+    if (stateObj)
+    {
+        const v = parseFloat(stateObj.state);
+        const next = isFinite(v) ? v : null;
+        if (next !== host._pvCurrent)
+        {
+            host._pvCurrent = next;
+        }
+        const unit = stateObj.attributes?.unit_of_measurement ?? '';
+        if (unit !== host._pvUnit)
+        {
+            host._pvUnit = unit;
+        }
+
+        //Append the freshly-read state to the rolling buffer if
+        //the entity timestamp moved forward since last cycle.
+        //We trim entries older than 5 min so the buffer stays
+        //tiny even on entities that update many times per
+        //second.
+        if (next !== null)
+        {
+            const ts = stateObj.last_updated
+                ? new Date(stateObj.last_updated).getTime()
+                : Date.now();
+            const buf = host._pvSampleBuffer;
+            const last = buf.length > 0 ? buf[buf.length - 1] : null;
+            if (!last || ts > last.t)
+            {
+                buf.push({ t: ts, v: next });
+                const cutoff = Date.now() - 5 * 60 * 1000;
+                while (buf.length > 1 && buf[0].t < cutoff)
+                {
+                    buf.shift();
+                }
+            }
+        }
+    }
+    else
+    {
+        if (host._pvCurrent !== null)
+        {
+            host._pvCurrent = null;
+        }
+        //Drop the buffer when the entity disappears so we don't
+        //serve stale samples after the user clears the config.
+        if (host._pvSampleBuffer.length > 0)
+        {
+            host._pvSampleBuffer = [];
+        }
+    }
+
+    //History fetch, only when the (entity, range) tuple changes.
+    //Without this guard we'd reissue the WebSocket command on
+    //every Lit cycle (e.g. every clock tick) and the dashboard
+    //would queue thousands of identical requests.
+    if (!host._timeRange || host._pvFetching)
+    {
+        return;
+    }
+    const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
+    const fetchKey = `${entity}@${rangeKey}`;
+    if (fetchKey === host._pvFetchKey)
+    {
+        return;
+    }
+    host._pvFetchKey = fetchKey;
+    fetchPvHistory(host, entity, host._timeRange.start, host._timeRange.end);
+}
+
+
+//Pull a historical series from HA's `history/history_during_period`
+//WebSocket command, coerce the heterogeneous payload into parallel
+//times[] / values[] arrays, and snapshot the fetch outcome for
+//`window.heliosStats()`. Fires off `host._pvFetching` for the
+//duration; the gate in refreshPv prevents overlapping calls.
+export async function fetchPvHistory(
+    host: PvHost,
+    entityId: string,
+    start: Date,
+    end: Date
+): Promise<void>
+{
+    if (!host.hass?.callWS)
+    {
+        return;
+    }
+    host._pvFetching = true;
+    try
+    {
+        //History only exists up to "now", anything past that is
+        //the forecast half of the timeline and has no production
+        //data. Clamp the fetch end so we don't waste a roundtrip
+        //asking HA for empty future buckets.
+        const now = new Date();
+        const fetchEnd = end > now ? now : end;
+        if (start >= fetchEnd)
+        {
+            host._pvHistory = { times: [], values: [] };
+            return;
+        }
+
+        const result: any = await host.hass.callWS({
+            type:             'history/history_during_period',
+            start_time:       start.toISOString(),
+            end_time:         fetchEnd.toISOString(),
+            entity_ids:       [entityId],
+            minimal_response: true,
+            no_attributes:    true
+        });
+
+        const arr: any[] = (result && result[entityId]) ?? [];
+        const times:  Date[]   = [];
+        const values: number[] = [];
+        let lastTsMs: number | null = null;
+
+        for (const item of arr)
+        {
+            //HA's history payload uses several field layouts
+            //depending on the requested options, the recorder
+            //version and the entity. We accept anything that can
+            //be coerced to a finite number for the value and a
+            //valid Date for the timestamp, rather than gating on
+            //a specific JS type, because some integrations write
+            //the state as a number (not a string) and some HA
+            //versions omit `lu` on entries where the timestamp
+            //matches the previous one.
+            const sRaw = item?.s ?? item?.state;
+            if (sRaw === null
+                || sRaw === undefined
+                || sRaw === 'unavailable'
+                || sRaw === 'unknown'
+                || sRaw === '')
+            {
+                continue;
+            }
+            const v = parseFloat(String(sRaw));
+            if (!isFinite(v))
+            {
+                continue;
+            }
+
+            //Timestamp resolution order: epoch-seconds float
+            //(`lu` / `lc`, minimal_response default), then ISO
+            //strings (`last_updated` / `last_changed`, full
+            //response). When none is set we re-use the previous
+            //entry's timestamp, the common case for HA's
+            //"only-state-changed" compaction where unchanged
+            //timestamps are simply omitted.
+            let ts: Date | null = null;
+            const tsRaw =
+                item?.lu             ??
+                item?.lc             ??
+                item?.last_updated   ??
+                item?.last_changed   ??
+                null;
+            if (typeof tsRaw === 'number')
+            {
+                //epoch seconds (minimal_response) or epoch ms
+                //(some integrations). Distinguish by magnitude:
+                //a value above 10^12 is already in ms.
+                ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
+            }
+            else if (typeof tsRaw === 'string')
+            {
+                //Could be an ISO date string or a stringified
+                //epoch; try both.
+                const asNum = Number(tsRaw);
+                if (Number.isFinite(asNum) && asNum > 1e9)
+                {
+                    ts = new Date(asNum > 1e12 ? asNum : asNum * 1000);
+                }
+                else
+                {
+                    ts = new Date(tsRaw);
+                }
+            }
+            if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
+            {
+                ts = new Date(lastTsMs);
+            }
+            if (!ts || isNaN(ts.getTime()))
+            {
+                continue;
+            }
+
+            lastTsMs = ts.getTime();
+            times.push(ts);
+            values.push(v);
+        }
+
+        host._pvHistory = { times, values };
+        //Snapshot the fetch outcome so `window.heliosStats()` can
+        //surface it without us logging on every fetch.
+        host._pvHistoryDiagnostics =
+        {
+            rawEntries: arr.length,
+            samples:    times.length,
+            windowH:    Number(((fetchEnd.getTime() - start.getTime()) / 3_600_000).toFixed(1))
+        };
+    }
+    catch (e)
+    {
+        console.warn('[HELIOS] PV history fetch failed:', e);
+        host._pvHistory = { times: [], values: [] };
+    }
+    finally
+    {
+        host._pvFetching = false;
+    }
+}
+
+
+//Compute the production rate at an arbitrary historical time
+//(used when the user scrubs the timeline into the past). For
+//a cumulative entity we differentiate the two history samples
+//bracketing the requested instant; for a power entity we just
+//return the value of the closest historical sample. Returns
+//null when the requested time falls outside the fetched
+//history window, the chip is then hidden by the caller, which
+//is the right behaviour for the future half of the timeline
+//(no production data exists there yet).
+export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
+{
+    const hist = host._pvHistory;
+    if (!hist || hist.times.length === 0)
+    {
+        return null;
+    }
+
+    const tMs = time.getTime();
+    const firstMs = hist.times[0].getTime();
+    const lastMs  = hist.times[hist.times.length - 1].getTime();
+    if (tMs < firstMs || tMs > lastMs + 60_000)
+    {
+        //Outside the history window. Allow a 60 s grace at the
+        //tail so a "live" scrub to "now" still resolves.
+        return null;
+    }
+
+    //Classification, same logic as currentPvRate. Repeated
+    //inline so each helper is self-contained.
+    const entity   = String(host.config?.['pv-power-entity'] ?? '').trim();
+    const stateObj = host.hass?.states?.[entity];
+    const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
+    const dc       = String(stateObj?.attributes?.device_class ?? '').toLowerCase();
+    const u        = (host._pvUnit || '').trim();
+    const lu       = u.toLowerCase();
+
+    let isCumulative: boolean;
+    if (sc === 'total_increasing' || sc === 'total') isCumulative = true;
+    else if (sc === 'measurement') isCumulative = false;
+    else if (dc === 'energy') isCumulative = true;
+    else if (dc === 'power') isCumulative = false;
+    else isCumulative = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
+
+    let rateUnit: string;
+    if (lu === 'wh')       rateUnit = 'W';
+    else if (lu === 'kwh') rateUnit = 'kW';
+    else if (lu === 'mwh') rateUnit = 'MW';
+    else                   rateUnit = u ? `${u}/h` : '';
+
+    //Locate the index of the sample at or before `time`, linear
+    //scan is fine for the ~96 samples a typical 4-day window
+    //carries.
+    let idx = hist.times.length - 1;
+    for (let i = 0; i < hist.times.length; i++)
+    {
+        if (hist.times[i].getTime() > tMs)
+        {
+            idx = i - 1;
+            break;
+        }
+    }
+    if (idx < 0)
+    {
+        idx = 0;
+    }
+
+    if (!isCumulative)
+    {
+        //Power sensor: just return the historical value.
+        return { value: hist.values[idx], unit: u };
+    }
+
+    //Cumulative: differentiate around the located index.
+    let lo = idx;
+    let hi = idx + 1 < hist.times.length ? idx + 1 : idx;
+    if (lo === hi)
+    {
+        //At the boundary, fall back to the previous pair.
+        lo = Math.max(0, idx - 1);
+        hi = idx;
+    }
+    if (lo === hi)
+    {
+        //Single-sample history, no rate possible.
+        return { value: 0, unit: rateUnit };
+    }
+    const dtH = (hist.times[hi].getTime() - hist.times[lo].getTime()) / 3_600_000;
+    if (dtH <= 0)
+    {
+        return { value: 0, unit: rateUnit };
+    }
+    const dv = hist.values[hi] - hist.values[lo];
+    if (dv < 0)
+    {
+        //Counter reset between the two samples → no production
+        //(rate is meaningless across a midnight reset).
+        return { value: 0, unit: rateUnit };
+    }
+    return { value: dv / dtH, unit: rateUnit };
+}
+
+
+//Compute the instantaneous PV production rate for "now".
+//
+//  - Cumulative entity (state_class total_increasing|total,
+//    device_class energy, or unit Wh/kWh/MWh) → differentiate
+//    over the rolling sample buffer (which is filled live each
+//    Lit cycle), anchored on the sample closest to ~60 s ago
+//    so the readout reflects the last minute of production.
+//  - Instantaneous entity (anything else) → the entity's own
+//    state value already IS the rate.
+//
+//Returns null when no usable rate can be derived (no entity,
+//no buffer yet, counter reset). The caller falls back to the
+//raw current state in that case so the chip stays populated.
+export function currentPvRate(host: PvHost): PvRate | null
+{
+    if (host._pvCurrent === null)
+    {
+        return null;
+    }
+
+    const entity   = String(host.config?.['pv-power-entity'] ?? '').trim();
+    const stateObj = host.hass?.states?.[entity];
+    const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
+    const dc       = String(stateObj?.attributes?.device_class ?? '').toLowerCase();
+    const u        = (host._pvUnit || '').trim();
+    const lu       = u.toLowerCase();
+
+    //HA's classification taxonomy is authoritative when set;
+    //fall back to the unit string for entities (custom
+    //template sensors mostly) that omit state_class /
+    //device_class.
+    let isCumulative: boolean;
+    if (sc === 'total_increasing' || sc === 'total')
+    {
+        isCumulative = true;
+    }
+    else if (sc === 'measurement')
+    {
+        isCumulative = false;
+    }
+    else if (dc === 'energy')
+    {
+        isCumulative = true;
+    }
+    else if (dc === 'power')
+    {
+        isCumulative = false;
+    }
+    else
+    {
+        isCumulative = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
+    }
+
+    if (!isCumulative)
+    {
+        //Instantaneous sensor, the live state IS the rate.
+        return { value: host._pvCurrent, unit: u };
+    }
+
+    //Choose the rate unit so the formatted readout reads as
+    //power, not as energy-per-something. When the source unit
+    //is unknown, append "/h" so the user still sees a sensible
+    //label (e.g. "12 units/h") instead of a bare number.
+    let rateUnit: string;
+    if (lu === 'wh')       rateUnit = 'W';
+    else if (lu === 'kwh') rateUnit = 'kW';
+    else if (lu === 'mwh') rateUnit = 'MW';
+    else                   rateUnit = u ? `${u}/h` : '';
+
+    //Cumulative path: from this point on we MUST return a rate
+    //object, never null. Showing the raw cumulative state on
+    //the chip would be flat-out wrong for an "energy total"
+    //sensor (e.g. lifetime kWh). When no rate can be derived
+    //(entity static all night, no recent samples, no history),
+    //we default to 0, that's the truthful answer for a sensor
+    //that hasn't moved.
+
+    //Preferred path: use the rolling buffer of live samples. We
+    //walk back from the newest to find the sample closest to
+    //~60 s ago, that anchors the rate to a "last minute"
+    //window the user explicitly asked for. If the buffer
+    //doesn't cover a full minute (entity updates rarely), we
+    //fall back to the oldest available sample.
+    const buf = host._pvSampleBuffer;
+    if (buf.length >= 2)
+    {
+        const last = buf[buf.length - 1];
+        const target = last.t - 60_000;
+        let prev = buf[0];
+        for (const s of buf)
+        {
+            if (s.t <= target)
+            {
+                prev = s;
+            }
+            else
+            {
+                break;
+            }
+        }
+        const dtH = (last.t - prev.t) / 3_600_000;
+        if (dtH > 0)
+        {
+            const dv = last.v - prev.v;
+            if (dv < 0)
+            {
+                //Counter reset (e.g. "energy today" flipping to
+                //0 at midnight), no meaningful rate. Drop the
+                //pre-reset samples so the next call works on a
+                //clean window.
+                host._pvSampleBuffer = [last];
+                return { value: 0, unit: rateUnit };
+            }
+            return { value: dv / dtH, unit: rateUnit };
+        }
+    }
+
+    //Static-entity heuristic: if the entity hasn't moved for
+    //a minute or more, the live state is the same as it was
+    //60 s ago by definition, production rate is zero. This
+    //resolves the "lifetime kWh sensor at night" case: the
+    //cumulative value sits unchanged for hours, so any rate
+    //we'd compute against the buffer's single sample would be
+    //meaningless; the truthful answer is 0 W.
+    const lastUpdatedMs = stateObj?.last_updated
+        ? new Date(stateObj.last_updated).getTime()
+        : null;
+    if (lastUpdatedMs !== null && Date.now() - lastUpdatedMs >= 60_000)
+    {
+        return { value: 0, unit: rateUnit };
+    }
+
+    //Cold-start: the buffer hasn't accumulated two samples
+    //yet (we just opened the dashboard) AND the entity has
+    //changed in the last minute (otherwise the static check
+    //above would have already returned). Diff the last two
+    //historical samples so the chip is populated immediately
+    //instead of waiting a full minute for a buffer to form.
+    const hist = host._pvHistory;
+    if (hist && hist.times.length >= 2)
+    {
+        const lastIdx = hist.times.length - 1;
+        const prevIdx = lastIdx - 1;
+        const dtH = (hist.times[lastIdx].getTime()
+                   - hist.times[prevIdx].getTime()) / 3_600_000;
+        if (dtH > 0)
+        {
+            const dv = hist.values[lastIdx] - hist.values[prevIdx];
+            if (dv < 0)
+            {
+                return { value: 0, unit: rateUnit };
+            }
+            return { value: dv / dtH, unit: rateUnit };
+        }
+    }
+
+    //Default for a cumulative entity with no derivable rate
+    //yet, better than misleading the user with the lifetime
+    //total. Will quickly transition to a real rate as soon as
+    //the buffer accumulates two samples (typically < 1 min on
+    //a healthy production sensor).
+    return { value: 0, unit: rateUnit };
+}
+
+
+//Convert a PV rate into watts. Used to drive animation speeds on
+//a unit-agnostic scale, the leader-line dash flow saturates at a
+//fixed wattage no matter what unit the user's sensor is in.
+export function pvNormalizeToWatts(value: number, unit: string): number
+{
+    const lu = (unit || '').toLowerCase();
+    if (lu === 'kw') return value * 1000;
+    if (lu === 'mw') return value * 1_000_000;
+    if (lu === 'w')  return value;
+    //Other units (e.g. raw cumulative kWh that we couldn't
+    //differentiate), treat as 0 so the animation pauses
+    //instead of mis-scaling.
+    return 0;
+}
+
+
+//Manual PV peak power.
+//
+//The user enters their installed array's peak power (kWp) in the
+//card editor. We convert that to a calibration scalar k (W per
+//percent of STC) by k = kWp * 1000 / 100 = kWp * 10, then
+//multiply by the clear-sky percentage to draw the dotted forecast
+//line on the PV chart. No history scan, no auto-fit, no rolling
+//buffer, the user knows their install best.
+//
+//Returns null when `pv-peak-kwp` is unset or invalid; callers
+//then skip the prediction line and the peak-of-day highlights
+//for future days.
+export function pvCalibK(config: HeliosConfig | undefined): number | null
+{
+    const raw = config?.['pv-peak-kwp'];
+    const kwp = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+    if (!isFinite(kwp) || kwp <= 0) return null;
+    return kwp * 10;
+}
+
+
+//One-time cleanup of the obsolete auto-calibration buffers (an
+//earlier release maintained a rolling 14-day fit in localStorage
+//and HA's frontend.user_data). Runs at boot, idempotent thanks
+//to the cleanup-flag key. Safe to keep forever, drops a few
+//bytes per coords pair we ever wrote samples for.
+export function wipeLegacyPvCalibStorage(
+    hass: any,
+    coords: { lat: number; lon: number } | null
+): void
+{
+    try
+    {
+        if (window.localStorage?.getItem(PV_CALIB_WIPE_FLAG_KEY) === '1')
+        {
+            return;
+        }
+    }
+    catch (_) { return; }
+
+    try
+    {
+        const ls = window.localStorage;
+        if (ls)
+        {
+            const stale: string[] = [];
+            for (let i = 0; i < ls.length; i++)
+            {
+                const k = ls.key(i);
+                if (k && k.startsWith('helios-pv-calib:') && k !== PV_CALIB_WIPE_FLAG_KEY)
+                {
+                    stale.push(k);
+                }
+            }
+            for (const k of stale) ls.removeItem(k);
+            ls.setItem(PV_CALIB_WIPE_FLAG_KEY, '1');
+        }
+    }
+    catch (_) {}
+
+    if (coords && hass?.callWS)
+    {
+        const haKey = `helios-pv-calib:${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
+        hass.callWS({ type: 'frontend/set_user_data', key: haKey, value: null })
+            .catch(() => {});
+    }
+}
+
+
+//Resolves the configured PV layout into a flat list of panel
+//orientations + pre-normalised shares (sum to 1.0).
+//
+//Read order, first match wins:
+//  1. `pv-arrays`: non-empty array, each entry parsed as
+//     { tilt: 0–90, azimuth: 0–360, share: weight }. Missing
+//     tilt defaults to 0 (horizontal fast path inside
+//     computePvPower, no transposition applied for that entry).
+//     Missing azimuth defaults to 180. Missing share triggers
+//     equal-split with siblings. Entries with share ≤ 0 are
+//     dropped. Shares are normalised so they sum to 1.0 before
+//     the caller weights them, so 50/50, 60/60 and 1/1 all
+//     produce the same forecast (forgives user typos).
+//  2. Legacy `pv-tilt` + `pv-azimuth`: read as a single entry
+//     with share = 1.0, but only when `pv-tilt` > 0 (matches the
+//     historical behaviour where tilt = 0 / unset skipped the
+//     transposition entirely).
+//  3. Otherwise empty result, caller uses the horizontal-panel
+//     fast path inside computePvPower.
+export function pvArrays(
+    config: HeliosConfig | undefined
+): { orientations: PanelOrientation[]; shares: number[] }
+{
+    const out: PanelOrientation[] = [];
+    const sh: number[] = [];
+
+    const rawList = config?.['pv-arrays'];
+    if (Array.isArray(rawList) && rawList.length > 0)
+    {
+        for (const entry of rawList)
+        {
+            if (!entry || typeof entry !== 'object') continue;
+            const e = entry as Record<string, unknown>;
+
+            //Missing / blank tilt is the editor's "flat install" state,
+            //and matches the legacy `pv-tilt` default. Default to 0;
+            //computePvPower then takes the horizontal fast path for
+            //this entry, leaving every other entry's transposition
+            //intact.
+            const rawTilt = e['tilt'];
+            const tiltRaw = typeof rawTilt === 'number' ? rawTilt : parseFloat(String(rawTilt ?? ''));
+            const tilt    = isFinite(tiltRaw) ? tiltRaw : 0;
+
+            const rawAz = e['azimuth'];
+            const az    = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
+            const azDeg = isFinite(az) ? ((az % 360) + 360) % 360 : 180;
+
+            const rawShare = e['share'];
+            //undefined / null share means "equal split with siblings",
+            //flag it with NaN and fill in after we know the count of
+            //share-less entries.
+            let share: number;
+            if (rawShare === undefined || rawShare === null || rawShare === '')
+            {
+                share = NaN;
+            }
+            else
+            {
+                const s = typeof rawShare === 'number' ? rawShare : parseFloat(String(rawShare));
+                if (!isFinite(s) || s <= 0) continue;
+                share = s;
+            }
+
+            out.push({
+                tiltDeg:    Math.max(0, Math.min(90, tilt)),
+                azimuthDeg: azDeg
+            });
+            sh.push(share);
+        }
+
+        //Fill blank shares with the average of the explicit ones (or
+        //1.0 when every entry omitted a share). Keeps "no share field"
+        //behaving like equal-split even when mixed with explicit ones.
+        const explicit = sh.filter(s => isFinite(s));
+        const fillVal  = explicit.length > 0
+            ? explicit.reduce((a, b) => a + b, 0) / explicit.length
+            : 1;
+        for (let i = 0; i < sh.length; i++)
+        {
+            if (!isFinite(sh[i])) sh[i] = fillVal;
+        }
+    }
+
+    if (out.length === 0)
+    {
+        //Legacy single-orientation fallback.
+        const rawTilt = config?.['pv-tilt'];
+        const tilt    = typeof rawTilt === 'number' ? rawTilt : parseFloat(String(rawTilt ?? ''));
+        if (isFinite(tilt) && tilt > 0)
+        {
+            const rawAz = config?.['pv-azimuth'];
+            const az    = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
+            out.push({
+                tiltDeg:    Math.max(0, Math.min(90, tilt)),
+                azimuthDeg: isFinite(az) ? ((az % 360) + 360) % 360 : 180
+            });
+            sh.push(1);
+        }
+    }
+
+    //Normalise to 1.0 so callers can multiply directly without an
+    //extra divide per sample. Empty list stays empty → horizontal
+    //fast path in the caller.
+    const total = sh.reduce((a, b) => a + b, 0);
+    if (total > 0)
+    {
+        for (let i = 0; i < sh.length; i++) sh[i] /= total;
+    }
+
+    return { orientations: out, shares: sh };
+}
+
+
+//Forecast PV percentage at a single sample, summed across every
+//configured array weighted by its share of the total kWp. Falls
+//through to the horizontal-panel fast path inside computePvPower
+//when no array is configured (returns the GHI-normalised value
+//the legacy code used to produce).
+export function computePvPowerWeighted(
+    config: HeliosConfig | undefined,
+    t: Date,
+    lat: number,
+    lon: number,
+    cloudPct: number
+): number
+{
+    const { orientations, shares } = pvArrays(config);
+    if (orientations.length === 0)
+    {
+        return computePvPower(t, lat, lon, cloudPct);
+    }
+    let acc = 0;
+    for (let i = 0; i < orientations.length; i++)
+    {
+        acc += computePvPower(t, lat, lon, cloudPct, orientations[i]) * shares[i];
+    }
+    return acc;
+}
+
+
+//Format a PV reading for the chip below the home. The display
+//auto-rescales W → kW when the magnitude crosses a threshold so
+//a 4500 W reading prints as "4.5 kW" rather than the noisier
+//"4500 W". Energy units (kWh / Wh) keep their native unit and
+//get a single decimal, daily totals usually sit in the 0–50 kWh
+//band where one decimal is the right amount of precision.
+export function formatPvValue(hass: any, value: number, unit: string): string
+{
+    const u = (unit || '').trim();
+    const lu = u.toLowerCase();
+
+    if (lu === 'w' && Math.abs(value) >= 1000)
+    {
+        return `${formatLocalisedNumber(hass, value / 1000, 2)} kW`;
+    }
+    if (lu === 'w')
+    {
+        return `${formatLocalisedNumber(hass, value, 0, true)} W`;
+    }
+    if (lu === 'kw')
+    {
+        return `${formatLocalisedNumber(hass, value, 2)} kW`;
+    }
+    if (lu === 'wh')
+    {
+        if (Math.abs(value) >= 1000)
+        {
+            return `${formatLocalisedNumber(hass, value / 1000, 1)} kWh`;
+        }
+        return `${formatLocalisedNumber(hass, value, 0, true)} Wh`;
+    }
+    if (lu === 'kwh' || lu === 'mwh')
+    {
+        return `${formatLocalisedNumber(hass, value, 1)} ${u}`;
+    }
+    //Fallback for arbitrary units, keep one decimal of precision
+    //and let the entity's own unit string carry through.
+    const formatted = Math.abs(value) >= 100
+        ? formatLocalisedNumber(hass, value, 0, true)
+        : formatLocalisedNumber(hass, value, 1);
+    return u ? `${formatted} ${u}` : formatted;
+}

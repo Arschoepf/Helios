@@ -15,8 +15,8 @@
 //Once the heights are ready, the consolidation logic is identical, so
 //keeping it in one place avoids drift between providers.
 
-import { convexHull } from '../helios-shadows';
-import type { LidarShadowResult } from '../helios-lidar';
+import { convexHull } from '../shadows';
+import type { LidarShadowResult } from '../lidar';
 
 //Tuning constants. Same defaults as the legacy FR-only implementation:
 //
