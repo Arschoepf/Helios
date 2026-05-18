@@ -2210,7 +2210,22 @@ export class HeliosEngine
     //can show an empty overlay instead of garbage.
     public projectLidarPoints(
         maxRadiusMeters: number
-    ): { xy: Float32Array; count: number; homeX: number; homeY: number; radiusPx: number } | null
+    ): {
+        xy:       Float32Array;
+        dist2:    Float32Array;
+        count:    number;
+        homeX:    number;
+        homeY:    number;
+        radiusM:  number;
+        //World-to-screen jacobian columns (pixels per metre) for the
+        //east + north axes around the home. Lets the card draw the
+        //pulse wavefront ring in perspective: a unit circle on the
+        //ground at radius r metres projects to an ellipse on screen
+        //via {x, y} = home + r·cos(θ)·jEast + r·sin(θ)·jNorth, which
+        //the card walks for 32 samples per frame to trace the ring.
+        jExX:     number; jExY: number;
+        jNoX:     number; jNoY: number;
+    } | null
     {
         if (!this.map || !this._mapReady) return null;
         const raster = this._lidarRaster;
@@ -2259,8 +2274,9 @@ export class HeliosEngine
         const r2     = radius * radius;
 
         //Pre-size at worst-case all-visible. The card reads only
-        //[0, count*2) entries, the trailing slack stays unread.
-        const xy = new Float32Array(N * 2);
+        //[0, count*2) entries; dist2 is parallel, [0, count) entries.
+        const xy    = new Float32Array(N * 2);
+        const dist2 = new Float32Array(N);
         let count = 0;
 
         for (let j = 0; j < rasterSize; j++)
@@ -2272,30 +2288,31 @@ export class HeliosEngine
             {
                 const h = heights[j * rasterSize + i];
                 if (!isFinite(h)) continue;
-                const cLon   = minLon + (i + 0.5) * pxLon;
-                const dLonM  = (cLon - homeLon) * M_PER_DEG_LON;
-                if (dLonM * dLonM + dLatM2 > r2) continue;
+                const cLon  = minLon + (i + 0.5) * pxLon;
+                const dLonM = (cLon - homeLon) * M_PER_DEG_LON;
+                const d2    = dLonM * dLonM + dLatM2;
+                if (d2 > r2) continue;
                 //Affine projection: 6 mul + 4 add per point. Replaces
                 //a full matrix multiply per cell, the single biggest
                 //frame-cost win in this overlay.
                 xy[count * 2]     = hX + dLonM * jExX + dLatM * jNoX + h * jUpX;
                 xy[count * 2 + 1] = hY + dLonM * jExY + dLatM * jNoY + h * jUpY;
+                //Stash world-distance² (metres²) so the scanner pulse
+                //gates dots in WORLD space (a true expanding disc on
+                //the ground), not in screen-space (which would clip
+                //near + far cells unevenly under the camera pitch).
+                dist2[count]      = d2;
                 count++;
             }
         }
-        //Scanner-style pulse needs the home anchor on screen and the
-        //visible-disc radius in pixels so it can sweep a wavefront
-        //ring outward from (homeX, homeY) to radiusPx. Derive radiusPx
-        //from the jacobian + the configured metres radius rather than
-        //walking the xy buffer for a max() (the buffer covers a
-        //square crop, the disc is the inscribed circle, and the
-        //jacobian already gives us pixels-per-metre for free).
-        const pxPerMetreEast  = Math.hypot(jExX, jExY);
-        const pxPerMetreNorth = Math.hypot(jNoX, jNoY);
-        const pxPerMetre      = (pxPerMetreEast + pxPerMetreNorth) * 0.5;
-        const radiusPx        = radius * pxPerMetre;
 
-        return { xy, count, homeX: hX, homeY: hY, radiusPx };
+        return {
+            xy, dist2, count,
+            homeX:   hX,
+            homeY:   hY,
+            radiusM: radius,
+            jExX, jExY, jNoX, jNoY
+        };
     }
 
     //Toggle MapTiler's symbol layers (road names, house numbers,

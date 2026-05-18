@@ -59,6 +59,21 @@ export const heliosCardStyles = css`
         position: relative;
     }
 
+    /*  Force-hide the MapLibre attribution rail. attributionControl
+        compact: true is meant to collapse it to an icon, but MapLibre
+        auto-expands the full bar above 640 px viewport width which
+        most dashboard cards exceed. We hide it outright via CSS, the
+        attribution credit (MapLibre + OpenFreeMap + OpenMapTiles +
+        OpenStreetMap data) lives in the README and the HACS info pane
+        so the license obligation stays satisfied through documentation
+        rather than chrome real estate. */
+    .maplibregl-ctrl-attrib,
+    .maplibregl-ctrl-bottom-right,
+    .maplibregl-ctrl-bottom-left
+    {
+        display: none !important;
+    }
+
 
     /*  Home hitbox, invisible circular click target centred on the
         home's projected screen position. Sits above every overlay
@@ -912,7 +927,14 @@ export const heliosCardStyles = css`
     {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 6px;
+        /*  Sized to mirror the .clock chip on the opposite rail
+            (~80 px wide with the default "mm-dd HH:MM" content, at
+            12 px / weight 600). justify-content: center balances the
+            icon + label inside that fixed width so the toggle reads
+            as a symmetric counterweight to the date chip.            */
+        min-width: 80px;
         height: 22px;
         box-sizing: border-box;
         padding: 0 8px;
@@ -933,23 +955,28 @@ export const heliosCardStyles = css`
             click reaches the @click handler, mirroring what
             .clock / .live-return-btn do on the opposite (top-left)
             rail. Without this the button visually renders enabled but
-            ignores every click. */
+            ignores every click.
+
+            z-index: 50 puts the button above the LiDAR View canvas
+            overlay (z 30) so the toggle stays clickable while the
+            View is open, otherwise the canvas would swallow the
+            click that exits the mode. */
         pointer-events: auto;
+        position: relative;
+        z-index: 50;
     }
-    /*  Uppercase glyphs in Roboto are positioned in the upper ~80%
-        of their em-box (the cap-baseline trick that makes lowercase
-        x-height feel balanced). With line-height: 1 and flex
-        align-items: center, that pushes the visible centre of
-        "LIDAR" ~1 px above the chip's geometric centre. A 1 px
-        translateY on the label nudges it back into true centre
-        against the 14 px icon. The icon itself sits dead-centre via
-        flex with no offset, since ha-icon is a square box without
-        ascender/descender asymmetry. */
+    /*  Roboto cap glyphs at small sizes inside line-height: 1 sit
+        slightly low in the em-box once the descender slack is gone,
+        so flex-centering still leaves the visual centre of "LIDAR"
+        a hair below the chip's geometric centre against a 14 px icon
+        glyph. translateY(-1px) on the label nudges it back up into
+        true centre. The icon itself stays at the geometric centre,
+        ha-icon is a square box without ascender/descender asymmetry. */
     .lidar-view-btn-label
     {
         display: inline-block;
         line-height: 1;
-        transform: translateY(1px);
+        transform: translateY(-1px);
     }
     .lidar-view-btn ha-icon
     {

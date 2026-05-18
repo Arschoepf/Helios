@@ -386,13 +386,32 @@ export class HeliosCard extends LitElement
     @state() private _lidarViewMode = false;
     //Screen-space projection of the raw LiDAR raster for the current
     //map transform. Refreshed in _refreshOverlays whenever a transform
-    //fires AND lidar view is active. Buffer is interleaved [x,y,...]
-    //with `count` valid pairs; the canvas draw loop reads only those.
-    //homeX/Y and radiusPx feed the scanner pulse: the pulse expands
-    //from (homeX, homeY) out to radiusPx so the wavefront tracks the
-    //visible disc edge exactly, even when the camera rotates.
+    //fires AND lidar view is active.
+    //  xy        : interleaved [x0,y0,x1,y1,...] of `count` projected
+    //              dot positions, in CSS pixels relative to the canvas.
+    //  dist2     : parallel array of world-distance² (in m²) from the
+    //              home for each dot, the scanner pulse gates on this
+    //              so the expanding wave is a real disc on the ground
+    //              and not a screen-space circle that distorts under
+    //              the camera pitch.
+    //  homeX/Y   : home anchor in canvas pixels, the wave centre.
+    //  radiusM   : the user-configured pulse / disc radius in metres
+    //              (matches what we passed to projectLidarPoints).
+    //  jExX..jNoY: 2x2 world-to-screen jacobian columns (px / m) around
+    //              the home, lets the canvas paint the wavefront as
+    //              the perspective-projected unit circle scaled to
+    //              the current radius via a 32-vertex polygon.
     @state() private _lidarViewPoints:
-        { xy: Float32Array; count: number; homeX: number; homeY: number; radiusPx: number }
+        {
+            xy:      Float32Array;
+            dist2:   Float32Array;
+            count:   number;
+            homeX:   number;
+            homeY:   number;
+            radiusM: number;
+            jExX:    number; jExY: number;
+            jNoX:    number; jNoY: number;
+        }
         | null = null;
     //Scanner-pulse animation timestamps. Set to performance.now() on
     //toggle: _lidarPulseInStartMs on enter (radial reveal + glowing
@@ -1857,10 +1876,20 @@ export class HeliosCard extends LitElement
 
     //Repaint the LiDAR View canvas. Called from the Lit `updated()`
     //lifecycle hook (which fires after every render whose state
-    //changed). We compare the points buffer reference, the canvas
-    //size and the visual config so we only repaint when something
-    //actually changes; idle re-renders (e.g. clock tick) cost nothing.
-    private _lidarCanvasLastSig = '';
+    //Offscreen "bake" of the full dot cloud at the current camera
+    //transform. The hot path during the pulse animation is no longer
+    //"walk N points and rect() each one per frame", it's "clip to a
+    //perspective polygon and drawImage the baked canvas once per
+    //frame" - constant cost regardless of point count.
+    //
+    //The bake is invalidated by the bake signature (xy buffer
+    //identity + visual config); the camera transform is captured via
+    //_lidarCanvasTransformTick, which already increments per overlay
+    //refresh, so the bake re-runs only when the user rotates / zooms /
+    //resizes, never on the per-frame animation tick.
+    private _lidarOffscreen?:        HTMLCanvasElement;
+    private _lidarOffscreenSig:      string = '';
+
     private _redrawLidarCanvas(): void
     {
         //Stay painting while a pulse-out animation is in flight even
@@ -1886,8 +1915,6 @@ export class HeliosCard extends LitElement
         const alpha  = this._lidarViewPointOpacity();
 
         //Pulse progress, [0..1]. easeOutCubic: fast start, slow finish.
-        //Visually reads as a scanner that races out from the home and
-        //settles smoothly at the disc edge instead of stopping flat.
         const now      = performance.now();
         const inStart  = this._lidarPulseInStartMs;
         const outStart = this._lidarPulseOutStartMs;
@@ -1899,70 +1926,117 @@ export class HeliosCard extends LitElement
             : 0;
         const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
         const inEased  = easeOutCubic(inT);
-        //Exit fade is fast and linear, dots dim uniformly then disappear.
         const globalAlpha = outStart !== null ? (1 - outT) : 1;
-
-        //Sig must include the pulse state so the canvas redraws on
-        //every rAF tick during an animation rather than short-
-        //circuiting on the cached signature.
-        const sig    = `${points?.count ?? 0}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}|${inStart ?? '-'}@${inT.toFixed(3)}|${outStart ?? '-'}@${outT.toFixed(3)}`;
-        if (sig === this._lidarCanvasLastSig) return;
-        this._lidarCanvasLastSig = sig;
 
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, cssW, cssH);
         if (!points || points.count === 0) return;
         if (globalAlpha <= 0) return;
 
-        const homeX     = points.homeX;
-        const homeY     = points.homeY;
-        const radiusPx  = points.radiusPx;
-        //During the enter pulse, only dots whose screen-distance from
-        //home is within `currentRadius` are drawn. Once inEased
-        //reaches 1 the whole disc is visible and the gate is open.
-        const currentRadius   = inEased * radiusPx;
-        const currentRadius2  = currentRadius * currentRadius;
-        const gating = inStart !== null && inT < 1;
+        const homeX   = points.homeX;
+        const homeY   = points.homeY;
+        const radiusM = points.radiusM;
+        const jExX    = points.jExX;
+        const jExY    = points.jExY;
+        const jNoX    = points.jNoX;
+        const jNoY    = points.jNoY;
 
-        ctx.fillStyle = this._withAlpha(color, alpha * globalAlpha);
-        const half = size / 2;
-        const xy   = points.xy;
-        const N    = points.count;
-        const W    = cssW;
-        const H    = cssH;
-        const path = new Path2D();
-        let drawn = 0;
-        for (let i = 0; i < N; i++)
+        //Bake the full dot cloud into an offscreen canvas. Re-bakes
+        //only when the projection or visual config changes; the per-
+        //frame pulse animation reuses the same bake and just clips.
+        const bakeSig = `${points.count}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}`;
+        if (bakeSig !== this._lidarOffscreenSig || !this._lidarOffscreen)
         {
-            const x = xy[i * 2];
-            const y = xy[i * 2 + 1];
-            if (x < -half || y < -half || x > W + half || y > H + half) continue;
-            if (gating)
+            if (!this._lidarOffscreen)
             {
-                const dx = x - homeX;
-                const dy = y - homeY;
-                if (dx * dx + dy * dy > currentRadius2) continue;
+                this._lidarOffscreen = document.createElement('canvas');
             }
-            path.rect(x - half, y - half, size, size);
-            drawn++;
+            const off = this._lidarOffscreen;
+            off.width  = wantW;
+            off.height = wantH;
+            const offCtx = off.getContext('2d')!;
+            offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            offCtx.fillStyle = this._withAlpha(color, alpha);
+            const half = size / 2;
+            const xy   = points.xy;
+            const N    = points.count;
+            const W    = cssW;
+            const H    = cssH;
+            const path = new Path2D();
+            for (let i = 0; i < N; i++)
+            {
+                const x = xy[i * 2];
+                const y = xy[i * 2 + 1];
+                if (x < -half || y < -half || x > W + half || y > H + half) continue;
+                path.rect(x - half, y - half, size, size);
+            }
+            offCtx.fill(path);
+            this._lidarOffscreenSig = bakeSig;
         }
-        if (drawn > 0) ctx.fill(path);
 
-        //Scanner wavefront ring: a glowing circle at the current
-        //pulse radius, painted on top of the revealed dots so the
-        //leading edge reads as "the scanner is here right now".
-        //Fades to zero as the pulse reaches the disc edge (energy
-        //dissipates over distance, also avoids a flat-stop look).
+        //During the enter pulse, clip the composite to a polygon that
+        //tracks the perspective-projected disc at the current world
+        //radius. The polygon is the unit circle on the ground (32
+        //samples), each sample projected via the world-to-screen
+        //jacobian, so it's a true ellipse on screen under the camera
+        //pitch instead of a flat circle that would clip near + far
+        //cells unevenly.
+        const gating = inStart !== null && inT < 1;
+        const currentRadiusM = gating ? (inEased * radiusM) : radiusM;
+
         if (gating)
         {
-            const ringAlpha = (1 - inEased) * 0.85 * globalAlpha;
-            const ringWidth = Math.max(1, 2 + (1 - inEased) * 4);
+            ctx.save();
+            ctx.beginPath();
+            const STEPS = 64;
+            for (let k = 0; k < STEPS; k++)
+            {
+                const a = (k / STEPS) * Math.PI * 2;
+                const wx = Math.cos(a) * currentRadiusM;
+                const wy = Math.sin(a) * currentRadiusM;
+                const sx = homeX + wx * jExX + wy * jNoX;
+                const sy = homeY + wx * jExY + wy * jNoY;
+                if (k === 0) ctx.moveTo(sx, sy);
+                else         ctx.lineTo(sx, sy);
+            }
+            ctx.closePath();
+            ctx.clip();
+        }
+
+        if (globalAlpha < 1) ctx.globalAlpha = globalAlpha;
+        //Single drawImage of the baked offscreen, cost is constant
+        //regardless of point count. The clip above limits the visible
+        //region to the expanding perspective ellipse.
+        ctx.drawImage(this._lidarOffscreen!, 0, 0, cssW, cssH);
+        if (globalAlpha < 1) ctx.globalAlpha = 1;
+
+        if (gating)
+        {
+            ctx.restore();
+
+            //Scanner wavefront ring: traced via the same 32-sample
+            //polygon so the ring follows the perspective ellipse,
+            //not a screen-space circle. Stroke width + glow shrink as
+            //the wave expands (energy dissipating outward).
+            const ringAlpha = (1 - inEased) * 0.9 * globalAlpha;
+            const ringWidth = Math.max(1.5, 2 + (1 - inEased) * 4);
             ctx.strokeStyle = this._withAlpha(color, ringAlpha);
             ctx.lineWidth   = ringWidth;
             ctx.shadowColor = this._withAlpha(color, ringAlpha);
-            ctx.shadowBlur  = 12 + (1 - inEased) * 16;
+            ctx.shadowBlur  = 12 + (1 - inEased) * 18;
             ctx.beginPath();
-            ctx.arc(homeX, homeY, currentRadius, 0, Math.PI * 2);
+            const STEPS = 64;
+            for (let k = 0; k < STEPS; k++)
+            {
+                const a = (k / STEPS) * Math.PI * 2;
+                const wx = Math.cos(a) * currentRadiusM;
+                const wy = Math.sin(a) * currentRadiusM;
+                const sx = homeX + wx * jExX + wy * jNoX;
+                const sy = homeY + wx * jExY + wy * jNoY;
+                if (k === 0) ctx.moveTo(sx, sy);
+                else         ctx.lineTo(sx, sy);
+            }
+            ctx.closePath();
             ctx.stroke();
             ctx.shadowBlur = 0;
         }

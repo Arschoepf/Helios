@@ -31318,6 +31318,7 @@ const _HeliosEngine = class _HeliosEngine {
     const radius = Math.max(1, maxRadiusMeters);
     const r2 = radius * radius;
     const xy = new Float32Array(N2 * 2);
+    const dist2 = new Float32Array(N2);
     let count = 0;
     for (let j = 0; j < rasterSize; j++) {
       const cLat = maxLat - (j + 0.5) * pxLat;
@@ -31328,17 +31329,26 @@ const _HeliosEngine = class _HeliosEngine {
         if (!isFinite(h2)) continue;
         const cLon = minLon + (i2 + 0.5) * pxLon;
         const dLonM = (cLon - homeLon) * M_PER_DEG_LON;
-        if (dLonM * dLonM + dLatM2 > r2) continue;
+        const d2 = dLonM * dLonM + dLatM2;
+        if (d2 > r2) continue;
         xy[count * 2] = hX + dLonM * jExX + dLatM * jNoX + h2 * jUpX;
         xy[count * 2 + 1] = hY + dLonM * jExY + dLatM * jNoY + h2 * jUpY;
+        dist2[count] = d2;
         count++;
       }
     }
-    const pxPerMetreEast = Math.hypot(jExX, jExY);
-    const pxPerMetreNorth = Math.hypot(jNoX, jNoY);
-    const pxPerMetre = (pxPerMetreEast + pxPerMetreNorth) * 0.5;
-    const radiusPx = radius * pxPerMetre;
-    return { xy, count, homeX: hX, homeY: hY, radiusPx };
+    return {
+      xy,
+      dist2,
+      count,
+      homeX: hX,
+      homeY: hY,
+      radiusM: radius,
+      jExX,
+      jExY,
+      jNoX,
+      jNoY
+    };
   }
   //Toggle MapTiler's symbol layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
@@ -33795,6 +33805,21 @@ const heliosCardStyles = i$3`
         position: relative;
     }
 
+    /*  Force-hide the MapLibre attribution rail. attributionControl
+        compact: true is meant to collapse it to an icon, but MapLibre
+        auto-expands the full bar above 640 px viewport width which
+        most dashboard cards exceed. We hide it outright via CSS, the
+        attribution credit (MapLibre + OpenFreeMap + OpenMapTiles +
+        OpenStreetMap data) lives in the README and the HACS info pane
+        so the license obligation stays satisfied through documentation
+        rather than chrome real estate. */
+    .maplibregl-ctrl-attrib,
+    .maplibregl-ctrl-bottom-right,
+    .maplibregl-ctrl-bottom-left
+    {
+        display: none !important;
+    }
+
 
     /*  Home hitbox, invisible circular click target centred on the
         home's projected screen position. Sits above every overlay
@@ -34648,7 +34673,14 @@ const heliosCardStyles = i$3`
     {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 6px;
+        /*  Sized to mirror the .clock chip on the opposite rail
+            (~80 px wide with the default "mm-dd HH:MM" content, at
+            12 px / weight 600). justify-content: center balances the
+            icon + label inside that fixed width so the toggle reads
+            as a symmetric counterweight to the date chip.            */
+        min-width: 80px;
         height: 22px;
         box-sizing: border-box;
         padding: 0 8px;
@@ -34669,23 +34701,28 @@ const heliosCardStyles = i$3`
             click reaches the @click handler, mirroring what
             .clock / .live-return-btn do on the opposite (top-left)
             rail. Without this the button visually renders enabled but
-            ignores every click. */
+            ignores every click.
+
+            z-index: 50 puts the button above the LiDAR View canvas
+            overlay (z 30) so the toggle stays clickable while the
+            View is open, otherwise the canvas would swallow the
+            click that exits the mode. */
         pointer-events: auto;
+        position: relative;
+        z-index: 50;
     }
-    /*  Uppercase glyphs in Roboto are positioned in the upper ~80%
-        of their em-box (the cap-baseline trick that makes lowercase
-        x-height feel balanced). With line-height: 1 and flex
-        align-items: center, that pushes the visible centre of
-        "LIDAR" ~1 px above the chip's geometric centre. A 1 px
-        translateY on the label nudges it back into true centre
-        against the 14 px icon. The icon itself sits dead-centre via
-        flex with no offset, since ha-icon is a square box without
-        ascender/descender asymmetry. */
+    /*  Roboto cap glyphs at small sizes inside line-height: 1 sit
+        slightly low in the em-box once the descender slack is gone,
+        so flex-centering still leaves the visual centre of "LIDAR"
+        a hair below the chip's geometric centre against a 14 px icon
+        glyph. translateY(-1px) on the label nudges it back up into
+        true centre. The icon itself stays at the geometric centre,
+        ha-icon is a square box without ascender/descender asymmetry. */
     .lidar-view-btn-label
     {
         display: inline-block;
         line-height: 1;
-        transform: translateY(1px);
+        transform: translateY(-1px);
     }
     .lidar-view-btn ha-icon
     {
@@ -37197,7 +37234,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.22"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.23"}`,
       labelStyle,
       versionStyle
     );
@@ -37218,7 +37255,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.22",
+        version: "1.6.0-alpha.23",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37226,7 +37263,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.22"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.23"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -37337,7 +37374,7 @@ let HeliosCard = class extends i {
         this._startLidarPulseLoop();
       }
     };
-    this._lidarCanvasLastSig = "";
+    this._lidarOffscreenSig = "";
     this._lidarCanvasTransformTick = 0;
     this._trackElement = null;
     this._trackPointerId = null;
@@ -38242,49 +38279,84 @@ let HeliosCard = class extends i {
     const easeOutCubic = (t2) => 1 - Math.pow(1 - t2, 3);
     const inEased = easeOutCubic(inT);
     const globalAlpha = outStart !== null ? 1 - outT : 1;
-    const sig = `${points?.count ?? 0}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}|${inStart ?? "-"}@${inT.toFixed(3)}|${outStart ?? "-"}@${outT.toFixed(3)}`;
-    if (sig === this._lidarCanvasLastSig) return;
-    this._lidarCanvasLastSig = sig;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
     if (!points || points.count === 0) return;
     if (globalAlpha <= 0) return;
     const homeX = points.homeX;
     const homeY = points.homeY;
-    const radiusPx = points.radiusPx;
-    const currentRadius = inEased * radiusPx;
-    const currentRadius2 = currentRadius * currentRadius;
-    const gating = inStart !== null && inT < 1;
-    ctx.fillStyle = this._withAlpha(color, alpha * globalAlpha);
-    const half = size / 2;
-    const xy = points.xy;
-    const N2 = points.count;
-    const W = cssW;
-    const H2 = cssH;
-    const path = new Path2D();
-    let drawn = 0;
-    for (let i2 = 0; i2 < N2; i2++) {
-      const x2 = xy[i2 * 2];
-      const y3 = xy[i2 * 2 + 1];
-      if (x2 < -half || y3 < -half || x2 > W + half || y3 > H2 + half) continue;
-      if (gating) {
-        const dx = x2 - homeX;
-        const dy = y3 - homeY;
-        if (dx * dx + dy * dy > currentRadius2) continue;
+    const radiusM = points.radiusM;
+    const jExX = points.jExX;
+    const jExY = points.jExY;
+    const jNoX = points.jNoX;
+    const jNoY = points.jNoY;
+    const bakeSig = `${points.count}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}`;
+    if (bakeSig !== this._lidarOffscreenSig || !this._lidarOffscreen) {
+      if (!this._lidarOffscreen) {
+        this._lidarOffscreen = document.createElement("canvas");
       }
-      path.rect(x2 - half, y3 - half, size, size);
-      drawn++;
+      const off = this._lidarOffscreen;
+      off.width = wantW;
+      off.height = wantH;
+      const offCtx = off.getContext("2d");
+      offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      offCtx.fillStyle = this._withAlpha(color, alpha);
+      const half = size / 2;
+      const xy = points.xy;
+      const N2 = points.count;
+      const W = cssW;
+      const H2 = cssH;
+      const path = new Path2D();
+      for (let i2 = 0; i2 < N2; i2++) {
+        const x2 = xy[i2 * 2];
+        const y3 = xy[i2 * 2 + 1];
+        if (x2 < -half || y3 < -half || x2 > W + half || y3 > H2 + half) continue;
+        path.rect(x2 - half, y3 - half, size, size);
+      }
+      offCtx.fill(path);
+      this._lidarOffscreenSig = bakeSig;
     }
-    if (drawn > 0) ctx.fill(path);
+    const gating = inStart !== null && inT < 1;
+    const currentRadiusM = gating ? inEased * radiusM : radiusM;
     if (gating) {
-      const ringAlpha = (1 - inEased) * 0.85 * globalAlpha;
-      const ringWidth = Math.max(1, 2 + (1 - inEased) * 4);
+      ctx.save();
+      ctx.beginPath();
+      const STEPS = 64;
+      for (let k2 = 0; k2 < STEPS; k2++) {
+        const a2 = k2 / STEPS * Math.PI * 2;
+        const wx = Math.cos(a2) * currentRadiusM;
+        const wy = Math.sin(a2) * currentRadiusM;
+        const sx = homeX + wx * jExX + wy * jNoX;
+        const sy = homeY + wx * jExY + wy * jNoY;
+        if (k2 === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.clip();
+    }
+    if (globalAlpha < 1) ctx.globalAlpha = globalAlpha;
+    ctx.drawImage(this._lidarOffscreen, 0, 0, cssW, cssH);
+    if (globalAlpha < 1) ctx.globalAlpha = 1;
+    if (gating) {
+      ctx.restore();
+      const ringAlpha = (1 - inEased) * 0.9 * globalAlpha;
+      const ringWidth = Math.max(1.5, 2 + (1 - inEased) * 4);
       ctx.strokeStyle = this._withAlpha(color, ringAlpha);
       ctx.lineWidth = ringWidth;
       ctx.shadowColor = this._withAlpha(color, ringAlpha);
-      ctx.shadowBlur = 12 + (1 - inEased) * 16;
+      ctx.shadowBlur = 12 + (1 - inEased) * 18;
       ctx.beginPath();
-      ctx.arc(homeX, homeY, currentRadius, 0, Math.PI * 2);
+      const STEPS = 64;
+      for (let k2 = 0; k2 < STEPS; k2++) {
+        const a2 = k2 / STEPS * Math.PI * 2;
+        const wx = Math.cos(a2) * currentRadiusM;
+        const wy = Math.sin(a2) * currentRadiusM;
+        const sx = homeX + wx * jExX + wy * jNoX;
+        const sy = homeY + wx * jExY + wy * jNoY;
+        if (k2 === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
