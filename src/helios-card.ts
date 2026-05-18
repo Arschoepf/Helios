@@ -388,7 +388,23 @@ export class HeliosCard extends LitElement
     //map transform. Refreshed in _refreshOverlays whenever a transform
     //fires AND lidar view is active. Buffer is interleaved [x,y,...]
     //with `count` valid pairs; the canvas draw loop reads only those.
-    @state() private _lidarViewPoints: { xy: Float32Array; count: number } | null = null;
+    //homeX/Y and radiusPx feed the scanner pulse: the pulse expands
+    //from (homeX, homeY) out to radiusPx so the wavefront tracks the
+    //visible disc edge exactly, even when the camera rotates.
+    @state() private _lidarViewPoints:
+        { xy: Float32Array; count: number; homeX: number; homeY: number; radiusPx: number }
+        | null = null;
+    //Scanner-pulse animation timestamps. Set to performance.now() on
+    //toggle: _lidarPulseInStartMs on enter (radial reveal + glowing
+    //wavefront expanding from home to disc edge), _lidarPulseOutStartMs
+    //on exit (rapid alpha fade of the dot cloud before the regular HUD
+    //fades back in). Null when no animation is in flight, the canvas
+    //then either paints the full point cloud or stays cleared.
+    private _lidarPulseInStartMs:  number | null = null;
+    private _lidarPulseOutStartMs: number | null = null;
+    private _lidarPulseRaf?:       number;
+    private static readonly _LIDAR_PULSE_IN_MS  = 1400;
+    private static readonly _LIDAR_PULSE_OUT_MS = 280;
 
     private _timer?:           number;
     private _lastHomeKey       = '';
@@ -659,6 +675,11 @@ export class HeliosCard extends LitElement
             window.clearTimeout(this._initDebounceTimer);
             this._initDebounceTimer = undefined;
             this._initInflight      = false;
+        }
+        if (this._lidarPulseRaf !== undefined)
+        {
+            cancelAnimationFrame(this._lidarPulseRaf);
+            this._lidarPulseRaf = undefined;
         }
         this._engine?.cleanup();
         this._engine = undefined;
@@ -1756,20 +1777,83 @@ export class HeliosCard extends LitElement
     //Toggle the LiDAR View overlay. Disabled (silently no-op) when
     //the engine reports no provider covers the home, so the user
     //never gets stuck in an empty-canvas view.
+    //
+    //Enter: pulse-in starts immediately, scanner-style. The lidar-
+    //view-active class on ha-card lands at the same instant, the
+    //regular HUD fades out under the dot cloud (which itself reveals
+    //radially from the home).
+    //
+    //Exit: two-phase. First the dot cloud fades out in ~280 ms (a
+    //quick exit pulse so the user feels the mode releasing), THEN
+    //the regular HUD fades back in via the CSS transition. We drop
+    //the lidar-view-active class only when the fade is done so the
+    //HUD doesn't pop back through the still-visible cloud.
     private _toggleLidarView = (): void =>
     {
         if (!this._engine) return;
         if (!this._lidarViewMode && this._engine.getActiveLidarSourceId() === null) return;
-        this._lidarViewMode = !this._lidarViewMode;
-        //Tell the engine so its fetch path also runs when shadows are
-        //off (the raster powers both cast shadows and the View
-        //overlay, but it would otherwise only get fetched when
-        //shadows are enabled).
-        this._engine.setLidarViewActive(this._lidarViewMode);
-        //Trigger a fresh projection on the next frame, the Lit
-        //re-render alone won't fire _refreshOverlays.
-        if (this._lidarViewMode) this._refreshOverlays();
+
+        if (!this._lidarViewMode)
+        {
+            //Off → on. Engaging immediately.
+            this._lidarPulseOutStartMs = null;
+            this._lidarPulseInStartMs  = performance.now();
+            this._lidarViewMode = true;
+            this._engine.setLidarViewActive(true);
+            this._refreshOverlays();
+            this._startLidarPulseLoop();
+        }
+        else
+        {
+            //On → off. Start the exit fade; the class flip + engine
+            //setLidarViewActive(false) happen at the end of the fade
+            //so the dot cloud doesn't blink off before the HUD eases
+            //back in.
+            this._lidarPulseInStartMs  = null;
+            this._lidarPulseOutStartMs = performance.now();
+            this._startLidarPulseLoop();
+        }
     };
+
+    //Drives the per-frame redraw while a pulse is in flight. Self-
+    //terminates when both pulses are null (idle stable state), so the
+    //rAF cost stays at zero during normal viewing.
+    private _startLidarPulseLoop(): void
+    {
+        if (this._lidarPulseRaf !== undefined) return;
+        const tick = (): void =>
+        {
+            const now = performance.now();
+            const inStart  = this._lidarPulseInStartMs;
+            const outStart = this._lidarPulseOutStartMs;
+
+            //Exit pulse complete, finalise the mode flip.
+            if (outStart !== null && now - outStart >= HeliosCard._LIDAR_PULSE_OUT_MS)
+            {
+                this._lidarPulseOutStartMs = null;
+                this._lidarViewMode = false;
+                this._engine?.setLidarViewActive(false);
+            }
+            //Enter pulse complete, just clear the marker. Canvas keeps
+            //drawing the full cloud, but the wavefront ring stops.
+            if (inStart !== null && now - inStart >= HeliosCard._LIDAR_PULSE_IN_MS)
+            {
+                this._lidarPulseInStartMs = null;
+            }
+
+            this._redrawLidarCanvas();
+
+            if (this._lidarPulseInStartMs !== null || this._lidarPulseOutStartMs !== null)
+            {
+                this._lidarPulseRaf = requestAnimationFrame(tick);
+            }
+            else
+            {
+                this._lidarPulseRaf = undefined;
+            }
+        };
+        this._lidarPulseRaf = requestAnimationFrame(tick);
+    }
 
     //Repaint the LiDAR View canvas. Called from the Lit `updated()`
     //lifecycle hook (which fires after every render whose state
@@ -1779,7 +1863,10 @@ export class HeliosCard extends LitElement
     private _lidarCanvasLastSig = '';
     private _redrawLidarCanvas(): void
     {
-        if (!this._lidarViewMode) return;
+        //Stay painting while a pulse-out animation is in flight even
+        //after _lidarViewMode flips back to false at the end of the
+        //fade, the rAF loop owns the final clear.
+        if (!this._lidarViewMode && this._lidarPulseOutStartMs === null) return;
         const canvas = this.renderRoot?.querySelector?.('canvas.lidar-view-canvas') as HTMLCanvasElement | null;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
@@ -1797,25 +1884,47 @@ export class HeliosCard extends LitElement
         const size   = this._lidarViewPointSizePx();
         const color  = this._lidarViewPointColor();
         const alpha  = this._lidarViewPointOpacity();
-        const sig    = `${points?.count ?? 0}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}`;
+
+        //Pulse progress, [0..1]. easeOutCubic: fast start, slow finish.
+        //Visually reads as a scanner that races out from the home and
+        //settles smoothly at the disc edge instead of stopping flat.
+        const now      = performance.now();
+        const inStart  = this._lidarPulseInStartMs;
+        const outStart = this._lidarPulseOutStartMs;
+        const inT  = inStart  !== null
+            ? Math.max(0, Math.min(1, (now - inStart)  / HeliosCard._LIDAR_PULSE_IN_MS))
+            : 1;
+        const outT = outStart !== null
+            ? Math.max(0, Math.min(1, (now - outStart) / HeliosCard._LIDAR_PULSE_OUT_MS))
+            : 0;
+        const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
+        const inEased  = easeOutCubic(inT);
+        //Exit fade is fast and linear, dots dim uniformly then disappear.
+        const globalAlpha = outStart !== null ? (1 - outT) : 1;
+
+        //Sig must include the pulse state so the canvas redraws on
+        //every rAF tick during an animation rather than short-
+        //circuiting on the cached signature.
+        const sig    = `${points?.count ?? 0}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}|${inStart ?? '-'}@${inT.toFixed(3)}|${outStart ?? '-'}@${outT.toFixed(3)}`;
         if (sig === this._lidarCanvasLastSig) return;
         this._lidarCanvasLastSig = sig;
 
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, cssW, cssH);
         if (!points || points.count === 0) return;
+        if (globalAlpha <= 0) return;
 
-        ctx.fillStyle = this._withAlpha(color, alpha);
-        //Square dots batched into a single Path2D + one fill() call,
-        //rather than N fillRect() calls. ctx.fillRect has fixed per-
-        //invocation overhead (~0.3 microsecond on V8) that adds up
-        //past ~100 K points; the Path2D path lets the rasteriser
-        //batch the union into one draw command. Cheap clipping cull
-        //(off-screen points skipped) trims the worst-case rotation
-        //load too: at extreme camera pitches a chunk of the disc
-        //projects past the canvas bounds, no point asking the GPU
-        //to clip them. The tight inner loop only does typed-array
-        //index reads, no per-point allocation.
+        const homeX     = points.homeX;
+        const homeY     = points.homeY;
+        const radiusPx  = points.radiusPx;
+        //During the enter pulse, only dots whose screen-distance from
+        //home is within `currentRadius` are drawn. Once inEased
+        //reaches 1 the whole disc is visible and the gate is open.
+        const currentRadius   = inEased * radiusPx;
+        const currentRadius2  = currentRadius * currentRadius;
+        const gating = inStart !== null && inT < 1;
+
+        ctx.fillStyle = this._withAlpha(color, alpha * globalAlpha);
         const half = size / 2;
         const xy   = points.xy;
         const N    = points.count;
@@ -1827,14 +1936,36 @@ export class HeliosCard extends LitElement
         {
             const x = xy[i * 2];
             const y = xy[i * 2 + 1];
-            //Off-screen cull, the per-point cost is one branch and
-            //four comparisons, much cheaper than feeding the point
-            //into the path only for the rasteriser to throw it out.
             if (x < -half || y < -half || x > W + half || y > H + half) continue;
+            if (gating)
+            {
+                const dx = x - homeX;
+                const dy = y - homeY;
+                if (dx * dx + dy * dy > currentRadius2) continue;
+            }
             path.rect(x - half, y - half, size, size);
             drawn++;
         }
         if (drawn > 0) ctx.fill(path);
+
+        //Scanner wavefront ring: a glowing circle at the current
+        //pulse radius, painted on top of the revealed dots so the
+        //leading edge reads as "the scanner is here right now".
+        //Fades to zero as the pulse reaches the disc edge (energy
+        //dissipates over distance, also avoids a flat-stop look).
+        if (gating)
+        {
+            const ringAlpha = (1 - inEased) * 0.85 * globalAlpha;
+            const ringWidth = Math.max(1, 2 + (1 - inEased) * 4);
+            ctx.strokeStyle = this._withAlpha(color, ringAlpha);
+            ctx.lineWidth   = ringWidth;
+            ctx.shadowColor = this._withAlpha(color, ringAlpha);
+            ctx.shadowBlur  = 12 + (1 - inEased) * 16;
+            ctx.beginPath();
+            ctx.arc(homeX, homeY, currentRadius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
     }
 
     //Bumped on every overlay refresh so _redrawLidarCanvas knows the

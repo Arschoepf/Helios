@@ -31334,7 +31334,11 @@ const _HeliosEngine = class _HeliosEngine {
         count++;
       }
     }
-    return { xy, count };
+    const pxPerMetreEast = Math.hypot(jExX, jExY);
+    const pxPerMetreNorth = Math.hypot(jNoX, jNoY);
+    const pxPerMetre = (pxPerMetreEast + pxPerMetreNorth) * 0.5;
+    const radiusPx = radius * pxPerMetre;
+    return { xy, count, homeX: hX, homeY: hY, radiusPx };
   }
   //Toggle MapTiler's symbol layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
@@ -37193,7 +37197,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.21"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.22"}`,
       labelStyle,
       versionStyle
     );
@@ -37214,7 +37218,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.21",
+        version: "1.6.0-alpha.22",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37222,7 +37226,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.21"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.22"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -37312,15 +37316,26 @@ let HeliosCard = class extends i {
     this._detailMode = false;
     this._lidarViewMode = false;
     this._lidarViewPoints = null;
+    this._lidarPulseInStartMs = null;
+    this._lidarPulseOutStartMs = null;
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
     this._toggleLidarView = () => {
       if (!this._engine) return;
       if (!this._lidarViewMode && this._engine.getActiveLidarSourceId() === null) return;
-      this._lidarViewMode = !this._lidarViewMode;
-      this._engine.setLidarViewActive(this._lidarViewMode);
-      if (this._lidarViewMode) this._refreshOverlays();
+      if (!this._lidarViewMode) {
+        this._lidarPulseOutStartMs = null;
+        this._lidarPulseInStartMs = performance.now();
+        this._lidarViewMode = true;
+        this._engine.setLidarViewActive(true);
+        this._refreshOverlays();
+        this._startLidarPulseLoop();
+      } else {
+        this._lidarPulseInStartMs = null;
+        this._lidarPulseOutStartMs = performance.now();
+        this._startLidarPulseLoop();
+      }
     };
     this._lidarCanvasLastSig = "";
     this._lidarCanvasTransformTick = 0;
@@ -37507,6 +37522,10 @@ let HeliosCard = class extends i {
       window.clearTimeout(this._initDebounceTimer);
       this._initDebounceTimer = void 0;
       this._initInflight = false;
+    }
+    if (this._lidarPulseRaf !== void 0) {
+      cancelAnimationFrame(this._lidarPulseRaf);
+      this._lidarPulseRaf = void 0;
     }
     this._engine?.cleanup();
     this._engine = void 0;
@@ -38172,8 +38191,34 @@ let HeliosCard = class extends i {
     if (!isFinite(n3)) return DEFAULT_LIDAR_VIEW_POINT_OPACITY;
     return Math.max(0, Math.min(1, n3));
   }
+  //Drives the per-frame redraw while a pulse is in flight. Self-
+  //terminates when both pulses are null (idle stable state), so the
+  //rAF cost stays at zero during normal viewing.
+  _startLidarPulseLoop() {
+    if (this._lidarPulseRaf !== void 0) return;
+    const tick = () => {
+      const now = performance.now();
+      const inStart = this._lidarPulseInStartMs;
+      const outStart = this._lidarPulseOutStartMs;
+      if (outStart !== null && now - outStart >= HeliosCard._LIDAR_PULSE_OUT_MS) {
+        this._lidarPulseOutStartMs = null;
+        this._lidarViewMode = false;
+        this._engine?.setLidarViewActive(false);
+      }
+      if (inStart !== null && now - inStart >= HeliosCard._LIDAR_PULSE_IN_MS) {
+        this._lidarPulseInStartMs = null;
+      }
+      this._redrawLidarCanvas();
+      if (this._lidarPulseInStartMs !== null || this._lidarPulseOutStartMs !== null) {
+        this._lidarPulseRaf = requestAnimationFrame(tick);
+      } else {
+        this._lidarPulseRaf = void 0;
+      }
+    };
+    this._lidarPulseRaf = requestAnimationFrame(tick);
+  }
   _redrawLidarCanvas() {
-    if (!this._lidarViewMode) return;
+    if (!this._lidarViewMode && this._lidarPulseOutStartMs === null) return;
     const canvas = this.renderRoot?.querySelector?.("canvas.lidar-view-canvas");
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -38189,13 +38234,28 @@ let HeliosCard = class extends i {
     const size = this._lidarViewPointSizePx();
     const color = this._lidarViewPointColor();
     const alpha = this._lidarViewPointOpacity();
-    const sig = `${points?.count ?? 0}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}`;
+    const now = performance.now();
+    const inStart = this._lidarPulseInStartMs;
+    const outStart = this._lidarPulseOutStartMs;
+    const inT = inStart !== null ? Math.max(0, Math.min(1, (now - inStart) / HeliosCard._LIDAR_PULSE_IN_MS)) : 1;
+    const outT = outStart !== null ? Math.max(0, Math.min(1, (now - outStart) / HeliosCard._LIDAR_PULSE_OUT_MS)) : 0;
+    const easeOutCubic = (t2) => 1 - Math.pow(1 - t2, 3);
+    const inEased = easeOutCubic(inT);
+    const globalAlpha = outStart !== null ? 1 - outT : 1;
+    const sig = `${points?.count ?? 0}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}|${inStart ?? "-"}@${inT.toFixed(3)}|${outStart ?? "-"}@${outT.toFixed(3)}`;
     if (sig === this._lidarCanvasLastSig) return;
     this._lidarCanvasLastSig = sig;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
     if (!points || points.count === 0) return;
-    ctx.fillStyle = this._withAlpha(color, alpha);
+    if (globalAlpha <= 0) return;
+    const homeX = points.homeX;
+    const homeY = points.homeY;
+    const radiusPx = points.radiusPx;
+    const currentRadius = inEased * radiusPx;
+    const currentRadius2 = currentRadius * currentRadius;
+    const gating = inStart !== null && inT < 1;
+    ctx.fillStyle = this._withAlpha(color, alpha * globalAlpha);
     const half = size / 2;
     const xy = points.xy;
     const N2 = points.count;
@@ -38207,10 +38267,27 @@ let HeliosCard = class extends i {
       const x2 = xy[i2 * 2];
       const y3 = xy[i2 * 2 + 1];
       if (x2 < -half || y3 < -half || x2 > W + half || y3 > H2 + half) continue;
+      if (gating) {
+        const dx = x2 - homeX;
+        const dy = y3 - homeY;
+        if (dx * dx + dy * dy > currentRadius2) continue;
+      }
       path.rect(x2 - half, y3 - half, size, size);
       drawn++;
     }
     if (drawn > 0) ctx.fill(path);
+    if (gating) {
+      const ringAlpha = (1 - inEased) * 0.85 * globalAlpha;
+      const ringWidth = Math.max(1, 2 + (1 - inEased) * 4);
+      ctx.strokeStyle = this._withAlpha(color, ringAlpha);
+      ctx.lineWidth = ringWidth;
+      ctx.shadowColor = this._withAlpha(color, ringAlpha);
+      ctx.shadowBlur = 12 + (1 - inEased) * 16;
+      ctx.beginPath();
+      ctx.arc(homeX, homeY, currentRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
   }
   //Mix a CSS hex colour with an alpha value to produce an rgba()
   //string. Accepts #rgb / #rrggbb / #rrggbbaa (the alpha component
@@ -40509,6 +40586,8 @@ HeliosCard.SUN_R_NEAR = 20;
 HeliosCard.SUN_RIM_WIDTH = 1.5;
 HeliosCard.SUN_FILL_OPACITY_BG = 0.2;
 HeliosCard.NIGHT_STROKE_FACTOR = 0.5;
+HeliosCard._LIDAR_PULSE_IN_MS = 1400;
+HeliosCard._LIDAR_PULSE_OUT_MS = 280;
 HeliosCard._VISUAL_CONFIG_KEYS = [
   "show-labels",
   "sun-color",

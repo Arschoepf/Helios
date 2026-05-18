@@ -2210,7 +2210,7 @@ export class HeliosEngine
     //can show an empty overlay instead of garbage.
     public projectLidarPoints(
         maxRadiusMeters: number
-    ): { xy: Float32Array; count: number } | null
+    ): { xy: Float32Array; count: number; homeX: number; homeY: number; radiusPx: number } | null
     {
         if (!this.map || !this._mapReady) return null;
         const raster = this._lidarRaster;
@@ -2283,7 +2283,19 @@ export class HeliosEngine
                 count++;
             }
         }
-        return { xy, count };
+        //Scanner-style pulse needs the home anchor on screen and the
+        //visible-disc radius in pixels so it can sweep a wavefront
+        //ring outward from (homeX, homeY) to radiusPx. Derive radiusPx
+        //from the jacobian + the configured metres radius rather than
+        //walking the xy buffer for a max() (the buffer covers a
+        //square crop, the disc is the inscribed circle, and the
+        //jacobian already gives us pixels-per-metre for free).
+        const pxPerMetreEast  = Math.hypot(jExX, jExY);
+        const pxPerMetreNorth = Math.hypot(jNoX, jNoY);
+        const pxPerMetre      = (pxPerMetreEast + pxPerMetreNorth) * 0.5;
+        const radiusPx        = radius * pxPerMetre;
+
+        return { xy, count, homeX: hX, homeY: hY, radiusPx };
     }
 
     //Toggle MapTiler's symbol layers (road names, house numbers,
