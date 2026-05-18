@@ -111,8 +111,6 @@ export const es: Translations = {
         shadowOpacityHint:     'Opacidad de las sombras proyectadas en el suelo.',
         lidarViewSection:      'Vista LiDAR',
         lidarViewHint:         'Haz clic en el botón LiDAR arriba a la derecha de la tarjeta para cambiar a una vista en nube de puntos de tu entorno: cada celda LiDAR cargada (suelo, vegetación y edificios) se pinta sobre el mapa de fondo. El botón queda deshabilitado cuando ningún proveedor cubre la casa. La vista reutiliza los datos ya recuperados con la precisión actual, no se hacen llamadas adicionales.',
-        lidarViewRadius:       'Radio de visualización (m)',
-        lidarViewRadiusHelp:   'Las celdas más allá de esta distancia desde la casa se omiten en la superposición, incluso si están dentro del radio de fetch LiDAR. Reduce este valor en dispositivos modestos cuando el ráster de alta precisión satura el presupuesto de frame.',
         lidarViewPointSize:    'Tamaño de puntos (px)',
         lidarViewPointColor:   'Color de puntos',
         lidarViewPointOpacity: 'Opacidad de puntos',

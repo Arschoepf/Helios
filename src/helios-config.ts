@@ -14,7 +14,6 @@ import
     DEFAULT_BUILDING_COLOR_HEX,
     DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
-    DEFAULT_LIDAR_VIEW_RADIUS_M,
     DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
     DEFAULT_LIDAR_VIEW_POINT_COLOR,
     DEFAULT_LIDAR_VIEW_POINT_OPACITY
@@ -760,52 +759,99 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.showLabelsHint}</div>
-                <div class="field">
-                    <span class="label">${t.editor.autoRotate}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['auto-rotate-enabled'] === true) ? 'active' : ''}"
-                            @click="${() => this._update('auto-rotate-enabled', true)}"
-                        >${t.editor.autoRotateOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['auto-rotate-enabled'] !== true) ? 'active' : ''}"
-                            @click="${() => this._update('auto-rotate-enabled', false)}"
-                        >${t.editor.autoRotateOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.autoRotateHint}</div>
-                <div class="field">
-                    <span class="label">${t.editor.pixelRatio}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['pixel-ratio'] ?? 'auto')).toLowerCase() !== '1x' ? 'active' : ''}"
-                            @click="${() => this._update('pixel-ratio', 'auto')}"
-                        >${t.editor.pixelRatioAuto}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['pixel-ratio'] ?? 'auto')).toLowerCase() === '1x' ? 'active' : ''}"
-                            @click="${() => this._update('pixel-ratio', '1x')}"
-                        >${t.editor.pixelRatio1x}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.pixelRatioHint}</div>
 
-                <label class="field">
-                    <span class="label">${t.editor.displayRadius}</span>
-                    <div class="slider-row">
+                </details>
+
+                <details class="advanced-section" ?open="${this._openSection === 'ui'}" @toggle="${(e: Event) => this._onSectionToggle('ui', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.uiSection}</summary>
+                    <label class="field">
+                        <span class="label">${t.editor.sunColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c['sun-color'], DEFAULT_SUN_COLOR_HEX)}"
+                            .ariaLabel="${t.editor.sunColor}"
+                            @value-changed="${(e: CustomEvent) => this._color('sun-color', e)}"
+                        ></helios-color-picker>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.cloudColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c['cloud-color'], DEFAULT_CLOUD_COLOR_HEX)}"
+                            .ariaLabel="${t.editor.cloudColor}"
+                            @value-changed="${(e: CustomEvent) => this._color('cloud-color', e)}"
+                        ></helios-color-picker>
+                    </label>
+                    <div class="hint">${t.editor.uiColorsHint}</div>
+                    <label class="field">
+                        <span class="label">${t.editor.dateFormat}</span>
                         <input
-                            type="range" min="20" max="1000" step="10"
-                            .value="${String(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M)}"
-                            @input="${(e: Event) => this._numSlider('building-radius', e)}"
+                            type="text"
+                            .value="${String(c['date-format'] ?? '')}"
+                            placeholder="mm-dd"
+                            @change="${(e: Event) => this._str('date-format', e)}"
                         />
-                        <span class="slider-value">${this._fmtNum(Number(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
+                    </label>
+                    <div class="field-help">
+                        ${t.editor.dateFormatHelp} <code>mm-dd</code>, <code>dd/mm</code>, <code>yyyy-mm-dd</code>.
                     </div>
-                </label>
-                <div class="hint">${t.editor.displayRadiusHint}</div>
-
+                    <div class="field">
+                        <span class="label">${t.editor.timeFormat}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${(String(c['time-format'] ?? '24h')) === '24h' ? 'active' : ''}"
+                                @click="${() => this._update('time-format', '24h')}"
+                            >${t.editor.timeFormat24}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${(String(c['time-format'] ?? '24h')) === '12h' ? 'active' : ''}"
+                                @click="${() => this._update('time-format', '12h')}"
+                            >${t.editor.timeFormat12}</button>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <span class="label">${t.editor.autoRotate}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${(c['auto-rotate-enabled'] === true) ? 'active' : ''}"
+                                @click="${() => this._update('auto-rotate-enabled', true)}"
+                            >${t.editor.autoRotateOn}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${(c['auto-rotate-enabled'] !== true) ? 'active' : ''}"
+                                @click="${() => this._update('auto-rotate-enabled', false)}"
+                            >${t.editor.autoRotateOff}</button>
+                        </div>
+                    </div>
+                    <div class="hint">${t.editor.autoRotateHint}</div>
+                    <div class="field">
+                        <span class="label">${t.editor.pixelRatio}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${(String(c['pixel-ratio'] ?? 'auto')).toLowerCase() !== '1x' ? 'active' : ''}"
+                                @click="${() => this._update('pixel-ratio', 'auto')}"
+                            >${t.editor.pixelRatioAuto}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${(String(c['pixel-ratio'] ?? 'auto')).toLowerCase() === '1x' ? 'active' : ''}"
+                                @click="${() => this._update('pixel-ratio', '1x')}"
+                            >${t.editor.pixelRatio1x}</button>
+                        </div>
+                    </div>
+                    <div class="hint">${t.editor.pixelRatioHint}</div>
+                    <label class="field">
+                        <span class="label">${t.editor.displayRadius}</span>
+                        <div class="slider-row">
+                            <input
+                                type="range" min="20" max="500" step="10"
+                                .value="${String(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M)}"
+                                @input="${(e: Event) => this._numSlider('building-radius', e)}"
+                            />
+                            <span class="slider-value">${this._fmtNum(Number(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
+                        </div>
+                    </label>
+                    <div class="hint">${t.editor.displayRadiusHint}</div>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'buildings'}" @toggle="${(e: Event) => this._onSectionToggle('buildings', e)}">
@@ -928,6 +974,14 @@ export class HeliosCardEditor extends LitElement
                     />
                 </label>
                 <div class="field-help">${t.editor.pvPeakPowerHelp}</div>
+                <label class="field">
+                    <span class="label">${t.editor.pvColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c['pv-color'], DEFAULT_PV_COLOR_HEX)}"
+                        .ariaLabel="${t.editor.pvColor}"
+                        @value-changed="${(e: CustomEvent) => this._color('pv-color', e)}"
+                    ></helios-color-picker>
+                </label>
                 ${(() => {
                     const arrays   = this._readPvArrays();
                     const sharesSum = this._arraySharesSum(arrays);
@@ -1036,15 +1090,6 @@ export class HeliosCardEditor extends LitElement
                     `;
                 })()}
 
-                <label class="field">
-                    <span class="label">${t.editor.pvColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c['pv-color'], DEFAULT_PV_COLOR_HEX)}"
-                        .ariaLabel="${t.editor.pvColor}"
-                        @value-changed="${(e: CustomEvent) => this._color('pv-color', e)}"
-                    ></helios-color-picker>
-                </label>
-
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'battery'}" @toggle="${(e: Event) => this._onSectionToggle('battery', e)}">
@@ -1139,67 +1184,9 @@ export class HeliosCardEditor extends LitElement
                     <div class="field-help">${t.editor.solarRadiationEntityHelp}</div>
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'ui'}" @toggle="${(e: Event) => this._onSectionToggle('ui', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.uiSection}</summary>
-                    <div class="hint">${t.editor.uiColorsHint}</div>
-                    <label class="field">
-                        <span class="label">${t.editor.sunColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c['sun-color'], DEFAULT_SUN_COLOR_HEX)}"
-                            .ariaLabel="${t.editor.sunColor}"
-                            @value-changed="${(e: CustomEvent) => this._color('sun-color', e)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.cloudColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c['cloud-color'], DEFAULT_CLOUD_COLOR_HEX)}"
-                            .ariaLabel="${t.editor.cloudColor}"
-                            @value-changed="${(e: CustomEvent) => this._color('cloud-color', e)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.dateFormat}</span>
-                        <input
-                            type="text"
-                            .value="${String(c['date-format'] ?? '')}"
-                            placeholder="mm-dd"
-                            @change="${(e: Event) => this._str('date-format', e)}"
-                        />
-                    </label>
-                    <div class="field-help">
-                        ${t.editor.dateFormatHelp} <code>mm-dd</code>, <code>dd/mm</code>, <code>yyyy-mm-dd</code>.
-                    </div>
-                    <div class="field">
-                        <span class="label">${t.editor.timeFormat}</span>
-                        <div class="segmented-toggle">
-                            <button
-                                type="button"
-                                class="seg-option ${(String(c['time-format'] ?? '24h')) === '24h' ? 'active' : ''}"
-                                @click="${() => this._update('time-format', '24h')}"
-                            >${t.editor.timeFormat24}</button>
-                            <button
-                                type="button"
-                                class="seg-option ${(String(c['time-format'] ?? '24h')) === '12h' ? 'active' : ''}"
-                                @click="${() => this._update('time-format', '12h')}"
-                            >${t.editor.timeFormat12}</button>
-                        </div>
-                    </div>
-                </details>
-
                 <details class="advanced-section" ?open="${this._openSection === 'lidarView'}" @toggle="${(e: Event) => this._onSectionToggle('lidarView', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.lidarViewSection}</summary>
                     <div class="hint">${t.editor.lidarViewHint}</div>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarViewRadius}</span>
-                        <input
-                            type="number" min="10" max="1000" step="10"
-                            placeholder="${String(DEFAULT_LIDAR_VIEW_RADIUS_M)}"
-                            .value="${c['lidar-view-radius'] != null ? String(c['lidar-view-radius']) : ''}"
-                            @change="${(e: Event) => this._numField('lidar-view-radius', e)}"
-                        />
-                    </label>
-                    <div class="field-help">${t.editor.lidarViewRadiusHelp}</div>
                     <label class="field">
                         <span class="label">${t.editor.lidarViewPointSize}</span>
                         <div class="slider-row">

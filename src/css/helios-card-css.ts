@@ -1173,17 +1173,25 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Top-right overlay rail. Hosts the LiDAR shadow busy chip so the
-        user knows the shadows currently on screen are still computing.
-        Mirrors the clock's top spacing on the opposite edge so the two
-        overlays sit at the same height. Pointer events off so the chip
-        never gets in the way of map interaction. */
+    /*  Top-right overlay rail. Hosts the LiDAR View toggle button.
+        Mirrors the clock's top spacing on the opposite edge so the
+        two overlays sit at the same height.
+
+        z-index: 60 puts the rail (and therefore the button) above
+        the LiDAR View canvas (z 30) AND above the centre spinner
+        (z 50), so the toggle is always reachable. Pointer events
+        off on the rail itself so the empty rail never steals map
+        interactions; the button opts back in (.lidar-view-btn has
+        its own pointer-events: auto). Stacking contexts: because
+        we set z-index on this absolute container, children's own
+        z-index values are scoped to this rail; the rail's z-index
+        is the one that competes with siblings in ha-card. */
     .overlay-top-right
     {
         position: absolute;
         top: 8px;
         right: 8px;
-        z-index: 5;
+        z-index: 60;
         display: flex;
         flex-direction: column;
         gap: 6px;

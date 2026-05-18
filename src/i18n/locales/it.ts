@@ -111,8 +111,6 @@ export const it: Translations = {
         shadowOpacityHint:     'Opacità delle ombre proiettate a terra.',
         lidarViewSection:      'Vista LiDAR',
         lidarViewHint:         'Clicca sul pulsante LiDAR in alto a destra della scheda per passare a una vista a nuvola di punti dei tuoi dintorni: ogni cella LiDAR caricata (suolo, vegetazione ed edifici) viene dipinta sopra la mappa di base. Il pulsante resta disabilitato quando nessun provider copre la casa. La vista riutilizza i dati già recuperati alla precisione attuale, nessuna chiamata aggiuntiva viene fatta.',
-        lidarViewRadius:       'Raggio di visualizzazione (m)',
-        lidarViewRadiusHelp:   'Le celle oltre questa distanza dalla casa vengono saltate nella sovrapposizione, anche se si trovano all\'interno del raggio di fetch LiDAR. Abbassa questo valore su dispositivi modesti quando il raster ad alta precisione satura il budget di frame.',
         lidarViewPointSize:    'Dimensione punti (px)',
         lidarViewPointColor:   'Colore punti',
         lidarViewPointOpacity: 'Opacità punti',

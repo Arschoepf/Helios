@@ -121,8 +121,6 @@ export const en: Translations = {
         shadowOpacityHint:     'Opacity of the cast ground shadows.',
         lidarViewSection:      'LiDAR View',
         lidarViewHint:         'Click the LiDAR button in the top-right of the card to switch into a point-cloud view of your surroundings: every loaded LiDAR cell (ground, vegetation and buildings) is painted over the basemap. The button stays disabled when no provider covers the home. The view reuses the data already fetched at the current precision, no extra calls are made.',
-        lidarViewRadius:       'Display radius (m)',
-        lidarViewRadiusHelp:   'Cells past this distance from the home are skipped in the overlay, even when they sit inside the LiDAR fetch radius. Lower this on weak devices when the High precision raster pushes the frame budget.',
         lidarViewPointSize:    'Point size (px)',
         lidarViewPointColor:   'Point color',
         lidarViewPointOpacity: 'Point opacity',

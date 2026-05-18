@@ -224,15 +224,14 @@ export interface HeliosConfig
     //                           model-derived irradiance on the sun
     //                           chip and the live W/m² readouts.
     'solar-radiation-entity'?: unknown;
-    //LiDAR View overlay (debug mode). When the user clicks the LiDAR
-    //View button in the top-right of the card, the regular map UI
-    //fades out and every raster cell currently loaded is projected to
-    //screen as a small dot. These four keys tune the overlay; none
-    //of them affect cast-shadow rendering.
-    //  lidar-view-radius       : metres. Cells beyond this distance
-    //                            from the home are skipped, even when
-    //                            they're inside the underlying LiDAR
-    //                            fetch radius. Default 100 m.
+    //LiDAR View overlay. When the user clicks the LiDAR View button
+    //in the top-right of the card, the regular map UI fades out and
+    //every raster cell currently loaded is projected to screen as a
+    //small dot. These three keys tune the look; none of them affect
+    //cast-shadow rendering. The visible disc radius reuses the
+    //existing `building-radius` (the "Display radius" knob), so the
+    //user has a single source of truth for how far around the home
+    //the card draws anything.
     //  lidar-view-point-size   : pixels (1..6). Square side length per
     //                            point on the canvas. Default 1.5.
     //  lidar-view-point-color  : hex string. Default '#ffffff' (white
@@ -241,7 +240,6 @@ export interface HeliosConfig
     //  lidar-view-point-opacity: 0..1. Default 0.5. Combined with
     //                            point-size to control the perceptual
     //                            density of the cloud.
-    'lidar-view-radius'?:        unknown;
     'lidar-view-point-size'?:    unknown;
     'lidar-view-point-color'?:   unknown;
     'lidar-view-point-opacity'?: unknown;
@@ -280,15 +278,10 @@ export const DEFAULT_SHADOW_OPACITY = 0.32;
 //URL + bbox in the editor / YAML.
 export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 
-//LiDAR View overlay defaults. The radius is the only one that
-//meaningfully affects per-frame cost; the visual knobs (size, color,
-//opacity) are pure paint, no recompute. 50 m gives a typical urban
-//mid-block worth of context (a few houses + the trees between them)
-//while keeping the projection loop inside a single-digit-ms budget
-//even at the High precision raster. Users on weak devices can drop
-//it further; users on desktops can push it past 100 m without
-//hitting the frame budget.
-export const DEFAULT_LIDAR_VIEW_RADIUS_M       = 50;
+//LiDAR View overlay defaults. The disc radius is taken from the
+//shared `building-radius` (the "Display radius" knob) so the View
+//and the rest of the card stay in sync; the three knobs left here
+//are pure paint, no recompute.
 export const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX  = 1.5;
 export const DEFAULT_LIDAR_VIEW_POINT_COLOR    = '#ffffff';
 export const DEFAULT_LIDAR_VIEW_POINT_OPACITY  = 0.5;
@@ -2210,22 +2203,7 @@ export class HeliosEngine
     //can show an empty overlay instead of garbage.
     public projectLidarPoints(
         maxRadiusMeters: number
-    ): {
-        xy:       Float32Array;
-        dist2:    Float32Array;
-        count:    number;
-        homeX:    number;
-        homeY:    number;
-        radiusM:  number;
-        //World-to-screen jacobian columns (pixels per metre) for the
-        //east + north axes around the home. Lets the card draw the
-        //pulse wavefront ring in perspective: a unit circle on the
-        //ground at radius r metres projects to an ellipse on screen
-        //via {x, y} = home + r·cos(θ)·jEast + r·sin(θ)·jNorth, which
-        //the card walks for 32 samples per frame to trace the ring.
-        jExX:     number; jExY: number;
-        jNoX:     number; jNoY: number;
-    } | null
+    ): { xy: Float32Array; count: number } | null
     {
         if (!this.map || !this._mapReady) return null;
         const raster = this._lidarRaster;
@@ -2274,9 +2252,8 @@ export class HeliosEngine
         const r2     = radius * radius;
 
         //Pre-size at worst-case all-visible. The card reads only
-        //[0, count*2) entries; dist2 is parallel, [0, count) entries.
-        const xy    = new Float32Array(N * 2);
-        const dist2 = new Float32Array(N);
+        //[0, count*2) entries; the trailing slack stays unread.
+        const xy = new Float32Array(N * 2);
         let count = 0;
 
         for (let j = 0; j < rasterSize; j++)
@@ -2290,29 +2267,17 @@ export class HeliosEngine
                 if (!isFinite(h)) continue;
                 const cLon  = minLon + (i + 0.5) * pxLon;
                 const dLonM = (cLon - homeLon) * M_PER_DEG_LON;
-                const d2    = dLonM * dLonM + dLatM2;
-                if (d2 > r2) continue;
+                if (dLonM * dLonM + dLatM2 > r2) continue;
                 //Affine projection: 6 mul + 4 add per point. Replaces
                 //a full matrix multiply per cell, the single biggest
                 //frame-cost win in this overlay.
                 xy[count * 2]     = hX + dLonM * jExX + dLatM * jNoX + h * jUpX;
                 xy[count * 2 + 1] = hY + dLonM * jExY + dLatM * jNoY + h * jUpY;
-                //Stash world-distance² (metres²) so the scanner pulse
-                //gates dots in WORLD space (a true expanding disc on
-                //the ground), not in screen-space (which would clip
-                //near + far cells unevenly under the camera pitch).
-                dist2[count]      = d2;
                 count++;
             }
         }
 
-        return {
-            xy, dist2, count,
-            homeX:   hX,
-            homeY:   hY,
-            radiusM: radius,
-            jExX, jExY, jNoX, jNoY
-        };
+        return { xy, count };
     }
 
     //Toggle MapTiler's symbol layers (road names, house numbers,
@@ -2356,7 +2321,11 @@ export class HeliosEngine
         {
             return DEFAULT_BUILDING_RADIUS_M;
         }
-        return Math.min(1000, Math.max(20, v));
+        //Hard ceiling at 500 m. Past that the basemap / LiDAR fetch
+        //and the per-frame projection start to chug; the slider in
+        //the editor also caps at 500 so anything above can only come
+        //from a hand-edited YAML config.
+        return Math.min(500, Math.max(20, v));
     }
 
     //Resolves the configured surroundings opacity (0..1). Falls back

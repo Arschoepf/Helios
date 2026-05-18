@@ -111,8 +111,6 @@ export const de: Translations = {
         shadowOpacityHint:     'Deckkraft der am Boden geworfenen Schatten.',
         lidarViewSection:      'LiDAR-Ansicht',
         lidarViewHint:         'Klicke oben rechts auf die Karte auf die Schaltfläche LiDAR, um in eine Punktwolken-Ansicht deiner Umgebung zu wechseln: Jede geladene LiDAR-Zelle (Boden, Vegetation und Gebäude) wird über der Basiskarte gemalt. Die Schaltfläche bleibt deaktiviert, wenn kein Anbieter das Zuhause abdeckt. Die Ansicht verwendet die bereits in der aktuellen Präzision abgerufenen Daten wieder, es werden keine zusätzlichen Aufrufe gemacht.',
-        lidarViewRadius:       'Anzeigeradius (m)',
-        lidarViewRadiusHelp:   'Zellen jenseits dieser Entfernung vom Zuhause werden im Overlay übersprungen, auch wenn sie innerhalb des LiDAR-Abfrageradius liegen. Reduziere diesen Wert auf schwachen Geräten, wenn das hochpräzise Raster das Frame-Budget sprengt.',
         lidarViewPointSize:    'Punktgröße (px)',
         lidarViewPointColor:   'Punktfarbe',
         lidarViewPointOpacity: 'Punktdeckkraft',

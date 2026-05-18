@@ -30195,7 +30195,6 @@ const LIDAR_PRECISION_RASTER = {
   high: 1024
 };
 const DEFAULT_SHADOW_OPACITY = 0.32;
-const DEFAULT_LIDAR_VIEW_RADIUS_M = 50;
 const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1.5;
 const DEFAULT_LIDAR_VIEW_POINT_COLOR = "#ffffff";
 const DEFAULT_LIDAR_VIEW_POINT_OPACITY = 0.5;
@@ -31318,7 +31317,6 @@ const _HeliosEngine = class _HeliosEngine {
     const radius = Math.max(1, maxRadiusMeters);
     const r2 = radius * radius;
     const xy = new Float32Array(N2 * 2);
-    const dist2 = new Float32Array(N2);
     let count = 0;
     for (let j = 0; j < rasterSize; j++) {
       const cLat = maxLat - (j + 0.5) * pxLat;
@@ -31329,26 +31327,13 @@ const _HeliosEngine = class _HeliosEngine {
         if (!isFinite(h2)) continue;
         const cLon = minLon + (i2 + 0.5) * pxLon;
         const dLonM = (cLon - homeLon) * M_PER_DEG_LON;
-        const d2 = dLonM * dLonM + dLatM2;
-        if (d2 > r2) continue;
+        if (dLonM * dLonM + dLatM2 > r2) continue;
         xy[count * 2] = hX + dLonM * jExX + dLatM * jNoX + h2 * jUpX;
         xy[count * 2 + 1] = hY + dLonM * jExY + dLatM * jNoY + h2 * jUpY;
-        dist2[count] = d2;
         count++;
       }
     }
-    return {
-      xy,
-      dist2,
-      count,
-      homeX: hX,
-      homeY: hY,
-      radiusM: radius,
-      jExX,
-      jExY,
-      jNoX,
-      jNoY
-    };
+    return { xy, count };
   }
   //Toggle MapTiler's symbol layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
@@ -31383,7 +31368,7 @@ const _HeliosEngine = class _HeliosEngine {
     if (!Number.isFinite(v2) || v2 <= 0) {
       return DEFAULT_BUILDING_RADIUS_M;
     }
-    return Math.min(1e3, Math.max(20, v2));
+    return Math.min(500, Math.max(20, v2));
   }
   //Resolves the configured surroundings opacity (0..1). Falls back
   //to DEFAULT_BUILDING_OPACITY for missing or invalid input.
@@ -32852,8 +32837,6 @@ const en = {
     shadowOpacityHint: "Opacity of the cast ground shadows.",
     lidarViewSection: "LiDAR View",
     lidarViewHint: "Click the LiDAR button in the top-right of the card to switch into a point-cloud view of your surroundings: every loaded LiDAR cell (ground, vegetation and buildings) is painted over the basemap. The button stays disabled when no provider covers the home. The view reuses the data already fetched at the current precision, no extra calls are made.",
-    lidarViewRadius: "Display radius (m)",
-    lidarViewRadiusHelp: "Cells past this distance from the home are skipped in the overlay, even when they sit inside the LiDAR fetch radius. Lower this on weak devices when the High precision raster pushes the frame budget.",
     lidarViewPointSize: "Point size (px)",
     lidarViewPointColor: "Point color",
     lidarViewPointOpacity: "Point opacity",
@@ -32975,8 +32958,6 @@ const fr = {
     shadowOpacityHint: "Opacité des ombres projetées au sol.",
     lidarViewSection: "Vue LiDAR",
     lidarViewHint: "Clique sur le bouton LiDAR en haut à droite de la carte pour basculer dans une vue en nuage de points de tes environs : chaque cellule LiDAR chargée (sol, végétation et bâtiments) est peinte par-dessus la carte de fond. Le bouton reste désactivé quand aucun provider ne couvre la maison. La vue réutilise les données déjà récupérées à la précision actuelle, aucun appel supplémentaire n'est fait.",
-    lidarViewRadius: "Rayon d'affichage (m)",
-    lidarViewRadiusHelp: "Les cellules au-delà de cette distance de la maison sont ignorées dans la superposition, même si elles sont à l'intérieur du rayon de fetch LiDAR. Baisse cette valeur sur les appareils faibles quand le raster en précision Haute charge le budget de frame.",
     lidarViewPointSize: "Taille des points (px)",
     lidarViewPointColor: "Couleur des points",
     lidarViewPointOpacity: "Opacité des points",
@@ -33098,8 +33079,6 @@ const de = {
     shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
     lidarViewSection: "LiDAR-Ansicht",
     lidarViewHint: "Klicke oben rechts auf die Karte auf die Schaltfläche LiDAR, um in eine Punktwolken-Ansicht deiner Umgebung zu wechseln: Jede geladene LiDAR-Zelle (Boden, Vegetation und Gebäude) wird über der Basiskarte gemalt. Die Schaltfläche bleibt deaktiviert, wenn kein Anbieter das Zuhause abdeckt. Die Ansicht verwendet die bereits in der aktuellen Präzision abgerufenen Daten wieder, es werden keine zusätzlichen Aufrufe gemacht.",
-    lidarViewRadius: "Anzeigeradius (m)",
-    lidarViewRadiusHelp: "Zellen jenseits dieser Entfernung vom Zuhause werden im Overlay übersprungen, auch wenn sie innerhalb des LiDAR-Abfrageradius liegen. Reduziere diesen Wert auf schwachen Geräten, wenn das hochpräzise Raster das Frame-Budget sprengt.",
     lidarViewPointSize: "Punktgröße (px)",
     lidarViewPointColor: "Punktfarbe",
     lidarViewPointOpacity: "Punktdeckkraft",
@@ -33221,8 +33200,6 @@ const es = {
     shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
     lidarViewSection: "Vista LiDAR",
     lidarViewHint: "Haz clic en el botón LiDAR arriba a la derecha de la tarjeta para cambiar a una vista en nube de puntos de tu entorno: cada celda LiDAR cargada (suelo, vegetación y edificios) se pinta sobre el mapa de fondo. El botón queda deshabilitado cuando ningún proveedor cubre la casa. La vista reutiliza los datos ya recuperados con la precisión actual, no se hacen llamadas adicionales.",
-    lidarViewRadius: "Radio de visualización (m)",
-    lidarViewRadiusHelp: "Las celdas más allá de esta distancia desde la casa se omiten en la superposición, incluso si están dentro del radio de fetch LiDAR. Reduce este valor en dispositivos modestos cuando el ráster de alta precisión satura el presupuesto de frame.",
     lidarViewPointSize: "Tamaño de puntos (px)",
     lidarViewPointColor: "Color de puntos",
     lidarViewPointOpacity: "Opacidad de puntos",
@@ -33344,8 +33321,6 @@ const it = {
     shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
     lidarViewSection: "Vista LiDAR",
     lidarViewHint: "Clicca sul pulsante LiDAR in alto a destra della scheda per passare a una vista a nuvola di punti dei tuoi dintorni: ogni cella LiDAR caricata (suolo, vegetazione ed edifici) viene dipinta sopra la mappa di base. Il pulsante resta disabilitato quando nessun provider copre la casa. La vista riutilizza i dati già recuperati alla precisione attuale, nessuna chiamata aggiuntiva viene fatta.",
-    lidarViewRadius: "Raggio di visualizzazione (m)",
-    lidarViewRadiusHelp: "Le celle oltre questa distanza dalla casa vengono saltate nella sovrapposizione, anche se si trovano all'interno del raggio di fetch LiDAR. Abbassa questo valore su dispositivi modesti quando il raster ad alta precisione satura il budget di frame.",
     lidarViewPointSize: "Dimensione punti (px)",
     lidarViewPointColor: "Colore punti",
     lidarViewPointOpacity: "Opacità punti",
@@ -33467,8 +33442,6 @@ const nl = {
     shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
     lidarViewSection: "LiDAR-weergave",
     lidarViewHint: "Klik rechtsboven in de kaart op de LiDAR-knop om over te schakelen naar een puntenwolk-weergave van je omgeving: elke geladen LiDAR-cel (grond, vegetatie en gebouwen) wordt over de basiskaart geschilderd. De knop blijft uitgeschakeld wanneer geen enkele provider het huis dekt. De weergave hergebruikt de data die al is opgehaald op de huidige precisie, er worden geen extra calls gedaan.",
-    lidarViewRadius: "Weergaveradius (m)",
-    lidarViewRadiusHelp: "Cellen voorbij deze afstand van het huis worden in de overlay overgeslagen, zelfs wanneer ze binnen de LiDAR fetch-radius vallen. Verlaag deze waarde op zwakkere apparaten wanneer de hoge-precisie raster het frame-budget overschrijdt.",
     lidarViewPointSize: "Puntgrootte (px)",
     lidarViewPointColor: "Puntkleur",
     lidarViewPointOpacity: "Puntdekking",
@@ -33590,8 +33563,6 @@ const pt = {
     shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
     lidarViewSection: "Vista LiDAR",
     lidarViewHint: "Clica no botão LiDAR no canto superior direito da carta para alternar para uma vista em nuvem de pontos do teu ambiente: cada célula LiDAR carregada (solo, vegetação e edifícios) é pintada sobre o mapa de fundo. O botão fica desactivado quando nenhum provedor cobre a casa. A vista reutiliza os dados já obtidos com a precisão actual, nenhuma chamada adicional é feita.",
-    lidarViewRadius: "Raio de visualização (m)",
-    lidarViewRadiusHelp: "As células além desta distância da casa são ignoradas na sobreposição, mesmo quando estão dentro do raio de fetch LiDAR. Reduz este valor em dispositivos modestos quando o raster em alta precisão satura o orçamento de frame.",
     lidarViewPointSize: "Tamanho dos pontos (px)",
     lidarViewPointColor: "Cor dos pontos",
     lidarViewPointOpacity: "Opacidade dos pontos",
@@ -33713,8 +33684,6 @@ const no = {
     shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
     lidarViewSection: "LiDAR-visning",
     lidarViewHint: "Klikk på LiDAR-knappen øverst til høyre på kortet for å bytte til en punktskyvisning av omgivelsene dine: hver lastet LiDAR-celle (bakke, vegetasjon og bygninger) males over grunnkartet. Knappen forblir deaktivert når ingen leverandør dekker hjemmet. Visningen gjenbruker dataen som allerede er hentet med gjeldende presisjon, ingen ekstra kall gjøres.",
-    lidarViewRadius: "Visningsradius (m)",
-    lidarViewRadiusHelp: "Celler utenfor denne avstanden fra hjemmet hoppes over i overlegget, selv når de ligger innenfor LiDAR-hentingsradiusen. Senk denne verdien på svake enheter når rasteret i høy presisjon sprenger frame-budsjettet.",
     lidarViewPointSize: "Punktstørrelse (px)",
     lidarViewPointColor: "Punktfarge",
     lidarViewPointOpacity: "Punktopasitet",
@@ -34903,17 +34872,25 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Top-right overlay rail. Hosts the LiDAR shadow busy chip so the
-        user knows the shadows currently on screen are still computing.
-        Mirrors the clock's top spacing on the opposite edge so the two
-        overlays sit at the same height. Pointer events off so the chip
-        never gets in the way of map interaction. */
+    /*  Top-right overlay rail. Hosts the LiDAR View toggle button.
+        Mirrors the clock's top spacing on the opposite edge so the
+        two overlays sit at the same height.
+
+        z-index: 60 puts the rail (and therefore the button) above
+        the LiDAR View canvas (z 30) AND above the centre spinner
+        (z 50), so the toggle is always reachable. Pointer events
+        off on the rail itself so the empty rail never steals map
+        interactions; the button opts back in (.lidar-view-btn has
+        its own pointer-events: auto). Stacking contexts: because
+        we set z-index on this absolute container, children's own
+        z-index values are scoped to this rail; the rail's z-index
+        is the one that competes with siblings in ha-card. */
     .overlay-top-right
     {
         position: absolute;
         top: 8px;
         right: 8px;
-        z-index: 5;
+        z-index: 60;
         display: flex;
         flex-direction: column;
         gap: 6px;
@@ -36624,52 +36601,99 @@ let HeliosCardEditor = class extends i {
                     </div>
                 </div>
                 <div class="hint">${t2.editor.showLabelsHint}</div>
-                <div class="field">
-                    <span class="label">${t2.editor.autoRotate}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${c2["auto-rotate-enabled"] === true ? "active" : ""}"
-                            @click="${() => this._update("auto-rotate-enabled", true)}"
-                        >${t2.editor.autoRotateOn}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${c2["auto-rotate-enabled"] !== true ? "active" : ""}"
-                            @click="${() => this._update("auto-rotate-enabled", false)}"
-                        >${t2.editor.autoRotateOff}</button>
-                    </div>
-                </div>
-                <div class="hint">${t2.editor.autoRotateHint}</div>
-                <div class="field">
-                    <span class="label">${t2.editor.pixelRatio}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["pixel-ratio"] ?? "auto").toLowerCase() !== "1x" ? "active" : ""}"
-                            @click="${() => this._update("pixel-ratio", "auto")}"
-                        >${t2.editor.pixelRatioAuto}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${String(c2["pixel-ratio"] ?? "auto").toLowerCase() === "1x" ? "active" : ""}"
-                            @click="${() => this._update("pixel-ratio", "1x")}"
-                        >${t2.editor.pixelRatio1x}</button>
-                    </div>
-                </div>
-                <div class="hint">${t2.editor.pixelRatioHint}</div>
 
-                <label class="field">
-                    <span class="label">${t2.editor.displayRadius}</span>
-                    <div class="slider-row">
+                </details>
+
+                <details class="advanced-section" ?open="${this._openSection === "ui"}" @toggle="${(e2) => this._onSectionToggle("ui", e2)}">
+                    <summary class="section-title section-title-collapse">${t2.editor.uiSection}</summary>
+                    <label class="field">
+                        <span class="label">${t2.editor.sunColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c2["sun-color"], DEFAULT_SUN_COLOR_HEX)}"
+                            .ariaLabel="${t2.editor.sunColor}"
+                            @value-changed="${(e2) => this._color("sun-color", e2)}"
+                        ></helios-color-picker>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.cloudColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c2["cloud-color"], DEFAULT_CLOUD_COLOR_HEX)}"
+                            .ariaLabel="${t2.editor.cloudColor}"
+                            @value-changed="${(e2) => this._color("cloud-color", e2)}"
+                        ></helios-color-picker>
+                    </label>
+                    <div class="hint">${t2.editor.uiColorsHint}</div>
+                    <label class="field">
+                        <span class="label">${t2.editor.dateFormat}</span>
                         <input
-                            type="range" min="20" max="1000" step="10"
-                            .value="${String(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M)}"
-                            @input="${(e2) => this._numSlider("building-radius", e2)}"
+                            type="text"
+                            .value="${String(c2["date-format"] ?? "")}"
+                            placeholder="mm-dd"
+                            @change="${(e2) => this._str("date-format", e2)}"
                         />
-                        <span class="slider-value">${this._fmtNum(Number(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
+                    </label>
+                    <div class="field-help">
+                        ${t2.editor.dateFormatHelp} <code>mm-dd</code>, <code>dd/mm</code>, <code>yyyy-mm-dd</code>.
                     </div>
-                </label>
-                <div class="hint">${t2.editor.displayRadiusHint}</div>
-
+                    <div class="field">
+                        <span class="label">${t2.editor.timeFormat}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${String(c2["time-format"] ?? "24h") === "24h" ? "active" : ""}"
+                                @click="${() => this._update("time-format", "24h")}"
+                            >${t2.editor.timeFormat24}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${String(c2["time-format"] ?? "24h") === "12h" ? "active" : ""}"
+                                @click="${() => this._update("time-format", "12h")}"
+                            >${t2.editor.timeFormat12}</button>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <span class="label">${t2.editor.autoRotate}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${c2["auto-rotate-enabled"] === true ? "active" : ""}"
+                                @click="${() => this._update("auto-rotate-enabled", true)}"
+                            >${t2.editor.autoRotateOn}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${c2["auto-rotate-enabled"] !== true ? "active" : ""}"
+                                @click="${() => this._update("auto-rotate-enabled", false)}"
+                            >${t2.editor.autoRotateOff}</button>
+                        </div>
+                    </div>
+                    <div class="hint">${t2.editor.autoRotateHint}</div>
+                    <div class="field">
+                        <span class="label">${t2.editor.pixelRatio}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${String(c2["pixel-ratio"] ?? "auto").toLowerCase() !== "1x" ? "active" : ""}"
+                                @click="${() => this._update("pixel-ratio", "auto")}"
+                            >${t2.editor.pixelRatioAuto}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${String(c2["pixel-ratio"] ?? "auto").toLowerCase() === "1x" ? "active" : ""}"
+                                @click="${() => this._update("pixel-ratio", "1x")}"
+                            >${t2.editor.pixelRatio1x}</button>
+                        </div>
+                    </div>
+                    <div class="hint">${t2.editor.pixelRatioHint}</div>
+                    <label class="field">
+                        <span class="label">${t2.editor.displayRadius}</span>
+                        <div class="slider-row">
+                            <input
+                                type="range" min="20" max="500" step="10"
+                                .value="${String(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M)}"
+                                @input="${(e2) => this._numSlider("building-radius", e2)}"
+                            />
+                            <span class="slider-value">${this._fmtNum(Number(c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
+                        </div>
+                    </label>
+                    <div class="hint">${t2.editor.displayRadiusHint}</div>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "buildings"}" @toggle="${(e2) => this._onSectionToggle("buildings", e2)}">
@@ -36792,6 +36816,14 @@ let HeliosCardEditor = class extends i {
                     />
                 </label>
                 <div class="field-help">${t2.editor.pvPeakPowerHelp}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.pvColor}</span>
+                    <helios-color-picker
+                        .value="${cfgHex(c2["pv-color"], DEFAULT_PV_COLOR_HEX)}"
+                        .ariaLabel="${t2.editor.pvColor}"
+                        @value-changed="${(e2) => this._color("pv-color", e2)}"
+                    ></helios-color-picker>
+                </label>
                 ${(() => {
       const arrays = this._readPvArrays();
       const sharesSum = this._arraySharesSum(arrays);
@@ -36894,15 +36926,6 @@ let HeliosCardEditor = class extends i {
                     `;
     })()}
 
-                <label class="field">
-                    <span class="label">${t2.editor.pvColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["pv-color"], DEFAULT_PV_COLOR_HEX)}"
-                        .ariaLabel="${t2.editor.pvColor}"
-                        @value-changed="${(e2) => this._color("pv-color", e2)}"
-                    ></helios-color-picker>
-                </label>
-
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "battery"}" @toggle="${(e2) => this._onSectionToggle("battery", e2)}">
@@ -36997,67 +37020,9 @@ let HeliosCardEditor = class extends i {
                     <div class="field-help">${t2.editor.solarRadiationEntityHelp}</div>
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === "ui"}" @toggle="${(e2) => this._onSectionToggle("ui", e2)}">
-                    <summary class="section-title section-title-collapse">${t2.editor.uiSection}</summary>
-                    <div class="hint">${t2.editor.uiColorsHint}</div>
-                    <label class="field">
-                        <span class="label">${t2.editor.sunColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c2["sun-color"], DEFAULT_SUN_COLOR_HEX)}"
-                            .ariaLabel="${t2.editor.sunColor}"
-                            @value-changed="${(e2) => this._color("sun-color", e2)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t2.editor.cloudColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c2["cloud-color"], DEFAULT_CLOUD_COLOR_HEX)}"
-                            .ariaLabel="${t2.editor.cloudColor}"
-                            @value-changed="${(e2) => this._color("cloud-color", e2)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t2.editor.dateFormat}</span>
-                        <input
-                            type="text"
-                            .value="${String(c2["date-format"] ?? "")}"
-                            placeholder="mm-dd"
-                            @change="${(e2) => this._str("date-format", e2)}"
-                        />
-                    </label>
-                    <div class="field-help">
-                        ${t2.editor.dateFormatHelp} <code>mm-dd</code>, <code>dd/mm</code>, <code>yyyy-mm-dd</code>.
-                    </div>
-                    <div class="field">
-                        <span class="label">${t2.editor.timeFormat}</span>
-                        <div class="segmented-toggle">
-                            <button
-                                type="button"
-                                class="seg-option ${String(c2["time-format"] ?? "24h") === "24h" ? "active" : ""}"
-                                @click="${() => this._update("time-format", "24h")}"
-                            >${t2.editor.timeFormat24}</button>
-                            <button
-                                type="button"
-                                class="seg-option ${String(c2["time-format"] ?? "24h") === "12h" ? "active" : ""}"
-                                @click="${() => this._update("time-format", "12h")}"
-                            >${t2.editor.timeFormat12}</button>
-                        </div>
-                    </div>
-                </details>
-
                 <details class="advanced-section" ?open="${this._openSection === "lidarView"}" @toggle="${(e2) => this._onSectionToggle("lidarView", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.lidarViewSection}</summary>
                     <div class="hint">${t2.editor.lidarViewHint}</div>
-                    <label class="field">
-                        <span class="label">${t2.editor.lidarViewRadius}</span>
-                        <input
-                            type="number" min="10" max="1000" step="10"
-                            placeholder="${String(DEFAULT_LIDAR_VIEW_RADIUS_M)}"
-                            .value="${c2["lidar-view-radius"] != null ? String(c2["lidar-view-radius"]) : ""}"
-                            @change="${(e2) => this._numField("lidar-view-radius", e2)}"
-                        />
-                    </label>
-                    <div class="field-help">${t2.editor.lidarViewRadiusHelp}</div>
                     <label class="field">
                         <span class="label">${t2.editor.lidarViewPointSize}</span>
                         <div class="slider-row">
@@ -37222,7 +37187,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.24"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.25"}`,
       labelStyle,
       versionStyle
     );
@@ -37243,7 +37208,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.24",
+        version: "1.6.0-alpha.25",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37251,7 +37216,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.24"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.25"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -37341,8 +37306,8 @@ let HeliosCard = class extends i {
     this._detailMode = false;
     this._lidarViewMode = false;
     this._lidarViewPoints = null;
-    this._lidarPulseInStartMs = null;
-    this._lidarPulseOutStartMs = null;
+    this._lidarFadeInStartMs = null;
+    this._lidarFadeOutStartMs = null;
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
@@ -37350,16 +37315,16 @@ let HeliosCard = class extends i {
       if (!this._engine) return;
       if (!this._lidarViewMode && this._engine.getActiveLidarSourceId() === null) return;
       if (!this._lidarViewMode) {
-        this._lidarPulseOutStartMs = null;
-        this._lidarPulseInStartMs = performance.now();
+        this._lidarFadeOutStartMs = null;
+        this._lidarFadeInStartMs = performance.now();
         this._lidarViewMode = true;
         this._engine.setLidarViewActive(true);
         this._refreshOverlays();
-        this._startLidarPulseLoop();
+        this._startLidarFadeLoop();
       } else {
-        this._lidarPulseInStartMs = null;
-        this._lidarPulseOutStartMs = performance.now();
-        this._startLidarPulseLoop();
+        this._lidarFadeInStartMs = null;
+        this._lidarFadeOutStartMs = performance.now();
+        this._startLidarFadeLoop();
       }
     };
     this._lidarOffscreenSig = "";
@@ -37548,9 +37513,9 @@ let HeliosCard = class extends i {
       this._initDebounceTimer = void 0;
       this._initInflight = false;
     }
-    if (this._lidarPulseRaf !== void 0) {
-      cancelAnimationFrame(this._lidarPulseRaf);
-      this._lidarPulseRaf = void 0;
+    if (this._lidarFadeRaf !== void 0) {
+      cancelAnimationFrame(this._lidarFadeRaf);
+      this._lidarFadeRaf = void 0;
     }
     this._engine?.cleanup();
     this._engine = void 0;
@@ -38179,24 +38144,20 @@ let HeliosCard = class extends i {
     this._cloudScene = this._engine ? this._engine.projectCloudScene() : null;
     this._homeSilhouettes = this._engine ? this._engine.projectHomeFootprints() : [];
     if (this._lidarViewMode && this._engine) {
-      const radius = this._lidarViewRadiusMeters();
+      const raw2 = this.config?.["building-radius"];
+      const parsed = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+      const radius = !isFinite(parsed) || parsed <= 0 ? DEFAULT_BUILDING_RADIUS_M : Math.min(500, Math.max(20, parsed));
       this._lidarViewPoints = this._engine.projectLidarPoints(radius);
       this._lidarCanvasTransformTick++;
     } else if (this._lidarViewPoints !== null) {
       this._lidarViewPoints = null;
     }
   }
-  //LiDAR View overlay knobs. Each helper parses the matching config
+  //LiDAR View visual knobs. Each helper parses the matching config
   //key and falls back to the engine-side DEFAULT_* constant when the
   //key is missing, non-finite, out of range, or otherwise unusable.
   //Keeping the validation here means the canvas draw loop doesn't
   //need its own defensive checks per frame.
-  _lidarViewRadiusMeters() {
-    const raw2 = this.config?.["lidar-view-radius"];
-    const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-    if (!isFinite(n3) || n3 <= 0) return DEFAULT_LIDAR_VIEW_RADIUS_M;
-    return Math.min(1e3, n3);
-  }
   _lidarViewPointSizePx() {
     const raw2 = this.config?.["lidar-view-point-size"];
     const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
@@ -38216,34 +38177,34 @@ let HeliosCard = class extends i {
     if (!isFinite(n3)) return DEFAULT_LIDAR_VIEW_POINT_OPACITY;
     return Math.max(0, Math.min(1, n3));
   }
-  //Drives the per-frame redraw while a pulse is in flight. Self-
-  //terminates when both pulses are null (idle stable state), so the
+  //Drives the per-frame redraw while a fade is in flight. Self-
+  //terminates when both fades are null (idle stable state), so the
   //rAF cost stays at zero during normal viewing.
-  _startLidarPulseLoop() {
-    if (this._lidarPulseRaf !== void 0) return;
+  _startLidarFadeLoop() {
+    if (this._lidarFadeRaf !== void 0) return;
     const tick = () => {
       const now = performance.now();
-      const inStart = this._lidarPulseInStartMs;
-      const outStart = this._lidarPulseOutStartMs;
-      if (outStart !== null && now - outStart >= HeliosCard._LIDAR_PULSE_OUT_MS) {
-        this._lidarPulseOutStartMs = null;
+      const inStart = this._lidarFadeInStartMs;
+      const outStart = this._lidarFadeOutStartMs;
+      if (outStart !== null && now - outStart >= HeliosCard._LIDAR_FADE_OUT_MS) {
+        this._lidarFadeOutStartMs = null;
         this._lidarViewMode = false;
         this._engine?.setLidarViewActive(false);
       }
-      if (inStart !== null && now - inStart >= HeliosCard._LIDAR_PULSE_IN_MS) {
-        this._lidarPulseInStartMs = null;
+      if (inStart !== null && now - inStart >= HeliosCard._LIDAR_FADE_IN_MS) {
+        this._lidarFadeInStartMs = null;
       }
       this._redrawLidarCanvas();
-      if (this._lidarPulseInStartMs !== null || this._lidarPulseOutStartMs !== null) {
-        this._lidarPulseRaf = requestAnimationFrame(tick);
+      if (this._lidarFadeInStartMs !== null || this._lidarFadeOutStartMs !== null) {
+        this._lidarFadeRaf = requestAnimationFrame(tick);
       } else {
-        this._lidarPulseRaf = void 0;
+        this._lidarFadeRaf = void 0;
       }
     };
-    this._lidarPulseRaf = requestAnimationFrame(tick);
+    this._lidarFadeRaf = requestAnimationFrame(tick);
   }
   _redrawLidarCanvas() {
-    if (!this._lidarViewMode && this._lidarPulseOutStartMs === null) return;
+    if (!this._lidarViewMode && this._lidarFadeOutStartMs === null) return;
     const canvas = this.renderRoot?.querySelector?.("canvas.lidar-view-canvas");
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -38260,24 +38221,15 @@ let HeliosCard = class extends i {
     const color = this._lidarViewPointColor();
     const alpha = this._lidarViewPointOpacity();
     const now = performance.now();
-    const inStart = this._lidarPulseInStartMs;
-    const outStart = this._lidarPulseOutStartMs;
-    const inT = inStart !== null ? Math.max(0, Math.min(1, (now - inStart) / HeliosCard._LIDAR_PULSE_IN_MS)) : 1;
-    const outT = outStart !== null ? Math.max(0, Math.min(1, (now - outStart) / HeliosCard._LIDAR_PULSE_OUT_MS)) : 0;
-    const easeOutCubic = (t2) => 1 - Math.pow(1 - t2, 3);
-    const inEased = easeOutCubic(inT);
-    const globalAlpha = outStart !== null ? 1 - outT : 1;
+    const inStart = this._lidarFadeInStartMs;
+    const outStart = this._lidarFadeOutStartMs;
+    const inT = inStart !== null ? Math.max(0, Math.min(1, (now - inStart) / HeliosCard._LIDAR_FADE_IN_MS)) : 1;
+    const outT = outStart !== null ? Math.max(0, Math.min(1, (now - outStart) / HeliosCard._LIDAR_FADE_OUT_MS)) : 0;
+    const globalAlpha = (inStart !== null ? inT : 1) * (outStart !== null ? 1 - outT : 1);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
     if (!points || points.count === 0) return;
     if (globalAlpha <= 0) return;
-    const homeX = points.homeX;
-    const homeY = points.homeY;
-    const radiusM = points.radiusM;
-    const jExX = points.jExX;
-    const jExY = points.jExY;
-    const jNoX = points.jNoX;
-    const jNoY = points.jNoY;
     const bakeSig = `${points.count}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}`;
     if (bakeSig !== this._lidarOffscreenSig || !this._lidarOffscreen) {
       if (!this._lidarOffscreen) {
@@ -38304,50 +38256,9 @@ let HeliosCard = class extends i {
       offCtx.fill(path);
       this._lidarOffscreenSig = bakeSig;
     }
-    const gating = inStart !== null && inT < 1;
-    const currentRadiusM = gating ? inEased * radiusM : radiusM;
-    if (gating) {
-      ctx.save();
-      ctx.beginPath();
-      const STEPS = 64;
-      for (let k2 = 0; k2 < STEPS; k2++) {
-        const a2 = k2 / STEPS * Math.PI * 2;
-        const wx = Math.cos(a2) * currentRadiusM;
-        const wy = Math.sin(a2) * currentRadiusM;
-        const sx = homeX + wx * jExX + wy * jNoX;
-        const sy = homeY + wx * jExY + wy * jNoY;
-        if (k2 === 0) ctx.moveTo(sx, sy);
-        else ctx.lineTo(sx, sy);
-      }
-      ctx.closePath();
-      ctx.clip();
-    }
     if (globalAlpha < 1) ctx.globalAlpha = globalAlpha;
     ctx.drawImage(this._lidarOffscreen, 0, 0, cssW, cssH);
     if (globalAlpha < 1) ctx.globalAlpha = 1;
-    if (gating) {
-      ctx.restore();
-      const ringAlpha = (1 - inEased) * 0.9 * globalAlpha;
-      const ringWidth = Math.max(1.5, 2 + (1 - inEased) * 4);
-      ctx.strokeStyle = this._withAlpha(color, ringAlpha);
-      ctx.lineWidth = ringWidth;
-      ctx.shadowColor = this._withAlpha(color, ringAlpha);
-      ctx.shadowBlur = 12 + (1 - inEased) * 18;
-      ctx.beginPath();
-      const STEPS = 64;
-      for (let k2 = 0; k2 < STEPS; k2++) {
-        const a2 = k2 / STEPS * Math.PI * 2;
-        const wx = Math.cos(a2) * currentRadiusM;
-        const wy = Math.sin(a2) * currentRadiusM;
-        const sx = homeX + wx * jExX + wy * jNoX;
-        const sy = homeY + wx * jExY + wy * jNoY;
-        if (k2 === 0) ctx.moveTo(sx, sy);
-        else ctx.lineTo(sx, sy);
-      }
-      ctx.closePath();
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
   }
   //Mix a CSS hex colour with an alpha value to produce an rgba()
   //string. Accepts #rgb / #rrggbb / #rrggbbaa (the alpha component
@@ -40646,8 +40557,8 @@ HeliosCard.SUN_R_NEAR = 20;
 HeliosCard.SUN_RIM_WIDTH = 1.5;
 HeliosCard.SUN_FILL_OPACITY_BG = 0.2;
 HeliosCard.NIGHT_STROKE_FACTOR = 0.5;
-HeliosCard._LIDAR_PULSE_IN_MS = 1400;
-HeliosCard._LIDAR_PULSE_OUT_MS = 280;
+HeliosCard._LIDAR_FADE_IN_MS = 380;
+HeliosCard._LIDAR_FADE_OUT_MS = 280;
 HeliosCard._VISUAL_CONFIG_KEYS = [
   "show-labels",
   "sun-color",

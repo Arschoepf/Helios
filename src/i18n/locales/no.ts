@@ -120,8 +120,6 @@ export const no: Translations = {
         shadowOpacityHint:     'Opasitet for projiserte bakkeskygger.',
         lidarViewSection:      'LiDAR-visning',
         lidarViewHint:         'Klikk på LiDAR-knappen øverst til høyre på kortet for å bytte til en punktskyvisning av omgivelsene dine: hver lastet LiDAR-celle (bakke, vegetasjon og bygninger) males over grunnkartet. Knappen forblir deaktivert når ingen leverandør dekker hjemmet. Visningen gjenbruker dataen som allerede er hentet med gjeldende presisjon, ingen ekstra kall gjøres.',
-        lidarViewRadius:       'Visningsradius (m)',
-        lidarViewRadiusHelp:   'Celler utenfor denne avstanden fra hjemmet hoppes over i overlegget, selv når de ligger innenfor LiDAR-hentingsradiusen. Senk denne verdien på svake enheter når rasteret i høy presisjon sprenger frame-budsjettet.',
         lidarViewPointSize:    'Punktstørrelse (px)',
         lidarViewPointColor:   'Punktfarge',
         lidarViewPointOpacity: 'Punktopasitet',

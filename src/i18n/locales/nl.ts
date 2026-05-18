@@ -111,8 +111,6 @@ export const nl: Translations = {
         shadowOpacityHint:     'Dekking van de op de grond geprojecteerde schaduwen.',
         lidarViewSection:      'LiDAR-weergave',
         lidarViewHint:         'Klik rechtsboven in de kaart op de LiDAR-knop om over te schakelen naar een puntenwolk-weergave van je omgeving: elke geladen LiDAR-cel (grond, vegetatie en gebouwen) wordt over de basiskaart geschilderd. De knop blijft uitgeschakeld wanneer geen enkele provider het huis dekt. De weergave hergebruikt de data die al is opgehaald op de huidige precisie, er worden geen extra calls gedaan.',
-        lidarViewRadius:       'Weergaveradius (m)',
-        lidarViewRadiusHelp:   'Cellen voorbij deze afstand van het huis worden in de overlay overgeslagen, zelfs wanneer ze binnen de LiDAR fetch-radius vallen. Verlaag deze waarde op zwakkere apparaten wanneer de hoge-precisie raster het frame-budget overschrijdt.',
         lidarViewPointSize:    'Puntgrootte (px)',
         lidarViewPointColor:   'Puntkleur',
         lidarViewPointOpacity: 'Puntdekking',
