@@ -648,8 +648,16 @@ export const heliosCardStyles = css`
     {
         position: absolute;
         bottom: 8px;
-        left:   8px;
-        right:  8px;
+        /*  Width is derived from --timeline-width-frac (0.5..1, set
+            inline by the renderer). At 1 the bar hugs the card edges
+            with the original 8 px breathing on each side. Below 1 it
+            shrinks proportionally and stays centred via the
+            translateX trick. The inset hooks (left / right: 8 px)
+            from the legacy layout are dropped, the new horizontal
+            placement uses left: 50 % + translate. */
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc((100% - 16px) * var(--timeline-width-frac, 1));
         z-index: 10;
         display: flex;
         flex-direction: column;

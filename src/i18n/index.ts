@@ -164,6 +164,20 @@ export interface Translations
         //and the cropped viewport.
         displayRadius:            string;
         displayRadiusHint:        string;
+        //Timeline sub-section, nested inside the UI section. Hosts
+        //the visibility toggle, the width slider and the per-day
+        //consumption-chip toggle.
+        timelineSection:          string;
+        timelineEnabled:          string;
+        timelineEnabledOn:        string;
+        timelineEnabledOff:       string;
+        timelineEnabledHint:      string;
+        timelineWidth:            string;
+        timelineWidthHint:        string;
+        timelineConsumption:      string;
+        timelineConsumptionOn:    string;
+        timelineConsumptionOff:   string;
+        timelineConsumptionHint:  string;
         //Surrounding buildings options. Cluster radius grows the home
         //group to include attached outbuildings, opacity controls the
         //transparency of the neighbours and the colour is the base

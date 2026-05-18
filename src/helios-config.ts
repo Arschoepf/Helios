@@ -18,6 +18,9 @@ import
     DEFAULT_LIDAR_VIEW_POINT_OPACITY,
     DEFAULT_LIDAR_VIEW_WIREFRAME,
     DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY,
+    DEFAULT_TIMELINE_ENABLED,
+    DEFAULT_TIMELINE_WIDTH_PCT,
+    DEFAULT_TIMELINE_CONSUMPTION_ENABLED,
     defaultLidarViewPointColor,
     defaultLidarViewWireframeColor
 } from './helios-engine';
@@ -855,6 +858,54 @@ export class HeliosCardEditor extends LitElement
                         </div>
                     </label>
                     <div class="hint">${t.editor.displayRadiusHint}</div>
+
+                    <details class="advanced-section" open>
+                        <summary class="section-title section-title-collapse">${t.editor.timelineSection}</summary>
+                        <div class="field">
+                            <span class="label">${t.editor.timelineEnabled}</span>
+                            <div class="segmented-toggle">
+                                <button
+                                    type="button"
+                                    class="seg-option ${((c['timeline-enabled'] ?? DEFAULT_TIMELINE_ENABLED) === true) ? 'active' : ''}"
+                                    @click="${() => this._update('timeline-enabled', true)}"
+                                >${t.editor.timelineEnabledOn}</button>
+                                <button
+                                    type="button"
+                                    class="seg-option ${((c['timeline-enabled'] ?? DEFAULT_TIMELINE_ENABLED) !== true) ? 'active' : ''}"
+                                    @click="${() => this._update('timeline-enabled', false)}"
+                                >${t.editor.timelineEnabledOff}</button>
+                            </div>
+                        </div>
+                        <div class="hint">${t.editor.timelineEnabledHint}</div>
+                        <label class="field">
+                            <span class="label">${t.editor.timelineWidth}</span>
+                            <div class="slider-row">
+                                <input
+                                    type="range" min="50" max="100" step="5"
+                                    .value="${String(c['timeline-width-pct'] ?? DEFAULT_TIMELINE_WIDTH_PCT)}"
+                                    @input="${(e: Event) => this._numSlider('timeline-width-pct', e)}"
+                                />
+                                <span class="slider-value">${this._fmtNum(Number(c['timeline-width-pct'] ?? DEFAULT_TIMELINE_WIDTH_PCT), 1)} %</span>
+                            </div>
+                        </label>
+                        <div class="hint">${t.editor.timelineWidthHint}</div>
+                        <div class="field">
+                            <span class="label">${t.editor.timelineConsumption}</span>
+                            <div class="segmented-toggle">
+                                <button
+                                    type="button"
+                                    class="seg-option ${((c['timeline-consumption-enabled'] ?? DEFAULT_TIMELINE_CONSUMPTION_ENABLED) === true) ? 'active' : ''}"
+                                    @click="${() => this._update('timeline-consumption-enabled', true)}"
+                                >${t.editor.timelineConsumptionOn}</button>
+                                <button
+                                    type="button"
+                                    class="seg-option ${((c['timeline-consumption-enabled'] ?? DEFAULT_TIMELINE_CONSUMPTION_ENABLED) !== true) ? 'active' : ''}"
+                                    @click="${() => this._update('timeline-consumption-enabled', false)}"
+                                >${t.editor.timelineConsumptionOff}</button>
+                            </div>
+                        </div>
+                        <div class="hint">${t.editor.timelineConsumptionHint}</div>
+                    </details>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'buildings'}" @toggle="${(e: Event) => this._onSectionToggle('buildings', e)}">

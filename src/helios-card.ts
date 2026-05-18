@@ -7,7 +7,10 @@ import
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
-    DEFAULT_BATTERY_COLOR_HEX
+    DEFAULT_BATTERY_COLOR_HEX,
+    DEFAULT_TIMELINE_ENABLED,
+    DEFAULT_TIMELINE_WIDTH_PCT,
+    DEFAULT_TIMELINE_CONSUMPTION_ENABLED
 } from './helios-engine';
 import { computePvPower, type PanelOrientation } from './helios-sun';
 import { pickTranslations } from './i18n';
@@ -1955,13 +1958,15 @@ export class HeliosCard extends LitElement
         const rect    = track.getBoundingClientRect();
         const frac    = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const rangeMs = this._timeRange.end.getTime() - this._timeRange.start.getTime();
-        const t       = new Date(this._timeRange.start.getTime() + frac * rangeMs);
-
-        if (t.getMinutes() >= 30)
-        {
-            t.setHours(t.getHours() + 1);
-        }
-        t.setMinutes(0, 0, 0);
+        //No hour-snap on the selected time: the previous behaviour
+        //rounded to the nearest full hour, which made the sun arc
+        //and the cloud disc jerk forward in 1 h jumps as the user
+        //dragged the cursor. Sub-hour timestamps still resolve to
+        //the right hourly bucket for weather variables (which are
+        //only published hourly) via nearest-hour lookup in the
+        //engine, so we keep accuracy where it matters and animate
+        //the sun position smoothly where it doesn't.
+        const t = new Date(this._timeRange.start.getTime() + frac * rangeMs);
 
         if (this._selectedTime && this._selectedTime.getTime() === t.getTime())
         {
@@ -2430,7 +2435,13 @@ export class HeliosCard extends LitElement
         //so-far is integrated from the actual PV history; today-
         //remainder + future days come from the kWp × clear-sky
         //model. The map is keyed by the day's local-midnight ms.
-        const dailyKwh = this._computeDailyKwhTotals();
+        //Skip the integration entirely when the user has the per-day
+        //consumption chip turned off: the chip is the only consumer
+        //here, no reason to spend cycles on the integration.
+        const showConsumption = this._timelineConsumptionEnabled();
+        const dailyKwh = showConsumption
+            ? this._computeDailyKwhTotals()
+            : new Map<number, number>();
 
         const labels: TemplateResult[] = [];
         const cursor = new Date(start);
@@ -2903,6 +2914,47 @@ export class HeliosCard extends LitElement
     private _batteryPowerInvert(): boolean
     {
         return this.config?.['battery-power-invert'] === true;
+    }
+
+    //Read the timeline visibility toggle. Default true so a fresh
+    //card config keeps showing the chart.
+    private _timelineEnabled(): boolean
+    {
+        const raw = this.config?.['timeline-enabled'];
+        if (typeof raw === 'boolean') return raw;
+        if (typeof raw === 'string')
+        {
+            const s = raw.trim().toLowerCase();
+            if (s === 'false' || s === '0' || s === 'off' || s === 'no') return false;
+            if (s === 'true'  || s === '1' || s === 'on'  || s === 'yes') return true;
+        }
+        return DEFAULT_TIMELINE_ENABLED;
+    }
+
+    //Read the timeline width as a percentage [50..100]. Clamped so
+    //a hand-edited YAML can't shrink the bar into uselessness or
+    //overflow the card edge.
+    private _timelineWidthPct(): number
+    {
+        const raw = this.config?.['timeline-width-pct'];
+        const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+        if (!isFinite(n)) return DEFAULT_TIMELINE_WIDTH_PCT;
+        return Math.min(100, Math.max(50, n));
+    }
+
+    //Read the per-day consumption chip toggle. Default true so the
+    //existing kWh readouts stay visible on legacy configs.
+    private _timelineConsumptionEnabled(): boolean
+    {
+        const raw = this.config?.['timeline-consumption-enabled'];
+        if (typeof raw === 'boolean') return raw;
+        if (typeof raw === 'string')
+        {
+            const s = raw.trim().toLowerCase();
+            if (s === 'false' || s === '0' || s === 'off' || s === 'no') return false;
+            if (s === 'true'  || s === '1' || s === 'on'  || s === 'yes') return true;
+        }
+        return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
     }
 
     //Resolves the configured PV layout into a flat list of panel
@@ -3515,7 +3567,12 @@ export class HeliosCard extends LitElement
         //ray through the chip's top, which looked broken.
         let sunRayTargetX = sunScene?.home.x ?? 0;
         let sunRayTargetY = sunScene?.home.y ?? 0;
-        if (layout && sunScene)
+        //Only snap the ray to the PV chip when the chip is actually
+        //rendered. Without this check, the ray pointed at a phantom
+        //pvLabel position whenever the user had no pv-power-entity
+        //configured, drawing toward an invisible anchor instead of
+        //landing on the home marker.
+        if (layout && sunScene && pvEntityId)
         {
             const dx       = sunScene.sun.x - layout.pvLabel.x;
             const dy       = sunScene.sun.y - layout.pvLabel.y;
@@ -3568,9 +3625,10 @@ export class HeliosCard extends LitElement
 
                 <div id="map-container"></div>
 
-                ${hasApiKey && this._timeRange ? html`
+                ${hasApiKey && this._timeRange && this._timelineEnabled() ? html`
                     <div
                         class="time-bar"
+                        style="--timeline-width-frac:${this._timelineWidthPct() / 100}"
                         @pointerdown="${this._onTimelinePointerDown}"
                     >
                         <!--  Optional PV production graph, only

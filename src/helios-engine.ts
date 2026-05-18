@@ -134,6 +134,20 @@ export interface HeliosConfig
     //forever; pinch-rotate still works normally. Useful on low-power
     //devices or for users who find the constant motion distracting.
     'auto-rotate-enabled'?:    unknown;
+    //Timeline visibility toggle. Default: true. When false the whole
+    //time-bar (chart card, day labels, scrub cursors) is hidden so
+    //the card focuses on the live scene only.
+    'timeline-enabled'?:       unknown;
+    //Timeline width as a percentage of the card width, 50..100.
+    //Default: 100 (current behaviour, hugs the card edges at 8 px).
+    //Below 100, the time-bar stays centred horizontally and the
+    //chart cards shrink proportionally.
+    'timeline-width-pct'?:     unknown;
+    //Show the per-day cumulative kWh chip next to each day label on
+    //the timeline. Default: true. When false, only the date is
+    //rendered, which keeps the chart cleaner when the user is not
+    //tracking production volumes.
+    'timeline-consumption-enabled'?: unknown;
     //Radius (m) around the home within which surrounding buildings are
     //rendered. Buildings outside are not drawn at all. Default 100 m.
     'building-radius'?:        unknown;
@@ -332,6 +346,13 @@ export function defaultLidarViewWireframeColor(cardTheme: unknown): string
 //fetch (shadows, vegetation extent) and the LiDAR overlay shouldn't
 //inherit that bound, mixing the two knobs felt opaque in the editor.
 export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
+//Timeline defaults. Exposed so the editor placeholders + sliders
+//land on the same values the runtime falls back to when the config
+//key is absent.
+export const DEFAULT_TIMELINE_ENABLED              = true;
+export const DEFAULT_TIMELINE_WIDTH_PCT            = 100;
+export const DEFAULT_TIMELINE_CONSUMPTION_ENABLED  = true;
+
 //Outer radius where the LiDAR view alpha hits zero. Fixed regardless
 //of the configured fetch radius. Past this distance the shader fades
 //cells to zero, so we never paint a million dots for cells the user

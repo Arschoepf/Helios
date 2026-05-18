@@ -30601,6 +30601,9 @@ function defaultLidarViewWireframeColor(cardTheme) {
   return isDark ? "#d0d0d0" : "#404040";
 }
 const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
+const DEFAULT_TIMELINE_ENABLED = true;
+const DEFAULT_TIMELINE_WIDTH_PCT = 100;
+const DEFAULT_TIMELINE_CONSUMPTION_ENABLED = true;
 const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
 const SHADOW_LAYER_IDS = [
   "helios-building-shadows"
@@ -33126,6 +33129,17 @@ const en = {
     buildingsHint: 'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
     displayRadius: "Display radius",
     displayRadiusHint: "Defines the visible area around the home. Anything past this radius is hidden: basemap, neighbouring buildings, shadows. Also drives the LiDAR fetch extent and the projected-shadow clip.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Show timeline",
+    timelineEnabledOn: "Show",
+    timelineEnabledOff: "Hide",
+    timelineEnabledHint: "Hides the entire bottom timeline (chart, day labels, scrub cursors). Useful when the card is embedded in a wider dashboard panel where another widget already shows the daily trend.",
+    timelineWidth: "Timeline width",
+    timelineWidthHint: "Shrinks the timeline horizontally while keeping it centred on the card. At 100 % it hugs the card edges; below that the bar pulls in proportionally on both sides.",
+    timelineConsumption: "Show daily consumption / forecast",
+    timelineConsumptionOn: "Show",
+    timelineConsumptionOff: "Hide",
+    timelineConsumptionHint: "Toggles the per-day kWh chip rendered next to each date on the timeline (observed for past days, forecast for today and ahead). Turn off if you only care about the live scene and want a cleaner chart.",
     buildingClusterRadius: "Home cluster radius",
     buildingOpacity: "Surrounding opacity",
     buildingColor: "Building color",
@@ -33253,6 +33267,17 @@ const fr = {
     buildingsHint: "Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».",
     displayRadius: "Rayon d'affichage",
     displayRadiusHint: "Définit la zone visible autour de la maison. Tout ce qui se trouve au-delà de ce rayon est masqué : fond de carte, bâtiments voisins, ombres. Pilote également l'étendue du fetch LiDAR et le clip des ombres projetées.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Afficher la timeline",
+    timelineEnabledOn: "Afficher",
+    timelineEnabledOff: "Masquer",
+    timelineEnabledHint: "Masque toute la barre temporelle en bas (graphique, labels des jours, curseurs). Utile quand la card est intégrée dans un dashboard plus large où un autre widget montre déjà la tendance journalière.",
+    timelineWidth: "Largeur de la timeline",
+    timelineWidthHint: "Réduit la timeline horizontalement tout en la gardant centrée. À 100 %, elle colle aux bords de la card ; en dessous, la barre se rétracte proportionnellement des deux côtés.",
+    timelineConsumption: "Afficher la consommation / prédiction journalière",
+    timelineConsumptionOn: "Afficher",
+    timelineConsumptionOff: "Masquer",
+    timelineConsumptionHint: "Active la puce kWh affichée à côté de chaque date sur la timeline (observée pour les jours passés, prédiction pour aujourd'hui et la suite). Désactive si tu te concentres sur la scène live et veux un graphique plus propre.",
     buildingClusterRadius: "Rayon de regroupement maison",
     buildingOpacity: "Opacité des bâtiments voisins",
     buildingColor: "Couleur des bâtiments",
@@ -33380,6 +33405,17 @@ const de = {
     buildingsHint: 'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
     displayRadius: "Anzeigeradius",
     displayRadiusHint: "Bestimmt den um das Zuhause sichtbaren Bereich. Alles jenseits dieses Radius bleibt verborgen: Grundkarte, Nachbargebäude, Schatten. Steuert zugleich den LiDAR-Fetch-Bereich und das Clipping der projizierten Schatten.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Timeline anzeigen",
+    timelineEnabledOn: "Anzeigen",
+    timelineEnabledOff: "Verbergen",
+    timelineEnabledHint: "Versteckt die gesamte untere Zeitleiste (Diagramm, Tageslabels, Scrub-Cursor). Hilfreich, wenn die Karte in ein breiteres Dashboard eingebettet ist, das den Tagesverlauf schon woanders zeigt.",
+    timelineWidth: "Breite der Timeline",
+    timelineWidthHint: "Schrumpft die Timeline horizontal und hält sie dabei auf der Karte zentriert. Bei 100 % schmiegt sie sich an die Kartenränder; darunter zieht die Leiste sich beidseitig proportional zurück.",
+    timelineConsumption: "Tägliche Verbrauch / Prognose anzeigen",
+    timelineConsumptionOn: "Anzeigen",
+    timelineConsumptionOff: "Verbergen",
+    timelineConsumptionHint: "Schaltet den kWh-Chip neben jedem Datum auf der Timeline (gemessen für vergangene Tage, Prognose für heute und später). Aus, wenn dir nur die Live-Szene zählt und das Diagramm aufgeräumter sein soll.",
     buildingClusterRadius: "Cluster-Radius Zuhause",
     buildingOpacity: "Deckkraft Nachbargebäude",
     buildingColor: "Gebäudefarbe",
@@ -33507,6 +33543,17 @@ const es = {
     buildingsHint: "Para mantener la tarjeta fluida en zonas urbanas densas, sólo los edificios dentro del radio configurado alrededor del hogar se renderizan en 3D. La propia casa siempre se muestra con opacidad completa; los edificios vecinos se renderizan con la opacidad configurada para aportar contexto urbano sin competir con los datos. El radio del grupo permite incluir las construcciones adosadas (terrazas, garajes, anexos) en el grupo «casa».",
     displayRadius: "Radio de visualización",
     displayRadiusHint: "Define el área visible alrededor de la casa. Todo lo que esté más allá de este radio queda oculto: mapa base, edificios vecinos, sombras. También determina el ámbito del fetch LiDAR y el recorte de las sombras proyectadas.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Mostrar la timeline",
+    timelineEnabledOn: "Mostrar",
+    timelineEnabledOff: "Ocultar",
+    timelineEnabledHint: "Oculta toda la barra temporal inferior (gráfico, etiquetas de los días, cursores). Útil cuando la card está integrada en un dashboard más amplio donde otro widget ya muestra la tendencia diaria.",
+    timelineWidth: "Ancho de la timeline",
+    timelineWidthHint: "Reduce la timeline horizontalmente manteniéndola centrada en la card. Al 100 % se pega a los bordes; por debajo, la barra se recoge proporcionalmente por ambos lados.",
+    timelineConsumption: "Mostrar consumo / pronóstico diario",
+    timelineConsumptionOn: "Mostrar",
+    timelineConsumptionOff: "Ocultar",
+    timelineConsumptionHint: "Controla la insignia de kWh que aparece junto a cada fecha en la timeline (observado para días pasados, pronóstico para hoy y los siguientes). Apágalo si solo te importa la escena en vivo y prefieres un gráfico más limpio.",
     buildingClusterRadius: "Radio del grupo de la casa",
     buildingOpacity: "Opacidad de los vecinos",
     buildingColor: "Color de los edificios",
@@ -33634,6 +33681,17 @@ const it = {
     buildingsHint: "Per mantenere la carta fluida nelle zone urbane dense, vengono renderizzati in 3D solo gli edifici entro il raggio configurato attorno alla casa. La casa stessa resta sempre a piena opacità; gli edifici vicini sono renderizzati con l'opacità configurata per dare contesto urbano senza competere con i dati. Il raggio del gruppo include le strutture annesse (verande, garage, dipendenze) nel gruppo «casa».",
     displayRadius: "Raggio di visualizzazione",
     displayRadiusHint: "Definisce l'area visibile attorno alla casa. Tutto ciò che è oltre questo raggio viene nascosto: mappa di base, edifici vicini, ombre. Determina anche l'estensione del fetch LiDAR e il taglio delle ombre proiettate.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Mostra la timeline",
+    timelineEnabledOn: "Mostra",
+    timelineEnabledOff: "Nascondi",
+    timelineEnabledHint: "Nasconde l'intera barra temporale in basso (grafico, etichette dei giorni, cursori). Utile quando la card è inserita in una dashboard più ampia dove un altro widget mostra già l'andamento giornaliero.",
+    timelineWidth: "Larghezza della timeline",
+    timelineWidthHint: "Riduce la timeline in orizzontale mantenendola centrata sulla card. Al 100 % aderisce ai bordi; sotto, la barra si ritira proporzionalmente da entrambi i lati.",
+    timelineConsumption: "Mostra consumo / previsione giornaliera",
+    timelineConsumptionOn: "Mostra",
+    timelineConsumptionOff: "Nascondi",
+    timelineConsumptionHint: "Attiva il chip kWh accanto a ogni data sulla timeline (osservato per i giorni passati, previsione per oggi e successivi). Disattivalo se ti interessa solo la scena live e vuoi un grafico più pulito.",
     buildingClusterRadius: "Raggio del gruppo casa",
     buildingOpacity: "Opacità degli edifici vicini",
     buildingColor: "Colore degli edifici",
@@ -33761,6 +33819,17 @@ const nl = {
     buildingsHint: 'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
     displayRadius: "Weergavestraal",
     displayRadiusHint: "Bepaalt het zichtbare gebied rond het huis. Alles buiten deze straal wordt verborgen: basiskaart, naburige gebouwen, schaduwen. Stuurt ook de omvang van de LiDAR-fetch en de clip van de geprojecteerde schaduwen aan.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Timeline tonen",
+    timelineEnabledOn: "Tonen",
+    timelineEnabledOff: "Verbergen",
+    timelineEnabledHint: "Verbergt de hele tijdsbalk onderaan (grafiek, daglabels, cursors). Handig als de card in een breder dashboardpaneel zit waar een ander widget de dagtrend al toont.",
+    timelineWidth: "Breedte van de timeline",
+    timelineWidthHint: "Maakt de timeline horizontaal smaller terwijl ze gecentreerd blijft op de card. Bij 100 % loopt ze tot de randen; daaronder trekt de balk evenredig aan beide kanten in.",
+    timelineConsumption: "Dagelijks verbruik / voorspelling tonen",
+    timelineConsumptionOn: "Tonen",
+    timelineConsumptionOff: "Verbergen",
+    timelineConsumptionHint: "Schakelt de kWh-chip naast elke datum op de timeline (gemeten voor afgelopen dagen, voorspelling voor vandaag en later). Uit als je alleen om de live scène geeft en een rustigere grafiek wilt.",
     buildingClusterRadius: "Cluster-straal huis",
     buildingOpacity: "Dekking omliggende gebouwen",
     buildingColor: "Gebouwkleur",
@@ -33888,6 +33957,17 @@ const pt = {
     buildingsHint: "Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».",
     displayRadius: "Raio de visualização",
     displayRadiusHint: "Define a área visível em torno da casa. Tudo o que estiver para além deste raio fica oculto: mapa base, edifícios vizinhos, sombras. Também controla o âmbito do fetch LiDAR e o corte das sombras projetadas.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Mostrar a timeline",
+    timelineEnabledOn: "Mostrar",
+    timelineEnabledOff: "Ocultar",
+    timelineEnabledHint: "Oculta toda a barra temporal em baixo (gráfico, etiquetas dos dias, cursores). Útil quando o card está integrado num dashboard mais largo onde outro widget já mostra a tendência diária.",
+    timelineWidth: "Largura da timeline",
+    timelineWidthHint: "Reduz a timeline na horizontal mantendo-a centrada na card. A 100 % cola às margens; abaixo disso, a barra recolhe-se proporcionalmente dos dois lados.",
+    timelineConsumption: "Mostrar consumo / previsão diária",
+    timelineConsumptionOn: "Mostrar",
+    timelineConsumptionOff: "Ocultar",
+    timelineConsumptionHint: "Liga o chip kWh ao lado de cada data na timeline (observado para dias passados, previsão para hoje e seguintes). Desliga se só te importa a cena ao vivo e queres um gráfico mais limpo.",
     buildingClusterRadius: "Raio do grupo da casa",
     buildingOpacity: "Opacidade dos vizinhos",
     buildingColor: "Cor dos edifícios",
@@ -34015,6 +34095,17 @@ const no = {
     buildingsHint: "For å holde kortet flytende i tette urbane områder rendres bare bygninger innenfor konfigurert radius rundt huset i 3D. Selve huset holdes alltid på full opasitet; nabobygninger rendres med konfigurert opasitet for å gi urban kontekst uten å konkurrere med dataovergangene. Klyngeradiusen grupperer tilkoblede uthus (verandaer, garasjer, skur) i «hus»-settet.",
     displayRadius: "Visningsradius",
     displayRadiusHint: "Definerer det synlige området rundt huset. Alt utenfor denne radiusen skjules: grunnkart, nabobygninger, skygger. Styrer også LiDAR-hentingens omfang og klipp av projiserte skygger.",
+    timelineSection: "Timeline",
+    timelineEnabled: "Vis timeline",
+    timelineEnabledOn: "Vis",
+    timelineEnabledOff: "Skjul",
+    timelineEnabledHint: "Skjuler hele tidslinjen nederst (graf, dagsetiketter, scrubmarkører). Nyttig når kortet sitter i et bredere dashboardpanel der en annen modul allerede viser dagstrenden.",
+    timelineWidth: "Bredde på timelinen",
+    timelineWidthHint: "Krymper timelinen horisontalt mens den holdes sentrert på kortet. Ved 100 % klistrer den seg til kantene; under det trekker stripen seg jevnt inn fra begge sider.",
+    timelineConsumption: "Vis daglig forbruk / prognose",
+    timelineConsumptionOn: "Vis",
+    timelineConsumptionOff: "Skjul",
+    timelineConsumptionHint: "Skrur av kWh-merket ved siden av hver dato på timelinen (målt for tidligere dager, prognose for i dag og framover). Av når du kun bryr deg om live-scenen og vil ha en renere graf.",
     buildingClusterRadius: "Hus-klyngeradius",
     buildingOpacity: "Opasitet for nabobygninger",
     buildingColor: "Bygningsfarge",
@@ -34706,8 +34797,16 @@ const heliosCardStyles = i$3`
     {
         position: absolute;
         bottom: 8px;
-        left:   8px;
-        right:  8px;
+        /*  Width is derived from --timeline-width-frac (0.5..1, set
+            inline by the renderer). At 1 the bar hugs the card edges
+            with the original 8 px breathing on each side. Below 1 it
+            shrinks proportionally and stays centred via the
+            translateX trick. The inset hooks (left / right: 8 px)
+            from the legacy layout are dropped, the new horizontal
+            placement uses left: 50 % + translate. */
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc((100% - 16px) * var(--timeline-width-frac, 1));
         z-index: 10;
         display: flex;
         flex-direction: column;
@@ -37032,6 +37131,54 @@ let HeliosCardEditor = class extends i {
                         </div>
                     </label>
                     <div class="hint">${t2.editor.displayRadiusHint}</div>
+
+                    <details class="advanced-section" open>
+                        <summary class="section-title section-title-collapse">${t2.editor.timelineSection}</summary>
+                        <div class="field">
+                            <span class="label">${t2.editor.timelineEnabled}</span>
+                            <div class="segmented-toggle">
+                                <button
+                                    type="button"
+                                    class="seg-option ${(c2["timeline-enabled"] ?? DEFAULT_TIMELINE_ENABLED) === true ? "active" : ""}"
+                                    @click="${() => this._update("timeline-enabled", true)}"
+                                >${t2.editor.timelineEnabledOn}</button>
+                                <button
+                                    type="button"
+                                    class="seg-option ${(c2["timeline-enabled"] ?? DEFAULT_TIMELINE_ENABLED) !== true ? "active" : ""}"
+                                    @click="${() => this._update("timeline-enabled", false)}"
+                                >${t2.editor.timelineEnabledOff}</button>
+                            </div>
+                        </div>
+                        <div class="hint">${t2.editor.timelineEnabledHint}</div>
+                        <label class="field">
+                            <span class="label">${t2.editor.timelineWidth}</span>
+                            <div class="slider-row">
+                                <input
+                                    type="range" min="50" max="100" step="5"
+                                    .value="${String(c2["timeline-width-pct"] ?? DEFAULT_TIMELINE_WIDTH_PCT)}"
+                                    @input="${(e2) => this._numSlider("timeline-width-pct", e2)}"
+                                />
+                                <span class="slider-value">${this._fmtNum(Number(c2["timeline-width-pct"] ?? DEFAULT_TIMELINE_WIDTH_PCT), 1)} %</span>
+                            </div>
+                        </label>
+                        <div class="hint">${t2.editor.timelineWidthHint}</div>
+                        <div class="field">
+                            <span class="label">${t2.editor.timelineConsumption}</span>
+                            <div class="segmented-toggle">
+                                <button
+                                    type="button"
+                                    class="seg-option ${(c2["timeline-consumption-enabled"] ?? DEFAULT_TIMELINE_CONSUMPTION_ENABLED) === true ? "active" : ""}"
+                                    @click="${() => this._update("timeline-consumption-enabled", true)}"
+                                >${t2.editor.timelineConsumptionOn}</button>
+                                <button
+                                    type="button"
+                                    class="seg-option ${(c2["timeline-consumption-enabled"] ?? DEFAULT_TIMELINE_CONSUMPTION_ENABLED) !== true ? "active" : ""}"
+                                    @click="${() => this._update("timeline-consumption-enabled", false)}"
+                                >${t2.editor.timelineConsumptionOff}</button>
+                            </div>
+                        </div>
+                        <div class="hint">${t2.editor.timelineConsumptionHint}</div>
+                    </details>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "buildings"}" @toggle="${(e2) => this._onSectionToggle("buildings", e2)}">
@@ -37559,7 +37706,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.35"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.36"}`,
       labelStyle,
       versionStyle
     );
@@ -37580,7 +37727,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.35",
+        version: "1.6.0-alpha.36",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37588,7 +37735,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.35"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.36"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -38640,10 +38787,6 @@ let HeliosCard = class extends i {
     const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
     const rangeMs = this._timeRange.end.getTime() - this._timeRange.start.getTime();
     const t2 = new Date(this._timeRange.start.getTime() + frac * rangeMs);
-    if (t2.getMinutes() >= 30) {
-      t2.setHours(t2.getHours() + 1);
-    }
-    t2.setMinutes(0, 0, 0);
     if (this._selectedTime && this._selectedTime.getTime() === t2.getTime()) {
       return;
     }
@@ -38968,7 +39111,8 @@ let HeliosCard = class extends i {
     const toPct = (d2) => Math.max(0, Math.min(100, (d2.getTime() - start.getTime()) / rangeMs * 100));
     const today0 = new Date(now);
     today0.setHours(0, 0, 0, 0);
-    const dailyKwh = this._computeDailyKwhTotals();
+    const showConsumption = this._timelineConsumptionEnabled();
+    const dailyKwh = showConsumption ? this._computeDailyKwhTotals() : /* @__PURE__ */ new Map();
     const labels = [];
     const cursor = new Date(start);
     cursor.setHours(0, 0, 0, 0);
@@ -39268,6 +39412,39 @@ let HeliosCard = class extends i {
   _batteryPowerInvert() {
     return this.config?.["battery-power-invert"] === true;
   }
+  //Read the timeline visibility toggle. Default true so a fresh
+  //card config keeps showing the chart.
+  _timelineEnabled() {
+    const raw2 = this.config?.["timeline-enabled"];
+    if (typeof raw2 === "boolean") return raw2;
+    if (typeof raw2 === "string") {
+      const s2 = raw2.trim().toLowerCase();
+      if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+      if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+    }
+    return DEFAULT_TIMELINE_ENABLED;
+  }
+  //Read the timeline width as a percentage [50..100]. Clamped so
+  //a hand-edited YAML can't shrink the bar into uselessness or
+  //overflow the card edge.
+  _timelineWidthPct() {
+    const raw2 = this.config?.["timeline-width-pct"];
+    const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+    if (!isFinite(n3)) return DEFAULT_TIMELINE_WIDTH_PCT;
+    return Math.min(100, Math.max(50, n3));
+  }
+  //Read the per-day consumption chip toggle. Default true so the
+  //existing kWh readouts stay visible on legacy configs.
+  _timelineConsumptionEnabled() {
+    const raw2 = this.config?.["timeline-consumption-enabled"];
+    if (typeof raw2 === "boolean") return raw2;
+    if (typeof raw2 === "string") {
+      const s2 = raw2.trim().toLowerCase();
+      if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+      if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+    }
+    return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
+  }
   //Resolves the configured PV layout into a flat list of panel
   //orientations + pre-normalised shares (sum to 1.0).
   //
@@ -39548,7 +39725,7 @@ let HeliosCard = class extends i {
     const sunFlowDuration = HeliosCard._flowDuration(sunWm2, 1e3, 0.8);
     let sunRayTargetX = sunScene?.home.x ?? 0;
     let sunRayTargetY = sunScene?.home.y ?? 0;
-    if (layout && sunScene) {
+    if (layout && sunScene && pvEntityId) {
       const dx = sunScene.sun.x - layout.pvLabel.x;
       const dy = sunScene.sun.y - layout.pvLabel.y;
       const compass = Math.atan2(dx, -dy);
@@ -39582,9 +39759,10 @@ let HeliosCard = class extends i {
 
                 <div id="map-container"></div>
 
-                ${hasApiKey && this._timeRange ? b`
+                ${hasApiKey && this._timeRange && this._timelineEnabled() ? b`
                     <div
                         class="time-bar"
+                        style="--timeline-width-frac:${this._timelineWidthPct() / 100}"
                         @pointerdown="${this._onTimelinePointerDown}"
                     >
                         <!--  Optional PV production graph, only
