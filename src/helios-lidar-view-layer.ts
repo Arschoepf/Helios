@@ -101,8 +101,21 @@ export class LidarViewLayer implements CustomLayerInterface
     private _map?:    MapLibreMap;
     private _gl?:     WebGLRenderingContext | WebGL2RenderingContext;
     private _program?: WebGLProgram;
-    private _buffer?:  WebGLBuffer;
+    //Vertex buffer (Mercator offsets from home, one triplet per
+    //finite cell) and its companion line-topology index buffer
+    //(pairs of vertex indices, one per grid edge whose endpoints
+    //both have data). Both are uploaded once per setData and reused
+    //for every frame: drawArrays(POINTS) for the dot cloud,
+    //drawElements(LINES) for the wireframe mesh.
+    private _buffer?:      WebGLBuffer;
+    private _indexBuffer?: WebGLBuffer;
     private _vertexCount: number = 0;
+    private _lineIdxCount: number = 0;
+    //WebGL2 supports UNSIGNED_INT indices natively; on a WebGL1
+    //context we probe for OES_element_index_uint at onAdd time. We
+    //need 32-bit indices because high-precision rasters reach a few
+    //million finite cells and 65536 is too small.
+    private _indexType: number = 0;
 
     private _aPos: number = -1;
     private _uMatrix?:       WebGLUniformLocation;
@@ -120,6 +133,12 @@ export class LidarViewLayer implements CustomLayerInterface
     private _pointSizePx:  number = 1.5;
     private _color:        [number, number, number, number] = [1, 1, 1, 0.5];
     private _alphaFade:    number = 0;
+    //Wireframe overlay: same vertices, line topology, independent
+    //colour + alpha. Off by default; when on, drawElements(LINES)
+    //runs alongside the points draw (the user can dial the point
+    //size to 0 to see lines only).
+    private _wireframeEnabled: boolean = false;
+    private _wireframeColor:   [number, number, number, number] = [1, 1, 1, 0.5];
 
     //Home position in Mercator. Recomputed when setHome is called so
     //the radius filter stays anchored on the rendered home, and used
@@ -128,9 +147,11 @@ export class LidarViewLayer implements CustomLayerInterface
     private _homeMerc: maplibregl.MercatorCoordinate;
     private _mercPerMeter: number;
 
-    //Vertices cached when the engine sets data BEFORE the layer is
-    //added to the map. Uploaded to GL the moment onAdd runs.
-    private _pendingVerts?: Float32Array;
+    //Vertices + line indices cached when the engine sets data BEFORE
+    //the layer is added to the map. Uploaded to GL the moment onAdd
+    //runs.
+    private _pendingVerts?:   Float32Array;
+    private _pendingLineIdx?: Uint32Array;
     //Raster reference kept around so setHome can rebuild the buffer
     //against the new origin. Without this, switching homes would
     //leave the cloud anchored at the previous mercator centre.
@@ -181,6 +202,19 @@ export class LidarViewLayer implements CustomLayerInterface
         this._map?.triggerRepaint();
     }
 
+    public setWireframeEnabled(on: boolean): void
+    {
+        if (on === this._wireframeEnabled) return;
+        this._wireframeEnabled = on;
+        this._map?.triggerRepaint();
+    }
+
+    public setWireframeColor(rgba: [number, number, number, number]): void
+    {
+        this._wireframeColor = rgba;
+        this._map?.triggerRepaint();
+    }
+
     //Rebuild the GPU buffer from a fresh height raster. Only finite
     //cells are uploaded; NaN sentinels (no-data) are dropped at build
     //time so the shader never sees them.
@@ -219,10 +253,14 @@ export class LidarViewLayer implements CustomLayerInterface
         const homeY = this._homeMerc.y;
         const homeZ = this._homeMerc.z ?? 0;
 
-        //Worst-case all-cells-finite allocation. We slice the unused
-        //tail off before upload so the GPU buffer only carries real
-        //points.
+        //Worst-case all-cells-finite allocations. We slice the unused
+        //tail off before upload so the GPU buffers only carry real
+        //points + real edges.
         const verts = new Float32Array(rasterSize * rasterSize * 3);
+        //cellToVert maps a (j*R + i) cell index to its index in the
+        //vertex stream, or -1 when the cell was NaN. Needed so the
+        //line-topology pass can connect adjacent finite cells.
+        const cellToVert = new Int32Array(rasterSize * rasterSize);
         let n = 0;
 
         for (let j = 0; j < rasterSize; j++)
@@ -230,29 +268,80 @@ export class LidarViewLayer implements CustomLayerInterface
             const cLat = maxLat - (j + 0.5) * pxLat;
             for (let i = 0; i < rasterSize; i++)
             {
-                const h = heights[j * rasterSize + i];
-                if (!isFinite(h)) continue;
+                const idx = j * rasterSize + i;
+                const h = heights[idx];
+                if (!isFinite(h))
+                {
+                    cellToVert[idx] = -1;
+                    continue;
+                }
                 const cLon = minLon + (i + 0.5) * pxLon;
                 const mc   = maplibregl.MercatorCoordinate.fromLngLat([cLon, cLat], h);
                 verts[n * 3    ] = mc.x       - homeX;
                 verts[n * 3 + 1] = mc.y       - homeY;
                 verts[n * 3 + 2] = (mc.z ?? 0) - homeZ;
+                cellToVert[idx]  = n;
                 n++;
             }
         }
         this._vertexCount = n;
         const used = n > 0 ? verts.subarray(0, n * 3) : new Float32Array(0);
 
+        //Wireframe topology: for every finite cell, emit an edge to
+        //the cell on its right (i+1, j) and below (i, j+1) when those
+        //neighbours are also finite. Each grid edge appears once, so
+        //the dataset stays at most ~2*N entries.
+        const maxEdges = Math.max(0, n * 2);
+        const lineIdx  = new Uint32Array(maxEdges * 2);
+        let li = 0;
+        for (let j = 0; j < rasterSize; j++)
+        {
+            for (let i = 0; i < rasterSize; i++)
+            {
+                const v = cellToVert[j * rasterSize + i];
+                if (v < 0) continue;
+                if (i + 1 < rasterSize)
+                {
+                    const vR = cellToVert[j * rasterSize + (i + 1)];
+                    if (vR >= 0)
+                    {
+                        lineIdx[li++] = v;
+                        lineIdx[li++] = vR;
+                    }
+                }
+                if (j + 1 < rasterSize)
+                {
+                    const vD = cellToVert[(j + 1) * rasterSize + i];
+                    if (vD >= 0)
+                    {
+                        lineIdx[li++] = v;
+                        lineIdx[li++] = vD;
+                    }
+                }
+            }
+        }
+        this._lineIdxCount = li;
+        const lineUsed = li > 0 ? lineIdx.subarray(0, li) : new Uint32Array(0);
+
         if (this._gl && this._buffer)
         {
-            this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this._buffer);
-            this._gl.bufferData(this._gl.ARRAY_BUFFER, used, this._gl.STATIC_DRAW);
+            const gl = this._gl;
+            gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, used, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            if (this._indexBuffer)
+            {
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._indexBuffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, lineUsed, gl.STATIC_DRAW);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+            }
         }
         else
         {
             //Layer not yet onAdd'd; stash so the upload runs the
             //moment we get a GL context.
-            this._pendingVerts = used;
+            this._pendingVerts   = used;
+            this._pendingLineIdx = lineUsed;
         }
         this._map?.triggerRepaint();
     }
@@ -305,16 +394,47 @@ export class LidarViewLayer implements CustomLayerInterface
                 gl.bindBuffer(gl.ARRAY_BUFFER, null);
                 this._pendingVerts = undefined;
             }
+
+            //Index buffer for the wireframe overlay. WebGL2 has
+            //native 32-bit index support; WebGL1 needs the
+            //OES_element_index_uint extension. We always need 32-bit
+            //because high-precision rasters reach a few million
+            //finite cells, well past the 16-bit cap. When the
+            //extension is unavailable (very rare today), the
+            //wireframe stays disabled; points keep working as the
+            //setLines path short-circuits on _indexType === 0.
+            const isWebGL2 = typeof WebGL2RenderingContext !== 'undefined'
+                          && gl instanceof WebGL2RenderingContext;
+            const has32Idx = isWebGL2
+                          || !!gl.getExtension('OES_element_index_uint');
+            this._indexType = has32Idx ? gl.UNSIGNED_INT : 0;
+            if (has32Idx)
+            {
+                this._indexBuffer = gl.createBuffer() ?? undefined;
+                if (this._pendingLineIdx && this._indexBuffer)
+                {
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._indexBuffer);
+                    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this._pendingLineIdx, gl.STATIC_DRAW);
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+                    this._pendingLineIdx = undefined;
+                }
+            }
         }
         catch (err)
         {
             //Tear down whatever managed to allocate before the throw,
             //so MapLibre's next layer sees a clean GL state.
             try { gl.bindBuffer(gl.ARRAY_BUFFER, null); } catch (_) {}
+            try { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null); } catch (_) {}
             if (this._buffer)
             {
                 try { gl.deleteBuffer(this._buffer); } catch (_) {}
                 this._buffer = undefined;
+            }
+            if (this._indexBuffer)
+            {
+                try { gl.deleteBuffer(this._indexBuffer); } catch (_) {}
+                this._indexBuffer = undefined;
             }
             if (program)
             {
@@ -377,7 +497,37 @@ export class LidarViewLayer implements CustomLayerInterface
         gl.disable(gl.STENCIL_TEST);
         gl.disable(gl.CULL_FACE);
 
-        gl.drawArrays(gl.POINTS, 0, this._vertexCount);
+        //Points pass. Skipped when the user dialed point size to 0
+        //(typical wireframe-only setup): gl_PointSize at 0 already
+        //collapses each primitive, but bypassing the call also saves
+        //the vertex shader work.
+        if (this._uColor && this._pointSizePx > 0)
+        {
+            gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
+            gl.drawArrays(gl.POINTS, 0, this._vertexCount);
+        }
+
+        //Wireframe pass. Same vertex buffer, line topology from the
+        //index buffer. The radius filter still applies via v_inside
+        //in the fragment shader: lines whose endpoints are both
+        //outside the radius go away, lines crossing the boundary
+        //fade to clipped at the edge.
+        if (this._wireframeEnabled
+         && this._indexBuffer
+         && this._indexType !== 0
+         && this._lineIdxCount > 0
+         && this._uColor)
+        {
+            gl.uniform4f(this._uColor,
+                this._wireframeColor[0],
+                this._wireframeColor[1],
+                this._wireframeColor[2],
+                this._wireframeColor[3]
+            );
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._indexBuffer);
+            gl.drawElements(gl.LINES, this._lineIdxCount, this._indexType, 0);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        }
     }
 
     //Build `mainMatrix * translation(homeMerc)` directly in the
@@ -406,12 +556,15 @@ export class LidarViewLayer implements CustomLayerInterface
 
     public onRemove(_map: MapLibreMap, gl: WebGLRenderingContext | WebGL2RenderingContext): void
     {
-        if (this._buffer)  gl.deleteBuffer(this._buffer);
-        if (this._program) gl.deleteProgram(this._program);
-        this._buffer  = undefined;
-        this._program = undefined;
-        this._gl      = undefined;
-        this._map     = undefined;
+        if (this._buffer)      gl.deleteBuffer(this._buffer);
+        if (this._indexBuffer) gl.deleteBuffer(this._indexBuffer);
+        if (this._program)     gl.deleteProgram(this._program);
+        this._buffer      = undefined;
+        this._indexBuffer = undefined;
+        this._program     = undefined;
+        this._indexType   = 0;
+        this._gl          = undefined;
+        this._map         = undefined;
     }
 
     private _compileShader(gl: WebGLRenderingContext | WebGL2RenderingContext, type: number, src: string): WebGLShader

@@ -249,10 +249,26 @@ export interface HeliosConfig
     //  lidar-view-point-opacity: 0..1. Default 0.5. Combined with
     //                            point-size to control the perceptual
     //                            density of the cloud.
-    'lidar-view-radius'?:        unknown;
-    'lidar-view-point-size'?:    unknown;
-    'lidar-view-point-color'?:   unknown;
-    'lidar-view-point-opacity'?: unknown;
+    //  lidar-view-wireframe        : boolean. Default false. When true,
+    //                                a Tron-style mesh is overlaid: a
+    //                                line is drawn between each finite
+    //                                cell and its right + bottom
+    //                                neighbours, also finite. Sits on
+    //                                top of (or replaces, if point size
+    //                                is set to 0) the dot cloud.
+    //  lidar-view-wireframe-color  : hex string. Default same white as
+    //                                points so the two pass together
+    //                                read as one mesh.
+    //  lidar-view-wireframe-opacity: 0..1. Default 0.35. Lighter than
+    //                                the dots so the mesh reads as
+    //                                "scaffolding under the points".
+    'lidar-view-radius'?:             unknown;
+    'lidar-view-point-size'?:         unknown;
+    'lidar-view-point-color'?:        unknown;
+    'lidar-view-point-opacity'?:      unknown;
+    'lidar-view-wireframe'?:          unknown;
+    'lidar-view-wireframe-color'?:    unknown;
+    'lidar-view-wireframe-opacity'?:  unknown;
 }
 
 //Default values for the building config, exposed so the visual
@@ -301,6 +317,9 @@ export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 export const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX  = 1.5;
 export const DEFAULT_LIDAR_VIEW_POINT_COLOR    = '#ffffff';
 export const DEFAULT_LIDAR_VIEW_POINT_OPACITY  = 0.5;
+export const DEFAULT_LIDAR_VIEW_WIREFRAME          = false;
+export const DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR    = '#ffffff';
+export const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY  = 0.35;
 
 
 //Single ground-shadow layer, rendered as an image source rather
@@ -2083,6 +2102,8 @@ export class HeliosEngine
         this._lidarViewLayer.setRadiusMeters(this._lidarViewRadiusMeters());
         this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
         this._lidarViewLayer.setColor(this._lidarViewColorRgba());
+        this._lidarViewLayer.setWireframeEnabled(this._lidarViewWireframeEnabled());
+        this._lidarViewLayer.setWireframeColor(this._lidarViewWireframeRgba());
     }
 
     //Fade alpha multiplier in [0..1]. Driven by the card's enter/exit
@@ -2127,6 +2148,34 @@ export class HeliosEngine
         const alpha = isFinite(opa)
             ? Math.max(0, Math.min(1, opa))
             : DEFAULT_LIDAR_VIEW_POINT_OPACITY;
+        const rgb = this._hexToRgb01(hex);
+        return [rgb[0], rgb[1], rgb[2], alpha];
+    }
+
+    private _lidarViewWireframeEnabled(): boolean
+    {
+        const raw = this.cfg['lidar-view-wireframe'];
+        if (typeof raw === 'boolean') return raw;
+        if (typeof raw === 'string')
+        {
+            const s = raw.trim().toLowerCase();
+            if (s === 'true'  || s === '1' || s === 'on'  || s === 'yes') return true;
+            if (s === 'false' || s === '0' || s === 'off' || s === 'no')  return false;
+        }
+        return DEFAULT_LIDAR_VIEW_WIREFRAME;
+    }
+
+    private _lidarViewWireframeRgba(): [number, number, number, number]
+    {
+        const rawColor = this.cfg['lidar-view-wireframe-color'];
+        const hex = typeof rawColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim())
+            ? rawColor.trim()
+            : DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR;
+        const rawOpa = this.cfg['lidar-view-wireframe-opacity'];
+        const opa = typeof rawOpa === 'number' ? rawOpa : parseFloat(String(rawOpa ?? ''));
+        const alpha = isFinite(opa)
+            ? Math.max(0, Math.min(1, opa))
+            : DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY;
         const rgb = this._hexToRgb01(hex);
         return [rgb[0], rgb[1], rgb[2], alpha];
     }

@@ -30238,12 +30238,16 @@ class LidarViewLayer {
     this.type = "custom";
     this.renderingMode = "2d";
     this._vertexCount = 0;
+    this._lineIdxCount = 0;
+    this._indexType = 0;
     this._aPos = -1;
     this._shiftedMatrix = new Float32Array(16);
     this._radiusMeters = 100;
     this._pointSizePx = 1.5;
     this._color = [1, 1, 1, 0.5];
     this._alphaFade = 0;
+    this._wireframeEnabled = false;
+    this._wireframeColor = [1, 1, 1, 0.5];
     this._raster = null;
     this._homeMerc = maplibregl.MercatorCoordinate.fromLngLat([opts.homeLon, opts.homeLat], 0);
     this._mercPerMeter = this._homeMerc.meterInMercatorCoordinateUnits();
@@ -30273,6 +30277,15 @@ class LidarViewLayer {
     const clamped = Math.max(0, Math.min(1, a2));
     if (clamped === this._alphaFade) return;
     this._alphaFade = clamped;
+    this._map?.triggerRepaint();
+  }
+  setWireframeEnabled(on) {
+    if (on === this._wireframeEnabled) return;
+    this._wireframeEnabled = on;
+    this._map?.triggerRepaint();
+  }
+  setWireframeColor(rgba) {
+    this._wireframeColor = rgba;
     this._map?.triggerRepaint();
   }
   //Rebuild the GPU buffer from a fresh height raster. Only finite
@@ -30305,27 +30318,66 @@ class LidarViewLayer {
     const homeY = this._homeMerc.y;
     const homeZ = this._homeMerc.z ?? 0;
     const verts = new Float32Array(rasterSize * rasterSize * 3);
+    const cellToVert = new Int32Array(rasterSize * rasterSize);
     let n3 = 0;
     for (let j = 0; j < rasterSize; j++) {
       const cLat = maxLat - (j + 0.5) * pxLat;
       for (let i2 = 0; i2 < rasterSize; i2++) {
-        const h2 = heights[j * rasterSize + i2];
-        if (!isFinite(h2)) continue;
+        const idx = j * rasterSize + i2;
+        const h2 = heights[idx];
+        if (!isFinite(h2)) {
+          cellToVert[idx] = -1;
+          continue;
+        }
         const cLon = minLon + (i2 + 0.5) * pxLon;
         const mc = maplibregl.MercatorCoordinate.fromLngLat([cLon, cLat], h2);
         verts[n3 * 3] = mc.x - homeX;
         verts[n3 * 3 + 1] = mc.y - homeY;
         verts[n3 * 3 + 2] = (mc.z ?? 0) - homeZ;
+        cellToVert[idx] = n3;
         n3++;
       }
     }
     this._vertexCount = n3;
     const used = n3 > 0 ? verts.subarray(0, n3 * 3) : new Float32Array(0);
+    const maxEdges = Math.max(0, n3 * 2);
+    const lineIdx = new Uint32Array(maxEdges * 2);
+    let li = 0;
+    for (let j = 0; j < rasterSize; j++) {
+      for (let i2 = 0; i2 < rasterSize; i2++) {
+        const v2 = cellToVert[j * rasterSize + i2];
+        if (v2 < 0) continue;
+        if (i2 + 1 < rasterSize) {
+          const vR = cellToVert[j * rasterSize + (i2 + 1)];
+          if (vR >= 0) {
+            lineIdx[li++] = v2;
+            lineIdx[li++] = vR;
+          }
+        }
+        if (j + 1 < rasterSize) {
+          const vD = cellToVert[(j + 1) * rasterSize + i2];
+          if (vD >= 0) {
+            lineIdx[li++] = v2;
+            lineIdx[li++] = vD;
+          }
+        }
+      }
+    }
+    this._lineIdxCount = li;
+    const lineUsed = li > 0 ? lineIdx.subarray(0, li) : new Uint32Array(0);
     if (this._gl && this._buffer) {
-      this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this._buffer);
-      this._gl.bufferData(this._gl.ARRAY_BUFFER, used, this._gl.STATIC_DRAW);
+      const gl = this._gl;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, used, gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      if (this._indexBuffer) {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, lineUsed, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+      }
     } else {
       this._pendingVerts = used;
+      this._pendingLineIdx = lineUsed;
     }
     this._map?.triggerRepaint();
   }
@@ -30362,9 +30414,25 @@ class LidarViewLayer {
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
         this._pendingVerts = void 0;
       }
+      const isWebGL2 = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
+      const has32Idx = isWebGL2 || !!gl.getExtension("OES_element_index_uint");
+      this._indexType = has32Idx ? gl.UNSIGNED_INT : 0;
+      if (has32Idx) {
+        this._indexBuffer = gl.createBuffer() ?? void 0;
+        if (this._pendingLineIdx && this._indexBuffer) {
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._indexBuffer);
+          gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this._pendingLineIdx, gl.STATIC_DRAW);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+          this._pendingLineIdx = void 0;
+        }
+      }
     } catch (err) {
       try {
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      } catch (_2) {
+      }
+      try {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
       } catch (_2) {
       }
       if (this._buffer) {
@@ -30373,6 +30441,13 @@ class LidarViewLayer {
         } catch (_2) {
         }
         this._buffer = void 0;
+      }
+      if (this._indexBuffer) {
+        try {
+          gl.deleteBuffer(this._indexBuffer);
+        } catch (_2) {
+        }
+        this._indexBuffer = void 0;
       }
       if (program) {
         try {
@@ -30415,7 +30490,22 @@ class LidarViewLayer {
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.STENCIL_TEST);
     gl.disable(gl.CULL_FACE);
-    gl.drawArrays(gl.POINTS, 0, this._vertexCount);
+    if (this._uColor && this._pointSizePx > 0) {
+      gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
+      gl.drawArrays(gl.POINTS, 0, this._vertexCount);
+    }
+    if (this._wireframeEnabled && this._indexBuffer && this._indexType !== 0 && this._lineIdxCount > 0 && this._uColor) {
+      gl.uniform4f(
+        this._uColor,
+        this._wireframeColor[0],
+        this._wireframeColor[1],
+        this._wireframeColor[2],
+        this._wireframeColor[3]
+      );
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._indexBuffer);
+      gl.drawElements(gl.LINES, this._lineIdxCount, this._indexType, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+    }
   }
   //Build `mainMatrix * translation(homeMerc)` directly in the
   //pre-allocated Float32Array uniform target. The product simplifies
@@ -30450,9 +30540,12 @@ class LidarViewLayer {
   }
   onRemove(_map, gl) {
     if (this._buffer) gl.deleteBuffer(this._buffer);
+    if (this._indexBuffer) gl.deleteBuffer(this._indexBuffer);
     if (this._program) gl.deleteProgram(this._program);
     this._buffer = void 0;
+    this._indexBuffer = void 0;
     this._program = void 0;
+    this._indexType = 0;
     this._gl = void 0;
     this._map = void 0;
   }
@@ -30483,6 +30576,9 @@ const DEFAULT_SHADOW_OPACITY = 0.32;
 const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1.5;
 const DEFAULT_LIDAR_VIEW_POINT_COLOR = "#ffffff";
 const DEFAULT_LIDAR_VIEW_POINT_OPACITY = 0.5;
+const DEFAULT_LIDAR_VIEW_WIREFRAME = false;
+const DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR = "#ffffff";
+const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY = 0.35;
 const SHADOW_LAYER_IDS = [
   "helios-building-shadows"
 ];
@@ -31441,6 +31537,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarViewLayer.setRadiusMeters(this._lidarViewRadiusMeters());
     this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
     this._lidarViewLayer.setColor(this._lidarViewColorRgba());
+    this._lidarViewLayer.setWireframeEnabled(this._lidarViewWireframeEnabled());
+    this._lidarViewLayer.setWireframeColor(this._lidarViewWireframeRgba());
   }
   //Fade alpha multiplier in [0..1]. Driven by the card's enter/exit
   //animation; the engine just forwards. When the View is off the
@@ -31468,6 +31566,25 @@ const _HeliosEngine = class _HeliosEngine {
     const rawOpa = this.cfg["lidar-view-point-opacity"];
     const opa = typeof rawOpa === "number" ? rawOpa : parseFloat(String(rawOpa ?? ""));
     const alpha = isFinite(opa) ? Math.max(0, Math.min(1, opa)) : DEFAULT_LIDAR_VIEW_POINT_OPACITY;
+    const rgb = this._hexToRgb01(hex);
+    return [rgb[0], rgb[1], rgb[2], alpha];
+  }
+  _lidarViewWireframeEnabled() {
+    const raw2 = this.cfg["lidar-view-wireframe"];
+    if (typeof raw2 === "boolean") return raw2;
+    if (typeof raw2 === "string") {
+      const s2 = raw2.trim().toLowerCase();
+      if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+      if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+    }
+    return DEFAULT_LIDAR_VIEW_WIREFRAME;
+  }
+  _lidarViewWireframeRgba() {
+    const rawColor = this.cfg["lidar-view-wireframe-color"];
+    const hex = typeof rawColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim()) ? rawColor.trim() : DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR;
+    const rawOpa = this.cfg["lidar-view-wireframe-opacity"];
+    const opa = typeof rawOpa === "number" ? rawOpa : parseFloat(String(rawOpa ?? ""));
+    const alpha = isFinite(opa) ? Math.max(0, Math.min(1, opa)) : DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY;
     const rgb = this._hexToRgb01(hex);
     return [rgb[0], rgb[1], rgb[2], alpha];
   }
@@ -33010,6 +33127,12 @@ const en = {
     lidarViewPointSize: "Point size (px)",
     lidarViewPointColor: "Point color",
     lidarViewPointOpacity: "Point opacity",
+    lidarViewWireframe: "Wireframe overlay",
+    lidarViewWireframeOn: "On",
+    lidarViewWireframeOff: "Off",
+    lidarViewWireframeHint: "Connects each finite LiDAR cell to its right and bottom neighbours with line segments, producing a Tron-style mesh on top of the dot cloud. Dial the point size to 0 if you only want the lines. Heavy rasters at high precision are still drawn in a single GPU draw call, but the line count grows with the cell count, so older devices may slow down on big radii.",
+    lidarViewWireframeColor: "Wireframe color",
+    lidarViewWireframeOpacity: "Wireframe opacity",
     localLidarSection: "Advanced — Local LiDAR (BYO)",
     localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.",
     localLidarToolsHint: "Need to prepare a raster from scratch? The Helios repo ships Python helper tools under `tools/lidar/`, see the README there for the full pipeline (system GDAL install, `uv` setup, inspect / convert / synthetic test commands).",
@@ -33133,6 +33256,12 @@ const fr = {
     lidarViewPointSize: "Taille des points (px)",
     lidarViewPointColor: "Couleur des points",
     lidarViewPointOpacity: "Opacité des points",
+    lidarViewWireframe: "Fil de fer",
+    lidarViewWireframeOn: "Activé",
+    lidarViewWireframeOff: "Désactivé",
+    lidarViewWireframeHint: "Relie chaque cellule LiDAR finie à ses voisines droite et bas avec des segments, ce qui donne un maillage style Tron par-dessus le nuage de points. Met la taille des points à 0 si tu ne veux que les lignes. Les rasters lourds en haute précision tiennent toujours dans un seul draw call GPU, mais le nombre de lignes grandit avec le nombre de cellules, donc les vieux appareils peuvent ralentir sur les grands rayons.",
+    lidarViewWireframeColor: "Couleur du fil de fer",
+    lidarViewWireframeOpacity: "Opacité du fil de fer",
     localLidarSection: "Avancé — LiDAR local (BYO)",
     localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la zone définie, cette source remplace tout fournisseur national.",
     localLidarToolsHint: "Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d'inspection / conversion / test synthétique).",
@@ -33256,6 +33385,12 @@ const de = {
     lidarViewPointSize: "Punktgröße (px)",
     lidarViewPointColor: "Punktfarbe",
     lidarViewPointOpacity: "Punktdeckkraft",
+    lidarViewWireframe: "Drahtgitter",
+    lidarViewWireframeOn: "An",
+    lidarViewWireframeOff: "Aus",
+    lidarViewWireframeHint: "Verbindet jede gültige LiDAR-Zelle mit ihren rechten und unteren Nachbarn durch Linien, das ergibt ein Drahtgitter im Tron-Stil über der Punktwolke. Setze die Punktgröße auf 0, wenn du nur die Linien sehen willst. Auch schwere Raster bei hoher Präzision laufen in einem einzigen GPU-Draw, aber die Linienzahl wächst mit der Zellzahl, ältere Geräte können bei großen Radien einbrechen.",
+    lidarViewWireframeColor: "Drahtgitter-Farbe",
+    lidarViewWireframeOpacity: "Drahtgitter-Deckkraft",
     localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
     localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb des definierten Bereichs ersetzt diese Quelle jeden nationalen Anbieter.",
     localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).",
@@ -33379,6 +33514,12 @@ const es = {
     lidarViewPointSize: "Tamaño de puntos (px)",
     lidarViewPointColor: "Color de puntos",
     lidarViewPointOpacity: "Opacidad de puntos",
+    lidarViewWireframe: "Malla de alambre",
+    lidarViewWireframeOn: "Activado",
+    lidarViewWireframeOff: "Desactivado",
+    lidarViewWireframeHint: "Conecta cada celda LiDAR finita con sus vecinas a la derecha y abajo mediante segmentos, dando una malla estilo Tron sobre la nube de puntos. Pon el tamaño de los puntos a 0 si solo quieres las líneas. Los rasters densos en precisión alta siguen pintándose en una sola llamada GPU, pero el número de líneas crece con el número de celdas, los dispositivos antiguos pueden ralentizarse en radios grandes.",
+    lidarViewWireframeColor: "Color de la malla",
+    lidarViewWireframeOpacity: "Opacidad de la malla",
     localLidarSection: "Avanzado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del área definida, esta fuente reemplaza cualquier proveedor nacional.",
     localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? El repositorio de Helios incluye herramientas Python en `tools/lidar/`, consulta el README de esa carpeta para el pipeline completo (instalación de GDAL de sistema, configuración de `uv`, comandos de inspección / conversión / prueba sintética).",
@@ -33502,6 +33643,12 @@ const it = {
     lidarViewPointSize: "Dimensione punti (px)",
     lidarViewPointColor: "Colore punti",
     lidarViewPointOpacity: "Opacità punti",
+    lidarViewWireframe: "Reticolo",
+    lidarViewWireframeOn: "Attivo",
+    lidarViewWireframeOff: "Disattivo",
+    lidarViewWireframeHint: "Collega ogni cella LiDAR finita ai vicini a destra e in basso con segmenti, generando un reticolo stile Tron sopra la nuvola di punti. Imposta la dimensione dei punti a 0 se vuoi solo le linee. I raster pesanti in alta precisione restano in una sola chiamata GPU, ma il numero di linee cresce con quello delle celle, i dispositivi più vecchi possono rallentare sui raggi grandi.",
+    lidarViewWireframeColor: "Colore del reticolo",
+    lidarViewWireframeOpacity: "Opacità del reticolo",
     localLidarSection: "Avanzato — LiDAR locale (BYO)",
     localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. All'interno dell'area definita, questa sorgente sostituisce qualsiasi provider nazionale.",
     localLidarToolsHint: "Devi preparare un raster da zero? Il repository Helios include strumenti Python in `tools/lidar/`, vedi il README di quella cartella per la pipeline completa (installazione di GDAL di sistema, configurazione di `uv`, comandi di ispezione / conversione / test sintetico).",
@@ -33625,6 +33772,12 @@ const nl = {
     lidarViewPointSize: "Puntgrootte (px)",
     lidarViewPointColor: "Puntkleur",
     lidarViewPointOpacity: "Puntdekking",
+    lidarViewWireframe: "Draadmodel",
+    lidarViewWireframeOn: "Aan",
+    lidarViewWireframeOff: "Uit",
+    lidarViewWireframeHint: "Verbindt elke geldige LiDAR-cel met haar rechter- en onderbuur via segmenten, wat een Tron-achtig draadmodel over de puntwolk geeft. Zet de puntgrootte op 0 als je alleen de lijnen wilt. Zware rasters bij hoge precisie blijven in één GPU-call, maar het aantal lijnen groeit mee met het aantal cellen, oudere apparaten kunnen vertragen bij grote stralen.",
+    lidarViewWireframeColor: "Kleur van het draadmodel",
+    lidarViewWireframeOpacity: "Dekking van het draadmodel",
     localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
     localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen het gedefinieerde gebied vervangt deze bron elke nationale leverancier.",
     localLidarToolsHint: "Een eigen raster nodig? De Helios-repository bevat Python-hulpmiddelen onder `tools/lidar/`, zie de README daar voor de volledige pipeline (installatie van de GDAL-systeembibliotheek, `uv`-setup, inspect / convert / synthetisch test-commando's).",
@@ -33748,6 +33901,12 @@ const pt = {
     lidarViewPointSize: "Tamanho dos pontos (px)",
     lidarViewPointColor: "Cor dos pontos",
     lidarViewPointOpacity: "Opacidade dos pontos",
+    lidarViewWireframe: "Estrutura em arame",
+    lidarViewWireframeOn: "Ativo",
+    lidarViewWireframeOff: "Inativo",
+    lidarViewWireframeHint: "Liga cada célula LiDAR finita aos vizinhos à direita e abaixo com segmentos, criando uma malha estilo Tron sobre a nuvem de pontos. Coloca o tamanho dos pontos a 0 se só queres as linhas. Rasters densos em alta precisão continuam a desenhar-se numa única chamada GPU, mas o número de linhas cresce com o número de células, dispositivos antigos podem abrandar em raios grandes.",
+    lidarViewWireframeColor: "Cor da estrutura",
+    lidarViewWireframeOpacity: "Opacidade da estrutura",
     localLidarSection: "Avançado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da área definida, esta fonte substitui qualquer fornecedor nacional.",
     localLidarToolsHint: "Precisas de preparar um raster do zero? O repositório Helios inclui ferramentas Python em `tools/lidar/`, consulta o README dessa pasta para o pipeline completo (instalação do GDAL de sistema, configuração do `uv`, comandos de inspeção / conversão / teste sintético).",
@@ -33871,6 +34030,12 @@ const no = {
     lidarViewPointSize: "Punktstørrelse (px)",
     lidarViewPointColor: "Punktfarge",
     lidarViewPointOpacity: "Punktopasitet",
+    lidarViewWireframe: "Trådmodell",
+    lidarViewWireframeOn: "På",
+    lidarViewWireframeOff: "Av",
+    lidarViewWireframeHint: "Knytter hver gyldige LiDAR-celle til naboene til høyre og under med segmenter, og lager dermed et Tron-aktig nett oppå punktskyen. Sett punktstørrelsen til 0 om du kun vil ha linjene. Tunge rastere ved høy presisjon kjøres fortsatt i ett GPU-kall, men antall linjer vokser med antall celler, eldre enheter kan bremse på store radier.",
+    lidarViewWireframeColor: "Trådmodell-farge",
+    lidarViewWireframeOpacity: "Trådmodell-opasitet",
     localLidarSection: "Avansert — Lokal LiDAR (BYO)",
     localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.",
     localLidarToolsHint: "Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).",
@@ -37227,6 +37392,40 @@ let HeliosCardEditor = class extends i {
                             <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-point-opacity"] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
                         </div>
                     </label>
+                    <div class="field">
+                        <span class="label">${t2.editor.lidarViewWireframe}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${(c2["lidar-view-wireframe"] ?? DEFAULT_LIDAR_VIEW_WIREFRAME) === true ? "active" : ""}"
+                                @click="${() => this._update("lidar-view-wireframe", true)}"
+                            >${t2.editor.lidarViewWireframeOn}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${(c2["lidar-view-wireframe"] ?? DEFAULT_LIDAR_VIEW_WIREFRAME) !== true ? "active" : ""}"
+                                @click="${() => this._update("lidar-view-wireframe", false)}"
+                            >${t2.editor.lidarViewWireframeOff}</button>
+                        </div>
+                    </div>
+                    <div class="hint">${t2.editor.lidarViewWireframeHint}</div>
+                    <label class="field">
+                        <span class="label">${t2.editor.lidarViewWireframeColor}</span>
+                        <helios-color-picker
+                            .value="${String(c2["lidar-view-wireframe-color"] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR)}"
+                            @value-changed="${(e2) => this._update("lidar-view-wireframe-color", e2.detail.value)}"
+                        ></helios-color-picker>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t2.editor.lidarViewWireframeOpacity}</span>
+                        <div class="slider-row">
+                            <input
+                                type="range" min="0" max="1" step="0.05"
+                                .value="${String(c2["lidar-view-wireframe-opacity"] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY)}"
+                                @input="${(e2) => this._numSlider("lidar-view-wireframe-opacity", e2)}"
+                            />
+                            <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-wireframe-opacity"] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY), 0.05)}</span>
+                        </div>
+                    </label>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "lidar"}" @toggle="${(e2) => this._onSectionToggle("lidar", e2)}">
@@ -37362,7 +37561,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.31"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.32"}`,
       labelStyle,
       versionStyle
     );
@@ -37383,7 +37582,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.31",
+        version: "1.6.0-alpha.32",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37391,7 +37590,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.31"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.32"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

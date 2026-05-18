@@ -16,7 +16,10 @@ import
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
     DEFAULT_LIDAR_VIEW_POINT_COLOR,
-    DEFAULT_LIDAR_VIEW_POINT_OPACITY
+    DEFAULT_LIDAR_VIEW_POINT_OPACITY,
+    DEFAULT_LIDAR_VIEW_WIREFRAME,
+    DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR,
+    DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -1226,6 +1229,40 @@ export class HeliosCardEditor extends LitElement
                                 @input="${(e: Event) => this._numSlider('lidar-view-point-opacity', e)}"
                             />
                             <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
+                        </div>
+                    </label>
+                    <div class="field">
+                        <span class="label">${t.editor.lidarViewWireframe}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${((c['lidar-view-wireframe'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME) === true) ? 'active' : ''}"
+                                @click="${() => this._update('lidar-view-wireframe', true)}"
+                            >${t.editor.lidarViewWireframeOn}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${((c['lidar-view-wireframe'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME) !== true) ? 'active' : ''}"
+                                @click="${() => this._update('lidar-view-wireframe', false)}"
+                            >${t.editor.lidarViewWireframeOff}</button>
+                        </div>
+                    </div>
+                    <div class="hint">${t.editor.lidarViewWireframeHint}</div>
+                    <label class="field">
+                        <span class="label">${t.editor.lidarViewWireframeColor}</span>
+                        <helios-color-picker
+                            .value="${String(c['lidar-view-wireframe-color'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR)}"
+                            @value-changed="${(e: CustomEvent) => this._update('lidar-view-wireframe-color', e.detail.value)}"
+                        ></helios-color-picker>
+                    </label>
+                    <label class="field">
+                        <span class="label">${t.editor.lidarViewWireframeOpacity}</span>
+                        <div class="slider-row">
+                            <input
+                                type="range" min="0" max="1" step="0.05"
+                                .value="${String(c['lidar-view-wireframe-opacity'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY)}"
+                                @input="${(e: Event) => this._numSlider('lidar-view-wireframe-opacity', e)}"
+                            />
+                            <span class="slider-value">${this._fmtNum(Number(c['lidar-view-wireframe-opacity'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY), 0.05)}</span>
                         </div>
                     </label>
                 </details>
