@@ -2021,26 +2021,57 @@ export class HeliosEngine
     //layer instance is created once per engine and reused across style
     //reloads; setStyle wipes layers but the JS object survives, so we
     //re-add it and replay the cached buffer + tunables.
+    //
+    //All steps that touch MapLibre are wrapped in try / catch: a
+    //custom layer onAdd that throws can leave the painter with
+    //polluted GL state (bound buffers, attrib enables) and silently
+    //kill the basemap for the rest of the session. With the wrap, a
+    //bad shader compile or a transient painter state just disables
+    //our overlay instead of breaking the whole map.
+    //
+    //The addLayer call itself is deferred to the next animation frame.
+    //style.load can fire before MapLibre's painter has finished
+    //binding its default buffers; addLayer then synchronously invokes
+    //our onAdd against a half-initialised context, which is exactly
+    //the "map renders black until page refresh" symptom.
     private _initLidarViewLayer(): void
     {
         if (!this.map) return;
-        if (!this._lidarViewLayer)
+        try
         {
-            this._lidarViewLayer = new LidarViewLayer({
-                homeLat: this.homeLat,
-                homeLon: this.homeLon
+            if (!this._lidarViewLayer)
+            {
+                this._lidarViewLayer = new LidarViewLayer({
+                    homeLat: this.homeLat,
+                    homeLon: this.homeLon
+                });
+            }
+            this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
+            this._pushLidarViewConfig();
+
+            const layer  = this._lidarViewLayer;
+            const raster = this._lidarRaster;
+            window.requestAnimationFrame(() =>
+            {
+                if (!this.map) return;
+                try
+                {
+                    if (!this.map.getLayer(layer.id))
+                    {
+                        this.map.addLayer(layer);
+                    }
+                    if (raster) layer.setData(raster);
+                }
+                catch (err)
+                {
+                    console.warn('[HELIOS] LiDAR view layer attach failed:', err);
+                }
             });
         }
-        if (!this.map.getLayer(this._lidarViewLayer.id))
+        catch (err)
         {
-            this.map.addLayer(this._lidarViewLayer);
+            console.warn('[HELIOS] LiDAR view layer init failed:', err);
         }
-        //Keep the home + visual knobs in sync (style reloads may have
-        //wiped the previous GL state, the setters double as
-        //"replay the current values" hooks).
-        this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
-        this._pushLidarViewConfig();
-        if (this._lidarRaster) this._lidarViewLayer.setData(this._lidarRaster);
     }
 
     //Read all LiDAR View visual knobs off the current config and push

@@ -262,35 +262,68 @@ export class LidarViewLayer implements CustomLayerInterface
         this._map = map;
         this._gl  = gl;
 
-        const vs = this._compileShader(gl, gl.VERTEX_SHADER,   VERT_SRC);
-        const fs = this._compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
-        const program = gl.createProgram();
-        if (!program) throw new Error('LidarViewLayer: createProgram failed');
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+        //onAdd must leave GL in a clean state on every exit path. A
+        //partial shader compile / link that throws while a buffer is
+        //bound or an attribute is enabled pollutes the painter's
+        //assumptions and the basemap renders to garbage until the
+        //page is refreshed. Catch our own errors, free anything we
+        //allocated, and re-throw so the surrounding try / catch in
+        //_initLidarViewLayer reports it without breaking the rest of
+        //the map setup.
+        let vs: WebGLShader | null = null;
+        let fs: WebGLShader | null = null;
+        let program: WebGLProgram | null = null;
+        try
         {
-            const log = gl.getProgramInfoLog(program) ?? '';
-            gl.deleteProgram(program);
-            throw new Error(`LidarViewLayer: link failed: ${log}`);
+            vs = this._compileShader(gl, gl.VERTEX_SHADER,   VERT_SRC);
+            fs = this._compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
+            program = gl.createProgram();
+            if (!program) throw new Error('LidarViewLayer: createProgram failed');
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+            {
+                const log = gl.getProgramInfoLog(program) ?? '';
+                throw new Error(`LidarViewLayer: link failed: ${log}`);
+            }
+            this._program = program;
+
+            this._aPos          = gl.getAttribLocation(program, 'a_pos');
+            this._uMatrix       = gl.getUniformLocation(program, 'u_matrix')       ?? undefined;
+            this._uMercPerMeter = gl.getUniformLocation(program, 'u_mercPerMeter') ?? undefined;
+            this._uRadius       = gl.getUniformLocation(program, 'u_radiusMeters') ?? undefined;
+            this._uPointSize    = gl.getUniformLocation(program, 'u_pointSizePx')  ?? undefined;
+            this._uColor        = gl.getUniformLocation(program, 'u_color')        ?? undefined;
+            this._uAlphaFade    = gl.getUniformLocation(program, 'u_alphaFade')    ?? undefined;
+
+            this._buffer = gl.createBuffer() ?? undefined;
+            if (this._pendingVerts && this._buffer)
+            {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
+                gl.bufferData(gl.ARRAY_BUFFER, this._pendingVerts, gl.STATIC_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+                this._pendingVerts = undefined;
+            }
         }
-        this._program = program;
-
-        this._aPos          = gl.getAttribLocation(program, 'a_pos');
-        this._uMatrix       = gl.getUniformLocation(program, 'u_matrix')       ?? undefined;
-        this._uMercPerMeter = gl.getUniformLocation(program, 'u_mercPerMeter') ?? undefined;
-        this._uRadius       = gl.getUniformLocation(program, 'u_radiusMeters') ?? undefined;
-        this._uPointSize    = gl.getUniformLocation(program, 'u_pointSizePx')  ?? undefined;
-        this._uColor        = gl.getUniformLocation(program, 'u_color')        ?? undefined;
-        this._uAlphaFade    = gl.getUniformLocation(program, 'u_alphaFade')    ?? undefined;
-
-        this._buffer = gl.createBuffer() ?? undefined;
-        if (this._pendingVerts && this._buffer)
+        catch (err)
         {
-            gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
-            gl.bufferData(gl.ARRAY_BUFFER, this._pendingVerts, gl.STATIC_DRAW);
-            this._pendingVerts = undefined;
+            //Tear down whatever managed to allocate before the throw,
+            //so MapLibre's next layer sees a clean GL state.
+            try { gl.bindBuffer(gl.ARRAY_BUFFER, null); } catch (_) {}
+            if (this._buffer)
+            {
+                try { gl.deleteBuffer(this._buffer); } catch (_) {}
+                this._buffer = undefined;
+            }
+            if (program)
+            {
+                try { gl.deleteProgram(program); } catch (_) {}
+            }
+            if (vs) try { gl.deleteShader(vs); } catch (_) {}
+            if (fs) try { gl.deleteShader(fs); } catch (_) {}
+            this._program = undefined;
+            throw err;
         }
     }
 

@@ -30332,31 +30332,64 @@ class LidarViewLayer {
   onAdd(map, gl) {
     this._map = map;
     this._gl = gl;
-    const vs = this._compileShader(gl, gl.VERTEX_SHADER, VERT_SRC);
-    const fs = this._compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
-    const program = gl.createProgram();
-    if (!program) throw new Error("LidarViewLayer: createProgram failed");
-    gl.attachShader(program, vs);
-    gl.attachShader(program, fs);
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      const log = gl.getProgramInfoLog(program) ?? "";
-      gl.deleteProgram(program);
-      throw new Error(`LidarViewLayer: link failed: ${log}`);
-    }
-    this._program = program;
-    this._aPos = gl.getAttribLocation(program, "a_pos");
-    this._uMatrix = gl.getUniformLocation(program, "u_matrix") ?? void 0;
-    this._uMercPerMeter = gl.getUniformLocation(program, "u_mercPerMeter") ?? void 0;
-    this._uRadius = gl.getUniformLocation(program, "u_radiusMeters") ?? void 0;
-    this._uPointSize = gl.getUniformLocation(program, "u_pointSizePx") ?? void 0;
-    this._uColor = gl.getUniformLocation(program, "u_color") ?? void 0;
-    this._uAlphaFade = gl.getUniformLocation(program, "u_alphaFade") ?? void 0;
-    this._buffer = gl.createBuffer() ?? void 0;
-    if (this._pendingVerts && this._buffer) {
-      gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
-      gl.bufferData(gl.ARRAY_BUFFER, this._pendingVerts, gl.STATIC_DRAW);
-      this._pendingVerts = void 0;
+    let vs = null;
+    let fs = null;
+    let program = null;
+    try {
+      vs = this._compileShader(gl, gl.VERTEX_SHADER, VERT_SRC);
+      fs = this._compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
+      program = gl.createProgram();
+      if (!program) throw new Error("LidarViewLayer: createProgram failed");
+      gl.attachShader(program, vs);
+      gl.attachShader(program, fs);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        const log = gl.getProgramInfoLog(program) ?? "";
+        throw new Error(`LidarViewLayer: link failed: ${log}`);
+      }
+      this._program = program;
+      this._aPos = gl.getAttribLocation(program, "a_pos");
+      this._uMatrix = gl.getUniformLocation(program, "u_matrix") ?? void 0;
+      this._uMercPerMeter = gl.getUniformLocation(program, "u_mercPerMeter") ?? void 0;
+      this._uRadius = gl.getUniformLocation(program, "u_radiusMeters") ?? void 0;
+      this._uPointSize = gl.getUniformLocation(program, "u_pointSizePx") ?? void 0;
+      this._uColor = gl.getUniformLocation(program, "u_color") ?? void 0;
+      this._uAlphaFade = gl.getUniformLocation(program, "u_alphaFade") ?? void 0;
+      this._buffer = gl.createBuffer() ?? void 0;
+      if (this._pendingVerts && this._buffer) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this._pendingVerts, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        this._pendingVerts = void 0;
+      }
+    } catch (err) {
+      try {
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      } catch (_2) {
+      }
+      if (this._buffer) {
+        try {
+          gl.deleteBuffer(this._buffer);
+        } catch (_2) {
+        }
+        this._buffer = void 0;
+      }
+      if (program) {
+        try {
+          gl.deleteProgram(program);
+        } catch (_2) {
+        }
+      }
+      if (vs) try {
+        gl.deleteShader(vs);
+      } catch (_2) {
+      }
+      if (fs) try {
+        gl.deleteShader(fs);
+      } catch (_2) {
+      }
+      this._program = void 0;
+      throw err;
     }
   }
   render(gl, args) {
@@ -31359,20 +31392,46 @@ const _HeliosEngine = class _HeliosEngine {
   //layer instance is created once per engine and reused across style
   //reloads; setStyle wipes layers but the JS object survives, so we
   //re-add it and replay the cached buffer + tunables.
+  //
+  //All steps that touch MapLibre are wrapped in try / catch: a
+  //custom layer onAdd that throws can leave the painter with
+  //polluted GL state (bound buffers, attrib enables) and silently
+  //kill the basemap for the rest of the session. With the wrap, a
+  //bad shader compile or a transient painter state just disables
+  //our overlay instead of breaking the whole map.
+  //
+  //The addLayer call itself is deferred to the next animation frame.
+  //style.load can fire before MapLibre's painter has finished
+  //binding its default buffers; addLayer then synchronously invokes
+  //our onAdd against a half-initialised context, which is exactly
+  //the "map renders black until page refresh" symptom.
   _initLidarViewLayer() {
     if (!this.map) return;
-    if (!this._lidarViewLayer) {
-      this._lidarViewLayer = new LidarViewLayer({
-        homeLat: this.homeLat,
-        homeLon: this.homeLon
+    try {
+      if (!this._lidarViewLayer) {
+        this._lidarViewLayer = new LidarViewLayer({
+          homeLat: this.homeLat,
+          homeLon: this.homeLon
+        });
+      }
+      this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
+      this._pushLidarViewConfig();
+      const layer = this._lidarViewLayer;
+      const raster = this._lidarRaster;
+      window.requestAnimationFrame(() => {
+        if (!this.map) return;
+        try {
+          if (!this.map.getLayer(layer.id)) {
+            this.map.addLayer(layer);
+          }
+          if (raster) layer.setData(raster);
+        } catch (err) {
+          console.warn("[HELIOS] LiDAR view layer attach failed:", err);
+        }
       });
+    } catch (err) {
+      console.warn("[HELIOS] LiDAR view layer init failed:", err);
     }
-    if (!this.map.getLayer(this._lidarViewLayer.id)) {
-      this.map.addLayer(this._lidarViewLayer);
-    }
-    this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
-    this._pushLidarViewConfig();
-    if (this._lidarRaster) this._lidarViewLayer.setData(this._lidarRaster);
   }
   //Read all LiDAR View visual knobs off the current config and push
   //them to the layer. Called on init and whenever updateConfig sees a
@@ -37303,7 +37362,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.29"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.30"}`,
       labelStyle,
       versionStyle
     );
@@ -37324,7 +37383,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.29",
+        version: "1.6.0-alpha.30",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37332,7 +37391,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.29"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.30"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
