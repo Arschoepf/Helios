@@ -512,7 +512,8 @@ export function renderDashTodaySection(
                             <span class="dash-stat-unit">kWh ${t.detail.todayProduced}</span>
                             ${deltaPct !== null ? html`
                                 <span class="dash-stat-delta ${deltaPct >= 0 ? 'dash-stat-delta-up' : 'dash-stat-delta-down'}"
-                                      title="${t.detail.deltaTooltip}"
+                                      data-tooltip="${t.detail.deltaTooltip}"
+                                      aria-label="${t.detail.deltaTooltip}"
                                 >
                                     (${deltaPct >= 0 ? '+' : ''}${formatLocalisedNumber(host.hass, deltaPct, 0, true)} %)
                                 </span>

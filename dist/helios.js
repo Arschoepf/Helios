@@ -2176,9 +2176,42 @@ const heliosCardStyles = i$3`
         font-variant-numeric: tabular-nums;
         margin-left: 6px;
         opacity: 0.85;
+        position: relative;
+        cursor: help;
     }
     .dash-stat-delta-up   { color: #22c55e; }
     .dash-stat-delta-down { color: #ef4444; }
+    /*  Custom CSS hover hint. Native title= works but only fires
+        after a ~1 s hover delay and is gated by browser quirks
+        inside HA's nested Shadow DOM; a pure CSS ::after
+        appears instantly on hover and looks consistent across
+        every host environment. data-tooltip carries the i18n
+        string; aria-label keeps screen readers informed.       */
+    .dash-stat-delta::after
+    {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.85);
+        color: #ffffff;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.1px;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease-out 0.05s;
+        z-index: 10;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
+    }
+    .dash-stat-delta:hover::after
+    {
+        opacity: 1;
+    }
     .dash-today-meta
     {
         display: flex;
@@ -2193,18 +2226,23 @@ const heliosCardStyles = i$3`
     {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        font-size: 12px;
+        /*  Tightened from 12 px to 11 px font and 6 px to 4 px
+            gap so the two peak meta lines (PIC RÉEL + PIC PRÉVU)
+            still fit side by side at typical smartphone card
+            widths (~330 px inner width). Below that the parent
+            flex-wrap kicks in and they stack as before.        */
+        gap: 4px;
+        font-size: 11px;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
     }
-    .dash-today-line ha-icon { --mdc-icon-size: 14px; }
+    .dash-today-line ha-icon { --mdc-icon-size: 13px; }
     .dash-today-line .dash-line-value { font-weight: 700; }
     .dash-today-line .dash-line-label
     {
         font-size: 10px;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.8px;
         opacity: 0.55;
     }
 
@@ -2374,42 +2412,50 @@ const heliosCardStyles = i$3`
         border-color: #191a1b;
     }
 
-    /*  X-axis: hour ticks ('00h' / '06h' / ...) along the bottom
-        edge of the chart frame, semi-transparent so they read as
-        subtle annotation. Y-axis ticks for kWh sit just inside
-        the left edge in the same compact style.                  */
+    /*  Axis label overlays. Positioned so each label hugs its
+        respective gridline:
+        - X-axis container starts where horizontal gridlines end
+          (top: 83.33 %, matching (H - PAD_B) / H), so the hour
+          labels sit ~2 px below the gridline-end of the data area.
+        - Y-axis container ends where vertical gridlines start
+          (width: 9.17 %, matching PAD_L / W), with labels right-
+          aligned 3 px inside, so each kWh number reads as a
+          caption directly to the left of its gridline.
+        Both have pointer-events: none so they don't intercept
+        hover on the chart.                                        */
     .dash-today-chart-axis-x
     {
         position: absolute;
-        left: 0; right: 0; bottom: 2px;
-        height: 10px;
+        left: 0; right: 0;
+        top: 83.33%;
+        bottom: 0;
         pointer-events: none;
     }
     .dash-today-chart-axis-x-label
     {
         position: absolute;
+        top: 2px;
         transform: translateX(-50%);
-        bottom: 0;
         font-size: 9px;
         font-weight: 600;
-        opacity: 0.5;
+        opacity: 0.55;
         font-variant-numeric: tabular-nums;
     }
     .dash-today-chart-axis-y
     {
         position: absolute;
-        top: 0; bottom: 0; left: 4px;
-        width: 22px;
+        top: 0; bottom: 0; left: 0;
+        width: 9.17%;
         pointer-events: none;
     }
     .dash-today-chart-axis-y-label
     {
         position: absolute;
-        left: 0;
+        right: 3px;
         transform: translateY(-50%);
         font-size: 9px;
         font-weight: 600;
-        opacity: 0.5;
+        opacity: 0.55;
         font-variant-numeric: tabular-nums;
     }
 
@@ -37892,7 +37938,8 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                             <span class="dash-stat-unit">kWh ${t2.detail.todayProduced}</span>
                             ${deltaPct !== null ? b`
                                 <span class="dash-stat-delta ${deltaPct >= 0 ? "dash-stat-delta-up" : "dash-stat-delta-down"}"
-                                      title="${t2.detail.deltaTooltip}"
+                                      data-tooltip="${t2.detail.deltaTooltip}"
+                                      aria-label="${t2.detail.deltaTooltip}"
                                 >
                                     (${deltaPct >= 0 ? "+" : ""}${formatLocalisedNumber(host.hass, deltaPct, 0, true)} %)
                                 </span>
@@ -40045,7 +40092,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.43"}`,
+      `%c☀ HELIOS%c v${"1.6.0-beta.0"}`,
       labelStyle,
       versionStyle
     );
@@ -40066,7 +40113,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.43",
+        version: "1.6.0-beta.0",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40074,7 +40121,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.43"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-beta.0"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
