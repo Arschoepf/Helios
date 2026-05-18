@@ -30514,9 +30514,23 @@ const _HeliosEngine = class _HeliosEngine {
       cleaned.push({ tMs: ms, wm2: s2.wm2 });
     }
     cleaned.sort((a2, b2) => a2.tMs - b2.tMs);
-    this._sensorIrradianceSamples = cleaned.length > 0 ? cleaned : null;
+    const next3 = cleaned.length > 0 ? cleaned : null;
+    if (this._sensorSamplesEqual(this._sensorIrradianceSamples, next3)) {
+      return;
+    }
+    this._sensorIrradianceSamples = next3;
     this._arcInputsCache = void 0;
     this._renderForCurrentSelection();
+  }
+  _sensorSamplesEqual(a2, b2) {
+    if (a2 === b2) return true;
+    if (a2 === null || b2 === null) return false;
+    if (a2.length !== b2.length) return false;
+    for (let i2 = 0; i2 < a2.length; i2++) {
+      if (a2[i2].tMs !== b2[i2].tMs) return false;
+      if (a2[i2].wm2 !== b2[i2].wm2) return false;
+    }
+    return true;
   }
   //Nearest-neighbour lookup over the pushed sensor history. Returns
   //the W/m² reading whose timestamp is closest to `t` provided the
@@ -37028,7 +37042,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.25"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.26"}`,
       labelStyle,
       versionStyle
     );
@@ -37049,7 +37063,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.25",
+        version: "1.6.0-alpha.26",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37057,7 +37071,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.25"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.26"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

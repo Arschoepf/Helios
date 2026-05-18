@@ -724,13 +724,42 @@ export class HeliosEngine
             cleaned.push({ tMs: ms, wm2: s.wm2 });
         }
         cleaned.sort((a, b) => a.tMs - b.tMs);
-        this._sensorIrradianceSamples = cleaned.length > 0 ? cleaned : null;
+        const next = cleaned.length > 0 ? cleaned : null;
+
+        //Skip the (re-)render hop when the dataset matches what we
+        //already hold. The card pushes samples on every Lit cycle to
+        //keep the live state fresh, so without this guard each push
+        //fires onWeatherUpdate, which rewrites @state references on
+        //the card, which re-runs updated(), which pushes again, an
+        //unterminated render loop that freezes the dashboard the
+        //moment a solar-radiation entity is selected.
+        if (this._sensorSamplesEqual(this._sensorIrradianceSamples, next))
+        {
+            return;
+        }
+        this._sensorIrradianceSamples = next;
         //Sun arc cache colours each daily sample from a single live-
         //cloud key; mixing sensor data into the lookup invalidates
         //the existing cache for that day so the next projectSunScene
         //rebuilds with the new ground truth.
         this._arcInputsCache = undefined;
         this._renderForCurrentSelection();
+    }
+
+    private _sensorSamplesEqual(
+        a: { tMs: number; wm2: number }[] | null,
+        b: { tMs: number; wm2: number }[] | null
+    ): boolean
+    {
+        if (a === b) return true;
+        if (a === null || b === null) return false;
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++)
+        {
+            if (a[i].tMs !== b[i].tMs) return false;
+            if (a[i].wm2 !== b[i].wm2) return false;
+        }
+        return true;
     }
 
     //Nearest-neighbour lookup over the pushed sensor history. Returns
