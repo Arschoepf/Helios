@@ -2126,14 +2126,18 @@ export class HeliosEngine
 
     //Distance-based opacity fall-off bounds for the View. The cloud
     //sits at full opacity within LIDAR_VIEW_FULL_OPACITY_RADIUS_M of
-    //the home, then smooth-fades to 0 at the fetch radius (building-
-    //radius). On tight discs (building-radius < the full-opacity
-    //threshold) the band collapses to a near-sharp cut at the data
-    //edge, with a 1 m epsilon so the shader's smoothstep never sees
-    //edge0 == edge1 (undefined behaviour in GLSL).
+    //the home, then smooth-fades to 0 at half the fetch radius
+    //(building-radius / 2). Halving the outer bound keeps the fade
+    //band tight enough to be visible even on a fullscreen layout
+    //with a large display radius, and roughly quarters the cell
+    //count rasterised per frame (area scales with r squared). On
+    //tight discs (building-radius / 2 < the full-opacity threshold)
+    //the band collapses to a near-sharp cut at the data edge, with
+    //a 1 m epsilon so the shader's smoothstep never sees edge0 ==
+    //edge1 (undefined behaviour in GLSL).
     private _lidarViewFadeRange(): [fullMeters: number, fadeMeters: number]
     {
-        const fadeOut = Math.max(2, this._buildingRadiusMeters());
+        const fadeOut = Math.max(2, this._buildingRadiusMeters() * 0.5);
         const full    = Math.max(1, Math.min(LIDAR_VIEW_FULL_OPACITY_RADIUS_M, fadeOut - 1));
         return [full, fadeOut];
     }

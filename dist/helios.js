@@ -31571,13 +31571,17 @@ const _HeliosEngine = class _HeliosEngine {
   }
   //Distance-based opacity fall-off bounds for the View. The cloud
   //sits at full opacity within LIDAR_VIEW_FULL_OPACITY_RADIUS_M of
-  //the home, then smooth-fades to 0 at the fetch radius (building-
-  //radius). On tight discs (building-radius < the full-opacity
-  //threshold) the band collapses to a near-sharp cut at the data
-  //edge, with a 1 m epsilon so the shader's smoothstep never sees
-  //edge0 == edge1 (undefined behaviour in GLSL).
+  //the home, then smooth-fades to 0 at half the fetch radius
+  //(building-radius / 2). Halving the outer bound keeps the fade
+  //band tight enough to be visible even on a fullscreen layout
+  //with a large display radius, and roughly quarters the cell
+  //count rasterised per frame (area scales with r squared). On
+  //tight discs (building-radius / 2 < the full-opacity threshold)
+  //the band collapses to a near-sharp cut at the data edge, with
+  //a 1 m epsilon so the shader's smoothstep never sees edge0 ==
+  //edge1 (undefined behaviour in GLSL).
   _lidarViewFadeRange() {
-    const fadeOut = Math.max(2, this._buildingRadiusMeters());
+    const fadeOut = Math.max(2, this._buildingRadiusMeters() * 0.5);
     const full = Math.max(1, Math.min(LIDAR_VIEW_FULL_OPACITY_RADIUS_M, fadeOut - 1));
     return [full, fadeOut];
   }
@@ -37560,7 +37564,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.33"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.34"}`,
       labelStyle,
       versionStyle
     );
@@ -37581,7 +37585,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.33",
+        version: "1.6.0-alpha.34",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37589,7 +37593,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.33"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.34"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
