@@ -15,11 +15,11 @@ import
     DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
-    DEFAULT_LIDAR_VIEW_POINT_COLOR,
     DEFAULT_LIDAR_VIEW_POINT_OPACITY,
     DEFAULT_LIDAR_VIEW_WIREFRAME,
-    DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR,
-    DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY
+    DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY,
+    defaultLidarViewPointColor,
+    defaultLidarViewWireframeColor
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -1191,18 +1191,6 @@ export class HeliosCardEditor extends LitElement
                     <summary class="section-title section-title-collapse">${t.editor.lidarViewSection}</summary>
                     <div class="hint">${t.editor.lidarViewHint}</div>
                     <label class="field">
-                        <span class="label">${t.editor.lidarViewRadius}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="20" max="500" step="10"
-                                .value="${String(c['lidar-view-radius'] ?? (c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M))}"
-                                @input="${(e: Event) => this._numSlider('lidar-view-radius', e)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c['lidar-view-radius'] ?? (c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M)), 1)} m</span>
-                        </div>
-                    </label>
-                    <div class="hint">${t.editor.lidarViewRadiusHint}</div>
-                    <label class="field">
                         <span class="label">${t.editor.lidarViewPointSize}</span>
                         <div class="slider-row">
                             <input
@@ -1216,7 +1204,7 @@ export class HeliosCardEditor extends LitElement
                     <label class="field">
                         <span class="label">${t.editor.lidarViewPointColor}</span>
                         <helios-color-picker
-                            .value="${String(c['lidar-view-point-color'] ?? DEFAULT_LIDAR_VIEW_POINT_COLOR)}"
+                            .value="${String(c['lidar-view-point-color'] ?? defaultLidarViewPointColor(c['card-theme']))}"
                             @value-changed="${(e: CustomEvent) => this._update('lidar-view-point-color', e.detail.value)}"
                         ></helios-color-picker>
                     </label>
@@ -1250,7 +1238,7 @@ export class HeliosCardEditor extends LitElement
                     <label class="field">
                         <span class="label">${t.editor.lidarViewWireframeColor}</span>
                         <helios-color-picker
-                            .value="${String(c['lidar-view-wireframe-color'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR)}"
+                            .value="${String(c['lidar-view-wireframe-color'] ?? defaultLidarViewWireframeColor(c['card-theme']))}"
                             @value-changed="${(e: CustomEvent) => this._update('lidar-view-wireframe-color', e.detail.value)}"
                         ></helios-color-picker>
                     </label>

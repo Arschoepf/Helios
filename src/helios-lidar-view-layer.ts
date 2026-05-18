@@ -23,10 +23,14 @@ import type {
 } from 'maplibre-gl';
 
 //Vertex shader. Takes one Mercator-offset triplet per point (each
-//cell's position relative to the home, in Mercator units), filters by
-//distance to the home in metres, and sets gl_PointSize so the dot
-//occupies the configured pixel area regardless of zoom. Off-radius
-//points collapse to PointSize 0 so the rasteriser skips them.
+//cell's position relative to the home, in Mercator units) and emits
+//a continuous fall-off factor v_alpha based on the cell's metric
+//distance to the home: 1 within u_fadeFullMeters, fading down to 0
+//at u_fadeOutMeters via a smoothstep. The fragment shader uses
+//v_alpha as a multiplier on the layer colour so points near the
+//home read at full opacity while the outer disc dissolves into the
+//basemap. Lines whose endpoints span the fade band inherit a
+//gradient automatically through varying interpolation.
 //
 //The matrix is *already* shifted to be home-relative: the host JS
 //pre-multiplies MapLibre's projection matrix by a translation to the
@@ -42,18 +46,24 @@ precision highp float;
 attribute vec3 a_pos;
 uniform mat4  u_matrix;
 uniform float u_mercPerMeter;
-uniform float u_radiusMeters;
+uniform float u_fadeFullMeters;
+uniform float u_fadeOutMeters;
 uniform float u_pointSizePx;
-varying float v_inside;
+varying float v_alpha;
 
 void main() {
     float dxM = a_pos.x / u_mercPerMeter;
     float dyM = a_pos.y / u_mercPerMeter;
     float d2  = dxM * dxM + dyM * dyM;
-    float r2  = u_radiusMeters * u_radiusMeters;
-    v_inside  = step(d2, r2);
+    float fullR2 = u_fadeFullMeters * u_fadeFullMeters;
+    float fadeR2 = u_fadeOutMeters * u_fadeOutMeters;
+    v_alpha = 1.0 - smoothstep(fullR2, fadeR2, d2);
     gl_Position  = u_matrix * vec4(a_pos, 1.0);
-    gl_PointSize = u_pointSizePx * v_inside;
+    //Collapse the primitive once the alpha is essentially zero so
+    //fully-faded points don't waste rasteriser time. The 0.001
+    //threshold is below the perceptual floor (1/255 = 0.0039) so
+    //nothing visible is dropped.
+    gl_PointSize = u_pointSizePx * step(0.001, v_alpha);
 }
 `;
 
@@ -67,11 +77,16 @@ const FRAG_SRC = `
 precision mediump float;
 uniform vec4  u_color;
 uniform float u_alphaFade;
-varying float v_inside;
+varying float v_alpha;
 
 void main() {
-    if (v_inside < 0.5) discard;
-    gl_FragColor = vec4(u_color.rgb, u_color.a * u_alphaFade);
+    //v_alpha is the home-distance fall-off, 1 inside the full radius
+    //and dropping to 0 at the fade-out radius. Cells fully past the
+    //fade are still discarded so we don't waste blend bandwidth on
+    //invisible fragments (and for lines this clips the segment past
+    //the boundary cleanly).
+    if (v_alpha <= 0.0) discard;
+    gl_FragColor = vec4(u_color.rgb, u_color.a * u_alphaFade * v_alpha);
 }
 `;
 
@@ -120,7 +135,8 @@ export class LidarViewLayer implements CustomLayerInterface
     private _aPos: number = -1;
     private _uMatrix?:       WebGLUniformLocation;
     private _uMercPerMeter?: WebGLUniformLocation;
-    private _uRadius?:       WebGLUniformLocation;
+    private _uFadeFull?:     WebGLUniformLocation;
+    private _uFadeOut?:      WebGLUniformLocation;
     private _uPointSize?:    WebGLUniformLocation;
     private _uColor?:        WebGLUniformLocation;
     private _uAlphaFade?:    WebGLUniformLocation;
@@ -128,8 +144,12 @@ export class LidarViewLayer implements CustomLayerInterface
     //to avoid garbage on every render call.
     private _shiftedMatrix:  Float32Array = new Float32Array(16);
 
-    //Tunables, pushed by the engine on config / fade ticks.
-    private _radiusMeters: number = 100;
+    //Tunables, pushed by the engine on config / fade ticks. The fade
+    //range (full inside .._fadeFullMeters, smoothstep down to 0 at
+    //.._fadeOutMeters) lets the cloud sit at full opacity around the
+    //home and dissolve into the basemap further out.
+    private _fadeFullMeters: number = 100;
+    private _fadeOutMeters:  number = 100;
     private _pointSizePx:  number = 1.5;
     private _color:        [number, number, number, number] = [1, 1, 1, 0.5];
     private _alphaFade:    number = 0;
@@ -173,10 +193,12 @@ export class LidarViewLayer implements CustomLayerInterface
         this._map?.triggerRepaint();
     }
 
-    public setRadiusMeters(r: number): void
+    public setFadeRange(fullMeters: number, fadeOutMeters: number): void
     {
-        if (r === this._radiusMeters) return;
-        this._radiusMeters = r;
+        if (fullMeters === this._fadeFullMeters
+         && fadeOutMeters === this._fadeOutMeters) return;
+        this._fadeFullMeters = fullMeters;
+        this._fadeOutMeters  = fadeOutMeters;
         this._map?.triggerRepaint();
     }
 
@@ -379,12 +401,13 @@ export class LidarViewLayer implements CustomLayerInterface
             this._program = program;
 
             this._aPos          = gl.getAttribLocation(program, 'a_pos');
-            this._uMatrix       = gl.getUniformLocation(program, 'u_matrix')       ?? undefined;
-            this._uMercPerMeter = gl.getUniformLocation(program, 'u_mercPerMeter') ?? undefined;
-            this._uRadius       = gl.getUniformLocation(program, 'u_radiusMeters') ?? undefined;
-            this._uPointSize    = gl.getUniformLocation(program, 'u_pointSizePx')  ?? undefined;
-            this._uColor        = gl.getUniformLocation(program, 'u_color')        ?? undefined;
-            this._uAlphaFade    = gl.getUniformLocation(program, 'u_alphaFade')    ?? undefined;
+            this._uMatrix       = gl.getUniformLocation(program, 'u_matrix')        ?? undefined;
+            this._uMercPerMeter = gl.getUniformLocation(program, 'u_mercPerMeter')  ?? undefined;
+            this._uFadeFull     = gl.getUniformLocation(program, 'u_fadeFullMeters') ?? undefined;
+            this._uFadeOut      = gl.getUniformLocation(program, 'u_fadeOutMeters')  ?? undefined;
+            this._uPointSize    = gl.getUniformLocation(program, 'u_pointSizePx')   ?? undefined;
+            this._uColor        = gl.getUniformLocation(program, 'u_color')         ?? undefined;
+            this._uAlphaFade    = gl.getUniformLocation(program, 'u_alphaFade')     ?? undefined;
 
             this._buffer = gl.createBuffer() ?? undefined;
             if (this._pendingVerts && this._buffer)
@@ -472,7 +495,8 @@ export class LidarViewLayer implements CustomLayerInterface
 
         if (this._uMatrix)       gl.uniformMatrix4fv(this._uMatrix, false, this._shiftedMatrix);
         if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
-        if (this._uRadius)       gl.uniform1f(this._uRadius, this._radiusMeters);
+        if (this._uFadeFull)     gl.uniform1f(this._uFadeFull, this._fadeFullMeters);
+        if (this._uFadeOut)      gl.uniform1f(this._uFadeOut,  this._fadeOutMeters);
         //gl_PointSize is measured in framebuffer pixels. MapLibre
         //sizes its framebuffer at map.getPixelRatio() x CSS, which the
         //user can clamp via the `pixel-ratio` config (1x on mobile to

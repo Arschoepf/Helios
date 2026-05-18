@@ -231,16 +231,6 @@ export interface HeliosConfig
     //every raster cell currently loaded is projected to screen as a
     //small dot. These keys tune the look; none of them affect cast-
     //shadow rendering.
-    //  lidar-view-radius       : metres (20..500). Optional. Overrides
-    //                            the building-radius for the dot cloud
-    //                            so a user can fetch a wide area for
-    //                            shadows but only paint a tight disc
-    //                            of points (frame-rate cap for big
-    //                            rasters / fullscreen layouts). Cells
-    //                            outside the radius are skipped at
-    //                            projection time, the underlying data
-    //                            and shadow features are untouched.
-    //                            Defaults to building-radius when unset.
     //  lidar-view-point-size   : pixels (1..6). Square side length per
     //                            point on the canvas. Default 1.5.
     //  lidar-view-point-color  : hex string. Default '#ffffff' (white
@@ -262,7 +252,6 @@ export interface HeliosConfig
     //  lidar-view-wireframe-opacity: 0..1. Default 0.35. Lighter than
     //                                the dots so the mesh reads as
     //                                "scaffolding under the points".
-    'lidar-view-radius'?:             unknown;
     'lidar-view-point-size'?:         unknown;
     'lidar-view-point-color'?:        unknown;
     'lidar-view-point-opacity'?:      unknown;
@@ -314,12 +303,32 @@ export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 //shared `building-radius` (the "Display radius" knob) so the View
 //and the rest of the card stay in sync; the three knobs left here
 //are pure paint, no recompute.
-export const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX  = 1.5;
-export const DEFAULT_LIDAR_VIEW_POINT_COLOR    = '#ffffff';
-export const DEFAULT_LIDAR_VIEW_POINT_OPACITY  = 0.5;
-export const DEFAULT_LIDAR_VIEW_WIREFRAME          = false;
-export const DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR    = '#ffffff';
-export const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY  = 0.35;
+export const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX  = 1;
+export const DEFAULT_LIDAR_VIEW_POINT_OPACITY  = 0.3;
+export const DEFAULT_LIDAR_VIEW_WIREFRAME          = true;
+export const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY  = 0.25;
+//Theme-aware colour defaults. Points pick the high-contrast tone
+//(white on dark, black on light); the wireframe sits a notch back
+//(light grey on dark, dark grey on light) so the lines read as a
+//softer scaffolding underneath the dots without competing for
+//attention. Helpers are used both at runtime (engine push) and in
+//the editor (placeholders + color-picker initial value) so what the
+//user sees matches what gets rendered.
+export function defaultLidarViewPointColor(cardTheme: unknown): string
+{
+    const isDark = String(cardTheme ?? 'light').toLowerCase() === 'dark';
+    return isDark ? '#ffffff' : '#000000';
+}
+export function defaultLidarViewWireframeColor(cardTheme: unknown): string
+{
+    const isDark = String(cardTheme ?? 'light').toLowerCase() === 'dark';
+    return isDark ? '#d0d0d0' : '#404040';
+}
+//Distance from the home at which the LiDAR view is at full opacity.
+//Beyond this, alpha smoothstep-fades down to 0 at the fetch radius
+//(building-radius), so the cloud reads as anchored on the home and
+//dissolves into the basemap as you look further out.
+export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
 
 
 //Single ground-shadow layer, rendered as an image source rather
@@ -2099,7 +2108,8 @@ export class HeliosEngine
     private _pushLidarViewConfig(): void
     {
         if (!this._lidarViewLayer) return;
-        this._lidarViewLayer.setRadiusMeters(this._lidarViewRadiusMeters());
+        const [fullR, fadeR] = this._lidarViewFadeRange();
+        this._lidarViewLayer.setFadeRange(fullR, fadeR);
         this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
         this._lidarViewLayer.setColor(this._lidarViewColorRgba());
         this._lidarViewLayer.setWireframeEnabled(this._lidarViewWireframeEnabled());
@@ -2114,19 +2124,18 @@ export class HeliosEngine
         this._lidarViewLayer?.setAlphaFade(alpha);
     }
 
-    private _lidarViewRadiusMeters(): number
+    //Distance-based opacity fall-off bounds for the View. The cloud
+    //sits at full opacity within LIDAR_VIEW_FULL_OPACITY_RADIUS_M of
+    //the home, then smooth-fades to 0 at the fetch radius (building-
+    //radius). On tight discs (building-radius < the full-opacity
+    //threshold) the band collapses to a near-sharp cut at the data
+    //edge, with a 1 m epsilon so the shader's smoothstep never sees
+    //edge0 == edge1 (undefined behaviour in GLSL).
+    private _lidarViewFadeRange(): [fullMeters: number, fadeMeters: number]
     {
-        //Two radii bound the View:
-        //  buildingRadius : how far the LiDAR raster actually covers.
-        //  viewRadius     : optional override (lidar-view-radius).
-        //min() so a stray viewRadius > buildingRadius never reveals
-        //ghost cells that were never fetched.
-        const buildingRadius = this._buildingRadiusMeters();
-        const raw = this.cfg['lidar-view-radius'];
-        const parsed = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-        if (!isFinite(parsed) || parsed <= 0) return buildingRadius;
-        const viewRadius = Math.min(500, Math.max(20, parsed));
-        return Math.min(buildingRadius, viewRadius);
+        const fadeOut = Math.max(2, this._buildingRadiusMeters());
+        const full    = Math.max(1, Math.min(LIDAR_VIEW_FULL_OPACITY_RADIUS_M, fadeOut - 1));
+        return [full, fadeOut];
     }
 
     private _lidarViewPointSizePx(): number
@@ -2142,7 +2151,7 @@ export class HeliosEngine
         const rawColor = this.cfg['lidar-view-point-color'];
         const hex = typeof rawColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim())
             ? rawColor.trim()
-            : DEFAULT_LIDAR_VIEW_POINT_COLOR;
+            : defaultLidarViewPointColor(this.cfg['card-theme']);
         const rawOpa = this.cfg['lidar-view-point-opacity'];
         const opa = typeof rawOpa === 'number' ? rawOpa : parseFloat(String(rawOpa ?? ''));
         const alpha = isFinite(opa)
@@ -2170,7 +2179,7 @@ export class HeliosEngine
         const rawColor = this.cfg['lidar-view-wireframe-color'];
         const hex = typeof rawColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim())
             ? rawColor.trim()
-            : DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR;
+            : defaultLidarViewWireframeColor(this.cfg['card-theme']);
         const rawOpa = this.cfg['lidar-view-wireframe-opacity'];
         const opa = typeof rawOpa === 'number' ? rawOpa : parseFloat(String(rawOpa ?? ''));
         const alpha = isFinite(opa)

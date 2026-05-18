@@ -30207,29 +30207,40 @@ precision highp float;
 attribute vec3 a_pos;
 uniform mat4  u_matrix;
 uniform float u_mercPerMeter;
-uniform float u_radiusMeters;
+uniform float u_fadeFullMeters;
+uniform float u_fadeOutMeters;
 uniform float u_pointSizePx;
-varying float v_inside;
+varying float v_alpha;
 
 void main() {
     float dxM = a_pos.x / u_mercPerMeter;
     float dyM = a_pos.y / u_mercPerMeter;
     float d2  = dxM * dxM + dyM * dyM;
-    float r2  = u_radiusMeters * u_radiusMeters;
-    v_inside  = step(d2, r2);
+    float fullR2 = u_fadeFullMeters * u_fadeFullMeters;
+    float fadeR2 = u_fadeOutMeters * u_fadeOutMeters;
+    v_alpha = 1.0 - smoothstep(fullR2, fadeR2, d2);
     gl_Position  = u_matrix * vec4(a_pos, 1.0);
-    gl_PointSize = u_pointSizePx * v_inside;
+    //Collapse the primitive once the alpha is essentially zero so
+    //fully-faded points don't waste rasteriser time. The 0.001
+    //threshold is below the perceptual floor (1/255 = 0.0039) so
+    //nothing visible is dropped.
+    gl_PointSize = u_pointSizePx * step(0.001, v_alpha);
 }
 `;
 const FRAG_SRC = `
 precision mediump float;
 uniform vec4  u_color;
 uniform float u_alphaFade;
-varying float v_inside;
+varying float v_alpha;
 
 void main() {
-    if (v_inside < 0.5) discard;
-    gl_FragColor = vec4(u_color.rgb, u_color.a * u_alphaFade);
+    //v_alpha is the home-distance fall-off, 1 inside the full radius
+    //and dropping to 0 at the fade-out radius. Cells fully past the
+    //fade are still discarded so we don't waste blend bandwidth on
+    //invisible fragments (and for lines this clips the segment past
+    //the boundary cleanly).
+    if (v_alpha <= 0.0) discard;
+    gl_FragColor = vec4(u_color.rgb, u_color.a * u_alphaFade * v_alpha);
 }
 `;
 class LidarViewLayer {
@@ -30242,7 +30253,8 @@ class LidarViewLayer {
     this._indexType = 0;
     this._aPos = -1;
     this._shiftedMatrix = new Float32Array(16);
-    this._radiusMeters = 100;
+    this._fadeFullMeters = 100;
+    this._fadeOutMeters = 100;
     this._pointSizePx = 1.5;
     this._color = [1, 1, 1, 0.5];
     this._alphaFade = 0;
@@ -30258,9 +30270,10 @@ class LidarViewLayer {
     if (this._raster) this.setData(this._raster);
     this._map?.triggerRepaint();
   }
-  setRadiusMeters(r2) {
-    if (r2 === this._radiusMeters) return;
-    this._radiusMeters = r2;
+  setFadeRange(fullMeters, fadeOutMeters) {
+    if (fullMeters === this._fadeFullMeters && fadeOutMeters === this._fadeOutMeters) return;
+    this._fadeFullMeters = fullMeters;
+    this._fadeOutMeters = fadeOutMeters;
     this._map?.triggerRepaint();
   }
   setPointSizePx(px) {
@@ -30403,7 +30416,8 @@ class LidarViewLayer {
       this._aPos = gl.getAttribLocation(program, "a_pos");
       this._uMatrix = gl.getUniformLocation(program, "u_matrix") ?? void 0;
       this._uMercPerMeter = gl.getUniformLocation(program, "u_mercPerMeter") ?? void 0;
-      this._uRadius = gl.getUniformLocation(program, "u_radiusMeters") ?? void 0;
+      this._uFadeFull = gl.getUniformLocation(program, "u_fadeFullMeters") ?? void 0;
+      this._uFadeOut = gl.getUniformLocation(program, "u_fadeOutMeters") ?? void 0;
       this._uPointSize = gl.getUniformLocation(program, "u_pointSizePx") ?? void 0;
       this._uColor = gl.getUniformLocation(program, "u_color") ?? void 0;
       this._uAlphaFade = gl.getUniformLocation(program, "u_alphaFade") ?? void 0;
@@ -30480,7 +30494,8 @@ class LidarViewLayer {
     gl.vertexAttribPointer(this._aPos, 3, gl.FLOAT, false, 0, 0);
     if (this._uMatrix) gl.uniformMatrix4fv(this._uMatrix, false, this._shiftedMatrix);
     if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
-    if (this._uRadius) gl.uniform1f(this._uRadius, this._radiusMeters);
+    if (this._uFadeFull) gl.uniform1f(this._uFadeFull, this._fadeFullMeters);
+    if (this._uFadeOut) gl.uniform1f(this._uFadeOut, this._fadeOutMeters);
     const pixelRatio = this._map?.getPixelRatio?.() ?? (typeof window !== "undefined" && window.devicePixelRatio || 1);
     if (this._uPointSize) gl.uniform1f(this._uPointSize, this._pointSizePx * pixelRatio);
     if (this._uColor) gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
@@ -30573,12 +30588,19 @@ const LIDAR_PRECISION_PITCH_MULT = {
   high: 1
 };
 const DEFAULT_SHADOW_OPACITY = 0.32;
-const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1.5;
-const DEFAULT_LIDAR_VIEW_POINT_COLOR = "#ffffff";
-const DEFAULT_LIDAR_VIEW_POINT_OPACITY = 0.5;
-const DEFAULT_LIDAR_VIEW_WIREFRAME = false;
-const DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR = "#ffffff";
-const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY = 0.35;
+const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1;
+const DEFAULT_LIDAR_VIEW_POINT_OPACITY = 0.3;
+const DEFAULT_LIDAR_VIEW_WIREFRAME = true;
+const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY = 0.25;
+function defaultLidarViewPointColor(cardTheme) {
+  const isDark = String(cardTheme ?? "light").toLowerCase() === "dark";
+  return isDark ? "#ffffff" : "#000000";
+}
+function defaultLidarViewWireframeColor(cardTheme) {
+  const isDark = String(cardTheme ?? "light").toLowerCase() === "dark";
+  return isDark ? "#d0d0d0" : "#404040";
+}
+const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
 const SHADOW_LAYER_IDS = [
   "helios-building-shadows"
 ];
@@ -31534,7 +31556,8 @@ const _HeliosEngine = class _HeliosEngine {
   //relevant key change.
   _pushLidarViewConfig() {
     if (!this._lidarViewLayer) return;
-    this._lidarViewLayer.setRadiusMeters(this._lidarViewRadiusMeters());
+    const [fullR, fadeR] = this._lidarViewFadeRange();
+    this._lidarViewLayer.setFadeRange(fullR, fadeR);
     this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
     this._lidarViewLayer.setColor(this._lidarViewColorRgba());
     this._lidarViewLayer.setWireframeEnabled(this._lidarViewWireframeEnabled());
@@ -31546,13 +31569,17 @@ const _HeliosEngine = class _HeliosEngine {
   setLidarViewFadeAlpha(alpha) {
     this._lidarViewLayer?.setAlphaFade(alpha);
   }
-  _lidarViewRadiusMeters() {
-    const buildingRadius = this._buildingRadiusMeters();
-    const raw2 = this.cfg["lidar-view-radius"];
-    const parsed = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-    if (!isFinite(parsed) || parsed <= 0) return buildingRadius;
-    const viewRadius = Math.min(500, Math.max(20, parsed));
-    return Math.min(buildingRadius, viewRadius);
+  //Distance-based opacity fall-off bounds for the View. The cloud
+  //sits at full opacity within LIDAR_VIEW_FULL_OPACITY_RADIUS_M of
+  //the home, then smooth-fades to 0 at the fetch radius (building-
+  //radius). On tight discs (building-radius < the full-opacity
+  //threshold) the band collapses to a near-sharp cut at the data
+  //edge, with a 1 m epsilon so the shader's smoothstep never sees
+  //edge0 == edge1 (undefined behaviour in GLSL).
+  _lidarViewFadeRange() {
+    const fadeOut = Math.max(2, this._buildingRadiusMeters());
+    const full = Math.max(1, Math.min(LIDAR_VIEW_FULL_OPACITY_RADIUS_M, fadeOut - 1));
+    return [full, fadeOut];
   }
   _lidarViewPointSizePx() {
     const raw2 = this.cfg["lidar-view-point-size"];
@@ -31562,7 +31589,7 @@ const _HeliosEngine = class _HeliosEngine {
   }
   _lidarViewColorRgba() {
     const rawColor = this.cfg["lidar-view-point-color"];
-    const hex = typeof rawColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim()) ? rawColor.trim() : DEFAULT_LIDAR_VIEW_POINT_COLOR;
+    const hex = typeof rawColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim()) ? rawColor.trim() : defaultLidarViewPointColor(this.cfg["card-theme"]);
     const rawOpa = this.cfg["lidar-view-point-opacity"];
     const opa = typeof rawOpa === "number" ? rawOpa : parseFloat(String(rawOpa ?? ""));
     const alpha = isFinite(opa) ? Math.max(0, Math.min(1, opa)) : DEFAULT_LIDAR_VIEW_POINT_OPACITY;
@@ -31581,7 +31608,7 @@ const _HeliosEngine = class _HeliosEngine {
   }
   _lidarViewWireframeRgba() {
     const rawColor = this.cfg["lidar-view-wireframe-color"];
-    const hex = typeof rawColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim()) ? rawColor.trim() : DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR;
+    const hex = typeof rawColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim()) ? rawColor.trim() : defaultLidarViewWireframeColor(this.cfg["card-theme"]);
     const rawOpa = this.cfg["lidar-view-wireframe-opacity"];
     const opa = typeof rawOpa === "number" ? rawOpa : parseFloat(String(rawOpa ?? ""));
     const alpha = isFinite(opa) ? Math.max(0, Math.min(1, opa)) : DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY;
@@ -33122,15 +33149,13 @@ const en = {
     shadowOpacityHint: "Opacity of the cast ground shadows.",
     lidarViewSection: "LiDAR View",
     lidarViewHint: "Click the LiDAR button in the top-right of the card to switch into a point-cloud view of your surroundings: every loaded LiDAR cell (ground, vegetation and buildings) is painted over the basemap. The button stays disabled when no provider covers the home. The view reuses the data already fetched at the current precision, no extra calls are made.",
-    lidarViewRadius: "LiDAR view radius (m)",
-    lidarViewRadiusHint: "Only the points inside this radius around the home are drawn. The underlying data and the shadows are unchanged, this is purely a per-frame paint filter. Useful with high precision or fullscreen layouts: fetch a wide area for the shadows, paint a tighter dot cloud. Capped by the display radius (you can't draw more than what was fetched).",
     lidarViewPointSize: "Point size (px)",
     lidarViewPointColor: "Point color",
     lidarViewPointOpacity: "Point opacity",
     lidarViewWireframe: "Wireframe overlay",
     lidarViewWireframeOn: "On",
     lidarViewWireframeOff: "Off",
-    lidarViewWireframeHint: "Connects each finite LiDAR cell to its right and bottom neighbours with line segments, producing a Tron-style mesh on top of the dot cloud. Dial the point size to 0 if you only want the lines. Heavy rasters at high precision are still drawn in a single GPU draw call, but the line count grows with the cell count, so older devices may slow down on big radii.",
+    lidarViewWireframeHint: "Connects each finite LiDAR cell to its right and bottom neighbours with line segments, producing a mesh on top of the dot cloud. Dial the point size to 0 if you only want the lines. Heavy rasters at high precision are still drawn in a single GPU draw call, but the line count grows with the cell count, so older devices may slow down on big radii.",
     lidarViewWireframeColor: "Wireframe color",
     lidarViewWireframeOpacity: "Wireframe opacity",
     localLidarSection: "Advanced — Local LiDAR (BYO)",
@@ -33251,15 +33276,13 @@ const fr = {
     shadowOpacityHint: "Opacité des ombres projetées au sol.",
     lidarViewSection: "Vue LiDAR",
     lidarViewHint: "Clique sur le bouton LiDAR en haut à droite de la carte pour basculer dans une vue en nuage de points de tes environs : chaque cellule LiDAR chargée (sol, végétation et bâtiments) est peinte par-dessus la carte de fond. Le bouton reste désactivé quand aucun provider ne couvre la maison. La vue réutilise les données déjà récupérées à la précision actuelle, aucun appel supplémentaire n'est fait.",
-    lidarViewRadius: "Rayon de la vue LiDAR (m)",
-    lidarViewRadiusHint: "Seuls les points à l'intérieur de ce rayon autour de la maison sont dessinés. Les données et les ombres restent intactes, c'est un simple filtre au moment du tracé. Utile en précision haute ou en plein écran : tu peux récupérer une zone large pour les ombres tout en peignant un nuage de points plus serré. Bornée par le rayon d'affichage (impossible de tracer plus que ce qui a été chargé).",
     lidarViewPointSize: "Taille des points (px)",
     lidarViewPointColor: "Couleur des points",
     lidarViewPointOpacity: "Opacité des points",
     lidarViewWireframe: "Fil de fer",
     lidarViewWireframeOn: "Activé",
     lidarViewWireframeOff: "Désactivé",
-    lidarViewWireframeHint: "Relie chaque cellule LiDAR finie à ses voisines droite et bas avec des segments, ce qui donne un maillage style Tron par-dessus le nuage de points. Met la taille des points à 0 si tu ne veux que les lignes. Les rasters lourds en haute précision tiennent toujours dans un seul draw call GPU, mais le nombre de lignes grandit avec le nombre de cellules, donc les vieux appareils peuvent ralentir sur les grands rayons.",
+    lidarViewWireframeHint: "Relie chaque cellule LiDAR finie à ses voisines droite et bas avec des segments, ce qui donne un maillage par-dessus le nuage de points. Met la taille des points à 0 si tu ne veux que les lignes. Les rasters lourds en haute précision tiennent toujours dans un seul draw call GPU, mais le nombre de lignes grandit avec le nombre de cellules, donc les vieux appareils peuvent ralentir sur les grands rayons.",
     lidarViewWireframeColor: "Couleur du fil de fer",
     lidarViewWireframeOpacity: "Opacité du fil de fer",
     localLidarSection: "Avancé — LiDAR local (BYO)",
@@ -33380,15 +33403,13 @@ const de = {
     shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
     lidarViewSection: "LiDAR-Ansicht",
     lidarViewHint: "Klicke oben rechts auf die Karte auf die Schaltfläche LiDAR, um in eine Punktwolken-Ansicht deiner Umgebung zu wechseln: Jede geladene LiDAR-Zelle (Boden, Vegetation und Gebäude) wird über der Basiskarte gemalt. Die Schaltfläche bleibt deaktiviert, wenn kein Anbieter das Zuhause abdeckt. Die Ansicht verwendet die bereits in der aktuellen Präzision abgerufenen Daten wieder, es werden keine zusätzlichen Aufrufe gemacht.",
-    lidarViewRadius: "LiDAR-Ansichtsradius (m)",
-    lidarViewRadiusHint: "Nur Punkte innerhalb dieses Radius rund ums Zuhause werden gezeichnet. Daten und Schatten bleiben unangetastet, das ist nur ein Filter beim Zeichnen. Hilfreich bei hoher Präzision oder Vollbild-Layouts: einen großen Bereich für die Schatten laden, eine kompaktere Punktwolke zeichnen. Begrenzt durch den Anzeigeradius (mehr als geladen wurde, lässt sich nicht zeichnen).",
     lidarViewPointSize: "Punktgröße (px)",
     lidarViewPointColor: "Punktfarbe",
     lidarViewPointOpacity: "Punktdeckkraft",
     lidarViewWireframe: "Drahtgitter",
     lidarViewWireframeOn: "An",
     lidarViewWireframeOff: "Aus",
-    lidarViewWireframeHint: "Verbindet jede gültige LiDAR-Zelle mit ihren rechten und unteren Nachbarn durch Linien, das ergibt ein Drahtgitter im Tron-Stil über der Punktwolke. Setze die Punktgröße auf 0, wenn du nur die Linien sehen willst. Auch schwere Raster bei hoher Präzision laufen in einem einzigen GPU-Draw, aber die Linienzahl wächst mit der Zellzahl, ältere Geräte können bei großen Radien einbrechen.",
+    lidarViewWireframeHint: "Verbindet jede gültige LiDAR-Zelle mit ihren rechten und unteren Nachbarn durch Linien, das ergibt ein Drahtgitter über der Punktwolke. Setze die Punktgröße auf 0, wenn du nur die Linien sehen willst. Auch schwere Raster bei hoher Präzision laufen in einem einzigen GPU-Draw, aber die Linienzahl wächst mit der Zellzahl, ältere Geräte können bei großen Radien einbrechen.",
     lidarViewWireframeColor: "Drahtgitter-Farbe",
     lidarViewWireframeOpacity: "Drahtgitter-Deckkraft",
     localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
@@ -33509,15 +33530,13 @@ const es = {
     shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
     lidarViewSection: "Vista LiDAR",
     lidarViewHint: "Haz clic en el botón LiDAR arriba a la derecha de la tarjeta para cambiar a una vista en nube de puntos de tu entorno: cada celda LiDAR cargada (suelo, vegetación y edificios) se pinta sobre el mapa de fondo. El botón queda deshabilitado cuando ningún proveedor cubre la casa. La vista reutiliza los datos ya recuperados con la precisión actual, no se hacen llamadas adicionales.",
-    lidarViewRadius: "Radio de la vista LiDAR (m)",
-    lidarViewRadiusHint: "Solo se dibujan los puntos dentro de este radio alrededor del hogar. Los datos y las sombras quedan intactos, es únicamente un filtro al pintar. Útil con precisión alta o en pantalla completa: capturas un área amplia para las sombras y pintas una nube de puntos más ajustada. Limitado por el radio de visualización (no puedes dibujar más de lo que se cargó).",
     lidarViewPointSize: "Tamaño de puntos (px)",
     lidarViewPointColor: "Color de puntos",
     lidarViewPointOpacity: "Opacidad de puntos",
     lidarViewWireframe: "Malla de alambre",
     lidarViewWireframeOn: "Activado",
     lidarViewWireframeOff: "Desactivado",
-    lidarViewWireframeHint: "Conecta cada celda LiDAR finita con sus vecinas a la derecha y abajo mediante segmentos, dando una malla estilo Tron sobre la nube de puntos. Pon el tamaño de los puntos a 0 si solo quieres las líneas. Los rasters densos en precisión alta siguen pintándose en una sola llamada GPU, pero el número de líneas crece con el número de celdas, los dispositivos antiguos pueden ralentizarse en radios grandes.",
+    lidarViewWireframeHint: "Conecta cada celda LiDAR finita con sus vecinas a la derecha y abajo mediante segmentos, dando una malla sobre la nube de puntos. Pon el tamaño de los puntos a 0 si solo quieres las líneas. Los rasters densos en precisión alta siguen pintándose en una sola llamada GPU, pero el número de líneas crece con el número de celdas, los dispositivos antiguos pueden ralentizarse en radios grandes.",
     lidarViewWireframeColor: "Color de la malla",
     lidarViewWireframeOpacity: "Opacidad de la malla",
     localLidarSection: "Avanzado — LiDAR local (BYO)",
@@ -33638,15 +33657,13 @@ const it = {
     shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
     lidarViewSection: "Vista LiDAR",
     lidarViewHint: "Clicca sul pulsante LiDAR in alto a destra della scheda per passare a una vista a nuvola di punti dei tuoi dintorni: ogni cella LiDAR caricata (suolo, vegetazione ed edifici) viene dipinta sopra la mappa di base. Il pulsante resta disabilitato quando nessun provider copre la casa. La vista riutilizza i dati già recuperati alla precisione attuale, nessuna chiamata aggiuntiva viene fatta.",
-    lidarViewRadius: "Raggio della vista LiDAR (m)",
-    lidarViewRadiusHint: "Vengono disegnati solo i punti all'interno di questo raggio intorno a casa. I dati e le ombre restano invariati, è solo un filtro al momento del disegno. Utile con alta precisione o layout a schermo intero: carichi un'area ampia per le ombre e disegni una nuvola di punti più stretta. Limitato dal raggio di visualizzazione (non puoi disegnare oltre quanto già caricato).",
     lidarViewPointSize: "Dimensione punti (px)",
     lidarViewPointColor: "Colore punti",
     lidarViewPointOpacity: "Opacità punti",
     lidarViewWireframe: "Reticolo",
     lidarViewWireframeOn: "Attivo",
     lidarViewWireframeOff: "Disattivo",
-    lidarViewWireframeHint: "Collega ogni cella LiDAR finita ai vicini a destra e in basso con segmenti, generando un reticolo stile Tron sopra la nuvola di punti. Imposta la dimensione dei punti a 0 se vuoi solo le linee. I raster pesanti in alta precisione restano in una sola chiamata GPU, ma il numero di linee cresce con quello delle celle, i dispositivi più vecchi possono rallentare sui raggi grandi.",
+    lidarViewWireframeHint: "Collega ogni cella LiDAR finita ai vicini a destra e in basso con segmenti, generando un reticolo sopra la nuvola di punti. Imposta la dimensione dei punti a 0 se vuoi solo le linee. I raster pesanti in alta precisione restano in una sola chiamata GPU, ma il numero di linee cresce con quello delle celle, i dispositivi più vecchi possono rallentare sui raggi grandi.",
     lidarViewWireframeColor: "Colore del reticolo",
     lidarViewWireframeOpacity: "Opacità del reticolo",
     localLidarSection: "Avanzato — LiDAR locale (BYO)",
@@ -33767,15 +33784,13 @@ const nl = {
     shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
     lidarViewSection: "LiDAR-weergave",
     lidarViewHint: "Klik rechtsboven in de kaart op de LiDAR-knop om over te schakelen naar een puntenwolk-weergave van je omgeving: elke geladen LiDAR-cel (grond, vegetatie en gebouwen) wordt over de basiskaart geschilderd. De knop blijft uitgeschakeld wanneer geen enkele provider het huis dekt. De weergave hergebruikt de data die al is opgehaald op de huidige precisie, er worden geen extra calls gedaan.",
-    lidarViewRadius: "LiDAR-weergaveradius (m)",
-    lidarViewRadiusHint: "Alleen de punten binnen deze straal rond de woning worden getekend. De data en de schaduwen blijven ongemoeid; dit is puur een filter bij het tekenen. Handig bij hoge precisie of een schermvullende layout: je laadt een breed gebied voor de schaduwen en tekent een compactere puntwolk. Begrensd door de weergavestraal (je kunt niet meer tekenen dan wat geladen is).",
     lidarViewPointSize: "Puntgrootte (px)",
     lidarViewPointColor: "Puntkleur",
     lidarViewPointOpacity: "Puntdekking",
     lidarViewWireframe: "Draadmodel",
     lidarViewWireframeOn: "Aan",
     lidarViewWireframeOff: "Uit",
-    lidarViewWireframeHint: "Verbindt elke geldige LiDAR-cel met haar rechter- en onderbuur via segmenten, wat een Tron-achtig draadmodel over de puntwolk geeft. Zet de puntgrootte op 0 als je alleen de lijnen wilt. Zware rasters bij hoge precisie blijven in één GPU-call, maar het aantal lijnen groeit mee met het aantal cellen, oudere apparaten kunnen vertragen bij grote stralen.",
+    lidarViewWireframeHint: "Verbindt elke geldige LiDAR-cel met haar rechter- en onderbuur via segmenten, wat een draadmodel over de puntwolk geeft. Zet de puntgrootte op 0 als je alleen de lijnen wilt. Zware rasters bij hoge precisie blijven in één GPU-call, maar het aantal lijnen groeit mee met het aantal cellen, oudere apparaten kunnen vertragen bij grote stralen.",
     lidarViewWireframeColor: "Kleur van het draadmodel",
     lidarViewWireframeOpacity: "Dekking van het draadmodel",
     localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
@@ -33896,15 +33911,13 @@ const pt = {
     shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
     lidarViewSection: "Vista LiDAR",
     lidarViewHint: "Clica no botão LiDAR no canto superior direito da carta para alternar para uma vista em nuvem de pontos do teu ambiente: cada célula LiDAR carregada (solo, vegetação e edifícios) é pintada sobre o mapa de fundo. O botão fica desactivado quando nenhum provedor cobre a casa. A vista reutiliza os dados já obtidos com a precisão actual, nenhuma chamada adicional é feita.",
-    lidarViewRadius: "Raio da vista LiDAR (m)",
-    lidarViewRadiusHint: "Apenas os pontos dentro deste raio à volta da casa são desenhados. Os dados e as sombras ficam intactos, é apenas um filtro ao desenhar. Útil com alta precisão ou em ecrã inteiro: capturas uma zona ampla para as sombras e desenhas uma nuvem de pontos mais apertada. Limitado pelo raio de visualização (não podes desenhar mais do que foi carregado).",
     lidarViewPointSize: "Tamanho dos pontos (px)",
     lidarViewPointColor: "Cor dos pontos",
     lidarViewPointOpacity: "Opacidade dos pontos",
     lidarViewWireframe: "Estrutura em arame",
     lidarViewWireframeOn: "Ativo",
     lidarViewWireframeOff: "Inativo",
-    lidarViewWireframeHint: "Liga cada célula LiDAR finita aos vizinhos à direita e abaixo com segmentos, criando uma malha estilo Tron sobre a nuvem de pontos. Coloca o tamanho dos pontos a 0 se só queres as linhas. Rasters densos em alta precisão continuam a desenhar-se numa única chamada GPU, mas o número de linhas cresce com o número de células, dispositivos antigos podem abrandar em raios grandes.",
+    lidarViewWireframeHint: "Liga cada célula LiDAR finita aos vizinhos à direita e abaixo com segmentos, criando uma malha sobre a nuvem de pontos. Coloca o tamanho dos pontos a 0 se só queres as linhas. Rasters densos em alta precisão continuam a desenhar-se numa única chamada GPU, mas o número de linhas cresce com o número de células, dispositivos antigos podem abrandar em raios grandes.",
     lidarViewWireframeColor: "Cor da estrutura",
     lidarViewWireframeOpacity: "Opacidade da estrutura",
     localLidarSection: "Avançado — LiDAR local (BYO)",
@@ -34025,15 +34038,13 @@ const no = {
     shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
     lidarViewSection: "LiDAR-visning",
     lidarViewHint: "Klikk på LiDAR-knappen øverst til høyre på kortet for å bytte til en punktskyvisning av omgivelsene dine: hver lastet LiDAR-celle (bakke, vegetasjon og bygninger) males over grunnkartet. Knappen forblir deaktivert når ingen leverandør dekker hjemmet. Visningen gjenbruker dataen som allerede er hentet med gjeldende presisjon, ingen ekstra kall gjøres.",
-    lidarViewRadius: "LiDAR-visningsradius (m)",
-    lidarViewRadiusHint: "Bare punktene innenfor denne radiusen rundt huset tegnes. Dataene og skyggene forblir uberørte, dette er bare et filter ved tegningen. Nyttig ved høy presisjon eller fullskjermoppsett: du henter et stort område for skyggene og tegner en strammere punktsky. Begrenset av visningsradiusen (du kan ikke tegne mer enn det som er hentet).",
     lidarViewPointSize: "Punktstørrelse (px)",
     lidarViewPointColor: "Punktfarge",
     lidarViewPointOpacity: "Punktopasitet",
     lidarViewWireframe: "Trådmodell",
     lidarViewWireframeOn: "På",
     lidarViewWireframeOff: "Av",
-    lidarViewWireframeHint: "Knytter hver gyldige LiDAR-celle til naboene til høyre og under med segmenter, og lager dermed et Tron-aktig nett oppå punktskyen. Sett punktstørrelsen til 0 om du kun vil ha linjene. Tunge rastere ved høy presisjon kjøres fortsatt i ett GPU-kall, men antall linjer vokser med antall celler, eldre enheter kan bremse på store radier.",
+    lidarViewWireframeHint: "Knytter hver gyldige LiDAR-celle til naboene til høyre og under med segmenter, og lager dermed et nett oppå punktskyen. Sett punktstørrelsen til 0 om du kun vil ha linjene. Tunge rastere ved høy presisjon kjøres fortsatt i ett GPU-kall, men antall linjer vokser med antall celler, eldre enheter kan bremse på store radier.",
     lidarViewWireframeColor: "Trådmodell-farge",
     lidarViewWireframeOpacity: "Trådmodell-opasitet",
     localLidarSection: "Avansert — Lokal LiDAR (BYO)",
@@ -37352,18 +37363,6 @@ let HeliosCardEditor = class extends i {
                     <summary class="section-title section-title-collapse">${t2.editor.lidarViewSection}</summary>
                     <div class="hint">${t2.editor.lidarViewHint}</div>
                     <label class="field">
-                        <span class="label">${t2.editor.lidarViewRadius}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="20" max="500" step="10"
-                                .value="${String(c2["lidar-view-radius"] ?? (c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M))}"
-                                @input="${(e2) => this._numSlider("lidar-view-radius", e2)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-radius"] ?? (c2["building-radius"] ?? DEFAULT_BUILDING_RADIUS_M)), 1)} m</span>
-                        </div>
-                    </label>
-                    <div class="hint">${t2.editor.lidarViewRadiusHint}</div>
-                    <label class="field">
                         <span class="label">${t2.editor.lidarViewPointSize}</span>
                         <div class="slider-row">
                             <input
@@ -37377,7 +37376,7 @@ let HeliosCardEditor = class extends i {
                     <label class="field">
                         <span class="label">${t2.editor.lidarViewPointColor}</span>
                         <helios-color-picker
-                            .value="${String(c2["lidar-view-point-color"] ?? DEFAULT_LIDAR_VIEW_POINT_COLOR)}"
+                            .value="${String(c2["lidar-view-point-color"] ?? defaultLidarViewPointColor(c2["card-theme"]))}"
                             @value-changed="${(e2) => this._update("lidar-view-point-color", e2.detail.value)}"
                         ></helios-color-picker>
                     </label>
@@ -37411,7 +37410,7 @@ let HeliosCardEditor = class extends i {
                     <label class="field">
                         <span class="label">${t2.editor.lidarViewWireframeColor}</span>
                         <helios-color-picker
-                            .value="${String(c2["lidar-view-wireframe-color"] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_COLOR)}"
+                            .value="${String(c2["lidar-view-wireframe-color"] ?? defaultLidarViewWireframeColor(c2["card-theme"]))}"
                             @value-changed="${(e2) => this._update("lidar-view-wireframe-color", e2.detail.value)}"
                         ></helios-color-picker>
                     </label>
@@ -37561,7 +37560,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.32"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.33"}`,
       labelStyle,
       versionStyle
     );
@@ -37582,7 +37581,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.32",
+        version: "1.6.0-alpha.33",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37590,7 +37589,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.32"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.33"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
