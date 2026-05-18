@@ -876,13 +876,6 @@ export class HeliosEngine
             maxLon:     number;
         }
         | null = null;
-    //Id of the LiDAR provider that owns the data currently in
-    //`_lidarRaster` / `_lidarShadowFeatures`. Null when the home
-    //isn't covered by any provider (or shadows are disabled). The
-    //card reads this through getActiveLidarSourceId() to gate the
-    //LiDAR View button's enabled state without poking provider
-    //internals.
-    private _lidarSourceId: string | null = null;
 
     //Offscreen canvas used to rasterise cast shadows before uploading
     //them to the MapLibre image source. Lives for the whole engine
@@ -2144,15 +2137,36 @@ export class HeliosEngine
         return out;
     }
 
+    //LiDAR View active flag. Pushed in by the card when the user
+    //toggles the View overlay on, so the LiDAR raster fetch path runs
+    //even when cast shadows are disabled in the config. Without this,
+    //a user with shadows off would click the button and see an empty
+    //canvas because the raster never gets fetched.
+    private _lidarViewActive: boolean = false;
+    public setLidarViewActive(on: boolean): void
+    {
+        if (on === this._lidarViewActive) return;
+        this._lidarViewActive = on;
+        //Going from off→on, kick the fetch path so the raster lands.
+        //Going from on→off, no-op: the raster stays cached and the
+        //next shadow refresh (if shadows come back on) reuses it.
+        if (on) this._ensureLidarFetched();
+    }
+
     //LiDAR View support, exposed to the card.
     //
     //getActiveLidarSourceId returns the id of the provider that
-    //matched the home (e.g. 'de-nrw-ndom'), or null when no provider
-    //covers the home or shadows are disabled. The card gates the
-    //LiDAR View button on this.
+    //covers the home (e.g. 'de-nrw-ndom'), or null when no provider
+    //covers it. Resolved on-demand against `resolveLidarSource`
+    //rather than reading the cached `_lidarSourceId` field, so the
+    //answer is correct from the very first render of the card,
+    //independent of whether the shadow fetch path has had a chance
+    //to run yet (or whether shadows are even enabled in the config).
+    //The resolver itself is cheap, ~5 bbox comparisons.
     public getActiveLidarSourceId(): string | null
     {
-        return this._lidarSourceId;
+        const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
+        return provider ? provider.id : null;
     }
 
     //Project every raw raster cell (vegetation + ground + buildings,
@@ -2634,22 +2648,21 @@ export class HeliosEngine
         if (!this.map) return;
 
         const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
-        if (!provider || !this._shadowsEnabled())
+        //Bail when nothing wants the data: no provider covers the
+        //home, OR the user has shadows off AND no LiDAR View open.
+        //The View toggle lets the raster fetch happen even when cast
+        //shadows are off, so the debug overlay can show data without
+        //requiring the user to re-enable shadows just to inspect.
+        if (!provider || (!this._shadowsEnabled() && !this._lidarViewActive))
         {
             this._lidarShadowFeatures    = null;
             this._lidarShadowDiagnostics = null;
             this._lidarShadowKey         = '';
             this._lidarRaster            = null;
-            this._lidarSourceId          = null;
             this._lidarShadowAbort?.abort();
             this._lidarShadowAbort       = undefined;
             return;
         }
-        //Even before the fetch lands we know which provider matches
-        //the home, so surface the id now: the LiDAR View button reads
-        //this on every render and we want it to enable as soon as we
-        //know coverage exists, not only once the bytes arrive.
-        this._lidarSourceId = provider.id;
 
         const level      = this._lidarPrecisionLevel();
         const rasterSize = LIDAR_PRECISION_RASTER[level];

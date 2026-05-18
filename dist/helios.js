@@ -30328,7 +30328,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarShadowDiagnostics = null;
     this._lidarShadowKey = "";
     this._lidarRaster = null;
-    this._lidarSourceId = null;
+    this._lidarViewActive = false;
     this._detailMode = false;
     this._postExitCooldownUntil = 0;
     this.homeLat = haCoords[1];
@@ -31231,14 +31231,24 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return out;
   }
+  setLidarViewActive(on) {
+    if (on === this._lidarViewActive) return;
+    this._lidarViewActive = on;
+    if (on) this._ensureLidarFetched();
+  }
   //LiDAR View support, exposed to the card.
   //
   //getActiveLidarSourceId returns the id of the provider that
-  //matched the home (e.g. 'de-nrw-ndom'), or null when no provider
-  //covers the home or shadows are disabled. The card gates the
-  //LiDAR View button on this.
+  //covers the home (e.g. 'de-nrw-ndom'), or null when no provider
+  //covers it. Resolved on-demand against `resolveLidarSource`
+  //rather than reading the cached `_lidarSourceId` field, so the
+  //answer is correct from the very first render of the card,
+  //independent of whether the shadow fetch path has had a chance
+  //to run yet (or whether shadows are even enabled in the config).
+  //The resolver itself is cheap, ~5 bbox comparisons.
   getActiveLidarSourceId() {
-    return this._lidarSourceId;
+    const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
+    return provider ? provider.id : null;
   }
   //Project every raw raster cell (vegetation + ground + buildings,
   //threshold-bypassed) to screen-space. Returns interleaved
@@ -31587,17 +31597,15 @@ const _HeliosEngine = class _HeliosEngine {
   _ensureLidarFetched() {
     if (!this.map) return;
     const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
-    if (!provider || !this._shadowsEnabled()) {
+    if (!provider || !this._shadowsEnabled() && !this._lidarViewActive) {
       this._lidarShadowFeatures = null;
       this._lidarShadowDiagnostics = null;
       this._lidarShadowKey = "";
       this._lidarRaster = null;
-      this._lidarSourceId = null;
       this._lidarShadowAbort?.abort();
       this._lidarShadowAbort = void 0;
       return;
     }
-    this._lidarSourceId = provider.id;
     const level = this._lidarPrecisionLevel();
     const rasterSize = LIDAR_PRECISION_RASTER[level];
     const radius = this._buildingRadiusMeters();
@@ -34835,40 +34843,34 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Passive 28 px square chip used as a "LiDAR shadow computing"
-        indicator. Same visual language as the date/time clock (white
-        surface, 1 px black border) so it doesn't introduce a new style
-        vocabulary; the only content is a small spinning ring. */
+    /*  "LiDAR shadow computing" indicator. Stripped to the spinning
+        sun glyph alone, no chip plate, no border, no shadow, matches
+        the clean spinner-sun aesthetic at the centre of the map: a
+        pure on-brand mark in the foreground that doesn't compete
+        with the chips and buttons around it. */
     .shadow-busy-chip
     {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width:  28px;
-        height: 28px;
-        background: #ffffff;
-        border: 1px solid #000000;
-        border-radius: 3px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        width:  22px;
+        height: 22px;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
     }
 
-    /*  Rotating sun glyph used as the busy indicator. Matches the
-        default Helios sun tone so the spinner reads as a Helios sun
-        rather than a generic system loader. */
+    /*  Rotating sun glyph used as the busy indicator. Themed through
+        the configured sun colour so themed installs stay on-brand,
+        with the brand orange as the fallback. */
     .shadow-busy-sun
     {
         --mdc-icon-size: 18px;
-        color: #EF9F27;
+        color: var(--helios-sun-color, #EF9F27);
         display: inline-flex;
         align-items: center;
         justify-content: center;
         animation: helios-shadow-spin 1.4s linear infinite;
-    }
-
-    ha-card.theme-dark .shadow-busy-chip
-    {
-        background: #14161c;
-        border-color: rgba(255, 255, 255, 0.6);
     }
 
     @keyframes helios-shadow-spin
@@ -35341,7 +35343,8 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .tb-day-label,
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label,
-    ha-card.theme-dark .map-btn:not(.map-btn-on)
+    ha-card.theme-dark .map-btn:not(.map-btn-on),
+    ha-card.theme-dark .lidar-view-btn:not(.is-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -35364,7 +35367,8 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .tl-live-btn ha-icon,
     ha-card.theme-dark .cloud-pct-label ha-icon,
     ha-card.theme-dark .solar-pct-label ha-icon,
-    ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon
+    ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
+    ha-card.theme-dark .lidar-view-btn:not(.is-on) ha-icon
     {
         color: #e6e6e6;
     }
@@ -37118,7 +37122,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.17"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.18"}`,
       labelStyle,
       versionStyle
     );
@@ -37139,7 +37143,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.17",
+        version: "1.6.0-alpha.18",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37147,7 +37151,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.17"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.18"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -37244,6 +37248,7 @@ let HeliosCard = class extends i {
       if (!this._engine) return;
       if (!this._lidarViewMode && this._engine.getActiveLidarSourceId() === null) return;
       this._lidarViewMode = !this._lidarViewMode;
+      this._engine.setLidarViewActive(this._lidarViewMode);
       if (this._lidarViewMode) this._refreshOverlays();
     };
     this._lidarCanvasLastSig = "";

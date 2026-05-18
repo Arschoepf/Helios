@@ -1752,6 +1752,11 @@ export class HeliosCard extends LitElement
         if (!this._engine) return;
         if (!this._lidarViewMode && this._engine.getActiveLidarSourceId() === null) return;
         this._lidarViewMode = !this._lidarViewMode;
+        //Tell the engine so its fetch path also runs when shadows are
+        //off (the raster powers both cast shadows and the View
+        //overlay, but it would otherwise only get fetched when
+        //shadows are enabled).
+        this._engine.setLidarViewActive(this._lidarViewMode);
         //Trigger a fresh projection on the next frame, the Lit
         //re-render alone won't fire _refreshOverlays.
         if (this._lidarViewMode) this._refreshOverlays();

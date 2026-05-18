@@ -1150,40 +1150,34 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Passive 28 px square chip used as a "LiDAR shadow computing"
-        indicator. Same visual language as the date/time clock (white
-        surface, 1 px black border) so it doesn't introduce a new style
-        vocabulary; the only content is a small spinning ring. */
+    /*  "LiDAR shadow computing" indicator. Stripped to the spinning
+        sun glyph alone, no chip plate, no border, no shadow, matches
+        the clean spinner-sun aesthetic at the centre of the map: a
+        pure on-brand mark in the foreground that doesn't compete
+        with the chips and buttons around it. */
     .shadow-busy-chip
     {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width:  28px;
-        height: 28px;
-        background: #ffffff;
-        border: 1px solid #000000;
-        border-radius: 3px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        width:  22px;
+        height: 22px;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
     }
 
-    /*  Rotating sun glyph used as the busy indicator. Matches the
-        default Helios sun tone so the spinner reads as a Helios sun
-        rather than a generic system loader. */
+    /*  Rotating sun glyph used as the busy indicator. Themed through
+        the configured sun colour so themed installs stay on-brand,
+        with the brand orange as the fallback. */
     .shadow-busy-sun
     {
         --mdc-icon-size: 18px;
-        color: #EF9F27;
+        color: var(--helios-sun-color, #EF9F27);
         display: inline-flex;
         align-items: center;
         justify-content: center;
         animation: helios-shadow-spin 1.4s linear infinite;
-    }
-
-    ha-card.theme-dark .shadow-busy-chip
-    {
-        background: #14161c;
-        border-color: rgba(255, 255, 255, 0.6);
     }
 
     @keyframes helios-shadow-spin
@@ -1656,7 +1650,8 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .tb-day-label,
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label,
-    ha-card.theme-dark .map-btn:not(.map-btn-on)
+    ha-card.theme-dark .map-btn:not(.map-btn-on),
+    ha-card.theme-dark .lidar-view-btn:not(.is-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -1679,7 +1674,8 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .tl-live-btn ha-icon,
     ha-card.theme-dark .cloud-pct-label ha-icon,
     ha-card.theme-dark .solar-pct-label ha-icon,
-    ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon
+    ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
+    ha-card.theme-dark .lidar-view-btn:not(.is-on) ha-icon
     {
         color: #e6e6e6;
     }
