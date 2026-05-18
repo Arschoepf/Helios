@@ -361,32 +361,37 @@ hourly aggregation is memoised against the history reference.
 `lidarPrecision*`, `shadowOpacity*`, `mapStyleMinimal`,
 `mapStyleSatellite`, `terrainDetail*`. All 7 locales updated.
 
-**LiDAR coverage.** France IGN HD lands here in v1.4.0; the four
-other providers (Defra UK, IGN ES, PDOK NL, Kartverket NO) land in
-v1.5.0 alongside the OpenFreeMap migration. Adding a country is a
-single-file drop under `./helios-lidar/providers/`: implement the
-`LidarSource` interface from `helios-lidar.ts` and register the
-provider in `LIDAR_SOURCES`. The `findLidarSource(lat, lon)`
-resolver returns the first matching provider, or `null` for an
-out-of-coverage home, in which case the engine falls back to its
-basemap building footprints automatically.
+**LiDAR coverage.** France IGN HD lands in v1.4.0; the four
+companion providers (Defra UK, IGN ES, PDOK NL, Kartverket NO) land
+in v1.5.0 alongside the OpenFreeMap migration; the Geobasis NRW
+nDOM (Nordrhein-Westfalen, ~18 M inhabitants) lands in
+v1.6.0-alpha.16 as the first German Land. Adding a country (or a
+sub-national region) is a single-file drop under
+`./helios-lidar/providers/`: implement the `LidarSource` interface
+from `helios-lidar.ts` and register the provider in
+`LIDAR_SOURCES`. The `findLidarSource(lat, lon)` resolver returns
+the first matching provider, or `null` for an out-of-coverage home,
+in which case the engine falls back to its basemap building
+footprints automatically.
 
 The shared post-processing (flood-fill on cells above a height
 threshold + size cap + convex hull) lives in
 `./helios-lidar/helios-lidar-pipeline.ts`. Each provider only owns
 the upstream-specific fetch logic: France serves a single nDSM
-raster as BIL float32, the others (UK / NL / NO) need two GeoTIFF
-fetches (DSM + DTM) and a per-pixel subtraction, Spain merges two
-pre-normalised coverages (vegetation + buildings) via element-wise
-MAX. The GeoTIFF fetch + decode + math helpers are factored into
-`./helios-lidar/helios-lidar-geotiff.ts`, backed by the `geotiff`
-package (~120 KB gzipped, includes lazy-loaded codecs for pako /
-zstd / lerc / jpeg / lzw all inlined into the single `helios.js`
-bundle via Vite `inlineDynamicImports`).
+raster as BIL float32, NRW serves a single nDOM via WCS as
+single-band Float32 GeoTIFF, the others (UK / NL / NO) need two
+GeoTIFF fetches (DSM + DTM) and a per-pixel subtraction, Spain
+merges two pre-normalised coverages (vegetation + buildings) via
+element-wise MAX. The GeoTIFF fetch + decode + math helpers are
+factored into `./helios-lidar/helios-lidar-geotiff.ts`, backed by
+the `geotiff` package (~120 KB gzipped, includes lazy-loaded codecs
+for pako / zstd / lerc / jpeg / lzw all inlined into the single
+`helios.js` bundle via Vite `inlineDynamicImports`).
 
 Providers probed and not yet integrated:
 
-* **Wales** (NRW), per-tile ZIP downloads only, no live raster query.
+* **Wales** (Natural Resources Wales), per-tile ZIP downloads only,
+  no live raster query.
 * **Switzerland** (swisstopo), WMS only carries pre-rendered PNG
   hillshade; raw `swissALTI3D` rasters are downloadable as files
   only.
@@ -394,6 +399,18 @@ Providers probed and not yet integrated:
   is only published as cached PNG visualisation.
 * **Denmark** (Datafordeler DHM), WCS GeoTIFF exists but requires a
   per-user API key / OAuth signup.
+* **Belgium** (Wallonia + Flanders), both regions publish 1m
+  DSM/DTM rasters under CC-BY 4.0 / open licences. Wallonia's
+  ArcGIS WMS serves pre-rendered RGB tiles for `image/tiff` (not
+  the raw float we need), and the Flemish DHMV II WCS exposes only
+  EPSG:31370 (Belgian Lambert 72), which would require bundling a
+  reprojection library (proj4js, ~50 KB gzip) so the existing
+  WGS84-only fetch math can target it. Parked until both regions
+  can be unblocked together, since the Flemish reprojection work
+  also unlocks Wallonia.
+* **Other German Länder** (Bayern, Berlin, Hamburg, Sachsen, ...),
+  most publish comparable nDOM rasters to NRW under permissive
+  licences; tracked per-Land for future drop-in providers.
 * **United States**, federal USGS 3DEP exposes a live ArcGIS Image
   Server
   (`elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer`)

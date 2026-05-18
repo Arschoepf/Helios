@@ -29837,7 +29837,7 @@ const englandLidarComposite = {
     });
   }
 };
-const WCS_URL$1 = "https://wcs-mds.idee.es/mds";
+const WCS_URL$2 = "https://wcs-mds.idee.es/mds";
 const COVERAGE_VEG = "mdsn_v025";
 const COVERAGE_BLD = "mdsn_e025";
 const ES_BBOX = { minLat: 35.8, maxLat: 44, minLon: -9.6, maxLon: 4.4 };
@@ -29871,7 +29871,7 @@ const spainPnoaLidar = {
         SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326",
         OUTPUTCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
       });
-      return `${WCS_URL$1}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
+      return `${WCS_URL$2}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
     };
     const [veg, bld] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(COVERAGE_VEG), rasterSize, opts.signal),
@@ -29891,7 +29891,7 @@ const spainPnoaLidar = {
     });
   }
 };
-const WCS_URL = "https://service.pdok.nl/rws/ahn/wcs/v1_0";
+const WCS_URL$1 = "https://service.pdok.nl/rws/ahn/wcs/v1_0";
 const COVERAGE_DSM = "dsm_05m";
 const COVERAGE_DTM = "dtm_05m";
 const NL_BBOX = { minLat: 50.7, maxLat: 53.8, minLon: 3.1, maxLon: 7.3 };
@@ -29925,7 +29925,7 @@ const netherlandsAhn4 = {
         SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326",
         OUTPUTCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
       });
-      return `${WCS_URL}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
+      return `${WCS_URL$1}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
     };
     const [dsm, dtm] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(COVERAGE_DSM), rasterSize, opts.signal),
@@ -30005,6 +30005,58 @@ const norwayKartverketNhm = {
     });
   }
 };
+const WCS_URL = "https://www.wcs.nrw.de/geobasis/wcs_nw_ndom";
+const COVERAGE = "nw_ndom";
+const NRW_BBOX = { minLat: 50.3, maxLat: 52.55, minLon: 5.85, maxLon: 9.5 };
+const nrwLidarNdom = {
+  id: "de-nrw-ndom",
+  name: "Geobasis NRW nDOM (Nordrhein-Westfalen)",
+  covers(lat, lon) {
+    return lat >= NRW_BBOX.minLat && lat <= NRW_BBOX.maxLat && lon >= NRW_BBOX.minLon && lon <= NRW_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < NRW_BBOX.minLat || bbox.minLat > NRW_BBOX.maxLat || bbox.maxLon < NRW_BBOX.minLon || bbox.minLon > NRW_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const params = new URLSearchParams({
+      SERVICE: "WCS",
+      VERSION: "2.0.1",
+      REQUEST: "GetCoverage",
+      COVERAGEID: COVERAGE,
+      FORMAT: "image/tiff",
+      SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
+    });
+    params.append("SUBSET", `Long(${bbox.minLon},${bbox.maxLon})`);
+    params.append("SUBSET", `Lat(${bbox.minLat},${bbox.maxLat})`);
+    params.append("SCALESIZE", `Long(${rasterSize}),Lat(${rasterSize})`);
+    const heights = await fetchFloat32GeoTiff(
+      `${WCS_URL}?${params.toString()}`,
+      rasterSize,
+      opts.signal
+    );
+    if (!heights) return emptyResult();
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
 function normaliseLocalNdsmRaster(band, noData) {
   const hasNoData = noData !== null && Number.isFinite(noData);
   for (let i2 = 0; i2 < band.length; i2++) {
@@ -30066,7 +30118,8 @@ const LIDAR_SOURCES = [
   englandLidarComposite,
   spainPnoaLidar,
   netherlandsAhn4,
-  norwayKartverketNhm
+  norwayKartverketNhm,
+  nrwLidarNdom
 ];
 function findLidarSource(lat, lon) {
   for (const src of LIDAR_SOURCES) {
@@ -36772,7 +36825,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.15"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.16"}`,
       labelStyle,
       versionStyle
     );
@@ -36793,7 +36846,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.15",
+        version: "1.6.0-alpha.16",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -36801,7 +36854,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.15"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.16"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

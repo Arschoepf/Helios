@@ -169,6 +169,7 @@ LiDAR coverage today:
 | Spain | **IGN España PNOA-LiDAR (MDSn)** | Peninsular Spain + Balearics | GeoTIFF float32 | Two coverages (vegetation + buildings), merged via MAX. Canarias not covered |
 | Netherlands | **PDOK AHN4** | Mainland NL | GeoTIFF float32 | Two coverages (DSM + DTM), subtracted client-side. Caribbean Netherlands not covered |
 | Norway | **Kartverket NHM** | Mainland Norway + Svalbard | GeoTIFF float32 (ArcGIS) | Two services (DOM + DTM), subtracted client-side |
+| Germany (NRW) | **Geobasis NRW nDOM** | Nordrhein-Westfalen (~18M people) | GeoTIFF float32 (WCS) | Pre-computed nDOM, single fetch. Other German Länder not yet covered |
 
 Other national LiDAR programmes were probed and not yet integrated:
 
@@ -176,6 +177,8 @@ Other national LiDAR programmes were probed and not yet integrated:
 * **Switzerland (swisstopo)** , published WMS only carries pre-rendered PNG hillshade, not raw heights. Raw `swissALTI3D` rasters are downloadable as files only.
 * **Slovakia (ZBGIS)** , DMR (terrain) is available as GeoTIFF, but DMP (surface) is only published as cached PNG visualisations.
 * **Denmark (Datafordeler DHM)** , WCS GeoTIFF exists but requires a per-user API key / OAuth signup, integration parked until that friction is reduced.
+* **Belgium (Wallonia + Flanders)** , both regions publish 1m DSM/DTM rasters under permissive licences (CC-BY 4.0 for Wallonia's MNS/MNT 2021-2022, Flemish DHMV II for Flanders + Brussels). Wallonia's WMS however serves pre-rendered RGB tiles for `image/tiff`, not the raw float values we need. Flanders has a clean Float32 WCS but the only exposed CRS is EPSG:31370 (Belgian Lambert 72) which would require bundling a reprojection library (proj4js) to convert our WGS84 bbox math. Parked until both can be unblocked together.
+* **Other German Länder** , Bayern, Berlin, Hamburg, Sachsen and a handful of others publish nDOM rasters with similar quality to NRW, integration tracked per-Land as time allows.
 * **United States** , federal USGS 3DEP exposes a live ArcGIS Image Server (`elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer`) for the *bare-earth* DEM only (DTM). No public DSM service at federal level, so the height-above-ground data needed for shadows isn't reachable. State-level programmes such as Minnesota DNR (`mntopo`) publish raw LiDAR as per-tile ZIP downloads only, no live raster query API. BYO local nDSM is the practical path for US users until a public DSM service materialises.
 
 If your country publishes a usable LiDAR HD endpoint (raw float heights via WMS or WCS, CORS-friendly, no per-user authentication) and you'd like to see it integrated, open an issue. The provider plug-in shape is documented in [ARCHITECTURE.md](./ARCHITECTURE.md) (`helios-lidar.ts` interface + `./helios-lidar/providers/` registry).

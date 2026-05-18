@@ -80,6 +80,7 @@ import { englandLidarComposite } from './helios-lidar/providers/helios-lidar-uk'
 import { spainPnoaLidar }       from './helios-lidar/providers/helios-lidar-es';
 import { netherlandsAhn4 }      from './helios-lidar/providers/helios-lidar-nl';
 import { norwayKartverketNhm }  from './helios-lidar/providers/helios-lidar-no';
+import { nrwLidarNdom }         from './helios-lidar/providers/helios-lidar-de-nrw';
 import {
     createLocalNdsmSource,
     type LocalNdsmConfig
@@ -97,7 +98,8 @@ export const LIDAR_SOURCES: LidarSource[] = [
     englandLidarComposite,
     spainPnoaLidar,
     netherlandsAhn4,
-    norwayKartverketNhm
+    norwayKartverketNhm,
+    nrwLidarNdom
 ];
 
 export function findLidarSource(lat: number, lon: number): LidarSource | null
