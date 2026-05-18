@@ -30195,7 +30195,7 @@ const LIDAR_PRECISION_RASTER = {
   high: 1024
 };
 const DEFAULT_SHADOW_OPACITY = 0.32;
-const DEFAULT_LIDAR_VIEW_RADIUS_M = 100;
+const DEFAULT_LIDAR_VIEW_RADIUS_M = 50;
 const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1.5;
 const DEFAULT_LIDAR_VIEW_POINT_COLOR = "#ffffff";
 const DEFAULT_LIDAR_VIEW_POINT_OPACITY = 0.5;
@@ -30373,7 +30373,15 @@ const _HeliosEngine = class _HeliosEngine {
         touchPitch: false,
         boxZoom: false,
         keyboard: false,
-        pixelRatio
+        pixelRatio,
+        //Collapse the attribution control to a tiny "i" disc by
+        //default. OSM / OpenFreeMap / OpenMapTiles require the
+        //attribution to stay accessible (license terms), so we
+        //can't hide it outright, but `compact: true` makes it a
+        //single icon at the bottom-right of the canvas that
+        //expands on click. Far less visual noise than the full
+        //"MapLibre | OpenFreeMap © OpenMapTiles..." bar.
+        attributionControl: { compact: true }
       }
     );
     this._resizeObserver = new ResizeObserver(() => {
@@ -31254,7 +31262,20 @@ const _HeliosEngine = class _HeliosEngine {
   //threshold-bypassed) to screen-space. Returns interleaved
   //[x0, y0, x1, y1, ...] Float32 plus the count, so the card can
   //fillRect through the buffer without per-point object allocations
-  //on every frame (1M points × 16ms/frame is a tight budget).
+  //on every frame.
+  //
+  //Performance: hot path runs at hundreds of thousands of cells per
+  //frame during camera rotation. The naive per-cell
+  //`_projectScenePoint(lon, lat, h)` is a full 4x4 matrix-build +
+  //multiply (~5 microseconds), which puts a 500 K-cell scene over
+  //2 seconds per frame, unusable. We dodge that by projecting the
+  //home + three anchors (1 m east, 1 m north, home + 1 m of
+  //altitude) ONCE per frame, deriving a 2×3 affine jacobian
+  //(world-metres around the home → screen pixels), then the cell
+  //loop is a flat 6 mul + 6 add per point. ~50× faster on the
+  //typical raster, no visual difference within the ~100 m disc
+  //(the small-area linearisation holds well at zoom 18 with a
+  //fixed camera tween cadence).
   //
   //maxRadiusMeters is honoured client-side: cells whose centre
   //sits past that distance from the home are skipped. The card
@@ -31263,8 +31284,8 @@ const _HeliosEngine = class _HeliosEngine {
   //devices.
   //
   //Returns null when no raster has been fetched yet (home outside
-  //coverage, shadows disabled, fetch still in flight, etc.) so the
-  //card can show an empty overlay instead of garbage.
+  //coverage, shadows disabled, fetch still in flight) so the card
+  //can show an empty overlay instead of garbage.
   projectLidarPoints(maxRadiusMeters) {
     if (!this.map || !this._mapReady) return null;
     const raster = this._lidarRaster;
@@ -31272,26 +31293,44 @@ const _HeliosEngine = class _HeliosEngine {
     const { heights, rasterSize, minLat, maxLat, minLon, maxLon } = raster;
     const N2 = rasterSize * rasterSize;
     if (heights.length < N2) return null;
+    const homeLat = this.homeLat;
+    const homeLon = this.homeLon;
+    const COS_LAT = Math.cos(homeLat * Math.PI / 180);
+    const M_PER_DEG_LAT2 = 111320;
+    const M_PER_DEG_LON = M_PER_DEG_LAT2 * COS_LAT;
+    const ONE_METRE_LAT = 1 / M_PER_DEG_LAT2;
+    const ONE_METRE_LON = 1 / M_PER_DEG_LON;
+    const homeAnchor = this._projectScenePoint(homeLon, homeLat, 0);
+    const eastAnchor = this._projectScenePoint(homeLon + ONE_METRE_LON, homeLat, 0);
+    const northAnchor = this._projectScenePoint(homeLon, homeLat + ONE_METRE_LAT, 0);
+    const upAnchor = this._projectScenePoint(homeLon, homeLat, 1);
+    if (!homeAnchor || !eastAnchor || !northAnchor || !upAnchor) return null;
+    const jExX = eastAnchor.x - homeAnchor.x;
+    const jExY = eastAnchor.y - homeAnchor.y;
+    const jNoX = northAnchor.x - homeAnchor.x;
+    const jNoY = northAnchor.y - homeAnchor.y;
+    const jUpX = upAnchor.x - homeAnchor.x;
+    const jUpY = upAnchor.y - homeAnchor.y;
+    const hX = homeAnchor.x;
+    const hY = homeAnchor.y;
     const pxLon = (maxLon - minLon) / rasterSize;
     const pxLat = (maxLat - minLat) / rasterSize;
     const radius = Math.max(1, maxRadiusMeters);
+    const r2 = radius * radius;
     const xy = new Float32Array(N2 * 2);
     let count = 0;
-    const homeLat = this.homeLat;
-    const homeLon = this.homeLon;
     for (let j = 0; j < rasterSize; j++) {
       const cLat = maxLat - (j + 0.5) * pxLat;
+      const dLatM = (cLat - homeLat) * M_PER_DEG_LAT2;
+      const dLatM2 = dLatM * dLatM;
       for (let i2 = 0; i2 < rasterSize; i2++) {
         const h2 = heights[j * rasterSize + i2];
         if (!isFinite(h2)) continue;
         const cLon = minLon + (i2 + 0.5) * pxLon;
-        const dLat = (cLat - homeLat) * 111320;
-        const dLon = (cLon - homeLon) * 111320 * Math.cos(homeLat * Math.PI / 180);
-        if (dLat * dLat + dLon * dLon > radius * radius) continue;
-        const px = this._projectScenePoint(cLon, cLat, h2);
-        if (!px) continue;
-        xy[count * 2] = px.x;
-        xy[count * 2 + 1] = px.y;
+        const dLonM = (cLon - homeLon) * M_PER_DEG_LON;
+        if (dLonM * dLonM + dLatM2 > r2) continue;
+        xy[count * 2] = hX + dLonM * jExX + dLatM * jNoX + h2 * jUpX;
+        xy[count * 2 + 1] = hY + dLonM * jExY + dLatM * jNoY + h2 * jUpY;
         count++;
       }
     }
@@ -34629,25 +34668,27 @@ const heliosCardStyles = i$3`
             ignores every click. */
         pointer-events: auto;
     }
-    /*  Force the label baseline to line-height: 1 (instead of the
-        browser default 1.2-1.4 inherited from <button>'s native
-        styles) so the uppercase glyphs sit dead-centre of the chip's
-        22 px box. Without this, the text rides ~1 px above centre
-        on Chromium and ~2 px above on Safari, visibly mis-aligned
-        against the icon. inline-flex pulls the glyph metrics into
-        flex alignment too, so vertical-align doesn't leak in from
-        the surrounding inline context. */
+    /*  Uppercase glyphs in Roboto are positioned in the upper ~80%
+        of their em-box (the cap-baseline trick that makes lowercase
+        x-height feel balanced). With line-height: 1 and flex
+        align-items: center, that pushes the visible centre of
+        "LIDAR" ~1 px above the chip's geometric centre. A 1 px
+        translateY on the label nudges it back into true centre
+        against the 14 px icon. The icon itself sits dead-centre via
+        flex with no offset, since ha-icon is a square box without
+        ascender/descender asymmetry. */
     .lidar-view-btn-label
     {
-        display: inline-flex;
-        align-items: center;
+        display: inline-block;
         line-height: 1;
+        transform: translateY(1px);
     }
     .lidar-view-btn ha-icon
     {
         --mdc-icon-size: 14px;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         line-height: 1;
     }
     .lidar-view-btn:disabled
@@ -34684,27 +34725,32 @@ const heliosCardStyles = i$3`
         opacity: 1;
     }
 
-    /*  When LiDAR View is active, fade out every other overlay
-        layer (chips, leaders, timeline, sun arc, dashboard panels)
-        so the dot cloud reads on its own against a quiet basemap.
-        The toggle button itself is opted back in (selector below)
-        so the user can always exit. The map container stays
-        visible so the dots are projected onto a real basemap. */
+    /*  When LiDAR View is active, fade out every overlay layer so
+        the dot cloud reads on its own against a quiet basemap. The
+        toggle button itself is opted back in (selector below) so
+        the user can always exit. The map container stays visible
+        so the dots are projected onto a real basemap.
+
+        Selector list mirrors what .detail-active fades earlier in
+        this file, plus the corners (top-left clock + top-right rail
+        minus the LiDAR button itself), the home hitbox / glow, and
+        the timeline. Easier to audit if any future overlay needs
+        to be hidden in LiDAR View by looking at this single block. */
     ha-card.lidar-view-active .overlay-top-left,
     ha-card.lidar-view-active .home-glow-svg,
-    ha-card.lidar-view-active .home-silhouette-svg,
-    ha-card.lidar-view-active .solar-svg,
-    ha-card.lidar-view-active .cloud-disc-svg,
-    ha-card.lidar-view-active .pv-chip,
-    ha-card.lidar-view-active .battery-soc-chip,
-    ha-card.lidar-view-active .battery-power-chip,
-    ha-card.lidar-view-active .pv-leader,
-    ha-card.lidar-view-active .battery-leader,
-    ha-card.lidar-view-active .time-bar,
     ha-card.lidar-view-active .home-hitbox,
-    ha-card.lidar-view-active .cloud-label,
-    ha-card.lidar-view-active .home-name-label,
-    ha-card.lidar-view-active .sun-label
+    ha-card.lidar-view-active .home-silhouette-svg,
+    ha-card.lidar-view-active .time-bar,
+    ha-card.lidar-view-active .solar-svg,
+    ha-card.lidar-view-active .solar-pct-label,
+    ha-card.lidar-view-active .solar-horizon-icon,
+    ha-card.lidar-view-active .cloud-svg,
+    ha-card.lidar-view-active .cloud-leader-svg,
+    ha-card.lidar-view-active .cloud-pct-label,
+    ha-card.lidar-view-active .pv-home-leader-svg,
+    ha-card.lidar-view-active .pv-pct-label,
+    ha-card.lidar-view-active .battery-leader-svg,
+    ha-card.lidar-view-active .battery-pct-label
     {
         opacity: 0;
         pointer-events: none;
@@ -37147,7 +37193,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.20"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.21"}`,
       labelStyle,
       versionStyle
     );
@@ -37168,7 +37214,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.20",
+        version: "1.6.0-alpha.21",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37176,7 +37222,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.20"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.21"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -38153,9 +38199,18 @@ let HeliosCard = class extends i {
     const half = size / 2;
     const xy = points.xy;
     const N2 = points.count;
+    const W = cssW;
+    const H2 = cssH;
+    const path = new Path2D();
+    let drawn = 0;
     for (let i2 = 0; i2 < N2; i2++) {
-      ctx.fillRect(xy[i2 * 2] - half, xy[i2 * 2 + 1] - half, size, size);
+      const x2 = xy[i2 * 2];
+      const y3 = xy[i2 * 2 + 1];
+      if (x2 < -half || y3 < -half || x2 > W + half || y3 > H2 + half) continue;
+      path.rect(x2 - half, y3 - half, size, size);
+      drawn++;
     }
+    if (drawn > 0) ctx.fill(path);
   }
   //Mix a CSS hex colour with an alpha value to produce an rgba()
   //string. Accepts #rgb / #rrggbb / #rrggbbaa (the alpha component

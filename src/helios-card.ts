@@ -1806,17 +1806,35 @@ export class HeliosCard extends LitElement
         if (!points || points.count === 0) return;
 
         ctx.fillStyle = this._withAlpha(color, alpha);
-        //Square dots via fillRect, ~3x faster than ctx.arc at the
-        //sub-pixel sizes we use here, and visually indistinguishable
-        //past the first few pixels of diameter. Pre-compute the half
-        //offset once so the tight loop only does index reads.
+        //Square dots batched into a single Path2D + one fill() call,
+        //rather than N fillRect() calls. ctx.fillRect has fixed per-
+        //invocation overhead (~0.3 microsecond on V8) that adds up
+        //past ~100 K points; the Path2D path lets the rasteriser
+        //batch the union into one draw command. Cheap clipping cull
+        //(off-screen points skipped) trims the worst-case rotation
+        //load too: at extreme camera pitches a chunk of the disc
+        //projects past the canvas bounds, no point asking the GPU
+        //to clip them. The tight inner loop only does typed-array
+        //index reads, no per-point allocation.
         const half = size / 2;
         const xy   = points.xy;
         const N    = points.count;
+        const W    = cssW;
+        const H    = cssH;
+        const path = new Path2D();
+        let drawn = 0;
         for (let i = 0; i < N; i++)
         {
-            ctx.fillRect(xy[i * 2] - half, xy[i * 2 + 1] - half, size, size);
+            const x = xy[i * 2];
+            const y = xy[i * 2 + 1];
+            //Off-screen cull, the per-point cost is one branch and
+            //four comparisons, much cheaper than feeding the point
+            //into the path only for the rasteriser to throw it out.
+            if (x < -half || y < -half || x > W + half || y > H + half) continue;
+            path.rect(x - half, y - half, size, size);
+            drawn++;
         }
+        if (drawn > 0) ctx.fill(path);
     }
 
     //Bumped on every overlay refresh so _redrawLidarCanvas knows the

@@ -936,25 +936,27 @@ export const heliosCardStyles = css`
             ignores every click. */
         pointer-events: auto;
     }
-    /*  Force the label baseline to line-height: 1 (instead of the
-        browser default 1.2-1.4 inherited from <button>'s native
-        styles) so the uppercase glyphs sit dead-centre of the chip's
-        22 px box. Without this, the text rides ~1 px above centre
-        on Chromium and ~2 px above on Safari, visibly mis-aligned
-        against the icon. inline-flex pulls the glyph metrics into
-        flex alignment too, so vertical-align doesn't leak in from
-        the surrounding inline context. */
+    /*  Uppercase glyphs in Roboto are positioned in the upper ~80%
+        of their em-box (the cap-baseline trick that makes lowercase
+        x-height feel balanced). With line-height: 1 and flex
+        align-items: center, that pushes the visible centre of
+        "LIDAR" ~1 px above the chip's geometric centre. A 1 px
+        translateY on the label nudges it back into true centre
+        against the 14 px icon. The icon itself sits dead-centre via
+        flex with no offset, since ha-icon is a square box without
+        ascender/descender asymmetry. */
     .lidar-view-btn-label
     {
-        display: inline-flex;
-        align-items: center;
+        display: inline-block;
         line-height: 1;
+        transform: translateY(1px);
     }
     .lidar-view-btn ha-icon
     {
         --mdc-icon-size: 14px;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         line-height: 1;
     }
     .lidar-view-btn:disabled
@@ -991,27 +993,32 @@ export const heliosCardStyles = css`
         opacity: 1;
     }
 
-    /*  When LiDAR View is active, fade out every other overlay
-        layer (chips, leaders, timeline, sun arc, dashboard panels)
-        so the dot cloud reads on its own against a quiet basemap.
-        The toggle button itself is opted back in (selector below)
-        so the user can always exit. The map container stays
-        visible so the dots are projected onto a real basemap. */
+    /*  When LiDAR View is active, fade out every overlay layer so
+        the dot cloud reads on its own against a quiet basemap. The
+        toggle button itself is opted back in (selector below) so
+        the user can always exit. The map container stays visible
+        so the dots are projected onto a real basemap.
+
+        Selector list mirrors what .detail-active fades earlier in
+        this file, plus the corners (top-left clock + top-right rail
+        minus the LiDAR button itself), the home hitbox / glow, and
+        the timeline. Easier to audit if any future overlay needs
+        to be hidden in LiDAR View by looking at this single block. */
     ha-card.lidar-view-active .overlay-top-left,
     ha-card.lidar-view-active .home-glow-svg,
-    ha-card.lidar-view-active .home-silhouette-svg,
-    ha-card.lidar-view-active .solar-svg,
-    ha-card.lidar-view-active .cloud-disc-svg,
-    ha-card.lidar-view-active .pv-chip,
-    ha-card.lidar-view-active .battery-soc-chip,
-    ha-card.lidar-view-active .battery-power-chip,
-    ha-card.lidar-view-active .pv-leader,
-    ha-card.lidar-view-active .battery-leader,
-    ha-card.lidar-view-active .time-bar,
     ha-card.lidar-view-active .home-hitbox,
-    ha-card.lidar-view-active .cloud-label,
-    ha-card.lidar-view-active .home-name-label,
-    ha-card.lidar-view-active .sun-label
+    ha-card.lidar-view-active .home-silhouette-svg,
+    ha-card.lidar-view-active .time-bar,
+    ha-card.lidar-view-active .solar-svg,
+    ha-card.lidar-view-active .solar-pct-label,
+    ha-card.lidar-view-active .solar-horizon-icon,
+    ha-card.lidar-view-active .cloud-svg,
+    ha-card.lidar-view-active .cloud-leader-svg,
+    ha-card.lidar-view-active .cloud-pct-label,
+    ha-card.lidar-view-active .pv-home-leader-svg,
+    ha-card.lidar-view-active .pv-pct-label,
+    ha-card.lidar-view-active .battery-leader-svg,
+    ha-card.lidar-view-active .battery-pct-label
     {
         opacity: 0;
         pointer-events: none;
