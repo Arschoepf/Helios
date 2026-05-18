@@ -26,6 +26,8 @@ export const fr: Translations = {
         batteryLabel:       'Batterie',
         batteryCharged:     'chargé',
         batteryDischarged:  'déchargé',
+        actualShort:        'Réel',
+        forecastShort:      'Prévu',
     },
 
     editor:

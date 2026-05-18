@@ -566,6 +566,8 @@ export function renderDashTodayChart(
 {
     if (cum.maxKwh < 0.05) return nothing;
 
+    const t = pickTranslations(host.hass?.language);
+
     const HOUR_MS  = 3_600_000;
     const today0   = new Date();
     today0.setHours(0, 0, 0, 0);
@@ -579,7 +581,7 @@ export function renderDashTodayChart(
     //gutter on the left (kWh labels) and below (hour labels) so
     //the HTML axis overlays never overlap the plotted curves.
     const W = 240, H = 60;
-    const PAD_L = 22, PAD_R = 4, PAD_T = 4, PAD_B = 10;
+    const PAD_L = 22, PAD_R = 4, PAD_T = 12, PAD_B = 10;
     const yMax  = Math.max(cum.maxKwh, 0.1) * 1.05;
 
     const xFor = (t: number): number =>
@@ -778,13 +780,15 @@ export function renderDashTodayChart(
                 >
                     <span class="dash-today-chart-tooltip-time">${hoverTimeLabel}</span>
                     ${hoverActualKwh !== null ? html`
-                        <span class="dash-today-chart-tooltip-actual" style="color:${pvColor}">
-                            ${formatLocalisedNumber(host.hass, hoverActualKwh, 1)} kWh
+                        <span class="dash-today-chart-tooltip-row">
+                            <span class="dash-today-chart-tooltip-key" style="color:${pvColor}">${t.detail.actualShort}:</span>
+                            <span class="dash-today-chart-tooltip-value">${formatLocalisedNumber(host.hass, hoverActualKwh, 1)} kWh</span>
                         </span>
                     ` : nothing}
                     ${hoverPredictedKwh !== null ? html`
-                        <span class="dash-today-chart-tooltip-predicted" style="color:${predictedColor}">
-                            ${formatLocalisedNumber(host.hass, hoverPredictedKwh, 1)} kWh
+                        <span class="dash-today-chart-tooltip-row">
+                            <span class="dash-today-chart-tooltip-key" style="color:${predictedColor}">${t.detail.forecastShort}:</span>
+                            <span class="dash-today-chart-tooltip-value">${formatLocalisedNumber(host.hass, hoverPredictedKwh, 1)} kWh</span>
                         </span>
                     ` : nothing}
                 </div>

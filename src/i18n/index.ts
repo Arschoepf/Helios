@@ -42,6 +42,10 @@ export interface Translations
         //  batteryLabel    , top of the battery vessel section
         //  batteryCharged  , label under the charge total
         //  batteryDischarged , label under the discharge total
+        //  actualShort     , short "Actual" label used in compact
+        //                    spaces (chart hover tooltip)
+        //  forecastShort   , short "Forecast" label used in compact
+        //                    spaces (chart hover tooltip)
         todayLabel:        string;
         todayProduced:     string;
         todayForecast:     string;
@@ -53,6 +57,8 @@ export interface Translations
         batteryLabel:      string;
         batteryCharged:    string;
         batteryDischarged: string;
+        actualShort:       string;
+        forecastShort:     string;
     };
 
     editor:

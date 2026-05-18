@@ -18,7 +18,9 @@ export const de: Translations = {
         tomorrowPeak:       'Spitze erwartet gegen',
         batteryLabel:       'Batterie',
         batteryCharged:     'geladen',
-        batteryDischarged:  'entladen',},
+        batteryDischarged:  'entladen',
+        actualShort:        'Real',
+        forecastShort:      'Prognose',},
 
     editor:
     {

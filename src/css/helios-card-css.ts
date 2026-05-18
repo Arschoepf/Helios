@@ -418,10 +418,6 @@ export const heliosCardStyles = css`
         align-items: baseline;
         line-height: 1;
     }
-    .dash-today-stat-predicted .dash-stat-value
-    {
-        font-style: italic;
-    }
     /*  Signed delta % shown after the produced value: "(+15 %)" if
         we're ahead of the forecast at this moment, "(-8 %)" if
         behind. Inherits font sizing from the stat unit it sits
@@ -478,7 +474,12 @@ export const heliosCardStyles = css`
         display: block;
         position: relative;
         width: 100%;
-        height: 110px;
+        /*  Taller chart so the dual curves + sunrise/sunset markers
+            + now cursor + hover overlays all have breathing room.
+            The data area sits below the icon zone (PAD_T = 12 in
+            viewBox units) so sunrise/sunset icons docked at the
+            top never collide with the curves' upper readings.   */
+        height: 160px;
         background: rgba(0, 0, 0, 0.05);
         border: 1px solid rgba(0, 0, 0, 0.12);
         border-radius: 4px;
@@ -580,11 +581,17 @@ export const heliosCardStyles = css`
     .dash-today-chart-twilight-icon
     {
         position: absolute;
-        bottom: 13px;
+        /*  Anchored to the top of the chart so the icons read as
+            flags capping their dotted lines, rather than buried in
+            the bottom axis-label gutter. Sits in the top padding
+            zone (PAD_T = 12 viewBox units) so it never overlaps
+            the curves' data area.                                */
+        top: 4px;
         transform: translateX(-50%);
-        --mdc-icon-size: 12px;
-        opacity: 0.85;
+        --mdc-icon-size: 18px;
+        opacity: 0.95;
         pointer-events: none;
+        z-index: 2;
     }
     .dash-today-chart-hover-line
     {
@@ -698,10 +705,23 @@ export const heliosCardStyles = css`
         letter-spacing: 0.6px;
         text-transform: uppercase;
     }
-    .dash-today-chart-tooltip-actual,
-    .dash-today-chart-tooltip-predicted
+    .dash-today-chart-tooltip-row
+    {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 4px;
+    }
+    .dash-today-chart-tooltip-key
     {
         font-weight: 700;
+        font-size: 9px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    .dash-today-chart-tooltip-value
+    {
+        font-weight: 700;
+        color: #ffffff;
     }
 
     /*  Status line under the body when the day's production hasn't

@@ -18,7 +18,9 @@ export const nl: Translations = {
         tomorrowPeak:       'piek verwacht rond',
         batteryLabel:       'Batterij',
         batteryCharged:     'opgeladen',
-        batteryDischarged:  'ontladen',},
+        batteryDischarged:  'ontladen',
+        actualShort:        'Werkelijk',
+        forecastShort:      'Verwacht',},
 
     editor:
     {

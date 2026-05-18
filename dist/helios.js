@@ -616,7 +616,9 @@ const en = {
     tomorrowPeak: "peak expected around",
     batteryLabel: "Battery",
     batteryCharged: "charged",
-    batteryDischarged: "discharged"
+    batteryDischarged: "discharged",
+    actualShort: "Actual",
+    forecastShort: "Forecast"
   },
   editor: {
     locationSection: "Location",
@@ -756,7 +758,9 @@ const fr = {
     tomorrowPeak: "pic prévu vers",
     batteryLabel: "Batterie",
     batteryCharged: "chargé",
-    batteryDischarged: "déchargé"
+    batteryDischarged: "déchargé",
+    actualShort: "Réel",
+    forecastShort: "Prévu"
   },
   editor: {
     locationSection: "Localisation",
@@ -896,7 +900,9 @@ const de = {
     tomorrowPeak: "Spitze erwartet gegen",
     batteryLabel: "Batterie",
     batteryCharged: "geladen",
-    batteryDischarged: "entladen"
+    batteryDischarged: "entladen",
+    actualShort: "Real",
+    forecastShort: "Prognose"
   },
   editor: {
     locationSection: "Standort",
@@ -1036,7 +1042,9 @@ const es = {
     tomorrowPeak: "pico previsto sobre las",
     batteryLabel: "Batería",
     batteryCharged: "cargado",
-    batteryDischarged: "descargado"
+    batteryDischarged: "descargado",
+    actualShort: "Real",
+    forecastShort: "Previsto"
   },
   editor: {
     locationSection: "Ubicación",
@@ -1176,7 +1184,9 @@ const it = {
     tomorrowPeak: "picco previsto verso le",
     batteryLabel: "Batteria",
     batteryCharged: "caricato",
-    batteryDischarged: "scaricato"
+    batteryDischarged: "scaricato",
+    actualShort: "Reale",
+    forecastShort: "Previsto"
   },
   editor: {
     locationSection: "Posizione",
@@ -1316,7 +1326,9 @@ const nl = {
     tomorrowPeak: "piek verwacht rond",
     batteryLabel: "Batterij",
     batteryCharged: "opgeladen",
-    batteryDischarged: "ontladen"
+    batteryDischarged: "ontladen",
+    actualShort: "Werkelijk",
+    forecastShort: "Verwacht"
   },
   editor: {
     locationSection: "Locatie",
@@ -1456,7 +1468,9 @@ const pt = {
     tomorrowPeak: "pico previsto por volta das",
     batteryLabel: "Bateria",
     batteryCharged: "carregado",
-    batteryDischarged: "descarregado"
+    batteryDischarged: "descarregado",
+    actualShort: "Real",
+    forecastShort: "Previsto"
   },
   editor: {
     locationSection: "Localização",
@@ -1596,7 +1610,9 @@ const no = {
     tomorrowPeak: "topp ventet rundt",
     batteryLabel: "Batteri",
     batteryCharged: "ladet",
-    batteryDischarged: "utladet"
+    batteryDischarged: "utladet",
+    actualShort: "Reell",
+    forecastShort: "Estimert"
   },
   editor: {
     locationSection: "Sted",
@@ -2140,10 +2156,6 @@ const heliosCardStyles = i$3`
         align-items: baseline;
         line-height: 1;
     }
-    .dash-today-stat-predicted .dash-stat-value
-    {
-        font-style: italic;
-    }
     /*  Signed delta % shown after the produced value: "(+15 %)" if
         we're ahead of the forecast at this moment, "(-8 %)" if
         behind. Inherits font sizing from the stat unit it sits
@@ -2200,7 +2212,12 @@ const heliosCardStyles = i$3`
         display: block;
         position: relative;
         width: 100%;
-        height: 110px;
+        /*  Taller chart so the dual curves + sunrise/sunset markers
+            + now cursor + hover overlays all have breathing room.
+            The data area sits below the icon zone (PAD_T = 12 in
+            viewBox units) so sunrise/sunset icons docked at the
+            top never collide with the curves' upper readings.   */
+        height: 160px;
         background: rgba(0, 0, 0, 0.05);
         border: 1px solid rgba(0, 0, 0, 0.12);
         border-radius: 4px;
@@ -2302,11 +2319,17 @@ const heliosCardStyles = i$3`
     .dash-today-chart-twilight-icon
     {
         position: absolute;
-        bottom: 13px;
+        /*  Anchored to the top of the chart so the icons read as
+            flags capping their dotted lines, rather than buried in
+            the bottom axis-label gutter. Sits in the top padding
+            zone (PAD_T = 12 viewBox units) so it never overlaps
+            the curves' data area.                                */
+        top: 4px;
         transform: translateX(-50%);
-        --mdc-icon-size: 12px;
-        opacity: 0.85;
+        --mdc-icon-size: 18px;
+        opacity: 0.95;
         pointer-events: none;
+        z-index: 2;
     }
     .dash-today-chart-hover-line
     {
@@ -2420,10 +2443,23 @@ const heliosCardStyles = i$3`
         letter-spacing: 0.6px;
         text-transform: uppercase;
     }
-    .dash-today-chart-tooltip-actual,
-    .dash-today-chart-tooltip-predicted
+    .dash-today-chart-tooltip-row
+    {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 4px;
+    }
+    .dash-today-chart-tooltip-key
     {
         font-weight: 700;
+        font-size: 9px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    .dash-today-chart-tooltip-value
+    {
+        font-weight: 700;
+        color: #ffffff;
     }
 
     /*  Status line under the body when the day's production hasn't
@@ -37877,6 +37913,7 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
 }
 function renderDashTodayChart(host, pvColor, sunColor, cum) {
   if (cum.maxKwh < 0.05) return A;
+  const t2 = pickTranslations(host.hass?.language);
   const HOUR_MS = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
@@ -37884,9 +37921,9 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
   const endMs = startMs + 24 * HOUR_MS;
   const nowMs = Date.now();
   const W = 240, H2 = 60;
-  const PAD_L = 22, PAD_R = 4, PAD_T = 4, PAD_B = 10;
+  const PAD_L = 22, PAD_R = 4, PAD_T = 12, PAD_B = 10;
   const yMax = Math.max(cum.maxKwh, 0.1) * 1.05;
-  const xFor = (t2) => PAD_L + (t2 - startMs) / (endMs - startMs) * (W - PAD_L - PAD_R);
+  const xFor = (t22) => PAD_L + (t22 - startMs) / (endMs - startMs) * (W - PAD_L - PAD_R);
   const yFor = (kwh) => H2 - PAD_B - kwh / yMax * (H2 - PAD_T - PAD_B);
   const buildPath = (pts) => {
     if (pts.length < 2) return "";
@@ -38047,13 +38084,15 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                 >
                     <span class="dash-today-chart-tooltip-time">${hoverTimeLabel}</span>
                     ${hoverActualKwh !== null ? b`
-                        <span class="dash-today-chart-tooltip-actual" style="color:${pvColor}">
-                            ${formatLocalisedNumber(host.hass, hoverActualKwh, 1)} kWh
+                        <span class="dash-today-chart-tooltip-row">
+                            <span class="dash-today-chart-tooltip-key" style="color:${pvColor}">${t2.detail.actualShort}:</span>
+                            <span class="dash-today-chart-tooltip-value">${formatLocalisedNumber(host.hass, hoverActualKwh, 1)} kWh</span>
                         </span>
                     ` : A}
                     ${hoverPredictedKwh !== null ? b`
-                        <span class="dash-today-chart-tooltip-predicted" style="color:${predictedColor}">
-                            ${formatLocalisedNumber(host.hass, hoverPredictedKwh, 1)} kWh
+                        <span class="dash-today-chart-tooltip-row">
+                            <span class="dash-today-chart-tooltip-key" style="color:${predictedColor}">${t2.detail.forecastShort}:</span>
+                            <span class="dash-today-chart-tooltip-value">${formatLocalisedNumber(host.hass, hoverPredictedKwh, 1)} kWh</span>
                         </span>
                     ` : A}
                 </div>
@@ -39989,7 +40028,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.41"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.42"}`,
       labelStyle,
       versionStyle
     );
@@ -40010,7 +40049,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.41",
+        version: "1.6.0-alpha.42",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40018,7 +40057,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.41"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.42"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

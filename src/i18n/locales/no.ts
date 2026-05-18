@@ -27,7 +27,9 @@ export const no: Translations = {
         tomorrowPeak:       'topp ventet rundt',
         batteryLabel:       'Batteri',
         batteryCharged:     'ladet',
-        batteryDischarged:  'utladet',},
+        batteryDischarged:  'utladet',
+        actualShort:        'Reell',
+        forecastShort:      'Estimert',},
 
     editor:
     {
