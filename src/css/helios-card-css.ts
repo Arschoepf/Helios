@@ -411,6 +411,21 @@ export const heliosCardStyles = css`
     {
         font-style: italic;
     }
+    /*  Signed delta % shown after the produced value: "(+15 %)" if
+        we're ahead of the forecast at this moment, "(-8 %)" if
+        behind. Inherits font sizing from the stat unit it sits
+        next to, with a touch more weight so the sign reads cleanly
+        but doesn't compete with the headline number.            */
+    .dash-stat-delta
+    {
+        font-size: 13px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        margin-left: 6px;
+        opacity: 0.85;
+    }
+    .dash-stat-delta-up   { color: #22c55e; }
+    .dash-stat-delta-down { color: #ef4444; }
     .dash-today-meta
     {
         display: flex;
@@ -464,6 +479,20 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
     }
+    /*  Subtle hour + kWh gridlines drawn inside the SVG behind
+        the curves. Stretch with the viewBox but stroke width
+        stays at 1 px via vector-effect.                          */
+    .dash-today-chart-grid
+    {
+        stroke: rgba(0, 0, 0, 0.10);
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .dash-today-chart-grid
+    {
+        stroke: rgba(255, 255, 255, 0.12);
+    }
     .dash-today-chart-actual
     {
         fill: none;
@@ -505,30 +534,73 @@ export const heliosCardStyles = css`
     {
         stroke: #191a1b;
     }
+
+    /*  X-axis: hour ticks ('00h' / '06h' / ...) along the bottom
+        edge of the chart frame, semi-transparent so they read as
+        subtle annotation. Y-axis ticks for kWh sit just inside
+        the left edge in the same compact style.                  */
+    .dash-today-chart-axis-x
+    {
+        position: absolute;
+        left: 0; right: 0; bottom: 2px;
+        height: 10px;
+        pointer-events: none;
+    }
+    .dash-today-chart-axis-x-label
+    {
+        position: absolute;
+        transform: translateX(-50%);
+        bottom: 0;
+        font-size: 9px;
+        font-weight: 600;
+        opacity: 0.5;
+        font-variant-numeric: tabular-nums;
+    }
+    .dash-today-chart-axis-y
+    {
+        position: absolute;
+        top: 0; bottom: 0; left: 4px;
+        width: 22px;
+        pointer-events: none;
+    }
+    .dash-today-chart-axis-y-label
+    {
+        position: absolute;
+        left: 0;
+        transform: translateY(-50%);
+        font-size: 9px;
+        font-weight: 600;
+        opacity: 0.5;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*  Hover tooltip floats OUTSIDE the chart frame, anchored to
+        the top edge with a small gap, so it never overlaps the
+        curves it's describing. Dark background in BOTH themes:
+        the lighter "predicted" colour would be unreadable on a
+        light bg, and a consistent dark pill keeps the visual
+        language stable across themes.                             */
     .dash-today-chart-tooltip
     {
         position: absolute;
-        top: 4px;
+        bottom: calc(100% + 4px);
         transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.82);
+        background: rgba(0, 0, 0, 0.85);
         color: #ffffff;
         font-size: 10px;
         font-weight: 600;
         letter-spacing: 0.2px;
-        padding: 4px 7px;
-        border-radius: 3px;
+        padding: 4px 8px;
+        border-radius: 4px;
         white-space: nowrap;
         pointer-events: none;
         font-variant-numeric: tabular-nums;
         display: inline-flex;
         flex-direction: column;
-        gap: 1px;
+        gap: 2px;
         line-height: 1.2;
-    }
-    ha-card.theme-dark .dash-today-chart-tooltip
-    {
-        background: rgba(255, 255, 255, 0.92);
-        color: #111111;
+        z-index: 2;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
     }
     .dash-today-chart-tooltip-time
     {

@@ -2125,6 +2125,21 @@ const heliosCardStyles = i$3`
     {
         font-style: italic;
     }
+    /*  Signed delta % shown after the produced value: "(+15 %)" if
+        we're ahead of the forecast at this moment, "(-8 %)" if
+        behind. Inherits font sizing from the stat unit it sits
+        next to, with a touch more weight so the sign reads cleanly
+        but doesn't compete with the headline number.            */
+    .dash-stat-delta
+    {
+        font-size: 13px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        margin-left: 6px;
+        opacity: 0.85;
+    }
+    .dash-stat-delta-up   { color: #22c55e; }
+    .dash-stat-delta-down { color: #ef4444; }
     .dash-today-meta
     {
         display: flex;
@@ -2178,6 +2193,20 @@ const heliosCardStyles = i$3`
         width: 100%;
         height: 100%;
     }
+    /*  Subtle hour + kWh gridlines drawn inside the SVG behind
+        the curves. Stretch with the viewBox but stroke width
+        stays at 1 px via vector-effect.                          */
+    .dash-today-chart-grid
+    {
+        stroke: rgba(0, 0, 0, 0.10);
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .dash-today-chart-grid
+    {
+        stroke: rgba(255, 255, 255, 0.12);
+    }
     .dash-today-chart-actual
     {
         fill: none;
@@ -2219,30 +2248,73 @@ const heliosCardStyles = i$3`
     {
         stroke: #191a1b;
     }
+
+    /*  X-axis: hour ticks ('00h' / '06h' / ...) along the bottom
+        edge of the chart frame, semi-transparent so they read as
+        subtle annotation. Y-axis ticks for kWh sit just inside
+        the left edge in the same compact style.                  */
+    .dash-today-chart-axis-x
+    {
+        position: absolute;
+        left: 0; right: 0; bottom: 2px;
+        height: 10px;
+        pointer-events: none;
+    }
+    .dash-today-chart-axis-x-label
+    {
+        position: absolute;
+        transform: translateX(-50%);
+        bottom: 0;
+        font-size: 9px;
+        font-weight: 600;
+        opacity: 0.5;
+        font-variant-numeric: tabular-nums;
+    }
+    .dash-today-chart-axis-y
+    {
+        position: absolute;
+        top: 0; bottom: 0; left: 4px;
+        width: 22px;
+        pointer-events: none;
+    }
+    .dash-today-chart-axis-y-label
+    {
+        position: absolute;
+        left: 0;
+        transform: translateY(-50%);
+        font-size: 9px;
+        font-weight: 600;
+        opacity: 0.5;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*  Hover tooltip floats OUTSIDE the chart frame, anchored to
+        the top edge with a small gap, so it never overlaps the
+        curves it's describing. Dark background in BOTH themes:
+        the lighter "predicted" colour would be unreadable on a
+        light bg, and a consistent dark pill keeps the visual
+        language stable across themes.                             */
     .dash-today-chart-tooltip
     {
         position: absolute;
-        top: 4px;
+        bottom: calc(100% + 4px);
         transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.82);
+        background: rgba(0, 0, 0, 0.85);
         color: #ffffff;
         font-size: 10px;
         font-weight: 600;
         letter-spacing: 0.2px;
-        padding: 4px 7px;
-        border-radius: 3px;
+        padding: 4px 8px;
+        border-radius: 4px;
         white-space: nowrap;
         pointer-events: none;
         font-variant-numeric: tabular-nums;
         display: inline-flex;
         flex-direction: column;
-        gap: 1px;
+        gap: 2px;
         line-height: 1.2;
-    }
-    ha-card.theme-dark .dash-today-chart-tooltip
-    {
-        background: rgba(255, 255, 255, 0.92);
-        color: #111111;
+        z-index: 2;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
     }
     .dash-today-chart-tooltip-time
     {
@@ -37406,7 +37478,7 @@ function computeDailyKwhTotals(host) {
 function renderDashboard(host) {
   const t2 = pickTranslations(host.hass?.language);
   const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
-  cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
+  const cloudColor = cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
   const pvColor = cfgHex(host.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
   const batteryColor = cfgHex(host.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
   const hasBattery = String(host.config?.["battery-soc-entity"] ?? "").trim() !== "" || String(host.config?.["battery-power-entity"] ?? "").trim() !== "";
@@ -37422,7 +37494,7 @@ function renderDashboard(host) {
             <div class="detail-panel-inner">
                 ${renderDashTodaySection(host, t2, pvColor, sunColor)}
                 <div class="dash-row">
-                    ${renderDashTomorrowSection(host, t2, sunColor)}
+                    ${renderDashTomorrowSection(host, t2, sunColor, cloudColor, pvColor)}
                     ${hasBattery ? renderDashBatterySection(host, t2, batteryColor) : A}
                 </div>
             </div>
@@ -37522,6 +37594,20 @@ function computeTodayHourly(host) {
   }
   return { bins, peakHourTs, peakW, producedKwh, forecastKwh };
 }
+function interpolateKwhAt(pts, t2) {
+  if (pts.length === 0) return null;
+  if (t2 < pts[0].tMs) return null;
+  if (t2 > pts[pts.length - 1].tMs) return null;
+  let lo = 0, hi = pts.length - 1;
+  while (lo < hi - 1) {
+    const mid = lo + hi >> 1;
+    if (pts[mid].tMs <= t2) lo = mid;
+    else hi = mid;
+  }
+  const a2 = pts[lo], b2 = pts[hi];
+  if (b2.tMs === a2.tMs) return a2.kwh;
+  return a2.kwh + (t2 - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
+}
 function computeTodayCumulative(host) {
   const HOUR_MS = 36e5;
   const today0 = /* @__PURE__ */ new Date();
@@ -37595,6 +37681,7 @@ function computeTodayCumulative(host) {
 }
 function renderDashTodaySection(host, t2, pvColor, sunColor) {
   const data = computeTodayHourly(host);
+  const cum = computeTodayCumulative(host);
   const HOUR_MS = 36e5;
   const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
     hour: "2-digit",
@@ -37602,16 +37689,15 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
     hourCycle: "h23"
   }) : "";
   const peakValueLabel = formatPvWatts(host.hass, data.peakW);
-  const today0 = /* @__PURE__ */ new Date();
-  today0.setHours(0, 0, 0, 0);
-  const todayMs = today0.getTime();
-  const dailyKwh = computeDailyKwhTotals(host);
-  const forecastKwh = dailyKwh.get(todayMs) ?? data.forecastKwh;
-  const showForecast = forecastKwh > data.producedKwh + 0.05;
+  const producedKwh = cum.actualSamples.length > 0 ? cum.actualSamples[cum.actualSamples.length - 1].kwh : 0;
+  const forecastKwh = cum.predictedSamples.length > 0 ? cum.predictedSamples[cum.predictedSamples.length - 1].kwh : 0;
+  const nowMs = Date.now();
+  const predictedAtNow = interpolateKwhAt(cum.predictedSamples, nowMs);
+  const deltaPct = predictedAtNow !== null && predictedAtNow > 0.2 && producedKwh > 0.05 ? (producedKwh - predictedAtNow) / predictedAtNow * 100 : null;
   const showPeak = data.peakHourTs !== null && data.peakW > 50;
   const pvConfigured = String(host.config?.["pv-power-entity"] ?? "").trim() !== "";
   const historyLoading = pvConfigured && host._pvHistory === null;
-  const notStartedYet = !historyLoading && data.producedKwh < 0.05 && data.peakHourTs !== null && data.peakHourTs > Date.now();
+  const notStartedYet = !historyLoading && producedKwh < 0.05 && data.peakHourTs !== null && data.peakHourTs > Date.now();
   const predictedColor = lerpHexToward(pvColor, "#ffffff", 0.55);
   return b`
         <section class="dash-section dash-card dash-today">
@@ -37625,11 +37711,16 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                         ${historyLoading ? b`
                             <span class="dash-stat-skeleton" aria-hidden="true"></span>
                         ` : b`
-                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, data.producedKwh, 1)}</span>
+                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, producedKwh, 1)}</span>
                             <span class="dash-stat-unit">kWh ${t2.detail.todayProduced}</span>
+                            ${deltaPct !== null ? b`
+                                <span class="dash-stat-delta ${deltaPct >= 0 ? "dash-stat-delta-up" : "dash-stat-delta-down"}">
+                                    (${deltaPct >= 0 ? "+" : ""}${formatLocalisedNumber(host.hass, deltaPct, 0, true)} %)
+                                </span>
+                            ` : A}
                         `}
                     </div>
-                    ${showForecast ? b`
+                    ${forecastKwh > 0.05 ? b`
                         <div class="dash-today-stat dash-today-stat-predicted" style="color:${predictedColor}">
                             <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)}</span>
                             <span class="dash-stat-unit">kWh ${t2.detail.todayForecast}</span>
@@ -37645,7 +37736,7 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                         </div>
                     </div>
                 ` : A}
-                ${historyLoading ? A : renderDashTodayChart(host, pvColor)}
+                ${historyLoading ? A : renderDashTodayChart(host, pvColor, cum)}
             </div>
             ${notStartedYet ? b`
                 <div class="dash-today-status">${t2.detail.todayNotStartedYet}</div>
@@ -37653,8 +37744,7 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
         </section>
     `;
 }
-function renderDashTodayChart(host, pvColor) {
-  const cum = computeTodayCumulative(host);
+function renderDashTodayChart(host, pvColor, cum) {
   if (cum.maxKwh < 0.05) return A;
   const HOUR_MS = 36e5;
   const today0 = /* @__PURE__ */ new Date();
@@ -37662,9 +37752,9 @@ function renderDashTodayChart(host, pvColor) {
   const startMs = today0.getTime();
   const endMs = startMs + 24 * HOUR_MS;
   const W = 240, H2 = 60;
-  const PAD_X = 4, PAD_T = 4, PAD_B = 6;
+  const PAD_L = 4, PAD_R = 4, PAD_T = 4, PAD_B = 6;
   const yMax = Math.max(cum.maxKwh, 0.1) * 1.05;
-  const xFor = (t2) => PAD_X + (t2 - startMs) / (endMs - startMs) * (W - 2 * PAD_X);
+  const xFor = (t2) => PAD_L + (t2 - startMs) / (endMs - startMs) * (W - PAD_L - PAD_R);
   const yFor = (kwh) => H2 - PAD_B - kwh / yMax * (H2 - PAD_T - PAD_B);
   const buildPath = (pts) => {
     if (pts.length < 2) return "";
@@ -37675,20 +37765,18 @@ function renderDashTodayChart(host, pvColor) {
   const actualPath = buildPath(cum.actualSamples);
   const predictedPath = buildPath(cum.predictedSamples);
   const predictedColor = lerpHexToward(pvColor, "#ffffff", 0.55);
-  const interp = (pts, t2) => {
-    if (pts.length === 0) return null;
-    if (t2 < pts[0].tMs) return null;
-    if (t2 > pts[pts.length - 1].tMs) return null;
-    let lo = 0, hi = pts.length - 1;
-    while (lo < hi - 1) {
-      const mid = lo + hi >> 1;
-      if (pts[mid].tMs <= t2) lo = mid;
-      else hi = mid;
-    }
-    const a2 = pts[lo], b2 = pts[hi];
-    if (b2.tMs === a2.tMs) return a2.kwh;
-    return a2.kwh + (t2 - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
+  const hourTicks = [0, 6, 12, 18];
+  const niceStep = (range) => {
+    if (range <= 0) return 1;
+    const target = range / 4;
+    const pow = Math.pow(10, Math.floor(Math.log10(target)));
+    const ratio = target / pow;
+    const step = ratio < 1.5 ? 1 : ratio < 3 ? 2 : ratio < 7 ? 5 : 10;
+    return step * pow;
   };
+  const yStep = niceStep(yMax);
+  const kwhTicks = [];
+  for (let v2 = 0; v2 <= yMax + 1e-9; v2 += yStep) kwhTicks.push(v2);
   const hoverTs = host._dashChartHoverTs;
   let hoverActualKwh = null;
   let hoverPredictedKwh = null;
@@ -37696,8 +37784,8 @@ function renderDashTodayChart(host, pvColor) {
   let hoverFracX = 0;
   let hoverTimeLabel = "";
   if (hoverTs !== null && hoverTs >= startMs && hoverTs < endMs) {
-    hoverActualKwh = interp(cum.actualSamples, hoverTs);
-    hoverPredictedKwh = interp(cum.predictedSamples, hoverTs);
+    hoverActualKwh = interpolateKwhAt(cum.actualSamples, hoverTs);
+    hoverPredictedKwh = interpolateKwhAt(cum.predictedSamples, hoverTs);
     hoverX = xFor(hoverTs);
     hoverFracX = hoverX / W * 100;
     hoverTimeLabel = new Date(hoverTs).toLocaleTimeString([], {
@@ -37715,6 +37803,20 @@ function renderDashTodayChart(host, pvColor) {
                  @pointermove="${(e2) => handleDashChartPointerMove(host, e2)}"
                  @pointerleave="${() => handleDashChartPointerLeave(host)}"
             >
+                ${kwhTicks.map((v2) => w`
+                    <line class="dash-today-chart-grid"
+                          x1="${PAD_L}"     y1="${yFor(v2).toFixed(2)}"
+                          x2="${W - PAD_R}" y2="${yFor(v2).toFixed(2)}"/>
+                `)}
+                ${hourTicks.map((h2) => {
+    const tMs = startMs + h2 * HOUR_MS;
+    const x2 = xFor(tMs);
+    return w`
+                        <line class="dash-today-chart-grid"
+                              x1="${x2.toFixed(2)}" y1="${PAD_T}"
+                              x2="${x2.toFixed(2)}" y2="${H2 - PAD_B}"/>
+                    `;
+  })}
                 ${predictedPath !== "" ? w`
                     <path class="dash-today-chart-predicted"
                           d="${predictedPath}"
@@ -37745,6 +37847,20 @@ function renderDashTodayChart(host, pvColor) {
                             fill="${pvColor}"/>
                 ` : A}
             </svg>
+            <div class="dash-today-chart-axis-x">
+                ${hourTicks.map((h2) => b`
+                    <span class="dash-today-chart-axis-x-label"
+                          style="left: ${((PAD_L + h2 / 24 * (W - PAD_L - PAD_R)) / W * 100).toFixed(2)}%;"
+                    >${String(h2).padStart(2, "0")}h</span>
+                `)}
+            </div>
+            <div class="dash-today-chart-axis-y">
+                ${kwhTicks.map((v2) => b`
+                    <span class="dash-today-chart-axis-y-label"
+                          style="top: ${(yFor(v2) / H2 * 100).toFixed(2)}%;"
+                    >${formatLocalisedNumber(host.hass, v2, v2 < 10 ? 1 : 0)}</span>
+                `)}
+            </div>
             ${showHover ? b`
                 <div class="dash-today-chart-tooltip"
                      style="left: ${hoverFracX.toFixed(2)}%;"
@@ -37805,7 +37921,7 @@ function computeTomorrow(host) {
   const avgCloud = cloudWeight > 0 ? cloudSum / cloudWeight : 0;
   return { totalKwh, peakHourTs, peakW, avgCloud };
 }
-function renderDashTomorrowSection(host, t2, sunColor, _cloudColor) {
+function renderDashTomorrowSection(host, t2, sunColor, _cloudColor, pvColor) {
   const data = computeTomorrow(host);
   const HOUR_MS = 36e5;
   const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
@@ -37813,21 +37929,26 @@ function renderDashTomorrowSection(host, t2, sunColor, _cloudColor) {
     minute: "2-digit",
     hourCycle: "h23"
   }) : "";
+  const predictedColor = lerpHexToward(pvColor, "#ffffff", 0.55);
   return b`
         <section class="dash-section dash-card dash-tomorrow">
             <header class="dash-card-header">
                 <ha-icon class="dash-card-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
                 <span class="dash-card-label">${t2.detail.tomorrowLabel}</span>
-                <span class="dash-card-trailing dash-card-trailing-forecast">
-                    <span class="dash-stat-value-sm">≈ ${formatLocalisedNumber(host.hass, data.totalKwh, 1)}</span>
-                    <span class="dash-stat-unit-sm">kWh</span>
-                </span>
             </header>
+            <div class="dash-today-headline">
+                <div class="dash-today-stat dash-today-stat-predicted" style="color:${predictedColor}">
+                    <span class="dash-stat-value">≈ ${formatLocalisedNumber(host.hass, data.totalKwh, 1)}</span>
+                    <span class="dash-stat-unit">kWh ${t2.detail.todayForecast}</span>
+                </div>
+            </div>
             ${data.peakHourTs !== null ? b`
-                <div class="dash-tomorrow-peak">
-                    <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
-                    <span class="dash-line-label">${t2.detail.tomorrowPeak}</span>
-                    <span class="dash-line-value">${peakTimeLabel}</span>
+                <div class="dash-today-meta">
+                    <div class="dash-today-line dash-tomorrow-peak">
+                        <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
+                        <span class="dash-line-label">${t2.detail.tomorrowPeak}</span>
+                        <span class="dash-line-value">${peakTimeLabel}</span>
+                    </div>
                 </div>
             ` : A}
         </section>
@@ -39688,7 +39809,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.38"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.39"}`,
       labelStyle,
       versionStyle
     );
@@ -39709,7 +39830,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.38",
+        version: "1.6.0-alpha.39",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -39717,7 +39838,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.38"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.39"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
