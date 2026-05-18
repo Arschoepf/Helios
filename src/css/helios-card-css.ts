@@ -869,8 +869,8 @@ export const heliosCardStyles = css`
         left: 50%;
         transform: translate(-50%, -50%);
         z-index: 50;
-        width: 44px;
-        height: 44px;
+        width: 56px;
+        height: 56px;
         opacity: 0;
         transition: opacity 0.15s ease;
         pointer-events: none;
@@ -881,20 +881,121 @@ export const heliosCardStyles = css`
         opacity: 1;
     }
 
-    .spinner
+    /*  Helios brand spinner: the SVG sun, no border, no background,
+        no shadow. Only the ray bundle rotates; the inner disc stays
+        still so the brand colour reads as a steady centre while the
+        rays sweep around it. */
+    .spinner-sun
     {
-        width: 100%;
+        width:  100%;
         height: 100%;
-        border: 3px solid rgba(255,255,255,0.20);
-        border-top-color: #ffffff;
-        border-radius: 50%;
-        animation: helios-spin 0.75s linear infinite;
-        box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        display: block;
+    }
+    .spinner-sun-rays
+    {
+        transform-origin: 32px 32px;
+        transform-box: view-box;
+        animation: helios-spin 1.6s linear infinite;
     }
 
     @keyframes helios-spin
     {
         to { transform: rotate(360deg); }
+    }
+
+
+    /*  LiDAR View toggle button, lives in the .overlay-top-right
+        column. Sized to mirror the .clock chip on the left so the
+        two corners read as a symmetric pair. Stays at fixed width
+        when toggled on/off so neighbour chips don't jump. */
+    .lidar-view-btn
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 22px;
+        box-sizing: border-box;
+        padding: 0 8px;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        line-height: 1;
+        cursor: pointer;
+        transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+    }
+    .lidar-view-btn ha-icon
+    {
+        --mdc-icon-size: 14px;
+    }
+    .lidar-view-btn:disabled
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .lidar-view-btn.is-on
+    {
+        background: #1f6feb;
+        color: #ffffff;
+        border-color: #1f6feb;
+    }
+
+
+    /*  LiDAR View canvas overlay. Sits above the map and the
+        regular HUD but below the LiDAR View toggle button itself,
+        so the user can always exit. Hidden by default; revealed
+        with a fade when .lidar-view-active lands on ha-card. */
+    .lidar-view-canvas
+    {
+        position: absolute;
+        inset: 0;
+        width:  100%;
+        height: 100%;
+        z-index: 30;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+        background: transparent;
+    }
+    ha-card.lidar-view-active .lidar-view-canvas
+    {
+        opacity: 1;
+    }
+
+    /*  When LiDAR View is active, fade out every other overlay
+        layer (chips, leaders, timeline, sun arc, dashboard panels)
+        so the dot cloud reads on its own against a quiet basemap.
+        The toggle button itself is opted back in (selector below)
+        so the user can always exit. The map container stays
+        visible so the dots are projected onto a real basemap. */
+    ha-card.lidar-view-active .overlay-top-left,
+    ha-card.lidar-view-active .home-glow-svg,
+    ha-card.lidar-view-active .home-silhouette-svg,
+    ha-card.lidar-view-active .solar-svg,
+    ha-card.lidar-view-active .cloud-disc-svg,
+    ha-card.lidar-view-active .pv-chip,
+    ha-card.lidar-view-active .battery-soc-chip,
+    ha-card.lidar-view-active .battery-power-chip,
+    ha-card.lidar-view-active .pv-leader,
+    ha-card.lidar-view-active .battery-leader,
+    ha-card.lidar-view-active .time-bar,
+    ha-card.lidar-view-active .home-hitbox,
+    ha-card.lidar-view-active .cloud-label,
+    ha-card.lidar-view-active .home-name-label,
+    ha-card.lidar-view-active .sun-label
+    {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+    ha-card.lidar-view-active .overlay-top-right
+    {
+        opacity: 1;
+        pointer-events: auto;
     }
 
 

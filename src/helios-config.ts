@@ -13,7 +13,11 @@ import
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_BUILDING_COLOR_HEX,
     DEFAULT_LIDAR_PRECISION,
-    DEFAULT_SHADOW_OPACITY
+    DEFAULT_SHADOW_OPACITY,
+    DEFAULT_LIDAR_VIEW_RADIUS_M,
+    DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
+    DEFAULT_LIDAR_VIEW_POINT_COLOR,
+    DEFAULT_LIDAR_VIEW_POINT_OPACITY
 } from './helios-engine';
 import { pickTranslations, type Translations } from './i18n';
 
@@ -877,6 +881,48 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </label>
                 <div class="hint">${t.editor.shadowOpacityHint}</div>
+
+                <div class="subsection-title">${t.editor.lidarViewSection}</div>
+                <div class="hint">${t.editor.lidarViewHint}</div>
+                <label class="field">
+                    <span class="label">${t.editor.lidarViewRadius}</span>
+                    <input
+                        type="number" min="10" max="1000" step="10"
+                        placeholder="${String(DEFAULT_LIDAR_VIEW_RADIUS_M)}"
+                        .value="${c['lidar-view-radius'] != null ? String(c['lidar-view-radius']) : ''}"
+                        @change="${(e: Event) => this._numField('lidar-view-radius', e)}"
+                    />
+                </label>
+                <div class="field-help">${t.editor.lidarViewRadiusHelp}</div>
+                <label class="field">
+                    <span class="label">${t.editor.lidarViewPointSize}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="1" max="6" step="0.5"
+                            .value="${String(c['lidar-view-point-size'] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX)}"
+                            @input="${(e: Event) => this._numSlider('lidar-view-point-size', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-size'] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX), 0.5)}</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.lidarViewPointColor}</span>
+                    <helios-color-picker
+                        .value="${String(c['lidar-view-point-color'] ?? DEFAULT_LIDAR_VIEW_POINT_COLOR)}"
+                        @value-changed="${(e: CustomEvent) => this._update('lidar-view-point-color', e.detail.value)}"
+                    ></helios-color-picker>
+                </label>
+                <label class="field">
+                    <span class="label">${t.editor.lidarViewPointOpacity}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            .value="${String(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY)}"
+                            @input="${(e: Event) => this._numSlider('lidar-view-point-opacity', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
+                    </div>
+                </label>
 
                 </details>
 

@@ -241,6 +241,19 @@ export function processHeightRaster(
             heightRangeM:     keptCells > 0
                 ? [Number(hMin.toFixed(1)), Number(hMax.toFixed(1))]
                 : null
+        },
+        //Forward the raw raster + geo so the engine can keep it for
+        //the LiDAR View overlay. Same buffer reference, no copy: the
+        //pipeline never mutates `heights` after the validity pass
+        //above, and the engine treats the buffer as read-only.
+        raster:
+        {
+            heights:    heights,
+            rasterSize,
+            minLat,
+            maxLat,
+            minLon,
+            maxLon
         }
     };
 }

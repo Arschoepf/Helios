@@ -124,6 +124,22 @@ export const editorStyles = css`
         border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
     }
 
+    /*  Subsection heading inside an already-collapsible block. One
+        notch quieter than .section-title (no border, dimmer colour)
+        so users read it as "still inside the parent section, this
+        is just a logical group". Used for the LiDAR View knobs
+        nested in the Shading section. */
+    .subsection-title
+    {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: var(--secondary-text-color, #6c757d);
+        margin-top: 16px;
+        margin-bottom: 4px;
+    }
+
     /*  Collapsible section. Uses native <details>/<summary> so the
         open/closed state needs no JS plumbing and survives keyboard
         navigation for free. The default disclosure triangle is

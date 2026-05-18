@@ -26450,6 +26450,18 @@ function processHeightRaster(heights, geo, opts = {}) {
       cellsKept: keptCells,
       cellsPerClumpCap: maxCellsPerComponent,
       heightRangeM: keptCells > 0 ? [Number(hMin.toFixed(1)), Number(hMax.toFixed(1))] : null
+    },
+    //Forward the raw raster + geo so the engine can keep it for
+    //the LiDAR View overlay. Same buffer reference, no copy: the
+    //pipeline never mutates `heights` after the validity pass
+    //above, and the engine treats the buffer as read-only.
+    raster: {
+      heights,
+      rasterSize,
+      minLat,
+      maxLat,
+      minLon,
+      maxLon
     }
   };
 }
@@ -30183,6 +30195,10 @@ const LIDAR_PRECISION_RASTER = {
   high: 1024
 };
 const DEFAULT_SHADOW_OPACITY = 0.32;
+const DEFAULT_LIDAR_VIEW_RADIUS_M = 100;
+const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1.5;
+const DEFAULT_LIDAR_VIEW_POINT_COLOR = "#ffffff";
+const DEFAULT_LIDAR_VIEW_POINT_OPACITY = 0.5;
 const SHADOW_LAYER_IDS = [
   "helios-building-shadows"
 ];
@@ -30311,6 +30327,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarShadowFeatures = null;
     this._lidarShadowDiagnostics = null;
     this._lidarShadowKey = "";
+    this._lidarRaster = null;
+    this._lidarSourceId = null;
     this._detailMode = false;
     this._postExitCooldownUntil = 0;
     this.homeLat = haCoords[1];
@@ -31213,6 +31231,62 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return out;
   }
+  //LiDAR View support, exposed to the card.
+  //
+  //getActiveLidarSourceId returns the id of the provider that
+  //matched the home (e.g. 'de-nrw-ndom'), or null when no provider
+  //covers the home or shadows are disabled. The card gates the
+  //LiDAR View button on this.
+  getActiveLidarSourceId() {
+    return this._lidarSourceId;
+  }
+  //Project every raw raster cell (vegetation + ground + buildings,
+  //threshold-bypassed) to screen-space. Returns interleaved
+  //[x0, y0, x1, y1, ...] Float32 plus the count, so the card can
+  //fillRect through the buffer without per-point object allocations
+  //on every frame (1M points × 16ms/frame is a tight budget).
+  //
+  //maxRadiusMeters is honoured client-side: cells whose centre
+  //sits past that distance from the home are skipped. The card
+  //surfaces this as a config knob so the user can shrink the
+  //visible disc to keep frame times sane on big rasters / weak
+  //devices.
+  //
+  //Returns null when no raster has been fetched yet (home outside
+  //coverage, shadows disabled, fetch still in flight, etc.) so the
+  //card can show an empty overlay instead of garbage.
+  projectLidarPoints(maxRadiusMeters) {
+    if (!this.map || !this._mapReady) return null;
+    const raster = this._lidarRaster;
+    if (!raster) return null;
+    const { heights, rasterSize, minLat, maxLat, minLon, maxLon } = raster;
+    const N2 = rasterSize * rasterSize;
+    if (heights.length < N2) return null;
+    const pxLon = (maxLon - minLon) / rasterSize;
+    const pxLat = (maxLat - minLat) / rasterSize;
+    const radius = Math.max(1, maxRadiusMeters);
+    const xy = new Float32Array(N2 * 2);
+    let count = 0;
+    const homeLat = this.homeLat;
+    const homeLon = this.homeLon;
+    for (let j = 0; j < rasterSize; j++) {
+      const cLat = maxLat - (j + 0.5) * pxLat;
+      for (let i2 = 0; i2 < rasterSize; i2++) {
+        const h2 = heights[j * rasterSize + i2];
+        if (!isFinite(h2)) continue;
+        const cLon = minLon + (i2 + 0.5) * pxLon;
+        const dLat = (cLat - homeLat) * 111320;
+        const dLon = (cLon - homeLon) * 111320 * Math.cos(homeLat * Math.PI / 180);
+        if (dLat * dLat + dLon * dLon > radius * radius) continue;
+        const px = this._projectScenePoint(cLon, cLat, h2);
+        if (!px) continue;
+        xy[count * 2] = px.x;
+        xy[count * 2 + 1] = px.y;
+        count++;
+      }
+    }
+    return { xy, count };
+  }
   //Toggle MapTiler's symbol layers (road names, house numbers,
   //POIs, place names) on or off based on the `show-labels` config.
   //Symbol-type layers are the canonical container for text + icon
@@ -31517,10 +31591,13 @@ const _HeliosEngine = class _HeliosEngine {
       this._lidarShadowFeatures = null;
       this._lidarShadowDiagnostics = null;
       this._lidarShadowKey = "";
+      this._lidarRaster = null;
+      this._lidarSourceId = null;
       this._lidarShadowAbort?.abort();
       this._lidarShadowAbort = void 0;
       return;
     }
+    this._lidarSourceId = provider.id;
     const level = this._lidarPrecisionLevel();
     const rasterSize = LIDAR_PRECISION_RASTER[level];
     const radius = this._buildingRadiusMeters();
@@ -31545,6 +31622,7 @@ const _HeliosEngine = class _HeliosEngine {
       if (ac.signal.aborted || !this.map) return;
       this._lidarShadowFeatures = res.features;
       this._lidarShadowDiagnostics = res.diagnostics;
+      this._lidarRaster = res.raster ?? null;
       this._lastAtmosphereAlt = -999;
       this._refreshShadowsAndAtmosphere();
     }).catch((err) => {
@@ -32713,6 +32791,13 @@ const en = {
     lidarPrecisionHint: "If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat OpenFreeMap building footprints and this setting has no effect.",
     shadowOpacity: "Shadow opacity",
     shadowOpacityHint: "Opacity of the cast ground shadows.",
+    lidarViewSection: "LiDAR View (debug overlay)",
+    lidarViewHint: "Click the LiDAR button in the top-right of the card to overlay every loaded LiDAR cell (ground, vegetation and buildings) on the basemap as a point cloud. The button stays disabled when no provider covers the home. The view reuses the data already fetched at the current precision, no extra calls are made.",
+    lidarViewRadius: "Display radius (m)",
+    lidarViewRadiusHelp: "Cells past this distance from the home are skipped in the overlay, even when they sit inside the LiDAR fetch radius. Lower this on weak devices when the High precision raster pushes the frame budget.",
+    lidarViewPointSize: "Point size (px)",
+    lidarViewPointColor: "Point color",
+    lidarViewPointOpacity: "Point opacity",
     localLidarSection: "Advanced — Local LiDAR (BYO)",
     localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.",
     localLidarToolsHint: "Need to prepare a raster from scratch? The Helios repo ships Python helper tools under `tools/lidar/`, see the README there for the full pipeline (system GDAL install, `uv` setup, inspect / convert / synthetic test commands).",
@@ -32831,6 +32916,13 @@ const fr = {
     lidarPrecisionHint: "Si ta zone est couverte par un provider LiDAR intégré à Helios, tu bénéficies d'ombres plus réalistes (bâtiments ET végétation). Des décalages peuvent apparaître entre les bâtiments affichés et leurs ombres : les données LiDAR sont enregistrées à un instant donné et ne reflètent pas toujours l'état actuel du terrain. Hors zone LiDAR, les ombres retombent sur les empreintes plates des bâtiments OpenFreeMap et cette option n'a aucun effet.",
     shadowOpacity: "Opacité des ombres",
     shadowOpacityHint: "Opacité des ombres projetées au sol.",
+    lidarViewSection: "Vue LiDAR (mode debug)",
+    lidarViewHint: "Clique sur le bouton LiDAR en haut à droite de la carte pour superposer chaque cellule LiDAR chargée (sol, végétation et bâtiments) sur la carte de fond comme un nuage de points. Le bouton reste désactivé quand aucun provider ne couvre la maison. La vue réutilise les données déjà récupérées à la précision actuelle, aucun appel supplémentaire n'est fait.",
+    lidarViewRadius: "Rayon d'affichage (m)",
+    lidarViewRadiusHelp: "Les cellules au-delà de cette distance de la maison sont ignorées dans la superposition, même si elles sont à l'intérieur du rayon de fetch LiDAR. Baisse cette valeur sur les appareils faibles quand le raster en précision Haute charge le budget de frame.",
+    lidarViewPointSize: "Taille des points (px)",
+    lidarViewPointColor: "Couleur des points",
+    lidarViewPointOpacity: "Opacité des points",
     localLidarSection: "Avancé — LiDAR local (BYO)",
     localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la zone définie, cette source remplace tout fournisseur national.",
     localLidarToolsHint: "Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d'inspection / conversion / test synthétique).",
@@ -32949,6 +33041,13 @@ const de = {
     lidarPrecisionHint: "Wird das Zuhause von einem in Helios eingebundenen LiDAR-Provider abgedeckt, entstehen realistischere Schatten (Gebäude UND Vegetation). Zwischen den dargestellten Gebäuden und ihren Schatten können Abweichungen auftreten: Die LiDAR-Aufnahme stammt aus einem festen Zeitpunkt und bildet den aktuellen Zustand nicht zwangsläufig ab. Außerhalb der LiDAR-Abdeckung greifen die flachen OpenFreeMap-Gebäudegrundrisse, und diese Option bleibt wirkungslos.",
     shadowOpacity: "Schatten-Deckkraft",
     shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
+    lidarViewSection: "LiDAR-Ansicht (Debug-Overlay)",
+    lidarViewHint: "Klicke oben rechts auf die Karte auf die Schaltfläche LiDAR, um jede geladene LiDAR-Zelle (Boden, Vegetation und Gebäude) als Punktwolke über die Basiskarte zu legen. Die Schaltfläche bleibt deaktiviert, wenn kein Anbieter das Zuhause abdeckt. Die Ansicht verwendet die bereits in der aktuellen Präzision abgerufenen Daten wieder, es werden keine zusätzlichen Aufrufe gemacht.",
+    lidarViewRadius: "Anzeigeradius (m)",
+    lidarViewRadiusHelp: "Zellen jenseits dieser Entfernung vom Zuhause werden im Overlay übersprungen, auch wenn sie innerhalb des LiDAR-Abfrageradius liegen. Reduziere diesen Wert auf schwachen Geräten, wenn das hochpräzise Raster das Frame-Budget sprengt.",
+    lidarViewPointSize: "Punktgröße (px)",
+    lidarViewPointColor: "Punktfarbe",
+    lidarViewPointOpacity: "Punktdeckkraft",
     localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
     localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb des definierten Bereichs ersetzt diese Quelle jeden nationalen Anbieter.",
     localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).",
@@ -33067,6 +33166,13 @@ const es = {
     lidarPrecisionHint: "Si tu zona la cubre un proveedor LiDAR integrado con Helios, dispones de sombras más realistas (edificios Y vegetación). Pueden aparecer desfases entre los edificios mostrados y sus sombras: los datos LiDAR se capturan en un instante concreto y no siempre reflejan el estado actual del terreno. Fuera de la cobertura LiDAR, las sombras se basan en las huellas planas de los edificios OpenFreeMap y esta opción no tiene efecto.",
     shadowOpacity: "Opacidad de las sombras",
     shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
+    lidarViewSection: "Vista LiDAR (modo debug)",
+    lidarViewHint: "Haz clic en el botón LiDAR arriba a la derecha de la tarjeta para superponer cada celda LiDAR cargada (suelo, vegetación y edificios) sobre el mapa de fondo como una nube de puntos. El botón queda deshabilitado cuando ningún proveedor cubre la casa. La vista reutiliza los datos ya recuperados con la precisión actual, no se hacen llamadas adicionales.",
+    lidarViewRadius: "Radio de visualización (m)",
+    lidarViewRadiusHelp: "Las celdas más allá de esta distancia desde la casa se omiten en la superposición, incluso si están dentro del radio de fetch LiDAR. Reduce este valor en dispositivos modestos cuando el ráster de alta precisión satura el presupuesto de frame.",
+    lidarViewPointSize: "Tamaño de puntos (px)",
+    lidarViewPointColor: "Color de puntos",
+    lidarViewPointOpacity: "Opacidad de puntos",
     localLidarSection: "Avanzado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del área definida, esta fuente reemplaza cualquier proveedor nacional.",
     localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? El repositorio de Helios incluye herramientas Python en `tools/lidar/`, consulta el README de esa carpeta para el pipeline completo (instalación de GDAL de sistema, configuración de `uv`, comandos de inspección / conversión / prueba sintética).",
@@ -33185,6 +33291,13 @@ const it = {
     lidarPrecisionHint: "Se la tua zona è coperta da un provider LiDAR integrato in Helios, ottieni ombre più realistiche (edifici E vegetazione). Possono comparire scostamenti tra gli edifici renderizzati e le loro ombre: i dati LiDAR sono catturati in un istante preciso e non sempre rispecchiano lo stato attuale del terreno. Fuori dalla copertura LiDAR, le ombre ricadono sulle impronte piatte degli edifici OpenFreeMap e questa opzione non ha alcun effetto.",
     shadowOpacity: "Opacità delle ombre",
     shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
+    lidarViewSection: "Vista LiDAR (modalità debug)",
+    lidarViewHint: "Clicca sul pulsante LiDAR in alto a destra della scheda per sovrapporre ogni cella LiDAR caricata (suolo, vegetazione ed edifici) alla mappa di base come una nuvola di punti. Il pulsante resta disabilitato quando nessun provider copre la casa. La vista riutilizza i dati già recuperati alla precisione attuale, nessuna chiamata aggiuntiva viene fatta.",
+    lidarViewRadius: "Raggio di visualizzazione (m)",
+    lidarViewRadiusHelp: "Le celle oltre questa distanza dalla casa vengono saltate nella sovrapposizione, anche se si trovano all'interno del raggio di fetch LiDAR. Abbassa questo valore su dispositivi modesti quando il raster ad alta precisione satura il budget di frame.",
+    lidarViewPointSize: "Dimensione punti (px)",
+    lidarViewPointColor: "Colore punti",
+    lidarViewPointOpacity: "Opacità punti",
     localLidarSection: "Avanzato — LiDAR locale (BYO)",
     localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. All'interno dell'area definita, questa sorgente sostituisce qualsiasi provider nazionale.",
     localLidarToolsHint: "Devi preparare un raster da zero? Il repository Helios include strumenti Python in `tools/lidar/`, vedi il README di quella cartella per la pipeline completa (installazione di GDAL di sistema, configurazione di `uv`, comandi di ispezione / conversione / test sintetico).",
@@ -33303,6 +33416,13 @@ const nl = {
     lidarPrecisionHint: "Wanneer je woning binnen het bereik van een LiDAR-provider valt die in Helios is geïntegreerd, krijg je realistischere schaduwen (gebouwen ÉN vegetatie). Er kunnen verschuivingen optreden tussen de getoonde gebouwen en hun schaduwen: de LiDAR-opname is op een bepaald moment vastgelegd en weerspiegelt niet altijd de huidige situatie. Buiten LiDAR-dekking vallen de schaduwen terug op de platte OpenFreeMap-gebouwomtreklijnen en heeft deze optie geen effect.",
     shadowOpacity: "Schaduwdekking",
     shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
+    lidarViewSection: "LiDAR-weergave (debug overlay)",
+    lidarViewHint: "Klik rechtsboven in de kaart op de LiDAR-knop om elke geladen LiDAR-cel (grond, vegetatie en gebouwen) als een puntenwolk over de basiskaart te leggen. De knop blijft uitgeschakeld wanneer geen enkele provider het huis dekt. De weergave hergebruikt de data die al is opgehaald op de huidige precisie, er worden geen extra calls gedaan.",
+    lidarViewRadius: "Weergaveradius (m)",
+    lidarViewRadiusHelp: "Cellen voorbij deze afstand van het huis worden in de overlay overgeslagen, zelfs wanneer ze binnen de LiDAR fetch-radius vallen. Verlaag deze waarde op zwakkere apparaten wanneer de hoge-precisie raster het frame-budget overschrijdt.",
+    lidarViewPointSize: "Puntgrootte (px)",
+    lidarViewPointColor: "Puntkleur",
+    lidarViewPointOpacity: "Puntdekking",
     localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
     localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen het gedefinieerde gebied vervangt deze bron elke nationale leverancier.",
     localLidarToolsHint: "Een eigen raster nodig? De Helios-repository bevat Python-hulpmiddelen onder `tools/lidar/`, zie de README daar voor de volledige pipeline (installatie van de GDAL-systeembibliotheek, `uv`-setup, inspect / convert / synthetisch test-commando's).",
@@ -33421,6 +33541,13 @@ const pt = {
     lidarPrecisionHint: "Se a tua zona é coberta por um fornecedor LiDAR integrado no Helios, beneficias de sombras mais realistas (edifícios E vegetação). Podem aparecer desfasamentos entre os edifícios desenhados e as suas sombras: os dados LiDAR são capturados num instante preciso e nem sempre refletem o estado atual do terreno. Fora da cobertura LiDAR, as sombras voltam às impressões planas dos edifícios OpenFreeMap e esta opção não tem qualquer efeito.",
     shadowOpacity: "Opacidade das sombras",
     shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
+    lidarViewSection: "Vista LiDAR (modo debug)",
+    lidarViewHint: "Clica no botão LiDAR no canto superior direito da carta para sobrepor cada célula LiDAR carregada (solo, vegetação e edifícios) sobre o mapa de fundo como uma nuvem de pontos. O botão fica desactivado quando nenhum provedor cobre a casa. A vista reutiliza os dados já obtidos com a precisão actual, nenhuma chamada adicional é feita.",
+    lidarViewRadius: "Raio de visualização (m)",
+    lidarViewRadiusHelp: "As células além desta distância da casa são ignoradas na sobreposição, mesmo quando estão dentro do raio de fetch LiDAR. Reduz este valor em dispositivos modestos quando o raster em alta precisão satura o orçamento de frame.",
+    lidarViewPointSize: "Tamanho dos pontos (px)",
+    lidarViewPointColor: "Cor dos pontos",
+    lidarViewPointOpacity: "Opacidade dos pontos",
     localLidarSection: "Avançado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da área definida, esta fonte substitui qualquer fornecedor nacional.",
     localLidarToolsHint: "Precisas de preparar um raster do zero? O repositório Helios inclui ferramentas Python em `tools/lidar/`, consulta o README dessa pasta para o pipeline completo (instalação do GDAL de sistema, configuração do `uv`, comandos de inspeção / conversão / teste sintético).",
@@ -33539,6 +33666,13 @@ const no = {
     lidarPrecisionHint: "Hvis huset ligger innenfor en LiDAR-leverandør integrert med Helios (Kartverket NHM for Norge), får du mer realistiske skygger (bygninger OG vegetasjon). Noe forskyvning kan oppstå mellom de viste bygningene og skyggene deres: LiDAR-undersøkelsen er fanget på en gitt dato og gjenspeiler kanskje ikke nåværende tilstand. Utenfor LiDAR-dekning faller skyggene tilbake til de flate OpenFreeMap-bygningsfotavtrykkene, og denne innstillingen har ingen effekt.",
     shadowOpacity: "Skyggeopasitet",
     shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
+    lidarViewSection: "LiDAR-visning (debug-overlegg)",
+    lidarViewHint: "Klikk på LiDAR-knappen øverst til høyre på kortet for å legge hver lastet LiDAR-celle (bakke, vegetasjon og bygninger) over grunnkartet som en punktsky. Knappen forblir deaktivert når ingen leverandør dekker hjemmet. Visningen gjenbruker dataen som allerede er hentet med gjeldende presisjon, ingen ekstra kall gjøres.",
+    lidarViewRadius: "Visningsradius (m)",
+    lidarViewRadiusHelp: "Celler utenfor denne avstanden fra hjemmet hoppes over i overlegget, selv når de ligger innenfor LiDAR-hentingsradiusen. Senk denne verdien på svake enheter når rasteret i høy presisjon sprenger frame-budsjettet.",
+    lidarViewPointSize: "Punktstørrelse (px)",
+    lidarViewPointColor: "Punktfarge",
+    lidarViewPointOpacity: "Punktopasitet",
     localLidarSection: "Avansert — Lokal LiDAR (BYO)",
     localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.",
     localLidarToolsHint: "Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).",
@@ -34420,8 +34554,8 @@ const heliosCardStyles = i$3`
         left: 50%;
         transform: translate(-50%, -50%);
         z-index: 50;
-        width: 44px;
-        height: 44px;
+        width: 56px;
+        height: 56px;
         opacity: 0;
         transition: opacity 0.15s ease;
         pointer-events: none;
@@ -34432,20 +34566,121 @@ const heliosCardStyles = i$3`
         opacity: 1;
     }
 
-    .spinner
+    /*  Helios brand spinner: the SVG sun, no border, no background,
+        no shadow. Only the ray bundle rotates; the inner disc stays
+        still so the brand colour reads as a steady centre while the
+        rays sweep around it. */
+    .spinner-sun
     {
-        width: 100%;
+        width:  100%;
         height: 100%;
-        border: 3px solid rgba(255,255,255,0.20);
-        border-top-color: #ffffff;
-        border-radius: 50%;
-        animation: helios-spin 0.75s linear infinite;
-        box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        display: block;
+    }
+    .spinner-sun-rays
+    {
+        transform-origin: 32px 32px;
+        transform-box: view-box;
+        animation: helios-spin 1.6s linear infinite;
     }
 
     @keyframes helios-spin
     {
         to { transform: rotate(360deg); }
+    }
+
+
+    /*  LiDAR View toggle button, lives in the .overlay-top-right
+        column. Sized to mirror the .clock chip on the left so the
+        two corners read as a symmetric pair. Stays at fixed width
+        when toggled on/off so neighbour chips don't jump. */
+    .lidar-view-btn
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 22px;
+        box-sizing: border-box;
+        padding: 0 8px;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        line-height: 1;
+        cursor: pointer;
+        transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+    }
+    .lidar-view-btn ha-icon
+    {
+        --mdc-icon-size: 14px;
+    }
+    .lidar-view-btn:disabled
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .lidar-view-btn.is-on
+    {
+        background: #1f6feb;
+        color: #ffffff;
+        border-color: #1f6feb;
+    }
+
+
+    /*  LiDAR View canvas overlay. Sits above the map and the
+        regular HUD but below the LiDAR View toggle button itself,
+        so the user can always exit. Hidden by default; revealed
+        with a fade when .lidar-view-active lands on ha-card. */
+    .lidar-view-canvas
+    {
+        position: absolute;
+        inset: 0;
+        width:  100%;
+        height: 100%;
+        z-index: 30;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.25s ease;
+        background: transparent;
+    }
+    ha-card.lidar-view-active .lidar-view-canvas
+    {
+        opacity: 1;
+    }
+
+    /*  When LiDAR View is active, fade out every other overlay
+        layer (chips, leaders, timeline, sun arc, dashboard panels)
+        so the dot cloud reads on its own against a quiet basemap.
+        The toggle button itself is opted back in (selector below)
+        so the user can always exit. The map container stays
+        visible so the dots are projected onto a real basemap. */
+    ha-card.lidar-view-active .overlay-top-left,
+    ha-card.lidar-view-active .home-glow-svg,
+    ha-card.lidar-view-active .home-silhouette-svg,
+    ha-card.lidar-view-active .solar-svg,
+    ha-card.lidar-view-active .cloud-disc-svg,
+    ha-card.lidar-view-active .pv-chip,
+    ha-card.lidar-view-active .battery-soc-chip,
+    ha-card.lidar-view-active .battery-power-chip,
+    ha-card.lidar-view-active .pv-leader,
+    ha-card.lidar-view-active .battery-leader,
+    ha-card.lidar-view-active .time-bar,
+    ha-card.lidar-view-active .home-hitbox,
+    ha-card.lidar-view-active .cloud-label,
+    ha-card.lidar-view-active .home-name-label,
+    ha-card.lidar-view-active .sun-label
+    {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+    ha-card.lidar-view-active .overlay-top-right
+    {
+        opacity: 1;
+        pointer-events: auto;
     }
 
 
@@ -35319,6 +35554,22 @@ const editorStyles = i$3`
         margin-top: 10px;
         padding-bottom: 4px;
         border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.12));
+    }
+
+    /*  Subsection heading inside an already-collapsible block. One
+        notch quieter than .section-title (no border, dimmer colour)
+        so users read it as "still inside the parent section, this
+        is just a logical group". Used for the LiDAR View knobs
+        nested in the Shading section. */
+    .subsection-title
+    {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: var(--secondary-text-color, #6c757d);
+        margin-top: 16px;
+        margin-bottom: 4px;
     }
 
     /*  Collapsible section. Uses native <details>/<summary> so the
@@ -36388,6 +36639,48 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="hint">${t2.editor.shadowOpacityHint}</div>
 
+                <div class="subsection-title">${t2.editor.lidarViewSection}</div>
+                <div class="hint">${t2.editor.lidarViewHint}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.lidarViewRadius}</span>
+                    <input
+                        type="number" min="10" max="1000" step="10"
+                        placeholder="${String(DEFAULT_LIDAR_VIEW_RADIUS_M)}"
+                        .value="${c2["lidar-view-radius"] != null ? String(c2["lidar-view-radius"]) : ""}"
+                        @change="${(e2) => this._numField("lidar-view-radius", e2)}"
+                    />
+                </label>
+                <div class="field-help">${t2.editor.lidarViewRadiusHelp}</div>
+                <label class="field">
+                    <span class="label">${t2.editor.lidarViewPointSize}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="1" max="6" step="0.5"
+                            .value="${String(c2["lidar-view-point-size"] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX)}"
+                            @input="${(e2) => this._numSlider("lidar-view-point-size", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-point-size"] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX), 0.5)}</span>
+                    </div>
+                </label>
+                <label class="field">
+                    <span class="label">${t2.editor.lidarViewPointColor}</span>
+                    <helios-color-picker
+                        .value="${String(c2["lidar-view-point-color"] ?? DEFAULT_LIDAR_VIEW_POINT_COLOR)}"
+                        @value-changed="${(e2) => this._update("lidar-view-point-color", e2.detail.value)}"
+                    ></helios-color-picker>
+                </label>
+                <label class="field">
+                    <span class="label">${t2.editor.lidarViewPointOpacity}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range" min="0" max="1" step="0.05"
+                            .value="${String(c2["lidar-view-point-opacity"] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY)}"
+                            @input="${(e2) => this._numSlider("lidar-view-point-opacity", e2)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-point-opacity"] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
+                    </div>
+                </label>
+
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "pv"}" @toggle="${(e2) => this._onSectionToggle("pv", e2)}">
@@ -36825,7 +37118,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.16"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.17"}`,
       labelStyle,
       versionStyle
     );
@@ -36846,7 +37139,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.16",
+        version: "1.6.0-alpha.17",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -36854,7 +37147,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.16"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.17"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -36942,9 +37235,19 @@ let HeliosCard = class extends i {
     this._isLiveMode = true;
     this._shadowBusy = false;
     this._detailMode = false;
+    this._lidarViewMode = false;
+    this._lidarViewPoints = null;
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
+    this._toggleLidarView = () => {
+      if (!this._engine) return;
+      if (!this._lidarViewMode && this._engine.getActiveLidarSourceId() === null) return;
+      this._lidarViewMode = !this._lidarViewMode;
+      if (this._lidarViewMode) this._refreshOverlays();
+    };
+    this._lidarCanvasLastSig = "";
+    this._lidarCanvasTransformTick = 0;
     this._trackElement = null;
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => this._onTimelinePointerMove(e2);
@@ -37193,6 +37496,7 @@ let HeliosCard = class extends i {
     this._refreshPv();
     this._refreshBattery();
     this._refreshSolarRadiation();
+    this._redrawLidarCanvas();
   }
   //Photovoltaic production
   //
@@ -37753,6 +38057,96 @@ let HeliosCard = class extends i {
     this._sunScene = this._engine ? this._engine.projectSunScene(t2) : null;
     this._cloudScene = this._engine ? this._engine.projectCloudScene() : null;
     this._homeSilhouettes = this._engine ? this._engine.projectHomeFootprints() : [];
+    if (this._lidarViewMode && this._engine) {
+      const radius = this._lidarViewRadiusMeters();
+      this._lidarViewPoints = this._engine.projectLidarPoints(radius);
+      this._lidarCanvasTransformTick++;
+    } else if (this._lidarViewPoints !== null) {
+      this._lidarViewPoints = null;
+    }
+  }
+  //LiDAR View overlay knobs. Each helper parses the matching config
+  //key and falls back to the engine-side DEFAULT_* constant when the
+  //key is missing, non-finite, out of range, or otherwise unusable.
+  //Keeping the validation here means the canvas draw loop doesn't
+  //need its own defensive checks per frame.
+  _lidarViewRadiusMeters() {
+    const raw2 = this.config?.["lidar-view-radius"];
+    const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+    if (!isFinite(n3) || n3 <= 0) return DEFAULT_LIDAR_VIEW_RADIUS_M;
+    return Math.min(1e3, n3);
+  }
+  _lidarViewPointSizePx() {
+    const raw2 = this.config?.["lidar-view-point-size"];
+    const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+    if (!isFinite(n3) || n3 <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
+    return Math.min(6, n3);
+  }
+  _lidarViewPointColor() {
+    const raw2 = this.config?.["lidar-view-point-color"];
+    if (typeof raw2 === "string" && /^#[0-9a-fA-F]{3,8}$/.test(raw2.trim())) {
+      return raw2.trim();
+    }
+    return DEFAULT_LIDAR_VIEW_POINT_COLOR;
+  }
+  _lidarViewPointOpacity() {
+    const raw2 = this.config?.["lidar-view-point-opacity"];
+    const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+    if (!isFinite(n3)) return DEFAULT_LIDAR_VIEW_POINT_OPACITY;
+    return Math.max(0, Math.min(1, n3));
+  }
+  _redrawLidarCanvas() {
+    if (!this._lidarViewMode) return;
+    const canvas = this.renderRoot?.querySelector?.("canvas.lidar-view-canvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = canvas.clientWidth;
+    const cssH = canvas.clientHeight;
+    const wantW = Math.max(1, Math.round(cssW * dpr));
+    const wantH = Math.max(1, Math.round(cssH * dpr));
+    if (canvas.width !== wantW) canvas.width = wantW;
+    if (canvas.height !== wantH) canvas.height = wantH;
+    const points = this._lidarViewPoints;
+    const size = this._lidarViewPointSizePx();
+    const color = this._lidarViewPointColor();
+    const alpha = this._lidarViewPointOpacity();
+    const sig = `${points?.count ?? 0}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}`;
+    if (sig === this._lidarCanvasLastSig) return;
+    this._lidarCanvasLastSig = sig;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+    if (!points || points.count === 0) return;
+    ctx.fillStyle = this._withAlpha(color, alpha);
+    const half = size / 2;
+    const xy = points.xy;
+    const N2 = points.count;
+    for (let i2 = 0; i2 < N2; i2++) {
+      ctx.fillRect(xy[i2 * 2] - half, xy[i2 * 2 + 1] - half, size, size);
+    }
+  }
+  //Mix a CSS hex colour with an alpha value to produce an rgba()
+  //string. Accepts #rgb / #rrggbb / #rrggbbaa (the alpha component
+  //in the source is replaced by the supplied alpha). Falls back to
+  //full opacity if parsing fails so the dots stay visible during
+  //bad-input edits.
+  _withAlpha(hex, alpha) {
+    const h2 = hex.replace("#", "");
+    let r2 = 255, g2 = 255, b2 = 255;
+    if (h2.length === 3) {
+      r2 = parseInt(h2[0] + h2[0], 16);
+      g2 = parseInt(h2[1] + h2[1], 16);
+      b2 = parseInt(h2[2] + h2[2], 16);
+    } else if (h2.length >= 6) {
+      r2 = parseInt(h2.slice(0, 2), 16);
+      g2 = parseInt(h2.slice(2, 4), 16);
+      b2 = parseInt(h2.slice(4, 6), 16);
+    }
+    if (!isFinite(r2) || !isFinite(g2) || !isFinite(b2)) {
+      return `rgba(255,255,255,${alpha})`;
+    }
+    return `rgba(${r2},${g2},${b2},${alpha})`;
   }
   //Segments now share one fixed colour (the configured sun
   //colour). Depth perception comes entirely from the per-segment
@@ -38770,10 +39164,26 @@ let HeliosCard = class extends i {
     }
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
+    const lidarSourceId = this._engine?.getActiveLidarSourceId() ?? null;
+    const lidarViewEnabled = lidarSourceId !== null;
+    const cardClasses = [
+      cardThemeClass,
+      this._detailMode ? "detail-active" : "",
+      this._lidarViewMode ? "lidar-view-active" : ""
+    ].filter(Boolean).join(" ");
     return b`
-            <ha-card class="${cardThemeClass} ${this._detailMode ? "detail-active" : ""}">
+            <ha-card class="${cardClasses}">
 
                 <div id="map-container"></div>
+
+                <!--  LiDAR View canvas overlay. Always present in the
+                      DOM so the canvas backing store survives across
+                      view-mode toggles (no flash on re-enter), but
+                      visually hidden until .lidar-view-active is set
+                      on ha-card. The canvas is sized to the host via
+                      CSS (100%/100%) and to its backing pixel buffer
+                      in _redrawLidarCanvas() based on devicePixelRatio. -->
+                <canvas class="lidar-view-canvas" aria-hidden="true"></canvas>
 
                 ${hasApiKey && this._timeRange ? b`
                     <div
@@ -38811,29 +39221,62 @@ let HeliosCard = class extends i {
 
                 ${hasApiKey ? b`
                     <div class="spinner-center ${this._fetching ? "spinning" : ""}">
-                        <div class="spinner"></div>
+                        <svg class="spinner-sun" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!--  Rotating ray bundle, 12 spokes around the disc.
+                                  Painted in the configured sun colour via the
+                                  CSS variable so the spinner stays on-brand
+                                  even when the user themes the sun. -->
+                            <g class="spinner-sun-rays">
+                                ${[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg) => w`
+                                    <line
+                                        x1="32" y1="6"
+                                        x2="32" y2="14"
+                                        stroke="var(--helios-sun-color, #f59e0b)"
+                                        stroke-width="3"
+                                        stroke-linecap="round"
+                                        transform="rotate(${deg} 32 32)"
+                                    />
+                                `)}
+                            </g>
+                            <!--  Steady inner disc, doesn't spin (otherwise the
+                                  rotation reads "the sun is wobbly", not
+                                  "we're loading"). -->
+                            <circle cx="32" cy="32" r="10" fill="var(--helios-sun-color, #f59e0b)" />
+                        </svg>
                     </div>
                 ` : A}
 
-                <!--  Top-right column. Hosts the back-to-live button
-                      (shown only while the user has scrubbed away from
-                      now) on top, and the LiDAR shadow busy chip below
-                      it. When both are visible they stack vertically;
-                      when only one is visible the column still sits at
-                      the same 8 px edge margin as the clock and timeline.  -->
-                <!--  Top-right column carries only the LiDAR shadow
-                      busy chip; the back-to-live button lives next
-                      to the clock (top-left) since both relate to
-                      "where am I in time".  -->
-                ${hasApiKey && this._shadowBusy ? b`
+                <!--  Top-right column. Hosts the LiDAR View toggle
+                      (always present when coords are known so its slot
+                      stays stable across homes; disabled when no LiDAR
+                      provider covers the active home) on top, and the
+                      LiDAR shadow busy chip below it. The back-to-live
+                      button lives top-left next to the clock since both
+                      relate to "where am I in time". Sits at the same
+                      8 px edge margin as the clock and the timeline.  -->
+                ${hasApiKey ? b`
                     <div class="overlay-top-right">
-                        <div
-                            class="shadow-busy-chip"
-                            title="LiDAR"
-                            aria-label="LiDAR"
+                        <button
+                            type="button"
+                            class="lidar-view-btn ${this._lidarViewMode ? "is-on" : ""}"
+                            ?disabled="${!lidarViewEnabled && !this._lidarViewMode}"
+                            title="${this._lidarViewMode ? "Exit LiDAR View" : lidarViewEnabled ? "LiDAR View" : "No LiDAR coverage here"}"
+                            aria-label="${this._lidarViewMode ? "Exit LiDAR View" : "LiDAR View"}"
+                            aria-pressed="${this._lidarViewMode ? "true" : "false"}"
+                            @click="${this._toggleLidarView}"
                         >
-                            <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
-                        </div>
+                            <ha-icon icon="mdi:dots-grid"></ha-icon>
+                            <span>LiDAR</span>
+                        </button>
+                        ${this._shadowBusy ? b`
+                            <div
+                                class="shadow-busy-chip"
+                                title="LiDAR"
+                                aria-label="LiDAR"
+                            >
+                                <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
+                            </div>
+                        ` : A}
                     </div>
                 ` : A}
 
@@ -40106,6 +40549,12 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_detailMode", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_lidarViewMode", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_lidarViewPoints", 2);
 HeliosCard = __decorateClass([
   t("helios-card")
 ], HeliosCard);

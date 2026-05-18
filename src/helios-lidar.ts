@@ -55,6 +55,20 @@ export interface LidarShadowResult
         //Min / max kept height in metres. null when no cell passed.
         heightRangeM: [number, number] | null;
     };
+    //Raw height raster + geo, forwarded by every provider so the
+    //engine can keep it around for the LiDAR View debug overlay
+    //(which projects every cell, threshold-bypassed, to screen).
+    //Producers always populate it when the upstream fetch succeeded;
+    //consumers that only care about cast shadows can ignore the field.
+    raster?:
+    {
+        heights:    Float32Array;
+        rasterSize: number;
+        minLat:     number;
+        maxLat:     number;
+        minLon:     number;
+        maxLon:     number;
+    };
 }
 
 export interface LidarShadowFetchOptions

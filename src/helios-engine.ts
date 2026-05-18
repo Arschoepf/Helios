@@ -224,6 +224,27 @@ export interface HeliosConfig
     //                           model-derived irradiance on the sun
     //                           chip and the live W/m² readouts.
     'solar-radiation-entity'?: unknown;
+    //LiDAR View overlay (debug mode). When the user clicks the LiDAR
+    //View button in the top-right of the card, the regular map UI
+    //fades out and every raster cell currently loaded is projected to
+    //screen as a small dot. These four keys tune the overlay; none
+    //of them affect cast-shadow rendering.
+    //  lidar-view-radius       : metres. Cells beyond this distance
+    //                            from the home are skipped, even when
+    //                            they're inside the underlying LiDAR
+    //                            fetch radius. Default 100 m.
+    //  lidar-view-point-size   : pixels (1..6). Square side length per
+    //                            point on the canvas. Default 1.5.
+    //  lidar-view-point-color  : hex string. Default '#ffffff' (white
+    //                            on the muted basemap reads as a fine
+    //                            point cloud regardless of theme).
+    //  lidar-view-point-opacity: 0..1. Default 0.5. Combined with
+    //                            point-size to control the perceptual
+    //                            density of the cloud.
+    'lidar-view-radius'?:        unknown;
+    'lidar-view-point-size'?:    unknown;
+    'lidar-view-point-color'?:   unknown;
+    'lidar-view-point-opacity'?: unknown;
 }
 
 //Default values for the building config, exposed so the visual
@@ -258,6 +279,16 @@ export const DEFAULT_SHADOW_OPACITY = 0.32;
 //provider stays disabled until the user flips this AND supplies the
 //URL + bbox in the editor / YAML.
 export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
+
+//LiDAR View overlay defaults. The radius is the only one that
+//meaningfully affects per-frame cost; the visual knobs (size, color,
+//opacity) are pure paint, no recompute. Picked from a typical urban
+//5-house block worth of context, large enough to show useful clumps
+//without burning the frame on a million points at the High precision.
+export const DEFAULT_LIDAR_VIEW_RADIUS_M       = 100;
+export const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX  = 1.5;
+export const DEFAULT_LIDAR_VIEW_POINT_COLOR    = '#ffffff';
+export const DEFAULT_LIDAR_VIEW_POINT_OPACITY  = 0.5;
 
 
 //Single ground-shadow layer, rendered as an image source rather
@@ -829,6 +860,29 @@ export class HeliosEngine
     //In-flight LiDAR shadow fetch, aborted when home/radius/precision
     //changes so a slow IGN response can't overwrite a fresher request.
     private _lidarShadowAbort?: AbortController;
+    //Raw height raster + geo kept around for the LiDAR View debug
+    //overlay (projects every cell, threshold-bypassed, to screen).
+    //Cleared whenever the fetch path resets `_lidarShadowFeatures`
+    //so the two stay in lockstep, the View overlay never out-lives
+    //the cast-shadow set it was sampled from. Held as a reference
+    //to the buffer the provider returned; no copy, no extra mem.
+    private _lidarRaster:
+        {
+            heights:    Float32Array;
+            rasterSize: number;
+            minLat:     number;
+            maxLat:     number;
+            minLon:     number;
+            maxLon:     number;
+        }
+        | null = null;
+    //Id of the LiDAR provider that owns the data currently in
+    //`_lidarRaster` / `_lidarShadowFeatures`. Null when the home
+    //isn't covered by any provider (or shadows are disabled). The
+    //card reads this through getActiveLidarSourceId() to gate the
+    //LiDAR View button's enabled state without poking provider
+    //internals.
+    private _lidarSourceId: string | null = null;
 
     //Offscreen canvas used to rasterise cast shadows before uploading
     //them to the MapLibre image source. Lives for the whole engine
@@ -2090,6 +2144,84 @@ export class HeliosEngine
         return out;
     }
 
+    //LiDAR View support, exposed to the card.
+    //
+    //getActiveLidarSourceId returns the id of the provider that
+    //matched the home (e.g. 'de-nrw-ndom'), or null when no provider
+    //covers the home or shadows are disabled. The card gates the
+    //LiDAR View button on this.
+    public getActiveLidarSourceId(): string | null
+    {
+        return this._lidarSourceId;
+    }
+
+    //Project every raw raster cell (vegetation + ground + buildings,
+    //threshold-bypassed) to screen-space. Returns interleaved
+    //[x0, y0, x1, y1, ...] Float32 plus the count, so the card can
+    //fillRect through the buffer without per-point object allocations
+    //on every frame (1M points × 16ms/frame is a tight budget).
+    //
+    //maxRadiusMeters is honoured client-side: cells whose centre
+    //sits past that distance from the home are skipped. The card
+    //surfaces this as a config knob so the user can shrink the
+    //visible disc to keep frame times sane on big rasters / weak
+    //devices.
+    //
+    //Returns null when no raster has been fetched yet (home outside
+    //coverage, shadows disabled, fetch still in flight, etc.) so the
+    //card can show an empty overlay instead of garbage.
+    public projectLidarPoints(
+        maxRadiusMeters: number
+    ): { xy: Float32Array; count: number } | null
+    {
+        if (!this.map || !this._mapReady) return null;
+        const raster = this._lidarRaster;
+        if (!raster) return null;
+
+        const { heights, rasterSize, minLat, maxLat, minLon, maxLon } = raster;
+        const N = rasterSize * rasterSize;
+        if (heights.length < N) return null;
+
+        const pxLon  = (maxLon - minLon) / rasterSize;
+        const pxLat  = (maxLat - minLat) / rasterSize;
+        const radius = Math.max(1, maxRadiusMeters);
+
+        //Worst-case all cells visible, pre-size for that. Trimming
+        //the buffer after fill is cheaper than incremental growth at
+        //these counts. The card reads only [0, count*2) entries.
+        const xy = new Float32Array(N * 2);
+        let count = 0;
+
+        const homeLat = this.homeLat;
+        const homeLon = this.homeLon;
+        for (let j = 0; j < rasterSize; j++)
+        {
+            const cLat = maxLat - (j + 0.5) * pxLat;
+            for (let i = 0; i < rasterSize; i++)
+            {
+                const h = heights[j * rasterSize + i];
+                if (!isFinite(h)) continue;
+                const cLon = minLon + (i + 0.5) * pxLon;
+                //Cheap circular crop, inline haversine via the same
+                //small-angle approximation the building radius helper
+                //uses elsewhere (good enough at the few-hundred-metre
+                //radii the LiDAR fetch covers, no need for full
+                //great-circle math at every cell).
+                const dLat = (cLat - homeLat) * 111_320;
+                const dLon = (cLon - homeLon) * 111_320
+                    * Math.cos(homeLat * Math.PI / 180);
+                if (dLat * dLat + dLon * dLon > radius * radius) continue;
+
+                const px = this._projectScenePoint(cLon, cLat, h);
+                if (!px) continue;
+                xy[count * 2]     = px.x;
+                xy[count * 2 + 1] = px.y;
+                count++;
+            }
+        }
+        return { xy, count };
+    }
+
     //Toggle MapTiler's symbol layers (road names, house numbers,
     //POIs, place names) on or off based on the `show-labels` config.
     //Symbol-type layers are the canonical container for text + icon
@@ -2507,10 +2639,17 @@ export class HeliosEngine
             this._lidarShadowFeatures    = null;
             this._lidarShadowDiagnostics = null;
             this._lidarShadowKey         = '';
+            this._lidarRaster            = null;
+            this._lidarSourceId          = null;
             this._lidarShadowAbort?.abort();
             this._lidarShadowAbort       = undefined;
             return;
         }
+        //Even before the fetch lands we know which provider matches
+        //the home, so surface the id now: the LiDAR View button reads
+        //this on every render and we want it to enable as soon as we
+        //know coverage exists, not only once the bytes arrive.
+        this._lidarSourceId = provider.id;
 
         const level      = this._lidarPrecisionLevel();
         const rasterSize = LIDAR_PRECISION_RASTER[level];
@@ -2539,6 +2678,7 @@ export class HeliosEngine
             if (ac.signal.aborted || !this.map) return;
             this._lidarShadowFeatures    = res.features;
             this._lidarShadowDiagnostics = res.diagnostics;
+            this._lidarRaster            = res.raster ?? null;
             //New shadow source available, force a full atmosphere /
             //shadow refresh on the next call rather than waiting for
             //the sun to move past the 0.5 deg threshold.

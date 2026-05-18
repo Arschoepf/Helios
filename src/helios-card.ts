@@ -7,7 +7,11 @@ import
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
-    DEFAULT_BATTERY_COLOR_HEX
+    DEFAULT_BATTERY_COLOR_HEX,
+    DEFAULT_LIDAR_VIEW_RADIUS_M,
+    DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
+    DEFAULT_LIDAR_VIEW_POINT_COLOR,
+    DEFAULT_LIDAR_VIEW_POINT_OPACITY
 } from './helios-engine';
 import { computePvPower, type PanelOrientation } from './helios-sun';
 import { pickTranslations } from './i18n';
@@ -374,6 +378,17 @@ export class HeliosCard extends LitElement
     //(on → off). Engine.setDetailMode drives the camera lerp;
     //CSS class .detail-active on ha-card fades out every overlay.
     @state() private _detailMode    = false;
+    //True while the LiDAR View debug overlay is showing: the map UI
+    //fades out, a full-card canvas paints every loaded LiDAR cell as
+    //a dot, and the same toggle button (top-right) brings the
+    //regular UI back when clicked again. Independent of detail mode;
+    //both can't be on at once (the button is hidden in detail).
+    @state() private _lidarViewMode = false;
+    //Screen-space projection of the raw LiDAR raster for the current
+    //map transform. Refreshed in _refreshOverlays whenever a transform
+    //fires AND lidar view is active. Buffer is interleaved [x,y,...]
+    //with `count` valid pairs; the canvas draw loop reads only those.
+    @state() private _lidarViewPoints: { xy: Float32Array; count: number } | null = null;
 
     private _timer?:           number;
     private _lastHomeKey       = '';
@@ -756,6 +771,11 @@ export class HeliosCard extends LitElement
         this._refreshPv();
         this._refreshBattery();
         this._refreshSolarRadiation();
+        //Repaint the LiDAR View canvas after the DOM has settled. The
+        //call is cheap (an early-return when the mode is off, a short-
+        //circuit when the signature is unchanged), so we can run it
+        //unconditionally on every Lit cycle without measurable cost.
+        this._redrawLidarCanvas();
     }
 
 
@@ -1670,6 +1690,153 @@ export class HeliosCard extends LitElement
         this._sunScene        = this._engine ? this._engine.projectSunScene(t)   : null;
         this._cloudScene      = this._engine ? this._engine.projectCloudScene()  : null;
         this._homeSilhouettes = this._engine ? this._engine.projectHomeFootprints() : [];
+
+        //LiDAR View overlay, only walked when the user opened it.
+        //Skipping the projection when the mode is off keeps the per-
+        //transform overhead at zero for the regular UI path, so the
+        //feature is pay-for-what-you-use (a 1M-cell raster wouldn't
+        //slow down anyone who never opens the debug view).
+        if (this._lidarViewMode && this._engine)
+        {
+            const radius = this._lidarViewRadiusMeters();
+            this._lidarViewPoints = this._engine.projectLidarPoints(radius);
+            this._lidarCanvasTransformTick++;
+        }
+        else if (this._lidarViewPoints !== null)
+        {
+            this._lidarViewPoints = null;
+        }
+    }
+
+    //LiDAR View overlay knobs. Each helper parses the matching config
+    //key and falls back to the engine-side DEFAULT_* constant when the
+    //key is missing, non-finite, out of range, or otherwise unusable.
+    //Keeping the validation here means the canvas draw loop doesn't
+    //need its own defensive checks per frame.
+    private _lidarViewRadiusMeters(): number
+    {
+        const raw = this.config?.['lidar-view-radius'];
+        const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+        if (!isFinite(n) || n <= 0) return DEFAULT_LIDAR_VIEW_RADIUS_M;
+        return Math.min(1000, n);
+    }
+    private _lidarViewPointSizePx(): number
+    {
+        const raw = this.config?.['lidar-view-point-size'];
+        const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+        if (!isFinite(n) || n <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
+        return Math.min(6, n);
+    }
+    private _lidarViewPointColor(): string
+    {
+        const raw = this.config?.['lidar-view-point-color'];
+        if (typeof raw === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(raw.trim()))
+        {
+            return raw.trim();
+        }
+        return DEFAULT_LIDAR_VIEW_POINT_COLOR;
+    }
+    private _lidarViewPointOpacity(): number
+    {
+        const raw = this.config?.['lidar-view-point-opacity'];
+        const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+        if (!isFinite(n)) return DEFAULT_LIDAR_VIEW_POINT_OPACITY;
+        return Math.max(0, Math.min(1, n));
+    }
+
+    //Toggle the LiDAR View overlay. Disabled (silently no-op) when
+    //the engine reports no provider covers the home, so the user
+    //never gets stuck in an empty-canvas view.
+    private _toggleLidarView = (): void =>
+    {
+        if (!this._engine) return;
+        if (!this._lidarViewMode && this._engine.getActiveLidarSourceId() === null) return;
+        this._lidarViewMode = !this._lidarViewMode;
+        //Trigger a fresh projection on the next frame, the Lit
+        //re-render alone won't fire _refreshOverlays.
+        if (this._lidarViewMode) this._refreshOverlays();
+    };
+
+    //Repaint the LiDAR View canvas. Called from the Lit `updated()`
+    //lifecycle hook (which fires after every render whose state
+    //changed). We compare the points buffer reference, the canvas
+    //size and the visual config so we only repaint when something
+    //actually changes; idle re-renders (e.g. clock tick) cost nothing.
+    private _lidarCanvasLastSig = '';
+    private _redrawLidarCanvas(): void
+    {
+        if (!this._lidarViewMode) return;
+        const canvas = this.renderRoot?.querySelector?.('canvas.lidar-view-canvas') as HTMLCanvasElement | null;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const dpr = window.devicePixelRatio || 1;
+        const cssW = canvas.clientWidth;
+        const cssH = canvas.clientHeight;
+        const wantW = Math.max(1, Math.round(cssW * dpr));
+        const wantH = Math.max(1, Math.round(cssH * dpr));
+        if (canvas.width !== wantW)  canvas.width  = wantW;
+        if (canvas.height !== wantH) canvas.height = wantH;
+
+        const points = this._lidarViewPoints;
+        const size   = this._lidarViewPointSizePx();
+        const color  = this._lidarViewPointColor();
+        const alpha  = this._lidarViewPointOpacity();
+        const sig    = `${points?.count ?? 0}|${size}|${color}|${alpha}|${wantW}x${wantH}|${this._lidarCanvasTransformTick}`;
+        if (sig === this._lidarCanvasLastSig) return;
+        this._lidarCanvasLastSig = sig;
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, cssW, cssH);
+        if (!points || points.count === 0) return;
+
+        ctx.fillStyle = this._withAlpha(color, alpha);
+        //Square dots via fillRect, ~3x faster than ctx.arc at the
+        //sub-pixel sizes we use here, and visually indistinguishable
+        //past the first few pixels of diameter. Pre-compute the half
+        //offset once so the tight loop only does index reads.
+        const half = size / 2;
+        const xy   = points.xy;
+        const N    = points.count;
+        for (let i = 0; i < N; i++)
+        {
+            ctx.fillRect(xy[i * 2] - half, xy[i * 2 + 1] - half, size, size);
+        }
+    }
+
+    //Bumped on every overlay refresh so _redrawLidarCanvas knows the
+    //projected buffer changed even when its length and the visual
+    //config are stable (the most common case: same raster, the camera
+    //rotated). Cheaper than diffing the Float32Array contents.
+    private _lidarCanvasTransformTick = 0;
+
+    //Mix a CSS hex colour with an alpha value to produce an rgba()
+    //string. Accepts #rgb / #rrggbb / #rrggbbaa (the alpha component
+    //in the source is replaced by the supplied alpha). Falls back to
+    //full opacity if parsing fails so the dots stay visible during
+    //bad-input edits.
+    private _withAlpha(hex: string, alpha: number): string
+    {
+        const h = hex.replace('#', '');
+        let r = 255, g = 255, b = 255;
+        if (h.length === 3)
+        {
+            r = parseInt(h[0] + h[0], 16);
+            g = parseInt(h[1] + h[1], 16);
+            b = parseInt(h[2] + h[2], 16);
+        }
+        else if (h.length >= 6)
+        {
+            r = parseInt(h.slice(0, 2), 16);
+            g = parseInt(h.slice(2, 4), 16);
+            b = parseInt(h.slice(4, 6), 16);
+        }
+        if (!isFinite(r) || !isFinite(g) || !isFinite(b))
+        {
+            return `rgba(255,255,255,${alpha})`;
+        }
+        return `rgba(${r},${g},${b},${alpha})`;
     }
 
     //Segments now share one fixed colour (the configured sun
@@ -3399,10 +3566,31 @@ export class HeliosCard extends LitElement
         const cardTheme = String(this.config?.['card-theme'] ?? 'light').toLowerCase();
         const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';
 
+        //LiDAR View gating: the button stays visible (so its location
+        //is predictable across homes) but goes disabled when no LiDAR
+        //provider covers the active home. Read off the engine, falls
+        //back to null until the engine has resolved its first home.
+        const lidarSourceId    = this._engine?.getActiveLidarSourceId() ?? null;
+        const lidarViewEnabled = lidarSourceId !== null;
+        const cardClasses = [
+            cardThemeClass,
+            this._detailMode    ? 'detail-active'    : '',
+            this._lidarViewMode ? 'lidar-view-active' : ''
+        ].filter(Boolean).join(' ');
+
         return html`
-            <ha-card class="${cardThemeClass} ${this._detailMode ? 'detail-active' : ''}">
+            <ha-card class="${cardClasses}">
 
                 <div id="map-container"></div>
+
+                <!--  LiDAR View canvas overlay. Always present in the
+                      DOM so the canvas backing store survives across
+                      view-mode toggles (no flash on re-enter), but
+                      visually hidden until .lidar-view-active is set
+                      on ha-card. The canvas is sized to the host via
+                      CSS (100%/100%) and to its backing pixel buffer
+                      in _redrawLidarCanvas() based on devicePixelRatio. -->
+                <canvas class="lidar-view-canvas" aria-hidden="true"></canvas>
 
                 ${hasApiKey && this._timeRange ? html`
                     <div
@@ -3440,29 +3628,62 @@ export class HeliosCard extends LitElement
 
                 ${hasApiKey ? html`
                     <div class="spinner-center ${this._fetching ? 'spinning' : ''}">
-                        <div class="spinner"></div>
+                        <svg class="spinner-sun" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <!--  Rotating ray bundle, 12 spokes around the disc.
+                                  Painted in the configured sun colour via the
+                                  CSS variable so the spinner stays on-brand
+                                  even when the user themes the sun. -->
+                            <g class="spinner-sun-rays">
+                                ${[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map(deg => svg`
+                                    <line
+                                        x1="32" y1="6"
+                                        x2="32" y2="14"
+                                        stroke="var(--helios-sun-color, #f59e0b)"
+                                        stroke-width="3"
+                                        stroke-linecap="round"
+                                        transform="rotate(${deg} 32 32)"
+                                    />
+                                `)}
+                            </g>
+                            <!--  Steady inner disc, doesn't spin (otherwise the
+                                  rotation reads "the sun is wobbly", not
+                                  "we're loading"). -->
+                            <circle cx="32" cy="32" r="10" fill="var(--helios-sun-color, #f59e0b)" />
+                        </svg>
                     </div>
                 ` : nothing}
 
-                <!--  Top-right column. Hosts the back-to-live button
-                      (shown only while the user has scrubbed away from
-                      now) on top, and the LiDAR shadow busy chip below
-                      it. When both are visible they stack vertically;
-                      when only one is visible the column still sits at
-                      the same 8 px edge margin as the clock and timeline.  -->
-                <!--  Top-right column carries only the LiDAR shadow
-                      busy chip; the back-to-live button lives next
-                      to the clock (top-left) since both relate to
-                      "where am I in time".  -->
-                ${hasApiKey && this._shadowBusy ? html`
+                <!--  Top-right column. Hosts the LiDAR View toggle
+                      (always present when coords are known so its slot
+                      stays stable across homes; disabled when no LiDAR
+                      provider covers the active home) on top, and the
+                      LiDAR shadow busy chip below it. The back-to-live
+                      button lives top-left next to the clock since both
+                      relate to "where am I in time". Sits at the same
+                      8 px edge margin as the clock and the timeline.  -->
+                ${hasApiKey ? html`
                     <div class="overlay-top-right">
-                        <div
-                            class="shadow-busy-chip"
-                            title="LiDAR"
-                            aria-label="LiDAR"
+                        <button
+                            type="button"
+                            class="lidar-view-btn ${this._lidarViewMode ? 'is-on' : ''}"
+                            ?disabled="${!lidarViewEnabled && !this._lidarViewMode}"
+                            title="${this._lidarViewMode ? 'Exit LiDAR View' : (lidarViewEnabled ? 'LiDAR View' : 'No LiDAR coverage here')}"
+                            aria-label="${this._lidarViewMode ? 'Exit LiDAR View' : 'LiDAR View'}"
+                            aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
+                            @click="${this._toggleLidarView}"
                         >
-                            <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
-                        </div>
+                            <ha-icon icon="mdi:dots-grid"></ha-icon>
+                            <span>LiDAR</span>
+                        </button>
+                        ${this._shadowBusy ? html`
+                            <div
+                                class="shadow-busy-chip"
+                                title="LiDAR"
+                                aria-label="LiDAR"
+                            >
+                                <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
+                            </div>
+                        ` : nothing}
                     </div>
                 ` : nothing}
 
