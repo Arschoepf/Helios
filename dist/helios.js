@@ -34562,8 +34562,8 @@ const heliosCardStyles = i$3`
         left: 50%;
         transform: translate(-50%, -50%);
         z-index: 50;
-        width: 56px;
-        height: 56px;
+        width: 40px;
+        height: 40px;
         opacity: 0;
         transition: opacity 0.15s ease;
         pointer-events: none;
@@ -34620,6 +34620,14 @@ const heliosCardStyles = i$3`
         line-height: 1;
         cursor: pointer;
         transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+        /*  The parent .overlay-top-right rail has pointer-events: none
+            (so the rail itself never steals map interactions when
+            empty). The button has to opt back in explicitly so its
+            click reaches the @click handler, mirroring what
+            .clock / .live-return-btn do on the opposite (top-left)
+            rail. Without this the button visually renders enabled but
+            ignores every click. */
+        pointer-events: auto;
     }
     /*  Force the label baseline to line-height: 1 (instead of the
         browser default 1.2-1.4 inherited from <button>'s native
@@ -37139,7 +37147,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-alpha.19"}`,
+      `%c☀ HELIOS%c v${"1.6.0-alpha.20"}`,
       labelStyle,
       versionStyle
     );
@@ -37160,7 +37168,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-alpha.19",
+        version: "1.6.0-alpha.20",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -37168,7 +37176,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-alpha.19"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-alpha.20"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

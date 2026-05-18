@@ -869,8 +869,8 @@ export const heliosCardStyles = css`
         left: 50%;
         transform: translate(-50%, -50%);
         z-index: 50;
-        width: 56px;
-        height: 56px;
+        width: 40px;
+        height: 40px;
         opacity: 0;
         transition: opacity 0.15s ease;
         pointer-events: none;
@@ -927,6 +927,14 @@ export const heliosCardStyles = css`
         line-height: 1;
         cursor: pointer;
         transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+        /*  The parent .overlay-top-right rail has pointer-events: none
+            (so the rail itself never steals map interactions when
+            empty). The button has to opt back in explicitly so its
+            click reaches the @click handler, mirroring what
+            .clock / .live-return-btn do on the opposite (top-left)
+            rail. Without this the button visually renders enabled but
+            ignores every click. */
+        pointer-events: auto;
     }
     /*  Force the label baseline to line-height: 1 (instead of the
         browser default 1.2-1.4 inherited from <button>'s native
