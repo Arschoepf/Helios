@@ -30828,7 +30828,6 @@ const _HeliosEngine = class _HeliosEngine {
       }
     });
     this._initNightShade();
-    this._initCropMask();
     this._initCloudCoverDisc();
     this._addBuildings();
     this._applyLabelVisibility();
@@ -30894,161 +30893,6 @@ const _HeliosEngine = class _HeliosEngine {
         }
       }
     );
-  }
-  //Display-radius crop mask.
-  //
-  //A single fill layer that paints everything outside the configured
-  //display radius (formerly the "building visibility radius") in the
-  //card's theme background colour. Drawn ABOVE the basemap + the
-  //hillshade + the night-shade, BELOW our helios-buildings + shadow
-  //layers, so the user only ever sees the disc's content; anything
-  //the basemap renders outside that disc is hidden under the mask.
-  //
-  //The mask geometry is a polygon with TWO rings: an outer ~5 km
-  //square around the home (large enough to cover any screen at the
-  //locked z=18 view, even at pitch 55 deg) and an inner 64-segment
-  //disc at the radius. GeoJSON polygons with a second ring treat
-  //it as a hole, so the rendered fill is exactly the donut between
-  //the two.
-  //
-  //Beyond the visual crop, the opaque mask lets the GPU early-out
-  //fragments under it. The basemap tiles still load and rasterise
-  //inside MapLibre, but the alpha blending of every layer beneath
-  //the mask is skipped, which on dense urban basemaps and on small
-  //devices saves a measurable fraction of the per-frame cost.
-  _initCropMask() {
-    if (!this.map) return;
-    if (this.map.getLayer("helios-crop-mask")) {
-      this.map.removeLayer("helios-crop-mask");
-    }
-    if (this.map.getSource("helios-crop-mask-src")) {
-      this.map.removeSource("helios-crop-mask-src");
-    }
-    const data = this._buildCropMaskFeature();
-    this.map.addSource(
-      "helios-crop-mask-src",
-      {
-        type: "geojson",
-        data
-      }
-    );
-    const isDark = String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
-    this.map.addLayer(
-      {
-        id: "helios-crop-mask",
-        type: "fill",
-        source: "helios-crop-mask-src",
-        paint: {
-          "fill-color": isDark ? "#14161c" : "#ffffff",
-          //Per-feature opacity, driven by the `opacity` property
-          //the source emits on each concentric ring. The inner
-          //rings around the disc edge fade in gradually; the
-          //outer ring is fully opaque.
-          "fill-opacity": ["get", "opacity"],
-          //Hard-edged on purpose. The fade lives in the ring
-          //stack, antialiasing the polygon edges would only
-          //bleed neighbouring rings together at the seams.
-          "fill-antialias": false
-        }
-      }
-    );
-  }
-  //Refresh the crop-mask geometry. Cheap (~64 cos/sin) so we can
-  //call it on every home / building-radius change without thought.
-  _updateCropMask() {
-    if (!this.map) return;
-    const src = this.map.getSource("helios-crop-mask-src");
-    if (!src) return;
-    src.setData(this._buildCropMaskFeature());
-  }
-  //Build the crop-mask geometry as a stack of N concentric donut
-  //features so the mask can fade smoothly into the disc rather
-  //than cutting on a hard edge.
-  //
-  //  - The outermost feature spans (radius + FADE_M) ... 5 km at
-  //    full opacity (1.0). Anything past the fade band is solid.
-  //  - The fade band (radius ... radius + FADE_M) is divided into
-  //    FADE_STEPS non-overlapping sub-rings, each with linearly
-  //    increasing opacity. Non-overlapping is key: with overlap,
-  //    fill-opacity composes via SRC_OVER and the band saturates
-  //    to opaque, defeating the gradient. The fill layer reads
-  //    `opacity` off each feature so a single layer renders the
-  //    whole stack.
-  //  - All rings share the same outer-square bound (5 km bbox)
-  //    except their inner hole shrinks step by step. GeoJSON
-  //    polygons treat the second ring as a hole, so each feature
-  //    paints just its band.
-  //
-  //  Layout (radii, metres):
-  //      r0 = radius              (disc edge,         opacity 0)
-  //      r1 = radius + FADE_M/N   (band 1,            opacity 1/N)
-  //      r2 = radius + 2*FADE_M/N (band 2,            opacity 2/N)
-  //      ...
-  //      rN = radius + FADE_M     (fully opaque from here outward)
-  //      ROut = 5 km              (outer bound)
-  _buildCropMaskFeature() {
-    const cosLat = Math.cos(this.homeLat * Math.PI / 180);
-    const FADE_M = 40;
-    const FADE_STEPS = 8;
-    const SEGS = 64;
-    const OUTER_M = 5e3;
-    const dLatOut = OUTER_M / 111320;
-    const dLonOut = OUTER_M / (111320 * cosLat);
-    const radius = this._buildingRadiusMeters();
-    const ringAtRadius = (rM) => {
-      const dLat = rM / 111320;
-      const dLon = rM / (111320 * cosLat);
-      const out = [];
-      for (let i2 = SEGS; i2 >= 0; i2--) {
-        const a2 = i2 / SEGS * 2 * Math.PI;
-        out.push([
-          this.homeLon + Math.cos(a2) * dLon,
-          this.homeLat + Math.sin(a2) * dLat
-        ]);
-      }
-      return out;
-    };
-    const outerSquare = [
-      [this.homeLon - dLonOut, this.homeLat - dLatOut],
-      [this.homeLon + dLonOut, this.homeLat - dLatOut],
-      [this.homeLon + dLonOut, this.homeLat + dLatOut],
-      [this.homeLon - dLonOut, this.homeLat + dLatOut],
-      [this.homeLon - dLonOut, this.homeLat - dLatOut]
-    ];
-    const features = [];
-    const step = FADE_M / FADE_STEPS;
-    for (let i2 = 0; i2 < FADE_STEPS; i2++) {
-      const innerR = radius + i2 * step;
-      const outerR = radius + (i2 + 1) * step;
-      const opacity = (i2 + 1) / FADE_STEPS;
-      features.push({
-        type: "Feature",
-        geometry: {
-          type: "Polygon",
-          //Outer ring first (CCW from the radial generator
-          //above is actually OK for polygons whose hole is
-          //inside); MapLibre's fill renderer treats the
-          //second ring as a hole either way.
-          coordinates: [
-            //Outer band edge (the larger ring) becomes
-            //the polygon outer ring.
-            ringAtRadius(outerR).reverse(),
-            //Inner band edge becomes the hole.
-            ringAtRadius(innerR)
-          ]
-        },
-        properties: { opacity }
-      });
-    }
-    features.push({
-      type: "Feature",
-      geometry: {
-        type: "Polygon",
-        coordinates: [outerSquare, ringAtRadius(radius + FADE_M)]
-      },
-      properties: { opacity: 1 }
-    });
-    return { type: "FeatureCollection", features };
   }
   //Cloud-cover disc setup.
   //
@@ -32522,7 +32366,6 @@ const _HeliosEngine = class _HeliosEngine {
       this._buildingsData = null;
       this._buildingsFetchKey = "";
       this._addBuildings();
-      this._updateCropMask();
     } else {
       if (nextOpacity !== prevOpacity && this.map.getLayer("helios-buildings-surroundings")) {
         this.map.setPaintProperty(
@@ -32659,7 +32502,6 @@ const _HeliosEngine = class _HeliosEngine {
       for (const lid of [
         "helios-hillshade",
         "helios-night-shade",
-        "helios-crop-mask",
         "helios-cloud-disc",
         "helios-cloud-disc-ring",
         "helios-cloud-ring",
@@ -32682,7 +32524,6 @@ const _HeliosEngine = class _HeliosEngine {
       for (const sid of [
         "helios-terrain",
         "helios-night-shade",
-        "helios-crop-mask-src",
         "helios-cloud-rings",
         "helios-buildings-surroundings-src",
         "helios-buildings-home-src",
@@ -37487,9 +37328,18 @@ let HeliosCard = class extends i {
   //stay readable when the user resizes down to that minimum.
   getGridOptions() {
     return {
-      rows: 11,
-      columns: 9,
-      min_rows: 6,
+      //Default to the section editor's actual ceiling (12 cols
+      //wide, 8 rows tall) so the slot HA carves out matches
+      //what its layout UI lets the user resize to. Asking for
+      //11 rows by default (the old value) lands a slider handle
+      //past the editor's max-row limit, which reads as a buggy
+      //"the card wants more space than I can give it" mismatch.
+      //Min rows lowered to 4 so the card still fits inside a
+      //compact two-row "info strip" layout if a power user
+      //really wants that.
+      rows: 8,
+      columns: 12,
+      min_rows: 4,
       max_rows: 24,
       min_columns: 6,
       max_columns: 12

@@ -632,9 +632,18 @@ export class HeliosCard extends LitElement
     }
     {
         return {
-            rows:        11,
-            columns:     9,
-            min_rows:    6,
+            //Default to the section editor's actual ceiling (12 cols
+            //wide, 8 rows tall) so the slot HA carves out matches
+            //what its layout UI lets the user resize to. Asking for
+            //11 rows by default (the old value) lands a slider handle
+            //past the editor's max-row limit, which reads as a buggy
+            //"the card wants more space than I can give it" mismatch.
+            //Min rows lowered to 4 so the card still fits inside a
+            //compact two-row "info strip" layout if a power user
+            //really wants that.
+            rows:        8,
+            columns:     12,
+            min_rows:    4,
             max_rows:    24,
             min_columns: 6,
             max_columns: 12

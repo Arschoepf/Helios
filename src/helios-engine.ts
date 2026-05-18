@@ -1621,7 +1621,6 @@ export class HeliosEngine
         //unpredictably; HTML overlays sidestep the GL pipeline
         //entirely.
         this._initNightShade();
-        this._initCropMask();
         this._initCloudCoverDisc();
         this._addBuildings();
         this._applyLabelVisibility();
@@ -1697,200 +1696,6 @@ export class HeliosEngine
                 'fill-opacity': 0
             }
         });
-    }
-
-    //Display-radius crop mask.
-    //
-    //A single fill layer that paints everything outside the configured
-    //display radius (formerly the "building visibility radius") in the
-    //card's theme background colour. Drawn ABOVE the basemap + the
-    //hillshade + the night-shade, BELOW our helios-buildings + shadow
-    //layers, so the user only ever sees the disc's content; anything
-    //the basemap renders outside that disc is hidden under the mask.
-    //
-    //The mask geometry is a polygon with TWO rings: an outer ~5 km
-    //square around the home (large enough to cover any screen at the
-    //locked z=18 view, even at pitch 55 deg) and an inner 64-segment
-    //disc at the radius. GeoJSON polygons with a second ring treat
-    //it as a hole, so the rendered fill is exactly the donut between
-    //the two.
-    //
-    //Beyond the visual crop, the opaque mask lets the GPU early-out
-    //fragments under it. The basemap tiles still load and rasterise
-    //inside MapLibre, but the alpha blending of every layer beneath
-    //the mask is skipped, which on dense urban basemaps and on small
-    //devices saves a measurable fraction of the per-frame cost.
-    private _initCropMask(): void
-    {
-        if (!this.map) return;
-
-        //Drop any stale instance so re-runs (style reload, theme
-        //switch) are idempotent.
-        if (this.map.getLayer('helios-crop-mask'))
-        {
-            this.map.removeLayer('helios-crop-mask');
-        }
-        if (this.map.getSource('helios-crop-mask-src'))
-        {
-            this.map.removeSource('helios-crop-mask-src');
-        }
-
-        const data = this._buildCropMaskFeature();
-        this.map.addSource('helios-crop-mask-src',
-        {
-            type: 'geojson',
-            data
-        });
-
-        //Theme background: matches the card chrome's surface so the
-        //masked area visually merges with the surrounding card
-        //rather than fighting it. Independent of `map-style`,
-        //`card-theme: dark` keeps the surface near-black even on
-        //the `minimal` basemap.
-        const isDark = String(this.cfg['card-theme'] ?? 'light').toLowerCase() === 'dark';
-        this.map.addLayer(
-        {
-            id:     'helios-crop-mask',
-            type:   'fill',
-            source: 'helios-crop-mask-src',
-            paint:
-            {
-                'fill-color':     isDark ? '#14161c' : '#ffffff',
-                //Per-feature opacity, driven by the `opacity` property
-                //the source emits on each concentric ring. The inner
-                //rings around the disc edge fade in gradually; the
-                //outer ring is fully opaque.
-                'fill-opacity':   ['get', 'opacity'],
-                //Hard-edged on purpose. The fade lives in the ring
-                //stack, antialiasing the polygon edges would only
-                //bleed neighbouring rings together at the seams.
-                'fill-antialias': false
-            }
-        });
-    }
-
-    //Refresh the crop-mask geometry. Cheap (~64 cos/sin) so we can
-    //call it on every home / building-radius change without thought.
-    private _updateCropMask(): void
-    {
-        if (!this.map) return;
-        const src = this.map.getSource('helios-crop-mask-src') as
-                    maplibregl.GeoJSONSource | undefined;
-        if (!src) return;
-        src.setData(this._buildCropMaskFeature());
-    }
-
-    //Build the crop-mask geometry as a stack of N concentric donut
-    //features so the mask can fade smoothly into the disc rather
-    //than cutting on a hard edge.
-    //
-    //  - The outermost feature spans (radius + FADE_M) ... 5 km at
-    //    full opacity (1.0). Anything past the fade band is solid.
-    //  - The fade band (radius ... radius + FADE_M) is divided into
-    //    FADE_STEPS non-overlapping sub-rings, each with linearly
-    //    increasing opacity. Non-overlapping is key: with overlap,
-    //    fill-opacity composes via SRC_OVER and the band saturates
-    //    to opaque, defeating the gradient. The fill layer reads
-    //    `opacity` off each feature so a single layer renders the
-    //    whole stack.
-    //  - All rings share the same outer-square bound (5 km bbox)
-    //    except their inner hole shrinks step by step. GeoJSON
-    //    polygons treat the second ring as a hole, so each feature
-    //    paints just its band.
-    //
-    //  Layout (radii, metres):
-    //      r0 = radius              (disc edge,         opacity 0)
-    //      r1 = radius + FADE_M/N   (band 1,            opacity 1/N)
-    //      r2 = radius + 2*FADE_M/N (band 2,            opacity 2/N)
-    //      ...
-    //      rN = radius + FADE_M     (fully opaque from here outward)
-    //      ROut = 5 km              (outer bound)
-    private _buildCropMaskFeature(): GeoJSON.FeatureCollection
-    {
-        const cosLat  = Math.cos(this.homeLat * Math.PI / 180);
-        //Fade transition width and step count. 40 m / 8 steps gives a
-        //5 m-per-step gradient; smooth at zoom 18 viewports while
-        //keeping the feature count tiny.
-        const FADE_M       = 40;
-        const FADE_STEPS   = 8;
-        const SEGS         = 64;
-        const OUTER_M      = 5000;
-        const dLatOut      = OUTER_M / 111_320;
-        const dLonOut      = OUTER_M / (111_320 * cosLat);
-        const radius       = this._buildingRadiusMeters();
-
-        //Pre-compute disc rings at every step radius. Each ring is in
-        //CW order (i from SEGS down to 0) so GeoJSON treats it as a
-        //hole inside the outer-square ring.
-        const ringAtRadius = (rM: number): number[][] =>
-        {
-            const dLat = rM / 111_320;
-            const dLon = rM / (111_320 * cosLat);
-            const out: number[][] = [];
-            for (let i = SEGS; i >= 0; i--)
-            {
-                const a = (i / SEGS) * 2 * Math.PI;
-                out.push([
-                    this.homeLon + Math.cos(a) * dLon,
-                    this.homeLat + Math.sin(a) * dLat
-                ]);
-            }
-            return out;
-        };
-
-        const outerSquare: number[][] = [
-            [this.homeLon - dLonOut, this.homeLat - dLatOut],
-            [this.homeLon + dLonOut, this.homeLat - dLatOut],
-            [this.homeLon + dLonOut, this.homeLat + dLatOut],
-            [this.homeLon - dLonOut, this.homeLat + dLatOut],
-            [this.homeLon - dLonOut, this.homeLat - dLatOut]
-        ];
-
-        const features: GeoJSON.Feature[] = [];
-        //Step rings inside the fade band. Each band has outer ring at
-        //(radius + (i+1) * step) and inner ring at (radius + i * step).
-        const step = FADE_M / FADE_STEPS;
-        for (let i = 0; i < FADE_STEPS; i++)
-        {
-            const innerR = radius + i * step;
-            const outerR = radius + (i + 1) * step;
-            const opacity = (i + 1) / FADE_STEPS;
-            features.push({
-                type: 'Feature',
-                geometry:
-                {
-                    type:        'Polygon',
-                    //Outer ring first (CCW from the radial generator
-                    //above is actually OK for polygons whose hole is
-                    //inside); MapLibre's fill renderer treats the
-                    //second ring as a hole either way.
-                    coordinates:
-                    [
-                        //Outer band edge (the larger ring) becomes
-                        //the polygon outer ring.
-                        ringAtRadius(outerR).reverse(),
-                        //Inner band edge becomes the hole.
-                        ringAtRadius(innerR)
-                    ]
-                },
-                properties: { opacity }
-            });
-        }
-
-        //Outermost feature: from the end of the fade band out to 5 km,
-        //fully opaque. Single donut with the outer-square as the
-        //outer ring and the fade-band's outer edge as the hole.
-        features.push({
-            type: 'Feature',
-            geometry:
-            {
-                type:        'Polygon',
-                coordinates: [outerSquare, ringAtRadius(radius + FADE_M)]
-            },
-            properties: { opacity: 1 }
-        });
-
-        return { type: 'FeatureCollection', features };
     }
 
     //Cloud-cover disc setup.
@@ -4118,9 +3923,6 @@ export class HeliosEngine
             this._buildingsData     = null;
             this._buildingsFetchKey = '';
             this._addBuildings();
-            //Radius change also moves the crop-mask hole, so refresh
-            //the donut geometry to match.
-            this._updateCropMask();
         }
         else
         {
@@ -4375,7 +4177,6 @@ export class HeliosEngine
             for (const lid of [
                 'helios-hillshade',
                 'helios-night-shade',
-                'helios-crop-mask',
                 'helios-cloud-disc',
                 'helios-cloud-disc-ring',
                 'helios-cloud-ring',
@@ -4398,7 +4199,6 @@ export class HeliosEngine
             for (const sid of [
                 'helios-terrain',
                 'helios-night-shade',
-                'helios-crop-mask-src',
                 'helios-cloud-rings',
                 'helios-buildings-surroundings-src',
                 'helios-buildings-home-src',
