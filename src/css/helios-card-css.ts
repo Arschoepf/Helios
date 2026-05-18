@@ -397,7 +397,14 @@ export const heliosCardStyles = css`
     .dash-today-headline
     {
         display: flex;
-        align-items: baseline;
+        /*  Align stats by the bottom of their box rather than by
+            baseline, because the italic predicted value renders
+            with a slightly higher baseline than the upright
+            produced value, which made the two numbers feel
+            misaligned at the top edge. Bottom-aligning normalises
+            them: the cap heights may differ by a px or two but the
+            visual line under the digits matches across stats.    */
+        align-items: end;
         gap: 18px;
         flex-wrap: wrap;
     }
@@ -493,23 +500,54 @@ export const heliosCardStyles = css`
     {
         stroke: rgba(255, 255, 255, 0.12);
     }
-    .dash-today-chart-actual
-    {
-        fill: none;
-        stroke-width: 1.6;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        opacity: 0.95;
-        vector-effect: non-scaling-stroke;
-    }
+    /*  Both production curves animate as a stroke reveal on the
+        first paint: the path is normalised to pathLength=100 in
+        the SVG, the dasharray covers the full length with one
+        dash, and stroke-dashoffset rolls from 100 (hidden) to 0
+        (full). The animation runs once on element insertion, so
+        the curves only animate when the dashboard opens (which
+        re-creates the path elements) and stay stable on every
+        subsequent re-render (e.g. the 30 s clock tick).         */
+    .dash-today-chart-actual,
     .dash-today-chart-predicted
     {
         fill: none;
-        stroke-width: 1.4;
         stroke-linecap: round;
         stroke-linejoin: round;
-        opacity: 0.95;
         vector-effect: non-scaling-stroke;
+        stroke-dasharray: 100;
+        stroke-dashoffset: 100;
+        animation: dash-chart-reveal 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+    .dash-today-chart-actual
+    {
+        stroke-width: 1.6;
+        opacity: 0.95;
+    }
+    .dash-today-chart-predicted
+    {
+        stroke-width: 1.4;
+        opacity: 0.95;
+    }
+    @keyframes dash-chart-reveal
+    {
+        to { stroke-dashoffset: 0; }
+    }
+
+    /*  "Now" cursor: vertical dashed line in the configured sun
+        colour marking the current wall-clock instant on the chart.
+        Refreshed via the card's 30 s clock tick (the dashboard
+        re-renders on every _now change), so the line walks across
+        the chart in step with real time. Stroke colour comes from
+        an inline style attribute so it tracks the user's chosen
+        sun colour.                                                */
+    .dash-today-chart-now
+    {
+        stroke-width: 1;
+        stroke-dasharray: 2 2;
+        vector-effect: non-scaling-stroke;
+        opacity: 0.75;
+        pointer-events: none;
     }
     .dash-today-chart-hover-line
     {

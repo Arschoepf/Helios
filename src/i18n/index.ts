@@ -31,7 +31,9 @@ export interface Translations
         //  todayLabel      , top of the today section
         //  todayProduced   , trailing text after the produced total
         //  todayForecast   , trailing text after the projected total
-        //  todayPeak       , trailing text after the peak readout
+        //  todayPeak       , trailing text after the actual peak readout
+        //  todayPeakForecast , trailing text after the predicted peak
+        //                      readout (twin of todayPeak for the model)
         //  todayNotStartedYet , status line shown when produced is
         //                      effectively zero and the peak is still
         //                      in the future (production hasn't begun)
@@ -44,6 +46,7 @@ export interface Translations
         todayProduced:     string;
         todayForecast:     string;
         todayPeak:         string;
+        todayPeakForecast: string;
         todayNotStartedYet: string;
         tomorrowLabel:     string;
         tomorrowPeak:      string;

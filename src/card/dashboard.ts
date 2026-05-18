@@ -98,6 +98,10 @@ export function computeTodayHourly(host: DashboardHost): {
     bins:        Array<{ hourTs: number; observedW: number | null; forecastW: number | null }>;
     peakHourTs:  number | null;
     peakW:       number;
+    peakActualHourTs:    number | null;
+    peakActualW:         number;
+    peakPredictedHourTs: number | null;
+    peakPredictedW:      number;
     producedKwh: number;
     forecastKwh: number;
 }
@@ -208,14 +212,34 @@ export function computeTodayHourly(host: DashboardHost): {
     //Aggregate: peak (across all bins, taking observed > forecast),
     //produced kWh (sum of observed × 1h), forecast end-of-day
     //(observed past + forecast future).
+    //
+    //We also track the actual and predicted peaks separately so
+    //the dashboard can show two distinct readouts (real vs model)
+    //side by side. The hybrid `peakW` is kept as a fallback for
+    //consumers that just want "the day's peak, whichever source".
     let peakW = 0;
     let peakHourTs: number | null = null;
+    let peakActualW = 0;
+    let peakActualHourTs: number | null = null;
+    let peakPredictedW = 0;
+    let peakPredictedHourTs: number | null = null;
     let producedKwh = 0;
     let forecastKwh = 0;
     for (const b of bins)
     {
         const w = b.observedW ?? b.forecastW ?? 0;
         if (w > peakW) { peakW = w; peakHourTs = b.hourTs; }
+
+        if (b.observedW !== null && b.observedW > peakActualW)
+        {
+            peakActualW = b.observedW;
+            peakActualHourTs = b.hourTs;
+        }
+        if (b.forecastW !== null && b.forecastW > peakPredictedW)
+        {
+            peakPredictedW = b.forecastW;
+            peakPredictedHourTs = b.hourTs;
+        }
 
         if (b.observedW !== null) producedKwh += b.observedW / 1000;
 
@@ -239,7 +263,13 @@ export function computeTodayHourly(host: DashboardHost): {
         }
     }
 
-    return { bins, peakHourTs, peakW, producedKwh, forecastKwh };
+    return {
+        bins,
+        peakHourTs, peakW,
+        peakActualHourTs, peakActualW,
+        peakPredictedHourTs, peakPredictedW,
+        producedKwh, forecastKwh
+    };
 }
 
 
@@ -398,12 +428,24 @@ export function renderDashTodaySection(
     const cum     = computeTodayCumulative(host);
     const HOUR_MS = 3_600_000;
 
-    const peakTimeLabel = data.peakHourTs !== null
-        ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
-            hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-        })
-        : '';
-    const peakValueLabel = formatPvWatts(host.hass, data.peakW);
+    //Format both the actual peak (highest observed bin so far) and
+    //the predicted peak (highest forecast bin). In the morning the
+    //actual one is null until production crosses ~50 W; in that
+    //case the row falls back to showing only "PIC PRÉVU". The
+    //hybrid peakHourTs / peakW pair is no longer rendered, the
+    //dual readout supersedes it.
+    const formatPeakTime = (hourTs: number | null): string =>
+        hourTs !== null
+            ? new Date(hourTs + HOUR_MS / 2).toLocaleTimeString([], {
+                hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+            })
+            : '';
+    const peakActualTime    = formatPeakTime(data.peakActualHourTs);
+    const peakActualValue   = formatPvWatts(host.hass, data.peakActualW);
+    const peakPredictedTime = formatPeakTime(data.peakPredictedHourTs);
+    const peakPredictedValue = formatPvWatts(host.hass, data.peakPredictedW);
+    const showPeakActual    = data.peakActualHourTs    !== null && data.peakActualW    > 50;
+    const showPeakPredicted = data.peakPredictedHourTs !== null && data.peakPredictedW > 50;
 
     //Use the cumulative method for both the headline produced and
     //forecast values so the numbers match the chart curves exactly.
@@ -431,7 +473,6 @@ export function renderDashTodaySection(
         ? ((producedKwh - predictedAtNow) / predictedAtNow) * 100
         : null;
 
-    const showPeak = data.peakHourTs !== null && data.peakW > 50;
 
     //Distinguish "no data yet" from "no production yet". When a PV
     //entity is configured and the history hasn't returned yet,
@@ -481,16 +522,25 @@ export function renderDashTodaySection(
                         </div>
                     ` : nothing}
                 </div>
-                ${showPeak ? html`
+                ${(showPeakActual || showPeakPredicted) ? html`
                     <div class="dash-today-meta">
-                        <div class="dash-today-line dash-today-peak">
-                            <ha-icon icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
-                            <span class="dash-line-label">${t.detail.todayPeak}</span>
-                            <span class="dash-line-value">${peakTimeLabel} · ${peakValueLabel}</span>
-                        </div>
+                        ${showPeakActual ? html`
+                            <div class="dash-today-line dash-today-peak" style="color:${pvColor}">
+                                <ha-icon icon="mdi:white-balance-sunny" style="color:${pvColor}"></ha-icon>
+                                <span class="dash-line-label">${t.detail.todayPeak}</span>
+                                <span class="dash-line-value">${peakActualTime} · ${peakActualValue}</span>
+                            </div>
+                        ` : nothing}
+                        ${showPeakPredicted ? html`
+                            <div class="dash-today-line dash-today-peak" style="color:${predictedColor}">
+                                <ha-icon icon="mdi:white-balance-sunny" style="color:${predictedColor}"></ha-icon>
+                                <span class="dash-line-label">${t.detail.todayPeakForecast}</span>
+                                <span class="dash-line-value">${peakPredictedTime} · ${peakPredictedValue}</span>
+                            </div>
+                        ` : nothing}
                     </div>
                 ` : nothing}
-                ${historyLoading ? nothing : renderDashTodayChart(host, pvColor, cum)}
+                ${historyLoading ? nothing : renderDashTodayChart(host, pvColor, sunColor, cum)}
             </div>
             ${notStartedYet ? html`
                 <div class="dash-today-status">${t.detail.todayNotStartedYet}</div>
@@ -506,9 +556,10 @@ export function renderDashTodaySection(
 //user hovers, a vertical guideline + travelling dot reveal a
 //tooltip showing the cumulative kWh at that exact minute.
 export function renderDashTodayChart(
-    host:    DashboardHost,
-    pvColor: string,
-    cum:     ReturnType<typeof computeTodayCumulative>
+    host:     DashboardHost,
+    pvColor:  string,
+    sunColor: string,
+    cum:      ReturnType<typeof computeTodayCumulative>
 ): TemplateResult | typeof nothing
 {
     if (cum.maxKwh < 0.05) return nothing;
@@ -518,15 +569,15 @@ export function renderDashTodayChart(
     today0.setHours(0, 0, 0, 0);
     const startMs  = today0.getTime();
     const endMs    = startMs + 24 * HOUR_MS;
+    const nowMs    = Date.now();
 
     //SVG viewBox with preserveAspectRatio="none". Curves stretch
     //to fill the rendered chart, stroke widths stay constant via
-    //vector-effect:non-scaling-stroke. Padding leaves room inside
-    //the data area for gridlines / hover overlay; axis labels
-    //live in absolutely-positioned HTML overlays outside the
-    //plot rectangle so text stays unsquashed.
+    //vector-effect:non-scaling-stroke. Padding leaves a clear
+    //gutter on the left (kWh labels) and below (hour labels) so
+    //the HTML axis overlays never overlap the plotted curves.
     const W = 240, H = 60;
-    const PAD_L = 4, PAD_R = 4, PAD_T = 4, PAD_B = 6;
+    const PAD_L = 22, PAD_R = 4, PAD_T = 4, PAD_B = 10;
     const yMax  = Math.max(cum.maxKwh, 0.1) * 1.05;
 
     const xFor = (t: number): number =>
@@ -611,13 +662,21 @@ export function renderDashTodayChart(
                 })}
                 ${predictedPath !== '' ? svg`
                     <path class="dash-today-chart-predicted"
+                          pathLength="100"
                           d="${predictedPath}"
                           stroke="${predictedColor}"/>
                 ` : nothing}
                 ${actualPath !== '' ? svg`
                     <path class="dash-today-chart-actual"
+                          pathLength="100"
                           d="${actualPath}"
                           stroke="${pvColor}"/>
+                ` : nothing}
+                ${nowMs >= startMs && nowMs < endMs ? svg`
+                    <line class="dash-today-chart-now"
+                          x1="${xFor(nowMs).toFixed(2)}" x2="${xFor(nowMs).toFixed(2)}"
+                          y1="${PAD_T}" y2="${H - PAD_B}"
+                          stroke="${sunColor}"/>
                 ` : nothing}
                 ${showHover ? svg`
                     <line class="dash-today-chart-hover-line"
@@ -650,7 +709,7 @@ export function renderDashTodayChart(
                 ${kwhTicks.map(v => html`
                     <span class="dash-today-chart-axis-y-label"
                           style="top: ${(yFor(v) / H * 100).toFixed(2)}%;"
-                    >${formatLocalisedNumber(host.hass, v, v < 10 ? 1 : 0)}</span>
+                    >${formatLocalisedNumber(host.hass, v, yStep < 1 ? 1 : 0)}</span>
                 `)}
             </div>
             ${showHover ? html`
