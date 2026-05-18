@@ -204,7 +204,7 @@ export interface Translations
         //Opacity of the cast ground shadows, 0..1 slider in the editor.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
-        //LiDAR View debug overlay (subsection inside Shading).
+        //LiDAR View overlay (subsection inside Shading).
         //Lets the user toggle a Canvas overlay that paints every
         //loaded LiDAR cell as a dot, plus tune its visual knobs.
         lidarViewSection:         string;

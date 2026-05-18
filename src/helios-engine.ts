@@ -860,8 +860,8 @@ export class HeliosEngine
     //In-flight LiDAR shadow fetch, aborted when home/radius/precision
     //changes so a slow IGN response can't overwrite a fresher request.
     private _lidarShadowAbort?: AbortController;
-    //Raw height raster + geo kept around for the LiDAR View debug
-    //overlay (projects every cell, threshold-bypassed, to screen).
+    //Raw height raster + geo kept around for the LiDAR View overlay
+    //(projects every cell, threshold-bypassed, to screen).
     //Cleared whenever the fetch path resets `_lidarShadowFeatures`
     //so the two stay in lockstep, the View overlay never out-lives
     //the cast-shadow set it was sampled from. Held as a reference
@@ -2651,7 +2651,7 @@ export class HeliosEngine
         //Bail when nothing wants the data: no provider covers the
         //home, OR the user has shadows off AND no LiDAR View open.
         //The View toggle lets the raster fetch happen even when cast
-        //shadows are off, so the debug overlay can show data without
+        //shadows are off, so the View overlay can show data without
         //requiring the user to re-enable shadows just to inspect.
         if (!provider || (!this._shadowsEnabled() && !this._lidarViewActive))
         {

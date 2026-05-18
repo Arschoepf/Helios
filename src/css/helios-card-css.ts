@@ -928,9 +928,26 @@ export const heliosCardStyles = css`
         cursor: pointer;
         transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
     }
+    /*  Force the label baseline to line-height: 1 (instead of the
+        browser default 1.2-1.4 inherited from <button>'s native
+        styles) so the uppercase glyphs sit dead-centre of the chip's
+        22 px box. Without this, the text rides ~1 px above centre
+        on Chromium and ~2 px above on Safari, visibly mis-aligned
+        against the icon. inline-flex pulls the glyph metrics into
+        flex alignment too, so vertical-align doesn't leak in from
+        the surrounding inline context. */
+    .lidar-view-btn-label
+    {
+        display: inline-flex;
+        align-items: center;
+        line-height: 1;
+    }
     .lidar-view-btn ha-icon
     {
         --mdc-icon-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        line-height: 1;
     }
     .lidar-view-btn:disabled
     {

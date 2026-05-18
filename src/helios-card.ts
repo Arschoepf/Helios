@@ -378,11 +378,11 @@ export class HeliosCard extends LitElement
     //(on → off). Engine.setDetailMode drives the camera lerp;
     //CSS class .detail-active on ha-card fades out every overlay.
     @state() private _detailMode    = false;
-    //True while the LiDAR View debug overlay is showing: the map UI
-    //fades out, a full-card canvas paints every loaded LiDAR cell as
-    //a dot, and the same toggle button (top-right) brings the
-    //regular UI back when clicked again. Independent of detail mode;
-    //both can't be on at once (the button is hidden in detail).
+    //True while the LiDAR View overlay is showing: the map UI fades
+    //out, a full-card canvas paints every loaded LiDAR cell as a
+    //dot, and the same toggle button (top-right) brings the regular
+    //UI back when clicked again. Independent of detail mode; both
+    //can't be on at once (the button is hidden in detail).
     @state() private _lidarViewMode = false;
     //Screen-space projection of the raw LiDAR raster for the current
     //map transform. Refreshed in _refreshOverlays whenever a transform
@@ -1605,6 +1605,15 @@ export class HeliosCard extends LitElement
                 container.removeChild(container.firstChild);
             }
             this._engine = new HeliosEngine(container, this.config, [lon, lat], elevation);
+            //Ping Lit so the chrome that depends on engine readiness
+            //(today: the LiDAR View button, which gates on the
+            //provider resolver via this._engine.getActiveLidarSourceId())
+            //flips to its enabled state as soon as the engine lands,
+            //instead of waiting for the next clock tick / state poke
+            //to trigger an unrelated re-render. The engine instance
+            //itself isn't a @state property so this nudge is the only
+            //signal Lit gets that it became truthy.
+            this.requestUpdate();
 
             this._engine.onFetchStart = () =>
             {
@@ -1695,7 +1704,7 @@ export class HeliosCard extends LitElement
         //Skipping the projection when the mode is off keeps the per-
         //transform overhead at zero for the regular UI path, so the
         //feature is pay-for-what-you-use (a 1M-cell raster wouldn't
-        //slow down anyone who never opens the debug view).
+        //slow down anyone who never opens the LiDAR View).
         if (this._lidarViewMode && this._engine)
         {
             const radius = this._lidarViewRadiusMeters();
@@ -3632,7 +3641,7 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 ${hasApiKey ? html`
-                    <div class="spinner-center ${this._fetching ? 'spinning' : ''}">
+                    <div class="spinner-center ${(this._fetching || this._shadowBusy) ? 'spinning' : ''}">
                         <svg class="spinner-sun" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <!--  Rotating ray bundle, 12 spokes around the disc.
                                   Painted in the configured sun colour via the
@@ -3658,14 +3667,18 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                <!--  Top-right column. Hosts the LiDAR View toggle
-                      (always present when coords are known so its slot
+                <!--  Top-right column. Hosts the LiDAR View toggle:
+                      always present when coords are known so its slot
                       stays stable across homes; disabled when no LiDAR
-                      provider covers the active home) on top, and the
-                      LiDAR shadow busy chip below it. The back-to-live
+                      provider covers the active home. The back-to-live
                       button lives top-left next to the clock since both
-                      relate to "where am I in time". Sits at the same
-                      8 px edge margin as the clock and the timeline.  -->
+                      relate to "where am I in time". The shadow-busy
+                      indicator now rides the centre spinner-sun (which
+                      also shows during the initial weather fetch) so
+                      the user has a single, prominent loading signal
+                      instead of two competing spinners on opposite
+                      sides of the card. Sits at the same 8 px edge
+                      margin as the clock and the timeline.  -->
                 ${hasApiKey ? html`
                     <div class="overlay-top-right">
                         <button
@@ -3678,17 +3691,8 @@ export class HeliosCard extends LitElement
                             @click="${this._toggleLidarView}"
                         >
                             <ha-icon icon="mdi:dots-grid"></ha-icon>
-                            <span>LiDAR</span>
+                            <span class="lidar-view-btn-label">LiDAR</span>
                         </button>
-                        ${this._shadowBusy ? html`
-                            <div
-                                class="shadow-busy-chip"
-                                title="LiDAR"
-                                aria-label="LiDAR"
-                            >
-                                <ha-icon icon="mdi:weather-sunny" class="shadow-busy-sun"></ha-icon>
-                            </div>
-                        ` : nothing}
                     </div>
                 ` : nothing}
 
