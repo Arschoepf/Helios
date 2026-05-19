@@ -173,13 +173,16 @@ Helios/
 │   │       ├── pipeline.ts              Flood-fill + convex-hull pipeline (shared by every provider)
 │   │       ├── geotiff.ts               Float32 GeoTIFF fetch + DSM-DTM helpers
 │   │       ├── local-ndsm.ts            Generic BYO nDSM provider built from card config
-│   │       └── providers/               One file per country
+│   │       └── providers/               One file per country / region
 │   │           ├── fr.ts                IGN HD (metropolitan France + Corsica), BIL float32
 │   │           ├── uk.ts                Defra LiDAR Composite (England), GeoTIFF DSM + DTM
 │   │           ├── es.ts                IGN España PNOA-LiDAR MDSn (peninsular Spain), GeoTIFF
 │   │           ├── nl.ts                PDOK AHN4 (Netherlands), GeoTIFF DSM + DTM
 │   │           ├── no.ts                Kartverket NHM (Norway + Svalbard), ArcGIS Float32 GeoTIFF
-│   │           └── de-nrw.ts            Geobasis NRW nDOM (Nordrhein-Westfalen), GeoTIFF WCS
+│   │           ├── de-nrw.ts            Geobasis NRW nDOM (Nordrhein-Westfalen), GeoTIFF WCS
+│   │           ├── pl.ts                GUGiK NMPT (Poland), GeoTIFF WCS 2.0.1, EPSG:4326 native
+│   │           ├── ca.ts                NRCan HRDEM Mosaic (Canada), GeoTIFF WCS 1.1.1
+│   │           └── at-stmk.ts           Land Steiermark ALS (Styria, Austria), GeoTIFF WCS DSM + DGM
 │   ├── css/
 │   │   ├── helios-card-css.ts           Runtime card styles (map, chips, charts)
 │   │   └── helios-card-editor-css.ts    Editor + color-picker styles
@@ -489,13 +492,18 @@ diagnostic snapshot.
   [@stephenwq](https://github.com/stephenwq). Unlocks coverage
   in any region with raw LiDAR data available offline (initial
   use case: NSW Australia).
-* **`engine/lidar/providers/*.ts`**, one file per country.
-  France (BIL float32, single fetch), England / Netherlands /
-  Norway (GeoTIFF DSM + DTM, two fetches subtracted client-side),
-  Spain (GeoTIFF MDSn vegetation + buildings merged via MAX),
-  Germany-NRW (pre-computed nDOM, single fetch). Each provider
-  ends by handing a single height raster to `pipeline.ts` for
-  post-processing.
+* **`engine/lidar/providers/*.ts`**, one file per country / region.
+  Single-fetch normalised-raster providers (height-above-ground
+  natively): France (BIL float32), Germany-NRW (Geobasis nDOM),
+  Poland (GUGiK NMPT, EPSG:4326 native), Canada (NRCan HRDEM DSM
+  via WCS 1.1.1). Two-fetch DSM-minus-DTM providers: England /
+  Netherlands / Norway / Austria-Styria. MAX-merge provider:
+  Spain (PNOA MDSn vegetation + buildings). Each provider ends
+  by handing a single height raster to `pipeline.ts` for
+  post-processing. See [LIDAR_PROVIDERS.md](./LIDAR_PROVIDERS.md)
+  for the full worldwide registry, including verified-compatible
+  candidates pending integration and explicitly-incompatible
+  sources.
 
 ---
 
@@ -759,17 +767,18 @@ To publish a release:
   per-user rate limit, but the project is run by a single
   organisation; if their CDN goes down, the basemap stops loading
   for everyone. No commercial SLA is offered.
-* **LiDAR coverage**, six providers integrated today (France IGN
+* **LiDAR coverage**, nine providers integrated today (France IGN
   HD, England Defra, Spain IGN, Netherlands PDOK, Norway
-  Kartverket, Germany NRW). Out-of-coverage homes fall back to
+  Kartverket, Germany NRW, Poland GUGiK, Canada NRCan HRDEM,
+  Austria Steiermark). Out-of-coverage homes fall back to
   OpenFreeMap building footprints (buildings only, no vegetation),
   so the visual works worldwide but trees / hedges only cast
-  shadows in covered countries. Additional providers are on the
-  roadmap as national open-data APIs become available with a
-  CORS-friendly raw raster endpoint. Users in uncovered regions
-  with access to raw LiDAR data can host their own nDSM GeoTIFF
-  and have Helios use it as the shadow source via the BYO
-  `lidar-local-ndsm-*` config.
+  shadows in covered countries. The full registry of integrated
+  + verified compatible + incompatible providers worldwide lives
+  in [LIDAR_PROVIDERS.md](./LIDAR_PROVIDERS.md). Users in
+  uncovered regions with access to raw LiDAR data can host their
+  own nDSM GeoTIFF and have Helios use it as the shadow source
+  via the BYO `lidar-local-ndsm-*` config.
 * **WebGL contexts on long-lived dashboards**, browsers cap
   concurrent WebGL contexts at 8–16. Helios releases its context
   cleanly on every re-init via `WEBGL_lose_context`, but if you

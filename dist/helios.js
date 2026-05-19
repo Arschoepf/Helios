@@ -34181,7 +34181,7 @@ function maxRasters(a2, b2) {
   return out;
 }
 const DSM_URL = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-surface-model-last-return-dsm-1m-2022/wms";
-const DTM_URL$1 = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms";
+const DTM_URL$2 = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms";
 const DSM_LAYER = "Lidar_Composite_Elevation_LZ_DSM_1m";
 const DTM_LAYER = "Lidar_Composite_Elevation_DTM_1m";
 const UK_BBOX = { minLat: 49.7, maxLat: 56, minLon: -7.2, maxLon: 2.1 };
@@ -34224,7 +34224,7 @@ const englandLidarComposite = {
     };
     const [dsm, dtm] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(DSM_URL, DSM_LAYER), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DTM_URL$1, DTM_LAYER), rasterSize, opts.signal)
+      fetchFloat32GeoTiff(buildUrl(DTM_URL$2, DTM_LAYER), rasterSize, opts.signal)
     ]);
     if (!dsm || !dtm) return emptyResult();
     const heights = subtractRasters(dsm, dtm);
@@ -34240,7 +34240,7 @@ const englandLidarComposite = {
     });
   }
 };
-const WCS_URL$2 = "https://wcs-mds.idee.es/mds";
+const WCS_URL$4 = "https://wcs-mds.idee.es/mds";
 const COVERAGE_VEG = "mdsn_v025";
 const COVERAGE_BLD = "mdsn_e025";
 const ES_BBOX = { minLat: 35.8, maxLat: 44, minLon: -9.6, maxLon: 4.4 };
@@ -34276,7 +34276,7 @@ const spainPnoaLidar = {
         SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326",
         OUTPUTCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
       });
-      return `${WCS_URL$2}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
+      return `${WCS_URL$4}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
     };
     const [veg, bld] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(COVERAGE_VEG), rasterSize, opts.signal),
@@ -34296,7 +34296,7 @@ const spainPnoaLidar = {
     });
   }
 };
-const WCS_URL$1 = "https://service.pdok.nl/rws/ahn/wcs/v1_0";
+const WCS_URL$3 = "https://service.pdok.nl/rws/ahn/wcs/v1_0";
 const COVERAGE_DSM = "dsm_05m";
 const COVERAGE_DTM = "dtm_05m";
 const NL_BBOX = { minLat: 50.7, maxLat: 53.8, minLon: 3.1, maxLon: 7.3 };
@@ -34332,7 +34332,7 @@ const netherlandsAhn4 = {
         SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326",
         OUTPUTCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
       });
-      return `${WCS_URL$1}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
+      return `${WCS_URL$3}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
     };
     const [dsm, dtm] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(COVERAGE_DSM), rasterSize, opts.signal),
@@ -34352,8 +34352,8 @@ const netherlandsAhn4 = {
     });
   }
 };
-const DTM_URL = "https://hoydedata.no/arcgis/rest/services/DTM/ImageServer/exportImage";
-const DOM_URL = "https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage";
+const DTM_URL$1 = "https://hoydedata.no/arcgis/rest/services/DTM/ImageServer/exportImage";
+const DOM_URL$1 = "https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage";
 const NO_BBOX = { minLat: 57.5, maxLat: 81, minLon: 4, maxLon: 33 };
 const norwayKartverketNhm = {
   id: "no-kartverket-nhm",
@@ -34391,8 +34391,8 @@ const norwayKartverketNhm = {
       return `${base}?${params.toString()}`;
     };
     const [dom, dtm] = await Promise.all([
-      fetchFloat32GeoTiff(buildUrl(DOM_URL), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DTM_URL), rasterSize, opts.signal)
+      fetchFloat32GeoTiff(buildUrl(DOM_URL$1), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DTM_URL$1), rasterSize, opts.signal)
     ]);
     if (!dom || !dtm) return emptyResult();
     const cleanseNoData = (a2) => {
@@ -34414,8 +34414,8 @@ const norwayKartverketNhm = {
     });
   }
 };
-const WCS_URL = "https://www.wcs.nrw.de/geobasis/wcs_nw_ndom";
-const COVERAGE = "nw_ndom";
+const WCS_URL$2 = "https://www.wcs.nrw.de/geobasis/wcs_nw_ndom";
+const COVERAGE$3 = "nw_ndom";
 const NRW_BBOX = { minLat: 50.3, maxLat: 52.55, minLon: 5.85, maxLon: 9.5 };
 const nrwLidarNdom = {
   id: "de-nrw-ndom",
@@ -34443,7 +34443,7 @@ const nrwLidarNdom = {
       SERVICE: "WCS",
       VERSION: "2.0.1",
       REQUEST: "GetCoverage",
-      COVERAGEID: COVERAGE,
+      COVERAGEID: COVERAGE$3,
       FORMAT: "image/tiff",
       SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
     });
@@ -34451,11 +34451,184 @@ const nrwLidarNdom = {
     params.append("SUBSET", `Lat(${bbox.minLat},${bbox.maxLat})`);
     params.append("SCALESIZE", `Long(${rasterSize}),Lat(${rasterSize})`);
     const heights = await fetchFloat32GeoTiff(
+      `${WCS_URL$2}?${params.toString()}`,
+      rasterSize,
+      opts.signal
+    );
+    if (!heights) return emptyResult();
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
+const WCS_URL$1 = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMPT/GRID1/WCS/DigitalSurfaceModel";
+const COVERAGE$2 = "DSM_PL-EVRF2007-NH";
+const PL_BBOX = { minLat: 49, maxLat: 54.85, minLon: 14.1, maxLon: 24.2 };
+const polandGugikNmpt = {
+  id: "pl-gugik-nmpt",
+  name: "GUGiK NMPT (Poland)",
+  //GUGiK NMPT is published on a 1 m grid nationwide.
+  nativeCellPitchMeters: 1,
+  covers(lat, lon) {
+    return lat >= PL_BBOX.minLat && lat <= PL_BBOX.maxLat && lon >= PL_BBOX.minLon && lon <= PL_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < PL_BBOX.minLat || bbox.minLat > PL_BBOX.maxLat || bbox.maxLon < PL_BBOX.minLon || bbox.minLon > PL_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const params = new URLSearchParams({
+      SERVICE: "WCS",
+      VERSION: "2.0.1",
+      REQUEST: "GetCoverage",
+      COVERAGEID: COVERAGE$2,
+      FORMAT: "image/tiff",
+      SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
+    });
+    params.append("SUBSET", `Long(${bbox.minLon},${bbox.maxLon})`);
+    params.append("SUBSET", `Lat(${bbox.minLat},${bbox.maxLat})`);
+    params.append("SCALESIZE", `Long(${rasterSize}),Lat(${rasterSize})`);
+    const heights = await fetchFloat32GeoTiff(
+      `${WCS_URL$1}?${params.toString()}`,
+      rasterSize,
+      opts.signal
+    );
+    if (!heights) return emptyResult();
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
+const WCS_URL = "https://datacube.services.geo.ca/ows/elevation";
+const COVERAGE$1 = "dsm";
+const CA_BBOX = { minLat: 41.5, maxLat: 84, minLon: -141.5, maxLon: -52 };
+const canadaHrdem = {
+  id: "ca-nrcan-hrdem",
+  name: "NRCan HRDEM (Canada)",
+  //HRDEM is 1 m where LiDAR-derived (most populated south), 2 m in
+  //the rest of the country. We declare 1 m as the native pitch so
+  //high-precision requests don't downsample on the upstream where
+  //the source is finer.
+  nativeCellPitchMeters: 1,
+  covers(lat, lon) {
+    return lat >= CA_BBOX.minLat && lat <= CA_BBOX.maxLat && lon >= CA_BBOX.minLon && lon <= CA_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < CA_BBOX.minLat || bbox.minLat > CA_BBOX.maxLat || bbox.maxLon < CA_BBOX.minLon || bbox.minLon > CA_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const deltaLon = (bbox.maxLon - bbox.minLon) / rasterSize;
+    const deltaLat = (bbox.maxLat - bbox.minLat) / rasterSize;
+    const params = new URLSearchParams({
+      SERVICE: "WCS",
+      VERSION: "1.1.1",
+      REQUEST: "GetCoverage",
+      IDENTIFIER: COVERAGE$1,
+      FORMAT: "image/tiff",
+      BOUNDINGBOX: `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat},urn:ogc:def:crs:EPSG::4326`,
+      GRIDBASECRS: "urn:ogc:def:crs:EPSG::4326",
+      GRIDCS: "urn:ogc:def:cs:OGC:0.0:Grid2dSquareCS",
+      GRIDTYPE: "urn:ogc:def:method:WCS:1.1:2dSimpleGrid",
+      GRIDORIGIN: `${bbox.minLon} ${bbox.maxLat}`,
+      GRIDOFFSETS: `${deltaLon} ${-deltaLat}`
+    });
+    const heights = await fetchFloat32GeoTiff(
       `${WCS_URL}?${params.toString()}`,
       rasterSize,
       opts.signal
     );
     if (!heights) return emptyResult();
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
+const DOM_URL = "https://gis.stmk.gv.at/arcgis/services/OGD/ALSHoeheninformation_1m_UTM33N/MapServer/WCSServer";
+const DTM_URL = "https://gis.stmk.gv.at/arcgis/services/OGD/ALSGelaendeinformation_1m_UTM33N/MapServer/WCSServer";
+const COVERAGE = "Coverage4";
+const AT_STMK_BBOX = { minLat: 46.55, maxLat: 47.85, minLon: 13.5, maxLon: 16.2 };
+const austriaSteiermarkAls = {
+  id: "at-stmk-als",
+  name: "Land Steiermark ALS (Styria, Austria)",
+  //ALS Höhen-/Geländeinformation are published on a 1 m grid.
+  nativeCellPitchMeters: 1,
+  covers(lat, lon) {
+    return lat >= AT_STMK_BBOX.minLat && lat <= AT_STMK_BBOX.maxLat && lon >= AT_STMK_BBOX.minLon && lon <= AT_STMK_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < AT_STMK_BBOX.minLat || bbox.minLat > AT_STMK_BBOX.maxLat || bbox.maxLon < AT_STMK_BBOX.minLon || bbox.minLon > AT_STMK_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const buildUrl = (base) => {
+      const params = new URLSearchParams({
+        SERVICE: "WCS",
+        VERSION: "2.0.1",
+        REQUEST: "GetCoverage",
+        COVERAGEID: COVERAGE,
+        FORMAT: "image/tiff",
+        SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
+      });
+      params.append("SUBSET", `Lat(${bbox.minLat},${bbox.maxLat})`);
+      params.append("SUBSET", `Long(${bbox.minLon},${bbox.maxLon})`);
+      params.append("SCALESIZE", `Lat(${rasterSize}),Long(${rasterSize})`);
+      return `${base}?${params.toString()}`;
+    };
+    const [dom, dtm] = await Promise.all([
+      fetchFloat32GeoTiff(buildUrl(DOM_URL), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DTM_URL), rasterSize, opts.signal)
+    ]);
+    if (!dom || !dtm) return emptyResult();
+    const heights = subtractRasters(dom, dtm);
     return processHeightRaster(heights, {
       rasterSize,
       minLat: bbox.minLat,
@@ -34532,11 +34705,14 @@ function createLocalNdsmSource(cfg) {
 }
 const LIDAR_SOURCES = [
   franceLidarHd,
+  nrwLidarNdom,
+  polandGugikNmpt,
+  canadaHrdem,
   englandLidarComposite,
   spainPnoaLidar,
   netherlandsAhn4,
   norwayKartverketNhm,
-  nrwLidarNdom
+  austriaSteiermarkAls
 ];
 function findLidarSource(lat, lon) {
   for (const src of LIDAR_SOURCES) {
@@ -40651,7 +40827,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-beta.5"}`,
+      `%c☀ HELIOS%c v${"1.6.0-beta.6"}`,
       labelStyle,
       versionStyle
     );
@@ -40675,7 +40851,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-beta.5",
+        version: "1.6.0-beta.6",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40683,7 +40859,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-beta.5"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-beta.6"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

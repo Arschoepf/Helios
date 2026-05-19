@@ -98,12 +98,15 @@ export interface LidarShadowFetchOptions
     signal?:                  AbortSignal;
 }
 
-import { franceLidarHd }       from './lidar/providers/fr';
-import { englandLidarComposite } from './lidar/providers/uk';
-import { spainPnoaLidar }       from './lidar/providers/es';
-import { netherlandsAhn4 }      from './lidar/providers/nl';
-import { norwayKartverketNhm }  from './lidar/providers/no';
-import { nrwLidarNdom }         from './lidar/providers/de-nrw';
+import { franceLidarHd }          from './lidar/providers/fr';
+import { englandLidarComposite }   from './lidar/providers/uk';
+import { spainPnoaLidar }          from './lidar/providers/es';
+import { netherlandsAhn4 }         from './lidar/providers/nl';
+import { norwayKartverketNhm }     from './lidar/providers/no';
+import { nrwLidarNdom }            from './lidar/providers/de-nrw';
+import { polandGugikNmpt }         from './lidar/providers/pl';
+import { canadaHrdem }             from './lidar/providers/ca';
+import { austriaSteiermarkAls }    from './lidar/providers/at-stmk';
 import {
     createLocalNdsmSource,
     type LocalNdsmConfig
@@ -112,17 +115,20 @@ import type { HeliosConfig } from '../helios-config';
 
 //Registered providers, ordered by preference. The first provider
 //whose covers() probe accepts the home position wins. Bbox checks
-//are non-overlapping today (one country per provider) but the
-//ordering is conservative: France first because that's the only
-//provider with a single-fetch normalised raster (BIL float32, no
-//GeoTIFF parse, no DSM-DTM subtraction round-trip).
+//are non-overlapping today (one country / region per provider) but
+//the ordering is conservative: single-fetch normalised-raster
+//providers come first because they skip the DSM-DTM subtraction
+//round-trip (France BIL, NRW nDOM, Poland NMPT, Canada HRDEM DSM).
 export const LIDAR_SOURCES: LidarSource[] = [
     franceLidarHd,
+    nrwLidarNdom,
+    polandGugikNmpt,
+    canadaHrdem,
     englandLidarComposite,
     spainPnoaLidar,
     netherlandsAhn4,
     norwayKartverketNhm,
-    nrwLidarNdom
+    austriaSteiermarkAls
 ];
 
 export function findLidarSource(lat: number, lon: number): LidarSource | null

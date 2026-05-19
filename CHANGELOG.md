@@ -86,6 +86,24 @@ polish.
   nDOM raster via WCS GeoTIFF, covering Nordrhein-Westfalen
   (~18M people). Single fetch, routes through the same shared
   pipeline as every other provider.
+* **Poland (GUGiK NMPT) provider**. National pre-computed DSM via
+  WCS 2.0.1, GeoTIFF Float32, EPSG:4326 natively supported (no
+  reprojection round-trip). ~38M people. Single fetch.
+* **Canada (NRCan HRDEM Mosaic) provider**. National DSM coverage
+  via GeoServer WCS 1.1.1. 1-2 m LiDAR-derived in the populated
+  south, satellite-derived further north. ~38M people. Single
+  fetch.
+* **Austria, Styria (Steiermark) provider**. Two-fetch DSM-DTM
+  subtraction from the Land Steiermark ALS Höhen-
+  / Geländeinformation WCS services. ~1.2M people. First
+  Austrian Land integrated, opens the door to the eight others.
+* **Worldwide LiDAR provider registry**. New
+  [`LIDAR_PROVIDERS.md`](./LIDAR_PROVIDERS.md) lists every public
+  elevation / LiDAR source we have inspected (integrated,
+  verified compatible but pending, partially compatible,
+  incompatible) with status, endpoint, example fetch URL ready to
+  paste in a browser, and a compatibility checklist for adding
+  new countries.
 * **BYO local nDSM provider**. New `lidar-local-ndsm-*` config
   family lets users in regions without a built-in provider host
   their own height-above-ground GeoTIFF and have Helios use it as

@@ -184,7 +184,15 @@ LiDAR coverage today:
 | Spain | **IGN España PNOA-LiDAR (MDSn)** | Peninsular Spain + Balearics | GeoTIFF float32 | Two coverages (vegetation + buildings), merged via MAX. Canarias not covered |
 | Netherlands | **PDOK AHN4** | Mainland NL | GeoTIFF float32 | Two coverages (DSM + DTM), subtracted client-side. Caribbean Netherlands not covered |
 | Norway | **Kartverket NHM** | Mainland Norway + Svalbard | GeoTIFF float32 (ArcGIS) | Two services (DOM + DTM), subtracted client-side |
-| Germany (NRW) | **Geobasis NRW nDOM** | Nordrhein-Westfalen (~18M people) | GeoTIFF float32 (WCS) | Pre-computed nDOM, single fetch. Other German Länder not yet covered |
+| Germany (NRW) | **Geobasis NRW nDOM** | Nordrhein-Westfalen (~18M people) | GeoTIFF float32 (WCS) | Pre-computed nDOM, single fetch |
+| Poland | **GUGiK NMPT** | All of Poland (~38M people) | GeoTIFF float32 (WCS 2.0.1) | Pre-computed national DSM, single fetch, EPSG:4326 natively supported |
+| Canada | **NRCan HRDEM Mosaic** | National (1-2 m LiDAR in the south, satellite-derived in the far north) | GeoTIFF float32 (WCS 1.1.1) | Pre-computed DSM coverage, single fetch |
+| Austria (Styria) | **Land Steiermark ALS** | Styria (Steiermark, ~1.2M people) | GeoTIFF float32 (WCS 2.0.1) | Two fetches (DOM + DGM), subtracted client-side |
+
+A comprehensive registry of every public LiDAR/elevation API we've
+inspected (integrated, verified compatible but pending, or
+incompatible) lives in [LIDAR_PROVIDERS.md](./LIDAR_PROVIDERS.md),
+including example GetCoverage URLs ready to paste in a browser.
 
 Other national LiDAR programmes were probed and not yet integrated:
 
@@ -278,7 +286,7 @@ Source layout:
 | `src/engine/lidar/pipeline.ts`    | Shared flood-fill + convex-hull pipeline |
 | `src/engine/lidar/geotiff.ts`     | Float32 GeoTIFF fetch + DSM-DTM math helpers |
 | `src/engine/lidar/local-ndsm.ts`  | Generic BYO nDSM provider built from card config |
-| `src/engine/lidar/providers/`     | One file per country: `fr.ts`, `uk.ts`, `es.ts`, `nl.ts`, `no.ts`, `de-nrw.ts` |
+| `src/engine/lidar/providers/`     | One file per country / region: `fr.ts`, `uk.ts`, `es.ts`, `nl.ts`, `no.ts`, `de-nrw.ts`, `pl.ts`, `ca.ts`, `at-stmk.ts` |
 | `src/css/`                        | Card + editor style literals |
 | `src/i18n/`                       | 8-locale strict-typed translations (en/fr/de/es/it/nl/pt/no) |
 | `tools/`                          | Python helper scripts for local data preparation workflows |
