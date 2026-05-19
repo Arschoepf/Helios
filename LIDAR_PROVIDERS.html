@@ -241,34 +241,43 @@
     font-size: 12px;
   }
 
-  /*  Helios brand banner. Full-width strip in a near-black tone
-      that contrasts with the rest of the light page chrome, with
-      the icon sitting on the left of the H1 so the registry feels
-      like part of the project rather than a generic doc.          */
+  /*  Helios brand banner. True full-viewport-width strip in a near-
+      black tone that contrasts with the rest of the light page
+      chrome. Lives OUTSIDE <main> so it stretches edge-to-edge on
+      wide screens. Icon preserves its native 2:1 aspect ratio
+      (1280×640 source) so it doesn't get squashed into a square.   */
   .brand
   {
     background: linear-gradient(135deg, #1a1d24 0%, #2a2f3a 100%);
     color: #ffffff;
-    padding: 22px 28px;
-    margin: -40px -28px 32px;
+    padding: 24px 28px;
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 22px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .brand-inner
+  {
+    max-width: 1240px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 22px;
   }
   .brand-icon
   {
-    width: 56px;
-    height: 56px;
+    height: 64px;
+    width: auto;            /*  let the 2:1 aspect ratio breathe.    */
     flex: 0 0 auto;
     display: block;
-    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35));
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.45));
   }
   .brand-text
   {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
   }
   .brand-text h1
   {
@@ -276,6 +285,7 @@
     color: #ffffff;
     font-size: 26px;
     letter-spacing: -0.4px;
+    line-height: 1.15;
   }
   .brand-text .brand-sub
   {
@@ -295,15 +305,18 @@
 </style>
 </head>
 <body>
-<main>
 
 <div class="brand">
-  <img class="brand-icon" src="images/helios_icon.png" alt="Helios" />
-  <div class="brand-text">
-    <h1>LiDAR provider registry</h1>
-    <span class="brand-sub">Helios , real-time solar exposure for Home Assistant</span>
+  <div class="brand-inner">
+    <img class="brand-icon" src="images/helios_icon.png" alt="Helios" />
+    <div class="brand-text">
+      <h1>LiDAR provider registry</h1>
+      <span class="brand-sub">Helios , real-time solar exposure for Home Assistant</span>
+    </div>
   </div>
 </div>
+
+<main>
 <p class="lede">Every public elevation / LiDAR data source we have
 inspected for <a href="https://github.com/ReikanYsora/Helios">Helios</a>,
 with status, endpoint, an example fetch URL ready to paste in a
@@ -319,9 +332,13 @@ browser, and a worldwide map of the integrated providers' coverage.</p>
 </div>
 
 
-<h2>Coverage map</h2>
-<p>Bounding boxes of every integrated provider, plotted on an
-equirectangular world map. Hover a rectangle for the provider name.</p>
+<h2>Where Helios sees real LiDAR shadows</h2>
+<p>The green rectangles on the map below show the bounding box of
+each LiDAR provider that Helios ships with natively. If your home
+sits inside one of them, your card paints cast shadows from real
+buildings AND vegetation captured by aerial LiDAR; outside, it
+falls back to OpenFreeMap building footprints (buildings only, no
+trees). Hover any rectangle to see which provider covers it.</p>
 
 <div class="map-wrap">
 <svg class="world-map" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
