@@ -1380,14 +1380,12 @@ export class HeliosCardEditor extends LitElement
                 <details class="advanced-section" ?open="${this._openSection === 'reset'}" @toggle="${(e: Event) => this._onSectionToggle('reset', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.resetSection}</summary>
                     <div class="hint">${t.editor.resetSectionHint}</div>
-                    <div class="reset-row">
-                        <button
-                            type="button"
-                            class="reset-btn"
-                            @click="${() => this._onResetCacheClick()}"
-                        >${this._resetFeedback ?? t.editor.resetCacheButton}</button>
-                        <div class="reset-warning">${t.editor.resetCacheWarning}</div>
-                    </div>
+                    <div class="hint reset-warning">${t.editor.resetCacheWarning}</div>
+                    <button
+                        type="button"
+                        class="reset-btn"
+                        @click="${() => this._onResetCacheClick()}"
+                    >${this._resetFeedback ?? t.editor.resetCacheButton}</button>
                 </details>
 
             </div>

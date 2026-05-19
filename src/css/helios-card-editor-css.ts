@@ -493,18 +493,22 @@ export const editorStyles = css`
         outline-offset: 2px;
     }
 
-    /*  Reset section: a single button + a destructive-action
-        warning sat side by side. The button is in destructive
-        red so users read it as "this empties data" without
-        relying on the label alone; the warning text is the
-        full explanation of what gets wiped and what doesn't. */
-    .reset-row
+    /*  Reset section: warning text stacked ABOVE the button so the
+        user reads the destructive-action explanation before
+        reaching the click target. The button itself is
+        right-aligned (display:block + margin-left:auto), matching
+        the +Add row affordance pattern used in the PV arrays
+        section so the editor's bottom-of-section action buttons
+        all live in the same screen position. Destructive red
+        border + label so the colour reinforces the "this empties
+        data" message even at a glance. */
+    .reset-warning
     {
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-        flex-wrap: wrap;
-        margin-top: 8px;
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--secondary-text-color, #5f6368);
+        opacity: 0.85;
+        margin-bottom: 8px;
     }
     .reset-btn
     {
@@ -512,12 +516,15 @@ export const editorStyles = css`
         border: 1px solid #ef4444;
         color: #ef4444;
         border-radius: 4px;
-        padding: 6px 12px;
+        padding: 4px 10px;
         font-size: 12px;
         font-weight: 600;
         font-family: inherit;
         cursor: pointer;
-        flex: 0 0 auto;
+        display: block;
+        margin-left: auto;
+        margin-top: 8px;
+        width: fit-content;
     }
     .reset-btn:hover
     {
@@ -527,13 +534,5 @@ export const editorStyles = css`
     {
         outline: 2px solid #ef4444;
         outline-offset: 2px;
-    }
-    .reset-warning
-    {
-        flex: 1 1 200px;
-        font-size: 11px;
-        line-height: 1.4;
-        color: var(--secondary-text-color, #5f6368);
-        opacity: 0.85;
     }
 `;

@@ -2671,6 +2671,27 @@ export class HeliosEngine
             }
         }
 
+        //Marker glyph: inline SVG of the MDI solar-panel icon, sized
+        //and coloured to match the configured PV palette. A
+        //surrounding white halo (drop-shadow) keeps the icon
+        //legible on dark basemaps without the heavier "pin" chrome
+        //that the default MapLibre Marker draws.
+        const buildMarkerEl = (color: string): HTMLDivElement =>
+        {
+            const el = document.createElement('div');
+            el.className = 'helios-pv-array-marker';
+            el.style.cssText =
+                'width:24px;height:24px;display:flex;'
+              + 'align-items:center;justify-content:center;'
+              + 'pointer-events:none;'
+              + 'filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));';
+            el.innerHTML =
+                `<svg viewBox="0 0 24 24" width="24" height="24" fill="${color}" aria-hidden="true">`
+              + '<path d="M20 4H4C2.9 4 2 4.9 2 6V20H4V18H20V20H22V6C22 4.9 21.1 4 20 4M4 6H20V8H4V6M4 10H20V12H4V10M4 14H20V16H4V14Z"/>'
+              + '</svg>';
+            return el;
+        };
+
         //Reconcile against existing markers. Simplest approach for
         //a list capped at PV_ARRAYS_MAX (6): tear down and rebuild
         //when the lengths differ; otherwise just update positions
@@ -2682,15 +2703,7 @@ export class HeliosEngine
             this._pvArrayMarkers = [];
             for (const p of positions)
             {
-                const el = document.createElement('div');
-                el.className = 'helios-pv-array-marker';
-                el.style.cssText =
-                    'width:14px;height:14px;border-radius:50%;'
-                  + `background:${pvHex};`
-                  + 'border:2px solid #ffffff;'
-                  + 'box-shadow:0 2px 6px rgba(0,0,0,0.35);'
-                  + 'pointer-events:none;';
-                const marker = new maplibregl.Marker({ element: el })
+                const marker = new maplibregl.Marker({ element: buildMarkerEl(pvHex) })
                     .setLngLat([p.lon, p.lat])
                     .addTo(this.map);
                 this._pvArrayMarkers.push(marker);
@@ -2702,9 +2715,12 @@ export class HeliosEngine
             {
                 this._pvArrayMarkers[i].setLngLat([positions[i].lon, positions[i].lat]);
                 //Colour might have changed via the PV colour picker
-                //even if the position list didn't.
+                //even if the position list didn't. Re-paint the SVG
+                //fill rather than rebuilding the element so MapLibre
+                //doesn't have to re-anchor the marker.
                 const el = this._pvArrayMarkers[i].getElement();
-                if (el) el.style.background = pvHex;
+                const svgPath = el?.querySelector('svg path');
+                if (svgPath) svgPath.parentElement?.setAttribute('fill', pvHex);
             }
         }
     }

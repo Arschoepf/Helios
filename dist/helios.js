@@ -36766,21 +36766,26 @@ const _HeliosEngine = class _HeliosEngine {
         positions.push({ lat, lon });
       }
     }
+    const buildMarkerEl = (color) => {
+      const el = document.createElement("div");
+      el.className = "helios-pv-array-marker";
+      el.style.cssText = "width:24px;height:24px;display:flex;align-items:center;justify-content:center;pointer-events:none;filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));";
+      el.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="${color}" aria-hidden="true"><path d="M20 4H4C2.9 4 2 4.9 2 6V20H4V18H20V20H22V6C22 4.9 21.1 4 20 4M4 6H20V8H4V6M4 10H20V12H4V10M4 14H20V16H4V14Z"/></svg>`;
+      return el;
+    };
     if (this._pvArrayMarkers.length !== positions.length) {
       for (const m2 of this._pvArrayMarkers) m2.remove();
       this._pvArrayMarkers = [];
       for (const p2 of positions) {
-        const el = document.createElement("div");
-        el.className = "helios-pv-array-marker";
-        el.style.cssText = `width:14px;height:14px;border-radius:50%;background:${pvHex};border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.35);pointer-events:none;`;
-        const marker = new maplibregl.Marker({ element: el }).setLngLat([p2.lon, p2.lat]).addTo(this.map);
+        const marker = new maplibregl.Marker({ element: buildMarkerEl(pvHex) }).setLngLat([p2.lon, p2.lat]).addTo(this.map);
         this._pvArrayMarkers.push(marker);
       }
     } else {
       for (let i2 = 0; i2 < positions.length; i2++) {
         this._pvArrayMarkers[i2].setLngLat([positions[i2].lon, positions[i2].lat]);
         const el = this._pvArrayMarkers[i2].getElement();
-        if (el) el.style.background = pvHex;
+        const svgPath = el?.querySelector("svg path");
+        if (svgPath) svgPath.parentElement?.setAttribute("fill", pvHex);
       }
     }
   }
@@ -39320,18 +39325,22 @@ const editorStyles = i$3`
         outline-offset: 2px;
     }
 
-    /*  Reset section: a single button + a destructive-action
-        warning sat side by side. The button is in destructive
-        red so users read it as "this empties data" without
-        relying on the label alone; the warning text is the
-        full explanation of what gets wiped and what doesn't. */
-    .reset-row
+    /*  Reset section: warning text stacked ABOVE the button so the
+        user reads the destructive-action explanation before
+        reaching the click target. The button itself is
+        right-aligned (display:block + margin-left:auto), matching
+        the +Add row affordance pattern used in the PV arrays
+        section so the editor's bottom-of-section action buttons
+        all live in the same screen position. Destructive red
+        border + label so the colour reinforces the "this empties
+        data" message even at a glance. */
+    .reset-warning
     {
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-        flex-wrap: wrap;
-        margin-top: 8px;
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--secondary-text-color, #5f6368);
+        opacity: 0.85;
+        margin-bottom: 8px;
     }
     .reset-btn
     {
@@ -39339,12 +39348,15 @@ const editorStyles = i$3`
         border: 1px solid #ef4444;
         color: #ef4444;
         border-radius: 4px;
-        padding: 6px 12px;
+        padding: 4px 10px;
         font-size: 12px;
         font-weight: 600;
         font-family: inherit;
         cursor: pointer;
-        flex: 0 0 auto;
+        display: block;
+        margin-left: auto;
+        margin-top: 8px;
+        width: fit-content;
     }
     .reset-btn:hover
     {
@@ -39354,14 +39366,6 @@ const editorStyles = i$3`
     {
         outline: 2px solid #ef4444;
         outline-offset: 2px;
-    }
-    .reset-warning
-    {
-        flex: 1 1 200px;
-        font-size: 11px;
-        line-height: 1.4;
-        color: var(--secondary-text-color, #5f6368);
-        opacity: 0.85;
     }
 `;
 var __defProp$1 = Object.defineProperty;
@@ -40566,14 +40570,12 @@ let HeliosCardEditor = class extends i {
                 <details class="advanced-section" ?open="${this._openSection === "reset"}" @toggle="${(e2) => this._onSectionToggle("reset", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.resetSection}</summary>
                     <div class="hint">${t2.editor.resetSectionHint}</div>
-                    <div class="reset-row">
-                        <button
-                            type="button"
-                            class="reset-btn"
-                            @click="${() => this._onResetCacheClick()}"
-                        >${this._resetFeedback ?? t2.editor.resetCacheButton}</button>
-                        <div class="reset-warning">${t2.editor.resetCacheWarning}</div>
-                    </div>
+                    <div class="hint reset-warning">${t2.editor.resetCacheWarning}</div>
+                    <button
+                        type="button"
+                        class="reset-btn"
+                        @click="${() => this._onResetCacheClick()}"
+                    >${this._resetFeedback ?? t2.editor.resetCacheButton}</button>
                 </details>
 
             </div>
@@ -40648,7 +40650,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-beta.2"}`,
+      `%c☀ HELIOS%c v${"1.6.0-beta.3"}`,
       labelStyle,
       versionStyle
     );
@@ -40672,7 +40674,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-beta.2",
+        version: "1.6.0-beta.3",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40680,7 +40682,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-beta.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-beta.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
