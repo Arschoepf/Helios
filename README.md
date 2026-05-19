@@ -188,6 +188,10 @@ LiDAR coverage today:
 | Poland | **GUGiK NMPT** | All of Poland (~38M people) | GeoTIFF float32 (WCS 2.0.1) | Pre-computed national DSM, single fetch, EPSG:4326 natively supported |
 | Canada | **NRCan HRDEM Mosaic** | National (1-2 m LiDAR in the south, satellite-derived in the far north) | GeoTIFF float32 (WCS 1.1.1) | Pre-computed DSM coverage, single fetch |
 | Austria (Styria) | **Land Steiermark ALS** | Styria (Steiermark, ~1.2M people) | GeoTIFF float32 (WCS 2.0.1) | Two fetches (DOM + DGM), subtracted client-side |
+| Austria (Tirol) | **Land Tirol ALS** | Tirol (~760K people) | GeoTIFF float32 (WCS 2.0.1) | Two fetches (DOM + DGM) at 5 m, subtracted client-side |
+| Germany (Baden-Württemberg) | **LGL INSPIRE DOM5 + DGM1** | Baden-Württemberg (~11.3M people) | GeoTIFF float32 (WCS 2.0.1) | Two INSPIRE coverages (DOM 5 m + DGM 1 m), subtracted client-side |
+| Germany (Brandenburg + Berlin) | **LGB bDOM + DGM** | Brandenburg + Berlin (~6.1M people) | GeoTIFF float32 (WCS 2.0.1) | Two fetches (image-based DOM + DGM), subtracted client-side |
+| United States (Vermont) | **VCGI nDSM** | Vermont (~645K people) | Float32 GeoTIFF (ArcGIS exportImage) | Pre-normalised nDSM, single fetch, no DSM-DTM round-trip |
 
 A comprehensive registry of every public LiDAR/elevation API we've
 inspected (integrated, verified compatible but pending, or
@@ -286,7 +290,7 @@ Source layout:
 | `src/engine/lidar/pipeline.ts`    | Shared flood-fill + convex-hull pipeline |
 | `src/engine/lidar/geotiff.ts`     | Float32 GeoTIFF fetch + DSM-DTM math helpers |
 | `src/engine/lidar/local-ndsm.ts`  | Generic BYO nDSM provider built from card config |
-| `src/engine/lidar/providers/`     | One file per country / region: `fr.ts`, `uk.ts`, `es.ts`, `nl.ts`, `no.ts`, `de-nrw.ts`, `pl.ts`, `ca.ts`, `at-stmk.ts` |
+| `src/engine/lidar/providers/`     | One file per country / region: `fr.ts`, `uk.ts`, `es.ts`, `nl.ts`, `no.ts`, `de-nrw.ts`, `pl.ts`, `ca.ts`, `at-stmk.ts`, `de-bb-be.ts`, `de-bw.ts`, `at-tirol.ts`, `us-vt.ts` |
 | `src/css/`                        | Card + editor style literals |
 | `src/i18n/`                       | 8-locale strict-typed translations (en/fr/de/es/it/nl/pt/no) |
 | `tools/`                          | Python helper scripts for local data preparation workflows |

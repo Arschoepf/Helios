@@ -182,7 +182,11 @@ Helios/
 │   │           ├── de-nrw.ts            Geobasis NRW nDOM (Nordrhein-Westfalen), GeoTIFF WCS
 │   │           ├── pl.ts                GUGiK NMPT (Poland), GeoTIFF WCS 2.0.1, EPSG:4326 native
 │   │           ├── ca.ts                NRCan HRDEM Mosaic (Canada), GeoTIFF WCS 1.1.1
-│   │           └── at-stmk.ts           Land Steiermark ALS (Styria, Austria), GeoTIFF WCS DSM + DGM
+│   │           ├── at-stmk.ts           Land Steiermark ALS (Styria, Austria), GeoTIFF WCS DSM + DGM
+│   │           ├── at-tirol.ts          Land Tirol ALS (Tyrol, Austria), GeoTIFF WCS DSM + DGM 5 m
+│   │           ├── de-bb-be.ts          LGB bDOM + DGM (Brandenburg + Berlin), GeoTIFF WCS 2.0.1
+│   │           ├── de-bw.ts             LGL INSPIRE DOM5 + DGM1 (Baden-Württemberg), GeoTIFF WCS 2.0.1
+│   │           └── us-vt.ts             VCGI nDSM (Vermont, USA), Float32 via ArcGIS exportImage
 │   ├── css/
 │   │   ├── helios-card-css.ts           Runtime card styles (map, chips, charts)
 │   │   └── helios-card-editor-css.ts    Editor + color-picker styles
@@ -767,10 +771,12 @@ To publish a release:
   per-user rate limit, but the project is run by a single
   organisation; if their CDN goes down, the basemap stops loading
   for everyone. No commercial SLA is offered.
-* **LiDAR coverage**, nine providers integrated today (France IGN
-  HD, England Defra, Spain IGN, Netherlands PDOK, Norway
+* **LiDAR coverage**, thirteen providers integrated today (France
+  IGN HD, England Defra, Spain IGN, Netherlands PDOK, Norway
   Kartverket, Germany NRW, Poland GUGiK, Canada NRCan HRDEM,
-  Austria Steiermark). Out-of-coverage homes fall back to
+  Austria Steiermark + Tirol, Germany Brandenburg + Berlin LGB,
+  Germany Baden-Württemberg LGL, USA Vermont VCGI).
+  Out-of-coverage homes fall back to
   OpenFreeMap building footprints (buildings only, no vegetation),
   so the visual works worldwide but trees / hedges only cast
   shadows in covered countries. The full registry of integrated

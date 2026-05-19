@@ -98,15 +98,19 @@ export interface LidarShadowFetchOptions
     signal?:                  AbortSignal;
 }
 
-import { franceLidarHd }          from './lidar/providers/fr';
-import { englandLidarComposite }   from './lidar/providers/uk';
-import { spainPnoaLidar }          from './lidar/providers/es';
-import { netherlandsAhn4 }         from './lidar/providers/nl';
-import { norwayKartverketNhm }     from './lidar/providers/no';
-import { nrwLidarNdom }            from './lidar/providers/de-nrw';
-import { polandGugikNmpt }         from './lidar/providers/pl';
-import { canadaHrdem }             from './lidar/providers/ca';
-import { austriaSteiermarkAls }    from './lidar/providers/at-stmk';
+import { franceLidarHd }              from './lidar/providers/fr';
+import { englandLidarComposite }       from './lidar/providers/uk';
+import { spainPnoaLidar }              from './lidar/providers/es';
+import { netherlandsAhn4 }             from './lidar/providers/nl';
+import { norwayKartverketNhm }         from './lidar/providers/no';
+import { nrwLidarNdom }                from './lidar/providers/de-nrw';
+import { polandGugikNmpt }             from './lidar/providers/pl';
+import { canadaHrdem }                 from './lidar/providers/ca';
+import { austriaSteiermarkAls }        from './lidar/providers/at-stmk';
+import { brandenburgBerlinDom }        from './lidar/providers/de-bb-be';
+import { badenWurttembergLgl }         from './lidar/providers/de-bw';
+import { austriaTirolAls }             from './lidar/providers/at-tirol';
+import { vermontVcgiNdsm }             from './lidar/providers/us-vt';
 import {
     createLocalNdsmSource,
     type LocalNdsmConfig
@@ -117,18 +121,23 @@ import type { HeliosConfig } from '../helios-config';
 //whose covers() probe accepts the home position wins. Bbox checks
 //are non-overlapping today (one country / region per provider) but
 //the ordering is conservative: single-fetch normalised-raster
-//providers come first because they skip the DSM-DTM subtraction
-//round-trip (France BIL, NRW nDOM, Poland NMPT, Canada HRDEM DSM).
+//providers come first (France BIL, NRW nDOM, Poland NMPT, Canada
+//HRDEM DSM, Vermont nDSM) because they skip the DSM-DTM
+//subtraction round-trip. DSM-DTM subtraction providers follow.
 export const LIDAR_SOURCES: LidarSource[] = [
     franceLidarHd,
     nrwLidarNdom,
     polandGugikNmpt,
     canadaHrdem,
+    vermontVcgiNdsm,
     englandLidarComposite,
     spainPnoaLidar,
     netherlandsAhn4,
     norwayKartverketNhm,
-    austriaSteiermarkAls
+    brandenburgBerlinDom,
+    badenWurttembergLgl,
+    austriaSteiermarkAls,
+    austriaTirolAls
 ];
 
 export function findLidarSource(lat: number, lon: number): LidarSource | null

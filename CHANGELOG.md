@@ -97,6 +97,20 @@ polish.
   subtraction from the Land Steiermark ALS Höhen-
   / Geländeinformation WCS services. ~1.2M people. First
   Austrian Land integrated, opens the door to the eight others.
+* **Austria, Tirol (Tyrol) provider**. Two-fetch DSM-DTM
+  subtraction from the Land Tirol terrain WCS (DGM + DOM 5 m).
+  ~760K people.
+* **Germany, Brandenburg + Berlin provider**. LGB bDOM + DGM
+  1 m WCS, two fetches subtracted client-side. Single integration
+  covers both Lands (Brandenburg ~2.5M + Berlin ~3.6M = ~6.1M
+  people).
+* **Germany, Baden-Württemberg provider**. LGL INSPIRE DOM5 +
+  DGM1 WCS, two fetches subtracted client-side. ~11.3M people,
+  Germany's third most populous Land.
+* **United States, Vermont provider**. VCGI statewide
+  pre-normalised nDSM via ArcGIS Image Server exportImage,
+  single-fetch Float32 GeoTIFF, no DSM-DTM round-trip. ~645K
+  people. First US-state native provider in Helios.
 * **Worldwide LiDAR provider registry**. New
   [`LIDAR_PROVIDERS.md`](./LIDAR_PROVIDERS.md) lists every public
   elevation / LiDAR source we have inspected (integrated,
