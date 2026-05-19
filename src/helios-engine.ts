@@ -2671,23 +2671,31 @@ export class HeliosEngine
             }
         }
 
-        //Marker glyph: inline SVG of the MDI solar-panel icon, sized
-        //and coloured to match the configured PV palette. A
-        //surrounding white halo (drop-shadow) keeps the icon
-        //legible on dark basemaps without the heavier "pin" chrome
-        //that the default MapLibre Marker draws.
+        //Marker glyph: a hand-built tilted-panel SVG, more
+        //recognisable as a solar panel than the MDI solar-panel
+        //glyph (which reads as horizontal bars / shutters). The
+        //trapezoid suggests a slightly-perspective view of a
+        //ground-mounted panel, with two white horizontal seams
+        //and two white vertical seams hinting at the cell grid.
+        //White drop-shadow halo keeps the icon legible on dark
+        //basemaps without the heavier "pin" chrome that the
+        //default MapLibre Marker draws.
         const buildMarkerEl = (color: string): HTMLDivElement =>
         {
             const el = document.createElement('div');
             el.className = 'helios-pv-array-marker';
             el.style.cssText =
-                'width:24px;height:24px;display:flex;'
+                'width:18px;height:18px;display:flex;'
               + 'align-items:center;justify-content:center;'
               + 'pointer-events:none;'
               + 'filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));';
             el.innerHTML =
-                `<svg viewBox="0 0 24 24" width="24" height="24" fill="${color}" aria-hidden="true">`
-              + '<path d="M20 4H4C2.9 4 2 4.9 2 6V20H4V18H20V20H22V6C22 4.9 21.1 4 20 4M4 6H20V8H4V6M4 10H20V12H4V10M4 14H20V16H4V14Z"/>'
+                '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
+              + `<path d="M5 7 L19 7 L21 18 L3 18 Z" fill="${color}" stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/>`
+              + '<line x1="4.3" y1="10.7" x2="19.7" y2="10.7" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
+              + '<line x1="3.7" y1="14.4" x2="20.3" y2="14.4" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
+              + '<line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
+              + '<line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
               + '</svg>';
             return el;
         };
@@ -2715,12 +2723,13 @@ export class HeliosEngine
             {
                 this._pvArrayMarkers[i].setLngLat([positions[i].lon, positions[i].lat]);
                 //Colour might have changed via the PV colour picker
-                //even if the position list didn't. Re-paint the SVG
-                //fill rather than rebuilding the element so MapLibre
+                //even if the position list didn't. Re-paint just
+                //the panel <path> (the white grid lines stay white)
+                //rather than rebuilding the element, so MapLibre
                 //doesn't have to re-anchor the marker.
                 const el = this._pvArrayMarkers[i].getElement();
                 const svgPath = el?.querySelector('svg path');
-                if (svgPath) svgPath.parentElement?.setAttribute('fill', pvHex);
+                if (svgPath) svgPath.setAttribute('fill', pvHex);
             }
         }
     }

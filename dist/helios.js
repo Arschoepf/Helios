@@ -36769,8 +36769,8 @@ const _HeliosEngine = class _HeliosEngine {
     const buildMarkerEl = (color) => {
       const el = document.createElement("div");
       el.className = "helios-pv-array-marker";
-      el.style.cssText = "width:24px;height:24px;display:flex;align-items:center;justify-content:center;pointer-events:none;filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));";
-      el.innerHTML = `<svg viewBox="0 0 24 24" width="24" height="24" fill="${color}" aria-hidden="true"><path d="M20 4H4C2.9 4 2 4.9 2 6V20H4V18H20V20H22V6C22 4.9 21.1 4 20 4M4 6H20V8H4V6M4 10H20V12H4V10M4 14H20V16H4V14Z"/></svg>`;
+      el.style.cssText = "width:18px;height:18px;display:flex;align-items:center;justify-content:center;pointer-events:none;filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));";
+      el.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 7 L19 7 L21 18 L3 18 Z" fill="${color}" stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/><line x1="4.3" y1="10.7" x2="19.7" y2="10.7" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="3.7" y1="14.4" x2="20.3" y2="14.4" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/></svg>`;
       return el;
     };
     if (this._pvArrayMarkers.length !== positions.length) {
@@ -36785,7 +36785,7 @@ const _HeliosEngine = class _HeliosEngine {
         this._pvArrayMarkers[i2].setLngLat([positions[i2].lon, positions[i2].lat]);
         const el = this._pvArrayMarkers[i2].getElement();
         const svgPath = el?.querySelector("svg path");
-        if (svgPath) svgPath.parentElement?.setAttribute("fill", pvHex);
+        if (svgPath) svgPath.setAttribute("fill", pvHex);
       }
     }
   }
@@ -38091,10 +38091,12 @@ function renderDashboard(host) {
             </button>
             <div class="detail-panel-inner">
                 ${renderDashTodaySection(host, t2, pvColor, sunColor)}
-                <div class="dash-row">
-                    ${renderDashTomorrowSection(host, t2, sunColor, cloudColor, pvColor)}
-                    ${hasBattery ? renderDashBatterySection(host, t2, batteryColor) : A}
-                </div>
+                ${hasBattery ? b`
+                    <div class="dash-row">
+                        ${renderDashTomorrowSection(host, t2, sunColor, cloudColor, pvColor)}
+                        ${renderDashBatterySection(host, t2, batteryColor)}
+                    </div>
+                ` : renderDashTomorrowSection(host, t2, sunColor, cloudColor, pvColor)}
             </div>
         </div>
     `;
@@ -40650,7 +40652,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-beta.3"}`,
+      `%c☀ HELIOS%c v${"1.6.0-beta.4"}`,
       labelStyle,
       versionStyle
     );
@@ -40674,7 +40676,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-beta.3",
+        version: "1.6.0-beta.4",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40682,7 +40684,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-beta.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-beta.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

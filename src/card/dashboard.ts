@@ -81,10 +81,12 @@ export function renderDashboard(host: DashboardHost): TemplateResult
             </button>
             <div class="detail-panel-inner">
                 ${renderDashTodaySection(host, t, pvColor, sunColor)}
-                <div class="dash-row">
-                    ${renderDashTomorrowSection(host, t, sunColor, cloudColor, pvColor)}
-                    ${hasBattery ? renderDashBatterySection(host, t, batteryColor) : nothing}
-                </div>
+                ${hasBattery ? html`
+                    <div class="dash-row">
+                        ${renderDashTomorrowSection(host, t, sunColor, cloudColor, pvColor)}
+                        ${renderDashBatterySection(host, t, batteryColor)}
+                    </div>
+                ` : renderDashTomorrowSection(host, t, sunColor, cloudColor, pvColor)}
             </div>
         </div>
     `;
