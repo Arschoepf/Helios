@@ -112,12 +112,12 @@ polish.
   single-fetch Float32 GeoTIFF, no DSM-DTM round-trip. ~645K
   people. First US-state native provider in Helios.
 * **Worldwide LiDAR provider registry**. New
-  [`LIDAR_PROVIDERS.md`](./LIDAR_PROVIDERS.md) lists every public
-  elevation / LiDAR source we have inspected (integrated,
+  [`LIDAR_PROVIDERS.html`](./LIDAR_PROVIDERS.html) lists every
+  public elevation / LiDAR source we have inspected (integrated,
   verified compatible but pending, partially compatible,
-  incompatible) with status, endpoint, example fetch URL ready to
-  paste in a browser, and a compatibility checklist for adding
-  new countries.
+  incompatible) with status, endpoint, curl-verified example fetch
+  URL ready to paste in a browser, and an inline SVG world map
+  overlaying the integrated providers' coverage bboxes.
 * **BYO local nDSM provider**. New `lidar-local-ndsm-*` config
   family lets users in regions without a built-in provider host
   their own height-above-ground GeoTIFF and have Helios use it as

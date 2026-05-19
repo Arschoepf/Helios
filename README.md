@@ -195,7 +195,7 @@ LiDAR coverage today:
 
 A comprehensive registry of every public LiDAR/elevation API we've
 inspected (integrated, verified compatible but pending, or
-incompatible) lives in [LIDAR_PROVIDERS.md](./LIDAR_PROVIDERS.md),
+incompatible) lives in [LIDAR_PROVIDERS.html](./LIDAR_PROVIDERS.html),
 including example GetCoverage URLs ready to paste in a browser.
 
 Other national LiDAR programmes were probed and not yet integrated:

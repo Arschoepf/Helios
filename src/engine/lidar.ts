@@ -106,11 +106,13 @@ import { norwayKartverketNhm }         from './lidar/providers/no';
 import { nrwLidarNdom }                from './lidar/providers/de-nrw';
 import { polandGugikNmpt }             from './lidar/providers/pl';
 import { canadaHrdem }                 from './lidar/providers/ca';
-import { austriaSteiermarkAls }        from './lidar/providers/at-stmk';
 import { brandenburgBerlinDom }        from './lidar/providers/de-bb-be';
-import { badenWurttembergLgl }         from './lidar/providers/de-bw';
-import { austriaTirolAls }             from './lidar/providers/at-tirol';
 import { vermontVcgiNdsm }             from './lidar/providers/us-vt';
+//Steiermark, Tirol and Baden-Württemberg WCS endpoints reject
+//EPSG:4326 axis-label subsetting and require a UTM / MGI Krüger
+//projection forward we don't yet bundle. Source files kept under
+//./lidar/providers/ for the next release; not registered here so
+//resolveLidarSource() doesn't dispatch to them and return empty.
 import {
     createLocalNdsmSource,
     type LocalNdsmConfig
@@ -134,10 +136,7 @@ export const LIDAR_SOURCES: LidarSource[] = [
     spainPnoaLidar,
     netherlandsAhn4,
     norwayKartverketNhm,
-    brandenburgBerlinDom,
-    badenWurttembergLgl,
-    austriaSteiermarkAls,
-    austriaTirolAls
+    brandenburgBerlinDom
 ];
 
 export function findLidarSource(lat: number, lon: number): LidarSource | null

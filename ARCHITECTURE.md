@@ -504,7 +504,7 @@ diagnostic snapshot.
   Netherlands / Norway / Austria-Styria. MAX-merge provider:
   Spain (PNOA MDSn vegetation + buildings). Each provider ends
   by handing a single height raster to `pipeline.ts` for
-  post-processing. See [LIDAR_PROVIDERS.md](./LIDAR_PROVIDERS.md)
+  post-processing. See [LIDAR_PROVIDERS.html](./LIDAR_PROVIDERS.html)
   for the full worldwide registry, including verified-compatible
   candidates pending integration and explicitly-incompatible
   sources.
@@ -781,7 +781,7 @@ To publish a release:
   so the visual works worldwide but trees / hedges only cast
   shadows in covered countries. The full registry of integrated
   + verified compatible + incompatible providers worldwide lives
-  in [LIDAR_PROVIDERS.md](./LIDAR_PROVIDERS.md). Users in
+  in [LIDAR_PROVIDERS.html](./LIDAR_PROVIDERS.html). Users in
   uncovered regions with access to raw LiDAR data can host their
   own nDSM GeoTIFF and have Helios use it as the shadow source
   via the BYO `lidar-local-ndsm-*` config.

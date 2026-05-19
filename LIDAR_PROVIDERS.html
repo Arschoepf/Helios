@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Helios LiDAR provider registry</title>
+<style>
+  /*  Quiet light surface, the same vibe as Helios's day card chrome
+      so the registry feels like part of the project rather than a
+      generic doc page.                                            */
+  :root
+  {
+    --bg:               #fafaf7;
+    --surface:          #ffffff;
+    --ink:              #1d1d1f;
+    --ink-soft:         #5f6368;
+    --border:           rgba(0, 0, 0, 0.10);
+    --accent:           #27b36b;
+    --integrated:       #27b36b;
+    --compatible:       #eab308;
+    --partial:          #f97316;
+    --incompatible:     #ef4444;
+    --code-bg:          #f3f3ef;
+    --link:             #2563eb;
+  }
+  *
+  {
+    box-sizing: border-box;
+  }
+  body
+  {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--ink);
+    background: var(--bg);
+  }
+  main
+  {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 40px 28px 80px;
+  }
+  h1
+  {
+    font-size: 30px;
+    margin: 0 0 8px;
+    letter-spacing: -0.5px;
+  }
+  h2
+  {
+    font-size: 19px;
+    margin: 40px 0 12px;
+    letter-spacing: -0.3px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  h3
+  {
+    font-size: 15px;
+    margin: 24px 0 8px;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  p
+  {
+    margin: 8px 0 16px;
+  }
+  .lede
+  {
+    color: var(--ink-soft);
+    margin-bottom: 0;
+  }
+  a
+  {
+    color: var(--link);
+    text-decoration: none;
+  }
+  a:hover { text-decoration: underline; }
+  code
+  {
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+  }
+  ul, ol
+  {
+    padding-left: 22px;
+  }
+  ul li, ol li
+  {
+    margin: 4px 0;
+  }
+
+  /*  Status legend chips, share a colour vocabulary with the map
+      overlays and the table left-borders below.                  */
+  .legend
+  {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 16px 0 24px;
+  }
+  .legend-chip
+  {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    background: var(--surface);
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .legend-dot
+  {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .legend-dot-int { background: var(--integrated); }
+  .legend-dot-cmp { background: var(--compatible); }
+  .legend-dot-prt { background: var(--partial); }
+  .legend-dot-inc { background: var(--incompatible); }
+
+  /*  Map container: 2:1 equirectangular world. Bbox rectangles get
+      a stroke + faint fill so coverage is obvious without
+      obscuring overlapping providers (e.g. NRW inside Germany).
+      Hover bumps the stroke + highlights the row + shows a label
+      via the tooltip <title>.                                    */
+  .map-wrap
+  {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+    margin: 12px 0 8px;
+    overflow: hidden;
+  }
+  .world-map
+  {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .world-graticule { stroke: rgba(0,0,0,0.08); stroke-width: 0.5; fill: none; }
+  .world-equator   { stroke: rgba(0,0,0,0.18); stroke-width: 0.7; fill: none; stroke-dasharray: 3 3; }
+  .world-frame     { stroke: rgba(0,0,0,0.30); stroke-width: 0.6; fill: none; }
+  .world-land
+  {
+    fill: #e7e6df;
+    stroke: rgba(0,0,0,0.25);
+    stroke-width: 0.3;
+    stroke-linejoin: round;
+  }
+  .map-label
+  {
+    fill: rgba(0,0,0,0.35);
+    font-size: 9px;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    pointer-events: none;
+  }
+  .map-bbox
+  {
+    fill: rgba(39, 179, 107, 0.22);
+    stroke: rgba(39, 179, 107, 0.95);
+    stroke-width: 0.9;
+    cursor: pointer;
+    transition: fill 0.15s ease;
+  }
+  .map-bbox:hover
+  {
+    fill: rgba(39, 179, 107, 0.50);
+    stroke-width: 1.5;
+  }
+  .map-caption
+  {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin: 0 4px 12px;
+  }
+
+  /*  Tables: shared rule set across the 4 sections, status colour
+      sits on the left border so rows can be skimmed by colour even
+      when the header is scrolled out.                             */
+  table
+  {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 13px;
+    margin: 8px 0 8px;
+  }
+  th, td
+  {
+    padding: 9px 10px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border);
+  }
+  th
+  {
+    background: #f3f3ef;
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr.integrated   td:first-child { border-left: 3px solid var(--integrated); }
+  tr.compatible   td:first-child { border-left: 3px solid var(--compatible); }
+  tr.partial      td:first-child { border-left: 3px solid var(--partial); }
+  tr.incompatible td:first-child { border-left: 3px solid var(--incompatible); }
+  td.pop { white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+  td.url { font-size: 12px; }
+  td.url code { white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+
+  .checklist
+  {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+  }
+  .checklist li
+  {
+    margin: 6px 0;
+  }
+
+  .test-link
+  {
+    font-size: 12px;
+  }
+
+  .footnote
+  {
+    color: var(--ink-soft);
+    font-size: 12px;
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Helios LiDAR provider registry</h1>
+<p class="lede">Every public elevation / LiDAR data source we have
+inspected for <a href="https://github.com/ReikanYsora/Helios">Helios</a>,
+with status, endpoint, an example fetch URL ready to paste in a
+browser, and a worldwide map of the integrated providers' coverage.</p>
+
+<!--  Status legend, same colour vocabulary as the map overlays and
+      the table left-borders below.                                 -->
+<div class="legend">
+  <span class="legend-chip"><span class="legend-dot legend-dot-int"></span>Integrated, ships natively</span>
+  <span class="legend-chip"><span class="legend-dot legend-dot-cmp"></span>Compatible, integration pending</span>
+  <span class="legend-chip"><span class="legend-dot legend-dot-prt"></span>Partial, blocked by format / format issue</span>
+  <span class="legend-chip"><span class="legend-dot legend-dot-inc"></span>Incompatible, no usable public endpoint today</span>
+</div>
+
+
+<h2>Coverage map</h2>
+<p>Bounding boxes of every integrated provider, plotted on an
+equirectangular world map. Hover a rectangle for the provider name.</p>
+
+<div class="map-wrap">
+<svg class="world-map" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+  <!--  Frame + graticule + equator. Equirectangular projection
+        with x = (lon + 180) * 1000 / 360, y = (90 - lat) * 500 / 180.
+        That lets every bbox rectangle below be plotted by a simple
+        (minLon, maxLat, maxLon, minLat) → (x1, y1, x2, y2) map.    -->
+  <rect class="world-frame" x="0" y="0" width="1000" height="500"/>
+
+  <!--  Graticule, 30° steps for latitude and longitude.            -->
+  <g class="world-graticule">
+    <line x1="0"   y1="83.33"  x2="1000" y2="83.33" />  <!-- 60N -->
+    <line x1="0"   y1="166.67" x2="1000" y2="166.67"/>  <!-- 30N -->
+    <line x1="0"   y1="333.33" x2="1000" y2="333.33"/>  <!-- 30S -->
+    <line x1="0"   y1="416.67" x2="1000" y2="416.67"/>  <!-- 60S -->
+    <line x1="166.67" y1="0" x2="166.67" y2="500"/>     <!-- -120 -->
+    <line x1="333.33" y1="0" x2="333.33" y2="500"/>     <!-- -60 -->
+    <line x1="666.67" y1="0" x2="666.67" y2="500"/>     <!--  60 -->
+    <line x1="833.33" y1="0" x2="833.33" y2="500"/>     <!-- 120 -->
+  </g>
+  <line class="world-equator" x1="0" y1="250" x2="1000" y2="250"/>
+  <line class="world-equator" x1="500" y1="0" x2="500" y2="500" stroke-dasharray="2 4"/>
+
+  <!--  Simplified continent silhouettes drawn as a single grouped
+        path collection. Equirectangular projection means each
+        polygon is a string of (x, y) pairs derived from (lon, lat)
+        via the formula above. Resolution is low on purpose, this
+        is a backdrop, not a navigation chart. Greenland, Antarctica,
+        Iceland and Madagascar are explicit because the LiDAR
+        registry sometimes annotates them.                           -->
+  <g class="world-land">
+    <!--  North America (rough) : Alaska + Canada + USA + Mexico
+          + Central America. ~30 vertices.                          -->
+    <path d="M 30,90 L 95,75 L 130,80 L 180,70 L 230,85 L 240,110
+             L 220,140 L 250,170 L 290,180 L 310,210 L 290,230
+             L 270,255 L 250,275 L 240,300 L 230,315 L 210,310
+             L 200,290 L 175,275 L 165,260 L 145,240 L 130,225
+             L 110,210 L 90,190 L 75,165 L 65,140 L 50,120 Z"/>
+    <!--  Greenland.                                                 -->
+    <path d="M 290,55 L 340,50 L 350,75 L 335,100 L 305,105 L 285,90 L 280,70 Z"/>
+    <!--  South America. ~15 vertices.                              -->
+    <path d="M 250,290 L 275,290 L 290,310 L 305,335 L 310,365
+             L 305,395 L 295,425 L 280,450 L 265,455 L 255,440
+             L 245,415 L 240,385 L 245,355 L 250,325 Z"/>
+    <!--  Europe (Iberia + main mass + Scandinavia + UK).           -->
+    <path d="M 475,140 L 510,135 L 540,130 L 565,125 L 580,135
+             L 590,150 L 585,165 L 570,178 L 555,185 L 535,180
+             L 515,175 L 500,165 L 485,158 L 475,150 Z
+             M 485,100 L 510,90 L 540,95 L 555,110 L 545,125 L 520,128 L 500,120 Z
+             M 460,160 L 475,160 L 478,178 L 470,185 L 460,180 Z"/>
+    <!--  Africa.                                                    -->
+    <path d="M 470,190 L 510,182 L 555,185 L 580,200 L 600,225
+             L 620,255 L 620,290 L 615,320 L 605,355 L 595,385
+             L 580,400 L 565,395 L 555,380 L 555,355 L 555,330
+             L 540,305 L 520,280 L 500,255 L 485,230 L 470,210 Z"/>
+    <!--  Madagascar.                                                -->
+    <path d="M 630,350 L 642,348 L 645,375 L 638,388 L 630,378 Z"/>
+    <!--  Asia (huge merged blob from Turkey through Siberia to
+          Japan + South-East-Asia islands as one polygon).          -->
+    <path d="M 590,140 L 640,120 L 700,110 L 760,105 L 820,100
+             L 870,110 L 900,125 L 920,150 L 920,180 L 910,205
+             L 880,220 L 850,230 L 820,235 L 800,250 L 815,270
+             L 830,285 L 850,295 L 855,310 L 845,320 L 825,320
+             L 805,305 L 785,290 L 770,275 L 760,260 L 745,250
+             L 725,245 L 700,240 L 680,230 L 660,215 L 640,200
+             L 615,190 L 600,170 L 595,155 Z"/>
+    <!--  Indonesia / SE Asia islands cluster.                       -->
+    <path d="M 790,295 L 815,290 L 820,310 L 800,320 L 780,310 Z"/>
+    <!--  Japan.                                                     -->
+    <path d="M 870,190 L 882,180 L 890,200 L 882,225 L 875,220 L 870,210 Z"/>
+    <!--  Australia.                                                 -->
+    <path d="M 790,345 L 855,340 L 880,355 L 880,385 L 855,395
+             L 825,400 L 795,395 L 785,380 L 785,360 Z"/>
+    <!--  New Zealand.                                               -->
+    <path d="M 895,400 L 905,398 L 910,420 L 902,425 L 895,418 Z
+             M 905,420 L 912,420 L 916,438 L 908,438 Z"/>
+    <!--  Antarctica band.                                           -->
+    <path d="M 0,475 L 1000,475 L 1000,500 L 0,500 Z"/>
+  </g>
+
+  <!--  Provider bounding boxes. Each rect carries a <title> so the
+        native browser tooltip shows the provider name + population
+        on hover, no JS dependency needed.                          -->
+  <g>
+    <rect class="map-bbox" x="484.72" y="106.94" width="42.50" height="29.16">
+      <title>France IGN LiDAR HD , ~68 M people</title>
+    </rect>
+    <rect class="map-bbox" x="479.99" y="94.45" width="25.83" height="17.50">
+      <title>Environment Agency LiDAR Composite , England, ~57 M people</title>
+    </rect>
+    <rect class="map-bbox" x="473.34" y="127.78" width="38.89" height="22.78">
+      <title>IGN España PNOA-LiDAR MDSn , ~46 M people</title>
+    </rect>
+    <rect class="map-bbox" x="508.61" y="100.55" width="11.67" height="8.61">
+      <title>PDOK AHN4 , Netherlands, ~17 M people</title>
+    </rect>
+    <rect class="map-bbox" x="511.11" y="25.00" width="80.55" height="65.28">
+      <title>Kartverket NHM , Norway + Svalbard, ~5.5 M people</title>
+    </rect>
+    <rect class="map-bbox" x="516.25" y="104.03" width="10.14" height="6.25">
+      <title>Geobasis NRW nDOM , Nordrhein-Westfalen, ~18 M people</title>
+    </rect>
+    <rect class="map-bbox" x="539.17" y="97.64" width="28.06" height="16.25">
+      <title>GUGiK NMPT , Poland, ~38 M people</title>
+    </rect>
+    <rect class="map-bbox" x="106.94" y="16.67" width="248.61" height="118.06">
+      <title>NRCan HRDEM Mosaic , Canada, ~38 M people</title>
+    </rect>
+    <rect class="map-bbox" x="295.83" y="124.72" width="5.83" height="6.81">
+      <title>VCGI nDSM , Vermont USA, ~645 K people</title>
+    </rect>
+    <rect class="map-bbox" x="531.31" y="101.22" width="9.72" height="6.11">
+      <title>LGB bDOM + DGM , Brandenburg + Berlin, ~6.1 M people</title>
+    </rect>
+  </g>
+
+  <!--  Continent labels (faint), help the eye place the bbox in
+        the world without dominating the visualisation.             -->
+  <text class="map-label" x="180" y="180">North America</text>
+  <text class="map-label" x="265" y="380">South America</text>
+  <text class="map-label" x="500" y="155">Europe</text>
+  <text class="map-label" x="560" y="320">Africa</text>
+  <text class="map-label" x="745" y="180">Asia</text>
+  <text class="map-label" x="820" y="375">Australia</text>
+</svg>
+</div>
+<p class="map-caption">Equirectangular projection, lat / lon
+graticule at 30° steps. Green rectangles span each integrated
+provider's coverage bbox; some overlap (NRW + Brandenburg
+inside Germany, Vermont inside Canada's pad).</p>
+
+
+<h2>🟢 Integrated providers</h2>
+<p>Ten providers ship natively in Helios today. Every example URL
+below was curl-verified on the day of publication; if one stops
+working it's worth filing a Helios issue, the same URL is what the
+runtime provider builds.</p>
+
+<table>
+<thead><tr>
+  <th>Country / region</th>
+  <th>API name</th>
+  <th class="pop">Population</th>
+  <th>Format</th>
+  <th>CRS</th>
+  <th>Test URL</th>
+</tr></thead>
+<tbody>
+<tr class="integrated">
+  <td>🇫🇷 France</td>
+  <td>IGN LiDAR HD (MNH WMS)</td>
+  <td class="pop">~68 M</td>
+  <td>BIL Float32, single fetch (already nDSM)</td>
+  <td>EPSG:4326</td>
+  <td class="url"><a class="test-link" href="https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G&STYLES=&CRS=EPSG:4326&BBOX=48.85,2.34,48.86,2.35&WIDTH=64&HEIGHT=64&FORMAT=image/x-bil;bits=32" target="_blank" rel="noopener">Paris ~1 km² ↗</a></td>
+</tr>
+<tr class="integrated">
+  <td>🇬🇧 England</td>
+  <td>Environment Agency LiDAR Composite (DSM + DTM)</td>
+  <td class="pop">~57 M</td>
+  <td>GeoTIFF Float32, two coverages subtracted client-side</td>
+  <td>EPSG:4326 (CRS:84)</td>
+  <td class="url"><a class="test-link" href="https://environment.data.gov.uk/spatialdata/lidar-composite-digital-surface-model-last-return-dsm-1m-2022/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Lidar_Composite_Elevation_LZ_DSM_1m&STYLES=&CRS=CRS:84&BBOX=-0.13,51.50,-0.12,51.51&WIDTH=64&HEIGHT=64&FORMAT=image/tiff" target="_blank" rel="noopener">London ~1 km² (DSM) ↗</a></td>
+</tr>
+<tr class="integrated">
+  <td>🇪🇸 Spain</td>
+  <td>IGN España PNOA-LiDAR MDSn</td>
+  <td class="pop">~46 M</td>
+  <td>GeoTIFF Float32, vegetation + buildings MAX-merged</td>
+  <td>EPSG:4326</td>
+  <td class="url"><a class="test-link" href="https://wcs-mds.idee.es/mds?SERVICE=WCS&VERSION=2.0.1&REQUEST=GetCoverage&COVERAGEID=mdsn_v025&FORMAT=image/tiff&SUBSETTINGCRS=http://www.opengis.net/def/crs/EPSG/0/4326&SUBSET=Lat(40.41,40.42)&SUBSET=Long(-3.71,-3.70)&SCALESIZE=Lat(64),Long(64)" target="_blank" rel="noopener">Madrid ~1 km² (vegetation MDSn) ↗</a></td>
+</tr>
+<tr class="integrated">
+  <td>🇳🇱 Netherlands</td>
+  <td>PDOK AHN4 (DSM + DTM)</td>
+  <td class="pop">~17 M</td>
+  <td>GeoTIFF Float32, two coverages subtracted client-side</td>
+  <td>EPSG:4326</td>
+  <td class="url"><a class="test-link" href="https://service.pdok.nl/rws/ahn/wcs/v1_0?SERVICE=WCS&VERSION=2.0.1&REQUEST=GetCoverage&COVERAGEID=dsm_05m&FORMAT=image/tiff&SUBSETTINGCRS=http://www.opengis.net/def/crs/EPSG/0/4326&SUBSET=Lat(52.37,52.38)&SUBSET=Long(4.89,4.90)&SCALESIZE=Lat(64),Long(64)" target="_blank" rel="noopener">Amsterdam ~1 km² (DSM) ↗</a></td>
+</tr>
+<tr class="integrated">
+  <td>🇳🇴 Norway</td>
+  <td>Kartverket NHM (DOM + DTM, ArcGIS Image Server)</td>
+  <td class="pop">~5.5 M</td>
+  <td>Float32 GeoTIFF via exportImage, DOM-DTM subtracted</td>
+  <td>EPSG:4326 (reprojected)</td>
+  <td class="url"><a class="test-link" href="https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage?bbox=10.74,59.91,10.75,59.92&bboxSR=4326&imageSR=4326&size=64,64&format=tiff&pixelType=F32&noData=-9999&f=image" target="_blank" rel="noopener">Oslo ~1 km² (DOM) ↗</a></td>
+</tr>
+<tr class="integrated">
+  <td>🇩🇪 Germany (NRW)</td>
+  <td>Geobasis NRW nDOM</td>
+  <td class="pop">~18 M</td>
+  <td>GeoTIFF Float32 single-band (already nDOM)</td>
+  <td>EPSG:4326</td>
+  <td class="url"><a class="test-link" href="https://www.wcs.nrw.de/geobasis/wcs_nw_ndom?SERVICE=WCS&VERSION=2.0.1&REQUEST=GetCoverage&COVERAGEID=nw_ndom&FORMAT=image/tiff&SUBSETTINGCRS=http://www.opengis.net/def/crs/EPSG/0/4326&SUBSET=Long(6.95,6.96)&SUBSET=Lat(50.93,50.94)&SCALESIZE=Long(64),Lat(64)" target="_blank" rel="noopener">Cologne ~1 km² ↗</a></td>
+</tr>
+<tr class="integrated">
+  <td>🇵🇱 Poland</td>
+  <td>GUGiK NMPT (national DSM)</td>
+  <td class="pop">~38 M</td>
+  <td>GeoTIFF Float32 via WCS 2.0.1, single fetch</td>
+  <td>EPSG:4326 native</td>
+  <td class="url"><a class="test-link" href="https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMPT/GRID1/WCS/DigitalSurfaceModel?SERVICE=WCS&VERSION=2.0.1&REQUEST=GetCoverage&COVERAGEID=DSM_PL-EVRF2007-NH&FORMAT=image/tiff&SUBSETTINGCRS=http://www.opengis.net/def/crs/EPSG/0/4326&SUBSET=Long(21.00,21.01)&SUBSET=Lat(52.23,52.24)&SCALESIZE=Long(64),Lat(64)" target="_blank" rel="noopener">Warsaw ~1 km² ↗</a></td>
+</tr>
+<tr class="integrated">
+  <td>🇨🇦 Canada</td>
+  <td>NRCan HRDEM Mosaic (DSM)</td>
+  <td class="pop">~38 M</td>
+  <td>GeoTIFF via WCS 1.1.1, single fetch</td>
+  <td>EPSG:4326 (BBOX in lat,lon order)</td>
+  <td class="url"><a class="test-link" href="https://datacube.services.geo.ca/ows/elevation?SERVICE=WCS&VERSION=1.1.1&REQUEST=GetCoverage&IDENTIFIER=dsm&FORMAT=image/geotiff&BOUNDINGBOX=43.65,-79.39,43.66,-79.38,urn:ogc:def:crs:EPSG::4326&GRIDBASECRS=urn:ogc:def:crs:EPSG::4326&GRIDCS=urn:ogc:def:cs:OGC:0.0:Grid2dSquareCS&GRIDTYPE=urn:ogc:def:method:WCS:1.1:2dSimpleGrid&GRIDORIGIN=43.66,-79.39&GRIDOFFSETS=-0.0001,0.0001" target="_blank" rel="noopener">Toronto ~1 km² ↗</a></td>
+</tr>
+<tr class="integrated">
+  <td>🇺🇸 United States (Vermont)</td>
+  <td>VCGI Statewide nDSM 0.7 m</td>
+  <td class="pop">~645 K</td>
+  <td>Float32 TIFF via ArcGIS exportImage, already nDSM</td>
+  <td>EPSG:3857 native, accepts 4326 in/out</td>
+  <td class="url"><a class="test-link" href="https://maps.vcgi.vermont.gov/arcgis/rest/services/EGC_services/IMG_VCGI_LIDARNDSM_WM_CACHE_v1/ImageServer/exportImage?bbox=-73.22,44.47,-73.21,44.48&bboxSR=4326&imageSR=4326&size=64,64&format=tiff&pixelType=F32&interpolation=RSP_BilinearInterpolation&f=image" target="_blank" rel="noopener">Burlington ~1 km² ↗</a></td>
+</tr>
+<tr class="integrated">
+  <td>🇩🇪 Germany (Brandenburg + Berlin)</td>
+  <td>LGB bDOM + DGM 1 m</td>
+  <td class="pop">~6.1 M</td>
+  <td>GeoTIFF Float32 via WCS 2.0.1, two coverages subtracted</td>
+  <td>EPSG:4326 native</td>
+  <td class="url"><a class="test-link" href="https://isk.geobasis-bb.de/ows/bdom_wcs?SERVICE=WCS&VERSION=2.0.1&REQUEST=GetCoverage&COVERAGEID=bb_bdom&FORMAT=image/tiff&SUBSETTINGCRS=http://www.opengis.net/def/crs/EPSG/0/4326&SUBSET=Long(13.40,13.41)&SUBSET=Lat(52.51,52.52)&SCALESIZE=Long(64),Lat(64)" target="_blank" rel="noopener">Berlin ~1 km² (bDOM) ↗</a></td>
+</tr>
+</tbody>
+</table>
+
+<h3>Bring-your-own (BYO) LiDAR</h3>
+<p>The six <code>lidar-local-ndsm-*</code> config keys point Helios
+at a user-hosted nDSM GeoTIFF inside a user-defined bounding box.
+Useful in any region with raw LiDAR data available offline (initial
+use case: NSW Australia). Contributed by
+<a href="https://github.com/jourdant">@jourdant</a> in
+<a href="https://github.com/ReikanYsora/Helios/pull/5">PR #5</a>,
+idea credited to <a href="https://github.com/stephenwq">@stephenwq</a>.</p>
+
+
+<h2>🟡 Verified compatible, integration pending</h2>
+<p>Endpoint exists, raw float values are reachable, but a piece of
+the integration still needs work (UTM projection helper, STAC
+client, API-key wrapper, etc.).</p>
+
+<table>
+<thead><tr>
+  <th>Country / region</th>
+  <th>API name</th>
+  <th class="pop">Population</th>
+  <th>Endpoint</th>
+  <th>Why pending</th>
+</tr></thead>
+<tbody>
+<tr class="compatible">
+  <td>🇩🇪 Germany (Baden-Württemberg)</td>
+  <td>LGL INSPIRE DOM5 + DGM1</td>
+  <td class="pop">~11.3 M</td>
+  <td class="url"><code>owsproxy.lgl-bw.de/owsproxy/wcs/WCS_INSP_BW_Hoehe_Coverage_DOM5</code></td>
+  <td>WCS endpoint live, but the service rejects EPSG:4326 SUBSET and demands native EPSG:25832 (UTM 32N) E / N axes plus a SCALESIZE workaround. Needs a Krüger-forward helper before it can ship.</td>
+</tr>
+<tr class="compatible">
+  <td>🇦🇹 Austria (Styria / Steiermark)</td>
+  <td>Land Steiermark ALS DOM + DGM 1 m</td>
+  <td class="pop">~1.2 M</td>
+  <td class="url"><code>gis.stmk.gv.at/.../ALSHoeheninformation_1m_UTM33N/MapServer/WCSServer</code></td>
+  <td>ArcGIS-backed WCS only accepts native-CRS subsetting (x / y in EPSG:32633). Same UTM Krüger-forward blocker as Baden-Württemberg.</td>
+</tr>
+<tr class="compatible">
+  <td>🇦🇹 Austria (Tyrol / Tirol)</td>
+  <td>Land Tirol terrain ALS DOM + DGM 5 m</td>
+  <td class="pop">~760 K</td>
+  <td class="url"><code>gis.tirol.gv.at/.../Service_Public/terrain/MapServer/WCSServer</code></td>
+  <td>Native CRS is EPSG:31254 (MGI Austria GK Zone M28, Bessel ellipsoid). Same blocker as Steiermark, plus a MGI/WGS84 Helmert offset for ~10 m accuracy.</td>
+</tr>
+<tr class="compatible">
+  <td>🇨🇿 Czech Republic</td>
+  <td>ČÚZK DMR via INSPIRE WCS</td>
+  <td class="pop">~10.5 M</td>
+  <td class="url"><code>ags.cuzk.gov.cz/arcgis2/services/INSPIRE_Nadmorska_vyska/ImageServer/WCSServer</code></td>
+  <td>INSPIRE coverage only publishes DMR (terrain), not DMP (surface). The pipeline expects metres-above-ground.</td>
+</tr>
+<tr class="compatible">
+  <td>🇨🇭 Switzerland</td>
+  <td>swisstopo swissSURFACE3D Raster (DSM)</td>
+  <td class="pop">~9 M</td>
+  <td class="url"><code>data.geo.admin.ch/api/stac/v1/collections/ch.swisstopo.swisssurface3d-raster</code></td>
+  <td>STAC API, not WCS. Needs a STAC client (item search, asset picker) on top of the existing GeoTIFF fetcher.</td>
+</tr>
+<tr class="compatible">
+  <td>🇪🇪 Estonia</td>
+  <td>Maa-amet DSM 1 m</td>
+  <td class="pop">~1.3 M</td>
+  <td class="url"><code>geoportaal.maaamet.ee</code></td>
+  <td>WMS / WMTS confirmed public; WCS metadata referenced but exact endpoint not located, needs a Maa-amet contact.</td>
+</tr>
+<tr class="compatible">
+  <td>🇳🇿 New Zealand</td>
+  <td>LINZ National Elevation 1 m (DEM + DSM)</td>
+  <td class="pop">~5.2 M</td>
+  <td class="url"><code>data.linz.govt.nz</code> (Koordinates)</td>
+  <td>Requires per-user API key under a free Koordinates account, would ship behind a <code>linz-api-key</code> config field.</td>
+</tr>
+<tr class="compatible">
+  <td>🇩🇰 Denmark</td>
+  <td>Dataforsyningen DHM (DTM + DSM)</td>
+  <td class="pop">~5.9 M</td>
+  <td class="url"><code>dataforsyningen.dk</code></td>
+  <td>Same shape as LINZ, opt-in API key, would ship behind a <code>dataforsyningen-api-key</code> config field.</td>
+</tr>
+<tr class="compatible">
+  <td>🇩🇪 Germany (Sachsen-Anhalt)</td>
+  <td>LVermGeo DOM1</td>
+  <td class="pop">~2.2 M</td>
+  <td class="url"><code>geodatenportal.sachsen-anhalt.de/wss/service/ST_LVermGeo_DOM1_WCS_OpenData/guest</code></td>
+  <td>Documented WCS URL returns HTTP 500 from upstream at audit time. Ships once the endpoint stabilises.</td>
+</tr>
+</tbody>
+</table>
+
+
+<h2>🟠 Probed, partially compatible</h2>
+<p>Data exists but a hard blocker (auth, format, projection) makes
+a clean live-fetch integration impossible today.</p>
+
+<table>
+<thead><tr>
+  <th>Country / region</th>
+  <th>API name</th>
+  <th class="pop">Population</th>
+  <th>Blocker</th>
+</tr></thead>
+<tbody>
+<tr class="partial">
+  <td>🇦🇺 Australia (NSW)</td>
+  <td>NSW Spatial Services 5 m Elevation</td>
+  <td class="pop">~8.2 M</td>
+  <td>Bare-earth DEM from stereo imagery (photogrammetry, 5 m), not a LiDAR DSM. Helios's pipeline expects height-above-ground; threshold flood-fill never fires. NSW users get LiDAR DSM today via BYO.</td>
+</tr>
+<tr class="partial">
+  <td>🇦🇺 Australia (federal)</td>
+  <td>Geoscience Australia ELVIS</td>
+  <td class="pop">~25 M</td>
+  <td>Download portal, no live raster query API at federal level.</td>
+</tr>
+<tr class="partial">
+  <td>🇩🇪 Germany (Bayern)</td>
+  <td>LDBV DOM20 (20 cm DSM)</td>
+  <td class="pop">~13 M</td>
+  <td>20 cm DSM Open Data, but bulk-download portal only, no documented WCS.</td>
+</tr>
+<tr class="partial">
+  <td>🇩🇪 Germany (Hamburg)</td>
+  <td>LGV bDOM 1 m</td>
+  <td class="pop">~1.9 M</td>
+  <td>Image-based DSM (photogrammetry) shipped as 3-3.5 GB bulk file packages (ASCII / PNG), no live raster query.</td>
+</tr>
+<tr class="partial">
+  <td>🇩🇪 Germany (Hessen)</td>
+  <td>HVBG DOM1</td>
+  <td class="pop">~6.3 M</td>
+  <td>Self-service download via gds.hessen.de; no WCS endpoint surfaced.</td>
+</tr>
+<tr class="partial">
+  <td>🇩🇪 Germany (Sachsen)</td>
+  <td>Freistaat Sachsen DOM1 + nDOM1</td>
+  <td class="pop">~4.0 M</td>
+  <td>Public WCS guest endpoint returns HTTP 403 (locked behind auth despite the "Open Data" branding).</td>
+</tr>
+<tr class="partial">
+  <td>🇧🇪 Belgium (Wallonia)</td>
+  <td>SPW LiDAR HD 2021-22 MNS 1 m</td>
+  <td class="pop">~3.6 M</td>
+  <td>MapServer exposes a WMSServer extension (rendered RGB tiles) but no WCSServer; the raw float DSM is only available in Lambert 08 (EPSG:3812), which needs proj4js.</td>
+</tr>
+<tr class="partial">
+  <td>🇧🇪 Belgium (Flanders)</td>
+  <td>AIV DHMV II DSM</td>
+  <td class="pop">~6.6 M</td>
+  <td>Float32 WCS exists but only in EPSG:31370 (Lambert 72). Same proj4js blocker as Wallonia; both would ship together.</td>
+</tr>
+<tr class="partial">
+  <td>🇫🇮 Finland</td>
+  <td>Maanmittauslaitos Elevation Model 2 m</td>
+  <td class="pop">~5.6 M</td>
+  <td>DTM only (bare earth), no DSM. Captures terrain shadows but not vegetation / buildings.</td>
+</tr>
+</tbody>
+</table>
+
+
+<h2>🔴 Probed, incompatible</h2>
+<p>Either there's no public API at all, or the only path is a
+download portal / per-user OAuth / format Helios can't consume.</p>
+
+<table>
+<thead><tr>
+  <th>Country / region</th>
+  <th>Provider</th>
+  <th>Reason</th>
+</tr></thead>
+<tbody>
+<tr class="incompatible">
+  <td>🇮🇹 Italy</td>
+  <td>Ministero dell'Ambiente PST LiDAR</td>
+  <td>Access requires signed information request via email (<code>datipst@mase.gov.it</code>). No live raster API.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇸🇪 Sweden</td>
+  <td>Lantmäteriet Laserdata Nedladdning</td>
+  <td>Raw LAZ point clouds only, no pre-rasterised DSM exposed via WCS.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇯🇵 Japan</td>
+  <td>GSI Fundamental Geospatial Data</td>
+  <td>Shapefile-only elevation, account signup required, no raster WCS.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇬🇷 Greece</td>
+  <td>Hellenic Cadastre</td>
+  <td>LiDAR datasets withheld under security restrictions.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇨🇭 Switzerland (legacy)</td>
+  <td>swissALTI3D</td>
+  <td>DTM only (bare earth) since the 2024 LiDAR refresh. Use swissSURFACE3D Raster (above 🟡) for DSM coverage.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇧🇪 Belgium (Brussels)</td>
+  <td>UrbIS-3D</td>
+  <td>DSM exists but only as per-municipality LAZ archives.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇸🇰 Slovakia</td>
+  <td>ZBGIS DMP</td>
+  <td>DMR (terrain) is GeoTIFF; DMP (surface) is only published as pre-rendered PNG visualisations.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇺🇸 United States (federal)</td>
+  <td>USGS 3DEP</td>
+  <td>Live ArcGIS Image Server exposes bare-earth DEM only. No federal DSM service.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇺🇸 United States (state, Minnesota)</td>
+  <td>MN DNR mntopo</td>
+  <td>Raw LiDAR per-tile ZIP download only, no live raster API.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇱🇻 Latvia</td>
+  <td>LGIA Digitālais virsmas modelis</td>
+  <td>Published as Shapefile-only downloads, no WCS.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇱🇹 Lithuania</td>
+  <td>NŽT / ŽGP</td>
+  <td>LiDAR available, but no public WCS / WMTS for the DSM raster.</td>
+</tr>
+<tr class="incompatible">
+  <td>🏴󠁧󠁢󠁷󠁬󠁳󠁿 Wales</td>
+  <td>Natural Resources Wales</td>
+  <td>Per-tile ZIP downloads only, no live raster query endpoint.</td>
+</tr>
+<tr class="incompatible">
+  <td>🇮🇸 Iceland</td>
+  <td>Landmælingar Íslands</td>
+  <td>LiDAR programme in progress, no national DSM service yet.</td>
+</tr>
+</tbody>
+</table>
+
+
+<h2>Provider compatibility checklist</h2>
+
+<div class="checklist">
+<p>To turn a new region into a Helios native provider it has to
+clear every box below.</p>
+<ul>
+  <li><strong>Raw float values exposed</strong>, not a pre-rendered RGB visualisation. A raster of metres-above-ground numbers, or a DSM + DTM pair whose difference is metres-above-ground.</li>
+  <li><strong>Live raster query API</strong> (WCS GetCoverage, ArcGIS Image Server <code>exportImage</code>, STAC + asset URLs). Per-tile ZIP or per-tile FTP isn't usable from a browser card.</li>
+  <li><strong>image/tiff Float32</strong> output, or the IGN-style raw BIL float32 stream. The helper in <code>src/engine/lidar/geotiff.ts</code> handles GeoTIFF Float32 transparently.</li>
+  <li><strong>EPSG:4326 input/output supported natively</strong>, or a UTM-zone projection that Helios already handles in another provider, or a willingness to bundle proj4js for an arbitrary national projection (Lambert, Bessel, S-JTSK, etc.).</li>
+  <li><strong>No per-user authentication</strong>. Free open data, optionally with an API key the user supplies in the editor.</li>
+  <li><strong>CORS headers</strong> (<code>Access-Control-Allow-Origin: *</code> or equivalent). Without them, browsers block the fetch from any HA dashboard not hosted on the data provider's domain.</li>
+</ul>
+</div>
+
+<h3>Adding a country</h3>
+<ol>
+  <li>Drop a new file at <code>src/engine/lidar/providers/&lt;iso&gt;.ts</code>, exporting a <code>LidarSource</code> (id, name, native cell pitch, <code>covers()</code> bbox probe, <code>fetchShadowRegions()</code> request builder).</li>
+  <li>Register it in <code>src/engine/lidar.ts</code>'s <code>LIDAR_SOURCES</code> array.</li>
+  <li>Add a row to this page in the integrated table.</li>
+  <li>Update <a href="README.md">README.md</a>'s LiDAR coverage section so users discover the new region.</li>
+  <li>Open a PR. The maintainer ships it in the next minor release alongside the others.</li>
+</ol>
+
+<p>See <code>src/engine/lidar/providers/de-nrw.ts</code> for the
+canonical single-coverage example, <code>uk.ts</code> for a
+DSM-minus-DTM example, and <code>es.ts</code> for a two-coverage
+MAX-merge example.</p>
+
+
+<p class="footnote">Source files and the latest version of this
+page live in the <a href="https://github.com/ReikanYsora/Helios">ReikanYsora/Helios</a>
+GitHub repo. Architecture details:
+<a href="ARCHITECTURE.md">ARCHITECTURE.md</a>. End-user docs:
+<a href="README.md">README.md</a>. Release history:
+<a href="CHANGELOG.md">CHANGELOG.md</a>.</p>
+
+</main>
+</body>
+</html>

@@ -71,26 +71,31 @@ export const canadaHrdem: LidarSource =
             return emptyResult();
         }
 
-        //WCS 1.1.1 GetCoverage. BoundingBox is (minx, miny, maxx, maxy,
-        //crs), GridOrigin is the top-left corner of the first output
-        //pixel, GridOffsets is "deltaX deltaY" in BaseCRS units (so
-        //degrees for EPSG:4326). deltaY is negative because the grid
-        //scans top-to-bottom.
-        const deltaLon = (bbox.maxLon - bbox.minLon) / rasterSize;
+        //WCS 1.1.1 GetCoverage. NRCan's GeoServer (geotrellis backend)
+        //expects BoundingBox in (lat_min, lon_min, lat_max, lon_max)
+        //order for EPSG:4326, not the more common (x_min, y_min,
+        //x_max, y_max) lon-first convention; mixing the two yields a
+        //500 "ExtentRangeError: xmin must be less than xmax". Format
+        //is `image/geotiff` (not `image/tiff`, which the server
+        //explicitly rejects). GridOrigin is the top-left corner in
+        //the same lat,lon order, GridOffsets is "delta_lat
+        //delta_lon" with delta_lat negative because the grid scans
+        //top-to-bottom.
         const deltaLat = (bbox.maxLat - bbox.minLat) / rasterSize;
+        const deltaLon = (bbox.maxLon - bbox.minLon) / rasterSize;
 
         const params = new URLSearchParams({
             SERVICE:      'WCS',
             VERSION:      '1.1.1',
             REQUEST:      'GetCoverage',
             IDENTIFIER:   COVERAGE,
-            FORMAT:       'image/tiff',
-            BOUNDINGBOX:  `${bbox.minLon},${bbox.minLat},${bbox.maxLon},${bbox.maxLat},urn:ogc:def:crs:EPSG::4326`,
+            FORMAT:       'image/geotiff',
+            BOUNDINGBOX:  `${bbox.minLat},${bbox.minLon},${bbox.maxLat},${bbox.maxLon},urn:ogc:def:crs:EPSG::4326`,
             GRIDBASECRS:  'urn:ogc:def:crs:EPSG::4326',
             GRIDCS:       'urn:ogc:def:cs:OGC:0.0:Grid2dSquareCS',
             GRIDTYPE:     'urn:ogc:def:method:WCS:1.1:2dSimpleGrid',
-            GRIDORIGIN:   `${bbox.minLon} ${bbox.maxLat}`,
-            GRIDOFFSETS:  `${deltaLon} ${-deltaLat}`
+            GRIDORIGIN:   `${bbox.maxLat},${bbox.minLon}`,
+            GRIDOFFSETS:  `${-deltaLat},${deltaLon}`
         });
 
         const heights = await fetchFloat32GeoTiff(
