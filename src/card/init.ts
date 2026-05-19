@@ -309,11 +309,9 @@ export function initEngineNow(host: InitHost): void
             //via onMapTransform.
             refreshOverlays(host);
         };
-        //Cloud-disc hover is now wired directly on the SVG
-        //element via @mousemove / @mouseleave (see the render
-        //path's solar-svg). The engine no longer surfaces a
-        //hover callback for the disc since it's no longer a
-        //MapLibre layer.
+        //Cloud-disc hover is wired directly on the SVG element via
+        //@mousemove / @mouseleave (see the render path's solar-svg),
+        //so the engine doesn't surface a hover callback for it.
         host._engine.onMapTransform = () =>
         {
             refreshOverlays(host);

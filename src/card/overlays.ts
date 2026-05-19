@@ -10,8 +10,8 @@ import type { HeliosEngine } from '../helios-engine';
 
 //Single arc sample as produced by engine.projectSunScene(). The
 //card consumes (x, y) for placement and `nearness` / `belowHorizon`
-//for visual modulation; `irradiance` is kept for future use, the
-//current segment renderer ignores it.
+//for visual modulation. `irradiance` is carried alongside for
+//consumers that want to colour-modulate per sample.
 export interface SunArcSample
 {
     x: number;
@@ -163,9 +163,7 @@ export function setAnimationsPaused(host: OverlaysHost, paused: boolean): void
 //Map an arc-sample sequence into stroke-ready segments. The
 //caller paints each segment as one <line> with a stroke width
 //scaled by `nearness` and a colour pulled from the configured
-//sun colour. `irradiance` is preserved on the segments for
-//symmetry with the input shape but is no longer read by the
-//current renderer.
+//sun colour.
 export function buildArcSegments(
     arc:      ReadonlyArray<SunArcSample>,
     sunColor: string

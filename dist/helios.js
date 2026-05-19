@@ -2024,15 +2024,14 @@ const heliosCardStyles = i$3`
     }
 
     /*  Detail panel, takes over the card while detail mode is on.
-        Hosts the four-section dashboard (today / week / tomorrow /
-        battery). The backdrop is a soft scrim + blur so the basemap
-        behind stays readable (the camera is zoomed and pitched
-        underneath) without competing with the panel content. The
-        panel itself no longer dismisses on a stray click; the
-        dedicated close button in the corner handles exit, since the
-        sections are scrollable on small viewports and a global
-        click-to-dismiss would close the panel on every internal
-        touch. */
+        Hosts the three-section dashboard (today / tomorrow /
+        battery, the last two sat side by side when both render).
+        The backdrop is a soft scrim + blur so the basemap behind
+        stays readable (the camera is zoomed and pitched underneath)
+        without competing with the panel content. Dismissal goes
+        through a dedicated close button in the corner rather than
+        a stray click on the panel itself, otherwise scrolling or
+        tapping inside a card on a small viewport would close it. */
     .detail-panel
     {
         position: absolute;
@@ -40652,7 +40651,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-beta.4"}`,
+      `%c☀ HELIOS%c v${"1.6.0-beta.5"}`,
       labelStyle,
       versionStyle
     );
@@ -40676,7 +40675,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-beta.4",
+        version: "1.6.0-beta.5",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40684,7 +40683,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-beta.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-beta.5"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -41700,11 +41699,10 @@ let HeliosCard = class extends i {
                       while _detailMode is on. The CSS class
                       .detail-active on ha-card fades out every
                       pre-existing overlay so the panel reads as
-                      the sole content while open. The panel itself
-                      no longer dismisses on a content click (that
-                      would fire on every internal scroll / tap),
-                      a dedicated close button in the corner handles
-                      exit.  -->
+                      the sole content while open. Dismissal goes
+                      through a dedicated close button in the corner
+                      rather than a content click, otherwise every
+                      internal scroll / tap would close the panel.  -->
                 ${this._detailMode ? renderDashboard(this) : A}
 
             </ha-card>

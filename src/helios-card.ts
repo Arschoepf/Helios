@@ -315,8 +315,8 @@ export class HeliosCard extends LitElement
     _pvFetchKey  = '';
     _pvFetching  = false;
     //Most recent PV history fetch outcome, surfaced via
-    //`window.heliosStats()`. Replaces what we used to print as
-    //`[HELIOS] PV history sensor.xxx: N raw -> M samples over H h`.
+    //`window.heliosStats()` (raw entries returned, samples kept after
+    //unit / unavailable filtering, window covered in hours).
     _pvHistoryDiagnostics: { rawEntries: number; samples: number; windowH: number } | null = null;
     //Idempotency flag for the one-time wipe of legacy PV calibration
     //buffers (see _wipeLegacyPvCalibStorage). Per-instance so we
@@ -365,11 +365,11 @@ export class HeliosCard extends LitElement
     @state() _sunScene: SunScene | null = null;
     //Screen-space layout of the cloud-cover disc + 100 % reference
     //ring, projected through engine.projectCloudScene() on every map
-    //transform and clock tick. The disc no longer lives as a
-    //MapLibre fill layer (terrain bent it out of shape with LiDAR
-    //precision on); it's now a pair of SVG polygons drawn alongside
-    //the sun arc, anchored at the home's terrain elevation so it
-    //stays a true circle whatever the ground does beneath it.
+    //transform and clock tick. Rendered as a pair of SVG polygons
+    //drawn alongside the sun arc, anchored at the home's terrain
+    //elevation so the disc stays a true circle whatever the ground
+    //does beneath it (a MapLibre fill layer would warp with the
+    //terrain mesh under high-precision LiDAR shadows).
     @state() _cloudScene: CloudScene | null = null;
     //Per-polygon silhouettes of the home building(s) in screen
     //space: each entry has the projected base ring and the
@@ -728,10 +728,10 @@ export class HeliosCard extends LitElement
             hourCycle: is12h ? 'h12' : 'h23'
         } as Intl.DateTimeFormatOptions);
 
-        //The on-ground disc now self-encodes the low/mid/high
-        //breakdown via three concentric bands (proportional radial
-        //widths, three shades of the cloud colour), so the hover
-        //tooltip we used to surface for the same data is gone.
+        //The on-ground disc self-encodes the low/mid/high breakdown
+        //via three concentric bands (proportional radial widths,
+        //three shades of the cloud colour); no hover tooltip
+        //needed.
         const cloudPctRound    = Math.max(0, Math.round(this._cloudCover));
 
         //Always-visible cloud-cover percentage label, overlaid in HTML
@@ -1812,11 +1812,10 @@ export class HeliosCard extends LitElement
                       while _detailMode is on. The CSS class
                       .detail-active on ha-card fades out every
                       pre-existing overlay so the panel reads as
-                      the sole content while open. The panel itself
-                      no longer dismisses on a content click (that
-                      would fire on every internal scroll / tap),
-                      a dedicated close button in the corner handles
-                      exit.  -->
+                      the sole content while open. Dismissal goes
+                      through a dedicated close button in the corner
+                      rather than a content click, otherwise every
+                      internal scroll / tap would close the panel.  -->
                 ${this._detailMode ? renderDashboard(this) : nothing}
 
             </ha-card>

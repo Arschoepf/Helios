@@ -589,8 +589,9 @@ export class HeliosEngine
     //shadow projector reads this on every sun-position refresh.
     private _lidarShadowFeatures: GeoJSON.FeatureCollection | null = null;
     //Diagnostics from the most recent LiDAR shadow fetch, surfaced via
-    //`window.heliosStats()`. Replaces what we used to print as
-    //`[HELIOS] LiDAR shadows: ... cells -> ... clumps` console info.
+    //`window.heliosStats()` (cells kept above the height threshold,
+    //per-clump cell cap derived from the raster pitch, height range
+    //of the surviving cells).
     private _lidarShadowDiagnostics:
         { cellsKept: number; cellsPerClumpCap: number; heightRangeM: [number, number] | null }
         | null = null;

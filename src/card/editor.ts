@@ -204,12 +204,13 @@ export class HeliosCardEditor extends LitElement
     @state()                        private _openArrayIndices: Set<number> = new Set([0]);
 
     //Per-key debounce timers for slider inputs. Sliders fire @input
-    //on every pixel of drag, which used to cascade an updateConfig +
-    //full re-render through the engine on each tick, visibly painful
-    //during preview. We update the local _cfg synchronously (so the
-    //slider's bound .value tracks the drag perfectly) but only
-    //dispatch the cross-component `config-changed` event after a
-    //short idle window.
+    //on every pixel of drag, so dispatching `config-changed` per
+    //tick would cascade an updateConfig + full re-render through
+    //the engine on each pixel, visibly painful during preview. We
+    //update the local _cfg synchronously (so the slider's bound
+    //.value tracks the drag perfectly) but only dispatch the
+    //cross-component `config-changed` event after a short idle
+    //window.
     private static readonly SLIDER_COMMIT_DELAY_MS = 250;
     private _sliderDebounce: Map<string, number> = new Map();
 

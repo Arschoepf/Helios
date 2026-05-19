@@ -190,15 +190,14 @@ export const heliosCardStyles = css`
     }
 
     /*  Detail panel, takes over the card while detail mode is on.
-        Hosts the four-section dashboard (today / week / tomorrow /
-        battery). The backdrop is a soft scrim + blur so the basemap
-        behind stays readable (the camera is zoomed and pitched
-        underneath) without competing with the panel content. The
-        panel itself no longer dismisses on a stray click; the
-        dedicated close button in the corner handles exit, since the
-        sections are scrollable on small viewports and a global
-        click-to-dismiss would close the panel on every internal
-        touch. */
+        Hosts the three-section dashboard (today / tomorrow /
+        battery, the last two sat side by side when both render).
+        The backdrop is a soft scrim + blur so the basemap behind
+        stays readable (the camera is zoomed and pitched underneath)
+        without competing with the panel content. Dismissal goes
+        through a dedicated close button in the corner rather than
+        a stray click on the panel itself, otherwise scrolling or
+        tapping inside a card on a small viewport would close it. */
     .detail-panel
     {
         position: absolute;

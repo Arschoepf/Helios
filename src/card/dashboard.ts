@@ -49,11 +49,12 @@ export interface DashboardHost extends ChartHost, BatteryHost
 }
 
 
-//Renders the detail-mode panel: 4 stacked sections (today, week,
-//tomorrow, battery) plus a close button. Each section uses one
-//big SVG illustration that IS the data; numbers are annotations
-//around the illustration, not the centerpiece. Battery section is
-//skipped silently when neither battery entity is configured.
+//Renders the detail-mode panel: a today section stacked above a
+//tomorrow + battery row plus a close button. Tomorrow stretches
+//full width when the battery section is skipped (neither battery
+//entity configured). Each section uses one big SVG illustration
+//that IS the data; numbers are annotations around the
+//illustration, not the centerpiece.
 //
 //The panel uses the configured colour palette (sun / cloud / pv /
 //battery) so the dashboard reads as the same product the user
@@ -445,9 +446,7 @@ export function renderDashTodaySection(
     //Format both the actual peak (highest observed bin so far) and
     //the predicted peak (highest forecast bin). In the morning the
     //actual one is null until production crosses ~50 W; in that
-    //case the row falls back to showing only "PIC PRÉVU". The
-    //hybrid peakHourTs / peakW pair is no longer rendered, the
-    //dual readout supersedes it.
+    //case the row falls back to showing only "PIC PRÉVU".
     const formatPeakTime = (hourTs: number | null): string =>
         hourTs !== null
             ? new Date(hourTs + HOUR_MS / 2).toLocaleTimeString([], {
