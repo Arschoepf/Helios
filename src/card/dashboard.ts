@@ -18,7 +18,7 @@ import
     DEFAULT_PV_COLOR_HEX,
     DEFAULT_BATTERY_COLOR_HEX
 } from '../helios-config';
-import { cfgHex, formatLocalisedNumber, lerpHexToward } from './format';
+import { cfgHex, formatDate, formatLocalisedNumber, lerpHexToward } from './format';
 import
 {
     pvCalibK,
@@ -141,16 +141,25 @@ export function computeTodayHourly(host: DashboardHost): {
         let values: number[] = hist.values;
         if (isCumulativeEnergy && times.length >= 2)
         {
+            //Same quantization guard as the chart's
+            //differentiation: hold the anchor until 3 min have
+            //accumulated so dv / dtH doesn't blow up when the
+            //sensor only reports integer Wh.
+            const MIN_DTH = 0.05;
             const dT: Date[] = [];
             const dV: number[] = [];
+            let prevIdx = 0;
             for (let i = 1; i < times.length; i++)
             {
-                const dtH = (times[i].getTime() - times[i - 1].getTime()) / 3_600_000;
-                if (dtH <= 0 || dtH > 6) continue;
-                const dv  = values[i] - values[i - 1];
-                if (dv < 0) continue;
+                const dtH = (times[i].getTime() - times[prevIdx].getTime()) / 3_600_000;
+                if (dtH <= 0) continue;
+                if (dtH > 6)  { prevIdx = i; continue; }
+                const dv = values[i] - values[prevIdx];
+                if (dv < 0)   { prevIdx = i; continue; }
+                if (dtH < MIN_DTH) continue;
                 dT.push(times[i]);
                 dV.push(dv / dtH);
+                prevIdx = i;
             }
             times = dT;
             values = dV;
@@ -496,11 +505,16 @@ export function renderDashTodaySection(
 
     const predictedColor = lerpHexToward(pvColor, '#ffffff', 0.55);
 
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    const todayDateLabel = formatDate(todayDate, host.config?.['date-format']);
+
     return html`
         <section class="dash-section dash-card dash-today">
             <header class="dash-card-header">
                 <ha-icon class="dash-card-icon" icon="mdi:weather-sunny" style="color:${sunColor}"></ha-icon>
                 <span class="dash-card-label">${t.detail.todayLabel}</span>
+                <span class="dash-card-date">(${todayDateLabel})</span>
             </header>
             <div class="dash-today-body">
                 <div class="dash-today-headline">
@@ -527,13 +541,18 @@ export function renderDashTodaySection(
                         </div>
                     ` : nothing}
                 </div>
-                ${(showPeakActual || showPeakPredicted) ? html`
+                ${(showPeakActual || showPeakPredicted || notStartedYet) ? html`
                     <div class="dash-today-meta">
                         ${showPeakActual ? html`
                             <div class="dash-today-line dash-today-peak" style="color:${pvColor}">
                                 <ha-icon icon="mdi:white-balance-sunny" style="color:${pvColor}"></ha-icon>
                                 <span class="dash-line-label">${t.detail.todayPeak}</span>
                                 <span class="dash-line-value">${peakActualTime} · ${peakActualValue}</span>
+                            </div>
+                        ` : notStartedYet ? html`
+                            <div class="dash-today-line dash-today-peak dash-today-paused" style="color:${pvColor}">
+                                <ha-icon icon="mdi:weather-night" style="color:${pvColor}"></ha-icon>
+                                <span class="dash-line-value">${t.detail.todayNotStartedYet}</span>
                             </div>
                         ` : nothing}
                         ${showPeakPredicted ? html`
@@ -547,9 +566,6 @@ export function renderDashTodaySection(
                 ` : nothing}
                 ${historyLoading ? nothing : renderDashTodayChart(host, pvColor, sunColor, cum)}
             </div>
-            ${notStartedYet ? html`
-                <div class="dash-today-status">${t.detail.todayNotStartedYet}</div>
-            ` : nothing}
         </section>
     `;
 }
@@ -885,11 +901,17 @@ export function renderDashTomorrowSection(
     //having to re-parse the label.
     const predictedColor = lerpHexToward(pvColor, '#ffffff', 0.55);
 
+    const tomorrowDate = new Date();
+    tomorrowDate.setHours(0, 0, 0, 0);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowDateLabel = formatDate(tomorrowDate, host.config?.['date-format']);
+
     return html`
         <section class="dash-section dash-card dash-tomorrow">
             <header class="dash-card-header">
                 <ha-icon class="dash-card-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
                 <span class="dash-card-label">${t.detail.tomorrowLabel}</span>
+                <span class="dash-card-date">(${tomorrowDateLabel})</span>
             </header>
             <div class="dash-today-headline">
                 <div class="dash-today-stat dash-today-stat-predicted" style="color:${predictedColor}">

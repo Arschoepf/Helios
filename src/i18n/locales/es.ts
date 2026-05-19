@@ -13,7 +13,7 @@ export const es: Translations = {
         todayForecast:      'previsto',
         todayPeak:          'pico real',
         todayPeakForecast:  'pico previsto',
-        todayNotStartedYet: 'producción en pausa',
+        todayNotStartedYet: 'Producción en pausa',
         tomorrowLabel:      'Mañana',
         tomorrowPeak:       'pico previsto sobre las',
         batteryLabel:       'Batería',

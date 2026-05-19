@@ -13,7 +13,7 @@ export const nl: Translations = {
         todayForecast:      'verwacht',
         todayPeak:          'reële piek',
         todayPeakForecast:  'verwachte piek',
-        todayNotStartedYet: 'opwekking gepauzeerd',
+        todayNotStartedYet: 'Opwekking gepauzeerd',
         tomorrowLabel:      'Morgen',
         tomorrowPeak:       'piek verwacht rond',
         batteryLabel:       'Batterij',

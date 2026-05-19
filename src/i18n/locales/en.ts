@@ -23,7 +23,7 @@ export const en: Translations = {
         todayForecast:      'forecast',
         todayPeak:          'actual peak',
         todayPeakForecast:  'forecast peak',
-        todayNotStartedYet: 'production paused',
+        todayNotStartedYet: 'Production paused',
         tomorrowLabel:      'Tomorrow',
         tomorrowPeak:       'peak expected around',
         batteryLabel:       'Battery',

@@ -318,6 +318,19 @@ export const heliosCardStyles = css`
         text-transform: uppercase;
         opacity: 0.65;
     }
+    /*  Date chip rendered next to AUJOURD'HUI / DEMAIN labels so the
+        user can confirm at a glance that the two sections cover
+        distinct days. Smaller and dimmer than the main label so it
+        reads as a sidekick, not a title.                            */
+    .dash-card-date
+    {
+        font-size: 10px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        opacity: 0.45;
+        letter-spacing: 0.5px;
+        margin-left: -2px;
+    }
     .dash-card-trailing
     {
         margin-left: auto;
@@ -489,15 +502,37 @@ export const heliosCardStyles = css`
         font-size: 11px;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
+        /*  Pin every child's line-box to the same vertical extent
+            as the icon so iOS Safari doesn't float the smaller
+            uppercase label text above the icon's centre. Without
+            this, the label / value picked up the parent font's
+            ~1.4 line-height and rendered ~2 px higher than the
+            13 px icon glyph on small screens.                    */
+        line-height: 1;
     }
-    .dash-today-line ha-icon { --mdc-icon-size: 13px; }
-    .dash-today-line .dash-line-value { font-weight: 700; }
+    .dash-today-line ha-icon
+    {
+        --mdc-icon-size: 13px;
+        width: 13px;
+        height: 13px;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+    .dash-today-line .dash-line-value
+    {
+        font-weight: 700;
+        line-height: 1;
+    }
     .dash-today-line .dash-line-label
     {
         font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 0.8px;
         opacity: 0.55;
+        line-height: 1;
     }
 
     /*  Cumulative production sparkline, full panel width below the
@@ -779,16 +814,6 @@ export const heliosCardStyles = css`
     {
         font-weight: 700;
         color: #ffffff;
-    }
-
-    /*  Status line under the body when the day's production hasn't
-        started yet (produced ~ 0, peak still in the future).         */
-    .dash-today-status
-    {
-        font-size: 11px;
-        opacity: 0.6;
-        font-style: italic;
-        margin-top: 4px;
     }
 
     /*  Skeleton placeholder shown in place of the produced value      */

@@ -22,7 +22,7 @@ export const no: Translations = {
         todayForecast:      'estimert',
         todayPeak:          'reell topp',
         todayPeakForecast:  'estimert topp',
-        todayNotStartedYet: 'produksjon pauset',
+        todayNotStartedYet: 'Produksjon pauset',
         tomorrowLabel:      'I morgen',
         tomorrowPeak:       'topp ventet rundt',
         batteryLabel:       'Batteri',

@@ -611,7 +611,7 @@ const en = {
     todayForecast: "forecast",
     todayPeak: "actual peak",
     todayPeakForecast: "forecast peak",
-    todayNotStartedYet: "production paused",
+    todayNotStartedYet: "Production paused",
     tomorrowLabel: "Tomorrow",
     tomorrowPeak: "peak expected around",
     batteryLabel: "Battery",
@@ -754,7 +754,7 @@ const fr = {
     todayForecast: "prévu",
     todayPeak: "pic réel",
     todayPeakForecast: "pic prévu",
-    todayNotStartedYet: "production en pause",
+    todayNotStartedYet: "Production en pause",
     tomorrowLabel: "Demain",
     tomorrowPeak: "pic prévu vers",
     batteryLabel: "Batterie",
@@ -1040,7 +1040,7 @@ const es = {
     todayForecast: "previsto",
     todayPeak: "pico real",
     todayPeakForecast: "pico previsto",
-    todayNotStartedYet: "producción en pausa",
+    todayNotStartedYet: "Producción en pausa",
     tomorrowLabel: "Mañana",
     tomorrowPeak: "pico previsto sobre las",
     batteryLabel: "Batería",
@@ -1183,7 +1183,7 @@ const it = {
     todayForecast: "previsto",
     todayPeak: "picco reale",
     todayPeakForecast: "picco previsto",
-    todayNotStartedYet: "produzione in pausa",
+    todayNotStartedYet: "Produzione in pausa",
     tomorrowLabel: "Domani",
     tomorrowPeak: "picco previsto verso le",
     batteryLabel: "Batteria",
@@ -1326,7 +1326,7 @@ const nl = {
     todayForecast: "verwacht",
     todayPeak: "reële piek",
     todayPeakForecast: "verwachte piek",
-    todayNotStartedYet: "opwekking gepauzeerd",
+    todayNotStartedYet: "Opwekking gepauzeerd",
     tomorrowLabel: "Morgen",
     tomorrowPeak: "piek verwacht rond",
     batteryLabel: "Batterij",
@@ -1469,7 +1469,7 @@ const pt = {
     todayForecast: "previsto",
     todayPeak: "pico real",
     todayPeakForecast: "pico previsto",
-    todayNotStartedYet: "produção em pausa",
+    todayNotStartedYet: "Produção em pausa",
     tomorrowLabel: "Amanhã",
     tomorrowPeak: "pico previsto por volta das",
     batteryLabel: "Bateria",
@@ -1612,7 +1612,7 @@ const no = {
     todayForecast: "estimert",
     todayPeak: "reell topp",
     todayPeakForecast: "estimert topp",
-    todayNotStartedYet: "produksjon pauset",
+    todayNotStartedYet: "Produksjon pauset",
     tomorrowLabel: "I morgen",
     tomorrowPeak: "topp ventet rundt",
     batteryLabel: "Batteri",
@@ -2064,6 +2064,19 @@ const heliosCardStyles = i$3`
         text-transform: uppercase;
         opacity: 0.65;
     }
+    /*  Date chip rendered next to AUJOURD'HUI / DEMAIN labels so the
+        user can confirm at a glance that the two sections cover
+        distinct days. Smaller and dimmer than the main label so it
+        reads as a sidekick, not a title.                            */
+    .dash-card-date
+    {
+        font-size: 10px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        opacity: 0.45;
+        letter-spacing: 0.5px;
+        margin-left: -2px;
+    }
     .dash-card-trailing
     {
         margin-left: auto;
@@ -2235,15 +2248,37 @@ const heliosCardStyles = i$3`
         font-size: 11px;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
+        /*  Pin every child's line-box to the same vertical extent
+            as the icon so iOS Safari doesn't float the smaller
+            uppercase label text above the icon's centre. Without
+            this, the label / value picked up the parent font's
+            ~1.4 line-height and rendered ~2 px higher than the
+            13 px icon glyph on small screens.                    */
+        line-height: 1;
     }
-    .dash-today-line ha-icon { --mdc-icon-size: 13px; }
-    .dash-today-line .dash-line-value { font-weight: 700; }
+    .dash-today-line ha-icon
+    {
+        --mdc-icon-size: 13px;
+        width: 13px;
+        height: 13px;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+    .dash-today-line .dash-line-value
+    {
+        font-weight: 700;
+        line-height: 1;
+    }
     .dash-today-line .dash-line-label
     {
         font-size: 10px;
         text-transform: uppercase;
         letter-spacing: 0.8px;
         opacity: 0.55;
+        line-height: 1;
     }
 
     /*  Cumulative production sparkline, full panel width below the
@@ -2525,16 +2560,6 @@ const heliosCardStyles = i$3`
     {
         font-weight: 700;
         color: #ffffff;
-    }
-
-    /*  Status line under the body when the day's production hasn't
-        started yet (produced ~ 0, peak still in the future).         */
-    .dash-today-status
-    {
-        font-size: 11px;
-        opacity: 0.6;
-        font-style: italic;
-        margin-top: 4px;
     }
 
     /*  Skeleton placeholder shown in place of the produced value      */
@@ -37435,19 +37460,30 @@ function renderPvChart(host) {
   let rawTimes = hist?.times ?? [];
   let rawValues = hist?.values ?? [];
   if (isCumulativeEnergy && rawTimes.length >= 2) {
+    const MIN_DTH = 0.05;
     const dTimes = [];
     const dValues = [];
+    let prevIdx = 0;
     for (let i2 = 1; i2 < rawTimes.length; i2++) {
-      const dtH = (rawTimes[i2].getTime() - rawTimes[i2 - 1].getTime()) / 36e5;
-      if (dtH <= 0 || dtH > 6) {
+      const dtH = (rawTimes[i2].getTime() - rawTimes[prevIdx].getTime()) / 36e5;
+      if (dtH <= 0) {
         continue;
       }
-      const dv = rawValues[i2] - rawValues[i2 - 1];
+      if (dtH > 6) {
+        prevIdx = i2;
+        continue;
+      }
+      const dv = rawValues[i2] - rawValues[prevIdx];
       if (dv < 0) {
+        prevIdx = i2;
+        continue;
+      }
+      if (dtH < MIN_DTH) {
         continue;
       }
       dTimes.push(rawTimes[i2]);
       dValues.push(dv / dtH);
+      prevIdx = i2;
     }
     rawTimes = dTimes;
     rawValues = dValues;
@@ -37720,15 +37756,26 @@ function computeTodayHourly(host) {
     let times = hist.times;
     let values2 = hist.values;
     if (isCumulativeEnergy && times.length >= 2) {
+      const MIN_DTH = 0.05;
       const dT = [];
       const dV = [];
+      let prevIdx = 0;
       for (let i2 = 1; i2 < times.length; i2++) {
-        const dtH = (times[i2].getTime() - times[i2 - 1].getTime()) / 36e5;
-        if (dtH <= 0 || dtH > 6) continue;
-        const dv = values2[i2] - values2[i2 - 1];
-        if (dv < 0) continue;
+        const dtH = (times[i2].getTime() - times[prevIdx].getTime()) / 36e5;
+        if (dtH <= 0) continue;
+        if (dtH > 6) {
+          prevIdx = i2;
+          continue;
+        }
+        const dv = values2[i2] - values2[prevIdx];
+        if (dv < 0) {
+          prevIdx = i2;
+          continue;
+        }
+        if (dtH < MIN_DTH) continue;
         dT.push(times[i2]);
         dV.push(dv / dtH);
+        prevIdx = i2;
       }
       times = dT;
       values2 = dV;
@@ -37922,11 +37969,15 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
   const historyLoading = pvConfigured && host._pvHistory === null;
   const notStartedYet = !historyLoading && producedKwh < 0.05 && data.peakHourTs !== null && data.peakHourTs > Date.now();
   const predictedColor = lerpHexToward(pvColor, "#ffffff", 0.55);
+  const todayDate = /* @__PURE__ */ new Date();
+  todayDate.setHours(0, 0, 0, 0);
+  const todayDateLabel = formatDate(todayDate, host.config?.["date-format"]);
   return b`
         <section class="dash-section dash-card dash-today">
             <header class="dash-card-header">
                 <ha-icon class="dash-card-icon" icon="mdi:weather-sunny" style="color:${sunColor}"></ha-icon>
                 <span class="dash-card-label">${t2.detail.todayLabel}</span>
+                <span class="dash-card-date">(${todayDateLabel})</span>
             </header>
             <div class="dash-today-body">
                 <div class="dash-today-headline">
@@ -37953,13 +38004,18 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                         </div>
                     ` : A}
                 </div>
-                ${showPeakActual || showPeakPredicted ? b`
+                ${showPeakActual || showPeakPredicted || notStartedYet ? b`
                     <div class="dash-today-meta">
                         ${showPeakActual ? b`
                             <div class="dash-today-line dash-today-peak" style="color:${pvColor}">
                                 <ha-icon icon="mdi:white-balance-sunny" style="color:${pvColor}"></ha-icon>
                                 <span class="dash-line-label">${t2.detail.todayPeak}</span>
                                 <span class="dash-line-value">${peakActualTime} · ${peakActualValue}</span>
+                            </div>
+                        ` : notStartedYet ? b`
+                            <div class="dash-today-line dash-today-peak dash-today-paused" style="color:${pvColor}">
+                                <ha-icon icon="mdi:weather-night" style="color:${pvColor}"></ha-icon>
+                                <span class="dash-line-value">${t2.detail.todayNotStartedYet}</span>
                             </div>
                         ` : A}
                         ${showPeakPredicted ? b`
@@ -37973,9 +38029,6 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                 ` : A}
                 ${historyLoading ? A : renderDashTodayChart(host, pvColor, sunColor, cum)}
             </div>
-            ${notStartedYet ? b`
-                <div class="dash-today-status">${t2.detail.todayNotStartedYet}</div>
-            ` : A}
         </section>
     `;
 }
@@ -38213,11 +38266,16 @@ function renderDashTomorrowSection(host, t2, sunColor, _cloudColor, pvColor) {
     hourCycle: "h23"
   }) : "";
   const predictedColor = lerpHexToward(pvColor, "#ffffff", 0.55);
+  const tomorrowDate = /* @__PURE__ */ new Date();
+  tomorrowDate.setHours(0, 0, 0, 0);
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrowDateLabel = formatDate(tomorrowDate, host.config?.["date-format"]);
   return b`
         <section class="dash-section dash-card dash-tomorrow">
             <header class="dash-card-header">
                 <ha-icon class="dash-card-icon" icon="mdi:weather-partly-cloudy" style="color:${sunColor}"></ha-icon>
                 <span class="dash-card-label">${t2.detail.tomorrowLabel}</span>
+                <span class="dash-card-date">(${tomorrowDateLabel})</span>
             </header>
             <div class="dash-today-headline">
                 <div class="dash-today-stat dash-today-stat-predicted" style="color:${predictedColor}">
@@ -40092,7 +40150,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-beta.0"}`,
+      `%c☀ HELIOS%c v${"1.6.0-beta.1"}`,
       labelStyle,
       versionStyle
     );
@@ -40113,7 +40171,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-beta.0",
+        version: "1.6.0-beta.1",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40121,7 +40179,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-beta.0"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-beta.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

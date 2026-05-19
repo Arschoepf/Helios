@@ -274,24 +274,49 @@ export function renderPvChart(host: ChartHost): TemplateResult
 
     if (isCumulativeEnergy && rawTimes.length >= 2)
     {
+        //Quantization fix: cumulative-energy sensors typically
+        //report integer Wh, so two samples a few seconds apart
+        //look like "0 then 1 Wh delta over 10 s", which divides
+        //to a fake 360 W spike when the true rate is closer to
+        //100 W. Hold the previous anchor until at least MIN_DTH
+        //of clock time has accumulated so dv / dtH averages over
+        //a window where quantization is negligible. Skip samples
+        //before that, don't advance the anchor, so the next
+        //iteration compares against the same baseline.
+        const MIN_DTH = 0.05;   //3 minutes
         const dTimes:  Date[]   = [];
         const dValues: number[] = [];
+        let prevIdx = 0;
         for (let i = 1; i < rawTimes.length; i++)
         {
-            const dtH = (rawTimes[i].getTime() - rawTimes[i - 1].getTime()) / 3_600_000;
-            if (dtH <= 0 || dtH > 6)
+            const dtH = (rawTimes[i].getTime() - rawTimes[prevIdx].getTime()) / 3_600_000;
+            if (dtH <= 0)
             {
                 continue;
             }
-            const dv = rawValues[i] - rawValues[i - 1];
+            if (dtH > 6)
+            {
+                //Sensor outage, abandon this anchor and start a
+                //fresh one at the current sample.
+                prevIdx = i;
+                continue;
+            }
+            const dv = rawValues[i] - rawValues[prevIdx];
             if (dv < 0)
             {
                 //Counter reset (typical for "energy today"
-                //sensors that zero out at midnight).
+                //sensors that zero out at midnight). Reset the
+                //anchor to the new low value.
+                prevIdx = i;
+                continue;
+            }
+            if (dtH < MIN_DTH)
+            {
                 continue;
             }
             dTimes.push(rawTimes[i]);
             dValues.push(dv / dtH);
+            prevIdx = i;
         }
         rawTimes  = dTimes;
         rawValues = dValues;

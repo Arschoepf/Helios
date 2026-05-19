@@ -20,7 +20,7 @@ export const fr: Translations = {
         todayForecast:      'prévu',
         todayPeak:          'pic réel',
         todayPeakForecast:  'pic prévu',
-        todayNotStartedYet: 'production en pause',
+        todayNotStartedYet: 'Production en pause',
         tomorrowLabel:      'Demain',
         tomorrowPeak:       'pic prévu vers',
         batteryLabel:       'Batterie',
