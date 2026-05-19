@@ -320,7 +320,7 @@ HELIOS depends on several open data services. None require an account or API key
 
 External contributors who have shaped the card beyond the core author:
 
-* **[@jourdant](https://github.com/jourdant)** — generic BYO local nDSM LiDAR provider ([PR #5](https://github.com/ReikanYsora/Helios/pull/5)), idea credited to [@stephenwq](https://github.com/stephenwq). Unlocks shadows in any region with raw LiDAR data available offline, initial use case NSW Australia.
+* **[@jourdant](https://github.com/jourdant)** (Jourdan Templeton) — generic BYO local nDSM LiDAR provider ([PR #5](https://github.com/ReikanYsora/Helios/pull/5), unlocks shadows in any region with raw LiDAR data available offline, initial use case NSW Australia), and the Python preparation toolchain under `tools/lidar/` ([PR #11](https://github.com/ReikanYsora/Helios/pull/11), inspect a GeoTIFF, convert to Cloud Optimized GeoTIFF, generate a synthetic test raster). Original idea credit: [@stephenwq](https://github.com/stephenwq).
 * **[@i6media](https://github.com/i6media)** (Frank Boon) — optional `home-latitude` / `home-longitude` overrides ([PR #9](https://github.com/ReikanYsora/Helios/pull/9), useful for shared HA installs, holiday / parents' homes, mobile setups, or multiple cards on one dashboard each visualising a different place), and the multi-orientation PV layout (`pv-arrays`) ([PR #10](https://github.com/ReikanYsora/Helios/pull/10), one entry per group of co-oriented panels, each with its own tilt, azimuth, share and optional GPS).
 
 ---
