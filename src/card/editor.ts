@@ -357,7 +357,14 @@ export class HeliosCardEditor extends LitElement
     //    show through).
     //Field values are stored as `number | null`, where null means
     //"empty input"; that maps directly to the input's value binding.
-    private _readPvArrays(): { name: string | null; tilt: number | null; azimuth: number | null; share: number | null }[]
+    private _readPvArrays(): {
+        name:      string | null;
+        tilt:      number | null;
+        azimuth:   number | null;
+        share:     number | null;
+        latitude:  number | null;
+        longitude: number | null;
+    }[]
     {
         const toNum = (v: unknown): number | null =>
         {
@@ -379,22 +386,24 @@ export class HeliosCardEditor extends LitElement
             {
                 const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
                 return {
-                    name:    toStr(e['name']),
-                    tilt:    toNum(e['tilt']),
-                    azimuth: toNum(e['azimuth']),
-                    share:   toNum(e['share'])
+                    name:      toStr(e['name']),
+                    tilt:      toNum(e['tilt']),
+                    azimuth:   toNum(e['azimuth']),
+                    share:     toNum(e['share']),
+                    latitude:  toNum(e['latitude']),
+                    longitude: toNum(e['longitude'])
                 };
             });
-            return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null }];
+            return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null }];
         }
 
         const legacyTilt = toNum(this._cfg?.['pv-tilt']);
         const legacyAz   = toNum(this._cfg?.['pv-azimuth']);
         if (legacyTilt !== null || legacyAz !== null)
         {
-            return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100 }];
+            return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, latitude: null, longitude: null }];
         }
-        return [{ name: null, tilt: null, azimuth: null, share: null }];
+        return [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null }];
     }
 
     //Persists a list of array entries to the config under `pv-arrays`
@@ -403,15 +412,24 @@ export class HeliosCardEditor extends LitElement
     //the section. Null fields are dropped so a partially-filled card
     //(e.g. tilt set but azimuth blank) still produces a sparse but
     //valid YAML entry; the card-side reader applies sensible defaults.
-    private _writePvArrays(list: { name: string | null; tilt: number | null; azimuth: number | null; share: number | null }[]): void
+    private _writePvArrays(list: {
+        name:      string | null;
+        tilt:      number | null;
+        azimuth:   number | null;
+        share:     number | null;
+        latitude:  number | null;
+        longitude: number | null;
+    }[]): void
     {
         const arrays = list.map(e =>
         {
             const o: Record<string, number | string> = {};
-            if (e.name    !== null) o['name']    = e.name;
-            if (e.tilt    !== null) o['tilt']    = e.tilt;
-            if (e.azimuth !== null) o['azimuth'] = e.azimuth;
-            if (e.share   !== null) o['share']   = e.share;
+            if (e.name      !== null) o['name']      = e.name;
+            if (e.tilt      !== null) o['tilt']      = e.tilt;
+            if (e.azimuth   !== null) o['azimuth']   = e.azimuth;
+            if (e.share     !== null) o['share']     = e.share;
+            if (e.latitude  !== null) o['latitude']  = e.latitude;
+            if (e.longitude !== null) o['longitude'] = e.longitude;
             return o;
         });
         const next = { ...this._cfg, 'pv-arrays': arrays } as HeliosConfig;
@@ -428,7 +446,7 @@ export class HeliosCardEditor extends LitElement
     //Updates a single field on entry `i` in the array list. Empty
     //input clears the field to null (mirrors `_numField`); any other
     //unparseable value is ignored so the previous typed value sticks.
-    private _arrayField(i: number, key: 'tilt' | 'azimuth' | 'share', e: Event): void
+    private _arrayField(i: number, key: 'tilt' | 'azimuth' | 'share' | 'latitude' | 'longitude', e: Event): void
     {
         const list = this._readPvArrays();
         if (i < 0 || i >= list.length) return;
@@ -474,7 +492,7 @@ export class HeliosCardEditor extends LitElement
     {
         const list = this._readPvArrays();
         if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
-        list.push({ name: null, tilt: null, azimuth: null, share: null });
+        list.push({ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null });
         //Open the newly added pan in the editor by default: the user
         //just clicked to add it, so its body should be visible without
         //requiring a second click on the chevron. Existing pans keep
@@ -1076,6 +1094,31 @@ export class HeliosCardEditor extends LitElement
                                                 />
                                             </label>
                                             <div class="field-help">${t.editor.pvArrayShareHelp}</div>
+                                            <label class="field">
+                                                <span class="label">${t.editor.pvArrayLatitude}</span>
+                                                <input
+                                                    type="number"
+                                                    min="-90"
+                                                    max="90"
+                                                    step="any"
+                                                    placeholder="${t.editor.pvArrayCoordsPlaceholder}"
+                                                    .value="${arr.latitude !== null ? String(arr.latitude) : ''}"
+                                                    @change="${(e: Event) => this._arrayField(i, 'latitude', e)}"
+                                                />
+                                            </label>
+                                            <label class="field">
+                                                <span class="label">${t.editor.pvArrayLongitude}</span>
+                                                <input
+                                                    type="number"
+                                                    min="-180"
+                                                    max="180"
+                                                    step="any"
+                                                    placeholder="${t.editor.pvArrayCoordsPlaceholder}"
+                                                    .value="${arr.longitude !== null ? String(arr.longitude) : ''}"
+                                                    @change="${(e: Event) => this._arrayField(i, 'longitude', e)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t.editor.pvArrayCoordsHelp}</div>
                                         </div>
                                     </details>
                                 `;
@@ -1334,8 +1377,50 @@ export class HeliosCardEditor extends LitElement
                     </label>
                 </details>
 
+                <details class="advanced-section" ?open="${this._openSection === 'reset'}" @toggle="${(e: Event) => this._onSectionToggle('reset', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.resetSection}</summary>
+                    <div class="hint">${t.editor.resetSectionHint}</div>
+                    <div class="reset-row">
+                        <button
+                            type="button"
+                            class="reset-btn"
+                            @click="${() => this._onResetCacheClick()}"
+                        >${this._resetFeedback ?? t.editor.resetCacheButton}</button>
+                        <div class="reset-warning">${t.editor.resetCacheWarning}</div>
+                    </div>
+                </details>
+
             </div>
         `;
+    }
+
+
+    //Fires the window-level reset bus so every live HeliosCard on
+    //the page drops its cached Open-Meteo payload + in-memory PV
+    //history and triggers a fresh fetch. Also flashes a short
+    //"Cache vidé" confirmation on the button itself for 2 s so
+    //the user knows the click landed without us needing a toast
+    //system inside the editor.
+    private _resetFeedbackTimer?: number;
+    @state() private _resetFeedback: string | null = null;
+
+    private _onResetCacheClick(): void
+    {
+        try
+        {
+            window.dispatchEvent(new CustomEvent('helios-data-cache-reset'));
+        }
+        catch (_) {}
+        const t = pickTranslations(this.hass?.language);
+        this._resetFeedback = t.editor.resetCacheDone;
+        if (this._resetFeedbackTimer !== undefined)
+        {
+            window.clearTimeout(this._resetFeedbackTimer);
+        }
+        this._resetFeedbackTimer = window.setTimeout(() =>
+        {
+            this._resetFeedback = null;
+        }, 2000);
     }
 
     static styles = editorStyles;

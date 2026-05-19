@@ -431,6 +431,70 @@ export const heliosCardStyles = css`
         align-items: baseline;
         line-height: 1;
     }
+    /*  When forecast calibration kicks in we stack the raw stat
+        (value + unit) on top of a small "refined" annotation that
+        shows the same forecast adjusted by the past-days actual /
+        predicted ratio. Right-aligned because the predicted stat
+        sits in the right column of the headline, the refined hint
+        should hug the column edge rather than pulling the eye
+        back left.                                                */
+    .dash-today-stat-with-refined
+    {
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 3px;
+    }
+    .dash-stat-main
+    {
+        display: inline-flex;
+        align-items: baseline;
+        line-height: 1;
+    }
+    .dash-stat-refined
+    {
+        font-size: 11px;
+        font-weight: 600;
+        opacity: 0.75;
+        white-space: nowrap;
+        position: relative;
+        cursor: help;
+    }
+    .dash-stat-refined-pct
+    {
+        font-variant-numeric: tabular-nums;
+        margin-left: 3px;
+    }
+    .dash-stat-refined-up   { color: #22c55e; }
+    .dash-stat-refined-down { color: #ef4444; }
+    /*  Same instant-appearing tooltip pattern as .dash-stat-delta,
+        explains where the refined value comes from when the user
+        hovers the chip.                                          */
+    .dash-stat-refined::after
+    {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        right: 0;
+        background: rgba(0, 0, 0, 0.85);
+        color: #ffffff;
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.1px;
+        white-space: normal;
+        max-width: 240px;
+        width: max-content;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease-out 0.05s;
+        z-index: 10;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
+    }
+    .dash-stat-refined:hover::after
+    {
+        opacity: 1;
+    }
     /*  Signed delta % shown after the produced value: "(+15 %)" if
         we're ahead of the forecast at this moment, "(-8 %)" if
         behind. Inherits font sizing from the stat unit it sits
@@ -521,10 +585,18 @@ export const heliosCardStyles = css`
         justify-content: center;
         line-height: 1;
     }
+    /*  Text spans get a 1 px downward nudge so their uppercase
+        glyphs visually centre with the icon. align-items: center
+        on the parent flex aligns line-boxes, not glyph
+        centroids, and an uppercase block (no descenders) sits
+        above its line-box centreline, so without the nudge the
+        text reads as floating 1-2 px above the icon, both on
+        desktop and on smartphone.                                 */
     .dash-today-line .dash-line-value
     {
         font-weight: 700;
         line-height: 1;
+        transform: translateY(1px);
     }
     .dash-today-line .dash-line-label
     {
@@ -533,6 +605,7 @@ export const heliosCardStyles = css`
         letter-spacing: 0.8px;
         opacity: 0.55;
         line-height: 1;
+        transform: translateY(1px);
     }
 
     /*  Cumulative production sparkline, full panel width below the

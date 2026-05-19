@@ -141,6 +141,16 @@ if (!window.customCards.some(c => c.type === 'helios-card'))
 //class to be fully constructed first.
 const _liveCards = new Set<HeliosCard>();
 
+//Window-level reset bus: the editor's "reset data cache" button
+//fires this event so every live card on the page (potentially
+//several dashboards open in the same tab) drops its cached data
+//in one sweep. Wired once at module load so we don't add/remove
+//the listener per card.
+window.addEventListener('helios-data-cache-reset', () =>
+{
+    for (const card of _liveCards) card.resetDataCache();
+});
+
 //Public diagnostic command, exposed once on first bundle load. Returns
 //a JSON-safe snapshot AND prints a grouped, human-readable dump to the
 //console. The dump includes the build version, the lifecycle counters
@@ -492,6 +502,26 @@ export class HeliosCard extends LitElement
     public invalidateLocation(): void
     {
         this._lastHomeKey = '';
+        this.requestUpdate();
+    }
+
+
+    //Wipe all card-side cached production / forecast data and
+    //trigger a fresh fetch from HA and Open-Meteo. Used by the
+    //editor's "reset data cache" button so users can recover from
+    //a stuck calibration or a stale weather payload without
+    //touching localStorage manually.
+    public resetDataCache(): void
+    {
+        //Drop in-memory PV state so the next refreshPv() refetches
+        //from scratch instead of pulling from the cached fetch key.
+        this._pvHistory             = null;
+        this._pvSampleBuffer        = [];
+        this._pvFetchKey            = '';
+        this._pvHistoryDiagnostics  = null;
+        //Engine-side: clears localStorage weather cache, drops the
+        //in-memory hourly snapshot and triggers a refetch.
+        this._engine?.resetDataCache();
         this.requestUpdate();
     }
 

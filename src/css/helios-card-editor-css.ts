@@ -492,4 +492,48 @@ export const editorStyles = css`
         outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 2px;
     }
+
+    /*  Reset section: a single button + a destructive-action
+        warning sat side by side. The button is in destructive
+        red so users read it as "this empties data" without
+        relying on the label alone; the warning text is the
+        full explanation of what gets wiped and what doesn't. */
+    .reset-row
+    {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        margin-top: 8px;
+    }
+    .reset-btn
+    {
+        background: transparent;
+        border: 1px solid #ef4444;
+        color: #ef4444;
+        border-radius: 4px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        flex: 0 0 auto;
+    }
+    .reset-btn:hover
+    {
+        background: rgba(239, 68, 68, 0.08);
+    }
+    .reset-btn:focus-visible
+    {
+        outline: 2px solid #ef4444;
+        outline-offset: 2px;
+    }
+    .reset-warning
+    {
+        flex: 1 1 200px;
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--secondary-text-color, #5f6368);
+        opacity: 0.85;
+    }
 `;

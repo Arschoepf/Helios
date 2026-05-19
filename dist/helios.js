@@ -619,7 +619,9 @@ const en = {
     batteryDischarged: "discharged",
     actualShort: "Actual",
     forecastShort: "Forecast",
-    deltaTooltip: "Actual production vs forecast at this moment"
+    deltaTooltip: "Actual production vs forecast at this moment",
+    forecastRefined: "refined",
+    forecastCalibrationHint: "Forecast adjusted from the average gap between the model and observed production over the last {n} days."
   },
   editor: {
     locationSection: "Location",
@@ -671,6 +673,10 @@ const en = {
     pvArrayTiltHelp: "Tilt of this row from horizontal, 0 to 90: 0 for a flat install, 30 to 45 for a typical pitched roof, 90 for a fully vertical setup such as a balcony. Combined with the azimuth, this drives the Liu-Jordan transposition that projects the predicted irradiance onto the panel plane.",
     pvArrayAzimuthHelp: "Compass bearing this row faces, clockwise from north, 0 to 360: 0 = north, 90 = east, 180 = south, 270 = west.",
     pvArrayShareHelp: "Relative weight of this row within the total kWp. Auto-normalised at compute time, so 50/50, 60/60 and 1/1 all produce the same forecast. Leave blank when there's only one row (it gets 100% by default).",
+    pvArrayLatitude: "Panel latitude",
+    pvArrayLongitude: "Panel longitude",
+    pvArrayCoordsHelp: "Optional. Only set these when this row is NOT at the same place as the home (ground-mount 300 m away, detached garage, etc.). Both fields must be filled in for the position to apply, otherwise the forecast uses the home position. A small green sphere will appear on the map at that location.",
+    pvArrayCoordsPlaceholder: "optional",
     pvColor: "Production color",
     batterySection: "Home battery",
     batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional. The chip on its side appears as soon as the entity is set.",
@@ -741,7 +747,12 @@ const en = {
     localLidarMinLat: "Min latitude",
     localLidarMaxLat: "Max latitude",
     localLidarMinLon: "Min longitude",
-    localLidarMaxLon: "Max longitude"
+    localLidarMaxLon: "Max longitude",
+    resetSection: "Reset",
+    resetSectionHint: "Maintenance tools to wipe data the card has cached locally.",
+    resetCacheButton: "Reset data cache",
+    resetCacheWarning: "Warning: this clears the cached Open-Meteo weather and the in-memory PV history for EVERY Helios card open on this page. The refined forecast will lose its 5 days of calibration until they're re-fetched (a few minutes depending on your HA server). Your data inside Home Assistant is never touched.",
+    resetCacheDone: "Cache cleared ✓"
   }
 };
 const fr = {
@@ -762,7 +773,9 @@ const fr = {
     batteryDischarged: "déchargé",
     actualShort: "Réel",
     forecastShort: "Prévu",
-    deltaTooltip: "Production réelle vs prévision à cet instant"
+    deltaTooltip: "Production réelle vs prévision à cet instant",
+    forecastRefined: "affiné",
+    forecastCalibrationHint: "Prévision ajustée selon l'écart moyen entre modèle et production réelle sur les {n} derniers jours."
   },
   editor: {
     locationSection: "Localisation",
@@ -814,6 +827,10 @@ const fr = {
     pvArrayTiltHelp: "Inclinaison de cette rangée par rapport à l'horizontale, de 0 à 90 : 0 pour une installation à plat, 30 à 45 pour un toit incliné classique, 90 pour une installation verticale (par exemple un balcon). Combinée à l'azimut, elle pilote la transposition Liu-Jordan qui projette l'irradiance prévue sur le plan des panneaux.",
     pvArrayAzimuthHelp: "Orientation à la boussole vers laquelle cette rangée est tournée, sens horaire depuis le nord, de 0 à 360 : 0 = nord, 90 = est, 180 = sud, 270 = ouest.",
     pvArrayShareHelp: "Poids relatif de cette rangée dans le total des kWp. Normalisé automatiquement au calcul : 50/50, 60/60 et 1/1 donnent tous le même résultat. Laisse vide quand il n'y a qu'une seule rangée (elle prend 100 % par défaut).",
+    pvArrayLatitude: "Latitude des panneaux",
+    pvArrayLongitude: "Longitude des panneaux",
+    pvArrayCoordsHelp: "Optionnel. À renseigner uniquement si cette rangée n'est PAS au même endroit que la maison (panneaux au sol à 300 m, garage isolé, etc.). Les deux champs doivent être remplis pour que la position s'applique. Sinon la prévision utilise la position de la maison. Une petite sphère verte apparaîtra sur la carte à cette position.",
+    pvArrayCoordsPlaceholder: "optionnel",
     pvColor: "Couleur de production",
     batterySection: "Batterie domestique",
     batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles. La pastille correspondante s'affiche dès que l'entité est renseignée.",
@@ -884,7 +901,12 @@ const fr = {
     localLidarMinLat: "Latitude min",
     localLidarMaxLat: "Latitude max",
     localLidarMinLon: "Longitude min",
-    localLidarMaxLon: "Longitude max"
+    localLidarMaxLon: "Longitude max",
+    resetSection: "Réinitialisation",
+    resetSectionHint: "Outils de maintenance pour purger les données mises en cache par la carte.",
+    resetCacheButton: "Réinitialiser le cache des données",
+    resetCacheWarning: "Attention : ce bouton vide la météo Open-Meteo en cache local et l'historique PV en mémoire pour TOUTES les cartes Helios ouvertes. La prévision affinée perdra ses 5 derniers jours de calibration le temps qu'ils soient récupérés à nouveau (quelques minutes selon ton serveur HA). Tes données dans Home Assistant ne sont jamais touchées.",
+    resetCacheDone: "Cache vidé ✓"
   }
 };
 const de = {
@@ -905,7 +927,9 @@ const de = {
     batteryDischarged: "entladen",
     actualShort: "Real",
     forecastShort: "Prognose",
-    deltaTooltip: "Reale Erzeugung vs Prognose im aktuellen Moment"
+    deltaTooltip: "Reale Erzeugung vs Prognose im aktuellen Moment",
+    forecastRefined: "verfeinert",
+    forecastCalibrationHint: "Prognose angepasst anhand der durchschnittlichen Abweichung zwischen Modell und realer Erzeugung der letzten {n} Tage."
   },
   editor: {
     locationSection: "Standort",
@@ -957,6 +981,10 @@ const de = {
     pvArrayTiltHelp: "Neigung dieser Reihe gegenüber der Horizontalen, 0 bis 90: 0 für eine flache Installation, 30 bis 45 für ein typisches Steildach, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Zusammen mit dem Azimut treibt die Neigung die Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert.",
     pvArrayAzimuthHelp: "Kompassrichtung, in die diese Reihe zeigt, im Uhrzeigersinn ab Norden, 0 bis 360: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen.",
     pvArrayShareHelp: "Relativer Anteil dieser Reihe an der Gesamt-kWp. Wird zum Berechnungszeitpunkt automatisch normalisiert, deshalb liefern 50/50, 60/60 und 1/1 dieselbe Prognose. Leer lassen, wenn nur eine Reihe existiert (sie bekommt standardmäßig 100 %).",
+    pvArrayLatitude: "Modul-Breitengrad",
+    pvArrayLongitude: "Modul-Längengrad",
+    pvArrayCoordsHelp: "Optional. Nur ausfüllen, wenn diese Reihe NICHT am selben Ort steht wie das Haus (Freilandanlage 300 m entfernt, separate Garage usw.). Beide Felder müssen ausgefüllt sein, damit die Position übernommen wird, sonst verwendet die Prognose den Standort des Hauses. Eine kleine grüne Kugel erscheint dann auf der Karte an dieser Position.",
+    pvArrayCoordsPlaceholder: "optional",
     pvColor: "Produktionsfarbe",
     batterySection: "Hausbatterie",
     batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional. Der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
@@ -1027,7 +1055,12 @@ const de = {
     localLidarMinLat: "Min. Breitengrad",
     localLidarMaxLat: "Max. Breitengrad",
     localLidarMinLon: "Min. Längengrad",
-    localLidarMaxLon: "Max. Längengrad"
+    localLidarMaxLon: "Max. Längengrad",
+    resetSection: "Zurücksetzen",
+    resetSectionHint: "Wartungswerkzeuge, um die lokal gespeicherten Daten der Karte zu löschen.",
+    resetCacheButton: "Datencache zurücksetzen",
+    resetCacheWarning: "Achtung: löscht das zwischengespeicherte Open-Meteo-Wetter und den PV-Verlauf im Speicher für ALLE auf dieser Seite geöffneten Helios-Karten. Die verfeinerte Prognose verliert ihre 5-Tage-Kalibrierung, bis sie erneut abgerufen wird (je nach HA-Server einige Minuten). Daten in Home Assistant bleiben unverändert.",
+    resetCacheDone: "Cache geleert ✓"
   }
 };
 const es = {
@@ -1048,7 +1081,9 @@ const es = {
     batteryDischarged: "descargado",
     actualShort: "Real",
     forecastShort: "Previsto",
-    deltaTooltip: "Producción real vs previsión en este momento"
+    deltaTooltip: "Producción real vs previsión en este momento",
+    forecastRefined: "ajustada",
+    forecastCalibrationHint: "Previsión ajustada según la diferencia media entre el modelo y la producción real de los últimos {n} días."
   },
   editor: {
     locationSection: "Ubicación",
@@ -1100,6 +1135,10 @@ const es = {
     pvArrayTiltHelp: "Inclinación de esta hilera respecto a la horizontal, de 0 a 90: 0 para una instalación plana, 30 a 45 para un tejado inclinado clásico, 90 para una instalación vertical (por ejemplo balcón). Combinada con el azimut, dirige la transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel.",
     pvArrayAzimuthHelp: "Orientación brújula a la que apunta esta hilera, en sentido horario desde el norte, de 0 a 360: 0 = norte, 90 = este, 180 = sur, 270 = oeste.",
     pvArrayShareHelp: "Peso relativo de esta hilera en el total de kWp. Se normaliza automáticamente al calcular: 50/50, 60/60 y 1/1 producen el mismo resultado. Déjalo vacío cuando solo hay una hilera (recibe el 100 % por defecto).",
+    pvArrayLatitude: "Latitud de los paneles",
+    pvArrayLongitude: "Longitud de los paneles",
+    pvArrayCoordsHelp: "Opcional. Rellénalo solo si esta hilera NO está en el mismo sitio que la casa (instalación al suelo a 300 m, garaje independiente, etc.). Ambos campos deben estar rellenados para que la posición se aplique; si no, la previsión usa la posición de la casa. Aparecerá una pequeña esfera verde en el mapa en esa posición.",
+    pvArrayCoordsPlaceholder: "opcional",
     pvColor: "Color de producción",
     batterySection: "Batería doméstica",
     batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales. El chip correspondiente aparece en cuanto la entidad está definida.",
@@ -1170,7 +1209,12 @@ const es = {
     localLidarMinLat: "Latitud mín.",
     localLidarMaxLat: "Latitud máx.",
     localLidarMinLon: "Longitud mín.",
-    localLidarMaxLon: "Longitud máx."
+    localLidarMaxLon: "Longitud máx.",
+    resetSection: "Restablecer",
+    resetSectionHint: "Herramientas de mantenimiento para borrar los datos almacenados localmente por la tarjeta.",
+    resetCacheButton: "Restablecer caché de datos",
+    resetCacheWarning: "Atención: borra la meteorología de Open-Meteo en caché y el historial PV en memoria de TODAS las tarjetas Helios abiertas en esta página. La previsión ajustada perderá sus 5 días de calibración hasta que se vuelvan a obtener (unos minutos según tu servidor HA). Los datos en Home Assistant no se tocan nunca.",
+    resetCacheDone: "Caché borrada ✓"
   }
 };
 const it = {
@@ -1191,7 +1235,9 @@ const it = {
     batteryDischarged: "scaricato",
     actualShort: "Reale",
     forecastShort: "Previsto",
-    deltaTooltip: "Produzione reale vs prevista in questo momento"
+    deltaTooltip: "Produzione reale vs prevista in questo momento",
+    forecastRefined: "rifinita",
+    forecastCalibrationHint: "Previsione corretta in base allo scarto medio tra modello e produzione reale negli ultimi {n} giorni."
   },
   editor: {
     locationSection: "Posizione",
@@ -1243,6 +1289,10 @@ const it = {
     pvArrayTiltHelp: "Inclinazione di questa fila rispetto all'orizzontale, da 0 a 90: 0 per un'installazione piana, 30 a 45 per un tetto inclinato classico, 90 per un'installazione verticale (per esempio balcone). Combinata con l'azimut, guida la trasposizione Liu-Jordan che proietta l'irradianza prevista sul piano del pannello.",
     pvArrayAzimuthHelp: "Orientamento bussola verso cui è rivolta questa fila, in senso orario da nord, da 0 a 360: 0 = nord, 90 = est, 180 = sud, 270 = ovest.",
     pvArrayShareHelp: "Peso relativo di questa fila nel totale dei kWp. Normalizzato automaticamente al calcolo: 50/50, 60/60 e 1/1 danno lo stesso risultato. Lascia vuoto quando c'è una sola fila (prende il 100 % per default).",
+    pvArrayLatitude: "Latitudine pannelli",
+    pvArrayLongitude: "Longitudine pannelli",
+    pvArrayCoordsHelp: "Opzionale. Compila solo se questa fila NON è nello stesso posto della casa (installazione a terra a 300 m, garage separato, ecc.). Entrambi i campi devono essere compilati perché la posizione si applichi, altrimenti la previsione usa la posizione della casa. Sulla mappa apparirà una piccola sfera verde in quella posizione.",
+    pvArrayCoordsPlaceholder: "opzionale",
     pvColor: "Colore di produzione",
     batterySection: "Batteria domestica",
     batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali. La pastiglia corrispondente appare appena l'entità è impostata.",
@@ -1313,7 +1363,12 @@ const it = {
     localLidarMinLat: "Latitudine min",
     localLidarMaxLat: "Latitudine max",
     localLidarMinLon: "Longitudine min",
-    localLidarMaxLon: "Longitudine max"
+    localLidarMaxLon: "Longitudine max",
+    resetSection: "Reset",
+    resetSectionHint: "Strumenti di manutenzione per cancellare i dati memorizzati localmente dalla card.",
+    resetCacheButton: "Reset cache dati",
+    resetCacheWarning: "Attenzione: cancella i dati meteo Open-Meteo in cache e lo storico PV in memoria per TUTTE le card Helios aperte in questa pagina. La previsione rifinita perderà i suoi 5 giorni di calibrazione finché non saranno scaricati di nuovo (qualche minuto a seconda del tuo server HA). I dati su Home Assistant non vengono mai toccati.",
+    resetCacheDone: "Cache svuotata ✓"
   }
 };
 const nl = {
@@ -1334,7 +1389,9 @@ const nl = {
     batteryDischarged: "ontladen",
     actualShort: "Werkelijk",
     forecastShort: "Verwacht",
-    deltaTooltip: "Werkelijke opwekking vs verwachting op dit moment"
+    deltaTooltip: "Werkelijke opwekking vs verwachting op dit moment",
+    forecastRefined: "bijgesteld",
+    forecastCalibrationHint: "Verwachting bijgesteld op basis van het gemiddelde verschil tussen model en gemeten opwekking over de laatste {n} dagen."
   },
   editor: {
     locationSection: "Locatie",
@@ -1386,6 +1443,10 @@ const nl = {
     pvArrayTiltHelp: "Helling van deze rij ten opzichte van het horizontale vlak, 0 tot 90: 0 voor een platte opstelling, 30 tot 45 voor een klassiek schuin dak, 90 voor een volledig verticale opstelling (bijvoorbeeld een balkon). Samen met de azimut stuurt deze instelling de Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert.",
     pvArrayAzimuthHelp: "Kompasrichting waarnaar deze rij wijst, met de klok mee vanaf het noorden, 0 tot 360: 0 = noord, 90 = oost, 180 = zuid, 270 = west.",
     pvArrayShareHelp: "Relatief gewicht van deze rij in het totale kWp. Wordt op berekentijd automatisch genormaliseerd: 50/50, 60/60 en 1/1 leveren hetzelfde resultaat. Laat leeg wanneer er maar één rij is (krijgt standaard 100%).",
+    pvArrayLatitude: "Breedtegraad panelen",
+    pvArrayLongitude: "Lengtegraad panelen",
+    pvArrayCoordsHelp: "Optioneel. Alleen invullen wanneer deze rij NIET op dezelfde locatie staat als het huis (grondopstelling 300 m verderop, vrijstaande garage, enz.). Beide velden moeten ingevuld zijn om de positie toe te passen; anders gebruikt de voorspelling de positie van het huis. Op de kaart verschijnt een kleine groene bol op die locatie.",
+    pvArrayCoordsPlaceholder: "optioneel",
     pvColor: "Productiekleur",
     batterySection: "Thuisbatterij",
     batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel. De bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
@@ -1456,7 +1517,12 @@ const nl = {
     localLidarMinLat: "Min. breedtegraad",
     localLidarMaxLat: "Max. breedtegraad",
     localLidarMinLon: "Min. lengtegraad",
-    localLidarMaxLon: "Max. lengtegraad"
+    localLidarMaxLon: "Max. lengtegraad",
+    resetSection: "Resetten",
+    resetSectionHint: "Onderhoudstools om de lokaal door de kaart bewaarde gegevens te wissen.",
+    resetCacheButton: "Datacache resetten",
+    resetCacheWarning: "Let op: dit wist de gecachete Open-Meteo weergegevens en de PV-geschiedenis in het geheugen van ELKE Helios-kaart die op deze pagina open staat. De bijgestelde verwachting verliest haar 5 dagen kalibratie totdat die opnieuw zijn opgehaald (enkele minuten afhankelijk van je HA-server). Gegevens in Home Assistant worden nooit aangeraakt.",
+    resetCacheDone: "Cache geleegd ✓"
   }
 };
 const pt = {
@@ -1477,7 +1543,9 @@ const pt = {
     batteryDischarged: "descarregado",
     actualShort: "Real",
     forecastShort: "Previsto",
-    deltaTooltip: "Produção real vs previsão neste momento"
+    deltaTooltip: "Produção real vs previsão neste momento",
+    forecastRefined: "ajustada",
+    forecastCalibrationHint: "Previsão ajustada pela diferença média entre o modelo e a produção real dos últimos {n} dias."
   },
   editor: {
     locationSection: "Localização",
@@ -1529,6 +1597,10 @@ const pt = {
     pvArrayTiltHelp: "Inclinação desta fileira em relação à horizontal, de 0 a 90: 0 para uma instalação plana, 30 a 45 para um telhado inclinado clássico, 90 para uma instalação vertical (por exemplo varanda). Combinada com o azimute, conduz a transposição Liu-Jordan que projeta a irradiância prevista sobre o plano do painel.",
     pvArrayAzimuthHelp: "Orientação na bússola para onde esta fileira aponta, no sentido horário a partir do norte, de 0 a 360: 0 = norte, 90 = este, 180 = sul, 270 = oeste.",
     pvArrayShareHelp: "Peso relativo desta fileira no total dos kWp. Normalizado automaticamente no cálculo: 50/50, 60/60 e 1/1 produzem o mesmo resultado. Deixa vazio quando só existe uma fileira (recebe 100 % por predefinição).",
+    pvArrayLatitude: "Latitude dos painéis",
+    pvArrayLongitude: "Longitude dos painéis",
+    pvArrayCoordsHelp: "Opcional. Preenche apenas se esta fileira NÃO estiver no mesmo sítio que a casa (instalação no solo a 300 m, garagem isolada, etc.). Ambos os campos têm de estar preenchidos para a posição ser aplicada; caso contrário, a previsão usa a posição da casa. Uma pequena esfera verde aparecerá no mapa nessa posição.",
+    pvArrayCoordsPlaceholder: "opcional",
     pvColor: "Cor de produção",
     batterySection: "Bateria doméstica",
     batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais. O chip correspondente aparece assim que a entidade é definida.",
@@ -1599,7 +1671,12 @@ const pt = {
     localLidarMinLat: "Latitude mín.",
     localLidarMaxLat: "Latitude máx.",
     localLidarMinLon: "Longitude mín.",
-    localLidarMaxLon: "Longitude máx."
+    localLidarMaxLon: "Longitude máx.",
+    resetSection: "Repor",
+    resetSectionHint: "Ferramentas de manutenção para limpar os dados armazenados localmente pelo cartão.",
+    resetCacheButton: "Repor cache de dados",
+    resetCacheWarning: "Atenção: limpa a meteorologia Open-Meteo em cache e o histórico PV em memória de TODOS os cartões Helios abertos nesta página. A previsão ajustada perderá os seus 5 dias de calibração até serem novamente obtidos (alguns minutos consoante o teu servidor HA). Os dados no Home Assistant nunca são tocados.",
+    resetCacheDone: "Cache limpa ✓"
   }
 };
 const no = {
@@ -1620,7 +1697,9 @@ const no = {
     batteryDischarged: "utladet",
     actualShort: "Reell",
     forecastShort: "Estimert",
-    deltaTooltip: "Reell produksjon vs estimat akkurat nå"
+    deltaTooltip: "Reell produksjon vs estimat akkurat nå",
+    forecastRefined: "justert",
+    forecastCalibrationHint: "Estimat justert ut fra gjennomsnittlig avvik mellom modell og målt produksjon siste {n} dager."
   },
   editor: {
     locationSection: "Sted",
@@ -1672,6 +1751,10 @@ const no = {
     pvArrayTiltHelp: "Helningen til denne raden i forhold til vannrett, fra 0 til 90: 0 for flat installasjon, 30 til 45 for et typisk skråtak, 90 for en helt vertikal oppstilling (for eksempel balkong). Sammen med azimuten driver helningen Liu-Jordan-transposisjonen som projiserer forventet stråling på panelets plan.",
     pvArrayAzimuthHelp: "Kompassretningen denne raden peker mot, med klokken fra nord, fra 0 til 360: 0 = nord, 90 = øst, 180 = sør, 270 = vest.",
     pvArrayShareHelp: "Relativ vekt av denne raden i den totale kWp. Normaliseres automatisk ved beregning: 50/50, 60/60 og 1/1 gir samme resultat. La stå tomt når det bare finnes én rad (den får 100 % som standard).",
+    pvArrayLatitude: "Breddegrad panel",
+    pvArrayLongitude: "Lengdegrad panel",
+    pvArrayCoordsHelp: "Valgfritt. Fyll bare ut hvis denne raden IKKE ligger på samme sted som boligen (bakkemontert 300 m unna, frittstående garasje osv.). Begge feltene må fylles ut for at posisjonen skal brukes, ellers bruker estimatet boligens posisjon. En liten grønn kule vises på kartet i den posisjonen.",
+    pvArrayCoordsPlaceholder: "valgfritt",
     pvColor: "Produksjonsfarge",
     batterySection: "Husbatteri",
     batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie. Chipen på sin side vises så snart entiteten er satt.",
@@ -1742,7 +1825,12 @@ const no = {
     localLidarMinLat: "Min breddegrad",
     localLidarMaxLat: "Maks breddegrad",
     localLidarMinLon: "Min lengdegrad",
-    localLidarMaxLon: "Maks lengdegrad"
+    localLidarMaxLon: "Maks lengdegrad",
+    resetSection: "Tilbakestilling",
+    resetSectionHint: "Vedlikeholdsverktøy for å tømme data som kortet har bufret lokalt.",
+    resetCacheButton: "Tilbakestill databuffer",
+    resetCacheWarning: "Advarsel: dette tømmer den bufrede Open-Meteo-væren og PV-historikken i minnet for ALLE Helios-kort som er åpne på denne siden. Det justerte estimatet mister sin 5-dagers kalibrering inntil den hentes på nytt (noen minutter avhengig av HA-serveren din). Data i Home Assistant røres aldri.",
+    resetCacheDone: "Buffer tømt ✓"
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt, no };
@@ -2177,6 +2265,70 @@ const heliosCardStyles = i$3`
         align-items: baseline;
         line-height: 1;
     }
+    /*  When forecast calibration kicks in we stack the raw stat
+        (value + unit) on top of a small "refined" annotation that
+        shows the same forecast adjusted by the past-days actual /
+        predicted ratio. Right-aligned because the predicted stat
+        sits in the right column of the headline, the refined hint
+        should hug the column edge rather than pulling the eye
+        back left.                                                */
+    .dash-today-stat-with-refined
+    {
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 3px;
+    }
+    .dash-stat-main
+    {
+        display: inline-flex;
+        align-items: baseline;
+        line-height: 1;
+    }
+    .dash-stat-refined
+    {
+        font-size: 11px;
+        font-weight: 600;
+        opacity: 0.75;
+        white-space: nowrap;
+        position: relative;
+        cursor: help;
+    }
+    .dash-stat-refined-pct
+    {
+        font-variant-numeric: tabular-nums;
+        margin-left: 3px;
+    }
+    .dash-stat-refined-up   { color: #22c55e; }
+    .dash-stat-refined-down { color: #ef4444; }
+    /*  Same instant-appearing tooltip pattern as .dash-stat-delta,
+        explains where the refined value comes from when the user
+        hovers the chip.                                          */
+    .dash-stat-refined::after
+    {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        right: 0;
+        background: rgba(0, 0, 0, 0.85);
+        color: #ffffff;
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.1px;
+        white-space: normal;
+        max-width: 240px;
+        width: max-content;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease-out 0.05s;
+        z-index: 10;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
+    }
+    .dash-stat-refined:hover::after
+    {
+        opacity: 1;
+    }
     /*  Signed delta % shown after the produced value: "(+15 %)" if
         we're ahead of the forecast at this moment, "(-8 %)" if
         behind. Inherits font sizing from the stat unit it sits
@@ -2267,10 +2419,18 @@ const heliosCardStyles = i$3`
         justify-content: center;
         line-height: 1;
     }
+    /*  Text spans get a 1 px downward nudge so their uppercase
+        glyphs visually centre with the icon. align-items: center
+        on the parent flex aligns line-boxes, not glyph
+        centroids, and an uppercase block (no descenders) sits
+        above its line-box centreline, so without the nudge the
+        text reads as floating 1-2 px above the icon, both on
+        desktop and on smartphone.                                 */
     .dash-today-line .dash-line-value
     {
         font-weight: 700;
         line-height: 1;
+        transform: translateY(1px);
     }
     .dash-today-line .dash-line-label
     {
@@ -2279,6 +2439,7 @@ const heliosCardStyles = i$3`
         letter-spacing: 0.8px;
         opacity: 0.55;
         line-height: 1;
+        transform: translateY(1px);
     }
 
     /*  Cumulative production sparkline, full panel width below the
@@ -4033,13 +4194,18 @@ function refreshPv(host) {
   if (!host._timeRange || host._pvFetching) {
     return;
   }
-  const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
+  const CALIBRATION_PAST_DAYS = 7;
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const fetchStart = new Date(today0.getTime() - CALIBRATION_PAST_DAYS * 24 * 36e5);
+  const fetchEnd = host._timeRange.end;
+  const rangeKey = `${fetchStart.getTime()}|${fetchEnd.getTime()}`;
   const fetchKey = `${entity}@${rangeKey}`;
   if (fetchKey === host._pvFetchKey) {
     return;
   }
   host._pvFetchKey = fetchKey;
-  fetchPvHistory(host, entity, host._timeRange.start, host._timeRange.end);
+  fetchPvHistory(host, entity, fetchStart, fetchEnd);
 }
 async function fetchPvHistory(host, entityId, start, end) {
   if (!host.hass?.callWS) {
@@ -4285,6 +4451,14 @@ function wipeLegacyPvCalibStorage(hass, coords) {
 function pvArrays(config) {
   const out = [];
   const sh = [];
+  const co = [];
+  const parseCoord = (v2, max) => {
+    if (v2 === void 0 || v2 === null || v2 === "") return null;
+    const n3 = typeof v2 === "number" ? v2 : parseFloat(String(v2));
+    if (!isFinite(n3)) return null;
+    if (n3 < -max || n3 > max) return null;
+    return n3;
+  };
   const rawList = config?.["pv-arrays"];
   if (Array.isArray(rawList) && rawList.length > 0) {
     for (const entry of rawList) {
@@ -4305,11 +4479,15 @@ function pvArrays(config) {
         if (!isFinite(s2) || s2 <= 0) continue;
         share = s2;
       }
+      const arrayLat = parseCoord(e2["latitude"], 90);
+      const arrayLon = parseCoord(e2["longitude"], 180);
+      const coords = arrayLat !== null && arrayLon !== null ? { lat: arrayLat, lon: arrayLon } : null;
       out.push({
         tiltDeg: Math.max(0, Math.min(90, tilt)),
         azimuthDeg: azDeg
       });
       sh.push(share);
+      co.push(coords);
     }
     const explicit = sh.filter((s2) => isFinite(s2));
     const fillVal = explicit.length > 0 ? explicit.reduce((a2, b2) => a2 + b2, 0) / explicit.length : 1;
@@ -4328,22 +4506,25 @@ function pvArrays(config) {
         azimuthDeg: isFinite(az) ? (az % 360 + 360) % 360 : 180
       });
       sh.push(1);
+      co.push(null);
     }
   }
   const total = sh.reduce((a2, b2) => a2 + b2, 0);
   if (total > 0) {
     for (let i2 = 0; i2 < sh.length; i2++) sh[i2] /= total;
   }
-  return { orientations: out, shares: sh };
+  return { orientations: out, shares: sh, coords: co };
 }
 function computePvPowerWeighted(config, t2, lat, lon, cloudPct) {
-  const { orientations, shares } = pvArrays(config);
+  const { orientations, shares, coords } = pvArrays(config);
   if (orientations.length === 0) {
     return computePvPower(t2, lat, lon, cloudPct);
   }
   let acc = 0;
   for (let i2 = 0; i2 < orientations.length; i2++) {
-    acc += computePvPower(t2, lat, lon, cloudPct, orientations[i2]) * shares[i2];
+    const arrayLat = coords[i2]?.lat ?? lat;
+    const arrayLon = coords[i2]?.lon ?? lon;
+    acc += computePvPower(t2, arrayLat, arrayLon, cloudPct, orientations[i2]) * shares[i2];
   }
   return acc;
 }
@@ -28780,7 +28961,7 @@ ${n4.shaderPreludeCode.vertexSource}`, define: n4.shaderDefine }, defaultProject
 })(maplibreGl);
 var maplibreGlExports = maplibreGl.exports;
 const maplibregl = /* @__PURE__ */ getDefaultExportFromCjs(maplibreGlExports);
-const PAST_DAYS = 2;
+const PAST_DAYS = 7;
 const FORECAST_DAYS = 3;
 const RATE_LIMIT_BACKOFF_MS = [
   5 * 6e4,
@@ -28836,6 +29017,24 @@ const CACHE_KEY_PREFIX = "helios-weather-cache:";
 const CACHE_TTL_MS = 30 * 6e4;
 function cacheKey(lat, lon, precision) {
   return `${CACHE_KEY_PREFIX}${precision}:${lat.toFixed(3)},${lon.toFixed(3)}`;
+}
+function clearWeatherCache() {
+  let cleared = 0;
+  try {
+    const ls = window.localStorage;
+    if (!ls) return 0;
+    const stale = [];
+    for (let i2 = 0; i2 < ls.length; i2++) {
+      const k2 = ls.key(i2);
+      if (k2 && k2.startsWith(CACHE_KEY_PREFIX)) stale.push(k2);
+    }
+    for (const k2 of stale) {
+      ls.removeItem(k2);
+      cleared++;
+    }
+  } catch (_2) {
+  }
+  return cleared;
 }
 function readCache(lat, lon, precision) {
   try {
@@ -35100,6 +35299,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._fetchLon = 0;
     this._mapReady = false;
     this._homeHourlyData = null;
+    this._pvArrayMarkers = [];
     this._selectedTime = null;
     this._lastAtmosphereAlt = -999;
     this._rateLimitStreak = 0;
@@ -35478,13 +35678,31 @@ const _HeliosEngine = class _HeliosEngine {
       cloudIntensity: weatherCodeToIntensity(wc, cc)
     };
   }
+  //Visible timeline window. The Open-Meteo payload now stretches
+  //7 past days so the dashboard forecast calibration has enough
+  //room to average ratios, but the timeline UI itself clips to
+  //the last 2 past days so the slider stays as scrubbable as
+  //before. Calibration consumers reach the full payload through
+  //`getTimelineSeries()`, which returns every hourly sample.
   _getTimeRange() {
     const home = this._homeHourlyData;
     if (!home || !home.times.length) {
       return null;
     }
     const t2 = home.times;
-    return { start: t2[0], end: t2[t2.length - 1] };
+    const last = t2[t2.length - 1];
+    const TIMELINE_PAST_DAYS = 2;
+    const today0 = /* @__PURE__ */ new Date();
+    today0.setHours(0, 0, 0, 0);
+    const visibleStartMs = today0.getTime() - TIMELINE_PAST_DAYS * 24 * 36e5;
+    let startIdx = 0;
+    for (let i2 = 0; i2 < t2.length; i2++) {
+      if (t2[i2].getTime() >= visibleStartMs) {
+        startIdx = i2;
+        break;
+      }
+    }
+    return { start: t2[startIdx], end: last };
   }
   //Resolve the configured cloud colour, falling back to the design
   //system default. Returned as RGB so callers can build either an
@@ -35554,6 +35772,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._addBuildings();
     this._initLidarViewLayer();
     this._applyLabelVisibility();
+    this._refreshPvArrayMarkers();
     window.clearInterval(this._skyTimer);
     this._lastAtmosphereAlt = -999;
     this._refreshShadowsAndAtmosphere();
@@ -36504,6 +36723,67 @@ const _HeliosEngine = class _HeliosEngine {
   setDetailMode(on) {
     setDetailMode(this, on);
   }
+  //Wipe every cached Open-Meteo payload from localStorage, drop
+  //the engine's in-memory weather snapshot, and trigger a fresh
+  //fetch. Used by the editor's "reset data cache" button.
+  //Returns the count of cached payloads removed (purely
+  //informational for the UI to show a quick confirmation).
+  resetDataCache() {
+    const cleared = clearWeatherCache();
+    this._homeHourlyData = null;
+    this._refreshWeather(this._fetchLat, this._fetchLon);
+    return cleared;
+  }
+  //Diff-and-rebuild of the small green marker spheres placed at
+  //each pv-array entry whose lat/lon is set AND meaningfully
+  //different from the home position. Cheap to do unconditionally
+  //(most installs have zero arrays with coords set, so the loop
+  //is empty in the common case). Called from updateConfig and
+  //from the engine's init path so a freshly loaded card with
+  //pre-set per-array coords already shows the spheres.
+  _refreshPvArrayMarkers() {
+    if (!this.map) return;
+    const HOME_PROXIMITY_M = 10;
+    const pvHex = (() => {
+      const raw22 = this.cfg["pv-color"];
+      if (typeof raw22 === "string" && /^#?[0-9a-f]{6}$/i.test(raw22.trim())) {
+        const s2 = raw22.trim();
+        return s2.startsWith("#") ? s2 : `#${s2}`;
+      }
+      return "#27B36B";
+    })();
+    const positions = [];
+    const raw2 = this.cfg["pv-arrays"];
+    if (Array.isArray(raw2)) {
+      for (const entry of raw2) {
+        if (!entry || typeof entry !== "object") continue;
+        const e2 = entry;
+        const lat = typeof e2["latitude"] === "number" ? e2["latitude"] : parseFloat(String(e2["latitude"] ?? ""));
+        const lon = typeof e2["longitude"] === "number" ? e2["longitude"] : parseFloat(String(e2["longitude"] ?? ""));
+        if (!isFinite(lat) || !isFinite(lon)) continue;
+        if (lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+        if (geoDistM(lat, lon, this.homeLat, this.homeLon) < HOME_PROXIMITY_M) continue;
+        positions.push({ lat, lon });
+      }
+    }
+    if (this._pvArrayMarkers.length !== positions.length) {
+      for (const m2 of this._pvArrayMarkers) m2.remove();
+      this._pvArrayMarkers = [];
+      for (const p2 of positions) {
+        const el = document.createElement("div");
+        el.className = "helios-pv-array-marker";
+        el.style.cssText = `width:14px;height:14px;border-radius:50%;background:${pvHex};border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.35);pointer-events:none;`;
+        const marker = new maplibregl.Marker({ element: el }).setLngLat([p2.lon, p2.lat]).addTo(this.map);
+        this._pvArrayMarkers.push(marker);
+      }
+    } else {
+      for (let i2 = 0; i2 < positions.length; i2++) {
+        this._pvArrayMarkers[i2].setLngLat([positions[i2].lon, positions[i2].lat]);
+        const el = this._pvArrayMarkers[i2].getElement();
+        if (el) el.style.background = pvHex;
+      }
+    }
+  }
   //True while the post-exit cooldown is active. The card consults
   //this to gate timeline scrubs; the engine consults it internally
   //for the canvas drag-rotate. Both surfaces read the same clock so
@@ -37059,6 +37339,7 @@ const _HeliosEngine = class _HeliosEngine {
     if (this._homeHourlyData && this._mapReady) {
       this._renderForCurrentSelection();
     }
+    this._refreshPvArrayMarkers();
   }
   cleanup() {
     bumpStat("enginesCleanedUp");
@@ -37157,6 +37438,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._buildingsData = null;
     this._buildingsFetchKey = "";
     this._homeHourlyData = null;
+    for (const m2 of this._pvArrayMarkers) m2.remove();
+    this._pvArrayMarkers = [];
     this._mapCanvas = void 0;
     this._dragRotateHandlers = void 0;
     this._mapPinHandler = void 0;
@@ -37708,6 +37991,83 @@ function computeDailyKwhTotals(host) {
   }
   return out;
 }
+const WINDOW_DAYS = 5;
+const RATIO_MIN = 0.5;
+const RATIO_MAX = 1.5;
+const MIN_DAY_PREDICTED_KWH = 2;
+function computeForecastCalibration(host) {
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const hist = host._pvHistory;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 === null || k2 <= 0 || !series || !hist || !coords) return null;
+  const HOUR_MS = 36e5;
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const ratios = [];
+  for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++) {
+    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
+    const dayEndMs = dayStartMs + 24 * HOUR_MS;
+    const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs);
+    if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
+    const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
+    if (actualKwh <= 0) continue;
+    const r2 = actualKwh / predictedKwh;
+    if (!isFinite(r2) || r2 <= 0) continue;
+    ratios.push(Math.max(RATIO_MIN, Math.min(RATIO_MAX, r2)));
+  }
+  if (ratios.length < 2) return null;
+  const mean = ratios.reduce((a2, b2) => a2 + b2, 0) / ratios.length;
+  return {
+    ratio: Math.max(RATIO_MIN, Math.min(RATIO_MAX, mean)),
+    daysUsed: ratios.length
+  };
+}
+function predictedKwhForDay(config, series, coords, startMs, endMs) {
+  const k2 = pvCalibK(config);
+  if (k2 === null || k2 <= 0) return 0;
+  let kwh = 0;
+  for (let i2 = 0; i2 < series.times.length; i2++) {
+    const tMs = series.times[i2].getTime();
+    if (tMs < startMs || tMs >= endMs) continue;
+    const cloud = series.cloud[i2] ?? 0;
+    const pct = computePvPowerWeighted(config, series.times[i2], coords.lat, coords.lon, cloud);
+    if (pct <= 0) continue;
+    kwh += pct * k2 / 1e3;
+  }
+  return kwh;
+}
+function actualKwhForDay(hist, pvUnit, startMs, endMs) {
+  if (hist.times.length < 2) return 0;
+  const unit = (pvUnit || "").toLowerCase();
+  const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
+  const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
+  const HOUR_MS = 36e5;
+  if (isCumulativeEnergy) {
+    let kwh2 = 0;
+    for (let i2 = 1; i2 < hist.times.length; i2++) {
+      const tMs = hist.times[i2].getTime();
+      if (tMs < startMs || tMs >= endMs) continue;
+      const dv = hist.values[i2] - hist.values[i2 - 1];
+      if (!isFinite(dv) || dv < 0) continue;
+      kwh2 += dv * energyFactor;
+    }
+    return kwh2;
+  }
+  let kwh = 0;
+  for (let i2 = 1; i2 < hist.times.length; i2++) {
+    const tCurrMs = hist.times[i2].getTime();
+    if (tCurrMs < startMs || tCurrMs >= endMs) continue;
+    const tPrevMs = hist.times[i2 - 1].getTime();
+    const dtH = (tCurrMs - tPrevMs) / HOUR_MS;
+    if (dtH <= 0 || dtH > 6) continue;
+    const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
+    const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
+    if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+    kwh += (wPrev + wCurr) / 2 * dtH / 1e3;
+  }
+  return kwh;
+}
 function renderDashboard(host) {
   const t2 = pickTranslations(host.hass?.language);
   const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -37972,6 +38332,10 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
   const todayDate = /* @__PURE__ */ new Date();
   todayDate.setHours(0, 0, 0, 0);
   const todayDateLabel = formatDate(todayDate, host.config?.["date-format"]);
+  const calibration = computeForecastCalibration(host);
+  const refinedForecastKwh = calibration !== null ? forecastKwh * calibration.ratio : null;
+  const refinedDeltaPct = calibration !== null ? (calibration.ratio - 1) * 100 : null;
+  const calibrationHint = calibration !== null ? t2.detail.forecastCalibrationHint.replace("{n}", String(calibration.daysUsed)) : "";
   return b`
         <section class="dash-section dash-card dash-today">
             <header class="dash-card-header">
@@ -37998,9 +38362,22 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                         `}
                     </div>
                     ${forecastKwh > 0.05 ? b`
-                        <div class="dash-today-stat dash-today-stat-predicted" style="color:${predictedColor}">
-                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)}</span>
-                            <span class="dash-stat-unit">kWh ${t2.detail.todayForecast}</span>
+                        <div class="dash-today-stat dash-today-stat-predicted ${refinedForecastKwh !== null ? "dash-today-stat-with-refined" : ""}" style="color:${predictedColor}">
+                            <span class="dash-stat-main">
+                                <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)}</span>
+                                <span class="dash-stat-unit">kWh ${t2.detail.todayForecast}</span>
+                            </span>
+                            ${refinedForecastKwh !== null && refinedDeltaPct !== null ? b`
+                                <span class="dash-stat-refined"
+                                      data-tooltip="${calibrationHint}"
+                                      aria-label="${calibrationHint}"
+                                >
+                                    → ${formatLocalisedNumber(host.hass, refinedForecastKwh, 1)} kWh ${t2.detail.forecastRefined}
+                                    <span class="dash-stat-refined-pct ${refinedDeltaPct >= 0 ? "dash-stat-refined-up" : "dash-stat-refined-down"}">
+                                        (${refinedDeltaPct >= 0 ? "+" : ""}${formatLocalisedNumber(host.hass, refinedDeltaPct, 0, true)} %)
+                                    </span>
+                                </span>
+                            ` : A}
                         </div>
                     ` : A}
                 </div>
@@ -38270,6 +38647,10 @@ function renderDashTomorrowSection(host, t2, sunColor, _cloudColor, pvColor) {
   tomorrowDate.setHours(0, 0, 0, 0);
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowDateLabel = formatDate(tomorrowDate, host.config?.["date-format"]);
+  const calibration = computeForecastCalibration(host);
+  const refinedTotalKwh = calibration !== null ? data.totalKwh * calibration.ratio : null;
+  const refinedDeltaPct = calibration !== null ? (calibration.ratio - 1) * 100 : null;
+  const calibrationHint = calibration !== null ? t2.detail.forecastCalibrationHint.replace("{n}", String(calibration.daysUsed)) : "";
   return b`
         <section class="dash-section dash-card dash-tomorrow">
             <header class="dash-card-header">
@@ -38278,9 +38659,22 @@ function renderDashTomorrowSection(host, t2, sunColor, _cloudColor, pvColor) {
                 <span class="dash-card-date">(${tomorrowDateLabel})</span>
             </header>
             <div class="dash-today-headline">
-                <div class="dash-today-stat dash-today-stat-predicted" style="color:${predictedColor}">
-                    <span class="dash-stat-value">≈ ${formatLocalisedNumber(host.hass, data.totalKwh, 1)}</span>
-                    <span class="dash-stat-unit">kWh ${t2.detail.todayForecast}</span>
+                <div class="dash-today-stat dash-today-stat-predicted ${refinedTotalKwh !== null ? "dash-today-stat-with-refined" : ""}" style="color:${predictedColor}">
+                    <span class="dash-stat-main">
+                        <span class="dash-stat-value">≈ ${formatLocalisedNumber(host.hass, data.totalKwh, 1)}</span>
+                        <span class="dash-stat-unit">kWh ${t2.detail.todayForecast}</span>
+                    </span>
+                    ${refinedTotalKwh !== null && refinedDeltaPct !== null ? b`
+                        <span class="dash-stat-refined"
+                              data-tooltip="${calibrationHint}"
+                              aria-label="${calibrationHint}"
+                        >
+                            → ${formatLocalisedNumber(host.hass, refinedTotalKwh, 1)} kWh ${t2.detail.forecastRefined}
+                            <span class="dash-stat-refined-pct ${refinedDeltaPct >= 0 ? "dash-stat-refined-up" : "dash-stat-refined-down"}">
+                                (${refinedDeltaPct >= 0 ? "+" : ""}${formatLocalisedNumber(host.hass, refinedDeltaPct, 0, true)} %)
+                            </span>
+                        </span>
+                    ` : A}
                 </div>
             </div>
             ${data.peakHourTs !== null ? b`
@@ -38925,6 +39319,50 @@ const editorStyles = i$3`
         outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 2px;
     }
+
+    /*  Reset section: a single button + a destructive-action
+        warning sat side by side. The button is in destructive
+        red so users read it as "this empties data" without
+        relying on the label alone; the warning text is the
+        full explanation of what gets wiped and what doesn't. */
+    .reset-row
+    {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        margin-top: 8px;
+    }
+    .reset-btn
+    {
+        background: transparent;
+        border: 1px solid #ef4444;
+        color: #ef4444;
+        border-radius: 4px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        flex: 0 0 auto;
+    }
+    .reset-btn:hover
+    {
+        background: rgba(239, 68, 68, 0.08);
+    }
+    .reset-btn:focus-visible
+    {
+        outline: 2px solid #ef4444;
+        outline-offset: 2px;
+    }
+    .reset-warning
+    {
+        flex: 1 1 200px;
+        font-size: 11px;
+        line-height: 1.4;
+        color: var(--secondary-text-color, #5f6368);
+        opacity: 0.85;
+    }
 `;
 var __defProp$1 = Object.defineProperty;
 var __getOwnPropDesc$1 = Object.getOwnPropertyDescriptor;
@@ -39134,6 +39572,7 @@ let HeliosCardEditor = class extends i {
       const u2 = String(entity.attributes.unit_of_measurement ?? "").trim();
       return u2 === "W/m²" || u2 === "W/m2";
     };
+    this._resetFeedback = null;
   }
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -39264,17 +39703,19 @@ let HeliosCardEditor = class extends i {
           name: toStr(e2["name"]),
           tilt: toNum2(e2["tilt"]),
           azimuth: toNum2(e2["azimuth"]),
-          share: toNum2(e2["share"])
+          share: toNum2(e2["share"]),
+          latitude: toNum2(e2["latitude"]),
+          longitude: toNum2(e2["longitude"])
         };
       });
-      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null }];
+      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null }];
     }
     const legacyTilt = toNum2(this._cfg?.["pv-tilt"]);
     const legacyAz = toNum2(this._cfg?.["pv-azimuth"]);
     if (legacyTilt !== null || legacyAz !== null) {
-      return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100 }];
+      return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, latitude: null, longitude: null }];
     }
-    return [{ name: null, tilt: null, azimuth: null, share: null }];
+    return [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null }];
   }
   //Persists a list of array entries to the config under `pv-arrays`
   //and clears the legacy `pv-tilt` / `pv-azimuth` keys in the same
@@ -39289,6 +39730,8 @@ let HeliosCardEditor = class extends i {
       if (e2.tilt !== null) o2["tilt"] = e2.tilt;
       if (e2.azimuth !== null) o2["azimuth"] = e2.azimuth;
       if (e2.share !== null) o2["share"] = e2.share;
+      if (e2.latitude !== null) o2["latitude"] = e2.latitude;
+      if (e2.longitude !== null) o2["longitude"] = e2.longitude;
       return o2;
     });
     const next3 = { ...this._cfg, "pv-arrays": arrays };
@@ -39327,7 +39770,7 @@ let HeliosCardEditor = class extends i {
   _arrayAdd() {
     const list = this._readPvArrays();
     if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
-    list.push({ name: null, tilt: null, azimuth: null, share: null });
+    list.push({ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null });
     this._openArrayIndices = /* @__PURE__ */ new Set([...this._openArrayIndices, list.length - 1]);
     this._writePvArrays(list);
   }
@@ -39837,6 +40280,31 @@ let HeliosCardEditor = class extends i {
                                                 />
                                             </label>
                                             <div class="field-help">${t2.editor.pvArrayShareHelp}</div>
+                                            <label class="field">
+                                                <span class="label">${t2.editor.pvArrayLatitude}</span>
+                                                <input
+                                                    type="number"
+                                                    min="-90"
+                                                    max="90"
+                                                    step="any"
+                                                    placeholder="${t2.editor.pvArrayCoordsPlaceholder}"
+                                                    .value="${arr.latitude !== null ? String(arr.latitude) : ""}"
+                                                    @change="${(e2) => this._arrayField(i2, "latitude", e2)}"
+                                                />
+                                            </label>
+                                            <label class="field">
+                                                <span class="label">${t2.editor.pvArrayLongitude}</span>
+                                                <input
+                                                    type="number"
+                                                    min="-180"
+                                                    max="180"
+                                                    step="any"
+                                                    placeholder="${t2.editor.pvArrayCoordsPlaceholder}"
+                                                    .value="${arr.longitude !== null ? String(arr.longitude) : ""}"
+                                                    @change="${(e2) => this._arrayField(i2, "longitude", e2)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t2.editor.pvArrayCoordsHelp}</div>
                                         </div>
                                     </details>
                                 `;
@@ -40095,8 +40563,35 @@ let HeliosCardEditor = class extends i {
                     </label>
                 </details>
 
+                <details class="advanced-section" ?open="${this._openSection === "reset"}" @toggle="${(e2) => this._onSectionToggle("reset", e2)}">
+                    <summary class="section-title section-title-collapse">${t2.editor.resetSection}</summary>
+                    <div class="hint">${t2.editor.resetSectionHint}</div>
+                    <div class="reset-row">
+                        <button
+                            type="button"
+                            class="reset-btn"
+                            @click="${() => this._onResetCacheClick()}"
+                        >${this._resetFeedback ?? t2.editor.resetCacheButton}</button>
+                        <div class="reset-warning">${t2.editor.resetCacheWarning}</div>
+                    </div>
+                </details>
+
             </div>
         `;
+  }
+  _onResetCacheClick() {
+    try {
+      window.dispatchEvent(new CustomEvent("helios-data-cache-reset"));
+    } catch (_2) {
+    }
+    const t2 = pickTranslations(this.hass?.language);
+    this._resetFeedback = t2.editor.resetCacheDone;
+    if (this._resetFeedbackTimer !== void 0) {
+      window.clearTimeout(this._resetFeedbackTimer);
+    }
+    this._resetFeedbackTimer = window.setTimeout(() => {
+      this._resetFeedback = null;
+    }, 2e3);
   }
 };
 HeliosCardEditor.SLIDER_COMMIT_DELAY_MS = 250;
@@ -40117,6 +40612,9 @@ __decorateClass$1([
 __decorateClass$1([
   r()
 ], HeliosCardEditor.prototype, "_openArrayIndices", 2);
+__decorateClass$1([
+  r()
+], HeliosCardEditor.prototype, "_resetFeedback", 2);
 HeliosCardEditor = __decorateClass$1([
   t("helios-card-editor")
 ], HeliosCardEditor);
@@ -40150,7 +40648,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0-beta.1"}`,
+      `%c☀ HELIOS%c v${"1.6.0-beta.2"}`,
       labelStyle,
       versionStyle
     );
@@ -40162,6 +40660,9 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
   }
 }
 const _liveCards = /* @__PURE__ */ new Set();
+window.addEventListener("helios-data-cache-reset", () => {
+  for (const card of _liveCards) card.resetDataCache();
+});
 {
   const w2 = window;
   if (!w2.heliosStats) {
@@ -40171,7 +40672,7 @@ const _liveCards = /* @__PURE__ */ new Set();
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0-beta.1",
+        version: "1.6.0-beta.2",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40179,7 +40680,7 @@ const _liveCards = /* @__PURE__ */ new Set();
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0-beta.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.0-beta.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -40337,6 +40838,19 @@ let HeliosCard = class extends i {
   //engine re-init falls out of that natural identity-drift path.
   invalidateLocation() {
     this._lastHomeKey = "";
+    this.requestUpdate();
+  }
+  //Wipe all card-side cached production / forecast data and
+  //trigger a fresh fetch from HA and Open-Meteo. Used by the
+  //editor's "reset data cache" button so users can recover from
+  //a stuck calibration or a stale weather payload without
+  //touching localStorage manually.
+  resetDataCache() {
+    this._pvHistory = null;
+    this._pvSampleBuffer = [];
+    this._pvFetchKey = "";
+    this._pvHistoryDiagnostics = null;
+    this._engine?.resetDataCache();
     this.requestUpdate();
   }
   //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.

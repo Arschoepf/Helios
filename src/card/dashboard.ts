@@ -27,6 +27,7 @@ import
 } from './pv';
 import { computeBatteryToday, type BatteryHost } from './battery';
 import { type ChartHost } from './charts';
+import { computeForecastCalibration } from './calibration';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
 
@@ -509,6 +510,22 @@ export function renderDashTodaySection(
     todayDate.setHours(0, 0, 0, 0);
     const todayDateLabel = formatDate(todayDate, host.config?.['date-format']);
 
+    //Forecast calibration: derive a multiplier from the past 5
+    //completed days' (actual / predicted) ratios, then surface
+    //both the raw and the refined kWh side by side under the
+    //PRÉVU stat. Hidden when fewer than 2 past days carried
+    //enough production to compute a stable ratio.
+    const calibration = computeForecastCalibration(host);
+    const refinedForecastKwh = calibration !== null
+        ? forecastKwh * calibration.ratio
+        : null;
+    const refinedDeltaPct = calibration !== null
+        ? (calibration.ratio - 1) * 100
+        : null;
+    const calibrationHint = calibration !== null
+        ? t.detail.forecastCalibrationHint.replace('{n}', String(calibration.daysUsed))
+        : '';
+
     return html`
         <section class="dash-section dash-card dash-today">
             <header class="dash-card-header">
@@ -535,9 +552,22 @@ export function renderDashTodaySection(
                         `}
                     </div>
                     ${forecastKwh > 0.05 ? html`
-                        <div class="dash-today-stat dash-today-stat-predicted" style="color:${predictedColor}">
-                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)}</span>
-                            <span class="dash-stat-unit">kWh ${t.detail.todayForecast}</span>
+                        <div class="dash-today-stat dash-today-stat-predicted ${refinedForecastKwh !== null ? 'dash-today-stat-with-refined' : ''}" style="color:${predictedColor}">
+                            <span class="dash-stat-main">
+                                <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)}</span>
+                                <span class="dash-stat-unit">kWh ${t.detail.todayForecast}</span>
+                            </span>
+                            ${refinedForecastKwh !== null && refinedDeltaPct !== null ? html`
+                                <span class="dash-stat-refined"
+                                      data-tooltip="${calibrationHint}"
+                                      aria-label="${calibrationHint}"
+                                >
+                                    → ${formatLocalisedNumber(host.hass, refinedForecastKwh, 1)} kWh ${t.detail.forecastRefined}
+                                    <span class="dash-stat-refined-pct ${refinedDeltaPct >= 0 ? 'dash-stat-refined-up' : 'dash-stat-refined-down'}">
+                                        (${refinedDeltaPct >= 0 ? '+' : ''}${formatLocalisedNumber(host.hass, refinedDeltaPct, 0, true)} %)
+                                    </span>
+                                </span>
+                            ` : nothing}
                         </div>
                     ` : nothing}
                 </div>
@@ -906,6 +936,21 @@ export function renderDashTomorrowSection(
     tomorrowDate.setDate(tomorrowDate.getDate() + 1);
     const tomorrowDateLabel = formatDate(tomorrowDate, host.config?.['date-format']);
 
+    //Same calibration multiplier we apply on the today card,
+    //surfaced under the tomorrow stat too so the user sees a
+    //refined estimate in both places. Hidden when calibration
+    //isn't available (no kWp, no history, < 2 valid past days).
+    const calibration = computeForecastCalibration(host);
+    const refinedTotalKwh = calibration !== null
+        ? data.totalKwh * calibration.ratio
+        : null;
+    const refinedDeltaPct = calibration !== null
+        ? (calibration.ratio - 1) * 100
+        : null;
+    const calibrationHint = calibration !== null
+        ? t.detail.forecastCalibrationHint.replace('{n}', String(calibration.daysUsed))
+        : '';
+
     return html`
         <section class="dash-section dash-card dash-tomorrow">
             <header class="dash-card-header">
@@ -914,9 +959,22 @@ export function renderDashTomorrowSection(
                 <span class="dash-card-date">(${tomorrowDateLabel})</span>
             </header>
             <div class="dash-today-headline">
-                <div class="dash-today-stat dash-today-stat-predicted" style="color:${predictedColor}">
-                    <span class="dash-stat-value">≈ ${formatLocalisedNumber(host.hass, data.totalKwh, 1)}</span>
-                    <span class="dash-stat-unit">kWh ${t.detail.todayForecast}</span>
+                <div class="dash-today-stat dash-today-stat-predicted ${refinedTotalKwh !== null ? 'dash-today-stat-with-refined' : ''}" style="color:${predictedColor}">
+                    <span class="dash-stat-main">
+                        <span class="dash-stat-value">≈ ${formatLocalisedNumber(host.hass, data.totalKwh, 1)}</span>
+                        <span class="dash-stat-unit">kWh ${t.detail.todayForecast}</span>
+                    </span>
+                    ${refinedTotalKwh !== null && refinedDeltaPct !== null ? html`
+                        <span class="dash-stat-refined"
+                              data-tooltip="${calibrationHint}"
+                              aria-label="${calibrationHint}"
+                        >
+                            → ${formatLocalisedNumber(host.hass, refinedTotalKwh, 1)} kWh ${t.detail.forecastRefined}
+                            <span class="dash-stat-refined-pct ${refinedDeltaPct >= 0 ? 'dash-stat-refined-up' : 'dash-stat-refined-down'}">
+                                (${refinedDeltaPct >= 0 ? '+' : ''}${formatLocalisedNumber(host.hass, refinedDeltaPct, 0, true)} %)
+                            </span>
+                        </span>
+                    ` : nothing}
                 </div>
             </div>
             ${data.peakHourTs !== null ? html`

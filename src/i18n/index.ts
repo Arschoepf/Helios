@@ -49,6 +49,13 @@ export interface Translations
         //  deltaTooltip    , native title hover hint on the headline
         //                    (+X % / -X %) chip, explaining the
         //                    comparison reference
+        //  forecastRefined , label on the small annotation under
+        //                    PRÉVU showing the calibrated value
+        //                    (e.g. "affiné" in fr)
+        //  forecastCalibrationHint , hover hint explaining what the
+        //                    refined value means and how many days
+        //                    fed into it. Receives a {n} token to
+        //                    be replaced with the day count.
         todayLabel:        string;
         todayProduced:     string;
         todayForecast:     string;
@@ -63,6 +70,8 @@ export interface Translations
         actualShort:       string;
         forecastShort:     string;
         deltaTooltip:      string;
+        forecastRefined:        string;
+        forecastCalibrationHint: string;
     };
 
     editor:
@@ -144,6 +153,15 @@ export interface Translations
         pvArrayTiltHelp:          string;
         pvArrayAzimuthHelp:       string;
         pvArrayShareHelp:         string;
+        //Optional per-array GPS coordinates. Used when the panels
+        //sit a meaningful distance away from the home (e.g. ground-
+        //mounted in a clearing while the home is under trees) so
+        //the prediction uses the panel's true sun position and the
+        //map shows a small marker at the panel location.
+        pvArrayLatitude:          string;
+        pvArrayLongitude:         string;
+        pvArrayCoordsHelp:        string;
+        pvArrayCoordsPlaceholder: string;
         pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;
@@ -264,6 +282,22 @@ export interface Translations
         localLidarMaxLat:         string;
         localLidarMinLon:         string;
         localLidarMaxLon:         string;
+        //Reset section: a single destructive button that wipes
+        //every cached payload (weather, PV history, sample
+        //buffer) and forces a fresh fetch. Sits in its own
+        //collapsible section at the very bottom of the editor.
+        //  resetSection         , section title
+        //  resetSectionHint     , one-liner under the title
+        //  resetCacheButton     , button label
+        //  resetCacheWarning    , destructive-action warning text
+        //  resetCacheDone       , transient confirmation shown on
+        //                         the button for a couple of seconds
+        //                         after the user clicks
+        resetSection:             string;
+        resetSectionHint:         string;
+        resetCacheButton:         string;
+        resetCacheWarning:        string;
+        resetCacheDone:           string;
     };
 }
 

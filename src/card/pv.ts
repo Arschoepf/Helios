@@ -144,18 +144,31 @@ export function refreshPv(host: PvHost): void
     //Without this guard we'd reissue the WebSocket command on
     //every Lit cycle (e.g. every clock tick) and the dashboard
     //would queue thousands of identical requests.
+    //
+    //Range extension: the timeline UI itself only renders the
+    //last 2 past days, but the forecast calibration needs ~5-7
+    //past days of observed PV to derive a stable ratio against
+    //the model. Stretch the fetch window back to 7 days even
+    //though the chart will only plot the trailing 2; the extra
+    //samples just sit unused by the chart and feed the
+    //calibration without an extra HA round-trip.
     if (!host._timeRange || host._pvFetching)
     {
         return;
     }
-    const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
+    const CALIBRATION_PAST_DAYS = 7;
+    const today0 = new Date();
+    today0.setHours(0, 0, 0, 0);
+    const fetchStart = new Date(today0.getTime() - CALIBRATION_PAST_DAYS * 24 * 3_600_000);
+    const fetchEnd   = host._timeRange.end;
+    const rangeKey = `${fetchStart.getTime()}|${fetchEnd.getTime()}`;
     const fetchKey = `${entity}@${rangeKey}`;
     if (fetchKey === host._pvFetchKey)
     {
         return;
     }
     host._pvFetchKey = fetchKey;
-    fetchPvHistory(host, entity, host._timeRange.start, host._timeRange.end);
+    fetchPvHistory(host, entity, fetchStart, fetchEnd);
 }
 
 
@@ -674,10 +687,32 @@ export function wipeLegacyPvCalibStorage(
 //     fast path inside computePvPower.
 export function pvArrays(
     config: HeliosConfig | undefined
-): { orientations: PanelOrientation[]; shares: number[] }
+): {
+    orientations: PanelOrientation[];
+    shares:       number[];
+    //Per-array lat/lon override, null when the user left them
+    //blank for this entry. Callers fall back to the home coords
+    //when null so existing configs keep working unchanged.
+    coords:       ({ lat: number; lon: number } | null)[];
+}
 {
     const out: PanelOrientation[] = [];
-    const sh: number[] = [];
+    const sh:  number[]           = [];
+    const co:  ({ lat: number; lon: number } | null)[] = [];
+
+    //Parse a single coord value (lat or lon) from the editor's
+    //free-form input. Empty / non-numeric / out-of-range values
+    //return null so the caller falls back cleanly. The range
+    //gate also protects against the editor leaking a 1.0e3
+    //typo into the forecast model.
+    const parseCoord = (v: unknown, max: number): number | null =>
+    {
+        if (v === undefined || v === null || v === '') return null;
+        const n = typeof v === 'number' ? v : parseFloat(String(v));
+        if (!isFinite(n)) return null;
+        if (n < -max || n > max) return null;
+        return n;
+    };
 
     const rawList = config?.['pv-arrays'];
     if (Array.isArray(rawList) && rawList.length > 0)
@@ -716,11 +751,24 @@ export function pvArrays(
                 share = s;
             }
 
+            //Per-array coords. Both lat AND lon must parse to
+            //valid numbers for the override to apply, otherwise
+            //we treat the array as "use home coords" rather
+            //than silently using only one half of a partial
+            //input (which would just be the home coord paired
+            //with an arbitrary 0 on the other axis).
+            const arrayLat = parseCoord(e['latitude'],  90);
+            const arrayLon = parseCoord(e['longitude'], 180);
+            const coords   = (arrayLat !== null && arrayLon !== null)
+                ? { lat: arrayLat, lon: arrayLon }
+                : null;
+
             out.push({
                 tiltDeg:    Math.max(0, Math.min(90, tilt)),
                 azimuthDeg: azDeg
             });
             sh.push(share);
+            co.push(coords);
         }
 
         //Fill blank shares with the average of the explicit ones (or
@@ -750,6 +798,7 @@ export function pvArrays(
                 azimuthDeg: isFinite(az) ? ((az % 360) + 360) % 360 : 180
             });
             sh.push(1);
+            co.push(null);
         }
     }
 
@@ -762,7 +811,7 @@ export function pvArrays(
         for (let i = 0; i < sh.length; i++) sh[i] /= total;
     }
 
-    return { orientations: out, shares: sh };
+    return { orientations: out, shares: sh, coords: co };
 }
 
 
@@ -779,7 +828,7 @@ export function computePvPowerWeighted(
     cloudPct: number
 ): number
 {
-    const { orientations, shares } = pvArrays(config);
+    const { orientations, shares, coords } = pvArrays(config);
     if (orientations.length === 0)
     {
         return computePvPower(t, lat, lon, cloudPct);
@@ -787,7 +836,17 @@ export function computePvPowerWeighted(
     let acc = 0;
     for (let i = 0; i < orientations.length; i++)
     {
-        acc += computePvPower(t, lat, lon, cloudPct, orientations[i]) * shares[i];
+        //Per-array coordinates override the home-level fallback
+        //when set. Used by installs where panels sit elsewhere
+        //than the home (e.g. ground-mounted in a clearing while
+        //the home itself is shaded), so each entry's sun
+        //position math runs at its true location. The cloud
+        //input is still the home-fetched series, since
+        //Open-Meteo's grid resolution is coarse enough that
+        //300 m of offset lands in the same cell.
+        const arrayLat = coords[i]?.lat ?? lat;
+        const arrayLon = coords[i]?.lon ?? lon;
+        acc += computePvPower(t, arrayLat, arrayLon, cloudPct, orientations[i]) * shares[i];
     }
     return acc;
 }

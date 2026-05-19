@@ -30,7 +30,10 @@ export const no: Translations = {
         batteryDischarged:  'utladet',
         actualShort:        'Reell',
         forecastShort:      'Estimert',
-        deltaTooltip:       'Reell produksjon vs estimat akkurat nå',},
+        deltaTooltip:       'Reell produksjon vs estimat akkurat nå',
+        forecastRefined:    'justert',
+        forecastCalibrationHint: 'Estimat justert ut fra gjennomsnittlig avvik mellom modell og målt produksjon siste {n} dager.',
+    },
 
     editor:
     {
@@ -83,6 +86,10 @@ export const no: Translations = {
         pvArrayTiltHelp:    'Helningen til denne raden i forhold til vannrett, fra 0 til 90: 0 for flat installasjon, 30 til 45 for et typisk skråtak, 90 for en helt vertikal oppstilling (for eksempel balkong). Sammen med azimuten driver helningen Liu-Jordan-transposisjonen som projiserer forventet stråling på panelets plan.',
         pvArrayAzimuthHelp: 'Kompassretningen denne raden peker mot, med klokken fra nord, fra 0 til 360: 0 = nord, 90 = øst, 180 = sør, 270 = vest.',
         pvArrayShareHelp:   'Relativ vekt av denne raden i den totale kWp. Normaliseres automatisk ved beregning: 50/50, 60/60 og 1/1 gir samme resultat. La stå tomt når det bare finnes én rad (den får 100 % som standard).',
+        pvArrayLatitude:    'Breddegrad panel',
+        pvArrayLongitude:   'Lengdegrad panel',
+        pvArrayCoordsHelp:  'Valgfritt. Fyll bare ut hvis denne raden IKKE ligger på samme sted som boligen (bakkemontert 300 m unna, frittstående garasje osv.). Begge feltene må fylles ut for at posisjonen skal brukes, ellers bruker estimatet boligens posisjon. En liten grønn kule vises på kartet i den posisjonen.',
+        pvArrayCoordsPlaceholder: 'valgfritt',
         pvColor:            'Produksjonsfarge',
         batterySection:     'Husbatteri',
         batteryHint:        'Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie. Chipen på sin side vises så snart entiteten er satt.',
@@ -153,6 +160,11 @@ export const no: Translations = {
         localLidarMinLat:      'Min breddegrad',
         localLidarMaxLat:      'Maks breddegrad',
         localLidarMinLon:      'Min lengdegrad',
-        localLidarMaxLon:      'Maks lengdegrad'
+        localLidarMaxLon:      'Maks lengdegrad',
+        resetSection:          'Tilbakestilling',
+        resetSectionHint:      'Vedlikeholdsverktøy for å tømme data som kortet har bufret lokalt.',
+        resetCacheButton:      'Tilbakestill databuffer',
+        resetCacheWarning:     'Advarsel: dette tømmer den bufrede Open-Meteo-væren og PV-historikken i minnet for ALLE Helios-kort som er åpne på denne siden. Det justerte estimatet mister sin 5-dagers kalibrering inntil den hentes på nytt (noen minutter avhengig av HA-serveren din). Data i Home Assistant røres aldri.',
+        resetCacheDone:        'Buffer tømt ✓'
     }
 };

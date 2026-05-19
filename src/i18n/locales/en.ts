@@ -31,7 +31,10 @@ export const en: Translations = {
         batteryDischarged:  'discharged',
         actualShort:        'Actual',
         forecastShort:      'Forecast',
-        deltaTooltip:       'Actual production vs forecast at this moment',},
+        deltaTooltip:       'Actual production vs forecast at this moment',
+        forecastRefined:    'refined',
+        forecastCalibrationHint: 'Forecast adjusted from the average gap between the model and observed production over the last {n} days.',
+    },
 
     editor:
     {
@@ -84,6 +87,10 @@ export const en: Translations = {
         pvArrayTiltHelp:    'Tilt of this row from horizontal, 0 to 90: 0 for a flat install, 30 to 45 for a typical pitched roof, 90 for a fully vertical setup such as a balcony. Combined with the azimuth, this drives the Liu-Jordan transposition that projects the predicted irradiance onto the panel plane.',
         pvArrayAzimuthHelp: 'Compass bearing this row faces, clockwise from north, 0 to 360: 0 = north, 90 = east, 180 = south, 270 = west.',
         pvArrayShareHelp:   'Relative weight of this row within the total kWp. Auto-normalised at compute time, so 50/50, 60/60 and 1/1 all produce the same forecast. Leave blank when there\'s only one row (it gets 100% by default).',
+        pvArrayLatitude:    'Panel latitude',
+        pvArrayLongitude:   'Panel longitude',
+        pvArrayCoordsHelp:  'Optional. Only set these when this row is NOT at the same place as the home (ground-mount 300 m away, detached garage, etc.). Both fields must be filled in for the position to apply, otherwise the forecast uses the home position. A small green sphere will appear on the map at that location.',
+        pvArrayCoordsPlaceholder: 'optional',
         pvColor:            'Production color',
         batterySection:     'Home battery',
         batteryHint:        'Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional. The chip on its side appears as soon as the entity is set.',
@@ -154,6 +161,11 @@ export const en: Translations = {
         localLidarMinLat:      'Min latitude',
         localLidarMaxLat:      'Max latitude',
         localLidarMinLon:      'Min longitude',
-        localLidarMaxLon:      'Max longitude'
+        localLidarMaxLon:      'Max longitude',
+        resetSection:          'Reset',
+        resetSectionHint:      'Maintenance tools to wipe data the card has cached locally.',
+        resetCacheButton:      'Reset data cache',
+        resetCacheWarning:     'Warning: this clears the cached Open-Meteo weather and the in-memory PV history for EVERY Helios card open on this page. The refined forecast will lose its 5 days of calibration until they\'re re-fetched (a few minutes depending on your HA server). Your data inside Home Assistant is never touched.',
+        resetCacheDone:        'Cache cleared ✓'
     }
 };

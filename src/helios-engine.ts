@@ -1,7 +1,7 @@
 import maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
-import { fetchHomePointData, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './engine/weather';
+import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './engine/buildings';
 import { projectExtrusionShadows } from './engine/shadows';
 import { resolveLidarSource } from './engine/lidar';
@@ -364,6 +364,10 @@ export class HeliosEngine
     //Single source of truth for hourly forecast data. Populated by
     //fetchHomePointData(); null until the first successful fetch.
     private _homeHourlyData: SampleHourly | null = null;
+    //Markers placed at each pv-array entry whose lat/lon is set and
+    //differs from the home position. Tracked per-array index so a
+    //config change rebuilds the set without leaking stale markers.
+    private _pvArrayMarkers: maplibregl.Marker[] = [];
     private _selectedTime:  Date | null       = null;
 
     //Skip atmosphere repaint when the sun moved less than 0.5° since
@@ -1128,6 +1132,12 @@ export class HeliosEngine
         };
     }
 
+    //Visible timeline window. The Open-Meteo payload now stretches
+    //7 past days so the dashboard forecast calibration has enough
+    //room to average ratios, but the timeline UI itself clips to
+    //the last 2 past days so the slider stays as scrubbable as
+    //before. Calibration consumers reach the full payload through
+    //`getTimelineSeries()`, which returns every hourly sample.
     private _getTimeRange(): { start: Date; end: Date } | null
     {
         const home = this._homeHourlyData;
@@ -1136,7 +1146,20 @@ export class HeliosEngine
             return null;
         }
         const t = home.times;
-        return { start: t[0], end: t[t.length - 1] };
+        const last = t[t.length - 1];
+        const TIMELINE_PAST_DAYS = 2;
+        const today0 = new Date();
+        today0.setHours(0, 0, 0, 0);
+        const visibleStartMs = today0.getTime() - TIMELINE_PAST_DAYS * 24 * 3_600_000;
+        //Snap to the earliest sample at or after the visible start.
+        //If the entire fetched window is shorter (cache truncated,
+        //first boot), fall back to the very first sample we have.
+        let startIdx = 0;
+        for (let i = 0; i < t.length; i++)
+        {
+            if (t[i].getTime() >= visibleStartMs) { startIdx = i; break; }
+        }
+        return { start: t[startIdx], end: last };
     }
 
     //Resolve the configured cloud colour, falling back to the design
@@ -1265,6 +1288,7 @@ export class HeliosEngine
         this._addBuildings();
         this._initLidarViewLayer();
         this._applyLabelVisibility();
+        this._refreshPvArrayMarkers();
 
         window.clearInterval(this._skyTimer);
         this._lastAtmosphereAlt = -999;
@@ -2593,6 +2617,98 @@ export class HeliosEngine
         _setDetailMode(this, on);
     }
 
+    //Wipe every cached Open-Meteo payload from localStorage, drop
+    //the engine's in-memory weather snapshot, and trigger a fresh
+    //fetch. Used by the editor's "reset data cache" button.
+    //Returns the count of cached payloads removed (purely
+    //informational for the UI to show a quick confirmation).
+    public resetDataCache(): number
+    {
+        const cleared = clearWeatherCache();
+        this._homeHourlyData = null;
+        this._refreshWeather(this._fetchLat, this._fetchLon);
+        return cleared;
+    }
+
+
+    //Diff-and-rebuild of the small green marker spheres placed at
+    //each pv-array entry whose lat/lon is set AND meaningfully
+    //different from the home position. Cheap to do unconditionally
+    //(most installs have zero arrays with coords set, so the loop
+    //is empty in the common case). Called from updateConfig and
+    //from the engine's init path so a freshly loaded card with
+    //pre-set per-array coords already shows the spheres.
+    private _refreshPvArrayMarkers(): void
+    {
+        if (!this.map) return;
+
+        const HOME_PROXIMITY_M = 10;  //treat <10 m diff as "at home"
+        const pvHex = (() =>
+        {
+            const raw = this.cfg['pv-color'];
+            if (typeof raw === 'string' && /^#?[0-9a-f]{6}$/i.test(raw.trim()))
+            {
+                const s = raw.trim();
+                return s.startsWith('#') ? s : `#${s}`;
+            }
+            return '#27B36B';
+        })();
+
+        const positions: { lat: number; lon: number }[] = [];
+        const raw = this.cfg['pv-arrays'];
+        if (Array.isArray(raw))
+        {
+            for (const entry of raw)
+            {
+                if (!entry || typeof entry !== 'object') continue;
+                const e = entry as Record<string, unknown>;
+                const lat = typeof e['latitude']  === 'number' ? e['latitude']  : parseFloat(String(e['latitude']  ?? ''));
+                const lon = typeof e['longitude'] === 'number' ? e['longitude'] : parseFloat(String(e['longitude'] ?? ''));
+                if (!isFinite(lat) || !isFinite(lon))            continue;
+                if (lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
+                if (geoDistM(lat, lon, this.homeLat, this.homeLon) < HOME_PROXIMITY_M) continue;
+                positions.push({ lat, lon });
+            }
+        }
+
+        //Reconcile against existing markers. Simplest approach for
+        //a list capped at PV_ARRAYS_MAX (6): tear down and rebuild
+        //when the lengths differ; otherwise just update positions
+        //in place. Either way, exactly N markers exist after the
+        //call, with no leftovers from previous configs.
+        if (this._pvArrayMarkers.length !== positions.length)
+        {
+            for (const m of this._pvArrayMarkers) m.remove();
+            this._pvArrayMarkers = [];
+            for (const p of positions)
+            {
+                const el = document.createElement('div');
+                el.className = 'helios-pv-array-marker';
+                el.style.cssText =
+                    'width:14px;height:14px;border-radius:50%;'
+                  + `background:${pvHex};`
+                  + 'border:2px solid #ffffff;'
+                  + 'box-shadow:0 2px 6px rgba(0,0,0,0.35);'
+                  + 'pointer-events:none;';
+                const marker = new maplibregl.Marker({ element: el })
+                    .setLngLat([p.lon, p.lat])
+                    .addTo(this.map);
+                this._pvArrayMarkers.push(marker);
+            }
+        }
+        else
+        {
+            for (let i = 0; i < positions.length; i++)
+            {
+                this._pvArrayMarkers[i].setLngLat([positions[i].lon, positions[i].lat]);
+                //Colour might have changed via the PV colour picker
+                //even if the position list didn't.
+                const el = this._pvArrayMarkers[i].getElement();
+                if (el) el.style.background = pvHex;
+            }
+        }
+    }
+
     //True while the post-exit cooldown is active. The card consults
     //this to gate timeline scrubs; the engine consults it internally
     //for the canvas drag-rotate. Both surfaces read the same clock so
@@ -3459,6 +3575,10 @@ export class HeliosEngine
         {
             this._renderForCurrentSelection();
         }
+
+        //Per-array PV markers: small spheres at panel positions
+        //when the user has set lat/lon different from home.
+        this._refreshPvArrayMarkers();
     }
 
 
@@ -3612,6 +3732,8 @@ export class HeliosEngine
         this._buildingsData     = null;
         this._buildingsFetchKey = '';
         this._homeHourlyData    = null;
+        for (const m of this._pvArrayMarkers) m.remove();
+        this._pvArrayMarkers    = [];
         this._mapCanvas             = undefined;
         this._dragRotateHandlers    = undefined;
         this._mapPinHandler         = undefined;

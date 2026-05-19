@@ -29,6 +29,8 @@ export const fr: Translations = {
         actualShort:        'Réel',
         forecastShort:      'Prévu',
         deltaTooltip:       'Production réelle vs prévision à cet instant',
+        forecastRefined:    'affiné',
+        forecastCalibrationHint: 'Prévision ajustée selon l\'écart moyen entre modèle et production réelle sur les {n} derniers jours.',
     },
 
     editor:
@@ -82,6 +84,10 @@ export const fr: Translations = {
         pvArrayTiltHelp:    'Inclinaison de cette rangée par rapport à l\'horizontale, de 0 à 90 : 0 pour une installation à plat, 30 à 45 pour un toit incliné classique, 90 pour une installation verticale (par exemple un balcon). Combinée à l\'azimut, elle pilote la transposition Liu-Jordan qui projette l\'irradiance prévue sur le plan des panneaux.',
         pvArrayAzimuthHelp: 'Orientation à la boussole vers laquelle cette rangée est tournée, sens horaire depuis le nord, de 0 à 360 : 0 = nord, 90 = est, 180 = sud, 270 = ouest.',
         pvArrayShareHelp:   'Poids relatif de cette rangée dans le total des kWp. Normalisé automatiquement au calcul : 50/50, 60/60 et 1/1 donnent tous le même résultat. Laisse vide quand il n\'y a qu\'une seule rangée (elle prend 100 % par défaut).',
+        pvArrayLatitude:    'Latitude des panneaux',
+        pvArrayLongitude:   'Longitude des panneaux',
+        pvArrayCoordsHelp:  'Optionnel. À renseigner uniquement si cette rangée n\'est PAS au même endroit que la maison (panneaux au sol à 300 m, garage isolé, etc.). Les deux champs doivent être remplis pour que la position s\'applique. Sinon la prévision utilise la position de la maison. Une petite sphère verte apparaîtra sur la carte à cette position.',
+        pvArrayCoordsPlaceholder: 'optionnel',
         pvColor:            'Couleur de production',
         batterySection:     'Batterie domestique',
         batteryHint:        'Optionnel. Chaque entité apparaît sous forme de pastille de part et d\'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles. La pastille correspondante s\'affiche dès que l\'entité est renseignée.',
@@ -152,6 +158,11 @@ export const fr: Translations = {
         localLidarMinLat:      'Latitude min',
         localLidarMaxLat:      'Latitude max',
         localLidarMinLon:      'Longitude min',
-        localLidarMaxLon:      'Longitude max'
+        localLidarMaxLon:      'Longitude max',
+        resetSection:          'Réinitialisation',
+        resetSectionHint:      'Outils de maintenance pour purger les données mises en cache par la carte.',
+        resetCacheButton:      'Réinitialiser le cache des données',
+        resetCacheWarning:     'Attention : ce bouton vide la météo Open-Meteo en cache local et l\'historique PV en mémoire pour TOUTES les cartes Helios ouvertes. La prévision affinée perdra ses 5 derniers jours de calibration le temps qu\'ils soient récupérés à nouveau (quelques minutes selon ton serveur HA). Tes données dans Home Assistant ne sont jamais touchées.',
+        resetCacheDone:        'Cache vidé ✓'
     }
 };

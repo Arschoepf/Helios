@@ -21,7 +21,10 @@ export const nl: Translations = {
         batteryDischarged:  'ontladen',
         actualShort:        'Werkelijk',
         forecastShort:      'Verwacht',
-        deltaTooltip:       'Werkelijke opwekking vs verwachting op dit moment',},
+        deltaTooltip:       'Werkelijke opwekking vs verwachting op dit moment',
+        forecastRefined:    'bijgesteld',
+        forecastCalibrationHint: 'Verwachting bijgesteld op basis van het gemiddelde verschil tussen model en gemeten opwekking over de laatste {n} dagen.',
+    },
 
     editor:
     {
@@ -74,6 +77,10 @@ export const nl: Translations = {
         pvArrayTiltHelp:    'Helling van deze rij ten opzichte van het horizontale vlak, 0 tot 90: 0 voor een platte opstelling, 30 tot 45 voor een klassiek schuin dak, 90 voor een volledig verticale opstelling (bijvoorbeeld een balkon). Samen met de azimut stuurt deze instelling de Liu-Jordan-transpositie aan die de voorspelde instraling op het paneelvlak projecteert.',
         pvArrayAzimuthHelp: 'Kompasrichting waarnaar deze rij wijst, met de klok mee vanaf het noorden, 0 tot 360: 0 = noord, 90 = oost, 180 = zuid, 270 = west.',
         pvArrayShareHelp:   'Relatief gewicht van deze rij in het totale kWp. Wordt op berekentijd automatisch genormaliseerd: 50/50, 60/60 en 1/1 leveren hetzelfde resultaat. Laat leeg wanneer er maar één rij is (krijgt standaard 100%).',
+        pvArrayLatitude:    'Breedtegraad panelen',
+        pvArrayLongitude:   'Lengtegraad panelen',
+        pvArrayCoordsHelp:  'Optioneel. Alleen invullen wanneer deze rij NIET op dezelfde locatie staat als het huis (grondopstelling 300 m verderop, vrijstaande garage, enz.). Beide velden moeten ingevuld zijn om de positie toe te passen; anders gebruikt de voorspelling de positie van het huis. Op de kaart verschijnt een kleine groene bol op die locatie.',
+        pvArrayCoordsPlaceholder: 'optioneel',
         pvColor:            'Productiekleur',
         batterySection:     'Thuisbatterij',
         batteryHint:        'Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel. De bijbehorende chip verschijnt zodra de entiteit is ingesteld.',
@@ -144,6 +151,11 @@ export const nl: Translations = {
         localLidarMinLat:      'Min. breedtegraad',
         localLidarMaxLat:      'Max. breedtegraad',
         localLidarMinLon:      'Min. lengtegraad',
-        localLidarMaxLon:      'Max. lengtegraad'
+        localLidarMaxLon:      'Max. lengtegraad',
+        resetSection:          'Resetten',
+        resetSectionHint:      'Onderhoudstools om de lokaal door de kaart bewaarde gegevens te wissen.',
+        resetCacheButton:      'Datacache resetten',
+        resetCacheWarning:     'Let op: dit wist de gecachete Open-Meteo weergegevens en de PV-geschiedenis in het geheugen van ELKE Helios-kaart die op deze pagina open staat. De bijgestelde verwachting verliest haar 5 dagen kalibratie totdat die opnieuw zijn opgehaald (enkele minuten afhankelijk van je HA-server). Gegevens in Home Assistant worden nooit aangeraakt.',
+        resetCacheDone:        'Cache geleegd ✓'
     }
 };

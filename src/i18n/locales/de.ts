@@ -21,7 +21,10 @@ export const de: Translations = {
         batteryDischarged:  'entladen',
         actualShort:        'Real',
         forecastShort:      'Prognose',
-        deltaTooltip:       'Reale Erzeugung vs Prognose im aktuellen Moment',},
+        deltaTooltip:       'Reale Erzeugung vs Prognose im aktuellen Moment',
+        forecastRefined:    'verfeinert',
+        forecastCalibrationHint: 'Prognose angepasst anhand der durchschnittlichen Abweichung zwischen Modell und realer Erzeugung der letzten {n} Tage.',
+    },
 
     editor:
     {
@@ -74,6 +77,10 @@ export const de: Translations = {
         pvArrayTiltHelp:    'Neigung dieser Reihe gegenüber der Horizontalen, 0 bis 90: 0 für eine flache Installation, 30 bis 45 für ein typisches Steildach, 90 für eine vollständig vertikale Anlage (zum Beispiel Balkon). Zusammen mit dem Azimut treibt die Neigung die Liu-Jordan-Transposition an, die die prognostizierte Einstrahlung auf die Modulebene projiziert.',
         pvArrayAzimuthHelp: 'Kompassrichtung, in die diese Reihe zeigt, im Uhrzeigersinn ab Norden, 0 bis 360: 0 = Norden, 90 = Osten, 180 = Süden, 270 = Westen.',
         pvArrayShareHelp:   'Relativer Anteil dieser Reihe an der Gesamt-kWp. Wird zum Berechnungszeitpunkt automatisch normalisiert, deshalb liefern 50/50, 60/60 und 1/1 dieselbe Prognose. Leer lassen, wenn nur eine Reihe existiert (sie bekommt standardmäßig 100 %).',
+        pvArrayLatitude:    'Modul-Breitengrad',
+        pvArrayLongitude:   'Modul-Längengrad',
+        pvArrayCoordsHelp:  'Optional. Nur ausfüllen, wenn diese Reihe NICHT am selben Ort steht wie das Haus (Freilandanlage 300 m entfernt, separate Garage usw.). Beide Felder müssen ausgefüllt sein, damit die Position übernommen wird, sonst verwendet die Prognose den Standort des Hauses. Eine kleine grüne Kugel erscheint dann auf der Karte an dieser Position.',
+        pvArrayCoordsPlaceholder: 'optional',
         pvColor:            'Produktionsfarbe',
         batterySection:     'Hausbatterie',
         batteryHint:        'Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional. Der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.',
@@ -144,6 +151,11 @@ export const de: Translations = {
         localLidarMinLat:      'Min. Breitengrad',
         localLidarMaxLat:      'Max. Breitengrad',
         localLidarMinLon:      'Min. Längengrad',
-        localLidarMaxLon:      'Max. Längengrad'
+        localLidarMaxLon:      'Max. Längengrad',
+        resetSection:          'Zurücksetzen',
+        resetSectionHint:      'Wartungswerkzeuge, um die lokal gespeicherten Daten der Karte zu löschen.',
+        resetCacheButton:      'Datencache zurücksetzen',
+        resetCacheWarning:     'Achtung: löscht das zwischengespeicherte Open-Meteo-Wetter und den PV-Verlauf im Speicher für ALLE auf dieser Seite geöffneten Helios-Karten. Die verfeinerte Prognose verliert ihre 5-Tage-Kalibrierung, bis sie erneut abgerufen wird (je nach HA-Server einige Minuten). Daten in Home Assistant bleiben unverändert.',
+        resetCacheDone:        'Cache geleert ✓'
     }
 };

@@ -22,11 +22,13 @@ export interface SampleHourly
 }
 
 
-//Forecast window: 2 days back + 2 days forward (today included on
-//the forecast side) = a 5-day timeline. Wider windows are technic-
-//ally possible but kill the UX in practice, forecasts past 48 h
-//get noisy, and the timeline becomes too dense to scrub precisely.
-const PAST_DAYS     = 2;
+//Forecast window: 7 days back + 2 days forward (today included on
+//the forecast side). The timeline itself only renders the last 2
+//past days (its slider stays tight and scrubbable), but the wider
+//past_days payload is needed by the forecast calibration: it
+//re-runs the model on past weather and compares to observed PV
+//history to derive a multiplier for upcoming predictions.
+const PAST_DAYS     = 7;
 //Open-Meteo counts today inside `forecast_days`, so FORECAST_DAYS=3
 //yields today + 2 future days. Combined with PAST_DAYS=2, the
 //timeline spans 5 days total, 2 past, today, 2 forecast, which is
@@ -161,6 +163,32 @@ interface CachedPayload
 function cacheKey(lat: number, lon: number, precision: 'standard' | 'high'): string
 {
     return `${CACHE_KEY_PREFIX}${precision}:${lat.toFixed(3)},${lon.toFixed(3)}`;
+}
+
+
+//Wipe every Open-Meteo payload we've stashed in localStorage.
+//Exposed for the editor's "reset data cache" button so a user
+//who wants to force a fresh fetch (after a network glitch, a
+//config change they want re-evaluated, or to retrain the
+//forecast calibration) can do so without having to clear
+//browser storage manually. Safe to call repeatedly.
+export function clearWeatherCache(): number
+{
+    let cleared = 0;
+    try
+    {
+        const ls = window.localStorage;
+        if (!ls) return 0;
+        const stale: string[] = [];
+        for (let i = 0; i < ls.length; i++)
+        {
+            const k = ls.key(i);
+            if (k && k.startsWith(CACHE_KEY_PREFIX)) stale.push(k);
+        }
+        for (const k of stale) { ls.removeItem(k); cleared++; }
+    }
+    catch (_) {}
+    return cleared;
 }
 
 function readCache(lat: number, lon: number, precision: 'standard' | 'high'): SampleHourly | null

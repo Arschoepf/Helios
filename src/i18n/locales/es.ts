@@ -21,7 +21,10 @@ export const es: Translations = {
         batteryDischarged:  'descargado',
         actualShort:        'Real',
         forecastShort:      'Previsto',
-        deltaTooltip:       'Producción real vs previsión en este momento',},
+        deltaTooltip:       'Producción real vs previsión en este momento',
+        forecastRefined:    'ajustada',
+        forecastCalibrationHint: 'Previsión ajustada según la diferencia media entre el modelo y la producción real de los últimos {n} días.',
+    },
 
     editor:
     {
@@ -74,6 +77,10 @@ export const es: Translations = {
         pvArrayTiltHelp:    'Inclinación de esta hilera respecto a la horizontal, de 0 a 90: 0 para una instalación plana, 30 a 45 para un tejado inclinado clásico, 90 para una instalación vertical (por ejemplo balcón). Combinada con el azimut, dirige la transposición Liu-Jordan que proyecta la irradiancia prevista sobre el plano del panel.',
         pvArrayAzimuthHelp: 'Orientación brújula a la que apunta esta hilera, en sentido horario desde el norte, de 0 a 360: 0 = norte, 90 = este, 180 = sur, 270 = oeste.',
         pvArrayShareHelp:   'Peso relativo de esta hilera en el total de kWp. Se normaliza automáticamente al calcular: 50/50, 60/60 y 1/1 producen el mismo resultado. Déjalo vacío cuando solo hay una hilera (recibe el 100 % por defecto).',
+        pvArrayLatitude:    'Latitud de los paneles',
+        pvArrayLongitude:   'Longitud de los paneles',
+        pvArrayCoordsHelp:  'Opcional. Rellénalo solo si esta hilera NO está en el mismo sitio que la casa (instalación al suelo a 300 m, garaje independiente, etc.). Ambos campos deben estar rellenados para que la posición se aplique; si no, la previsión usa la posición de la casa. Aparecerá una pequeña esfera verde en el mapa en esa posición.',
+        pvArrayCoordsPlaceholder: 'opcional',
         pvColor:            'Color de producción',
         batterySection:     'Batería doméstica',
         batteryHint:        'Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales. El chip correspondiente aparece en cuanto la entidad está definida.',
@@ -144,6 +151,11 @@ export const es: Translations = {
         localLidarMinLat:      'Latitud mín.',
         localLidarMaxLat:      'Latitud máx.',
         localLidarMinLon:      'Longitud mín.',
-        localLidarMaxLon:      'Longitud máx.'
+        localLidarMaxLon:      'Longitud máx.',
+        resetSection:          'Restablecer',
+        resetSectionHint:      'Herramientas de mantenimiento para borrar los datos almacenados localmente por la tarjeta.',
+        resetCacheButton:      'Restablecer caché de datos',
+        resetCacheWarning:     'Atención: borra la meteorología de Open-Meteo en caché y el historial PV en memoria de TODAS las tarjetas Helios abiertas en esta página. La previsión ajustada perderá sus 5 días de calibración hasta que se vuelvan a obtener (unos minutos según tu servidor HA). Los datos en Home Assistant no se tocan nunca.',
+        resetCacheDone:        'Caché borrada ✓'
     }
 };

@@ -21,7 +21,10 @@ export const it: Translations = {
         batteryDischarged:  'scaricato',
         actualShort:        'Reale',
         forecastShort:      'Previsto',
-        deltaTooltip:       'Produzione reale vs prevista in questo momento',},
+        deltaTooltip:       'Produzione reale vs prevista in questo momento',
+        forecastRefined:    'rifinita',
+        forecastCalibrationHint: 'Previsione corretta in base allo scarto medio tra modello e produzione reale negli ultimi {n} giorni.',
+    },
 
     editor:
     {
@@ -74,6 +77,10 @@ export const it: Translations = {
         pvArrayTiltHelp:    'Inclinazione di questa fila rispetto all\'orizzontale, da 0 a 90: 0 per un\'installazione piana, 30 a 45 per un tetto inclinato classico, 90 per un\'installazione verticale (per esempio balcone). Combinata con l\'azimut, guida la trasposizione Liu-Jordan che proietta l\'irradianza prevista sul piano del pannello.',
         pvArrayAzimuthHelp: 'Orientamento bussola verso cui è rivolta questa fila, in senso orario da nord, da 0 a 360: 0 = nord, 90 = est, 180 = sud, 270 = ovest.',
         pvArrayShareHelp:   'Peso relativo di questa fila nel totale dei kWp. Normalizzato automaticamente al calcolo: 50/50, 60/60 e 1/1 danno lo stesso risultato. Lascia vuoto quando c\'è una sola fila (prende il 100 % per default).',
+        pvArrayLatitude:    'Latitudine pannelli',
+        pvArrayLongitude:   'Longitudine pannelli',
+        pvArrayCoordsHelp:  'Opzionale. Compila solo se questa fila NON è nello stesso posto della casa (installazione a terra a 300 m, garage separato, ecc.). Entrambi i campi devono essere compilati perché la posizione si applichi, altrimenti la previsione usa la posizione della casa. Sulla mappa apparirà una piccola sfera verde in quella posizione.',
+        pvArrayCoordsPlaceholder: 'opzionale',
         pvColor:            'Colore di produzione',
         batterySection:     'Batteria domestica',
         batteryHint:        'Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali. La pastiglia corrispondente appare appena l\'entità è impostata.',
@@ -144,6 +151,11 @@ export const it: Translations = {
         localLidarMinLat:      'Latitudine min',
         localLidarMaxLat:      'Latitudine max',
         localLidarMinLon:      'Longitudine min',
-        localLidarMaxLon:      'Longitudine max'
+        localLidarMaxLon:      'Longitudine max',
+        resetSection:          'Reset',
+        resetSectionHint:      'Strumenti di manutenzione per cancellare i dati memorizzati localmente dalla card.',
+        resetCacheButton:      'Reset cache dati',
+        resetCacheWarning:     'Attenzione: cancella i dati meteo Open-Meteo in cache e lo storico PV in memoria per TUTTE le card Helios aperte in questa pagina. La previsione rifinita perderà i suoi 5 giorni di calibrazione finché non saranno scaricati di nuovo (qualche minuto a seconda del tuo server HA). I dati su Home Assistant non vengono mai toccati.',
+        resetCacheDone:        'Cache svuotata ✓'
     }
 };
