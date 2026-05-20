@@ -465,15 +465,26 @@ export const heliosCardStyles = css`
     }
     .dash-stat-refined-up   { color: #22c55e; }
     .dash-stat-refined-down { color: #ef4444; }
-    /*  Same instant-appearing tooltip pattern as .dash-stat-delta,
-        explains where the refined value comes from when the user
-        hovers the chip.                                          */
+    /*  Custom-styled tooltip explaining where the refined value
+        comes from. Same dark-box visual as .dash-stat-delta::after
+        below so the two tooltips share a vocabulary.
+
+        Horizontal anchor depends on which dashboard card holds
+        the chip. In the AUJOURD'HUI card the headline is a two-
+        column flex (produit on the left, prevu + refined on the
+        right), so the chip sits in the right column and the
+        tooltip extends LEFT into the card via right:0. In the
+        DEMAIN card the headline has a single left-aligned column
+        (only a prevu reading), so the chip sits on the LEFT and
+        the tooltip extends RIGHT into the card via left:0. Using
+        the same anchor in both cards bleeds the tooltip past
+        whichever edge it shares with the chip and gets clipped by
+        ha-card's overflow:hidden.                                 */
     .dash-stat-refined::after
     {
         content: attr(data-tooltip);
         position: absolute;
         bottom: calc(100% + 6px);
-        right: 0;
         background: rgba(0, 0, 0, 0.85);
         color: #ffffff;
         padding: 6px 10px;
@@ -482,7 +493,7 @@ export const heliosCardStyles = css`
         font-weight: 500;
         letter-spacing: 0.1px;
         white-space: normal;
-        max-width: 240px;
+        max-width: 220px;
         width: max-content;
         opacity: 0;
         pointer-events: none;
@@ -490,6 +501,8 @@ export const heliosCardStyles = css`
         z-index: 10;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
     }
+    .dash-card.dash-today    .dash-stat-refined::after { right: 0;  left: auto; }
+    .dash-card.dash-tomorrow .dash-stat-refined::after { left:  0;  right: auto; }
     .dash-stat-refined:hover::after
     {
         opacity: 1;

@@ -260,7 +260,9 @@ export function initEngineNow(host: InitHost): void
         //letting Open-Meteo fall back to its own DEM.
         const elevation = host.hass.config.elevation;
 
+        const hadPreviousEngine = host._engine !== undefined;
         host._engine?.cleanup();
+        host._engine = undefined;
         //Defensive: clear anything MapLibre left in the container
         //(canvas, telemetry div, marker root). Older revisions of
         //MapLibre occasionally left a dead canvas behind, which
@@ -269,80 +271,121 @@ export function initEngineNow(host: InitHost): void
         {
             container.removeChild(container.firstChild);
         }
-        host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
-        //Ping Lit so the chrome that depends on engine readiness
-        //(today: the LiDAR View button, which gates on the
-        //provider resolver via host._engine.getActiveLidarSourceId())
-        //flips to its enabled state as soon as the engine lands,
-        //instead of waiting for the next clock tick / state poke
-        //to trigger an unrelated re-render. The engine instance
-        //itself isn't a @state property so this nudge is the only
-        //signal Lit gets that it became truthy.
-        host.requestUpdate();
 
-        host._engine.onFetchStart = () =>
+        const spawnNewEngine = (): void =>
         {
-            host._fetching = true;
-        };
-        host._engine.onFetchEnd = () =>
-        {
-            host._fetching = false;
-        };
-        host._engine.onWeatherUpdate = data =>
-        {
-            //Per-layer cloud breakdown is now owned by the
-            //engine, it stashes low / mid / high alongside the
-            //effective coverage and projectCloudScene reads them
-            //back to size the three concentric bands. The card
-            //only needs the aggregate for the cloud chip label.
-            host._cloudCover         = data.cloudCover;
-            host._timeRange          = data.timeRange;
-            host._isLiveMode         = data.isLiveTime;
-            //Pull the hourly series the chart canvas plots. Same
-            //cadence as the gradients above, since both consume
-            //the engine's hourly data refresh.
-            host._chartSeries        = host._engine?.getTimelineSeries() ?? null;
-            //First weather update is also our cue to ask the
-            //engine for the initial label layout, by this point
-            //the map has loaded its style and the projection
-            //matrix is available. Subsequent transforms refresh
-            //via onMapTransform.
-            refreshOverlays(host);
-        };
-        //Cloud-disc hover is wired directly on the SVG element via
-        //@mousemove / @mouseleave (see the render path's solar-svg),
-        //so the engine doesn't surface a hover callback for it.
-        host._engine.onMapTransform = () =>
-        {
-            refreshOverlays(host);
-        };
-        //WebGL context loss recovery, iOS Safari recycles
-        //contexts under memory pressure. The engine emits this
-        //hook from its webglcontextlost listener; we tear down
-        //the dead engine and re-init from scratch on the next
-        //animation frame so the user never sees a stuck black
-        //canvas. _lastHomeKey is reset so the identity-change
-        //branch of updated() takes the re-init path.
-        host._engine.onContextLost = () =>
-        {
-            host._lastHomeKey = '';
-            if (!host._initInflight) initEngine(host);
+            //Container was checked above but the inter-frame gap
+            //below could land after a card disconnect. Re-check
+            //defensively so a torn-down card never spawns a new
+            //engine.
+            if (!host.config || !host.hass?.config)
+            {
+                host._initInflight = false;
+                return;
+            }
+            host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
+            wireEngineCallbacks(host);
+            host._initInflight = false;
         };
 
-        //LiDAR shadow compute: the engine fires these around its
-        //WMS round-trip + raster paint pass. The card surfaces a
-        //small spinner chip top-right so the user has a clear
-        //"shadows are coming" signal during the few seconds the
-        //fetch takes on a cold start.
-        host._engine.onShadowComputeStart = () =>
+        if (hadPreviousEngine)
         {
-            host._shadowBusy = true;
-        };
-        host._engine.onShadowComputeEnd = () =>
-        {
-            host._shadowBusy = false;
-        };
+            //Firefox's WebGL context release isn't synchronous: when
+            //we call WEBGL_lose_context.loseContext() in cleanup(),
+            //the context stays in Firefox's pool for one more frame.
+            //If we allocate the next engine in the same tick the new
+            //MapLibre instance can fail to bind a context and end up
+            //rendering a black canvas. Skipping one animation frame
+            //gives Firefox time to release before the new request.
+            //Chrome doesn't strictly need this but the extra ~16 ms
+            //is invisible to the user (the editor preview was already
+            //debounced upstream).
+            requestAnimationFrame(spawnNewEngine);
+            return;
+        }
 
-        host._initInflight = false;
+        spawnNewEngine();
     });
+}
+
+
+//Wires every engine-side callback into card state. Extracted so the
+//two engine-spawn paths (immediate, and rAF-deferred after a previous
+//engine cleanup) can share identical wiring. Assumes host._engine has
+//just been assigned and is non-null.
+function wireEngineCallbacks(host: InitHost): void
+{
+    if (!host._engine) return;
+
+    //Ping Lit so the chrome that depends on engine readiness
+    //(today: the LiDAR View button, which gates on the provider
+    //resolver via host._engine.getActiveLidarSourceId()) flips to
+    //its enabled state as soon as the engine lands, instead of
+    //waiting for the next clock tick to trigger an unrelated
+    //re-render. The engine instance itself isn't a @state
+    //property so this nudge is the only signal Lit gets that it
+    //became truthy.
+    host.requestUpdate();
+
+    host._engine.onFetchStart = () =>
+    {
+        host._fetching = true;
+    };
+    host._engine.onFetchEnd = () =>
+    {
+        host._fetching = false;
+    };
+    host._engine.onWeatherUpdate = data =>
+    {
+        //Per-layer cloud breakdown is now owned by the engine, it
+        //stashes low / mid / high alongside the effective
+        //coverage and projectCloudScene reads them back to size
+        //the three concentric bands. The card only needs the
+        //aggregate for the cloud chip label.
+        host._cloudCover         = data.cloudCover;
+        host._timeRange          = data.timeRange;
+        host._isLiveMode         = data.isLiveTime;
+        //Pull the hourly series the chart canvas plots. Same
+        //cadence as the gradients above, since both consume the
+        //engine's hourly data refresh.
+        host._chartSeries        = host._engine?.getTimelineSeries() ?? null;
+        //First weather update is also our cue to ask the engine
+        //for the initial label layout, by this point the map has
+        //loaded its style and the projection matrix is available.
+        //Subsequent transforms refresh via onMapTransform.
+        refreshOverlays(host);
+    };
+    //Cloud-disc hover is wired directly on the SVG element via
+    //@mousemove / @mouseleave (see the render path's solar-svg),
+    //so the engine doesn't surface a hover callback for it.
+    host._engine.onMapTransform = () =>
+    {
+        refreshOverlays(host);
+    };
+    //WebGL context loss recovery, iOS Safari recycles contexts
+    //under memory pressure. The engine emits this hook from its
+    //webglcontextlost listener; we tear down the dead engine and
+    //re-init from scratch on the next animation frame so the user
+    //never sees a stuck black canvas. _lastHomeKey is reset so
+    //the identity-change branch of updated() takes the re-init
+    //path.
+    host._engine.onContextLost = () =>
+    {
+        host._lastHomeKey = '';
+        if (!host._initInflight) initEngine(host);
+    };
+
+    //LiDAR shadow compute: the engine fires these around its WMS
+    //round-trip + raster paint pass. The card surfaces a small
+    //spinner chip top-right so the user has a clear "shadows are
+    //coming" signal during the few seconds the fetch takes on a
+    //cold start.
+    host._engine.onShadowComputeStart = () =>
+    {
+        host._shadowBusy = true;
+    };
+    host._engine.onShadowComputeEnd = () =>
+    {
+        host._shadowBusy = false;
+    };
 }

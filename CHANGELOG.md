@@ -5,6 +5,38 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.1
+
+Hotfix on top of v1.6.0 addressing two visible bugs surfaced by
+community feedback on the Reddit launch thread. Scope deliberately
+kept tight; LiDAR coverage expansion and other feature work moves
+to v1.7.
+
+### Fixes
+
+* **Refined-forecast tooltip clipping** ,
+  [#16](https://github.com/ReikanYsora/Helios/issues/16). The
+  hover explanation behind the "→ X kWh affiné" chip on the
+  AUJOURD'HUI and DEMAIN dashboard cards used the same horizontal
+  anchor on both layouts, which only fit the AUJOURD'HUI
+  two-column headline. The DEMAIN headline is a single
+  left-aligned column, so the chip sits on the left and the
+  tooltip extended past the card's left edge into ha-card's
+  overflow clip. Each card now anchors its tooltip on the side
+  opposite the chip so it grows into the card interior:
+  `.dash-card.dash-today .dash-stat-refined::after { right: 0 }`
+  and `.dash-card.dash-tomorrow .dash-stat-refined::after { left:
+  0 }`.
+* **Black-map after location change on Firefox**, when the user
+  switches `home-latitude` / `home-longitude` in the editor
+  preview on Firefox, the previous MapLibre engine's WebGL
+  context wasn't fully released by the time the next engine tried
+  to bind one, yielding a black canvas. Engine init now waits one
+  animation frame between cleanup and new MapLibre allocation
+  when there was a previous engine, giving Firefox time to
+  release the context. No effect on Chrome (the extra 16 ms sits
+  inside the existing 500 ms editor debounce).
+
 ## v1.6.0
 
 The biggest iteration since the OpenFreeMap migration. Three
