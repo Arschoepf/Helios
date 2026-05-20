@@ -5,6 +5,34 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.1-beta.1
+
+First prerelease on top of v1.6.0. Scope deliberately kept to two
+visible bugs surfaced by community feedback on the Reddit launch
+thread; LiDAR coverage work has been moved out to v1.7.
+
+### Fixes
+
+* **Black-map after location change on Firefox**, when the user
+  switches `home-latitude` / `home-longitude` in the editor preview
+  on Firefox, the previous MapLibre engine's WebGL context wasn't
+  fully released by the time the next engine tried to bind one,
+  yielding a black canvas. Engine init now waits one animation
+  frame between cleanup and new MapLibre allocation when there was
+  a previous engine, giving Firefox time to release the context.
+  No effect on Chrome (the extra 16 ms sits inside the existing
+  500 ms editor debounce).
+* **Refined-forecast tooltip clipping on narrow viewports**, the
+  hover explanation behind the "→ X kWh affiné" chip in the Today
+  card used to be a CSS `::after` pseudo with absolute positioning,
+  which got clipped by ha-card's `overflow: hidden` whenever the
+  card was narrow enough that the tooltip extended past the card's
+  left edge. Replaced with the browser-native `title` attribute so
+  the OS tooltip system owns positioning, never bleeds off-screen,
+  and works identically on mouse + keyboard + touch. The trade-off
+  is a ~1 s hover delay before the tooltip appears (the standard
+  native delay) instead of the instant-appearing custom tooltip.
+
 ## v1.6.0
 
 The biggest iteration since the OpenFreeMap migration. Three

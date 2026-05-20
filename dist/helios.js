@@ -2299,35 +2299,16 @@ const heliosCardStyles = i$3`
     }
     .dash-stat-refined-up   { color: #22c55e; }
     .dash-stat-refined-down { color: #ef4444; }
-    /*  Same instant-appearing tooltip pattern as .dash-stat-delta,
-        explains where the refined value comes from when the user
-        hovers the chip.                                          */
-    .dash-stat-refined::after
-    {
-        content: attr(data-tooltip);
-        position: absolute;
-        bottom: calc(100% + 6px);
-        right: 0;
-        background: rgba(0, 0, 0, 0.85);
-        color: #ffffff;
-        padding: 6px 10px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 0.1px;
-        white-space: normal;
-        max-width: 240px;
-        width: max-content;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.15s ease-out 0.05s;
-        z-index: 10;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
-    }
-    .dash-stat-refined:hover::after
-    {
-        opacity: 1;
-    }
+    /*  The refined chip's longer explanation surfaces through the
+        native HTML title attribute set in dashboard.ts. The browser
+        owns positioning and clipping, which is why we stopped trying
+        to render the explanation through a CSS ::after pseudo. Every
+        attempt at a custom-positioned tooltip ran into either
+        ha-card's overflow:hidden clip, the .detail-panel
+        backdrop-filter creating a position:fixed containing block,
+        or .dash-card's transform animation doing the same. The
+        native tooltip costs us a ~1 s hover delay but it never
+        bleeds off-screen.                                          */
     /*  Signed delta % shown after the produced value: "(+15 %)" if
         we're ahead of the forecast at this moment, "(-8 %)" if
         behind. Inherits font sizing from the stat unit it sits
@@ -37811,40 +37792,57 @@ function initEngineNow(host) {
     }
     const { lat, lon } = coords;
     const elevation = host.hass.config.elevation;
+    const hadPreviousEngine = host._engine !== void 0;
     host._engine?.cleanup();
+    host._engine = void 0;
     while (container.firstChild) {
       container.removeChild(container.firstChild);
     }
-    host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
-    host.requestUpdate();
-    host._engine.onFetchStart = () => {
-      host._fetching = true;
+    const spawnNewEngine = () => {
+      if (!host.config || !host.hass?.config) {
+        host._initInflight = false;
+        return;
+      }
+      host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
+      wireEngineCallbacks(host);
+      host._initInflight = false;
     };
-    host._engine.onFetchEnd = () => {
-      host._fetching = false;
-    };
-    host._engine.onWeatherUpdate = (data) => {
-      host._cloudCover = data.cloudCover;
-      host._timeRange = data.timeRange;
-      host._isLiveMode = data.isLiveTime;
-      host._chartSeries = host._engine?.getTimelineSeries() ?? null;
-      refreshOverlays(host);
-    };
-    host._engine.onMapTransform = () => {
-      refreshOverlays(host);
-    };
-    host._engine.onContextLost = () => {
-      host._lastHomeKey = "";
-      if (!host._initInflight) initEngine(host);
-    };
-    host._engine.onShadowComputeStart = () => {
-      host._shadowBusy = true;
-    };
-    host._engine.onShadowComputeEnd = () => {
-      host._shadowBusy = false;
-    };
-    host._initInflight = false;
+    if (hadPreviousEngine) {
+      requestAnimationFrame(spawnNewEngine);
+      return;
+    }
+    spawnNewEngine();
   });
+}
+function wireEngineCallbacks(host) {
+  if (!host._engine) return;
+  host.requestUpdate();
+  host._engine.onFetchStart = () => {
+    host._fetching = true;
+  };
+  host._engine.onFetchEnd = () => {
+    host._fetching = false;
+  };
+  host._engine.onWeatherUpdate = (data) => {
+    host._cloudCover = data.cloudCover;
+    host._timeRange = data.timeRange;
+    host._isLiveMode = data.isLiveTime;
+    host._chartSeries = host._engine?.getTimelineSeries() ?? null;
+    refreshOverlays(host);
+  };
+  host._engine.onMapTransform = () => {
+    refreshOverlays(host);
+  };
+  host._engine.onContextLost = () => {
+    host._lastHomeKey = "";
+    if (!host._initInflight) initEngine(host);
+  };
+  host._engine.onShadowComputeStart = () => {
+    host._shadowBusy = true;
+  };
+  host._engine.onShadowComputeEnd = () => {
+    host._shadowBusy = false;
+  };
 }
 function renderChart(host) {
   const series = host._chartSeries;
@@ -38605,7 +38603,7 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                             </span>
                             ${refinedForecastKwh !== null && refinedDeltaPct !== null ? b`
                                 <span class="dash-stat-refined"
-                                      data-tooltip="${calibrationHint}"
+                                      title="${calibrationHint}"
                                       aria-label="${calibrationHint}"
                                 >
                                     → ${formatLocalisedNumber(host.hass, refinedForecastKwh, 1)} kWh ${t2.detail.forecastRefined}
@@ -38902,7 +38900,7 @@ function renderDashTomorrowSection(host, t2, sunColor, _cloudColor, pvColor) {
                     </span>
                     ${refinedTotalKwh !== null && refinedDeltaPct !== null ? b`
                         <span class="dash-stat-refined"
-                              data-tooltip="${calibrationHint}"
+                              title="${calibrationHint}"
                               aria-label="${calibrationHint}"
                         >
                             → ${formatLocalisedNumber(host.hass, refinedTotalKwh, 1)} kWh ${t2.detail.forecastRefined}
@@ -40881,7 +40879,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.0"}`,
+      `%c☀ HELIOS%c v${"1.6.1-beta.1"}`,
       labelStyle,
       versionStyle
     );
@@ -40905,7 +40903,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.0",
+        version: "1.6.1-beta.1",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40913,7 +40911,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.0"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.1-beta.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

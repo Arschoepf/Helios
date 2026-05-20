@@ -465,35 +465,16 @@ export const heliosCardStyles = css`
     }
     .dash-stat-refined-up   { color: #22c55e; }
     .dash-stat-refined-down { color: #ef4444; }
-    /*  Same instant-appearing tooltip pattern as .dash-stat-delta,
-        explains where the refined value comes from when the user
-        hovers the chip.                                          */
-    .dash-stat-refined::after
-    {
-        content: attr(data-tooltip);
-        position: absolute;
-        bottom: calc(100% + 6px);
-        right: 0;
-        background: rgba(0, 0, 0, 0.85);
-        color: #ffffff;
-        padding: 6px 10px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 0.1px;
-        white-space: normal;
-        max-width: 240px;
-        width: max-content;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.15s ease-out 0.05s;
-        z-index: 10;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
-    }
-    .dash-stat-refined:hover::after
-    {
-        opacity: 1;
-    }
+    /*  The refined chip's longer explanation surfaces through the
+        native HTML title attribute set in dashboard.ts. The browser
+        owns positioning and clipping, which is why we stopped trying
+        to render the explanation through a CSS ::after pseudo. Every
+        attempt at a custom-positioned tooltip ran into either
+        ha-card's overflow:hidden clip, the .detail-panel
+        backdrop-filter creating a position:fixed containing block,
+        or .dash-card's transform animation doing the same. The
+        native tooltip costs us a ~1 s hover delay but it never
+        bleeds off-screen.                                          */
     /*  Signed delta % shown after the produced value: "(+15 %)" if
         we're ahead of the forecast at this moment, "(-8 %)" if
         behind. Inherits font sizing from the stat unit it sits
