@@ -5,6 +5,24 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.1-beta.2
+
+Beta.1 swapped the refined-forecast tooltip for the browser-native
+`title` attribute, which fixed clipping but visibly diverged from
+the dark-box dashboard tooltip used by the produced-value chip
+("Production réelle vs prévision à cet instant"). Beta.2 brings
+back the custom dark-box tooltip with the same visual vocabulary,
+positioned `right: 0` so it extends from the chip's right edge
+into the card interior (symmetric with the delta tooltip which is
+centered on a chip in the left column).
+
+The narrow-viewport clipping that the earlier 1.6.1 betas chased
+through container queries, `:has()` overflow lifts, `position:
+fixed` + JS, and containing-block detectors stays a known
+limitation: on viewports narrower than ~280 px of inner card width,
+the tooltip can still bleed past ha-card's clip. The visual-
+consistency win is worth more than chasing that edge case further.
+
 ## v1.6.1-beta.1
 
 First prerelease on top of v1.6.0. Scope deliberately kept to two

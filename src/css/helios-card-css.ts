@@ -465,16 +465,52 @@ export const heliosCardStyles = css`
     }
     .dash-stat-refined-up   { color: #22c55e; }
     .dash-stat-refined-down { color: #ef4444; }
-    /*  The refined chip's longer explanation surfaces through the
-        native HTML title attribute set in dashboard.ts. The browser
-        owns positioning and clipping, which is why we stopped trying
-        to render the explanation through a CSS ::after pseudo. Every
-        attempt at a custom-positioned tooltip ran into either
-        ha-card's overflow:hidden clip, the .detail-panel
-        backdrop-filter creating a position:fixed containing block,
-        or .dash-card's transform animation doing the same. The
-        native tooltip costs us a ~1 s hover delay but it never
-        bleeds off-screen.                                          */
+    /*  Custom-styled tooltip explaining where the refined value
+        comes from. Same dark-box visual as .dash-stat-delta::after
+        below so the two tooltips share a vocabulary; positioned
+        with right:0 so it extends LEFT from the chip's right edge
+        (the refined chip sits in the right column of the today /
+        tomorrow headline, so an axis-aligned extension toward the
+        card's interior fits cleanly inside the card). white-space:
+        normal + max-width:220px lets the longer calibration hint
+        wrap into a readable two- or three-line block.
+
+        On EXTREMELY narrow viewports (smaller than the card's
+        ~280 px inner width once the chip slot is accounted for) the
+        tooltip can still bleed past the card's left edge and get
+        clipped by ha-card's overflow:hidden. The previous betas
+        chased that edge case through container queries, :has()
+        overflow lifts, position:fixed with JS positioning, and a
+        backdrop-filter / transform containing-block detector,
+        without ever landing a fix that visually matched the
+        delta tooltip. We accept the narrow-viewport clip as a
+        known limitation in exchange for visual consistency.    */
+    .dash-stat-refined::after
+    {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        right: 0;
+        background: rgba(0, 0, 0, 0.85);
+        color: #ffffff;
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: 0.1px;
+        white-space: normal;
+        max-width: 220px;
+        width: max-content;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease-out 0.05s;
+        z-index: 10;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
+    }
+    .dash-stat-refined:hover::after
+    {
+        opacity: 1;
+    }
     /*  Signed delta % shown after the produced value: "(+15 %)" if
         we're ahead of the forecast at this moment, "(-8 %)" if
         behind. Inherits font sizing from the stat unit it sits

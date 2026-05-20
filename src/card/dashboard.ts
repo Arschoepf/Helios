@@ -560,7 +560,7 @@ export function renderDashTodaySection(
                             </span>
                             ${refinedForecastKwh !== null && refinedDeltaPct !== null ? html`
                                 <span class="dash-stat-refined"
-                                      title="${calibrationHint}"
+                                      data-tooltip="${calibrationHint}"
                                       aria-label="${calibrationHint}"
                                 >
                                     → ${formatLocalisedNumber(host.hass, refinedForecastKwh, 1)} kWh ${t.detail.forecastRefined}
@@ -967,7 +967,7 @@ export function renderDashTomorrowSection(
                     </span>
                     ${refinedTotalKwh !== null && refinedDeltaPct !== null ? html`
                         <span class="dash-stat-refined"
-                              title="${calibrationHint}"
+                              data-tooltip="${calibrationHint}"
                               aria-label="${calibrationHint}"
                         >
                             → ${formatLocalisedNumber(host.hass, refinedTotalKwh, 1)} kWh ${t.detail.forecastRefined}
