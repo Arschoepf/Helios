@@ -467,30 +467,24 @@ export const heliosCardStyles = css`
     .dash-stat-refined-down { color: #ef4444; }
     /*  Custom-styled tooltip explaining where the refined value
         comes from. Same dark-box visual as .dash-stat-delta::after
-        below so the two tooltips share a vocabulary; positioned
-        with right:0 so it extends LEFT from the chip's right edge
-        (the refined chip sits in the right column of the today /
-        tomorrow headline, so an axis-aligned extension toward the
-        card's interior fits cleanly inside the card). white-space:
-        normal + max-width:220px lets the longer calibration hint
-        wrap into a readable two- or three-line block.
+        below so the two tooltips share a vocabulary.
 
-        On EXTREMELY narrow viewports (smaller than the card's
-        ~280 px inner width once the chip slot is accounted for) the
-        tooltip can still bleed past the card's left edge and get
-        clipped by ha-card's overflow:hidden. The previous betas
-        chased that edge case through container queries, :has()
-        overflow lifts, position:fixed with JS positioning, and a
-        backdrop-filter / transform containing-block detector,
-        without ever landing a fix that visually matched the
-        delta tooltip. We accept the narrow-viewport clip as a
-        known limitation in exchange for visual consistency.    */
+        Horizontal anchor depends on which dashboard card holds
+        the chip. In the AUJOURD'HUI card the headline is a two-
+        column flex (produit on the left, prevu + refined on the
+        right), so the chip sits in the right column and the
+        tooltip extends LEFT into the card via right:0. In the
+        DEMAIN card the headline has a single left-aligned column
+        (only a prevu reading), so the chip sits on the LEFT and
+        the tooltip extends RIGHT into the card via left:0. Using
+        the same anchor in both cards bleeds the tooltip past
+        whichever edge it shares with the chip and gets clipped by
+        ha-card's overflow:hidden.                                 */
     .dash-stat-refined::after
     {
         content: attr(data-tooltip);
         position: absolute;
         bottom: calc(100% + 6px);
-        right: 0;
         background: rgba(0, 0, 0, 0.85);
         color: #ffffff;
         padding: 6px 10px;
@@ -507,6 +501,8 @@ export const heliosCardStyles = css`
         z-index: 10;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.30);
     }
+    .dash-card.dash-today    .dash-stat-refined::after { right: 0;  left: auto; }
+    .dash-card.dash-tomorrow .dash-stat-refined::after { left:  0;  right: auto; }
     .dash-stat-refined:hover::after
     {
         opacity: 1;

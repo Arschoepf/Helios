@@ -5,6 +5,27 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.1-beta.3
+
+Beta.2 brought back the dark-box tooltip style but reused the
+same `right: 0` anchor for both the AUJOURD'HUI and DEMAIN chips.
+The AUJOURD'HUI headline is a two-column flex (produit on the
+left, prevu + refined on the right), so the chip sits on the
+right and a tooltip extending LEFT into the card fits. The DEMAIN
+headline is a single left-aligned column, so the chip sits on the
+LEFT, which means the same `right: 0` anchor extends the tooltip
+LEFT past the card's left edge and gets clipped by ha-card's
+overflow:hidden.
+
+### Fix
+
+* Split the anchor by parent card: `.dash-card.dash-today
+  .dash-stat-refined::after { right: 0 }` (AUJOURD'HUI chip on
+  the right, tooltip extends left), `.dash-card.dash-tomorrow
+  .dash-stat-refined::after { left: 0 }` (DEMAIN chip on the
+  left, tooltip extends right). Each tooltip now grows into the
+  card interior away from its chip's anchor edge.
+
 ## v1.6.1-beta.2
 
 Beta.1 swapped the refined-forecast tooltip for the browser-native
