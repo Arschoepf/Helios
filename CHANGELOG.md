@@ -5,72 +5,37 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
-## v1.6.1-beta.3
+## v1.6.1
 
-Beta.2 brought back the dark-box tooltip style but reused the
-same `right: 0` anchor for both the AUJOURD'HUI and DEMAIN chips.
-The AUJOURD'HUI headline is a two-column flex (produit on the
-left, prevu + refined on the right), so the chip sits on the
-right and a tooltip extending LEFT into the card fits. The DEMAIN
-headline is a single left-aligned column, so the chip sits on the
-LEFT, which means the same `right: 0` anchor extends the tooltip
-LEFT past the card's left edge and gets clipped by ha-card's
-overflow:hidden.
-
-### Fix
-
-* Split the anchor by parent card: `.dash-card.dash-today
-  .dash-stat-refined::after { right: 0 }` (AUJOURD'HUI chip on
-  the right, tooltip extends left), `.dash-card.dash-tomorrow
-  .dash-stat-refined::after { left: 0 }` (DEMAIN chip on the
-  left, tooltip extends right). Each tooltip now grows into the
-  card interior away from its chip's anchor edge.
-
-## v1.6.1-beta.2
-
-Beta.1 swapped the refined-forecast tooltip for the browser-native
-`title` attribute, which fixed clipping but visibly diverged from
-the dark-box dashboard tooltip used by the produced-value chip
-("Production réelle vs prévision à cet instant"). Beta.2 brings
-back the custom dark-box tooltip with the same visual vocabulary,
-positioned `right: 0` so it extends from the chip's right edge
-into the card interior (symmetric with the delta tooltip which is
-centered on a chip in the left column).
-
-The narrow-viewport clipping that the earlier 1.6.1 betas chased
-through container queries, `:has()` overflow lifts, `position:
-fixed` + JS, and containing-block detectors stays a known
-limitation: on viewports narrower than ~280 px of inner card width,
-the tooltip can still bleed past ha-card's clip. The visual-
-consistency win is worth more than chasing that edge case further.
-
-## v1.6.1-beta.1
-
-First prerelease on top of v1.6.0. Scope deliberately kept to two
-visible bugs surfaced by community feedback on the Reddit launch
-thread; LiDAR coverage work has been moved out to v1.7.
+Hotfix on top of v1.6.0 addressing two visible bugs surfaced by
+community feedback on the Reddit launch thread. Scope deliberately
+kept tight; LiDAR coverage expansion and other feature work moves
+to v1.7.
 
 ### Fixes
 
+* **Refined-forecast tooltip clipping** ,
+  [#16](https://github.com/ReikanYsora/Helios/issues/16). The
+  hover explanation behind the "→ X kWh affiné" chip on the
+  AUJOURD'HUI and DEMAIN dashboard cards used the same horizontal
+  anchor on both layouts, which only fit the AUJOURD'HUI
+  two-column headline. The DEMAIN headline is a single
+  left-aligned column, so the chip sits on the left and the
+  tooltip extended past the card's left edge into ha-card's
+  overflow clip. Each card now anchors its tooltip on the side
+  opposite the chip so it grows into the card interior:
+  `.dash-card.dash-today .dash-stat-refined::after { right: 0 }`
+  and `.dash-card.dash-tomorrow .dash-stat-refined::after { left:
+  0 }`.
 * **Black-map after location change on Firefox**, when the user
-  switches `home-latitude` / `home-longitude` in the editor preview
-  on Firefox, the previous MapLibre engine's WebGL context wasn't
-  fully released by the time the next engine tried to bind one,
-  yielding a black canvas. Engine init now waits one animation
-  frame between cleanup and new MapLibre allocation when there was
-  a previous engine, giving Firefox time to release the context.
-  No effect on Chrome (the extra 16 ms sits inside the existing
-  500 ms editor debounce).
-* **Refined-forecast tooltip clipping on narrow viewports**, the
-  hover explanation behind the "→ X kWh affiné" chip in the Today
-  card used to be a CSS `::after` pseudo with absolute positioning,
-  which got clipped by ha-card's `overflow: hidden` whenever the
-  card was narrow enough that the tooltip extended past the card's
-  left edge. Replaced with the browser-native `title` attribute so
-  the OS tooltip system owns positioning, never bleeds off-screen,
-  and works identically on mouse + keyboard + touch. The trade-off
-  is a ~1 s hover delay before the tooltip appears (the standard
-  native delay) instead of the instant-appearing custom tooltip.
+  switches `home-latitude` / `home-longitude` in the editor
+  preview on Firefox, the previous MapLibre engine's WebGL
+  context wasn't fully released by the time the next engine tried
+  to bind one, yielding a black canvas. Engine init now waits one
+  animation frame between cleanup and new MapLibre allocation
+  when there was a previous engine, giving Firefox time to
+  release the context. No effect on Chrome (the extra 16 ms sits
+  inside the existing 500 ms editor debounce).
 
 ## v1.6.0
 
