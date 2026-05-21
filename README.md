@@ -36,6 +36,16 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 
 ## Screenshots
 
+### 1.6.0 trailer
+
+<a href="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/helios-1.6.0.mp4">
+  <img src="https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_01.png" alt="Helios 1.6.0 trailer (click to play)" />
+</a>
+
+*Click the image to play the trailer (also viewable directly at [helios-lidar.org](https://helios-lidar.org)).*
+
+### Stills
+
 ![HELIOS PREVIEW 01](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_01.png)
 ![HELIOS PREVIEW 02](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_02.png)
 ![HELIOS PREVIEW 02](https://raw.githubusercontent.com/ReikanYsora/Helios/main/images/preview_03.png)
