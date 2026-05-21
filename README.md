@@ -9,6 +9,8 @@
 
 It pulls weather forecasts from **Open-Meteo** (no key needed), reads the optional production sensor of your photovoltaic install from your HA states, and stitches them together onto an interactive 3D map powered by **MapLibre GL** with vector tiles served by **[OpenFreeMap](https://openfreemap.org/)** (free, no key, no signup). The whole map, sun arc, sun disc, incidence ray, cloud cover, building extrusions and cast shadows, irradiance graph, PV graph, reflects the timeline cursor; scrub it 2 days into the past or 2 days into the future and watch every layer follow.
 
+> **Companion site:** [**helios-lidar.org**](https://helios-lidar.org) is a free web tool that turns raw open LiDAR data from any country (LAZ / LAS point clouds OR DSM + DTM raster pairs) into the nDSM GeoTIFF Helios needs, plus the YAML snippet to paste into the card. Use it when your region is not covered by the built-in LiDAR providers below. No QGIS, no GDAL, no install. Free, no account, no ads, hosted on my own VPS.
+
 ---
 
 ## At a glance
@@ -212,17 +214,31 @@ If your country publishes a usable LiDAR HD endpoint (raw float heights via WMS 
 
 Out of coverage the card still renders shadows from OpenFreeMap building footprints, so the visual works worldwide, the LiDAR layer is a precision upgrade where available.
 
-### Bring your own LiDAR (advanced)
+### Bring your own LiDAR
 
-If your region isn't covered by any of the public providers above but you have access to raw LiDAR data (e.g. via a national open-data portal), you can prepare a small nDSM GeoTIFF offline and have Helios use it as its shadow source within a bounding box you define.
+If your region isn't covered by any of the public providers above but you have access to raw LiDAR data (e.g. via a national open-data portal), Helios can use a small nDSM GeoTIFF you prepared yourself as its shadow source within a bounding box you define. There are two ways to prepare that file.
 
-The card config exposes a `lidar-local-ndsm-*` family (visible in the editor's collapsed "Advanced — Local LiDAR (BYO)" section, hidden by default). When the toggle is on AND the URL + the 4 bounding-box keys all validate, this source takes precedence over any public provider that would otherwise match inside the bbox. Outside the bbox, the regular fallback chain (public providers → OpenFreeMap footprints) applies unchanged.
+#### Recommended path: helios-lidar.org
 
-What "nDSM" means: a normalised Digital Surface Model = DSM (top of canopy / rooftops) − DTM (bare earth), so each pixel holds height-above-ground in metres. A bare-earth DTM or a raw DSM is *not* a valid input, preparation has to happen offline (typically a few minutes in QGIS / GDAL / WhiteboxTools from the raw point cloud or the published DSM + DTM rasters). Host the resulting GeoTIFF anywhere your browser can fetch it (the recommended path is `/config/www/community/Helios/lidar/foo.tif`, exposed as `/local/community/Helios/lidar/foo.tif`).
+The companion web tool at **[helios-lidar.org](https://helios-lidar.org)** does the GIS conversion server-side. You upload either a raw LAZ / LAS point cloud or a DSM + DTM raster pair from your country's open-data portal; the site spits back, after a couple of minutes:
 
-**Preparation tools**: a set of Python helpers under [`tools/lidar/`](tools/lidar/README.md) walks you through the last stages of the prep pipeline (inspect a GeoTIFF, convert it to a Cloud Optimized GeoTIFF for efficient browser streaming, generate a synthetic test raster). Use them if you want a guided path; bypass them entirely if you already have a COG-formatted nDSM ready to host. The detailed guide, including the GDAL system-library install per OS, the `uv` setup, and the YAML config snippet to paste back into Helios, lives in [`tools/lidar/README.md`](tools/lidar/README.md).
+* a single Cloud-Optimized GeoTIFF (the nDSM Helios reads),
+* the exact YAML snippet to paste into your card config,
+* a 3D preview matching the card's own LiDAR View, so you can sanity-check the result before downloading.
 
-The BYO local nDSM provider was contributed by [@jourdant](https://github.com/jourdant) in [PR #5](https://github.com/ReikanYsora/Helios/pull/5), the preparation tooling in [PR #11](https://github.com/ReikanYsora/Helios/pull/11), with the original idea credited to [@stephenwq](https://github.com/stephenwq). Initial use case: NSW Australia (raster prepared from the [NSW elevation portal](https://elevation.fsdf.org.au/)), where no national provider plug-in exists in Helios yet. Big thanks to all three for closing the LiDAR-coverage gap for the rest of the world.
+No QGIS, no GDAL, no PDAL, no Python install on your side. Free, no account, no ads, no tracking. The site is hosted on a small VPS I pay for myself and is the intended path for LAZ-only or DSM/DTM-only regions where the on-the-fly providers above don't yet reach. Country-specific tile-picker links (France IGN, Switzerland swissSURFACE3D, Netherlands AHN, Spain PNOA-LiDAR, UK Environment Agency, USA 3DEP + global OpenTopography aggregator) are listed directly on the upload page, with a short glossary explaining DSM / DTM / nDSM / LAS / LAZ / COG for first-time users.
+
+#### Manual offline prep (advanced)
+
+If you'd rather run the conversion locally, a set of Python helpers under [`tools/lidar/`](tools/lidar/README.md) walks you through the same stages (inspect a GeoTIFF, convert it to a Cloud Optimized GeoTIFF, generate a synthetic test raster). Use them if you want a guided local path; bypass them entirely if you already have a COG-formatted nDSM ready to host. The detailed guide, including the GDAL system-library install per OS, the `uv` setup, and the YAML config snippet to paste back into Helios, lives in [`tools/lidar/README.md`](tools/lidar/README.md).
+
+#### How it plugs into the card
+
+The card config exposes a `lidar-local-ndsm-*` family (visible in the editor's collapsed "Advanced , Local LiDAR (BYO)" section, hidden by default). When the toggle is on AND the URL + the 4 bounding-box keys all validate, this source takes precedence over any public provider that would otherwise match inside the bbox. Outside the bbox, the regular fallback chain (public providers → OpenFreeMap footprints) applies unchanged.
+
+What "nDSM" means: a normalised Digital Surface Model = DSM (top of canopy / rooftops) − DTM (bare earth), so each pixel holds height-above-ground in metres. A bare-earth DTM or a raw DSM is *not* a valid input, the subtraction has to happen first. Host the resulting GeoTIFF anywhere your browser can fetch it: `/config/www/community/Helios/lidar/foo.tif` exposed as `/local/community/Helios/lidar/foo.tif` is the historical path; the YAML snippet that helios-lidar.org generates uses `/config/www/helios/foo.tif` exposed as `/local/helios/foo.tif` instead, both work.
+
+The BYO local nDSM provider was contributed by [@jourdant](https://github.com/jourdant) in [PR #5](https://github.com/ReikanYsora/Helios/pull/5), the preparation tooling in [PR #11](https://github.com/ReikanYsora/Helios/pull/11), with the original idea credited to [@stephenwq](https://github.com/stephenwq). Initial use case: NSW Australia (raster prepared from the [NSW elevation portal](https://elevation.fsdf.org.au/)), where no native provider exists in Helios yet. Big thanks to all three for closing the LiDAR-coverage gap for the rest of the world.
 
 ---
 
