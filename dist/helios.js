@@ -3154,7 +3154,17 @@ const heliosCardStyles = i$3`
         min-width: 80px;
         height: 22px;
         box-sizing: border-box;
-        padding: 0 8px;
+        /*  Padding + line-height match .clock on the opposite rail.
+            With padding 0 and line-height 1 the 11 px uppercase Roboto
+            glyphs sit flush against the chip's content edges, leaving
+            no slack for the font's natural cap-height asymmetry to
+            visually centre against the icon, the engines disagreed
+            on whether the resulting text sat a hair high or low. The
+            2 px vertical padding + 1.2 line-height give the glyph
+            box the same breathing room the date chip uses, so the
+            visible cap-height lines up with the icon's optical
+            centre on Chromium, Firefox and WebKit alike.            */
+        padding: 2px 8px;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
@@ -3164,7 +3174,7 @@ const heliosCardStyles = i$3`
         font-weight: 600;
         letter-spacing: 0.5px;
         text-transform: uppercase;
-        line-height: 1;
+        line-height: 1.2;
         cursor: pointer;
         /*  Force full opacity at every state except :disabled (which
             sets its own 0.35 for the visual "not available" hint).
@@ -3189,20 +3199,11 @@ const heliosCardStyles = i$3`
         position: relative;
         z-index: 50;
     }
-    /*  Centre the label by giving it the same flex semantics as the
-        icon: inline-flex + align-items center makes the browser use
-        the glyph BOX centre rather than the text baseline, which is
-        what the old translateY(-1px) was compensating for. The
-        translate worked in Chromium where Roboto sits a hair low
-        but over-corrected in Firefox and Safari (where it would
-        leave the label visibly above the icon midline). Dropping
-        the translate keeps every engine on the same anchor.        */
-    .lidar-view-btn-label
-    {
-        display: inline-flex;
-        align-items: center;
-        line-height: 1;
-    }
+    /*  No bespoke .lidar-view-btn-label rule: the label inherits the
+        button's line-height + font metrics so the chip-level flex
+        centre lines it up with the icon natively, the same way the
+        .clock chip places its date + time spans without any per-
+        child override.                                              */
     .lidar-view-btn ha-icon
     {
         --mdc-icon-size: 14px;
