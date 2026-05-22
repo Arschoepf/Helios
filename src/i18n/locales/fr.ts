@@ -159,7 +159,7 @@ export const fr: Translations = {
         lidarViewWireframeOpacity: 'Opacité du fil de fer',
         localLidarSection:     'Avancé — LiDAR local (BYO)',
         localLidarHint:        'Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d\'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l\'intérieur de la zone définie, cette source remplace tout fournisseur national.',
-        localLidarToolsHint:   'Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d\'inspection / conversion / test synthétique).',
+        localLidarToolsHint:   'Tu pars de zéro ? Le plus simple est le site compagnon [helios-lidar.org](https://helios-lidar.org) : dépose ton fichier LAZ / LAS brut ou un couple DSM + DTM, et il te renvoie le COG 2 bandes que Helios consomme (bande 1 = nDSM, bande 2 = DTM) avec le bloc YAML prêt à coller pour les clés ci-dessous. Gratuit, sans installation, sans compte. Si tu préfères tout faire en local, le dépôt Helios contient aussi des helpers Python sous `tools/lidar/` qui réalisent la même conversion.',
         localLidarEnabled:     'Utiliser les données locales',
         localLidarUrl:         'URL du GeoTIFF',
         localLidarMinLat:      'Latitude min',

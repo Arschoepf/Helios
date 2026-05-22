@@ -748,7 +748,7 @@ const en = {
     lidarViewWireframeOpacity: "Wireframe opacity",
     localLidarSection: "Advanced — Local LiDAR (BYO)",
     localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.",
-    localLidarToolsHint: "Need to prepare a raster from scratch? The Helios repo ships Python helper tools under `tools/lidar/`, see the README there for the full pipeline (system GDAL install, `uv` setup, inspect / convert / synthetic test commands).",
+    localLidarToolsHint: "Need to prepare a raster from scratch? The easy path is the companion site [helios-lidar.org](https://helios-lidar.org): drop in your raw LAZ / LAS file or a DSM + DTM raster pair, and it returns the 2-band COG Helios reads (band 1 = nDSM, band 2 = DTM) plus the ready-to-paste YAML for the keys below. Free, no install, no account. If you would rather run everything locally, the Helios repo also ships Python helpers under `tools/lidar/` for the same conversion.",
     localLidarEnabled: "Use local data",
     localLidarUrl: "GeoTIFF URL",
     localLidarMinLat: "Min latitude",
@@ -909,7 +909,7 @@ const fr = {
     lidarViewWireframeOpacity: "Opacité du fil de fer",
     localLidarSection: "Avancé — LiDAR local (BYO)",
     localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la zone définie, cette source remplace tout fournisseur national.",
-    localLidarToolsHint: "Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d'inspection / conversion / test synthétique).",
+    localLidarToolsHint: "Tu pars de zéro ? Le plus simple est le site compagnon [helios-lidar.org](https://helios-lidar.org) : dépose ton fichier LAZ / LAS brut ou un couple DSM + DTM, et il te renvoie le COG 2 bandes que Helios consomme (bande 1 = nDSM, bande 2 = DTM) avec le bloc YAML prêt à coller pour les clés ci-dessous. Gratuit, sans installation, sans compte. Si tu préfères tout faire en local, le dépôt Helios contient aussi des helpers Python sous `tools/lidar/` qui réalisent la même conversion.",
     localLidarEnabled: "Utiliser les données locales",
     localLidarUrl: "URL du GeoTIFF",
     localLidarMinLat: "Latitude min",
@@ -1070,7 +1070,7 @@ const de = {
     lidarViewWireframeOpacity: "Drahtgitter-Deckkraft",
     localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
     localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb des definierten Bereichs ersetzt diese Quelle jeden nationalen Anbieter.",
-    localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).",
+    localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Am einfachsten geht das über die Begleitseite [helios-lidar.org](https://helios-lidar.org): lade deine rohe LAZ / LAS-Datei oder ein DSM + DTM-Paar hoch, und du erhältst das 2-Band-COG zurück, das Helios liest (Band 1 = nDSM, Band 2 = DTM) zusammen mit dem fertigen YAML-Block für die Schlüssel unten. Kostenlos, ohne Installation, ohne Konto. Wenn du lieber alles lokal erledigst, enthält das Helios-Repository auch Python-Helfer unter `tools/lidar/` für dieselbe Konvertierung.",
     localLidarEnabled: "Lokale Daten verwenden",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min. Breitengrad",
@@ -1231,7 +1231,7 @@ const es = {
     lidarViewWireframeOpacity: "Opacidad de la malla",
     localLidarSection: "Avanzado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del área definida, esta fuente reemplaza cualquier proveedor nacional.",
-    localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? El repositorio de Helios incluye herramientas Python en `tools/lidar/`, consulta el README de esa carpeta para el pipeline completo (instalación de GDAL de sistema, configuración de `uv`, comandos de inspección / conversión / prueba sintética).",
+    localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? Lo más fácil es el sitio compañero [helios-lidar.org](https://helios-lidar.org): sube tu archivo LAZ / LAS sin procesar o un par DSM + DTM y te devuelve el COG de 2 bandas que Helios consume (banda 1 = nDSM, banda 2 = DTM) junto con el bloque YAML listo para pegar en las claves de abajo. Gratis, sin instalación, sin cuenta. Si prefieres hacerlo todo en local, el repositorio Helios también incluye ayudantes Python en `tools/lidar/` que realizan la misma conversión.",
     localLidarEnabled: "Usar datos locales",
     localLidarUrl: "URL del GeoTIFF",
     localLidarMinLat: "Latitud mín.",
@@ -1392,7 +1392,7 @@ const it = {
     lidarViewWireframeOpacity: "Opacità del reticolo",
     localLidarSection: "Avanzato — LiDAR locale (BYO)",
     localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. All'interno dell'area definita, questa sorgente sostituisce qualsiasi provider nazionale.",
-    localLidarToolsHint: "Devi preparare un raster da zero? Il repository Helios include strumenti Python in `tools/lidar/`, vedi il README di quella cartella per la pipeline completa (installazione di GDAL di sistema, configurazione di `uv`, comandi di ispezione / conversione / test sintetico).",
+    localLidarToolsHint: "Devi preparare un raster da zero? La via più semplice è il sito gemello [helios-lidar.org](https://helios-lidar.org): carica il tuo file LAZ / LAS grezzo o una coppia DSM + DTM e ti restituisce il COG a 2 bande che Helios consuma (banda 1 = nDSM, banda 2 = DTM) insieme al blocco YAML pronto da incollare nelle chiavi sotto. Gratis, nessuna installazione, nessun account. Se preferisci fare tutto in locale, il repository Helios include anche helper Python in `tools/lidar/` per la stessa conversione.",
     localLidarEnabled: "Usa dati locali",
     localLidarUrl: "URL del GeoTIFF",
     localLidarMinLat: "Latitudine min",
@@ -1553,7 +1553,7 @@ const nl = {
     lidarViewWireframeOpacity: "Dekking van het draadmodel",
     localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
     localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen het gedefinieerde gebied vervangt deze bron elke nationale leverancier.",
-    localLidarToolsHint: "Een eigen raster nodig? De Helios-repository bevat Python-hulpmiddelen onder `tools/lidar/`, zie de README daar voor de volledige pipeline (installatie van de GDAL-systeembibliotheek, `uv`-setup, inspect / convert / synthetisch test-commando's).",
+    localLidarToolsHint: "Een eigen raster nodig? Het makkelijkst gaat dat via de begeleidende site [helios-lidar.org](https://helios-lidar.org): upload je ruwe LAZ / LAS-bestand of een DSM + DTM-paar, en je krijgt de 2-band COG terug die Helios leest (band 1 = nDSM, band 2 = DTM), samen met het kant-en-klare YAML-blok voor de onderstaande sleutels. Gratis, geen installatie, geen account. Wil je liever alles lokaal doen? Dan bevat de Helios-repository ook Python-helpers onder `tools/lidar/` voor dezelfde conversie.",
     localLidarEnabled: "Lokale data gebruiken",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min. breedtegraad",
@@ -1714,7 +1714,7 @@ const pt = {
     lidarViewWireframeOpacity: "Opacidade da estrutura",
     localLidarSection: "Avançado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da área definida, esta fonte substitui qualquer fornecedor nacional.",
-    localLidarToolsHint: "Precisas de preparar um raster do zero? O repositório Helios inclui ferramentas Python em `tools/lidar/`, consulta o README dessa pasta para o pipeline completo (instalação do GDAL de sistema, configuração do `uv`, comandos de inspeção / conversão / teste sintético).",
+    localLidarToolsHint: "Precisas de preparar um raster do zero? A forma mais simples é o site complementar [helios-lidar.org](https://helios-lidar.org): envia o teu ficheiro LAZ / LAS bruto ou um par DSM + DTM e ele devolve o COG de 2 bandas que o Helios consome (banda 1 = nDSM, banda 2 = DTM) com o bloco YAML pronto para colar nas chaves abaixo. Grátis, sem instalação, sem conta. Se preferires fazer tudo localmente, o repositório Helios também inclui auxiliares Python em `tools/lidar/` para a mesma conversão.",
     localLidarEnabled: "Usar dados locais",
     localLidarUrl: "URL do GeoTIFF",
     localLidarMinLat: "Latitude mín.",
@@ -1875,7 +1875,7 @@ const no = {
     lidarViewWireframeOpacity: "Trådmodell-opasitet",
     localLidarSection: "Avansert — Lokal LiDAR (BYO)",
     localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.",
-    localLidarToolsHint: "Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).",
+    localLidarToolsHint: "Trenger du å lage et eget raster? Den enkleste veien er følgesettstedet [helios-lidar.org](https://helios-lidar.org): last opp den rå LAZ / LAS-filen din eller et DSM + DTM-par, så får du tilbake 2-bånds COG-en Helios leser (bånd 1 = nDSM, bånd 2 = DTM) sammen med den ferdige YAML-blokken for nøklene under. Gratis, ingen installasjon, ingen konto. Vil du heller gjøre alt lokalt, inneholder Helios-repoet også Python-hjelpere under `tools/lidar/` for samme konvertering.",
     localLidarEnabled: "Bruk lokale data",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min breddegrad",
@@ -35734,6 +35734,84 @@ function startAutoRotateLoop(host) {
   };
   host._autoRotateRaf = requestAnimationFrame(tick2);
 }
+const STATS_ENDPOINT_URL = "https://helios-lidar.org/api/heartbeat";
+const INSTALL_ID_KEY = "helios-install-id";
+const LAST_PING_KEY = "helios-install-last-ping";
+const PING_INTERVAL_MS = 24 * 60 * 60 * 1e3;
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function generateUuidV4() {
+  const cryptoObj = globalThis.crypto;
+  if (cryptoObj && typeof cryptoObj.randomUUID === "function") {
+    return cryptoObj.randomUUID();
+  }
+  if (cryptoObj && typeof cryptoObj.getRandomValues === "function") {
+    const b2 = new Uint8Array(16);
+    cryptoObj.getRandomValues(b2);
+    b2[6] = b2[6] & 15 | 64;
+    b2[8] = b2[8] & 63 | 128;
+    const hex = [];
+    for (let i2 = 0; i2 < 16; i2++) hex.push(b2[i2].toString(16).padStart(2, "0"));
+    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+  }
+  return "00000000-0000-0000-0000-000000000000";
+}
+function readStorage(key) {
+  try {
+    return window.localStorage?.getItem(key) ?? null;
+  } catch (_2) {
+    return null;
+  }
+}
+function writeStorage(key, value) {
+  try {
+    window.localStorage?.setItem(key, value);
+    return true;
+  } catch (_2) {
+    return false;
+  }
+}
+function getInstallId() {
+  const existing = readStorage(INSTALL_ID_KEY);
+  if (existing && UUID_V4_RE.test(existing)) return existing;
+  const fresh = generateUuidV4();
+  if (!UUID_V4_RE.test(fresh)) return null;
+  if (!writeStorage(INSTALL_ID_KEY, fresh)) return null;
+  return fresh;
+}
+function isOptedOut(config) {
+  if (config && config["helios-anon-stats"] === false) return true;
+  try {
+    const dnt = navigator.doNotTrack;
+    if (dnt === "1") return true;
+  } catch (_2) {
+  }
+  return false;
+}
+function maybePingHeartbeat(config) {
+  if (isOptedOut(config)) return;
+  const installId = getInstallId();
+  if (installId === null) return;
+  const rawLast = readStorage(LAST_PING_KEY);
+  if (rawLast !== null) {
+    const lastMs = parseInt(rawLast, 10);
+    if (Number.isFinite(lastMs) && Date.now() - lastMs < PING_INTERVAL_MS) {
+      return;
+    }
+  }
+  writeStorage(LAST_PING_KEY, String(Date.now()));
+  try {
+    fetch(STATS_ENDPOINT_URL, {
+      method: "POST",
+      mode: "cors",
+      credentials: "omit",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ install_id: installId }),
+      keepalive: true
+    }).catch(() => {
+    });
+  } catch (_2) {
+  }
+}
 const DETAIL_MODE_ZOOM_TARGET = 19.5;
 const DETAIL_MODE_PITCH_TARGET = 80;
 const DETAIL_MODE_TRANSITION_MS = 800;
@@ -36076,6 +36154,10 @@ const _HeliosEngine = class _HeliosEngine {
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
     this.cfg = { ...config };
     bumpStat("enginesCreated");
+    try {
+      maybePingHeartbeat(this.cfg);
+    } catch (_2) {
+    }
     while (_liveEngines.size >= MAX_LIVE_ENGINES) {
       const oldest = _liveEngines.values().next().value;
       if (!oldest) break;
@@ -38811,7 +38893,7 @@ function renderTimelineFutureMask(host) {
 }
 function pvValueAtTime(host, targetMs) {
   const luRaw = (host._pvUnit || "").trim();
-  if (!luRaw) return { value: NaN, unit: "" };
+  if (!luRaw) return { value: NaN, unit: "", isPredicted: false };
   const lu = luRaw.toLowerCase();
   const isCumulative = lu === "wh" || lu === "kwh" || lu === "mwh";
   const displayUnit = isCumulative ? lu === "kwh" ? "kW" : lu === "mwh" ? "MW" : "W" : luRaw;
@@ -38819,7 +38901,7 @@ function pvValueAtTime(host, targetMs) {
   const nativeFromW = duLow === "kw" ? 1 / 1e3 : duLow === "mw" ? 1 / 1e6 : 1;
   const coords = getHomeCoords(host.config, host.hass);
   if (coords && getSunPosition(new Date(targetMs), coords.lat, coords.lon).altitude <= 0) {
-    return { value: 0, unit: displayUnit };
+    return { value: 0, unit: displayUnit, isPredicted: false };
   }
   const hist = host._pvHistory;
   const lastObsMs = hist && hist.times.length >= 1 ? hist.times[hist.times.length - 1].getTime() : -Infinity;
@@ -38834,12 +38916,12 @@ function pvValueAtTime(host, targetMs) {
         if (dtH <= 0 || dtH > 6) break;
         const dv = hist.values[i2] - hist.values[i2 - 1];
         if (!isFinite(dv) || dv < 0) break;
-        return { value: Math.max(0, dv / dtH), unit: displayUnit };
+        return { value: Math.max(0, dv / dtH), unit: displayUnit, isPredicted: false };
       }
     } else {
       const v2 = interpAt(hist.times, hist.values, targetMs);
       if (isFinite(v2)) {
-        return { value: Math.max(0, v2), unit: displayUnit };
+        return { value: Math.max(0, v2), unit: displayUnit, isPredicted: false };
       }
     }
   }
@@ -38866,12 +38948,12 @@ function pvValueAtTime(host, targetMs) {
         raster
       }) * k2 * calR);
       const dt = t1 - t0;
-      if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit };
+      if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
       const w2 = w0 + (w1 - w0) * (targetMs - t0) / dt;
-      return { value: Math.max(0, w2) * nativeFromW, unit: displayUnit };
+      return { value: Math.max(0, w2) * nativeFromW, unit: displayUnit, isPredicted: true };
     }
   }
-  return { value: NaN, unit: displayUnit };
+  return { value: NaN, unit: displayUnit, isPredicted: false };
 }
 function renderTimelineHoverTooltip(host) {
   const range = host._timeRange;
@@ -38889,7 +38971,8 @@ function renderTimelineHoverTooltip(host) {
   const hasPv = isFinite(pv.value);
   const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
   const cloudColor = cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
-  const pvColor = cfgHex(host.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
+  const pvBaseColor = cfgHex(host.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
+  const pvColor = pv.isPredicted ? lerpHexToward(pvBaseColor, "#ffffff", 0.55) : pvBaseColor;
   const timeLabel = new Date(hoverMs).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -42125,7 +42208,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.13"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.14"}`,
       labelStyle,
       versionStyle
     );
@@ -42149,7 +42232,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.13",
+        version: "1.6.3-beta.14",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -42157,7 +42240,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.13"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.14"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

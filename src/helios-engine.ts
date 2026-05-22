@@ -8,6 +8,7 @@ import { resolveLidarSource } from './engine/lidar';
 import { RASTER_DEFAULTS } from './engine/lidar/pipeline';
 import { LidarViewLayer } from './engine/lidar-view-layer';
 import { startAutoRotateLoop } from './engine/auto-rotate';
+import { maybePingHeartbeat } from './engine/anon-stats';
 import { setDetailMode as _setDetailMode } from './engine/detail-mode';
 import
 {
@@ -699,6 +700,14 @@ export class HeliosEngine
         this.cfg     = { ...config };
 
         bumpStat('enginesCreated');
+
+        //Anonymous install heartbeat. Fires at most once per
+        //browser per 24 h, swallows every error, never blocks.
+        //Opt-out via `helios-anon-stats: false` or the browser's
+        //doNotTrack flag, see src/engine/anon-stats.ts for the
+        //full privacy contract.
+        try { maybePingHeartbeat(this.cfg); }
+        catch (_) { /* never let a side-effect break engine init */ }
 
         //Evict the oldest live engine if we're at the cap. Set
         //iteration follows insertion order so the first value is the

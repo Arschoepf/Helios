@@ -14,7 +14,7 @@ import
     DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX
 } from '../helios-config';
-import { cfgHex, formatDate, formatLocalisedNumber } from './format';
+import { cfgHex, formatDate, formatLocalisedNumber, lerpHexToward } from './format';
 import
 {
     pvCalibK,
@@ -238,10 +238,10 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 //window. Returns NaN value when neither source can supply a
 //number at the cursor instant (no entity configured, sample gap,
 //etc).
-function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit: string }
+function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit: string; isPredicted: boolean }
 {
     const luRaw = (host._pvUnit || '').trim();
-    if (!luRaw) return { value: NaN, unit: '' };
+    if (!luRaw) return { value: NaN, unit: '', isPredicted: false };
     const lu             = luRaw.toLowerCase();
     const isCumulative   = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
     const displayUnit    = isCumulative
@@ -266,7 +266,7 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     const coords = getHomeCoords(host.config, host.hass);
     if (coords && getSunPosition(new Date(targetMs), coords.lat, coords.lon).altitude <= 0)
     {
-        return { value: 0, unit: displayUnit };
+        return { value: 0, unit: displayUnit, isPredicted: false };
     }
 
     //Observed history. Cumulative entities differentiate between
@@ -299,7 +299,7 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
                 if (dtH <= 0 || dtH > 6) break;
                 const dv = hist.values[i] - hist.values[i - 1];
                 if (!isFinite(dv) || dv < 0) break;
-                return { value: Math.max(0, dv / dtH), unit: displayUnit };
+                return { value: Math.max(0, dv / dtH), unit: displayUnit, isPredicted: false };
             }
         }
         else
@@ -307,7 +307,7 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
             const v = interpAt(hist.times, hist.values, targetMs);
             if (isFinite(v))
             {
-                return { value: Math.max(0, v), unit: displayUnit };
+                return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
             }
         }
     }
@@ -343,13 +343,13 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
                 raster,
             }) * k * calR);
             const dt = t1 - t0;
-            if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit };
+            if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
             const w  = w0 + (w1 - w0) * (targetMs - t0) / dt;
-            return { value: Math.max(0, w) * nativeFromW, unit: displayUnit };
+            return { value: Math.max(0, w) * nativeFromW, unit: displayUnit, isPredicted: true };
         }
     }
 
-    return { value: NaN, unit: displayUnit };
+    return { value: NaN, unit: displayUnit, isPredicted: false };
 }
 
 
@@ -378,9 +378,14 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const pv   = pvValueAtTime(host, hoverMs);
     const hasPv = isFinite(pv.value);
 
-    const sunColor   = cfgHex(host.config?.['sun-color'],   DEFAULT_SUN_COLOR_HEX);
-    const cloudColor = cfgHex(host.config?.['cloud-color'], DEFAULT_CLOUD_COLOR_HEX);
-    const pvColor    = cfgHex(host.config?.['pv-color'],    DEFAULT_PV_COLOR_HEX);
+    const sunColor    = cfgHex(host.config?.['sun-color'],   DEFAULT_SUN_COLOR_HEX);
+    const cloudColor  = cfgHex(host.config?.['cloud-color'], DEFAULT_CLOUD_COLOR_HEX);
+    const pvBaseColor = cfgHex(host.config?.['pv-color'],    DEFAULT_PV_COLOR_HEX);
+    //Predicted PV reads lighter than observed, mirroring the
+    //dotted-vs-solid convention the dashboard uses for the
+    //refined-forecast headline + chart. Same lerp factor (0.55
+    //toward white) so the tint matches across the card.
+    const pvColor = pv.isPredicted ? lerpHexToward(pvBaseColor, '#ffffff', 0.55) : pvBaseColor;
 
     const timeLabel = new Date(hoverMs).toLocaleTimeString([], {
         hour: '2-digit', minute: '2-digit', hourCycle: 'h23',

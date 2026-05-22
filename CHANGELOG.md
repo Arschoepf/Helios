@@ -5,6 +5,54 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.14
+
+Community signal + a handful of polish items.
+
+### Anonymous install heartbeat
+
+From this release the card fires one tiny anonymous heartbeat to
+helios-lidar.org at most once per browser per 24 h. The whole
+body is `{ install_id: "<random UUIDv4>" }` , no IP, no UA, no
+HA version, no entity ids, no coordinates, no country. The VPS
+counts distinct UUIDs in a 30-day rolling window and exposes the
+total via `GET /api/install-count` so the landing page can show
+"X Helios cards running on dashboards right now". A second
+counter on the same page reports the all-time pipeline
+conversion count fed by `GET /api/conversions-count`.
+
+Three opt-out paths, any of which silences the heartbeat:
+
+* `helios-anon-stats: false` in the card config
+* Browser-level `Do Not Track` set to `1`
+* Private / incognito browsing with localStorage blocked
+
+Full contract in `src/engine/anon-stats.ts`; README has a
+dedicated "Privacy , anonymous community signal" section.
+
+### Polish
+
+* **Predicted-PV icon in the timeline hover tooltip** now reads
+  in the lighter "this is a forecast" colour (the same
+  `lerpHexToward(pvColor, '#ffffff', 0.55)` the dashboard uses
+  for the dotted forecast curve), instead of the solid pvColor.
+  `pvValueAtTime()` returns an `isPredicted` flag so the
+  tooltip + dot can flip independently.
+* **BYO-LiDAR helper text in the editor** now points users at
+  helios-lidar.org first (the easy path) and mentions the local
+  `tools/lidar/` helpers as the fallback. Updated across all 8
+  supported locales. The old text led with the local-Python
+  recipe even though helios-lidar.org has been the recommended
+  path since v1.6.2.
+
+### Notes
+
+The fix from beta.12 for the live forecast chip calibration
+ratio is included; same for the beta.13 tooltip-stacking +
+day/night separator + scrub-shadow throttle fixes. This is the
+roll-up release; if you're upgrading from 1.6.2, reading
+beta.7 onwards is the short version of what's changed.
+
 ## v1.6.3-beta.13
 
 Three follow-ups on the beta.12 live-card review.

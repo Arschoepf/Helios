@@ -257,6 +257,39 @@ The BYO local nDSM provider was contributed by [@jourdant](https://github.com/jo
 
 ---
 
+## Privacy , anonymous community signal
+
+From v1.6.3, the card sends **one tiny anonymous heartbeat** to `helios-lidar.org` so the landing page can show a live "Join the X users running Helios" counter. The whole point is informational + community-flavoured; nothing personal is collected.
+
+**What gets sent, in full:**
+
+```json
+{ "install_id": "<random UUID v4>" }
+```
+
+That is the entire body. A 36-character random UUID v4 generated client-side and persisted in your browser's `localStorage` under `helios-install-id`. It is fired at most **once per browser per 24 hours**.
+
+**What does NOT get sent / stored:**
+
+* No IP address (the heartbeat endpoint is configured not to log it)
+* No user-agent string
+* No Home Assistant version
+* No entity ids, no PV peak power, no battery state
+* No latitude / longitude, no country, no city
+* No timezone, no language
+
+The server upserts the UUID + a last-seen timestamp into a SQLite row. The public `GET /api/install-count` endpoint returns the count of distinct UUIDs seen in the last 30 days, nothing else. That count is what the landing page displays; **purely statistical**.
+
+**Opt-out, any of these silences the heartbeat completely:**
+
+* Set `helios-anon-stats: false` in your card config.
+* Browser-level `Do Not Track` (DNT) flag → automatic opt-out.
+* Private / incognito browsing with localStorage blocked → automatic opt-out.
+
+Source for the full contract: [`src/engine/anon-stats.ts`](src/engine/anon-stats.ts).
+
+---
+
 ## Technical stack
 
 | Component | Technology |
