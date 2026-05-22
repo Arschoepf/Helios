@@ -179,6 +179,51 @@ export class HeliosColorPicker extends LitElement
 }
 
 
+//Render a localised hint string that may contain markdown-style
+//links `[text](url)` as a Lit fragment with real `<a>` anchors.
+//No HTML parsing, no innerHTML: each link is built through Lit's
+//tagged template literal so the URL + text stay text-escaped.
+//
+//URL safety: anything that doesn't start with `http://` or
+//`https://` is rendered as plain text. Stops a malicious /
+//corrupted translation from sneaking in a `javascript:` URI.
+//
+//Used by editor hints that need a clickable link to
+//helios-lidar.org or other public docs.
+function renderMarkdownLinks(text: string): unknown[]
+{
+    const parts: unknown[] = [];
+    const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let cursor = 0;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null)
+    {
+        if (match.index > cursor)
+        {
+            parts.push(text.slice(cursor, match.index));
+        }
+        const label = match[1];
+        const url   = match[2];
+        if (/^https?:\/\//i.test(url))
+        {
+            parts.push(html`<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+        }
+        else
+        {
+            //Suspicious scheme, render as plain text so the user
+            //can see the URL but the browser doesn't follow it.
+            parts.push(`${label} (${url})`);
+        }
+        cursor = match.index + match[0].length;
+    }
+    if (cursor < text.length)
+    {
+        parts.push(text.slice(cursor));
+    }
+    return parts;
+}
+
+
 //Visual editor, exposes every config option through native HA form
 //controls (text inputs, color picker, entity picker). Wired into the
 //card via HeliosCard.getConfigElement().
@@ -1335,7 +1380,7 @@ export class HeliosCardEditor extends LitElement
                 <details class="advanced-section" ?open="${this._openSection === 'lidar'}" @toggle="${(e: Event) => this._onSectionToggle('lidar', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.localLidarSection}</summary>
                     <div class="hint">${t.editor.localLidarHint}</div>
-                    <div class="hint" style="margin-bottom: 14px;">${t.editor.localLidarToolsHint}</div>
+                    <div class="hint" style="margin-bottom: 14px;">${renderMarkdownLinks(t.editor.localLidarToolsHint)}</div>
                     <div class="field">
                         <span class="label">${t.editor.localLidarEnabled}</span>
                         <div class="segmented-toggle">

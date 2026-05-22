@@ -39799,7 +39799,7 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
   const peakPredictedValue = formatPvWatts(host.hass, data.peakPredictedW);
   const showPeakActual = data.peakActualHourTs !== null && data.peakActualW > 50;
   const showPeakPredicted = data.peakPredictedHourTs !== null && data.peakPredictedW > 50;
-  const producedKwh = cum.actualSamples.length > 0 ? cum.actualSamples[cum.actualSamples.length - 1].kwh : 0;
+  const producedKwh = cum.actualSamples.length > 0 ? Math.max(0, cum.actualSamples[cum.actualSamples.length - 1].kwh) : 0;
   const forecastKwh = cum.predictedSamples.length > 0 ? cum.predictedSamples[cum.predictedSamples.length - 1].kwh : 0;
   const nowMs = Date.now();
   const predictedAtNow = interpolateKwhAt(cum.predictedSamples, nowMs);
@@ -40578,6 +40578,14 @@ const editorStyles = i$3`
         font-style: italic;
         margin: 8px 0 20px 0;
     }
+    .hint a
+    {
+        color: var(--primary-color, #03a9f4);
+        text-decoration: none;
+        font-style: normal;
+        font-weight: 500;
+    }
+    .hint a:hover { text-decoration: underline; }
 
     .field
     {
@@ -41073,6 +41081,29 @@ __decorateClass$1([
 HeliosColorPicker = __decorateClass$1([
   t("helios-color-picker")
 ], HeliosColorPicker);
+function renderMarkdownLinks(text) {
+  const parts = [];
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let cursor = 0;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > cursor) {
+      parts.push(text.slice(cursor, match.index));
+    }
+    const label = match[1];
+    const url = match[2];
+    if (/^https?:\/\//i.test(url)) {
+      parts.push(b`<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+    } else {
+      parts.push(`${label} (${url})`);
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
+  }
+  return parts;
+}
 let HeliosCardEditor = class extends i {
   constructor() {
     super(...arguments);
@@ -42050,7 +42081,7 @@ let HeliosCardEditor = class extends i {
                 <details class="advanced-section" ?open="${this._openSection === "lidar"}" @toggle="${(e2) => this._onSectionToggle("lidar", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.localLidarSection}</summary>
                     <div class="hint">${t2.editor.localLidarHint}</div>
-                    <div class="hint" style="margin-bottom: 14px;">${t2.editor.localLidarToolsHint}</div>
+                    <div class="hint" style="margin-bottom: 14px;">${renderMarkdownLinks(t2.editor.localLidarToolsHint)}</div>
                     <div class="field">
                         <span class="label">${t2.editor.localLidarEnabled}</span>
                         <div class="segmented-toggle">
@@ -42208,7 +42239,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.14"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.15"}`,
       labelStyle,
       versionStyle
     );
@@ -42232,7 +42263,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.14",
+        version: "1.6.3-beta.15",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -42240,7 +42271,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.14"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.15"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

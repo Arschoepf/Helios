@@ -5,6 +5,26 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.15
+
+Two tight fixes spotted in the wild on beta.14.
+
+* **Markdown links in editor hints actually render now.** The
+  beta.14 BYO hint shipped a `[text](url)` markdown link to
+  helios-lidar.org but the editor was interpolating the string
+  as plain text, so the syntax showed up literally. New tiny
+  `renderMarkdownLinks()` helper in editor.ts parses the link
+  pattern and emits real `<a>` tags through Lit's tagged
+  templates (no `unsafeHTML`, URL scheme is restricted to
+  `http(s)://` so a corrupt translation can't sneak in a
+  `javascript:` URI). Styled via `.hint a` in the editor CSS.
+* **Dashboard "today produced" no longer reads "-0.0 kWh"
+  right after midnight.** A power-sensor reading slightly
+  negative in the small hours (inverter standby noise,
+  net-meter jitter) made the cumulative integral briefly land
+  at a tiny negative; `Math.max(0, kwh)` on the headline value
+  matches what the live PV chip + tooltip already do.
+
 ## v1.6.3-beta.14
 
 Community signal + a handful of polish items.

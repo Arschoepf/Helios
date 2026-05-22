@@ -476,8 +476,16 @@ export function renderDashTodaySection(
     //the terminal sample on the pure-model curve (end-of-day).
     //The hourly-bin aggregation in computeTodayHourly is still used
     //for the peak readout and the not-started-yet detection.
+    //
+    //Math.max guard: a power sensor that reads slightly negative at
+    //night (inverter standby noise, net-meter jitter) can produce
+    //a small negative integral over the first few minutes of the
+    //day; the headline would then read "-0.0 kWh produced" right
+    //after midnight, which is a UX regression (the user sees "-0"
+    //and assumes a bug). Flooring at zero matches the rest of the
+    //PV readouts (live chip, tooltip) that already do this.
     const producedKwh = cum.actualSamples.length > 0
-        ? cum.actualSamples[cum.actualSamples.length - 1].kwh
+        ? Math.max(0, cum.actualSamples[cum.actualSamples.length - 1].kwh)
         : 0;
     const forecastKwh = cum.predictedSamples.length > 0
         ? cum.predictedSamples[cum.predictedSamples.length - 1].kwh
