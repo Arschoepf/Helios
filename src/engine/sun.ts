@@ -101,12 +101,36 @@ export interface PanelOrientation
                           //from north (180 = south, 90 = east, etc.)
 }
 
+//Optional context that refines the PV estimate. Every field is
+//opt-in: caller passes only what it knows. Empty context preserves
+//the original Haurwitz / Liu-Jordan output exactly.
+//
+//  airTempC + windMs , feed the Sandia-style cell temperature model
+//    (see pv-thermal.ts). When airTempC is finite the result is
+//    multiplied by the thermal derating factor at the computed cell
+//    temperature.
+//
+//  shading , a boolean from the caller-side LiDAR raycast
+//    (isPanelShaded in pv-shading.ts). When true, the direct-beam
+//    component is zeroed; diffuse + ground-reflected terms are
+//    kept (a tree blocks the sun ray but not the upper hemisphere
+//    of diffuse sky).
+import { cellTemperatureC, thermalDerating } from './pv-thermal';
+
+export interface PvComputeContext
+{
+    airTempC?: number;
+    windMs?:   number;
+    shading?:  boolean;
+}
+
 export function computePvPower(
     date:          Date,
     lat:           number,
     lon:           number,
     cloudCoverPct: number,
-    panel?:        PanelOrientation
+    panel?:        PanelOrientation,
+    ctx?:          PvComputeContext,
 ): number
 {
     const sun = getSunPosition(date, lat, lon);
@@ -122,44 +146,72 @@ export function computePvPower(
 
     const ghiEff = ghiClear * kCloud;
 
+    let poaEff: number;
+
     //Horizontal panel (default): GHI already is the plane-of-array
     //irradiance, no transposition needed.
     if (!panel || panel.tiltDeg <= 0)
     {
-        return Math.max(0, Math.min(100, ghiEff / 1000 * 100));
+        //A flat panel has no "beam blocked while diffuse still
+        //arrives" geometry: a shaded horizontal panel sees only the
+        //small ground reflection from neighbouring lit ground. We
+        //approximate the shaded horizontal POA as 25 % of GHI, the
+        //typical clear-sky diffuse fraction.
+        poaEff = ctx?.shading ? ghiEff * 0.25 : ghiEff;
+    }
+    else
+    {
+        //Tilted panel: project the direct beam onto the panel normal,
+        //add the isotropic-sky diffuse component, plus a small ground-
+        //reflected term scaled by the panel's exposure to the ground.
+        const beta = panel.tiltDeg * D;
+        const dAz  = (sun.azimuth - panel.azimuthDeg) * D;
+        const altR = alt * D;
+
+        const cosTheta = Math.sin(altR) * Math.cos(beta)
+                       + Math.cos(altR) * Math.sin(beta) * Math.cos(dAz);
+
+        //Direct fraction from the cloud-attenuation factor. kCloud
+        //spans ~0.25 (overcast) to 1.0 (clear sky), mapped to a
+        //direct fraction of 0 → 0.85. Loose approximation of a
+        //proper clearness-index decomposition (Erbs, Reindl); good
+        //enough at the hourly resolution the card runs at.
+        const directFraction  = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
+        const diffuseFraction = 1 - directFraction;
+
+        //Beam transposition ratio R_b = cos(θi) / cos(zenith). Clamp
+        //the denominator at sin(5°) so the ratio doesn't blow up at
+        //sunrise / sunset (the beam component is tiny there anyway).
+        const Rb = cosTheta > 0
+            ? Math.max(0, cosTheta) / Math.max(0.087, cosZ)
+            : 0;
+
+        //Shading: the LiDAR raycast told us a building or tree is
+        //sitting between the panel and the sun. The direct beam is
+        //gone; the upper-hemisphere diffuse and ground-reflected
+        //terms still reach the panel (we don't model an obstacle
+        //that's also opaque to diffuse, which would require a
+        //sky-view factor calc the analytical pipeline doesn't have).
+        const directPoa  = ctx?.shading ? 0 : ghiEff * directFraction * Rb;
+        const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
+        const groundPoa  = ghiEff * 0.2             * (1 - Math.cos(beta)) / 2;
+
+        poaEff = directPoa + diffusePoa + groundPoa;
     }
 
-    //Tilted panel: project the direct beam onto the panel normal,
-    //add the isotropic-sky diffuse component, plus a small ground-
-    //reflected term scaled by the panel's exposure to the ground.
-    const beta = panel.tiltDeg * D;
-    const dAz  = (sun.azimuth - panel.azimuthDeg) * D;
-    const altR = alt * D;
+    //Thermal derating: warmer cells produce less. Only applied when
+    //the caller passes a finite air temperature, otherwise the
+    //multiplier stays at 1 and the legacy callers see the original
+    //output bit-for-bit.
+    let pStc = Math.max(0, poaEff / 1000);    //0..1+ of STC
 
-    const cosTheta = Math.sin(altR) * Math.cos(beta)
-                   + Math.cos(altR) * Math.sin(beta) * Math.cos(dAz);
+    if (ctx && isFinite(ctx.airTempC ?? NaN))
+    {
+        const tCell = cellTemperatureC(ctx.airTempC!, poaEff, ctx.windMs ?? 0);
+        pStc *= thermalDerating(tCell);
+    }
 
-    //Direct fraction from the cloud-attenuation factor. kCloud spans
-    //~0.25 (overcast) to 1.0 (clear sky), mapped to a direct fraction
-    //of 0 → 0.85. Loose approximation of a proper clearness-index
-    //decomposition (Erbs, Reindl); good enough at the hourly
-    //resolution the card runs at.
-    const directFraction  = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
-    const diffuseFraction = 1 - directFraction;
-
-    //Beam transposition ratio R_b = cos(θi) / cos(zenith). Clamp the
-    //denominator at sin(5°) so the ratio doesn't blow up at sunrise /
-    //sunset (the beam component is tiny there anyway).
-    const Rb = cosTheta > 0
-        ? Math.max(0, cosTheta) / Math.max(0.087, cosZ)
-        : 0;
-
-    const directPoa  = ghiEff * directFraction  * Rb;
-    const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
-    const groundPoa  = ghiEff * 0.2             * (1 - Math.cos(beta)) / 2;
-
-    const poaEff = directPoa + diffusePoa + groundPoa;
-    return Math.max(0, Math.min(100, poaEff / 1000 * 100));
+    return Math.max(0, Math.min(100, pStc * 100));
 }
 
 

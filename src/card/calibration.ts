@@ -72,13 +72,19 @@ export function computeForecastCalibration(host: ChartHost): ForecastCalibration
     today0.setHours(0, 0, 0, 0);
 
     const ratios: number[] = [];
+    //Same LiDAR raster + per-array shading used in the live
+    //prediction; pulling it once outside the day loop so each
+    //past-day integration sees identical shading geometry as
+    //the upcoming days. Null on installs without LiDAR coverage,
+    //in which case predictedKwhForDay skips the raycast.
+    const raster = host._engine?.getLidarRaster() ?? null;
 
     for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++)
     {
         const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
         const dayEndMs   = dayStartMs + 24 * HOUR_MS;
 
-        const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs);
+        const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
         if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
 
         const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
@@ -107,7 +113,8 @@ function predictedKwhForDay(
     series:   NonNullable<ChartHost['_chartSeries']>,
     coords:   { lat: number; lon: number },
     startMs:  number,
-    endMs:    number
+    endMs:    number,
+    raster:   import('../engine/pv-shading').NdsmRaster | null,
 ): number
 {
     const k = pvCalibK(config);
@@ -118,7 +125,11 @@ function predictedKwhForDay(
         const tMs = series.times[i].getTime();
         if (tMs < startMs || tMs >= endMs) continue;
         const cloud = series.cloud[i] ?? 0;
-        const pct = computePvPowerWeighted(config, series.times[i], coords.lat, coords.lon, cloud);
+        const pct = computePvPowerWeighted(config, series.times[i], coords.lat, coords.lon, cloud, {
+            airTempC: series.temperature?.[i] ?? NaN,
+            windMs:   series.windSpeed?.[i]   ?? NaN,
+            raster,
+        });
         if (pct <= 0) continue;
         kwh += (pct * k) / 1000;
     }

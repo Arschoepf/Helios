@@ -5,6 +5,77 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.2-beta.1
+
+Pre-release on top of v1.6.1 that lands two precision upgrades for
+the PV prediction model. Both are opt-in: existing configs render
+identically until they enable the new fields.
+
+### PV thermal derating
+
+The PV forecast now accounts for the cell temperature climb under
+sun and the convective cooling under wind, using the classic
+Sandia / NOCT pipeline:
+
+* Pulls `temperature_2m` + `wind_speed_10m` from Open-Meteo alongside
+  the existing cloud + shortwave variables.
+* Estimates cell temperature with `T_cell = T_air + (NOCT - 20) /
+  800 W/m² × GHI − 1.5 × wind`, then derates the output by
+  `1 + γ_pmp × (T_cell − 25)` with γ_pmp = −0.0040 /°C (typical
+  monocrystalline silicon coefficient).
+* Plumbed through every PV computation site: live chip, scrub
+  preview, dashboard "today" / "tomorrow" graphs, forecast
+  calibration. On a hot summer noon at 35 °C ambient and ~900 W/m²
+  the derating reduces the predicted peak by ~13 %, which is the
+  bulk of the model bias the calibration ratio was previously
+  absorbing as a flat multiplier.
+* Falls back cleanly when the model didn't return temperature or
+  wind: multiplier stays at 1 and the forecast reduces bit-for-bit
+  to the previous Haurwitz + Liu-Jordan output.
+
+### LiDAR-aware shading on the PV forecast
+
+When a LiDAR provider covers the home (or a BYO local-nDSM raster
+is configured), the PV forecast now ray-marches from each PV array
+along the sun direction and zeroes the direct-beam component on
+arrays whose line-of-sight to the sun is blocked by a building or
+tree. The diffuse + ground-reflected components are kept (an
+obstacle blocks the sun ray but not the upper hemisphere of sky),
+so a shaded panel doesn't drop to zero, just to the ~25-30 % of
+clear-sky output that the diffuse + reflected terms contribute.
+
+* New `height` field per entry in `pv-arrays` (metres above ground,
+  default 5). Used as the ray's starting altitude so a panel on a
+  first-floor roof clears a low fence the ground-mounted same-
+  orientation array would sit in the shadow of.
+* Bilinear sample of the loaded nDSM, 2 m step, 200 m max reach.
+  Same buffer the LiDAR View overlay paints, no extra fetch.
+* For installs with `pv-arrays` declared at distinct coordinates,
+  each entry is shaded independently. So a roof-east array can be
+  shaded by a tall neighbour at 8 am while the roof-west array
+  on the same property is fully lit.
+* Skipped silently when no LiDAR raster is loaded (no providers
+  match the home, no BYO nDSM configured), so installs outside
+  LiDAR coverage continue to produce the legacy forecast.
+
+### Notes for users
+
+The new fields are opt-in but the temperature derating activates
+automatically as soon as v1.6.2 is installed, since the weather
+fetch starts pulling temperature + wind without any config change.
+Expect the forecast to read **a few percent lower** at the midday
+peak on hot clear days and a few percent higher on cold clear
+winter days; the self-calibration ratio will absorb the residual
+within a few sunny days.
+
+For shading to kick in, the home needs to be inside a LiDAR
+provider's coverage (one of the 10 native providers shipped with
+the card, or a BYO local-nDSM via the `lidar-local-ndsm-*` keys).
+Outside coverage, the forecast falls back to the existing geometry-
+only model.
+
+---
+
 ## v1.6.1
 
 Hotfix on top of v1.6.0 addressing two visible bugs surfaced by

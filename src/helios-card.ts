@@ -388,9 +388,15 @@ export class HeliosCard extends LitElement
     //is outside the chart or the chart isn't shown.
     @state() _dashChartHoverTs: number | null = null;
     @state() _chartSeries: {
-        times:      Date[];
-        irradiance: number[];
-        cloud:      number[];
+        times:        Date[];
+        irradiance:   number[];
+        cloud:        number[];
+        //Hourly ambient temperature in °C + wind speed in m/s,
+        //NaN-padded where the model didn't return a value. Both
+        //arrays mirror the `times` length and feed the PV
+        //prediction's thermal-derating term.
+        temperature:  number[];
+        windSpeed:    number[];
     } | null = null;
     @state() _fetching        = false;
     @state() _timeRange:    { start: Date; end: Date } | null = null;
@@ -800,7 +806,11 @@ export class HeliosCard extends LitElement
                     if (d < bestDiff) { bestDiff = d; best = i; }
                 }
                 const cloud = series.cloud[best] ?? 0;
-                const pct   = computePvPowerWeighted(this.config,this._selectedTime!, coords.lat, coords.lon, cloud);
+                const pct   = computePvPowerWeighted(this.config, this._selectedTime!, coords.lat, coords.lon, cloud, {
+                    airTempC: series.temperature[best],
+                    windMs:   series.windSpeed[best],
+                    raster:   this._engine?.getLidarRaster() ?? null,
+                });
                 if (pct > 0)
                 {
                     //k is W per percent of STC, so pct × k is watts.

@@ -148,6 +148,14 @@ export interface WeatherData
     pvPowerHaurwitz:  number;      //always populated (analytical fallback)
     pvPowerShortwave: number;      //-1 if shortwave_radiation is unavailable
     irradianceSource: IrradianceSource;
+    //Live ambient context the card-side PV prediction uses to
+    //refine its forecast: temperature drives the thermal-derating
+    //multiplier, wind feeds the convective cooling term. NaN
+    //means "model didn't surface the value at this hour", the
+    //downstream predictor falls back to the legacy "cool cell"
+    //assumption (derating = 1) without erroring out.
+    temperatureC:   number;
+    windMs:         number;
 }
 
 type RGB = [number, number, number];
@@ -1092,6 +1100,13 @@ export class HeliosEngine
         cloudMid:       number;
         cloudHigh:      number;
         shortwave:      number;
+        //2-metre air temperature in °C. NaN means the model didn't
+        //return one at this hour, callers fall back to "no thermal
+        //derating" rather than guessing.
+        temperatureC:   number;
+        //10-metre wind speed in m/s. NaN means missing; same
+        //fallback semantics as temperature.
+        windMs:         number;
         cloudIntensity: CloudIntensity;
     }
     {
@@ -1101,6 +1116,8 @@ export class HeliosEngine
             cloudMid:       0,
             cloudHigh:      0,
             shortwave:      -1,
+            temperatureC:   NaN,
+            windMs:         NaN,
             cloudIntensity: 'clear' as CloudIntensity
         };
 
@@ -1122,6 +1139,8 @@ export class HeliosEngine
         const cHi  = home.cloudHigh[idx]   ?? 0;
         const sw   = home.shortwave[idx]   ?? -1;
         const wc   = home.weatherCode[idx] ?? 0;
+        const ta   = home.temperature[idx] ?? NaN;
+        const ws   = home.windSpeed[idx]   ?? NaN;
 
         return {
             cloudCover:     cc,
@@ -1129,6 +1148,8 @@ export class HeliosEngine
             cloudMid:       cMid,
             cloudHigh:      cHi,
             shortwave:      sw,
+            temperatureC:   ta,
+            windMs:         ws,
             cloudIntensity: weatherCodeToIntensity(wc, cc)
         };
     }
@@ -1244,7 +1265,9 @@ export class HeliosEngine
             pvPower,
             pvPowerHaurwitz,
             pvPowerShortwave,
-            irradianceSource
+            irradianceSource,
+            temperatureC:     w.temperatureC,
+            windMs:           w.windMs,
         });
 
         //Refresh the on-ground cloud-cover gauge: a coloured disc
@@ -3341,12 +3364,61 @@ export class HeliosEngine
     //
     //Returns null until the first weather fetch completes, mirroring
     //the contract of projectSunScene / projectHomeLabelLayout. The
+    //Read-only view of the currently loaded LiDAR nDSM raster.
+    //Returns the same buffer the LiDAR View overlay paints, plus
+    //its geographic bbox; the caller treats it as immutable
+    //(reading only) so we hand the live reference rather than a
+    //copy. Null when no LiDAR provider covers the home or the
+    //last fetch failed.
+    public getLidarRaster():
+        | {
+            heights:    Float32Array;
+            rasterSize: number;
+            minLat:     number;
+            maxLat:     number;
+            minLon:     number;
+            maxLon:     number;
+          }
+        | null
+    {
+        return this._lidarRaster;
+    }
+
+    //Hourly air temperature + wind speed series aligned with
+    //getTimelineSeries' `times` array. Both arrays may contain
+    //NaN entries where the model didn't return a value; callers
+    //skip those rather than rendering them. Null when no weather
+    //payload has landed yet.
+    public getAmbientSeries(): {
+        times:        Date[];
+        temperature:  number[];
+        windSpeed:    number[];
+    } | null
+    {
+        const home = this._homeHourlyData;
+        if (!home || !home.times.length) return null;
+        return {
+            times:       home.times,
+            temperature: home.temperature,
+            windSpeed:   home.windSpeed,
+        };
+    }
+
+
     //card is expected to call this whenever onWeatherUpdate fires
     //and re-render the chart.
     public getTimelineSeries(): {
-        times:      Date[];
-        irradiance: number[];
-        cloud:      number[];
+        times:        Date[];
+        irradiance:   number[];
+        cloud:        number[];
+        //Per-hour ambient temperature in °C and 10-metre wind speed
+        //in m/s, NaN-padded where the model didn't supply a value.
+        //Surfaced so the predictor in card/pv.ts can apply the
+        //thermal-derating factor without each caller having to
+        //re-derive the alignment between the weather hour and the
+        //timeline cursor.
+        temperature:  number[];
+        windSpeed:    number[];
     } | null
     {
         const home = this._homeHourlyData;
@@ -3381,9 +3453,11 @@ export class HeliosEngine
         const cloud = home.times.map((_, i) => home.cloudCover[i] ?? 0);
 
         return {
-            times: home.times.slice(),
+            times:       home.times.slice(),
             irradiance,
-            cloud
+            cloud,
+            temperature: home.temperature.slice(),
+            windSpeed:   home.windSpeed.slice(),
         };
     }
 

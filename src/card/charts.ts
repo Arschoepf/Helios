@@ -30,9 +30,14 @@ import { getHomeCoords } from './init';
 //and pushes to the card on every refresh.
 export interface ChartSeries
 {
-    times:      Date[];
-    irradiance: number[];
-    cloud:      number[];
+    times:        Date[];
+    irradiance:   number[];
+    cloud:        number[];
+    //Hourly ambient temperature (°C) and 10-metre wind speed (m/s).
+    //NaN where the model didn't supply a value. Consumers that
+    //don't care about thermal derating ignore these fields.
+    temperature:  number[];
+    windSpeed:    number[];
 }
 
 //Structural surface the host card exposes to this module. All
@@ -47,6 +52,11 @@ export interface ChartHost
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;
+    //Exposed so the PV predictor inside the chart layer can pull
+    //the loaded LiDAR raster for the per-array shading raycast.
+    //Optional because the chart still renders fine without the
+    //engine reference (shading just falls back to "no obstacle").
+    readonly _engine?:      { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
 }
 
 
@@ -372,14 +382,19 @@ export function renderPvChart(host: ChartHost): TemplateResult
     const predictedSamples: Array<{ t: Date; v: number }> = [];
     if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
     {
-        const nowMs = Date.now();
+        const nowMs  = Date.now();
+        const raster = host._engine?.getLidarRaster() ?? null;
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
             if (tMs <  nowMs)   continue;             //future only
             if (tMs <  startMs) continue;
             if (tMs >  endMsAbs) continue;
-            const pct = computePvPowerWeighted(host.config, series.times[i], lat, lon, series.cloud[i] ?? 0);
+            const pct = computePvPowerWeighted(host.config, series.times[i], lat, lon, series.cloud[i] ?? 0, {
+                airTempC: series.temperature[i],
+                windMs:   series.windSpeed[i],
+                raster,
+            });
             if (pct <= 0) continue;
             predictedSamples.push({ t: series.times[i], v: pct * k * nativeFromW });
         }
@@ -664,14 +679,19 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         //can integrate them by 1-hour rectangles per day. The
         //series timestamps are already at hour boundaries from
         //the engine's resampling.
-        const nowMs    = Date.now();
+        const nowMs  = Date.now();
+        const raster = host._engine?.getLidarRaster() ?? null;
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs   = series.times[i].getTime();
             if (tMs < startMs || tMs > endMsAbs) continue;
             if (tMs < nowMs) continue;   //past covered by Pass 1
             const cloud = series.cloud[i] ?? 0;
-            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud);
+            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
+                airTempC: series.temperature[i],
+                windMs:   series.windSpeed[i],
+                raster,
+            });
             if (pct <= 0) continue;
             //pct × k = watts at this hour midpoint × 1h = Wh.
             //Divide by 1000 to land in kWh.
