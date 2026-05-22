@@ -28,9 +28,18 @@
 //corner doesn't flicker between shaded/unshaded as the sun moves
 //across the corner pixel boundary).
 
+//LiDAR-derived working raster the engine hands to the shading
+//check. `heights` is the nDSM (height above local ground per cell)
+//and is always populated. `terrain` is the optional DTM band
+//(ground elevation per cell in the source vertical datum). When
+//the provider supplies a 2-band COG the engine reads both; when
+//the COG is a legacy single-band file (every nDSM shipped before
+//v1.6.3) the terrain field is left undefined and the ray-march
+//falls back to the old flat-ground behaviour.
 export interface NdsmRaster
 {
     heights:    Float32Array;
+    terrain?:   Float32Array;
     rasterSize: number;       //square: rasterSize × rasterSize cells
     minLat:     number;
     maxLat:     number;
@@ -41,10 +50,14 @@ export interface NdsmRaster
 const D = Math.PI / 180;
 const M_PER_DEG_LAT = 111_320;     //mean meridional metres per degree
 
-//Bilinear sample of the nDSM at a geographic point. Returns null
-//when the point falls outside the raster bbox or the four
-//neighbouring cells include any non-finite (no-data) value.
-export function sampleNdsmAt(
+//Bilinear sample of one Float32 band at a geographic point. Returns
+//null when the point falls outside the raster bbox or any of the
+//four bracketing cells carries a non-finite (no-data) value.
+//Shared between the nDSM (heights, always present) and the DTM
+//(terrain, optional) so both bands sample with identical interpola-
+//tion semantics.
+function bilinearSample(
+    band: Float32Array,
     raster: NdsmRaster,
     lon:    number,
     lat:    number,
@@ -63,10 +76,10 @@ export function sampleNdsmAt(
     const iy = Math.floor(y);
     if (ix < 0 || ix >= N - 1 || iy < 0 || iy >= N - 1) return null;
 
-    const h00 = raster.heights[iy       * N + ix];
-    const h10 = raster.heights[iy       * N + ix + 1];
-    const h01 = raster.heights[(iy + 1) * N + ix];
-    const h11 = raster.heights[(iy + 1) * N + ix + 1];
+    const h00 = band[iy       * N + ix];
+    const h10 = band[iy       * N + ix + 1];
+    const h01 = band[(iy + 1) * N + ix];
+    const h11 = band[(iy + 1) * N + ix + 1];
     if (!isFinite(h00) || !isFinite(h10) || !isFinite(h01) || !isFinite(h11)) return null;
 
     const dx = x - ix;
@@ -77,13 +90,55 @@ export function sampleNdsmAt(
 }
 
 
+//Bilinear sample of the nDSM at a geographic point. Returns null
+//when the point falls outside the raster bbox or the four
+//neighbouring cells include any non-finite (no-data) value.
+export function sampleNdsmAt(
+    raster: NdsmRaster,
+    lon:    number,
+    lat:    number,
+): number | null
+{
+    return bilinearSample(raster.heights, raster, lon, lat);
+}
+
+
+//Bilinear sample of the DTM (ground elevation) at a geographic
+//point. Returns null when the raster carries no terrain band (a
+//legacy single-band COG) or the point falls outside the raster
+//bbox / hits a no-data cell. Callers use this to lift the ray-
+//march into absolute Z so terrain slope between the panel and a
+//far obstacle is taken into account.
+export function sampleDtmAt(
+    raster: NdsmRaster,
+    lon:    number,
+    lat:    number,
+): number | null
+{
+    if (!raster.terrain) return null;
+    return bilinearSample(raster.terrain, raster, lon, lat);
+}
+
+
 //Walk from the panel position toward the sun and return true the
-//first time the nDSM cell at the current ground point sits ABOVE
-//the sun ray's altitude at that horizontal distance. Returns false
-//when the sun is reached without ever hitting a blocker, when the
-//raster is missing, or when the sun is below the horizon (sun
-//below horizon is already handled by the irradiance fast-path
-//upstream, so we don't double-count it here).
+//first time the local terrain + obstacle (nDSM) at the current
+//sample point projects ABOVE the sun ray's altitude at that
+//horizontal distance. Returns false when the sun is reached
+//without ever hitting a blocker, when the raster is missing, or
+//when the sun is below the horizon (sun below horizon is already
+//handled by the irradiance fast-path upstream, so we don't double-
+//count it here).
+//
+//Terrain awareness: when the raster carries a DTM band (v1.6.3+
+//2-band COGs), the ray-march compares both the ray and the
+//obstacle in absolute Z anchored at the panel's local ground
+//height. Sloped ground between the panel and a far obstacle is
+//then taken into account: a 5 m building 50 m east of the home
+//with the terrain rising 8 m on the way reads as a 13 m obstacle;
+//the same building with the terrain dropping 8 m reads as -3 m,
+//i.e. below the panel and invisible to the sun ray. Legacy
+//single-band COGs fall through to the flat-ground assumption
+//transparently.
 //
 //Default sampling: 2 m step, 200 m maximum reach. 2 m matches the
 //typical nDSM cell pitch for the IGN HD / Defra / AHN providers
@@ -120,14 +175,28 @@ export function isPanelShaded(
     const dLatPerM = dyM / M_PER_DEG_LAT;
     const dLonPerM = dxM / mPerDegLon;
 
+    //Panel's own DTM reference, looked up once. Null on legacy
+    //single-band rasters; the per-step "relGround" then defaults
+    //to 0 and the ray-march collapses back to the flat-ground
+    //recipe (obstacle_z = nDSM, ray_z = panel_height + d × tan).
+    const panelDtm = sampleDtmAt(raster, panelLon, panelLat);
+
     for (let d = stepM; d <= maxDistM; d += stepM)
     {
         const lat = panelLat + dLatPerM * d;
         const lon = panelLon + dLonPerM * d;
-        const groundHeight = sampleNdsmAt(raster, lon, lat);
-        if (groundHeight === null) continue;     //outside coverage, skip
-        const rayHeight = panelHeightM + d * tanAlt;
-        if (groundHeight > rayHeight) return true;
+        const obstacleAboveGround = sampleNdsmAt(raster, lon, lat);
+        if (obstacleAboveGround === null) continue;     //outside coverage, skip
+        let relGround = 0;
+        if (panelDtm !== null)
+        {
+            const sampleDtm = sampleDtmAt(raster, lon, lat);
+            if (sampleDtm === null) continue;            //gap in DTM, skip
+            relGround = sampleDtm - panelDtm;
+        }
+        const obstacleZ = relGround + obstacleAboveGround;
+        const rayZ      = panelHeightM + d * tanAlt;
+        if (obstacleZ > rayZ) return true;
     }
     return false;
 }

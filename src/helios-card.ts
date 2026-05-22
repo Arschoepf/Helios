@@ -1570,7 +1570,9 @@ export class HeliosCard extends LitElement
                             <polygon
                                 class="pv-home-leader-anchor-disc"
                                 points="${layout!.homeAnchorPoints}"
-                                fill="${pvColor}"
+                                fill="none"
+                                stroke="${pvColor}"
+                                stroke-width="1.6"
                             ></polygon>
                         </g>
                     </svg>

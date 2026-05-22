@@ -414,10 +414,16 @@ diagnostic snapshot.
   (γ_pmp = −0.0040 /°C by default). Both pure functions.
 * **`engine/pv-shading.ts`**, per-array LiDAR-aware shading check.
   `sampleNdsmAt()` bilinear-samples the loaded nDSM raster at
-  arbitrary lon/lat; `isPanelShaded()` ray-marches from a panel
-  position along the sun direction (2 m step, 200 m reach) and
-  returns true the first time the ground height exceeds the sun
-  ray's altitude. Pure functions.
+  arbitrary lon/lat; `sampleDtmAt()` does the same for the optional
+  DTM band shipped by 2-band COGs from helios-lidar.org v1.6.3+.
+  `isPanelShaded()` ray-marches from a panel position along the sun
+  direction (2 m step, 200 m reach) and returns true the first time
+  the local terrain + obstacle stack exceeds the sun ray's altitude.
+  When the raster carries a DTM band, the ray-march compares both
+  the ray and the obstacle in absolute Z anchored at the panel's
+  local ground; without one, it falls back to the flat-ground
+  geometry used in v1.6.2 and earlier (covers every public provider
+  + legacy single-band local COGs). Pure functions.
 * **`engine/weather.ts`**, `fetchHomePointData` and friends:
   multi-model Open-Meteo fetch with median fusion, regional
   model selection, in-browser cache, 429 back-off schedule, plus

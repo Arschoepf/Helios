@@ -5,6 +5,69 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.9
+
+Final pre-release on top of v1.6.3-beta.8 before the 1.6.3 GA.
+Major correctness fix on the LiDAR shading + a polish pass on the
+timeline UI bits introduced earlier in the beta line.
+
+### Terrain-aware LiDAR shading
+
+The ray-march in `pv-shading.ts` was treating every cell of the
+nDSM as if the ground at that cell were at the same elevation as
+the ground under the panel. On flat installs this is fine; on a
+hillside it's systematically wrong, a 5 m building 50 m east of
+a home on terrain that rises 8 m read as a 5 m obstacle when its
+real projected height in the panel's frame is 13 m, so the model
+under-counted shading at low sun angles. Conversely, the same
+building on terrain that drops 8 m got over-counted as 5 m of
+obstruction when it should have been read as -3 m and ignored.
+
+The helios-lidar.org pipeline (v1.6.3) now ships a 2-band COG
+(band 1 = nDSM as before, band 2 = DTM = ground elevation). The
+card's local-nDSM loader reads both bands, and the ray-march
+lifts its comparison into absolute Z so terrain slope between
+the panel and a far obstacle is correctly accounted for. Public
+providers (IGN, Defra, PDOK, ...) keep their existing single-band
+WCS layers; they fall through to the flat-ground geometry that
+was the v1.6.2 default. Legacy single-band local COGs already
+deployed at users also keep working unchanged. Re-running the
+LAZ on helios-lidar.org produces a new 2-band file users on
+sloped terrain can drop in for the corrected math.
+
+### PV tooltip stale-value fix
+
+Hovering a future instant on the timeline used to read out
+the last observed PV value clamped forward, so the tooltip
+showed "3 W" for noon tomorrow because that was the panel's
+reading at 16:00 yesterday. The observed-history path now
+explicitly cuts off at the last observed timestamp; instants
+beyond fall through to the forecast model, which is what the
+tooltip is supposed to show in the future window anyway.
+
+### UI polish from beta.8 review
+
+* **PV home-anchor halved + ringified.** Dropped from a 5 m
+  filled disc to a 2.5 m stroked ring around the home. Stays
+  perspective-projected (flat on the ground, aplated by pitch),
+  the home silhouette is now fully visible inside.
+* **Day strip restored kWh visibility.** Container query
+  threshold dropped from 90 px to 55 px and the font-size clamp
+  lowered to `clamp(7px, 9cqw, 11px)` so kWh shows on every
+  reasonable cell width including 4-day mobile views.
+* **Day-strip separators match the chart's.** The 1 px vertical
+  line between cells now uses the same dotted recipe as the
+  chart cards' `.hc-day-sep` (alpha 0.30, dash 1.5 / 2.5),
+  light + dark themes.
+
+### Cleanup
+
+`noUnusedLocals` + `noUnusedParameters` were already on in
+`tsconfig.json` and the full typecheck passes clean; no stale
+imports or references to removed UI elements remain. README +
+ARCHITECTURE.md updated for the new terrain-aware shading +
+companion COG format.
+
 ## v1.6.3-beta.8
 
 Iterative pre-release on top of v1.6.3-beta.7.

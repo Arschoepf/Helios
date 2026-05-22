@@ -3257,7 +3257,7 @@ const heliosCardStyles = i$3`
 
     /*  Default + light-theme look. Both the date and the kWh
         scale down with the cell width via cqw (1 % of container
-        inline size) clamped to a readable [8, 11] px range. Font
+        inline size) clamped to a readable [7, 11] px range. Font
         weight is intentionally NOT set here so it inherits from
         the cell (which gets is-today bumped to 800) and from the
         per-element overrides further down (.tb-day-strip-kwh
@@ -3265,7 +3265,7 @@ const heliosCardStyles = i$3`
     .tb-day-strip-date,
     .tb-day-strip-kwh
     {
-        font-size: clamp(8px, 11cqw, 11px);
+        font-size: clamp(7px, 9cqw, 11px);
     }
 
     .tb-day-strip-cell
@@ -3277,27 +3277,36 @@ const heliosCardStyles = i$3`
         font-weight: 800;
     }
 
-    /*  Below ~90 px of cell width the date + kWh start eating
-        each other; drop the kWh first (the date is the primary
-        anchor), and below ~60 px hide the dot separator too.
-        Container queries inside the same cell.                    */
-    @container tb-day-strip-cell (max-width: 90px)
+    /*  Last-resort fallback: a really cramped cell (4-day window on
+        a sub-300 px card) drops the kWh so the date stays the
+        single anchor visible. The clamp() above keeps the kWh
+        visible on every reasonable layout including a 4-day view
+        on a 700 px desktop card.                                   */
+    @container tb-day-strip-cell (max-width: 55px)
     {
         .tb-day-strip-kwh { display: none; }
     }
 
-    /*  Vertical separator at each between-day boundary. 1 px ink
-        line spanning the strip's full height; no separator at the
-        outer edges since the strip's own border already closes
-        the line there.                                             */
+    /*  Vertical separator at each between-day boundary. Dotted
+        1 px line matching the chart's own day separators
+        (.hc-day-sep: stroke 0.30 alpha, dasharray 1.5 / 2.5), so
+        the strip extends the same visual language as the cards
+        above it. No separator at the outer edges since the strip
+        border already closes the line there.                       */
     .tb-day-strip-sep
     {
         position: absolute;
         top: 0;
         bottom: 0;
         width: 1px;
-        background: rgba(0, 0, 0, 0.55);
         z-index: 1;
+        background-image: repeating-linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.30) 0,
+            rgba(0, 0, 0, 0.30) 1.5px,
+            transparent       1.5px,
+            transparent       4px
+        );
     }
 
     /*  Daily kWh total, sits next to the date label in the same
@@ -3918,16 +3927,22 @@ const heliosCardStyles = i$3`
         stroke-opacity: 0.95;
     }
 
-    /*  PV home-anchor disc, drawn as a polygon projected through
-        the map's perspective so it sits flat on the ground around
-        the home (an ellipse aplated by the camera pitch + rotated
-        by the camera bearing). The translate-to-home transform
-        lives on the wrapping <g>; the polygon points themselves
-        are coordinates relative to (0, 0), which lets the pulse
-        animation scale the polygon around the home centre by
-        simply scaling the group around its local origin.            */
+    /*  PV home-anchor ring, drawn as a stroked polygon projected
+        through the map's perspective so it sits flat on the ground
+        around the home (an ellipse aplated by the camera pitch +
+        rotated by the camera bearing). Stroked rather than filled
+        so the home silhouette stays visible inside the ring. The
+        translate-to-home transform lives on the wrapping <g>; the
+        polygon points themselves are coordinates relative to
+        (0, 0), which lets the pulse animation scale the polygon
+        around the home centre by simply scaling the group around
+        its local origin.                                            */
     .pv-home-leader-anchor       { transform-origin: 0 0; }
-    .pv-home-leader-anchor-disc  { transform-origin: 0 0; }
+    .pv-home-leader-anchor-disc
+    {
+        transform-origin: 0 0;
+        vector-effect: non-scaling-stroke;
+    }
     .pv-home-leader-anchor.is-pulsing .pv-home-leader-anchor-disc
     {
         animation: pv-home-anchor-pulse var(--pv-flow-duration, 2s) ease-in-out infinite;
@@ -4273,7 +4288,16 @@ const heliosCardStyles = i$3`
         background: #1f2021;
     }
     ha-card.theme-dark .tb-day-strip-cell { color: #e6e6e6; }
-    ha-card.theme-dark .tb-day-strip-sep  { background: rgba(255, 255, 255, 0.20); }
+    ha-card.theme-dark .tb-day-strip-sep
+    {
+        background-image: repeating-linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.30) 0,
+            rgba(255, 255, 255, 0.30) 1.5px,
+            transparent              1.5px,
+            transparent              4px
+        );
+    }
 
     ha-card.theme-dark .tl-live-btn ha-icon,
     ha-card.theme-dark .cloud-pct-label ha-icon,
@@ -4520,7 +4544,7 @@ function computeIrradianceWm2(date, lat, lon, cloudCoverPct) {
 }
 const D = Math.PI / 180;
 const M_PER_DEG_LAT$2 = 111320;
-function sampleNdsmAt(raster, lon, lat) {
+function bilinearSample(band, raster, lon, lat) {
   if (lon <= raster.minLon || lon >= raster.maxLon) return null;
   if (lat <= raster.minLat || lat >= raster.maxLat) return null;
   const N2 = raster.rasterSize;
@@ -4531,16 +4555,23 @@ function sampleNdsmAt(raster, lon, lat) {
   const ix = Math.floor(x2);
   const iy = Math.floor(y3);
   if (ix < 0 || ix >= N2 - 1 || iy < 0 || iy >= N2 - 1) return null;
-  const h00 = raster.heights[iy * N2 + ix];
-  const h10 = raster.heights[iy * N2 + ix + 1];
-  const h01 = raster.heights[(iy + 1) * N2 + ix];
-  const h11 = raster.heights[(iy + 1) * N2 + ix + 1];
+  const h00 = band[iy * N2 + ix];
+  const h10 = band[iy * N2 + ix + 1];
+  const h01 = band[(iy + 1) * N2 + ix];
+  const h11 = band[(iy + 1) * N2 + ix + 1];
   if (!isFinite(h00) || !isFinite(h10) || !isFinite(h01) || !isFinite(h11)) return null;
   const dx = x2 - ix;
   const dy = y3 - iy;
   const top = h00 * (1 - dx) + h10 * dx;
   const bot = h01 * (1 - dx) + h11 * dx;
   return top * (1 - dy) + bot * dy;
+}
+function sampleNdsmAt(raster, lon, lat) {
+  return bilinearSample(raster.heights, raster, lon, lat);
+}
+function sampleDtmAt(raster, lon, lat) {
+  if (!raster.terrain) return null;
+  return bilinearSample(raster.terrain, raster, lon, lat);
 }
 function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg, sunAzimuthDeg, stepM = 2, maxDistM = 200) {
   if (!raster) return false;
@@ -4553,13 +4584,21 @@ function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg,
   const mPerDegLon = M_PER_DEG_LAT$2 * Math.cos(panelLat * D);
   const dLatPerM = dyM / M_PER_DEG_LAT$2;
   const dLonPerM = dxM / mPerDegLon;
+  const panelDtm = sampleDtmAt(raster, panelLon, panelLat);
   for (let d2 = stepM; d2 <= maxDistM; d2 += stepM) {
     const lat = panelLat + dLatPerM * d2;
     const lon = panelLon + dLonPerM * d2;
-    const groundHeight = sampleNdsmAt(raster, lon, lat);
-    if (groundHeight === null) continue;
-    const rayHeight = panelHeightM + d2 * tanAlt;
-    if (groundHeight > rayHeight) return true;
+    const obstacleAboveGround = sampleNdsmAt(raster, lon, lat);
+    if (obstacleAboveGround === null) continue;
+    let relGround = 0;
+    if (panelDtm !== null) {
+      const sampleDtm = sampleDtmAt(raster, lon, lat);
+      if (sampleDtm === null) continue;
+      relGround = sampleDtm - panelDtm;
+    }
+    const obstacleZ = relGround + obstacleAboveGround;
+    const rayZ = panelHeightM + d2 * tanAlt;
+    if (obstacleZ > rayZ) return true;
   }
   return false;
 }
@@ -31179,7 +31218,7 @@ const DEFAULT_TARGET_AREA_M2 = 80;
 const DEFAULT_MIN_COMPONENT_CELLS = 3;
 const M_PER_DEG_LAT = 111320;
 const EARTH_RADIUS_M = 63710088e-1;
-function processHeightRaster(heights, geo, opts = {}) {
+function processHeightRaster(heights, geo, opts = {}, terrain) {
   const heightThresh = opts.heightThreshM ?? DEFAULT_HEIGHT_THRESH_M;
   const heightMax = opts.heightMaxM ?? DEFAULT_HEIGHT_MAX_M;
   const targetArea = opts.targetAreaM2 ?? DEFAULT_TARGET_AREA_M2;
@@ -31295,9 +31334,12 @@ function processHeightRaster(heights, geo, opts = {}) {
     //Forward the raw raster + geo so the engine can keep it for
     //the LiDAR View overlay. Same buffer reference, no copy: the
     //pipeline never mutates `heights` after the validity pass
-    //above, and the engine treats the buffer as read-only.
+    //above, and the engine treats the buffer as read-only. The
+    //terrain band, when provided, is forwarded with the same
+    //zero-copy contract.
     raster: {
       heights,
+      terrain,
       rasterSize,
       minLat,
       maxLat,
@@ -34592,32 +34634,38 @@ async function fetchFloat32GeoTiffWithNoData(url, rasterSize, signal) {
   } catch (_2) {
     noData = null;
   }
+  let sampleCount = 1;
+  try {
+    const anyImg = image;
+    if (typeof anyImg.getSamplesPerPixel === "function") {
+      const n3 = anyImg.getSamplesPerPixel();
+      if (typeof n3 === "number" && n3 >= 1) sampleCount = n3;
+    }
+  } catch (_2) {
+    sampleCount = 1;
+  }
+  const wantBands = sampleCount >= 2 ? [0, 1] : [0];
   let rasters;
   try {
     rasters = await image.readRasters({
       width: rasterSize,
       height: rasterSize,
       interleave: false,
-      samples: [0]
+      samples: wantBands
     });
   } catch (_2) {
     return null;
   }
-  let band;
-  if (Array.isArray(rasters)) {
-    if (rasters.length === 0) return null;
-    band = rasters[0];
-  } else {
-    band = rasters;
-  }
-  let data;
-  if (band instanceof Float32Array) {
-    data = band;
-  } else {
-    data = new Float32Array(band.length);
-    for (let i2 = 0; i2 < band.length; i2++) data[i2] = band[i2];
-  }
-  return { data, noData };
+  if (!Array.isArray(rasters) || rasters.length === 0) return null;
+  const toF32 = (b2) => {
+    if (b2 instanceof Float32Array) return b2;
+    const out = new Float32Array(b2.length);
+    for (let i2 = 0; i2 < b2.length; i2++) out[i2] = b2[i2];
+    return out;
+  };
+  const data = toF32(rasters[0]);
+  const terrain = rasters.length >= 2 ? toF32(rasters[1]) : null;
+  return { data, terrain, noData };
 }
 function maxRasters(a2, b2) {
   const N2 = Math.min(a2.length, b2.length);
@@ -35167,6 +35215,21 @@ function normaliseLocalNdsmRaster(band, noData) {
   }
   return band;
 }
+function normaliseLocalDtmRaster(band, noData) {
+  const hasNoData = noData !== null && Number.isFinite(noData);
+  for (let i2 = 0; i2 < band.length; i2++) {
+    const v2 = band[i2];
+    if (hasNoData && v2 === noData) {
+      band[i2] = NaN;
+      continue;
+    }
+    if (!Number.isFinite(v2)) {
+      band[i2] = NaN;
+      continue;
+    }
+  }
+  return band;
+}
 function createLocalNdsmSource(cfg) {
   const { url, minLat, maxLat, minLon, maxLon } = cfg;
   return {
@@ -35187,16 +35250,23 @@ function createLocalNdsmSource(cfg) {
         Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
       );
       let band;
+      let terrain;
       let noData;
       try {
         const r2 = await fetchFloat32GeoTiffWithNoData(url, rasterSize, opts.signal);
         band = r2 ? r2.data : null;
+        terrain = r2 ? r2.terrain : null;
         noData = r2 ? r2.noData : null;
       } catch (_2) {
         return emptyResult();
       }
       if (!band || band.length < rasterSize * rasterSize) return emptyResult();
       normaliseLocalNdsmRaster(band, noData);
+      if (terrain && terrain.length >= rasterSize * rasterSize) {
+        normaliseLocalDtmRaster(terrain, noData);
+      } else {
+        terrain = null;
+      }
       return processHeightRaster(band, {
         rasterSize,
         minLat,
@@ -35206,7 +35276,7 @@ function createLocalNdsmSource(cfg) {
         homeLat: opts.homeLat,
         homeLon: opts.homeLon,
         cropRadiusMeters: opts.cropRadiusMeters
-      });
+      }, {}, terrain ?? void 0);
     }
   };
 }
@@ -37574,7 +37644,7 @@ const _HeliosEngine = class _HeliosEngine {
     const shelfY = home.y - PV_CHIP_OFFSET_PX + BATTERY_CHIP_Y_OFFSET_PX;
     const pvX = home.x;
     const pvY = shelfY + BATTERY_CHIP_Y_OFFSET_PX;
-    const PV_HOME_ANCHOR_RADIUS_M = 5;
+    const PV_HOME_ANCHOR_RADIUS_M = 2.5;
     const ANCHOR_SAMPLES = 48;
     const anchorLatPerM = 1 / 111320;
     const anchorLonPerM = anchorLatPerM / cosLat;
@@ -37894,6 +37964,13 @@ const _HeliosEngine = class _HeliosEngine {
   //(reading only) so we hand the live reference rather than a
   //copy. Null when no LiDAR provider covers the home or the
   //last fetch failed.
+  //
+  //The optional `terrain` field carries the DTM band when the
+  //source COG ships one (v1.6.3+ helios-lidar.org output); it
+  //lets the shading ray-march lift its comparison into absolute
+  //Z so sloped ground between the panel and a far obstacle is
+  //taken into account. Absent on every public provider and on
+  //legacy single-band local COGs.
   getLidarRaster() {
     return this._lidarRaster;
   }
@@ -38599,7 +38676,8 @@ function pvValueAtTime(host, targetMs) {
     return { value: 0, unit: displayUnit };
   }
   const hist = host._pvHistory;
-  if (hist && hist.times.length >= 2) {
+  const lastObsMs = hist && hist.times.length >= 1 ? hist.times[hist.times.length - 1].getTime() : -Infinity;
+  if (hist && hist.times.length >= 2 && targetMs <= lastObsMs) {
     if (isCumulative) {
       for (let i2 = 1; i2 < hist.times.length; i2++) {
         const t1 = hist.times[i2].getTime();
@@ -39006,7 +39084,8 @@ function renderPvChart(host) {
     hoverX = hoverPct / 100 * W;
     const hoverMs = startMs + hoverPct / 100 * rangeMs;
     let hoverV = NaN;
-    if (samples.length >= 1) {
+    const lastObsMs = samples.length > 0 ? samples[samples.length - 1].t.getTime() : -Infinity;
+    if (samples.length >= 1 && hoverMs <= lastObsMs) {
       hoverV = interpAt(
         samples.map((s2) => s2.t),
         samples.map((s2) => s2.v),
@@ -41831,7 +41910,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.8"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.9"}`,
       labelStyle,
       versionStyle
     );
@@ -41855,7 +41934,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.8",
+        version: "1.6.3-beta.9",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41863,7 +41942,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.8"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.9"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -42655,7 +42734,9 @@ let HeliosCard = class extends i {
                             <polygon
                                 class="pv-home-leader-anchor-disc"
                                 points="${layout.homeAnchorPoints}"
-                                fill="${pvColor}"
+                                fill="none"
+                                stroke="${pvColor}"
+                                stroke-width="1.6"
                             ></polygon>
                         </g>
                     </svg>

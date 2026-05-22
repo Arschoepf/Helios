@@ -619,6 +619,7 @@ export class HeliosEngine
     private _lidarRaster:
         {
             heights:    Float32Array;
+            terrain?:   Float32Array;
             rasterSize: number;
             minLat:     number;
             maxLat:     number;
@@ -2956,7 +2957,7 @@ export class HeliosEngine
         //major axis perpendicular to the camera's bearing and the
         //minor axis along it, matching the perspective everywhere
         //else on the map.
-        const PV_HOME_ANCHOR_RADIUS_M = 5;
+        const PV_HOME_ANCHOR_RADIUS_M = 2.5;
         const ANCHOR_SAMPLES          = 48;
         const anchorLatPerM = 1 / 111_320;
         const anchorLonPerM = anchorLatPerM / cosLat;
@@ -3462,9 +3463,17 @@ export class HeliosEngine
     //(reading only) so we hand the live reference rather than a
     //copy. Null when no LiDAR provider covers the home or the
     //last fetch failed.
+    //
+    //The optional `terrain` field carries the DTM band when the
+    //source COG ships one (v1.6.3+ helios-lidar.org output); it
+    //lets the shading ray-march lift its comparison into absolute
+    //Z so sloped ground between the panel and a far obstacle is
+    //taken into account. Absent on every public provider and on
+    //legacy single-band local COGs.
     public getLidarRaster():
         | {
             heights:    Float32Array;
+            terrain?:   Float32Array;
             rasterSize: number;
             minLat:     number;
             maxLat:     number;

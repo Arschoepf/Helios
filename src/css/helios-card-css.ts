@@ -1407,7 +1407,7 @@ export const heliosCardStyles = css`
 
     /*  Default + light-theme look. Both the date and the kWh
         scale down with the cell width via cqw (1 % of container
-        inline size) clamped to a readable [8, 11] px range. Font
+        inline size) clamped to a readable [7, 11] px range. Font
         weight is intentionally NOT set here so it inherits from
         the cell (which gets is-today bumped to 800) and from the
         per-element overrides further down (.tb-day-strip-kwh
@@ -1415,7 +1415,7 @@ export const heliosCardStyles = css`
     .tb-day-strip-date,
     .tb-day-strip-kwh
     {
-        font-size: clamp(8px, 11cqw, 11px);
+        font-size: clamp(7px, 9cqw, 11px);
     }
 
     .tb-day-strip-cell
@@ -1427,27 +1427,36 @@ export const heliosCardStyles = css`
         font-weight: 800;
     }
 
-    /*  Below ~90 px of cell width the date + kWh start eating
-        each other; drop the kWh first (the date is the primary
-        anchor), and below ~60 px hide the dot separator too.
-        Container queries inside the same cell.                    */
-    @container tb-day-strip-cell (max-width: 90px)
+    /*  Last-resort fallback: a really cramped cell (4-day window on
+        a sub-300 px card) drops the kWh so the date stays the
+        single anchor visible. The clamp() above keeps the kWh
+        visible on every reasonable layout including a 4-day view
+        on a 700 px desktop card.                                   */
+    @container tb-day-strip-cell (max-width: 55px)
     {
         .tb-day-strip-kwh { display: none; }
     }
 
-    /*  Vertical separator at each between-day boundary. 1 px ink
-        line spanning the strip's full height; no separator at the
-        outer edges since the strip's own border already closes
-        the line there.                                             */
+    /*  Vertical separator at each between-day boundary. Dotted
+        1 px line matching the chart's own day separators
+        (.hc-day-sep: stroke 0.30 alpha, dasharray 1.5 / 2.5), so
+        the strip extends the same visual language as the cards
+        above it. No separator at the outer edges since the strip
+        border already closes the line there.                       */
     .tb-day-strip-sep
     {
         position: absolute;
         top: 0;
         bottom: 0;
         width: 1px;
-        background: rgba(0, 0, 0, 0.55);
         z-index: 1;
+        background-image: repeating-linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.30) 0,
+            rgba(0, 0, 0, 0.30) 1.5px,
+            transparent       1.5px,
+            transparent       4px
+        );
     }
 
     /*  Daily kWh total, sits next to the date label in the same
@@ -2068,16 +2077,22 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.95;
     }
 
-    /*  PV home-anchor disc, drawn as a polygon projected through
-        the map's perspective so it sits flat on the ground around
-        the home (an ellipse aplated by the camera pitch + rotated
-        by the camera bearing). The translate-to-home transform
-        lives on the wrapping <g>; the polygon points themselves
-        are coordinates relative to (0, 0), which lets the pulse
-        animation scale the polygon around the home centre by
-        simply scaling the group around its local origin.            */
+    /*  PV home-anchor ring, drawn as a stroked polygon projected
+        through the map's perspective so it sits flat on the ground
+        around the home (an ellipse aplated by the camera pitch +
+        rotated by the camera bearing). Stroked rather than filled
+        so the home silhouette stays visible inside the ring. The
+        translate-to-home transform lives on the wrapping <g>; the
+        polygon points themselves are coordinates relative to
+        (0, 0), which lets the pulse animation scale the polygon
+        around the home centre by simply scaling the group around
+        its local origin.                                            */
     .pv-home-leader-anchor       { transform-origin: 0 0; }
-    .pv-home-leader-anchor-disc  { transform-origin: 0 0; }
+    .pv-home-leader-anchor-disc
+    {
+        transform-origin: 0 0;
+        vector-effect: non-scaling-stroke;
+    }
     .pv-home-leader-anchor.is-pulsing .pv-home-leader-anchor-disc
     {
         animation: pv-home-anchor-pulse var(--pv-flow-duration, 2s) ease-in-out infinite;
@@ -2423,7 +2438,16 @@ export const heliosCardStyles = css`
         background: #1f2021;
     }
     ha-card.theme-dark .tb-day-strip-cell { color: #e6e6e6; }
-    ha-card.theme-dark .tb-day-strip-sep  { background: rgba(255, 255, 255, 0.20); }
+    ha-card.theme-dark .tb-day-strip-sep
+    {
+        background-image: repeating-linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.30) 0,
+            rgba(255, 255, 255, 0.30) 1.5px,
+            transparent              1.5px,
+            transparent              4px
+        );
+    }
 
     ha-card.theme-dark .tl-live-btn ha-icon,
     ha-card.theme-dark .cloud-pct-label ha-icon,

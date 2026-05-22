@@ -74,10 +74,18 @@ export interface PipelineOptions
 //Run the shared consolidation pipeline on a height-above-ground
 //Float32Array. The caller is responsible for any DSM-DTM subtraction
 //or no-data sentinel scrubbing; pass NaN for cells you want skipped.
+//
+//Optional `terrain` parallel buffer (same shape, same indexing as
+//`heights`) carries the DTM band when the source COG ships one
+//(v1.6.3+ helios-lidar.org pipeline). It is forwarded verbatim
+//onto the result's `raster.terrain` field so the shading ray-march
+//can lift its comparison into absolute Z. Pure pass-through: the
+//shadow consolidation logic itself stays nDSM-only.
 export function processHeightRaster(
     heights: Float32Array,
     geo:     RasterGeo,
-    opts:    PipelineOptions = {}
+    opts:    PipelineOptions = {},
+    terrain?: Float32Array,
 ): LidarShadowResult
 {
     const heightThresh = opts.heightThreshM    ?? DEFAULT_HEIGHT_THRESH_M;
@@ -245,10 +253,13 @@ export function processHeightRaster(
         //Forward the raw raster + geo so the engine can keep it for
         //the LiDAR View overlay. Same buffer reference, no copy: the
         //pipeline never mutates `heights` after the validity pass
-        //above, and the engine treats the buffer as read-only.
+        //above, and the engine treats the buffer as read-only. The
+        //terrain band, when provided, is forwarded with the same
+        //zero-copy contract.
         raster:
         {
             heights:    heights,
+            terrain,
             rasterSize,
             minLat,
             maxLat,

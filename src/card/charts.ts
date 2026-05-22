@@ -274,8 +274,17 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     //entities swinging through zero at dawn / dusk) can hand back
     //a small negative reading; we floor at zero so the tooltip
     //never displays "-2 W" of production.
+    //
+    //Hover instants BEYOND the last observed sample fall through
+    //to the forecast pass below: clamping interpAt to the last
+    //observed value would mean the tooltip reads "3 W" for noon
+    //tomorrow just because that was the panel's reading at 16:00
+    //yesterday (the late-afternoon tail of the last seen day).
     const hist = host._pvHistory;
-    if (hist && hist.times.length >= 2)
+    const lastObsMs = (hist && hist.times.length >= 1)
+        ? hist.times[hist.times.length - 1].getTime()
+        : -Infinity;
+    if (hist && hist.times.length >= 2 && targetMs <= lastObsMs)
     {
         if (isCumulative)
         {
@@ -955,7 +964,15 @@ export function renderPvChart(host: ChartHost): TemplateResult
         hoverX = (hoverPct / 100) * W;
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
         let hoverV: number = NaN;
-        if (samples.length >= 1)
+        //Only sample the observed curve when the hover instant
+        //sits inside the observed window. Otherwise interpAt
+        //would clamp to the last observed value and the dot would
+        //freeze on yesterday's late-afternoon reading when the
+        //user hovers at noon tomorrow.
+        const lastObsMs = samples.length > 0
+            ? samples[samples.length - 1].t.getTime()
+            : -Infinity;
+        if (samples.length >= 1 && hoverMs <= lastObsMs)
         {
             hoverV = interpAt(
                 samples.map(s => s.t),

@@ -126,15 +126,17 @@ export function subtractRasters(
 
 //Same byte path as fetchFloat32GeoTiff() but also returns the
 //GDAL_NODATA sentinel parsed from the GeoTIFF metadata (or null when
-//the tag is absent). Used by the local-nDSM provider so it can map
-//nodata cells to NaN before the shared pipeline runs; the public
-//providers stay on the simpler helper above and keep their existing
-//byte-for-byte behaviour.
+//the tag is absent), the band 1 data, AND the band 2 data when the
+//source COG ships one (v1.6.3+ helios-lidar.org pipeline outputs
+//a 2-band COG with band 1 = nDSM, band 2 = DTM). Used by the local-
+//nDSM provider so it can map nodata cells to NaN before the shared
+//pipeline runs; the public providers stay on the simpler helper
+//above and keep their existing byte-for-byte behaviour.
 export async function fetchFloat32GeoTiffWithNoData(
     url:        string,
     rasterSize: number,
     signal?:    AbortSignal
-): Promise<{ data: Float32Array; noData: number | null } | null>
+): Promise<{ data: Float32Array; terrain: Float32Array | null; noData: number | null } | null>
 {
     let resp: Response;
     try
@@ -177,6 +179,23 @@ export async function fetchFloat32GeoTiffWithNoData(
     }
     catch (_) { noData = null; }
 
+    //Probe the source band count so we can read band 2 (DTM) only
+    //when it actually exists. v1.6.3+ COGs ship 2 bands; legacy
+    //COGs uploaded before that or built from a single-band source
+    //expose only band 1, and getSamplesPerPixel returns 1.
+    let sampleCount = 1;
+    try
+    {
+        const anyImg = image as unknown as { getSamplesPerPixel?: () => number };
+        if (typeof anyImg.getSamplesPerPixel === 'function')
+        {
+            const n = anyImg.getSamplesPerPixel();
+            if (typeof n === 'number' && n >= 1) sampleCount = n;
+        }
+    }
+    catch (_) { sampleCount = 1; }
+    const wantBands = sampleCount >= 2 ? [0, 1] : [0];
+
     let rasters;
     try
     {
@@ -184,34 +203,29 @@ export async function fetchFloat32GeoTiffWithNoData(
             width:  rasterSize,
             height: rasterSize,
             interleave: false,
-            samples: [0]
+            samples: wantBands
         });
     }
     catch (_) { return null; }
 
-    let band: ArrayLike<number>;
-    if (Array.isArray(rasters))
-    {
-        if (rasters.length === 0) return null;
-        band = rasters[0] as ArrayLike<number>;
-    }
-    else
-    {
-        band = rasters as unknown as ArrayLike<number>;
-    }
+    //Always-an-array path (`interleave: false` returns one typed
+    //array per requested sample). Normalise each band to Float32.
+    if (!Array.isArray(rasters) || rasters.length === 0) return null;
 
-    let data: Float32Array;
-    if (band instanceof Float32Array)
+    const toF32 = (b: ArrayLike<number>): Float32Array =>
     {
-        data = band;
-    }
-    else
-    {
-        data = new Float32Array(band.length);
-        for (let i = 0; i < band.length; i++) data[i] = band[i];
-    }
+        if (b instanceof Float32Array) return b;
+        const out = new Float32Array(b.length);
+        for (let i = 0; i < b.length; i++) out[i] = b[i];
+        return out;
+    };
 
-    return { data, noData };
+    const data    = toF32(rasters[0] as ArrayLike<number>);
+    const terrain = rasters.length >= 2
+        ? toF32(rasters[1] as ArrayLike<number>)
+        : null;
+
+    return { data, terrain, noData };
 }
 
 //Element-wise MAX of two equally-sized rasters. Used by the Spanish
