@@ -18,6 +18,12 @@ export interface Translations
 {
     cardName:        string;
     cardDescription: string;
+    //Label on the always-visible LiDAR-view chip in the top-right
+    //corner of the card (the half of the LiDAR cluster that's
+    //purely a text label; the adjacent button carries the state
+    //icon). Stays short, ~10 chars max, to balance the clock chip
+    //width on the opposite corner.
+    lidarViewChipLabel: string;
 
     //Detail dashboard, opened by clicking the home. The camera eases
     //in (zoom + pitch) and a full-card overlay takes over while the

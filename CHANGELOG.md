@@ -5,6 +5,62 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.12
+
+Polish round on top of v1.6.3-beta.11. Mostly visual tweaks from
+a live-card review + a real correctness fix uncovered by the
+calibration-ratio audit.
+
+### Visual
+
+* **Day-strip date label bumped** (`clamp(9px, 11cqw, 13px)`, was
+  `clamp(7px, 9cqw, 11px)`). kWh stays demoted at the smaller
+  clamp so the date reads as the primary anchor.
+* **Pitch range widened** from [25°, 75°] to [15°, 85°]. The user
+  can dive nearly top-down (15°) or peek almost flat against the
+  ground (85°) without ever passing through it.
+* **Sunrise / sunset arc icons removed.** The drop-shadow stack
+  from beta.11 turned the sun-coloured glyphs into outlined blobs
+  the user found illegible, and the arc shape itself already
+  signals "this is sunrise / sunset". One less overlay on the
+  horizon line, the LiDAR shadows below it breathe again.
+* **Chart curve strokes 1.0 → 0.7 px.** On high-variation days
+  the 1.0 px line stacked over itself on every wobble and turned
+  dense regions into a smudged band; 0.7 px reads as a hairline
+  trace at any zoom.
+* **LiDAR chip** label switched from the literal "LiDAR" to the
+  i18n `lidarViewChipLabel` ("Vue LiDAR" / "LiDAR view" /
+  "LiDAR-Ansicht" / ...). The combined cluster width then roughly
+  matches the date / time chip on the opposite corner.
+* **Night-hatch overlay on the dashboard today chart.** The
+  vertical twilight lines + sunrise/sunset ha-icon glyphs are
+  replaced with the same diagonal hatch pattern the timeline's
+  `.hc-night-zone` uses. Same visual vocabulary across the card,
+  one less competing signal at the horizon line.
+* **Dashboard tomorrow-tooltip can now paint above the battery
+  card.** The `.dash-card` entry animation ended on
+  `transform: translateY(0)`, which left a non-`none` transform
+  in place and trapped the tooltip in the tomorrow card's stacking
+  context. Ending the animation on `transform: none` releases the
+  context and lets the tooltip's z-index do its job.
+
+### Correctness
+
+* **Live PV forecast chip now uses the 5-day calibration ratio.**
+  The chip (when scrubbing into the future) was the one consumer
+  of `pvCalibK × computePvPowerWeighted` that hadn't been wired to
+  `cal.ratio`, so it could read 30 W above or below the dotted
+  forecast curve and the hover tooltip at the same scrub instant.
+  Same ratio everywhere now, the readouts agree.
+
+### Repo housekeeping
+
+* **GitHub repo description updated.** HACS reads the repo's
+  `description` field for its list view; the old "real-time 3D
+  solar energy and cloud coverage visualization card" text was
+  pre-1.6 and didn't mention LiDAR or PV forecast. Refreshed to
+  match what the card actually does.
+
 ## v1.6.3-beta.11
 
 Polish round on top of v1.6.3-beta.10, picked up from a real-card

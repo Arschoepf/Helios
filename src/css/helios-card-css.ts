@@ -154,7 +154,6 @@ export const heliosCardStyles = css`
     .cloud-pct-label,
     .solar-svg,
     .solar-pct-label,
-    .solar-horizon-icon,
     .pv-home-anchor-svg,
     .pv-home-leader-svg,
     .pv-pct-label,
@@ -174,7 +173,6 @@ export const heliosCardStyles = css`
     ha-card.detail-active .cloud-pct-label,
     ha-card.detail-active .solar-svg,
     ha-card.detail-active .solar-pct-label,
-    ha-card.detail-active .solar-horizon-icon,
     ha-card.detail-active .pv-home-anchor-svg,
     ha-card.detail-active .pv-home-leader-svg,
     ha-card.detail-active .pv-pct-label,
@@ -290,7 +288,14 @@ export const heliosCardStyles = css`
     .dash-card.dash-battery  { animation-delay: 0.18s; }
     @keyframes dash-card-in
     {
-        to { opacity: 1; transform: translateY(0); }
+        /*  End on transform:none, not translateY(0). A non-none
+            transform value creates a new stacking context, which
+            would trap the calibration-hint tooltip on the tomorrow
+            card inside its own card and let the battery card next
+            to it paint OVER the tooltip. The none value releases
+            stacking context once the entry animation finishes so
+            the tooltip z-index can paint above sibling cards.     */
+        to { opacity: 1; transform: none; }
     }
 
     ha-card.theme-dark .dash-card
@@ -729,29 +734,21 @@ export const heliosCardStyles = css`
         of the chart for each. The zero-length dash + round cap
         renders as discrete dots, more discreet than the now
         cursor's continuous dashes.                              */
-    .dash-today-chart-twilight
+    /*  Diagonal night-zone hatch lines, painted inside the
+        SVG pattern block referenced by the pre-dawn + post-dusk
+        rects. Same alpha + light-on-dark recipe the timeline's
+        .hc-night-zone uses, just expressed as an SVG stroke
+        because the dashboard chart lives inside an SVG. Stroke
+        width is tuned for the chart's native size (~240×60 px)
+        so the dots read as a soft diagonal grain.                */
+    .dash-today-chart-night
     {
-        stroke-width: 1;
-        stroke-dasharray: 0 3;
-        stroke-linecap: round;
-        vector-effect: non-scaling-stroke;
-        opacity: 0.55;
+        stroke: rgba(0, 0, 0, 0.07);
         pointer-events: none;
     }
-    .dash-today-chart-twilight-icon
+    ha-card.theme-dark .dash-today-chart-night
     {
-        position: absolute;
-        /*  Anchored to the top of the chart so the icons read as
-            flags capping their dotted lines, rather than buried in
-            the bottom axis-label gutter. Sits in the top padding
-            zone (PAD_T = 12 viewBox units) so it never overlaps
-            the curves' data area.                                */
-        top: 4px;
-        transform: translateX(-50%);
-        --mdc-icon-size: 18px;
-        opacity: 0.95;
-        pointer-events: none;
-        z-index: 2;
+        stroke: rgba(255, 255, 255, 0.10);
     }
     .dash-today-chart-hover-line
     {
@@ -1080,13 +1077,15 @@ export const heliosCardStyles = css`
 
     /*  Stroke-only outline on top of the filled area so peaks read
         cleanly even where the gradient fades towards the midline.
-        Thinner stroke (1.0 px) than the v1.6.2 default (1.4 px) so
-        the curve reads as a line trace rather than a ribbon, which
-        is what the eye expects on a small-format chart card.       */
+        Stroke width 0.7 px (down from the v1.6.2 default 1.4 px)
+        so the curve reads as a hairline trace; on high-variation
+        days the previous 1.0 px ribbon stacked over itself on
+        every wobble and turned the dense regions into a smudged
+        band. At 0.7 px the curve stays a line at any zoom.        */
     .hc-chart-line
     {
         fill: none;
-        stroke-width: 1.0;
+        stroke-width: 0.7;
         stroke-linejoin: round;
         stroke-linecap: round;
         vector-effect: non-scaling-stroke;
@@ -1410,14 +1409,19 @@ export const heliosCardStyles = css`
         container-name: tb-day-strip-cell;
     }
 
-    /*  Default + light-theme look. Both the date and the kWh
-        scale down with the cell width via cqw (1 % of container
-        inline size) clamped to a readable [7, 11] px range. Font
-        weight is intentionally NOT set here so it inherits from
-        the cell (which gets is-today bumped to 800) and from the
-        per-element overrides further down (.tb-day-strip-kwh
-        keeps its lighter 500 weight + opacity recipe).            */
-    .tb-day-strip-date,
+    /*  Both the date and the kWh scale down with the cell width
+        via cqw (1 % of container inline size). The date sits at
+        a slightly bigger clamp than the kWh so the primary label
+        gets the visual weight; the kWh stays demoted as a
+        contextual annotation. Font weight is intentionally NOT
+        set here so it inherits from the cell (which gets is-today
+        bumped to 800) and from the per-element overrides further
+        down (.tb-day-strip-kwh keeps its lighter 500 weight +
+        opacity recipe).                                            */
+    .tb-day-strip-date
+    {
+        font-size: clamp(9px, 11cqw, 13px);
+    }
     .tb-day-strip-kwh
     {
         font-size: clamp(7px, 9cqw, 11px);
@@ -1698,7 +1702,6 @@ export const heliosCardStyles = css`
     ha-card.lidar-view-active .time-bar,
     ha-card.lidar-view-active .solar-svg,
     ha-card.lidar-view-active .solar-pct-label,
-    ha-card.lidar-view-active .solar-horizon-icon,
     ha-card.lidar-view-active .cloud-svg,
     ha-card.lidar-view-active .cloud-leader-svg,
     ha-card.lidar-view-active .cloud-pct-label,
@@ -2269,35 +2272,9 @@ export const heliosCardStyles = css`
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
-    /*  Sunrise / sunset markers. ha-icon glyphs (mdi:weather-sunset-up
-        / -down) centred on the horizon crossings of the day's solar
-        arc, coloured in the configured sun colour via inline style.
-        The icon shape itself communicates "rising" vs "setting" so
-        no label or rotation is needed.
-
-        Drop-shadow stack: a tight black ring at full alpha pulls the
-        icon's silhouette off the LiDAR shadow blobs that pile up
-        behind the horizon line, and a wider soft black halo fades
-        the contrast against bright cloud-cover regions. Dark theme
-        flips the inner ring to white-on-near-black so the icon
-        stays legible against the dark plate.                       */
-    .solar-horizon-icon
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        --mdc-icon-size: 18px;
-        pointer-events: none;
-        z-index: 6;
-        filter:
-            drop-shadow(0 0 1px rgba(0, 0, 0, 0.95))
-            drop-shadow(0 0 4px rgba(0, 0, 0, 0.55));
-    }
-    ha-card.theme-dark .solar-horizon-icon
-    {
-        filter:
-            drop-shadow(0 0 1px rgba(255, 255, 255, 0.95))
-            drop-shadow(0 0 5px rgba(0, 0, 0, 0.75));
-    }
+    /*  Sunrise / sunset markers used to live here as ha-icon
+        glyphs anchored to the arc's horizon crossings. Removed in
+        v1.6.3 ; the arc shape itself reads as "sunrise / sunset".  */
 
 
     /*  Below-horizon segments, round dots at fixed spacing so the

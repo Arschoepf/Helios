@@ -3,6 +3,7 @@ import type { Translations } from '../index';
 export const es: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Sol, nubes, producción FV, batería y sombras LiDAR sobre tu casa, en 3D y tiempo real',
+    lidarViewChipLabel: 'Vista LiDAR',
 
     detail:
     {

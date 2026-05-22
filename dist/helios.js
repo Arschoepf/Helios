@@ -604,6 +604,7 @@ const DEFAULT_TIMELINE_CONSUMPTION_ENABLED = true;
 const en = {
   cardName: "HELIOS",
   cardDescription: "☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home",
+  lidarViewChipLabel: "LiDAR view",
   detail: {
     exitHint: "Tap anywhere to exit",
     todayLabel: "Today",
@@ -764,6 +765,7 @@ const en = {
 const fr = {
   cardName: "HELIOS",
   cardDescription: "☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel",
+  lidarViewChipLabel: "Vue LiDAR",
   detail: {
     exitHint: "Cliquez n'importe où pour quitter",
     todayLabel: "Aujourd'hui",
@@ -924,6 +926,7 @@ const fr = {
 const de = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sonne, Wolken, PV-Erzeugung, Batterie und LiDAR-Schatten am Haus, in 3D-Echtzeit",
+  lidarViewChipLabel: "LiDAR-Ansicht",
   detail: {
     exitHint: "Tippe irgendwo, um zu schließen",
     todayLabel: "Heute",
@@ -1084,6 +1087,7 @@ const de = {
 const es = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, nubes, producción FV, batería y sombras LiDAR sobre tu casa, en 3D y tiempo real",
+  lidarViewChipLabel: "Vista LiDAR",
   detail: {
     exitHint: "Toca en cualquier lugar para salir",
     todayLabel: "Hoy",
@@ -1244,6 +1248,7 @@ const es = {
 const it = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sole, nuvole, produzione FV, batteria e ombre LiDAR sulla tua casa, in 3D e tempo reale",
+  lidarViewChipLabel: "Vista LiDAR",
   detail: {
     exitHint: "Tocca un punto qualsiasi per uscire",
     todayLabel: "Oggi",
@@ -1404,6 +1409,7 @@ const it = {
 const nl = {
   cardName: "HELIOS",
   cardDescription: "☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime",
+  lidarViewChipLabel: "LiDAR-weergave",
   detail: {
     exitHint: "Tik ergens om te sluiten",
     todayLabel: "Vandaag",
@@ -1564,6 +1570,7 @@ const nl = {
 const pt = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a tua casa, em 3D e tempo real",
+  lidarViewChipLabel: "Vista LiDAR",
   detail: {
     exitHint: "Toca em qualquer lugar para sair",
     todayLabel: "Hoje",
@@ -1724,6 +1731,7 @@ const pt = {
 const no = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid",
+  lidarViewChipLabel: "LiDAR-visning",
   detail: {
     exitHint: "Trykk hvor som helst for å gå ut",
     todayLabel: "I dag",
@@ -2036,7 +2044,6 @@ const heliosCardStyles = i$3`
     .cloud-pct-label,
     .solar-svg,
     .solar-pct-label,
-    .solar-horizon-icon,
     .pv-home-anchor-svg,
     .pv-home-leader-svg,
     .pv-pct-label,
@@ -2056,7 +2063,6 @@ const heliosCardStyles = i$3`
     ha-card.detail-active .cloud-pct-label,
     ha-card.detail-active .solar-svg,
     ha-card.detail-active .solar-pct-label,
-    ha-card.detail-active .solar-horizon-icon,
     ha-card.detail-active .pv-home-anchor-svg,
     ha-card.detail-active .pv-home-leader-svg,
     ha-card.detail-active .pv-pct-label,
@@ -2172,7 +2178,14 @@ const heliosCardStyles = i$3`
     .dash-card.dash-battery  { animation-delay: 0.18s; }
     @keyframes dash-card-in
     {
-        to { opacity: 1; transform: translateY(0); }
+        /*  End on transform:none, not translateY(0). A non-none
+            transform value creates a new stacking context, which
+            would trap the calibration-hint tooltip on the tomorrow
+            card inside its own card and let the battery card next
+            to it paint OVER the tooltip. The none value releases
+            stacking context once the entry animation finishes so
+            the tooltip z-index can paint above sibling cards.     */
+        to { opacity: 1; transform: none; }
     }
 
     ha-card.theme-dark .dash-card
@@ -2611,29 +2624,21 @@ const heliosCardStyles = i$3`
         of the chart for each. The zero-length dash + round cap
         renders as discrete dots, more discreet than the now
         cursor's continuous dashes.                              */
-    .dash-today-chart-twilight
+    /*  Diagonal night-zone hatch lines, painted inside the
+        SVG pattern block referenced by the pre-dawn + post-dusk
+        rects. Same alpha + light-on-dark recipe the timeline's
+        .hc-night-zone uses, just expressed as an SVG stroke
+        because the dashboard chart lives inside an SVG. Stroke
+        width is tuned for the chart's native size (~240×60 px)
+        so the dots read as a soft diagonal grain.                */
+    .dash-today-chart-night
     {
-        stroke-width: 1;
-        stroke-dasharray: 0 3;
-        stroke-linecap: round;
-        vector-effect: non-scaling-stroke;
-        opacity: 0.55;
+        stroke: rgba(0, 0, 0, 0.07);
         pointer-events: none;
     }
-    .dash-today-chart-twilight-icon
+    ha-card.theme-dark .dash-today-chart-night
     {
-        position: absolute;
-        /*  Anchored to the top of the chart so the icons read as
-            flags capping their dotted lines, rather than buried in
-            the bottom axis-label gutter. Sits in the top padding
-            zone (PAD_T = 12 viewBox units) so it never overlaps
-            the curves' data area.                                */
-        top: 4px;
-        transform: translateX(-50%);
-        --mdc-icon-size: 18px;
-        opacity: 0.95;
-        pointer-events: none;
-        z-index: 2;
+        stroke: rgba(255, 255, 255, 0.10);
     }
     .dash-today-chart-hover-line
     {
@@ -2962,13 +2967,15 @@ const heliosCardStyles = i$3`
 
     /*  Stroke-only outline on top of the filled area so peaks read
         cleanly even where the gradient fades towards the midline.
-        Thinner stroke (1.0 px) than the v1.6.2 default (1.4 px) so
-        the curve reads as a line trace rather than a ribbon, which
-        is what the eye expects on a small-format chart card.       */
+        Stroke width 0.7 px (down from the v1.6.2 default 1.4 px)
+        so the curve reads as a hairline trace; on high-variation
+        days the previous 1.0 px ribbon stacked over itself on
+        every wobble and turned the dense regions into a smudged
+        band. At 0.7 px the curve stays a line at any zoom.        */
     .hc-chart-line
     {
         fill: none;
-        stroke-width: 1.0;
+        stroke-width: 0.7;
         stroke-linejoin: round;
         stroke-linecap: round;
         vector-effect: non-scaling-stroke;
@@ -3292,14 +3299,19 @@ const heliosCardStyles = i$3`
         container-name: tb-day-strip-cell;
     }
 
-    /*  Default + light-theme look. Both the date and the kWh
-        scale down with the cell width via cqw (1 % of container
-        inline size) clamped to a readable [7, 11] px range. Font
-        weight is intentionally NOT set here so it inherits from
-        the cell (which gets is-today bumped to 800) and from the
-        per-element overrides further down (.tb-day-strip-kwh
-        keeps its lighter 500 weight + opacity recipe).            */
-    .tb-day-strip-date,
+    /*  Both the date and the kWh scale down with the cell width
+        via cqw (1 % of container inline size). The date sits at
+        a slightly bigger clamp than the kWh so the primary label
+        gets the visual weight; the kWh stays demoted as a
+        contextual annotation. Font weight is intentionally NOT
+        set here so it inherits from the cell (which gets is-today
+        bumped to 800) and from the per-element overrides further
+        down (.tb-day-strip-kwh keeps its lighter 500 weight +
+        opacity recipe).                                            */
+    .tb-day-strip-date
+    {
+        font-size: clamp(9px, 11cqw, 13px);
+    }
     .tb-day-strip-kwh
     {
         font-size: clamp(7px, 9cqw, 11px);
@@ -3580,7 +3592,6 @@ const heliosCardStyles = i$3`
     ha-card.lidar-view-active .time-bar,
     ha-card.lidar-view-active .solar-svg,
     ha-card.lidar-view-active .solar-pct-label,
-    ha-card.lidar-view-active .solar-horizon-icon,
     ha-card.lidar-view-active .cloud-svg,
     ha-card.lidar-view-active .cloud-leader-svg,
     ha-card.lidar-view-active .cloud-pct-label,
@@ -4151,35 +4162,9 @@ const heliosCardStyles = i$3`
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
-    /*  Sunrise / sunset markers. ha-icon glyphs (mdi:weather-sunset-up
-        / -down) centred on the horizon crossings of the day's solar
-        arc, coloured in the configured sun colour via inline style.
-        The icon shape itself communicates "rising" vs "setting" so
-        no label or rotation is needed.
-
-        Drop-shadow stack: a tight black ring at full alpha pulls the
-        icon's silhouette off the LiDAR shadow blobs that pile up
-        behind the horizon line, and a wider soft black halo fades
-        the contrast against bright cloud-cover regions. Dark theme
-        flips the inner ring to white-on-near-black so the icon
-        stays legible against the dark plate.                       */
-    .solar-horizon-icon
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        --mdc-icon-size: 18px;
-        pointer-events: none;
-        z-index: 6;
-        filter:
-            drop-shadow(0 0 1px rgba(0, 0, 0, 0.95))
-            drop-shadow(0 0 4px rgba(0, 0, 0, 0.55));
-    }
-    ha-card.theme-dark .solar-horizon-icon
-    {
-        filter:
-            drop-shadow(0 0 1px rgba(255, 255, 255, 0.95))
-            drop-shadow(0 0 5px rgba(0, 0, 0, 0.75));
-    }
+    /*  Sunrise / sunset markers used to live here as ha-icon
+        glyphs anchored to the arc's horizon crossings. Removed in
+        v1.6.3 ; the arc shape itself reads as "sunrise / sunset".  */
 
 
     /*  Below-horizon segments, round dots at fixed spacing so the
@@ -5446,144 +5431,6 @@ async function fetchSolarRadiationHistory(host, entityId, start, end) {
   } finally {
     host._solarRadiationFetching = false;
   }
-}
-function refreshOverlays(host) {
-  host._labelLayout = host._engine?.projectHomeLabelLayout() ?? null;
-  const t2 = host._selectedTime ?? host._now;
-  host._sunScene = host._engine ? host._engine.projectSunScene(t2) : null;
-  host._cloudScene = host._engine ? host._engine.projectCloudScene() : null;
-  host._homeSilhouettes = host._engine ? host._engine.projectHomeFootprints() : [];
-}
-function setAnimationsPaused(host, paused) {
-  host.classList.toggle("helios-paused", paused);
-  const root = host.shadowRoot;
-  if (!root) return;
-  const svgs = root.querySelectorAll("svg");
-  for (const svg of Array.from(svgs)) {
-    const s2 = svg;
-    try {
-      if (paused) s2.pauseAnimations?.();
-      else s2.unpauseAnimations?.();
-    } catch (_2) {
-    }
-  }
-}
-function buildArcSegments(arc, sunColor) {
-  const out = [];
-  for (let i2 = 0; i2 < arc.length - 1; i2++) {
-    const a2 = arc[i2];
-    const b2 = arc[i2 + 1];
-    out.push({
-      x1: a2.x,
-      y1: a2.y,
-      x2: b2.x,
-      y2: b2.y,
-      color: sunColor,
-      nearness: 0.5 * (a2.nearness + b2.nearness),
-      belowHorizon: a2.belowHorizon || b2.belowHorizon
-    });
-  }
-  return out;
-}
-function flowDuration(rate, saturation, minDuration = 0.4) {
-  if (!isFinite(rate) || rate <= 0) {
-    return 30;
-  }
-  const f2 = Math.min(1, rate / saturation);
-  const eased = 1 - Math.pow(1 - f2, 3);
-  return 30 - (30 - minDuration) * eased;
-}
-function tick(host) {
-  host._now = /* @__PURE__ */ new Date();
-  refreshOverlays(host);
-}
-function onTimelinePointerDown(host, e2) {
-  if (!host._timeRange) {
-    return;
-  }
-  if (host._engine?.isUserGestureSuppressed()) {
-    return;
-  }
-  const track = e2.currentTarget;
-  track.setPointerCapture(e2.pointerId);
-  host._trackElement = track;
-  host._trackPointerId = e2.pointerId;
-  track.addEventListener("pointermove", host._boundPointerMove);
-  track.addEventListener("pointerup", host._boundPointerUp);
-  track.addEventListener("pointercancel", host._boundPointerUp);
-  applyTimelinePointer(host, e2);
-}
-function onTimelinePointerMove(host, e2) {
-  if (e2.pointerId !== host._trackPointerId) {
-    return;
-  }
-  applyTimelinePointer(host, e2);
-}
-function onTimelinePointerUp(host, e2) {
-  if (e2.pointerId !== host._trackPointerId) {
-    return;
-  }
-  const track = host._trackElement;
-  if (track) {
-    try {
-      track.releasePointerCapture(e2.pointerId);
-    } catch (_2) {
-    }
-    track.removeEventListener("pointermove", host._boundPointerMove);
-    track.removeEventListener("pointerup", host._boundPointerUp);
-    track.removeEventListener("pointercancel", host._boundPointerUp);
-  }
-  host._trackElement = null;
-  host._trackPointerId = null;
-  host._chartHoverPct = null;
-}
-function applyTimelinePointer(host, e2) {
-  if (!host._timeRange) {
-    return;
-  }
-  const track = e2.currentTarget;
-  const rect = track.getBoundingClientRect();
-  const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
-  const rangeMs = host._timeRange.end.getTime() - host._timeRange.start.getTime();
-  const t2 = new Date(host._timeRange.start.getTime() + frac * rangeMs);
-  if (host._selectedTime && host._selectedTime.getTime() === t2.getTime()) {
-    return;
-  }
-  host._selectedTime = t2;
-  host._isLiveMode = false;
-  host._chartHoverPct = frac * 100;
-  host._engine?.setSelectedTime(t2);
-}
-function resetToLive(host) {
-  host._selectedTime = null;
-  host._isLiveMode = true;
-  host._engine?.setSelectedTime(null);
-}
-function timelineEnabled(config) {
-  const raw2 = config?.["timeline-enabled"];
-  if (typeof raw2 === "boolean") return raw2;
-  if (typeof raw2 === "string") {
-    const s2 = raw2.trim().toLowerCase();
-    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
-    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
-  }
-  return DEFAULT_TIMELINE_ENABLED;
-}
-function timelineWidthPct(config) {
-  const raw2 = config?.["timeline-width-pct"];
-  const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-  if (!isFinite(n3)) return DEFAULT_TIMELINE_WIDTH_PCT;
-  return Math.min(100, Math.max(50, n3));
-}
-function timelineConsumptionEnabled(config) {
-  const raw2 = config?.["timeline-consumption-enabled"];
-  if (typeof raw2 === "boolean") return raw2;
-  if (typeof raw2 === "string") {
-    const s2 = raw2.trim().toLowerCase();
-    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
-    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
-  }
-  return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
 }
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getDefaultExportFromCjs(x2) {
@@ -36294,8 +36141,8 @@ const _HeliosEngine = class _HeliosEngine {
     canvas.style.touchAction = "none";
     const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
     const PITCH_SENSITIVITY_DEG_PER_PX = 0.3;
-    const PITCH_MIN_DEG = 25;
-    const PITCH_MAX_DEG = 75;
+    const PITCH_MIN_DEG = 15;
+    const PITCH_MAX_DEG = 85;
     let dragRotating = false;
     let lastPointerX = 0;
     let lastPointerY = 0;
@@ -38412,6 +38259,52 @@ const _HeliosEngine = class _HeliosEngine {
 };
 _HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS = 30 * 60 * 1e3;
 let HeliosEngine = _HeliosEngine;
+function refreshOverlays(host) {
+  host._labelLayout = host._engine?.projectHomeLabelLayout() ?? null;
+  const t2 = host._selectedTime ?? host._now;
+  host._sunScene = host._engine ? host._engine.projectSunScene(t2) : null;
+  host._cloudScene = host._engine ? host._engine.projectCloudScene() : null;
+  host._homeSilhouettes = host._engine ? host._engine.projectHomeFootprints() : [];
+}
+function setAnimationsPaused(host, paused) {
+  host.classList.toggle("helios-paused", paused);
+  const root = host.shadowRoot;
+  if (!root) return;
+  const svgs = root.querySelectorAll("svg");
+  for (const svg of Array.from(svgs)) {
+    const s2 = svg;
+    try {
+      if (paused) s2.pauseAnimations?.();
+      else s2.unpauseAnimations?.();
+    } catch (_2) {
+    }
+  }
+}
+function buildArcSegments(arc, sunColor) {
+  const out = [];
+  for (let i2 = 0; i2 < arc.length - 1; i2++) {
+    const a2 = arc[i2];
+    const b2 = arc[i2 + 1];
+    out.push({
+      x1: a2.x,
+      y1: a2.y,
+      x2: b2.x,
+      y2: b2.y,
+      color: sunColor,
+      nearness: 0.5 * (a2.nearness + b2.nearness),
+      belowHorizon: a2.belowHorizon || b2.belowHorizon
+    });
+  }
+  return out;
+}
+function flowDuration(rate, saturation, minDuration = 0.4) {
+  if (!isFinite(rate) || rate <= 0) {
+    return 30;
+  }
+  const f2 = Math.min(1, rate / saturation);
+  const eased = 1 - Math.pow(1 - f2, 3);
+  return 30 - (30 - minDuration) * eased;
+}
 const VISUAL_CONFIG_KEYS = [
   "show-labels",
   "sun-color",
@@ -38656,6 +38549,98 @@ function actualKwhForDay(hist, pvUnit, startMs, endMs) {
     kwh += (wPrev + wCurr) / 2 * dtH / 1e3;
   }
   return kwh;
+}
+function tick(host) {
+  host._now = /* @__PURE__ */ new Date();
+  refreshOverlays(host);
+}
+function onTimelinePointerDown(host, e2) {
+  if (!host._timeRange) {
+    return;
+  }
+  if (host._engine?.isUserGestureSuppressed()) {
+    return;
+  }
+  const track = e2.currentTarget;
+  track.setPointerCapture(e2.pointerId);
+  host._trackElement = track;
+  host._trackPointerId = e2.pointerId;
+  track.addEventListener("pointermove", host._boundPointerMove);
+  track.addEventListener("pointerup", host._boundPointerUp);
+  track.addEventListener("pointercancel", host._boundPointerUp);
+  applyTimelinePointer(host, e2);
+}
+function onTimelinePointerMove(host, e2) {
+  if (e2.pointerId !== host._trackPointerId) {
+    return;
+  }
+  applyTimelinePointer(host, e2);
+}
+function onTimelinePointerUp(host, e2) {
+  if (e2.pointerId !== host._trackPointerId) {
+    return;
+  }
+  const track = host._trackElement;
+  if (track) {
+    try {
+      track.releasePointerCapture(e2.pointerId);
+    } catch (_2) {
+    }
+    track.removeEventListener("pointermove", host._boundPointerMove);
+    track.removeEventListener("pointerup", host._boundPointerUp);
+    track.removeEventListener("pointercancel", host._boundPointerUp);
+  }
+  host._trackElement = null;
+  host._trackPointerId = null;
+  host._chartHoverPct = null;
+}
+function applyTimelinePointer(host, e2) {
+  if (!host._timeRange) {
+    return;
+  }
+  const track = e2.currentTarget;
+  const rect = track.getBoundingClientRect();
+  const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
+  const rangeMs = host._timeRange.end.getTime() - host._timeRange.start.getTime();
+  const t2 = new Date(host._timeRange.start.getTime() + frac * rangeMs);
+  if (host._selectedTime && host._selectedTime.getTime() === t2.getTime()) {
+    return;
+  }
+  host._selectedTime = t2;
+  host._isLiveMode = false;
+  host._chartHoverPct = frac * 100;
+  host._engine?.setSelectedTime(t2);
+}
+function resetToLive(host) {
+  host._selectedTime = null;
+  host._isLiveMode = true;
+  host._engine?.setSelectedTime(null);
+}
+function timelineEnabled(config) {
+  const raw2 = config?.["timeline-enabled"];
+  if (typeof raw2 === "boolean") return raw2;
+  if (typeof raw2 === "string") {
+    const s2 = raw2.trim().toLowerCase();
+    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+  }
+  return DEFAULT_TIMELINE_ENABLED;
+}
+function timelineWidthPct(config) {
+  const raw2 = config?.["timeline-width-pct"];
+  const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+  if (!isFinite(n3)) return DEFAULT_TIMELINE_WIDTH_PCT;
+  return Math.min(100, Math.max(50, n3));
+}
+function timelineConsumptionEnabled(config) {
+  const raw2 = config?.["timeline-consumption-enabled"];
+  if (typeof raw2 === "boolean") return raw2;
+  if (typeof raw2 === "string") {
+    const s2 = raw2.trim().toLowerCase();
+    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+  }
+  return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
 }
 function findSunCrossing(lat, lon, dayStartMs, dayEndMs, direction) {
   const STEP_MS = 60 * 60 * 1e3;
@@ -39834,6 +39819,9 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
   const referenceYPct = referenceY / H2 * 100;
   const tooltipBelow = referenceY <= H2 / 2;
   const clipId = `dash-today-chart-reveal-${host._instanceId}`;
+  const hatchId = `dash-today-chart-night-${host._instanceId}`;
+  const nightLeftEnd = showSunrise ? xFor(sunriseMs) : null;
+  const nightRightStart = showSunset ? xFor(sunsetMs) : null;
   return b`
         <div class="dash-today-chart">
             <svg class="dash-today-chart-svg"
@@ -39848,7 +39836,45 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                               x="0" y="0"
                               width="${W}" height="${H2}"/>
                     </clipPath>
+                    <!--  Diagonal night-zone hatch. Tiled at 6 px in
+                          viewBox units, rotated 45°. Pattern stays
+                          tile-aligned regardless of the chart's pre-
+                          serveAspectRatio because the SVG renders at
+                          near-native size in the dashboard. Dark-mode
+                          stroke is set via the .dash-today-chart-
+                          night CSS class on the line element below.   -->
+                    <pattern id="${hatchId}"
+                             patternUnits="userSpaceOnUse"
+                             width="6" height="6"
+                             patternTransform="rotate(45)">
+                        <line class="dash-today-chart-night"
+                              x1="0" y1="0" x2="0" y2="6"
+                              stroke-width="1.5"/>
+                    </pattern>
                 </defs>
+                <!--  Night zones: pre-dawn rect from the plot's left
+                      edge to sunrise, and post-dusk rect from sunset
+                      to the plot's right edge. Skipped on polar days
+                      where the sun never crosses the horizon (showSun
+                      flags stay false).                               -->
+                ${nightLeftEnd !== null && nightLeftEnd > PAD_L ? w`
+                    <rect
+                        x="${PAD_L.toFixed(2)}"
+                        y="${PAD_T.toFixed(2)}"
+                        width="${(nightLeftEnd - PAD_L).toFixed(2)}"
+                        height="${(H2 - PAD_T - PAD_B).toFixed(2)}"
+                        fill="url(#${hatchId})"
+                    ></rect>
+                ` : A}
+                ${nightRightStart !== null && nightRightStart < W - PAD_R ? w`
+                    <rect
+                        x="${nightRightStart.toFixed(2)}"
+                        y="${PAD_T.toFixed(2)}"
+                        width="${(W - PAD_R - nightRightStart).toFixed(2)}"
+                        height="${(H2 - PAD_T - PAD_B).toFixed(2)}"
+                        fill="url(#${hatchId})"
+                    ></rect>
+                ` : A}
                 ${kwhTicks.map((v2) => w`
                     <line class="dash-today-chart-grid"
                           x1="${PAD_L}"     y1="${yFor(v2).toFixed(2)}"
@@ -39863,18 +39889,6 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                               x2="${x2.toFixed(2)}" y2="${H2 - PAD_B}"/>
                     `;
   })}
-                ${showSunrise ? w`
-                    <line class="dash-today-chart-twilight"
-                          x1="${xFor(sunriseMs).toFixed(2)}" x2="${xFor(sunriseMs).toFixed(2)}"
-                          y1="${PAD_T}" y2="${H2 - PAD_B}"
-                          stroke="${sunColor}"/>
-                ` : A}
-                ${showSunset ? w`
-                    <line class="dash-today-chart-twilight"
-                          x1="${xFor(sunsetMs).toFixed(2)}" x2="${xFor(sunsetMs).toFixed(2)}"
-                          y1="${PAD_T}" y2="${H2 - PAD_B}"
-                          stroke="${sunColor}"/>
-                ` : A}
                 <g clip-path="url(#${clipId})">
                     ${predictedPath !== "" ? w`
                         <path class="dash-today-chart-predicted"
@@ -39923,18 +39937,14 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                     >${formatLocalisedNumber(host.hass, v2, yStep < 1 ? 1 : 0)}</span>
                 `)}
             </div>
-            ${showSunrise ? b`
-                <ha-icon class="dash-today-chart-twilight-icon"
-                         icon="mdi:weather-sunset-up"
-                         style="left: ${(xFor(sunriseMs) / W * 100).toFixed(2)}%; color: ${sunColor};"
-                ></ha-icon>
-            ` : A}
-            ${showSunset ? b`
-                <ha-icon class="dash-today-chart-twilight-icon"
-                         icon="mdi:weather-sunset-down"
-                         style="left: ${(xFor(sunsetMs) / W * 100).toFixed(2)}%; color: ${sunColor};"
-                ></ha-icon>
-            ` : A}
+            <!--  Twilight ha-icon glyphs (sunrise / sunset) used to
+                  sit here; they were replaced in v1.6.3 by the
+                  night-zone diagonal hatch rendered inside the SVG
+                  above. Same visual vocabulary as the timeline's
+                  .hc-night-zone overlay, and the hatch communicates
+                  "this slice is night" without competing with the
+                  PV curve for the user's attention.                   -->
+
             ${showHover ? b`
                 <div class="dash-today-chart-tooltip dash-today-chart-tooltip-${tooltipBelow ? "below" : "above"}"
                      style="left: ${hoverFracX.toFixed(2)}%; top: ${referenceYPct.toFixed(2)}%;"
@@ -42041,7 +42051,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.11"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.12"}`,
       labelStyle,
       versionStyle
     );
@@ -42065,7 +42075,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.11",
+        version: "1.6.3-beta.12",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -42073,7 +42083,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.11"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.12"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -42384,7 +42394,9 @@ let HeliosCard = class extends i {
           raster: this._engine?.getLidarRaster() ?? null
         });
         if (pct > 0) {
-          const w2 = Math.min(pvInverterMaxW(this.config), pct * k2);
+          const cal = computeForecastCalibration(this);
+          const calR = cal ? cal.ratio : 1;
+          const w2 = Math.min(pvInverterMaxW(this.config), pct * k2 * calR);
           pvPredictedRate = { value: w2, unit: "W" };
         }
       }
@@ -42627,7 +42639,7 @@ let HeliosCard = class extends i {
                                 aria-label="${stateLabel}"
                                 aria-pressed="${this._lidarViewMode ? "true" : "false"}"
                                 @click="${onToggle}"
-                            >LiDAR</button>
+                            >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
                         </div>
                     `;
     })() : A}
@@ -43102,27 +43114,15 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
-                <!--  Sunrise / sunset markers. ha-icon glyphs centred
-                      on the horizon crossings of the day's solar arc,
-                      coloured in the configured sun colour. The icon
-                      shape itself signals the meaning (sun rising /
-                      setting) so no label or rotation is needed.
-                      Skipped on polar days where the sun never
-                      crosses the horizon.  -->
-                ${showSun && sunScene.sunrise ? b`
-                    <ha-icon
-                        class="solar-horizon-icon solar-horizon-sunrise"
-                        icon="mdi:weather-sunset-up"
-                        style="left:${sunScene.sunrise.x}px; top:${sunScene.sunrise.y}px; color:${sunColor}"
-                    ></ha-icon>
-                ` : A}
-                ${showSun && sunScene.sunset ? b`
-                    <ha-icon
-                        class="solar-horizon-icon solar-horizon-sunset"
-                        icon="mdi:weather-sunset-down"
-                        style="left:${sunScene.sunset.x}px; top:${sunScene.sunset.y}px; color:${sunColor}"
-                    ></ha-icon>
-                ` : A}
+                <!--  Sunrise / sunset markers were drawn here as
+                      sun-coloured ha-icon glyphs anchored at the
+                      arc's horizon crossings. Removed in v1.6.3 :
+                      the arc shape itself already communicates
+                      "the sun rises here, sets there", the icons
+                      added visual noise and competed with the
+                      LiDAR shadow blobs sitting on the same
+                      horizon line.                                  -->
+
 
                 <!--  Home hover glow, sun-coloured halo around the
                       projected home silhouette. Reuses the same base

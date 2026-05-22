@@ -727,7 +727,22 @@ export function renderDashTodayChart(
     //Unique clip-path id per instance so two cards on the same
     //dashboard don't share a single rect (and one card's animation
     //don't bleed into the other's).
-    const clipId = `dash-today-chart-reveal-${host._instanceId}`;
+    const clipId  = `dash-today-chart-reveal-${host._instanceId}`;
+    //Unique pattern id for the night-zone hatch overlay. Same
+    //per-instance scope as the clip-path so siblings don't collide.
+    const hatchId = `dash-today-chart-night-${host._instanceId}`;
+
+    //Night hatch: the regions before sunrise and after sunset get a
+    //subtle diagonal hatch instead of the previous vertical twilight
+    //lines + sun-up/sun-down glyphs. Same visual vocabulary as the
+    //timeline's .hc-night-zone overlay, kept inside the SVG via
+    //`<pattern>` because the dashboard chart is rendered at native
+    //size (no MapLibre downscale) so a stretched pattern still reads
+    //as a clean diagonal. The hatch is bound to the plotted area
+    //[PAD_L .. W-PAD_R] × [PAD_T .. H-PAD_B] so it doesn't bleed
+    //into the kWh / hour axis labels around the chart frame.
+    const nightLeftEnd    = showSunrise ? xFor(sunriseMs!) : null;
+    const nightRightStart = showSunset  ? xFor(sunsetMs!)  : null;
 
     return html`
         <div class="dash-today-chart">
@@ -743,7 +758,45 @@ export function renderDashTodayChart(
                               x="0" y="0"
                               width="${W}" height="${H}"/>
                     </clipPath>
+                    <!--  Diagonal night-zone hatch. Tiled at 6 px in
+                          viewBox units, rotated 45°. Pattern stays
+                          tile-aligned regardless of the chart's pre-
+                          serveAspectRatio because the SVG renders at
+                          near-native size in the dashboard. Dark-mode
+                          stroke is set via the .dash-today-chart-
+                          night CSS class on the line element below.   -->
+                    <pattern id="${hatchId}"
+                             patternUnits="userSpaceOnUse"
+                             width="6" height="6"
+                             patternTransform="rotate(45)">
+                        <line class="dash-today-chart-night"
+                              x1="0" y1="0" x2="0" y2="6"
+                              stroke-width="1.5"/>
+                    </pattern>
                 </defs>
+                <!--  Night zones: pre-dawn rect from the plot's left
+                      edge to sunrise, and post-dusk rect from sunset
+                      to the plot's right edge. Skipped on polar days
+                      where the sun never crosses the horizon (showSun
+                      flags stay false).                               -->
+                ${nightLeftEnd !== null && nightLeftEnd > PAD_L ? svg`
+                    <rect
+                        x="${PAD_L.toFixed(2)}"
+                        y="${PAD_T.toFixed(2)}"
+                        width="${(nightLeftEnd - PAD_L).toFixed(2)}"
+                        height="${(H - PAD_T - PAD_B).toFixed(2)}"
+                        fill="url(#${hatchId})"
+                    ></rect>
+                ` : nothing}
+                ${nightRightStart !== null && nightRightStart < W - PAD_R ? svg`
+                    <rect
+                        x="${nightRightStart.toFixed(2)}"
+                        y="${PAD_T.toFixed(2)}"
+                        width="${(W - PAD_R - nightRightStart).toFixed(2)}"
+                        height="${(H - PAD_T - PAD_B).toFixed(2)}"
+                        fill="url(#${hatchId})"
+                    ></rect>
+                ` : nothing}
                 ${kwhTicks.map(v => svg`
                     <line class="dash-today-chart-grid"
                           x1="${PAD_L}"     y1="${yFor(v).toFixed(2)}"
@@ -758,18 +811,6 @@ export function renderDashTodayChart(
                               x2="${x.toFixed(2)}" y2="${H - PAD_B}"/>
                     `;
                 })}
-                ${showSunrise ? svg`
-                    <line class="dash-today-chart-twilight"
-                          x1="${xFor(sunriseMs!).toFixed(2)}" x2="${xFor(sunriseMs!).toFixed(2)}"
-                          y1="${PAD_T}" y2="${H - PAD_B}"
-                          stroke="${sunColor}"/>
-                ` : nothing}
-                ${showSunset ? svg`
-                    <line class="dash-today-chart-twilight"
-                          x1="${xFor(sunsetMs!).toFixed(2)}" x2="${xFor(sunsetMs!).toFixed(2)}"
-                          y1="${PAD_T}" y2="${H - PAD_B}"
-                          stroke="${sunColor}"/>
-                ` : nothing}
                 <g clip-path="url(#${clipId})">
                     ${predictedPath !== '' ? svg`
                         <path class="dash-today-chart-predicted"
@@ -818,18 +859,14 @@ export function renderDashTodayChart(
                     >${formatLocalisedNumber(host.hass, v, yStep < 1 ? 1 : 0)}</span>
                 `)}
             </div>
-            ${showSunrise ? html`
-                <ha-icon class="dash-today-chart-twilight-icon"
-                         icon="mdi:weather-sunset-up"
-                         style="left: ${(xFor(sunriseMs!) / W * 100).toFixed(2)}%; color: ${sunColor};"
-                ></ha-icon>
-            ` : nothing}
-            ${showSunset ? html`
-                <ha-icon class="dash-today-chart-twilight-icon"
-                         icon="mdi:weather-sunset-down"
-                         style="left: ${(xFor(sunsetMs!) / W * 100).toFixed(2)}%; color: ${sunColor};"
-                ></ha-icon>
-            ` : nothing}
+            <!--  Twilight ha-icon glyphs (sunrise / sunset) used to
+                  sit here; they were replaced in v1.6.3 by the
+                  night-zone diagonal hatch rendered inside the SVG
+                  above. Same visual vocabulary as the timeline's
+                  .hc-night-zone overlay, and the hatch communicates
+                  "this slice is night" without competing with the
+                  PV curve for the user's attention.                   -->
+
             ${showHover ? html`
                 <div class="dash-today-chart-tooltip dash-today-chart-tooltip-${tooltipBelow ? 'below' : 'above'}"
                      style="left: ${hoverFracX.toFixed(2)}%; top: ${referenceYPct.toFixed(2)}%;"

@@ -885,13 +885,15 @@ export class HeliosEngine
         //Vertical drag controls camera pitch. dy positive (drag down)
         //tilts the camera flatter (less top-down, more horizon-on);
         //dy negative (drag up) tilts it back toward the bird's-eye.
-        //Bounds: [25°, 75°]. 25° keeps the 3D scene from collapsing
-        //into a flat overhead, 75° stops short of the horizon so the
-        //camera can never dip below the ground and reveal the
-        //missing under-side of the basemap mesh.
+        //Bounds: [15°, 85°]. The wider span lets the user dive
+        //almost top-down (15°) for a "map view" feel or peek almost
+        //flat against the ground (85°) for a "ground-level" feel,
+        //without ever allowing the camera to dip below the ground
+        //plane (90° would reveal the missing under-side of the
+        //basemap mesh).
         const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
-        const PITCH_MIN_DEG = 25;
-        const PITCH_MAX_DEG = 75;
+        const PITCH_MIN_DEG = 15;
+        const PITCH_MAX_DEG = 85;
         let dragRotating  = false;
         let lastPointerX  = 0;
         let lastPointerY  = 0;

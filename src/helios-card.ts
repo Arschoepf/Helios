@@ -30,6 +30,7 @@ import
     formatBatteryPower
 } from './card/battery';
 import { refreshSolarRadiation } from './card/radiation';
+import { computeForecastCalibration } from './card/calibration';
 import
 {
     renderChart,
@@ -824,11 +825,16 @@ export class HeliosCard extends LitElement
                 });
                 if (pct > 0)
                 {
-                    //k is W per percent of STC, so pct × k is watts;
-                    //clip at the inverter's PMax so a bright forecast
-                    //hour doesn't overshoot the install's hardware
-                    //ceiling. Infinity cap = no clipping.
-                    const w = Math.min(pvInverterMaxW(this.config), pct * k);
+                    //k is W per percent of STC, so pct × k is watts.
+                    //Apply the 5-day rolling calibration ratio so the
+                    //chip agrees with the dotted forecast curve + the
+                    //tooltip value at the same scrub instant; clip at
+                    //the inverter's PMax so a bright forecast hour
+                    //doesn't overshoot the install's hardware ceiling.
+                    //Infinity cap = no clipping.
+                    const cal  = computeForecastCalibration(this);
+                    const calR = cal ? cal.ratio : 1;
+                    const w    = Math.min(pvInverterMaxW(this.config), pct * k * calR);
                     pvPredictedRate = { value: w, unit: 'W' };
                 }
             }
@@ -1286,7 +1292,7 @@ export class HeliosCard extends LitElement
                                 aria-label="${stateLabel}"
                                 aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
                                 @click="${onToggle}"
-                            >LiDAR</button>
+                            >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
                         </div>
                     `;
                 })() : nothing}
@@ -1850,27 +1856,15 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                <!--  Sunrise / sunset markers. ha-icon glyphs centred
-                      on the horizon crossings of the day's solar arc,
-                      coloured in the configured sun colour. The icon
-                      shape itself signals the meaning (sun rising /
-                      setting) so no label or rotation is needed.
-                      Skipped on polar days where the sun never
-                      crosses the horizon.  -->
-                ${showSun && sunScene!.sunrise ? html`
-                    <ha-icon
-                        class="solar-horizon-icon solar-horizon-sunrise"
-                        icon="mdi:weather-sunset-up"
-                        style="left:${sunScene!.sunrise.x}px; top:${sunScene!.sunrise.y}px; color:${sunColor}"
-                    ></ha-icon>
-                ` : nothing}
-                ${showSun && sunScene!.sunset ? html`
-                    <ha-icon
-                        class="solar-horizon-icon solar-horizon-sunset"
-                        icon="mdi:weather-sunset-down"
-                        style="left:${sunScene!.sunset.x}px; top:${sunScene!.sunset.y}px; color:${sunColor}"
-                    ></ha-icon>
-                ` : nothing}
+                <!--  Sunrise / sunset markers were drawn here as
+                      sun-coloured ha-icon glyphs anchored at the
+                      arc's horizon crossings. Removed in v1.6.3 :
+                      the arc shape itself already communicates
+                      "the sun rises here, sets there", the icons
+                      added visual noise and competed with the
+                      LiDAR shadow blobs sitting on the same
+                      horizon line.                                  -->
+
 
                 <!--  Home hover glow, sun-coloured halo around the
                       projected home silhouette. Reuses the same base
