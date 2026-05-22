@@ -5,6 +5,33 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.8
+
+Iterative pre-release on top of v1.6.3-beta.7.
+
+* **PV home-anchor is now a perspective-projected ground disc.**
+  Was a screen-space `<circle>`; replaced with a polygon sampled
+  from 48 points on a 5 m world-coordinate circle around the home,
+  projected through the same camera matrices the rest of the map
+  uses. The disc lies flat on the ground at the home, aplated by
+  pitch and rotated by bearing, so it reads as part of the scene
+  rather than a UI sticker. The bead arrival pulse still scales
+  the polygon 1 -> 1.55 -> 1 around the home centre.
+* **Day-strip respects the dark theme.** Plate background pulls
+  the same `#1f2021` as the other dark chips, cell text switches
+  to the pale ink and the vertical separators take the chip-frame
+  alpha so the strip reads as one cohesive component in either
+  mode.
+* **Day-strip cells size their text to the available width.** Each
+  cell is its own size container; the date + kWh font scales via
+  `clamp(8px, 11cqw, 11px)` and the kWh row drops below 90 px of
+  cell width so a 4-day mobile view doesn't stack the two strings
+  on top of each other.
+* **Below-horizon sun arc dimmed.** The dotted underground leg of
+  the day-arc kept the same stroke-alpha as the daylight portion;
+  dropped to 0.45 on the colour stroke + 0.25 on the outline so
+  the dotted leg reads as ambient context, not foreground motion.
+
 ## v1.6.3-beta.7
 
 Iterative pre-release on top of v1.6.3-beta.6. Third polish round

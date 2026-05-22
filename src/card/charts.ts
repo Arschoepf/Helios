@@ -1102,7 +1102,7 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
     //when the first or last day is only partially visible. The
     //separator list collects the right edge of each day except the
     //last (no separator at the strip's outer right edge).
-    type Cell = { isToday: boolean; centrePct: number; label: string; kwhText: string; isForecast: boolean };
+    type Cell = { isToday: boolean; centrePct: number; widthPct: number; label: string; kwhText: string; isForecast: boolean };
     const cells: Cell[] = [];
     const sepPcts: number[] = [];
     const cursor = new Date(start);
@@ -1138,6 +1138,7 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
             cells.push({
                 isToday,
                 centrePct: pStart + w / 2,
+                widthPct:  w,
                 label,
                 kwhText,
                 isForecast,
@@ -1159,7 +1160,7 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
             ${cells.map(c => html`
                 <div
                     class="tb-day-strip-cell ${c.isToday ? 'is-today' : ''}"
-                    style="left:${c.centrePct.toFixed(2)}%"
+                    style="left:${(c.centrePct - c.widthPct / 2).toFixed(2)}%; width:${c.widthPct.toFixed(2)}%"
                 >
                     <span class="tb-day-strip-date">${c.label}</span>
                     ${c.kwhText ? html`

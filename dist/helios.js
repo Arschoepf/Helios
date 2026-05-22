@@ -3229,24 +3229,61 @@ const heliosCardStyles = i$3`
         position: absolute;
         top: 0;
         bottom: 0;
-        transform: translateX(-50%);
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 5px;
         padding: 0 4px;
+        box-sizing: border-box;
         color: #000000;
-        font-size: 11px;
-        font-weight: 600;
         line-height: 1.2;
         letter-spacing: 0.2px;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: clip;
         z-index: 2;
+        /*  Each cell is its own size container; the date + kWh
+            children scale + collapse using cqw / @container queries
+            so the text adapts to whatever horizontal real-estate
+            the visible time range gives the day (a 4-day window on
+            a narrow phone leaves ~25 % of the timeline per cell;
+            a 1-day window leaves the whole strip). Falls back to
+            the static font-size + display rules below on engines
+            without container-query support.                        */
+        container-type: inline-size;
+        container-name: tb-day-strip-cell;
     }
 
+    /*  Default + light-theme look. Both the date and the kWh
+        scale down with the cell width via cqw (1 % of container
+        inline size) clamped to a readable [8, 11] px range. Font
+        weight is intentionally NOT set here so it inherits from
+        the cell (which gets is-today bumped to 800) and from the
+        per-element overrides further down (.tb-day-strip-kwh
+        keeps its lighter 500 weight + opacity recipe).            */
+    .tb-day-strip-date,
+    .tb-day-strip-kwh
+    {
+        font-size: clamp(8px, 11cqw, 11px);
+    }
+
+    .tb-day-strip-cell
+    {
+        font-weight: 600;
+    }
     .tb-day-strip-cell.is-today
     {
         font-weight: 800;
+    }
+
+    /*  Below ~90 px of cell width the date + kWh start eating
+        each other; drop the kWh first (the date is the primary
+        anchor), and below ~60 px hide the dot separator too.
+        Container queries inside the same cell.                    */
+    @container tb-day-strip-cell (max-width: 90px)
+    {
+        .tb-day-strip-kwh { display: none; }
     }
 
     /*  Vertical separator at each between-day boundary. 1 px ink
@@ -3881,6 +3918,27 @@ const heliosCardStyles = i$3`
         stroke-opacity: 0.95;
     }
 
+    /*  PV home-anchor disc, drawn as a polygon projected through
+        the map's perspective so it sits flat on the ground around
+        the home (an ellipse aplated by the camera pitch + rotated
+        by the camera bearing). The translate-to-home transform
+        lives on the wrapping <g>; the polygon points themselves
+        are coordinates relative to (0, 0), which lets the pulse
+        animation scale the polygon around the home centre by
+        simply scaling the group around its local origin.            */
+    .pv-home-leader-anchor       { transform-origin: 0 0; }
+    .pv-home-leader-anchor-disc  { transform-origin: 0 0; }
+    .pv-home-leader-anchor.is-pulsing .pv-home-leader-anchor-disc
+    {
+        animation: pv-home-anchor-pulse var(--pv-flow-duration, 2s) ease-in-out infinite;
+    }
+    @keyframes pv-home-anchor-pulse
+    {
+        0%, 80% { transform: scale(1); }
+        92%     { transform: scale(1.55); }
+        100%    { transform: scale(1); }
+    }
+
 
     /*  Battery leaders.
         Both SoC ↔ PV and PV ↔ Power share the exact same visual
@@ -4042,11 +4100,20 @@ const heliosCardStyles = i$3`
     /*  Below-horizon segments, round dots at fixed spacing so the
         eye reads "this is happening underground" without colour or
         depth scaling having to carry the signal. dasharray "0 N"
-        with linecap round renders true circles on every browser. */
+        with linecap round renders true circles on every browser.
+        Stroke alpha is halved relative to the above-horizon arc
+        so the dotted leg recedes visually: the user reads the
+        bright arc as "the part of the day where there's sunlight"
+        and the dotted leg as ambient context underneath.            */
     .solar-svg .solar-arc-night
     {
         stroke-linecap: round;
         stroke-dasharray: 0 8;
+        stroke-opacity: 0.45;
+    }
+    .solar-svg .solar-arc-night.solar-arc-outline
+    {
+        stroke-opacity: 0.25;
     }
 
     /*  Incidence ray, dashes flow from the sun toward the home at
@@ -4176,7 +4243,7 @@ const heliosCardStyles = i$3`
         they get the same dark override. */
     ha-card.theme-dark .clock,
     ha-card.theme-dark .tl-live-btn,
-    ha-card.theme-dark .tb-day-label,
+    ha-card.theme-dark .tb-day-strip,
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label,
     ha-card.theme-dark .map-btn:not(.map-btn-on),
@@ -4196,10 +4263,17 @@ const heliosCardStyles = i$3`
         border-color: rgba(255, 255, 255, 0.20);
     }
 
-    ha-card.theme-dark .tb-day-label
+    /*  Day-strip dark-mode tweaks: text inside the cells switches
+        to the same pale ink the rest of the dark chips use, and
+        the vertical separators between days take the same border
+        alpha as the chip frame so the strip reads as one cohesive
+        component in either theme.                                 */
+    ha-card.theme-dark .tb-day-strip
     {
         background: #1f2021;
     }
+    ha-card.theme-dark .tb-day-strip-cell { color: #e6e6e6; }
+    ha-card.theme-dark .tb-day-strip-sep  { background: rgba(255, 255, 255, 0.20); }
 
     ha-card.theme-dark .tl-live-btn ha-icon,
     ha-card.theme-dark .cloud-pct-label ha-icon,
@@ -37500,13 +37574,29 @@ const _HeliosEngine = class _HeliosEngine {
     const shelfY = home.y - PV_CHIP_OFFSET_PX + BATTERY_CHIP_Y_OFFSET_PX;
     const pvX = home.x;
     const pvY = shelfY + BATTERY_CHIP_Y_OFFSET_PX;
+    const PV_HOME_ANCHOR_RADIUS_M = 5;
+    const ANCHOR_SAMPLES = 48;
+    const anchorLatPerM = 1 / 111320;
+    const anchorLonPerM = anchorLatPerM / cosLat;
+    const anchorPts = [];
+    for (let i2 = 0; i2 < ANCHOR_SAMPLES; i2++) {
+      const a2 = i2 / ANCHOR_SAMPLES * Math.PI * 2;
+      const dE = Math.cos(a2) * PV_HOME_ANCHOR_RADIUS_M;
+      const dN = Math.sin(a2) * PV_HOME_ANCHOR_RADIUS_M;
+      const p2 = m2.project([
+        this.homeLon + dE * anchorLonPerM,
+        this.homeLat + dN * anchorLatPerM
+      ]);
+      anchorPts.push(`${(p2.x - home.x).toFixed(2)},${(p2.y - home.y).toFixed(2)}`);
+    }
     return {
       cloudLabel: { x: cloudLabelX, y: cloudLabelY },
       pvLabel: { x: pvX, y: pvY },
       batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       ringEdge: { x: ringEdgeX, y: ringEdgeY },
-      home: { x: home.x, y: home.y }
+      home: { x: home.x, y: home.y },
+      homeAnchorPoints: anchorPts.join(" ")
     };
   }
   //Project a 3D point (longitude, latitude, altitude_m) into
@@ -39036,6 +39126,7 @@ function renderTimelineDayLabels(host) {
       cells.push({
         isToday,
         centrePct: pStart + w2 / 2,
+        widthPct: w2,
         label,
         kwhText,
         isForecast
@@ -39050,7 +39141,7 @@ function renderTimelineDayLabels(host) {
             ${cells.map((c2) => b`
                 <div
                     class="tb-day-strip-cell ${c2.isToday ? "is-today" : ""}"
-                    style="left:${c2.centrePct.toFixed(2)}%"
+                    style="left:${(c2.centrePct - c2.widthPct / 2).toFixed(2)}%; width:${c2.widthPct.toFixed(2)}%"
                 >
                     <span class="tb-day-strip-date">${c2.label}</span>
                     ${c2.kwhText ? b`
@@ -41740,7 +41831,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.7"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.8"}`,
       labelStyle,
       versionStyle
     );
@@ -41764,7 +41855,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.7",
+        version: "1.6.3-beta.8",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41772,7 +41863,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.7"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.8"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -42542,37 +42633,31 @@ let HeliosCard = class extends i {
                                 ></animateMotion>
                             </circle>
                         ` : A}
-                        <!--  Anchor bead at the home end of the leader,
-                              same colour as the line so the two read
-                              as one continuous element. Sized slightly
-                              larger than the moving bead (r 5 vs 4)
-                              so the destination reads as the "target"
-                              rather than another in-flight particle.
-                              When production is non-zero we synchronise
-                              an SVG <animate> pulse on the r attribute
-                              with the bead's animateMotion cycle: the
-                              anchor swells from r 5 to r 9 during the
-                              last ~15 % of the cycle (i.e. as the bead
-                              approaches) and snaps back at the cycle
-                              boundary. Visual effect, the anchor
-                              "absorbs" each incoming bead.  -->
-                        <circle
-                            class="pv-home-leader-anchor"
-                            cx="${layout.home.x}"
-                            cy="${layout.home.y}"
-                            r="5"
-                            fill="${pvColor}"
+                        <!--  Anchor at the home end of the leader, drawn
+                              as a ground disc projected through the
+                              map's perspective so it lies flat on the
+                              ground around the home rather than
+                              looking like a screen-space puck. The
+                              engine samples 48 points on a horizontal
+                              5 m circle around the home in world
+                              coordinates and serialises them relative
+                              to the home into homeAnchorPoints; we
+                              wrap the polygon in a translate-to-home
+                              group so the pulse animation can scale
+                              the polygon around (0, 0) and stay
+                              centred on the home through the bead's
+                              arrival cycle.                            -->
+                        <g
+                            class="pv-home-leader-anchor ${pvIdle ? "" : "is-pulsing"}"
+                            transform="translate(${layout.home.x},${layout.home.y})"
+                            style="--pv-flow-duration:${pvFlowDuration}s"
                         >
-                            ${!pvIdle ? w`
-                                <animate
-                                    attributeName="r"
-                                    values="5;5;9;5"
-                                    keyTimes="0;0.80;0.97;1"
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                ></animate>
-                            ` : A}
-                        </circle>
+                            <polygon
+                                class="pv-home-leader-anchor-disc"
+                                points="${layout.homeAnchorPoints}"
+                                fill="${pvColor}"
+                            ></polygon>
+                        </g>
                     </svg>
                 ` : A}
 

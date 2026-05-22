@@ -1548,37 +1548,31 @@ export class HeliosCard extends LitElement
                                 ></animateMotion>
                             </circle>
                         ` : nothing}
-                        <!--  Anchor bead at the home end of the leader,
-                              same colour as the line so the two read
-                              as one continuous element. Sized slightly
-                              larger than the moving bead (r 5 vs 4)
-                              so the destination reads as the "target"
-                              rather than another in-flight particle.
-                              When production is non-zero we synchronise
-                              an SVG <animate> pulse on the r attribute
-                              with the bead's animateMotion cycle: the
-                              anchor swells from r 5 to r 9 during the
-                              last ~15 % of the cycle (i.e. as the bead
-                              approaches) and snaps back at the cycle
-                              boundary. Visual effect, the anchor
-                              "absorbs" each incoming bead.  -->
-                        <circle
-                            class="pv-home-leader-anchor"
-                            cx="${layout!.home.x}"
-                            cy="${layout!.home.y}"
-                            r="5"
-                            fill="${pvColor}"
+                        <!--  Anchor at the home end of the leader, drawn
+                              as a ground disc projected through the
+                              map's perspective so it lies flat on the
+                              ground around the home rather than
+                              looking like a screen-space puck. The
+                              engine samples 48 points on a horizontal
+                              5 m circle around the home in world
+                              coordinates and serialises them relative
+                              to the home into homeAnchorPoints; we
+                              wrap the polygon in a translate-to-home
+                              group so the pulse animation can scale
+                              the polygon around (0, 0) and stay
+                              centred on the home through the bead's
+                              arrival cycle.                            -->
+                        <g
+                            class="pv-home-leader-anchor ${pvIdle ? '' : 'is-pulsing'}"
+                            transform="translate(${layout!.home.x},${layout!.home.y})"
+                            style="--pv-flow-duration:${pvFlowDuration}s"
                         >
-                            ${!pvIdle ? svg`
-                                <animate
-                                    attributeName="r"
-                                    values="5;5;9;5"
-                                    keyTimes="0;0.80;0.97;1"
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                ></animate>
-                            ` : nothing}
-                        </circle>
+                            <polygon
+                                class="pv-home-leader-anchor-disc"
+                                points="${layout!.homeAnchorPoints}"
+                                fill="${pvColor}"
+                            ></polygon>
+                        </g>
                     </svg>
                 ` : nothing}
 

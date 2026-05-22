@@ -2871,6 +2871,14 @@ export class HeliosEngine
         batteryPowerLabel: { x: number; y: number };
         ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
+        //SVG `polygon` `points` attribute for the PV home-anchor
+        //ground disc. Built by projecting 48 points on a horizontal
+        //circle of radius PV_HOME_ANCHOR_RADIUS_M metres around the
+        //home into screen pixels, then expressing each point
+        //relative to the home so the consuming SVG can wrap the
+        //polygon in a `<g transform="translate(home.x, home.y)">`
+        //and animate the pulse by scaling around the origin.
+        homeAnchorPoints:  string;
     } | null
     {
         if (!this.map)
@@ -2937,13 +2945,42 @@ export class HeliosEngine
         const pvX    = home.x;
         const pvY    = shelfY + BATTERY_CHIP_Y_OFFSET_PX;
 
+        //PV home-anchor ground disc, expressed as a polygon. We
+        //sample N points on a horizontal circle of radius
+        //PV_HOME_ANCHOR_RADIUS_M metres around the home (lat/lon
+        //offsets in the local tangent plane), project each through
+        //the current camera matrices, then express the result
+        //relative to the home so the SVG can wrap the polygon in a
+        //translate-to-home group. The disc lies flat on the ground
+        //plane, so at pitch=55° it projects to an ellipse with the
+        //major axis perpendicular to the camera's bearing and the
+        //minor axis along it, matching the perspective everywhere
+        //else on the map.
+        const PV_HOME_ANCHOR_RADIUS_M = 5;
+        const ANCHOR_SAMPLES          = 48;
+        const anchorLatPerM = 1 / 111_320;
+        const anchorLonPerM = anchorLatPerM / cosLat;
+        const anchorPts: string[] = [];
+        for (let i = 0; i < ANCHOR_SAMPLES; i++)
+        {
+            const a = (i / ANCHOR_SAMPLES) * Math.PI * 2;
+            const dE = Math.cos(a) * PV_HOME_ANCHOR_RADIUS_M;
+            const dN = Math.sin(a) * PV_HOME_ANCHOR_RADIUS_M;
+            const p  = m.project([
+                this.homeLon + dE * anchorLonPerM,
+                this.homeLat + dN * anchorLatPerM,
+            ]);
+            anchorPts.push(`${(p.x - home.x).toFixed(2)},${(p.y - home.y).toFixed(2)}`);
+        }
+
         return {
             cloudLabel:        { x: cloudLabelX,                    y: cloudLabelY },
             pvLabel:           { x: pvX,                            y: pvY         },
             batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
             batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
             ringEdge:          { x: ringEdgeX,                      y: ringEdgeY   },
-            home:              { x: home.x,                         y: home.y      }
+            home:              { x: home.x,                         y: home.y      },
+            homeAnchorPoints:  anchorPts.join(' '),
         };
     }
 

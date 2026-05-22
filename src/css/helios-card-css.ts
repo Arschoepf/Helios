@@ -1379,24 +1379,61 @@ export const heliosCardStyles = css`
         position: absolute;
         top: 0;
         bottom: 0;
-        transform: translateX(-50%);
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 5px;
         padding: 0 4px;
+        box-sizing: border-box;
         color: #000000;
-        font-size: 11px;
-        font-weight: 600;
         line-height: 1.2;
         letter-spacing: 0.2px;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: clip;
         z-index: 2;
+        /*  Each cell is its own size container; the date + kWh
+            children scale + collapse using cqw / @container queries
+            so the text adapts to whatever horizontal real-estate
+            the visible time range gives the day (a 4-day window on
+            a narrow phone leaves ~25 % of the timeline per cell;
+            a 1-day window leaves the whole strip). Falls back to
+            the static font-size + display rules below on engines
+            without container-query support.                        */
+        container-type: inline-size;
+        container-name: tb-day-strip-cell;
     }
 
+    /*  Default + light-theme look. Both the date and the kWh
+        scale down with the cell width via cqw (1 % of container
+        inline size) clamped to a readable [8, 11] px range. Font
+        weight is intentionally NOT set here so it inherits from
+        the cell (which gets is-today bumped to 800) and from the
+        per-element overrides further down (.tb-day-strip-kwh
+        keeps its lighter 500 weight + opacity recipe).            */
+    .tb-day-strip-date,
+    .tb-day-strip-kwh
+    {
+        font-size: clamp(8px, 11cqw, 11px);
+    }
+
+    .tb-day-strip-cell
+    {
+        font-weight: 600;
+    }
     .tb-day-strip-cell.is-today
     {
         font-weight: 800;
+    }
+
+    /*  Below ~90 px of cell width the date + kWh start eating
+        each other; drop the kWh first (the date is the primary
+        anchor), and below ~60 px hide the dot separator too.
+        Container queries inside the same cell.                    */
+    @container tb-day-strip-cell (max-width: 90px)
+    {
+        .tb-day-strip-kwh { display: none; }
     }
 
     /*  Vertical separator at each between-day boundary. 1 px ink
@@ -2031,6 +2068,27 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.95;
     }
 
+    /*  PV home-anchor disc, drawn as a polygon projected through
+        the map's perspective so it sits flat on the ground around
+        the home (an ellipse aplated by the camera pitch + rotated
+        by the camera bearing). The translate-to-home transform
+        lives on the wrapping <g>; the polygon points themselves
+        are coordinates relative to (0, 0), which lets the pulse
+        animation scale the polygon around the home centre by
+        simply scaling the group around its local origin.            */
+    .pv-home-leader-anchor       { transform-origin: 0 0; }
+    .pv-home-leader-anchor-disc  { transform-origin: 0 0; }
+    .pv-home-leader-anchor.is-pulsing .pv-home-leader-anchor-disc
+    {
+        animation: pv-home-anchor-pulse var(--pv-flow-duration, 2s) ease-in-out infinite;
+    }
+    @keyframes pv-home-anchor-pulse
+    {
+        0%, 80% { transform: scale(1); }
+        92%     { transform: scale(1.55); }
+        100%    { transform: scale(1); }
+    }
+
 
     /*  Battery leaders.
         Both SoC ↔ PV and PV ↔ Power share the exact same visual
@@ -2192,11 +2250,20 @@ export const heliosCardStyles = css`
     /*  Below-horizon segments, round dots at fixed spacing so the
         eye reads "this is happening underground" without colour or
         depth scaling having to carry the signal. dasharray "0 N"
-        with linecap round renders true circles on every browser. */
+        with linecap round renders true circles on every browser.
+        Stroke alpha is halved relative to the above-horizon arc
+        so the dotted leg recedes visually: the user reads the
+        bright arc as "the part of the day where there's sunlight"
+        and the dotted leg as ambient context underneath.            */
     .solar-svg .solar-arc-night
     {
         stroke-linecap: round;
         stroke-dasharray: 0 8;
+        stroke-opacity: 0.45;
+    }
+    .solar-svg .solar-arc-night.solar-arc-outline
+    {
+        stroke-opacity: 0.25;
     }
 
     /*  Incidence ray, dashes flow from the sun toward the home at
@@ -2326,7 +2393,7 @@ export const heliosCardStyles = css`
         they get the same dark override. */
     ha-card.theme-dark .clock,
     ha-card.theme-dark .tl-live-btn,
-    ha-card.theme-dark .tb-day-label,
+    ha-card.theme-dark .tb-day-strip,
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label,
     ha-card.theme-dark .map-btn:not(.map-btn-on),
@@ -2346,10 +2413,17 @@ export const heliosCardStyles = css`
         border-color: rgba(255, 255, 255, 0.20);
     }
 
-    ha-card.theme-dark .tb-day-label
+    /*  Day-strip dark-mode tweaks: text inside the cells switches
+        to the same pale ink the rest of the dark chips use, and
+        the vertical separators between days take the same border
+        alpha as the chip frame so the strip reads as one cohesive
+        component in either theme.                                 */
+    ha-card.theme-dark .tb-day-strip
     {
         background: #1f2021;
     }
+    ha-card.theme-dark .tb-day-strip-cell { color: #e6e6e6; }
+    ha-card.theme-dark .tb-day-strip-sep  { background: rgba(255, 255, 255, 0.20); }
 
     ha-card.theme-dark .tl-live-btn ha-icon,
     ha-card.theme-dark .cloud-pct-label ha-icon,
