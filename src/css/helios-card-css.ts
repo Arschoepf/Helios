@@ -1311,36 +1311,25 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        /*  Sized to mirror the .clock chip on the opposite rail
-            (~80 px wide with the default "mm-dd HH:MM" content, at
-            12 px / weight 600). justify-content: center balances the
-            icon + label inside that fixed width so the toggle reads
-            as a symmetric counterweight to the date chip.            */
-        min-width: 80px;
+        /*  Icon-only square chip on the top-right rail. The width
+            now equals the height so the cube-scan glyph sits
+            visibly centred whatever the browser's text metrics
+            quirks; the label was removed because rendering an 11 px
+            uppercase Roboto run inside an ha-card slot proved too
+            font-engine dependent (Chromium / Firefox / WebKit each
+            shifted the glyph box by a different fraction of a px
+            against the icon). The icon alone communicates the same
+            "LiDAR layer toggle" intent and stays pixel-perfect
+            across engines.                                          */
+        width:  22px;
         height: 22px;
         box-sizing: border-box;
-        /*  Padding + line-height match .clock on the opposite rail.
-            With padding 0 and line-height 1 the 11 px uppercase Roboto
-            glyphs sit flush against the chip's content edges, leaving
-            no slack for the font's natural cap-height asymmetry to
-            visually centre against the icon, the engines disagreed
-            on whether the resulting text sat a hair high or low. The
-            2 px vertical padding + 1.2 line-height give the glyph
-            box the same breathing room the date chip uses, so the
-            visible cap-height lines up with the icon's optical
-            centre on Chromium, Firefox and WebKit alike.            */
-        padding: 2px 8px;
+        padding: 0;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        line-height: 1.2;
         cursor: pointer;
         /*  Force full opacity at every state except :disabled (which
             sets its own 0.35 for the visual "not available" hint).
@@ -1365,14 +1354,13 @@ export const heliosCardStyles = css`
         position: relative;
         z-index: 50;
     }
-    /*  No bespoke .lidar-view-btn-label rule: the label inherits the
-        button's line-height + font metrics so the chip-level flex
-        centre lines it up with the icon natively, the same way the
-        .clock chip places its date + time spans without any per-
-        child override.                                              */
     .lidar-view-btn ha-icon
     {
-        --mdc-icon-size: 14px;
+        /*  The chip is icon-only now; bumping the glyph from 14 to
+            16 px fills the 22 px chip cleanly (1 px border + ~3 px
+            optical breathing room each side) and reads well even at
+            HA's smaller dashboard scales.                          */
+        --mdc-icon-size: 16px;
         display: inline-flex;
         align-items: center;
         justify-content: center;

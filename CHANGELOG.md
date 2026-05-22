@@ -5,6 +5,24 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.2-beta.2
+
+Iterative pre-release on top of v1.6.2-beta.1. Same feature set
+(thermal derating + LiDAR-aware shading on the PV forecast); the
+diff is two UI fixes on the LiDAR-View toggle.
+
+* The button is now icon-only. The `LiDAR` text label was visually
+  decentring against the icon across browsers because rendering an
+  11 px uppercase Roboto run inside an ha-card slot ends up
+  font-engine dependent (Chromium / Firefox / WebKit each shift the
+  glyph box by a different fraction of a px). Dropping the label
+  sidesteps the engine-divergence entirely.
+* Icon swapped from `mdi:dots-grid` to `mdi:cube-scan`. Communicates
+  the "3D scan / point cloud overlay" intent more directly than the
+  flat dot grid did.
+
+---
+
 ## v1.6.2-beta.1
 
 Pre-release on top of v1.6.1 that lands two precision upgrades for
