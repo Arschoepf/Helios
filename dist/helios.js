@@ -3189,18 +3189,19 @@ const heliosCardStyles = i$3`
         position: relative;
         z-index: 50;
     }
-    /*  Roboto cap glyphs at small sizes inside line-height: 1 sit
-        slightly low in the em-box once the descender slack is gone,
-        so flex-centering still leaves the visual centre of "LIDAR"
-        a hair below the chip's geometric centre against a 14 px icon
-        glyph. translateY(-1px) on the label nudges it back up into
-        true centre. The icon itself stays at the geometric centre,
-        ha-icon is a square box without ascender/descender asymmetry. */
+    /*  Centre the label by giving it the same flex semantics as the
+        icon: inline-flex + align-items center makes the browser use
+        the glyph BOX centre rather than the text baseline, which is
+        what the old translateY(-1px) was compensating for. The
+        translate worked in Chromium where Roboto sits a hair low
+        but over-corrected in Firefox and Safari (where it would
+        leave the label visibly above the icon midline). Dropping
+        the translate keeps every engine on the same anchor.        */
     .lidar-view-btn-label
     {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
         line-height: 1;
-        transform: translateY(-1px);
     }
     .lidar-view-btn ha-icon
     {
