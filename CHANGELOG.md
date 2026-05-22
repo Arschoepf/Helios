@@ -5,6 +5,34 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.7
+
+Iterative pre-release on top of v1.6.3-beta.6. Third polish round
++ a behaviour change on the forecast curves.
+
+* **Forecast curves now use the calibration ratio.** The dotted
+  forecast line on the PV chart, the per-day chip kWh totals and
+  the hover tooltip's PV value all multiply through the 5-day
+  rolling forecast calibration ratio, the same value the
+  dashboard's "refined" headline shows. The curve, the chips and
+  the dashboard number stay in lock-step instead of one of them
+  silently using the raw model.
+* **Tooltip PV is forced to zero when the sun is below the
+  horizon.** Catches stale observed samples that linger into the
+  night, inverter standby readings, and forecast bracketing pairs
+  that interpolate across sunrise / sunset.
+* **Day chips replaced by a single day strip.** One bordered bar
+  spanning the timeline width, with each day's date label centred
+  on its segment and a 1 px vertical line at every midnight
+  boundary. Same border / radius / shadow recipe as the chart
+  cards above it.
+* **Chart area fills dropped to 0.25 alpha** (was 0.5) on
+  irradiance, cloud cover and PV. Curves themselves (the stroked
+  lines) stay at full punch; only the wash under them softens.
+* **Scrub-cursor white halo removed.** The 1 px white outline
+  added in beta.6 turned out to be more distracting than helpful.
+  Scrub cursor is back to its plain 2 px blue plate.
+
 ## v1.6.3-beta.6
 
 Iterative pre-release on top of v1.6.3-beta.5. Second polish

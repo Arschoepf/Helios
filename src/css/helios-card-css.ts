@@ -1181,13 +1181,7 @@ export const heliosCardStyles = css`
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
-        /*  1 px white halo all the way down + a soft blue glow.
-            The white halo pulls the cursor off the future-mask wash
-            and the night-zone hatch underneath, so the user can
-            still see exactly where they're scrubbing even when the
-            cursor sits inside a faded region. */
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.95),
-                    0 0 4px rgba(31, 111, 235, 0.4);
+        box-shadow: 0 0 4px rgba(31, 111, 235, 0.4);
     }
 
     .tb-cursor-sel::after
@@ -1362,72 +1356,79 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Day-label chip row, sits as a sibling below the chart card
-        with the same horizontal positioning so each chip stays
-        anchored to its date column. Used to overlay the chart's
-        midline; was promoted out of the chart card so the chips
-        never sit on top of the irradiance / cloud curves they're
-        labelling. The row's own height is the chip height + a
-        small breathing band, kept narrow so the timeline block
-        doesn't grow noticeably.                                    */
-    .tb-day-labels
+    /*  Day strip: a single bordered bar spanning the full timeline
+        width, with one centred label per visible day and a 1 px
+        vertical separator at every midnight boundary between two
+        adjacent days. Same border + radius + shadow recipe as the
+        chart cards above so the timeline stack reads as one
+        composed instrument.                                        */
+    .tb-day-strip
     {
         position: relative;
         height: 22px;
-        /*  No extra margin-top: the time-bar's flex gap (6 px)
-            already separates the chip row from the chart card,
-            and that same 6 px shows up below the row as the
-            time-bar's bottom inset, vertically centring the chip
-            row in the band under the timeline.                    */
+        background: #ffffff;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
         pointer-events: none;
     }
 
-    .tb-day-label
+    .tb-day-strip-cell
     {
         position: absolute;
         top: 0;
+        bottom: 0;
         transform: translateX(-50%);
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 2px 7px;
-        font-size:    11px;
-        font-weight:  600;
-        line-height:  1.2;
+        padding: 0 4px;
+        color: #000000;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
         letter-spacing: 0.2px;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
         z-index: 2;
     }
 
-    .tb-day-label-today
+    .tb-day-strip-cell.is-today
     {
         font-weight: 800;
     }
 
-    /*  Daily kWh total appended next to the date. Lighter weight +
-        smaller separator dot so the date stays the primary read.
-        Forecast variant (today's remainder + future days) is
-        italicised so the user can tell observation from estimate
-        at a glance, same convention the PV chip uses for predicted
-        values. */
-    .tb-day-label-kwh
+    /*  Vertical separator at each between-day boundary. 1 px ink
+        line spanning the strip's full height; no separator at the
+        outer edges since the strip's own border already closes
+        the line there.                                             */
+    .tb-day-strip-sep
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 1;
+    }
+
+    /*  Daily kWh total, sits next to the date label in the same
+        cell. Same lighter weight + opacity recipe as the previous
+        chip layout so the date stays the primary read; forecast
+        days italicise to flag "estimate, not observation".         */
+    .tb-day-strip-kwh
     {
         font-weight: 500;
         opacity: 0.75;
     }
-    .tb-day-label-kwh::before
+    .tb-day-strip-kwh::before
     {
         content: "·";
         margin-right: 4px;
         opacity: 0.5;
     }
-    .tb-day-label-kwh.is-forecast
+    .tb-day-strip-kwh.is-forecast
     {
         font-style: italic;
     }

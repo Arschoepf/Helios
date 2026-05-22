@@ -25,6 +25,7 @@ import
 import { timelineConsumptionEnabled } from './timeline';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
+import { computeForecastCalibration } from './calibration';
 
 
 //Binary-search the sun's altitude=0 crossing inside [dayStart, dayEnd]
@@ -250,6 +251,23 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
                          : duLow === 'mw' ? 1 / 1_000_000
                          : 1;
 
+    //Hard zero when the sun is below the horizon at the cursor
+    //instant. Catches three otherwise-tricky cases at once:
+    //  - A stale observed sample (the entity didn't tick after dusk)
+    //    that interpAt clamps forward into the night.
+    //  - Forecast bracketing pairs straddling sunrise / sunset
+    //    where the linear interp between "0" and "small positive"
+    //    leaks a few watts into pre-dawn / post-dusk.
+    //  - Inverter standby readings that a power-entity reports as
+    //    0.5-2 W all night.
+    //Panels can't produce without sun, so we don't trust any source
+    //that disagrees with that physical floor.
+    const coords = getHomeCoords(host.config, host.hass);
+    if (coords && getSunPosition(new Date(targetMs), coords.lat, coords.lon).altitude <= 0)
+    {
+        return { value: 0, unit: displayUnit };
+    }
+
     //Observed history. Cumulative entities differentiate between
     //the bracketing pair (the same shape the chart uses); power
     //entities linearly interpolate. Sensor noise (and net-meter
@@ -285,10 +303,13 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     }
 
     //Forecast for future hours. Reuses the per-array PV power
-    //model + thermal / shading hooks the chart already feeds.
+    //model + thermal / shading hooks the chart already feeds, plus
+    //the 5-day rolling calibration ratio so the tooltip's forecast
+    //value matches the "refined" headline number on the dashboard.
     const series = host._chartSeries;
-    const coords = getHomeCoords(host.config, host.hass);
     const k      = pvCalibK(host.config);
+    const cal    = computeForecastCalibration(host);
+    const calR   = cal ? cal.ratio : 1;
     if (k !== null && series && coords && series.times.length >= 2)
     {
         const raster = host._engine?.getLidarRaster() ?? null;
@@ -302,12 +323,12 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
                 airTempC: series.temperature[i - 1],
                 windMs:   series.windSpeed[i - 1],
                 raster,
-            }) * k;
+            }) * k * calR;
             const w1 = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, series.cloud[i] ?? 0, {
                 airTempC: series.temperature[i],
                 windMs:   series.windSpeed[i],
                 raster,
-            }) * k;
+            }) * k * calR;
             const dt = t1 - t0;
             if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit };
             const w  = w0 + (w1 - w0) * (targetMs - t0) / dt;
@@ -633,12 +654,12 @@ export function renderChart(host: ChartHost): TemplateResult
             <path
                 d="${cloudArea}"
                 fill="${cloudColor}"
-                fill-opacity="0.5"
+                fill-opacity="0.25"
             ></path>
             <path
                 d="${irrArea}"
                 fill="${sunColor}"
-                fill-opacity="0.5"
+                fill-opacity="0.25"
             ></path>
             <path
                 class="hc-chart-line"
@@ -856,6 +877,13 @@ export function renderPvChart(host: ChartHost): TemplateResult
     const lat = coords?.lat;
     const lon = coords?.lon;
     const series = host._chartSeries;
+    //Apply the same 5-day rolling forecast calibration the dashboard
+    //already shows in its "refined" headline, so the dotted forecast
+    //curve below matches the number the user sees on the dash. Null
+    //(less than 2 valid past days) leaves the ratio at 1 and the
+    //curve is the raw model output.
+    const cal     = computeForecastCalibration(host);
+    const calR    = cal ? cal.ratio : 1;
     const predictedSamples: Array<{ t: Date; v: number }> = [];
     if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
     {
@@ -873,7 +901,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
                 raster,
             });
             if (pct <= 0) continue;
-            predictedSamples.push({ t: series.times[i], v: pct * k * nativeFromW });
+            predictedSamples.push({ t: series.times[i], v: pct * k * calR * nativeFromW });
         }
     }
 
@@ -970,7 +998,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
                 <path
                     d="${area}"
                     fill="${pvColor}"
-                    fill-opacity="0.5"
+                    fill-opacity="0.25"
                 ></path>
                 <path
                     class="hc-chart-line"
@@ -1068,7 +1096,15 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
         ? computeDailyKwhTotals(host)
         : new Map<number, number>();
 
-    const labels: TemplateResult[] = [];
+    //Build the per-day cells + the vertical separators between
+    //them. Cells use absolute positioning over the strip so each
+    //label sits at the geometric centre of its day's segment, even
+    //when the first or last day is only partially visible. The
+    //separator list collects the right edge of each day except the
+    //last (no separator at the strip's outer right edge).
+    type Cell = { isToday: boolean; centrePct: number; label: string; kwhText: string; isForecast: boolean };
+    const cells: Cell[] = [];
+    const sepPcts: number[] = [];
     const cursor = new Date(start);
     cursor.setHours(0, 0, 0, 0);
 
@@ -1089,36 +1125,53 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
             const isToday  = dayDelta === 0;
 
             const label    = formatDate(cursor, host.config?.['date-format']);
-            const centre   = pStart + w / 2;
-            const labelPct = Math.min(Math.max(centre, 6), 94);
 
             const kwh   = dailyKwh.get(cursor.getTime());
             //Forecast days (future + today's not-yet-produced
-            //share) are flagged so the chip styling can hint
-            //"this is an estimate" with a touch of italic. Past
-            //days are always concrete.
+            //share) are flagged so the cell can render the kWh
+            //in italic. Past days stay concrete.
             const isForecast = kwh !== undefined && cursor.getTime() > today0.getTime();
             const kwhText = (kwh !== undefined && isFinite(kwh) && kwh >= 0.05)
                 ? formatLocalisedNumber(host.hass, kwh, 1) + ' kWh'
                 : '';
 
-            labels.push(html`
-                <div
-                    class="tb-day-label ${isToday ? 'tb-day-label-today' : ''}"
-                    style="left:${labelPct}%"
-                >
-                    <span class="tb-day-label-date">${label}</span>
-                    ${kwhText ? html`
-                        <span class="tb-day-label-kwh ${isForecast ? 'is-forecast' : ''}">${kwhText}</span>
-                    ` : nothing}
-                </div>
-            `);
+            cells.push({
+                isToday,
+                centrePct: pStart + w / 2,
+                label,
+                kwhText,
+                isForecast,
+            });
+            //Right edge of the day; becomes a separator unless
+            //this day is the last one visible. We record it
+            //unconditionally and trim after the loop.
+            sepPcts.push(pEnd);
         }
 
         cursor.setTime(next.getTime());
     }
+    //The final entry is the right edge of the strip (not a
+    //between-day boundary), drop it.
+    if (sepPcts.length > 0) sepPcts.pop();
 
-    return html`<div class="tb-day-labels">${labels}</div>`;
+    return html`
+        <div class="tb-day-strip">
+            ${cells.map(c => html`
+                <div
+                    class="tb-day-strip-cell ${c.isToday ? 'is-today' : ''}"
+                    style="left:${c.centrePct.toFixed(2)}%"
+                >
+                    <span class="tb-day-strip-date">${c.label}</span>
+                    ${c.kwhText ? html`
+                        <span class="tb-day-strip-kwh ${c.isForecast ? 'is-forecast' : ''}">${c.kwhText}</span>
+                    ` : nothing}
+                </div>
+            `)}
+            ${sepPcts.map(p => html`
+                <div class="tb-day-strip-sep" style="left:${p.toFixed(2)}%"></div>
+            `)}
+        </div>
+    `;
 }
 
 
@@ -1201,10 +1254,15 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
 
     //Pass 2: future + today-remainder from the forecast model.
     //Skipped silently when peak power is unset (no model, no
-    //forecast, only past observation contributes).
+    //forecast, only past observation contributes). Forecast kWh
+    //is multiplied by the 5-day rolling calibration ratio so the
+    //per-day chips match the "refined" dashboard headline + the
+    //dotted forecast curve next to them.
     const k        = pvCalibK(host.config);   //W per percent of STC
     const series   = host._chartSeries;
     const coords   = getHomeCoords(host.config, host.hass);
+    const cal      = computeForecastCalibration(host);
+    const calR     = cal ? cal.ratio : 1;
     if (k !== null && k > 0 && series && coords)
     {
         //Index hourly forecast samples by hour-floor ms so we
@@ -1227,7 +1285,7 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
             if (pct <= 0) continue;
             //pct × k = watts at this hour midpoint × 1h = Wh.
             //Divide by 1000 to land in kWh.
-            const kwh = (pct * k) / 1000;
+            const kwh = (pct * k * calR) / 1000;
             const dk = dayKey(tMs);
             out.set(dk, (out.get(dk) ?? 0) + kwh);
         }

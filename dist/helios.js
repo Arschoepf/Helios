@@ -3031,13 +3031,7 @@ const heliosCardStyles = i$3`
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
-        /*  1 px white halo all the way down + a soft blue glow.
-            The white halo pulls the cursor off the future-mask wash
-            and the night-zone hatch underneath, so the user can
-            still see exactly where they're scrubbing even when the
-            cursor sits inside a faded region. */
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.95),
-                    0 0 4px rgba(31, 111, 235, 0.4);
+        box-shadow: 0 0 4px rgba(31, 111, 235, 0.4);
     }
 
     .tb-cursor-sel::after
@@ -3212,72 +3206,79 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Day-label chip row, sits as a sibling below the chart card
-        with the same horizontal positioning so each chip stays
-        anchored to its date column. Used to overlay the chart's
-        midline; was promoted out of the chart card so the chips
-        never sit on top of the irradiance / cloud curves they're
-        labelling. The row's own height is the chip height + a
-        small breathing band, kept narrow so the timeline block
-        doesn't grow noticeably.                                    */
-    .tb-day-labels
+    /*  Day strip: a single bordered bar spanning the full timeline
+        width, with one centred label per visible day and a 1 px
+        vertical separator at every midnight boundary between two
+        adjacent days. Same border + radius + shadow recipe as the
+        chart cards above so the timeline stack reads as one
+        composed instrument.                                        */
+    .tb-day-strip
     {
         position: relative;
         height: 22px;
-        /*  No extra margin-top: the time-bar's flex gap (6 px)
-            already separates the chip row from the chart card,
-            and that same 6 px shows up below the row as the
-            time-bar's bottom inset, vertically centring the chip
-            row in the band under the timeline.                    */
+        background: #ffffff;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
         pointer-events: none;
     }
 
-    .tb-day-label
+    .tb-day-strip-cell
     {
         position: absolute;
         top: 0;
+        bottom: 0;
         transform: translateX(-50%);
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 2px 7px;
-        font-size:    11px;
-        font-weight:  600;
-        line-height:  1.2;
+        padding: 0 4px;
+        color: #000000;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
         letter-spacing: 0.2px;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
         z-index: 2;
     }
 
-    .tb-day-label-today
+    .tb-day-strip-cell.is-today
     {
         font-weight: 800;
     }
 
-    /*  Daily kWh total appended next to the date. Lighter weight +
-        smaller separator dot so the date stays the primary read.
-        Forecast variant (today's remainder + future days) is
-        italicised so the user can tell observation from estimate
-        at a glance, same convention the PV chip uses for predicted
-        values. */
-    .tb-day-label-kwh
+    /*  Vertical separator at each between-day boundary. 1 px ink
+        line spanning the strip's full height; no separator at the
+        outer edges since the strip's own border already closes
+        the line there.                                             */
+    .tb-day-strip-sep
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 1;
+    }
+
+    /*  Daily kWh total, sits next to the date label in the same
+        cell. Same lighter weight + opacity recipe as the previous
+        chip layout so the date stays the primary read; forecast
+        days italicise to flag "estimate, not observation".         */
+    .tb-day-strip-kwh
     {
         font-weight: 500;
         opacity: 0.75;
     }
-    .tb-day-label-kwh::before
+    .tb-day-strip-kwh::before
     {
         content: "·";
         margin-right: 4px;
         opacity: 0.5;
     }
-    .tb-day-label-kwh.is-forecast
+    .tb-day-strip-kwh.is-forecast
     {
         font-style: italic;
     }
@@ -38294,6 +38295,88 @@ function wireEngineCallbacks(host) {
     host._shadowBusy = false;
   };
 }
+const WINDOW_DAYS = 5;
+const RATIO_MIN = 0.5;
+const RATIO_MAX = 1.5;
+const MIN_DAY_PREDICTED_KWH = 2;
+function computeForecastCalibration(host) {
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const hist = host._pvHistory;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 === null || k2 <= 0 || !series || !hist || !coords) return null;
+  const HOUR_MS = 36e5;
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const ratios = [];
+  const raster = host._engine?.getLidarRaster() ?? null;
+  for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++) {
+    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
+    const dayEndMs = dayStartMs + 24 * HOUR_MS;
+    const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
+    if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
+    const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
+    if (actualKwh <= 0) continue;
+    const r2 = actualKwh / predictedKwh;
+    if (!isFinite(r2) || r2 <= 0) continue;
+    ratios.push(Math.max(RATIO_MIN, Math.min(RATIO_MAX, r2)));
+  }
+  if (ratios.length < 2) return null;
+  const mean = ratios.reduce((a2, b2) => a2 + b2, 0) / ratios.length;
+  return {
+    ratio: Math.max(RATIO_MIN, Math.min(RATIO_MAX, mean)),
+    daysUsed: ratios.length
+  };
+}
+function predictedKwhForDay(config, series, coords, startMs, endMs, raster) {
+  const k2 = pvCalibK(config);
+  if (k2 === null || k2 <= 0) return 0;
+  let kwh = 0;
+  for (let i2 = 0; i2 < series.times.length; i2++) {
+    const tMs = series.times[i2].getTime();
+    if (tMs < startMs || tMs >= endMs) continue;
+    const cloud = series.cloud[i2] ?? 0;
+    const pct = computePvPowerWeighted(config, series.times[i2], coords.lat, coords.lon, cloud, {
+      airTempC: series.temperature?.[i2] ?? NaN,
+      windMs: series.windSpeed?.[i2] ?? NaN,
+      raster
+    });
+    if (pct <= 0) continue;
+    kwh += pct * k2 / 1e3;
+  }
+  return kwh;
+}
+function actualKwhForDay(hist, pvUnit, startMs, endMs) {
+  if (hist.times.length < 2) return 0;
+  const unit = (pvUnit || "").toLowerCase();
+  const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
+  const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
+  const HOUR_MS = 36e5;
+  if (isCumulativeEnergy) {
+    let kwh2 = 0;
+    for (let i2 = 1; i2 < hist.times.length; i2++) {
+      const tMs = hist.times[i2].getTime();
+      if (tMs < startMs || tMs >= endMs) continue;
+      const dv = hist.values[i2] - hist.values[i2 - 1];
+      if (!isFinite(dv) || dv < 0) continue;
+      kwh2 += dv * energyFactor;
+    }
+    return kwh2;
+  }
+  let kwh = 0;
+  for (let i2 = 1; i2 < hist.times.length; i2++) {
+    const tCurrMs = hist.times[i2].getTime();
+    if (tCurrMs < startMs || tCurrMs >= endMs) continue;
+    const tPrevMs = hist.times[i2 - 1].getTime();
+    const dtH = (tCurrMs - tPrevMs) / HOUR_MS;
+    if (dtH <= 0 || dtH > 6) continue;
+    const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
+    const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
+    if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+    kwh += (wPrev + wCurr) / 2 * dtH / 1e3;
+  }
+  return kwh;
+}
 function findSunCrossing(lat, lon, dayStartMs, dayEndMs, direction) {
   const STEP_MS = 60 * 60 * 1e3;
   let prevAlt = getSunPosition(new Date(dayStartMs), lat, lon).altitude;
@@ -38421,6 +38504,10 @@ function pvValueAtTime(host, targetMs) {
   const displayUnit = isCumulative ? lu === "kwh" ? "kW" : lu === "mwh" ? "MW" : "W" : luRaw;
   const duLow = displayUnit.toLowerCase();
   const nativeFromW = duLow === "kw" ? 1 / 1e3 : duLow === "mw" ? 1 / 1e6 : 1;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (coords && getSunPosition(new Date(targetMs), coords.lat, coords.lon).altitude <= 0) {
+    return { value: 0, unit: displayUnit };
+  }
   const hist = host._pvHistory;
   if (hist && hist.times.length >= 2) {
     if (isCumulative) {
@@ -38443,8 +38530,9 @@ function pvValueAtTime(host, targetMs) {
     }
   }
   const series = host._chartSeries;
-  const coords = getHomeCoords(host.config, host.hass);
   const k2 = pvCalibK(host.config);
+  const cal = computeForecastCalibration(host);
+  const calR = cal ? cal.ratio : 1;
   if (k2 !== null && series && coords && series.times.length >= 2) {
     const raster = host._engine?.getLidarRaster() ?? null;
     for (let i2 = 1; i2 < series.times.length; i2++) {
@@ -38456,12 +38544,12 @@ function pvValueAtTime(host, targetMs) {
         airTempC: series.temperature[i2 - 1],
         windMs: series.windSpeed[i2 - 1],
         raster
-      }) * k2;
+      }) * k2 * calR;
       const w1 = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, series.cloud[i2] ?? 0, {
         airTempC: series.temperature[i2],
         windMs: series.windSpeed[i2],
         raster
-      }) * k2;
+      }) * k2 * calR;
       const dt = t1 - t0;
       if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit };
       const w2 = w0 + (w1 - w0) * (targetMs - t0) / dt;
@@ -38636,12 +38724,12 @@ function renderChart(host) {
             <path
                 d="${cloudArea}"
                 fill="${cloudColor}"
-                fill-opacity="0.5"
+                fill-opacity="0.25"
             ></path>
             <path
                 d="${irrArea}"
                 fill="${sunColor}"
-                fill-opacity="0.5"
+                fill-opacity="0.25"
             ></path>
             <path
                 class="hc-chart-line"
@@ -38778,6 +38866,8 @@ function renderPvChart(host) {
   const lat = coords?.lat;
   const lon = coords?.lon;
   const series = host._chartSeries;
+  const cal = computeForecastCalibration(host);
+  const calR = cal ? cal.ratio : 1;
   const predictedSamples = [];
   if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
     const nowMs = Date.now();
@@ -38793,7 +38883,7 @@ function renderPvChart(host) {
         raster
       });
       if (pct <= 0) continue;
-      predictedSamples.push({ t: series.times[i2], v: pct * k2 * nativeFromW });
+      predictedSamples.push({ t: series.times[i2], v: pct * k2 * calR * nativeFromW });
     }
   }
   let yMax = 1;
@@ -38862,7 +38952,7 @@ function renderPvChart(host) {
                 <path
                     d="${area}"
                     fill="${pvColor}"
-                    fill-opacity="0.5"
+                    fill-opacity="0.25"
                 ></path>
                 <path
                     class="hc-chart-line"
@@ -38924,7 +39014,8 @@ function renderTimelineDayLabels(host) {
   today0.setHours(0, 0, 0, 0);
   const showConsumption = timelineConsumptionEnabled(host.config);
   const dailyKwh = showConsumption ? computeDailyKwhTotals(host) : /* @__PURE__ */ new Map();
-  const labels = [];
+  const cells = [];
+  const sepPcts = [];
   const cursor = new Date(start);
   cursor.setHours(0, 0, 0, 0);
   while (cursor.getTime() <= end.getTime()) {
@@ -38939,26 +39030,39 @@ function renderTimelineDayLabels(host) {
       const dayDelta = Math.round((cursor.getTime() - today0.getTime()) / 864e5);
       const isToday = dayDelta === 0;
       const label = formatDate(cursor, host.config?.["date-format"]);
-      const centre = pStart + w2 / 2;
-      const labelPct = Math.min(Math.max(centre, 6), 94);
       const kwh = dailyKwh.get(cursor.getTime());
       const isForecast = kwh !== void 0 && cursor.getTime() > today0.getTime();
       const kwhText = kwh !== void 0 && isFinite(kwh) && kwh >= 0.05 ? formatLocalisedNumber(host.hass, kwh, 1) + " kWh" : "";
-      labels.push(b`
-                <div
-                    class="tb-day-label ${isToday ? "tb-day-label-today" : ""}"
-                    style="left:${labelPct}%"
-                >
-                    <span class="tb-day-label-date">${label}</span>
-                    ${kwhText ? b`
-                        <span class="tb-day-label-kwh ${isForecast ? "is-forecast" : ""}">${kwhText}</span>
-                    ` : A}
-                </div>
-            `);
+      cells.push({
+        isToday,
+        centrePct: pStart + w2 / 2,
+        label,
+        kwhText,
+        isForecast
+      });
+      sepPcts.push(pEnd);
     }
     cursor.setTime(next3.getTime());
   }
-  return b`<div class="tb-day-labels">${labels}</div>`;
+  if (sepPcts.length > 0) sepPcts.pop();
+  return b`
+        <div class="tb-day-strip">
+            ${cells.map((c2) => b`
+                <div
+                    class="tb-day-strip-cell ${c2.isToday ? "is-today" : ""}"
+                    style="left:${c2.centrePct.toFixed(2)}%"
+                >
+                    <span class="tb-day-strip-date">${c2.label}</span>
+                    ${c2.kwhText ? b`
+                        <span class="tb-day-strip-kwh ${c2.isForecast ? "is-forecast" : ""}">${c2.kwhText}</span>
+                    ` : A}
+                </div>
+            `)}
+            ${sepPcts.map((p2) => b`
+                <div class="tb-day-strip-sep" style="left:${p2.toFixed(2)}%"></div>
+            `)}
+        </div>
+    `;
 }
 function computeDailyKwhTotals(host) {
   const out = /* @__PURE__ */ new Map();
@@ -39004,6 +39108,8 @@ function computeDailyKwhTotals(host) {
   const k2 = pvCalibK(host.config);
   const series = host._chartSeries;
   const coords = getHomeCoords(host.config, host.hass);
+  const cal = computeForecastCalibration(host);
+  const calR = cal ? cal.ratio : 1;
   if (k2 !== null && k2 > 0 && series && coords) {
     const nowMs = Date.now();
     const raster = host._engine?.getLidarRaster() ?? null;
@@ -39018,94 +39124,12 @@ function computeDailyKwhTotals(host) {
         raster
       });
       if (pct <= 0) continue;
-      const kwh = pct * k2 / 1e3;
+      const kwh = pct * k2 * calR / 1e3;
       const dk = dayKey(tMs);
       out.set(dk, (out.get(dk) ?? 0) + kwh);
     }
   }
   return out;
-}
-const WINDOW_DAYS = 5;
-const RATIO_MIN = 0.5;
-const RATIO_MAX = 1.5;
-const MIN_DAY_PREDICTED_KWH = 2;
-function computeForecastCalibration(host) {
-  const k2 = pvCalibK(host.config);
-  const series = host._chartSeries;
-  const hist = host._pvHistory;
-  const coords = getHomeCoords(host.config, host.hass);
-  if (k2 === null || k2 <= 0 || !series || !hist || !coords) return null;
-  const HOUR_MS = 36e5;
-  const today0 = /* @__PURE__ */ new Date();
-  today0.setHours(0, 0, 0, 0);
-  const ratios = [];
-  const raster = host._engine?.getLidarRaster() ?? null;
-  for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++) {
-    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
-    const dayEndMs = dayStartMs + 24 * HOUR_MS;
-    const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
-    if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
-    const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
-    if (actualKwh <= 0) continue;
-    const r2 = actualKwh / predictedKwh;
-    if (!isFinite(r2) || r2 <= 0) continue;
-    ratios.push(Math.max(RATIO_MIN, Math.min(RATIO_MAX, r2)));
-  }
-  if (ratios.length < 2) return null;
-  const mean = ratios.reduce((a2, b2) => a2 + b2, 0) / ratios.length;
-  return {
-    ratio: Math.max(RATIO_MIN, Math.min(RATIO_MAX, mean)),
-    daysUsed: ratios.length
-  };
-}
-function predictedKwhForDay(config, series, coords, startMs, endMs, raster) {
-  const k2 = pvCalibK(config);
-  if (k2 === null || k2 <= 0) return 0;
-  let kwh = 0;
-  for (let i2 = 0; i2 < series.times.length; i2++) {
-    const tMs = series.times[i2].getTime();
-    if (tMs < startMs || tMs >= endMs) continue;
-    const cloud = series.cloud[i2] ?? 0;
-    const pct = computePvPowerWeighted(config, series.times[i2], coords.lat, coords.lon, cloud, {
-      airTempC: series.temperature?.[i2] ?? NaN,
-      windMs: series.windSpeed?.[i2] ?? NaN,
-      raster
-    });
-    if (pct <= 0) continue;
-    kwh += pct * k2 / 1e3;
-  }
-  return kwh;
-}
-function actualKwhForDay(hist, pvUnit, startMs, endMs) {
-  if (hist.times.length < 2) return 0;
-  const unit = (pvUnit || "").toLowerCase();
-  const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
-  const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
-  const HOUR_MS = 36e5;
-  if (isCumulativeEnergy) {
-    let kwh2 = 0;
-    for (let i2 = 1; i2 < hist.times.length; i2++) {
-      const tMs = hist.times[i2].getTime();
-      if (tMs < startMs || tMs >= endMs) continue;
-      const dv = hist.values[i2] - hist.values[i2 - 1];
-      if (!isFinite(dv) || dv < 0) continue;
-      kwh2 += dv * energyFactor;
-    }
-    return kwh2;
-  }
-  let kwh = 0;
-  for (let i2 = 1; i2 < hist.times.length; i2++) {
-    const tCurrMs = hist.times[i2].getTime();
-    if (tCurrMs < startMs || tCurrMs >= endMs) continue;
-    const tPrevMs = hist.times[i2 - 1].getTime();
-    const dtH = (tCurrMs - tPrevMs) / HOUR_MS;
-    if (dtH <= 0 || dtH > 6) continue;
-    const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
-    const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
-    if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
-    kwh += (wPrev + wCurr) / 2 * dtH / 1e3;
-  }
-  return kwh;
 }
 function renderDashboard(host) {
   const t2 = pickTranslations(host.hass?.language);
@@ -41716,7 +41740,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.6"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.7"}`,
       labelStyle,
       versionStyle
     );
@@ -41740,7 +41764,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.6",
+        version: "1.6.3-beta.7",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41748,7 +41772,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.6"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.7"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
