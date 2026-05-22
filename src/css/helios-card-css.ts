@@ -1311,26 +1311,28 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        /*  Sized to mirror the .clock chip on the opposite rail
-            (~80 px wide with the default "mm-dd HH:MM" content, at
-            12 px / weight 600). justify-content: center balances the
-            icon + label inside that fixed width so the toggle reads
-            as a symmetric counterweight to the date chip.            */
-        min-width: 80px;
+        /*  Text-only "LiDAR" chip on the top-right rail. Layout
+            mirrors the .clock chip on the opposite rail exactly
+            (12 px Roboto 600, line-height 1.2, padding 2px 8px,
+            22 px tall) since that recipe centres consistently on
+            Chromium, Firefox and WebKit. Mixed-case "LiDAR" (no
+            text-transform) keeps the lowercase 'i' as an ascender
+            and the rest as cap-height + x-height letters, so the
+            baseline metrics are unambiguous, no engine-dependent
+            uppercase asymmetry to fight.                          */
         height: 22px;
         box-sizing: border-box;
-        padding: 0 8px;
+        padding: 2px 8px;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        font-size: 11px;
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size:   12px;
         font-weight: 600;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        line-height: 1;
+        line-height: 1.2;
+        white-space: nowrap;
         cursor: pointer;
         /*  Force full opacity at every state except :disabled (which
             sets its own 0.35 for the visual "not available" hint).
@@ -1354,27 +1356,6 @@ export const heliosCardStyles = css`
         pointer-events: auto;
         position: relative;
         z-index: 50;
-    }
-    /*  Roboto cap glyphs at small sizes inside line-height: 1 sit
-        slightly low in the em-box once the descender slack is gone,
-        so flex-centering still leaves the visual centre of "LIDAR"
-        a hair below the chip's geometric centre against a 14 px icon
-        glyph. translateY(-1px) on the label nudges it back up into
-        true centre. The icon itself stays at the geometric centre,
-        ha-icon is a square box without ascender/descender asymmetry. */
-    .lidar-view-btn-label
-    {
-        display: inline-block;
-        line-height: 1;
-        transform: translateY(-1px);
-    }
-    .lidar-view-btn ha-icon
-    {
-        --mdc-icon-size: 14px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
     }
     .lidar-view-btn:disabled
     {

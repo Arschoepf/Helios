@@ -15,7 +15,11 @@ scratch.
 ## Why these tools exist
 
 Helios renders realistic ground shadows from buildings and vegetation
-when LiDAR data is available for the home's location. The five built-in
+when LiDAR data is available for the home's location, AND uses the same
+nDSM to ray-march each PV array against the surrounding terrain so the
+forecast zeroes the direct-beam component on arrays the sun no longer
+reaches (a tree to the west at 18 h, a tall neighbour to the south at
+noon, a hill that drops the sun an hour early). The five built-in
 providers fetch national open data directly. For everywhere else, the
 BYO local nDSM provider lets users supply their own raster, as long as
 it matches the format the pipeline expects: a Float32 GeoTIFF where

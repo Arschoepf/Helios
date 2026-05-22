@@ -207,12 +207,17 @@ export function computeTodayHourly(host: DashboardHost): {
     const coords = getHomeCoords(host.config, host.hass);
     if (k !== null && k > 0 && series && coords)
     {
+        const raster = host._engine?.getLidarRaster() ?? null;
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
             if (tMs < startMs || tMs >= endMs) continue;
             const cloud = series.cloud[i] ?? 0;
-            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud);
+            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
+                airTempC: series.temperature[i],
+                windMs:   series.windSpeed[i],
+                raster,
+            });
             if (pct < 0) continue;
             const watts = pct * k;
             const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
@@ -411,13 +416,18 @@ export function computeTodayCumulative(host: DashboardHost): {
     const coords = getHomeCoords(host.config, host.hass);
     if (k !== null && k > 0 && series && coords)
     {
+        const raster = host._engine?.getLidarRaster() ?? null;
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
             if (tMs < startMs || tMs >= endMs) continue;
             const binEnd = Math.floor(tMs / HOUR_MS) * HOUR_MS + HOUR_MS;
             const cloud  = series.cloud[i] ?? 0;
-            const pct    = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud);
+            const pct    = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
+                airTempC: series.temperature[i],
+                windMs:   series.windSpeed[i],
+                raster,
+            });
             if (pct < 0) continue;
             predictedKwh += (pct * k) / 1000;
             predictedSamples.push({ tMs: binEnd, kwh: predictedKwh });
@@ -882,12 +892,17 @@ export function computeTomorrow(host: DashboardHost): {
 
     if (series && coords)
     {
+        const raster = host._engine?.getLidarRaster() ?? null;
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
             if (tMs < tomorrowMs || tMs >= endMs) continue;
             const cloud = series.cloud[i] ?? 0;
-            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud);
+            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
+                airTempC: series.temperature[i],
+                windMs:   series.windSpeed[i],
+                raster,
+            });
             if (pct > 0 && k !== null)
             {
                 const watts = pct * k;

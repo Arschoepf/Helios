@@ -159,7 +159,9 @@ Helios/
 │   │   ├── format.ts                    cfgHex, formatDate, locale-aware number, hex math
 │   │   └── editor.ts                    <helios-card-editor> + <helios-color-picker>
 │   ├── engine/                          Engine subsystems extracted from helios-engine.ts
-│   │   ├── sun.ts                       Solar position + Haurwitz / Kasten-Czeplak math
+│   │   ├── sun.ts                       Solar position + Haurwitz / Kasten-Czeplak / Liu-Jordan math
+│   │   ├── pv-thermal.ts                Sandia NOCT cell-temp + temp-coefficient derating
+│   │   ├── pv-shading.ts                nDSM raycast for per-array LiDAR-aware PV shading
 │   │   ├── weather.ts                   Open-Meteo multi-model fetch + cache + back-off
 │   │   ├── buildings.ts                 OpenFreeMap planet tile fetch + radius / cluster filter
 │   │   ├── shadows.ts                   Ground-projected shadow polygons (flat-opacity)
@@ -312,8 +314,9 @@ diagnostic snapshot.
   pipeline orchestration, the screen-space projections, the
   per-array PV markers, and the public API consumed by the card
   (`onWeatherUpdate`, `projectSunScene`, `setSelectedTime`,
-  `getTimelineSeries`, `setLidarViewActive`, `resetDataCache`,
-  etc.). Delegates focused subsystems to `engine/*` modules.
+  `getTimelineSeries`, `getLidarRaster`, `getAmbientSeries`,
+  `setLidarViewActive`, `resetDataCache`, etc.). Delegates focused
+  subsystems to `engine/*` modules.
 * **`helios-config.ts`**, `HeliosConfig` interface (every editor
   / YAML option) + `DEFAULT_*` constants. Imported by both the
   card and the engine so neither owns the schema.
@@ -397,9 +400,24 @@ diagnostic snapshot.
 
 * **`engine/sun.ts`**, `getSunPosition`, `computePvPower`,
   `computeIrradianceWm2` and the supporting Haurwitz / Kasten-
-  Czeplak / Liu-Jordan math. Pure functions; no DOM, no map.
-  Shared between the engine (live + forecast) and the card's PV
-  forecast renderer.
+  Czeplak / Liu-Jordan math. `computePvPower` also accepts a
+  `PvComputeContext` carrying optional `airTempC` + `windMs` +
+  `shading`, which it forwards to `pv-thermal.ts` for cell-temp
+  derating and to the caller for direct-beam zeroing on shaded
+  arrays. Pure functions; no DOM, no map. Shared between the
+  engine (live + forecast) and the card's PV forecast renderer.
+* **`engine/pv-thermal.ts`**, Sandia NOCT cell-temperature model
+  + linear temperature-coefficient derating. `cellTemperatureC()`
+  estimates the cell temp from air temperature, plane-of-array
+  irradiance and wind speed; `thermalDerating()` returns the
+  multiplicative output factor at the resulting cell temp
+  (γ_pmp = −0.0040 /°C by default). Both pure functions.
+* **`engine/pv-shading.ts`**, per-array LiDAR-aware shading check.
+  `sampleNdsmAt()` bilinear-samples the loaded nDSM raster at
+  arbitrary lon/lat; `isPanelShaded()` ray-marches from a panel
+  position along the sun direction (2 m step, 200 m reach) and
+  returns true the first time the ground height exceeds the sun
+  ray's altitude. Pure functions.
 * **`engine/weather.ts`**, `fetchHomePointData` and friends:
   multi-model Open-Meteo fetch with median fusion, regional
   model selection, in-browser cache, 429 back-off schedule, plus
@@ -407,7 +425,10 @@ diagnostic snapshot.
   fetch covers 7 past days + today + 2 forecast days; the
   timeline UI itself clips to the last 2 past days for scrub
   precision, the extra payload feeds the forecast calibration.
-  No DOM, no map.
+  Hourly variables include `shortwave_radiation_instant`, the
+  three split cloud layers, `weather_code`, and the
+  `temperature_2m` + `wind_speed_10m` pair that feeds the PV
+  thermal-derating model. No DOM, no map.
 * **`engine/buildings.ts`**, OpenFreeMap planet vector-tile fetch
   around the home (snapshot URL resolved once via the `/planet`
   TileJSON, cached for the page lifetime). Decodes tiles with

@@ -9,8 +9,16 @@
 //re-render exactly as the inline version did.
 
 import type { HeliosConfig } from '../helios-config';
-import { computePvPower, type PanelOrientation } from '../engine/sun';
+import { computePvPower, getSunPosition, type PanelOrientation } from '../engine/sun';
+import { isPanelShaded, type NdsmRaster } from '../engine/pv-shading';
 import { formatLocalisedNumber } from './format';
+
+//Default panel height above ground in metres when the user didn't
+//set a per-array `height`. 5 m matches the eaves of a single-storey
+//French house; close enough for the LiDAR raycast since the
+//surrounding obstacles (trees, neighbouring roofs) are usually
+//much taller than this fudge factor's residual error.
+const DEFAULT_PANEL_HEIGHT_M = 5;
 
 
 //Time + value pair stored in the rolling live-sample buffer used to
@@ -694,11 +702,17 @@ export function pvArrays(
     //blank for this entry. Callers fall back to the home coords
     //when null so existing configs keep working unchanged.
     coords:       ({ lat: number; lon: number } | null)[];
+    //Per-array height above ground in metres. Used by the LiDAR
+    //raycast shading check: a panel high on a south-facing roof
+    //clears a low garden fence that a ground-mounted array of
+    //the same orientation would sit in the shadow of.
+    heightsM:     number[];
 }
 {
     const out: PanelOrientation[] = [];
     const sh:  number[]           = [];
     const co:  ({ lat: number; lon: number } | null)[] = [];
+    const he:  number[]           = [];
 
     //Parse a single coord value (lat or lon) from the editor's
     //free-form input. Empty / non-numeric / out-of-range values
@@ -763,12 +777,21 @@ export function pvArrays(
                 ? { lat: arrayLat, lon: arrayLon }
                 : null;
 
+            const rawHeight = e['height'];
+            const heightRaw = typeof rawHeight === 'number'
+                ? rawHeight
+                : parseFloat(String(rawHeight ?? ''));
+            const heightM = isFinite(heightRaw) && heightRaw >= 0
+                ? Math.min(60, heightRaw)
+                : DEFAULT_PANEL_HEIGHT_M;
+
             out.push({
                 tiltDeg:    Math.max(0, Math.min(90, tilt)),
                 azimuthDeg: azDeg
             });
             sh.push(share);
             co.push(coords);
+            he.push(heightM);
         }
 
         //Fill blank shares with the average of the explicit ones (or
@@ -799,6 +822,7 @@ export function pvArrays(
             });
             sh.push(1);
             co.push(null);
+            he.push(DEFAULT_PANEL_HEIGHT_M);
         }
     }
 
@@ -811,7 +835,23 @@ export function pvArrays(
         for (let i = 0; i < sh.length; i++) sh[i] /= total;
     }
 
-    return { orientations: out, shares: sh, coords: co };
+    return { orientations: out, shares: sh, coords: co, heightsM: he };
+}
+
+
+//Live context the caller can hand to computePvPowerWeighted to
+//refine the prediction. Every field is optional, omitting them
+//returns the legacy Haurwitz + Liu-Jordan output untouched.
+//  airTempC + windMs , feed the Sandia-style cell temperature model
+//    in pv-thermal.ts, which derates the PV output for warm cells.
+//  raster , the loaded LiDAR nDSM; when set, each array is ray-
+//    tested against the local terrain and the direct beam is
+//    zeroed on shaded arrays.
+export interface PvWeightedContext
+{
+    airTempC?: number;
+    windMs?:   number;
+    raster?:   NdsmRaster | null;
 }
 
 
@@ -825,14 +865,32 @@ export function computePvPowerWeighted(
     t: Date,
     lat: number,
     lon: number,
-    cloudPct: number
+    cloudPct: number,
+    ctx?: PvWeightedContext,
 ): number
 {
-    const { orientations, shares, coords } = pvArrays(config);
+    const { orientations, shares, coords, heightsM } = pvArrays(config);
+    const baseCtx = (ctx && (isFinite(ctx.airTempC ?? NaN) || isFinite(ctx.windMs ?? NaN)))
+        ? { airTempC: ctx.airTempC, windMs: ctx.windMs }
+        : undefined;
+
     if (orientations.length === 0)
     {
-        return computePvPower(t, lat, lon, cloudPct);
+        //No declared orientation: take the horizontal-panel fast
+        //path with optional thermal context. LiDAR shading isn't
+        //meaningful at this granularity (we don't know where the
+        //panels physically are), so we skip the raycast.
+        return computePvPower(t, lat, lon, cloudPct, undefined, baseCtx);
     }
+
+    //One sun-position lookup per pass; reused for every array's
+    //shading check. getSunPosition has its own single-entry cache
+    //but the entry key is per-coords, so a multi-array install would
+    //thrash the cache otherwise.
+    const sun = ctx?.raster
+        ? getSunPosition(t, lat, lon)
+        : null;
+
     let acc = 0;
     for (let i = 0; i < orientations.length; i++)
     {
@@ -846,7 +904,22 @@ export function computePvPowerWeighted(
         //300 m of offset lands in the same cell.
         const arrayLat = coords[i]?.lat ?? lat;
         const arrayLon = coords[i]?.lon ?? lon;
-        acc += computePvPower(t, arrayLat, arrayLon, cloudPct, orientations[i]) * shares[i];
+
+        //LiDAR raycast: opaque obstacle between the panel and the
+        //sun zeros the direct beam component on this array. Diffuse
+        //+ ground still contribute, so a shaded panel doesn't drop
+        //to 0, just to ~25-30 % of its unshaded clear-sky output.
+        const shaded = (ctx?.raster && sun)
+            ? isPanelShaded(
+                ctx.raster, arrayLat, arrayLon,
+                heightsM[i] ?? DEFAULT_PANEL_HEIGHT_M,
+                sun.altitude, sun.azimuth)
+            : false;
+
+        const arrayCtx = (baseCtx || shaded)
+            ? { airTempC: baseCtx?.airTempC, windMs: baseCtx?.windMs, shading: shaded }
+            : undefined;
+        acc += computePvPower(t, arrayLat, arrayLon, cloudPct, orientations[i], arrayCtx) * shares[i];
     }
     return acc;
 }

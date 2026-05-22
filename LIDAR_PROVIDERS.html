@@ -320,7 +320,12 @@
 <p class="lede">Every public elevation / LiDAR data source I have
 inspected for <a href="https://github.com/ReikanYsora/Helios">Helios</a>,
 with status, endpoint, an example fetch URL ready to paste in a
-browser, and a worldwide map of the integrated providers' coverage.</p>
+browser, and a worldwide map of the integrated providers' coverage.
+LiDAR coverage also feeds the PV forecast: when a provider matches the
+home (or a BYO local nDSM is configured), the forecast ray-marches
+from each PV array toward the sun against the loaded nDSM and zeroes
+the direct beam on shaded arrays, keeping diffuse + ground-reflected
+contributions.</p>
 
 <!--  Status legend, same colour vocabulary as the map overlays and
       the table left-borders below.                                 -->

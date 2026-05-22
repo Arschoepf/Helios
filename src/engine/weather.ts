@@ -19,6 +19,14 @@ export interface SampleHourly
     cloudHigh:   number[];
     weatherCode: number[];
     shortwave:   number[];
+    //2-metre air temperature in °C, hourly. Used by the PV thermal
+    //derating model to estimate cell temperature alongside the
+    //irradiance term. NaN-padded when a hour is missing.
+    temperature: number[];
+    //10-metre wind speed in m/s, hourly. Same cadence as
+    //temperature; feeds the convective cooling term in the cell
+    //temperature estimate. NaN-padded when missing.
+    windSpeed:   number[];
 }
 
 
@@ -157,6 +165,8 @@ interface CachedPayload
         cloudHigh:   number[];
         weatherCode: number[];
         shortwave:   number[];
+        temperature?: number[];   //optional: older caches predate this field
+        windSpeed?:   number[];
     };
 }
 
@@ -219,7 +229,13 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             cloudMid:    p.cloudMid    ?? [],
             cloudHigh:   p.cloudHigh   ?? [],
             weatherCode: p.weatherCode ?? [],
-            shortwave:   p.shortwave   ?? []
+            shortwave:   p.shortwave   ?? [],
+            //Older caches predate the temperature + wind fetch; treat
+            //missing arrays as "no data" so the thermal derating
+            //multiplier falls back to 1 and the prediction reduces
+            //to the legacy Haurwitz output cleanly.
+            temperature: p.temperature ?? [],
+            windSpeed:   p.windSpeed   ?? [],
         };
     }
     catch
@@ -244,7 +260,9 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
                 cloudMid:    data.cloudMid,
                 cloudHigh:   data.cloudHigh,
                 weatherCode: data.weatherCode,
-                shortwave:   data.shortwave
+                shortwave:   data.shortwave,
+                temperature: data.temperature,
+                windSpeed:   data.windSpeed,
             }
         };
         window.localStorage?.setItem(cacheKey(lat, lon, precision), JSON.stringify(obj));
@@ -270,7 +288,14 @@ const HOURLY_VARS = [
     'cloud_cover_low',
     'cloud_cover_mid',
     'cloud_cover_high',
-    'weather_code'
+    'weather_code',
+    //Drive the PV thermal-derating model in pv-thermal.ts. Cell
+    //temperature climbs above STC under sun and is cooled by wind,
+    //so the engine pulls both alongside cloud + irradiance. Providers
+    //that don't return them leave the multiplier at 1, and the
+    //prediction falls back to the legacy "cool cell" assumption.
+    'temperature_2m',
+    'wind_speed_10m',
 ];
 
 //Multi-model responses suffix the variable key with the model name
@@ -323,9 +348,12 @@ function readWeatherCode(row: any, models: string[]): number[]
 }
 
 //Cloud-cover gaps clamp to 0 (treat missing as clear). Shortwave
-//uses -1 because 0 is a valid night value.
-const fillCloud     = (arr: Array<number | null>): number[] => arr.map(v => v == null ? 0  : v);
-const fillShortwave = (arr: Array<number | null>): number[] => arr.map(v => v == null ? -1 : v);
+//uses -1 because 0 is a valid night value. Temperature + wind use
+//NaN so a downstream `isFinite` check rejects the sample cleanly
+//without conflating "missing" with a real zero reading.
+const fillCloud     = (arr: Array<number | null>): number[] => arr.map(v => v == null ? 0   : v);
+const fillShortwave = (arr: Array<number | null>): number[] => arr.map(v => v == null ? -1  : v);
+const fillNaN       = (arr: Array<number | null>): number[] => arr.map(v => v == null ? NaN : v);
 
 
 //Single-point hourly forecast at the home location. Reads from the
@@ -398,7 +426,9 @@ export async function fetchHomePointData(
             cloudMid:    midSeries,
             cloudHigh:   highSeries,
             weatherCode: readWeatherCode(row, models),
-            shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models))
+            shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
+            temperature: fillNaN(readSeries(row, 'temperature_2m',  models)),
+            windSpeed:   fillNaN(readSeries(row, 'wind_speed_10m',  models)),
         };
 
         writeCache(lat, lon, precision, data);

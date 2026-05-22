@@ -477,7 +477,7 @@ class Z {
 }
 const B = t$1.litHtmlPolyfillSupport;
 B?.(S, k), (t$1.litHtmlVersions ?? (t$1.litHtmlVersions = [])).push("3.3.2");
-const D = (t2, i2, s2) => {
+const D$1 = (t2, i2, s2) => {
   const e2 = s2?.renderBefore ?? i2;
   let h2 = e2._$litPart$;
   if (void 0 === h2) {
@@ -503,7 +503,7 @@ class i extends y$1 {
   }
   update(t2) {
     const r2 = this.render();
-    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(t2), this._$Do = D(r2, this.renderRoot, this.renderOptions);
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(t2), this._$Do = D$1(r2, this.renderRoot, this.renderOptions);
   }
   connectedCallback() {
     super.connectedCallback(), this._$Do?.setConnected(true);
@@ -3145,26 +3145,28 @@ const heliosCardStyles = i$3`
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
-        /*  Sized to mirror the .clock chip on the opposite rail
-            (~80 px wide with the default "mm-dd HH:MM" content, at
-            12 px / weight 600). justify-content: center balances the
-            icon + label inside that fixed width so the toggle reads
-            as a symmetric counterweight to the date chip.            */
-        min-width: 80px;
+        /*  Text-only "LiDAR" chip on the top-right rail. Layout
+            mirrors the .clock chip on the opposite rail exactly
+            (12 px Roboto 600, line-height 1.2, padding 2px 8px,
+            22 px tall) since that recipe centres consistently on
+            Chromium, Firefox and WebKit. Mixed-case "LiDAR" (no
+            text-transform) keeps the lowercase 'i' as an ascender
+            and the rest as cap-height + x-height letters, so the
+            baseline metrics are unambiguous, no engine-dependent
+            uppercase asymmetry to fight.                          */
         height: 22px;
         box-sizing: border-box;
-        padding: 0 8px;
+        padding: 2px 8px;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        font-size: 11px;
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size:   12px;
         font-weight: 600;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        line-height: 1;
+        line-height: 1.2;
+        white-space: nowrap;
         cursor: pointer;
         /*  Force full opacity at every state except :disabled (which
             sets its own 0.35 for the visual "not available" hint).
@@ -3188,27 +3190,6 @@ const heliosCardStyles = i$3`
         pointer-events: auto;
         position: relative;
         z-index: 50;
-    }
-    /*  Roboto cap glyphs at small sizes inside line-height: 1 sit
-        slightly low in the em-box once the descender slack is gone,
-        so flex-centering still leaves the visual centre of "LIDAR"
-        a hair below the chip's geometric centre against a 14 px icon
-        glyph. translateY(-1px) on the label nudges it back up into
-        true centre. The icon itself stays at the geometric centre,
-        ha-icon is a square box without ascender/descender asymmetry. */
-    .lidar-view-btn-label
-    {
-        display: inline-block;
-        line-height: 1;
-        transform: translateY(-1px);
-    }
-    .lidar-view-btn ha-icon
-    {
-        --mdc-icon-size: 14px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
     }
     .lidar-view-btn:disabled
     {
@@ -4095,6 +4076,23 @@ function formatDate(d2, rawFormat) {
     return tok;
   });
 }
+const NOCT_CELL_C = 45;
+const NOCT_IRRADIANCE = 800;
+const NOCT_AIR_REF_C = 20;
+const WIND_COOLING_K = 1.5;
+const GAMMA_PMP_PER_C = -4e-3;
+const STC_REF_C = 25;
+function cellTemperatureC(airTempC, ghiWm2, windMs) {
+  if (!isFinite(airTempC)) return NaN;
+  const g2 = Math.max(0, ghiWm2);
+  const w2 = isFinite(windMs) ? Math.max(0, windMs) : 0;
+  return airTempC + (NOCT_CELL_C - NOCT_AIR_REF_C) / NOCT_IRRADIANCE * g2 - WIND_COOLING_K * w2;
+}
+function thermalDerating(cellTempC) {
+  if (!isFinite(cellTempC)) return 1;
+  const factor = 1 + GAMMA_PMP_PER_C * (cellTempC - STC_REF_C);
+  return Math.max(0.6, factor);
+}
 let _sunCacheKey = null;
 let _sunCacheValue = null;
 function getSunPosition(date, lat, lon) {
@@ -4123,7 +4121,7 @@ function getSunPosition(date, lat, lon) {
   _sunCacheValue = result;
   return result;
 }
-function computePvPower(date, lat, lon, cloudCoverPct, panel) {
+function computePvPower(date, lat, lon, cloudCoverPct, panel, ctx) {
   const sun = getSunPosition(date, lat, lon);
   const alt = sun.altitude;
   if (alt <= 0) return 0;
@@ -4133,21 +4131,28 @@ function computePvPower(date, lat, lon, cloudCoverPct, panel) {
   const cc = Math.max(0, Math.min(100, cloudCoverPct)) / 100;
   const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
   const ghiEff = ghiClear * kCloud;
+  let poaEff;
   if (!panel || panel.tiltDeg <= 0) {
-    return Math.max(0, Math.min(100, ghiEff / 1e3 * 100));
+    poaEff = ctx?.shading ? ghiEff * 0.25 : ghiEff;
+  } else {
+    const beta = panel.tiltDeg * D2;
+    const dAz = (sun.azimuth - panel.azimuthDeg) * D2;
+    const altR = alt * D2;
+    const cosTheta = Math.sin(altR) * Math.cos(beta) + Math.cos(altR) * Math.sin(beta) * Math.cos(dAz);
+    const directFraction = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
+    const diffuseFraction = 1 - directFraction;
+    const Rb = cosTheta > 0 ? Math.max(0, cosTheta) / Math.max(0.087, cosZ) : 0;
+    const directPoa = ctx?.shading ? 0 : ghiEff * directFraction * Rb;
+    const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
+    const groundPoa = ghiEff * 0.2 * (1 - Math.cos(beta)) / 2;
+    poaEff = directPoa + diffusePoa + groundPoa;
   }
-  const beta = panel.tiltDeg * D2;
-  const dAz = (sun.azimuth - panel.azimuthDeg) * D2;
-  const altR = alt * D2;
-  const cosTheta = Math.sin(altR) * Math.cos(beta) + Math.cos(altR) * Math.sin(beta) * Math.cos(dAz);
-  const directFraction = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
-  const diffuseFraction = 1 - directFraction;
-  const Rb = cosTheta > 0 ? Math.max(0, cosTheta) / Math.max(0.087, cosZ) : 0;
-  const directPoa = ghiEff * directFraction * Rb;
-  const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
-  const groundPoa = ghiEff * 0.2 * (1 - Math.cos(beta)) / 2;
-  const poaEff = directPoa + diffusePoa + groundPoa;
-  return Math.max(0, Math.min(100, poaEff / 1e3 * 100));
+  let pStc = Math.max(0, poaEff / 1e3);
+  if (ctx && isFinite(ctx.airTempC ?? NaN)) {
+    const tCell = cellTemperatureC(ctx.airTempC, poaEff, ctx.windMs ?? 0);
+    pStc *= thermalDerating(tCell);
+  }
+  return Math.max(0, Math.min(100, pStc * 100));
 }
 function computeIrradianceWm2(date, lat, lon, cloudCoverPct) {
   const sun = getSunPosition(date, lat, lon);
@@ -4160,6 +4165,52 @@ function computeIrradianceWm2(date, lat, lon, cloudCoverPct) {
   const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
   return Math.max(0, ghiClear * kCloud);
 }
+const D = Math.PI / 180;
+const M_PER_DEG_LAT$2 = 111320;
+function sampleNdsmAt(raster, lon, lat) {
+  if (lon <= raster.minLon || lon >= raster.maxLon) return null;
+  if (lat <= raster.minLat || lat >= raster.maxLat) return null;
+  const N2 = raster.rasterSize;
+  const u2 = (lon - raster.minLon) / (raster.maxLon - raster.minLon);
+  const v2 = (raster.maxLat - lat) / (raster.maxLat - raster.minLat);
+  const x2 = u2 * (N2 - 1);
+  const y3 = v2 * (N2 - 1);
+  const ix = Math.floor(x2);
+  const iy = Math.floor(y3);
+  if (ix < 0 || ix >= N2 - 1 || iy < 0 || iy >= N2 - 1) return null;
+  const h00 = raster.heights[iy * N2 + ix];
+  const h10 = raster.heights[iy * N2 + ix + 1];
+  const h01 = raster.heights[(iy + 1) * N2 + ix];
+  const h11 = raster.heights[(iy + 1) * N2 + ix + 1];
+  if (!isFinite(h00) || !isFinite(h10) || !isFinite(h01) || !isFinite(h11)) return null;
+  const dx = x2 - ix;
+  const dy = y3 - iy;
+  const top = h00 * (1 - dx) + h10 * dx;
+  const bot = h01 * (1 - dx) + h11 * dx;
+  return top * (1 - dy) + bot * dy;
+}
+function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg, sunAzimuthDeg, stepM = 2, maxDistM = 200) {
+  if (!raster) return false;
+  if (sunAltitudeDeg <= 0) return false;
+  const altR = sunAltitudeDeg * D;
+  const azR = sunAzimuthDeg * D;
+  const dxM = Math.sin(azR);
+  const dyM = Math.cos(azR);
+  const tanAlt = Math.tan(altR);
+  const mPerDegLon = M_PER_DEG_LAT$2 * Math.cos(panelLat * D);
+  const dLatPerM = dyM / M_PER_DEG_LAT$2;
+  const dLonPerM = dxM / mPerDegLon;
+  for (let d2 = stepM; d2 <= maxDistM; d2 += stepM) {
+    const lat = panelLat + dLatPerM * d2;
+    const lon = panelLon + dLonPerM * d2;
+    const groundHeight = sampleNdsmAt(raster, lon, lat);
+    if (groundHeight === null) continue;
+    const rayHeight = panelHeightM + d2 * tanAlt;
+    if (groundHeight > rayHeight) return true;
+  }
+  return false;
+}
+const DEFAULT_PANEL_HEIGHT_M = 5;
 const PV_CALIB_WIPE_FLAG_KEY = "helios-pv-calib:wiped-v1";
 function refreshPv(host) {
   const entity = String(host.config?.["pv-power-entity"] ?? "").trim();
@@ -4464,6 +4515,7 @@ function pvArrays(config) {
   const out = [];
   const sh = [];
   const co = [];
+  const he = [];
   const parseCoord = (v2, max) => {
     if (v2 === void 0 || v2 === null || v2 === "") return null;
     const n3 = typeof v2 === "number" ? v2 : parseFloat(String(v2));
@@ -4494,12 +4546,16 @@ function pvArrays(config) {
       const arrayLat = parseCoord(e2["latitude"], 90);
       const arrayLon = parseCoord(e2["longitude"], 180);
       const coords = arrayLat !== null && arrayLon !== null ? { lat: arrayLat, lon: arrayLon } : null;
+      const rawHeight = e2["height"];
+      const heightRaw = typeof rawHeight === "number" ? rawHeight : parseFloat(String(rawHeight ?? ""));
+      const heightM = isFinite(heightRaw) && heightRaw >= 0 ? Math.min(60, heightRaw) : DEFAULT_PANEL_HEIGHT_M;
       out.push({
         tiltDeg: Math.max(0, Math.min(90, tilt)),
         azimuthDeg: azDeg
       });
       sh.push(share);
       co.push(coords);
+      he.push(heightM);
     }
     const explicit = sh.filter((s2) => isFinite(s2));
     const fillVal = explicit.length > 0 ? explicit.reduce((a2, b2) => a2 + b2, 0) / explicit.length : 1;
@@ -4519,24 +4575,36 @@ function pvArrays(config) {
       });
       sh.push(1);
       co.push(null);
+      he.push(DEFAULT_PANEL_HEIGHT_M);
     }
   }
   const total = sh.reduce((a2, b2) => a2 + b2, 0);
   if (total > 0) {
     for (let i2 = 0; i2 < sh.length; i2++) sh[i2] /= total;
   }
-  return { orientations: out, shares: sh, coords: co };
+  return { orientations: out, shares: sh, coords: co, heightsM: he };
 }
-function computePvPowerWeighted(config, t2, lat, lon, cloudPct) {
-  const { orientations, shares, coords } = pvArrays(config);
+function computePvPowerWeighted(config, t2, lat, lon, cloudPct, ctx) {
+  const { orientations, shares, coords, heightsM } = pvArrays(config);
+  const baseCtx = ctx && (isFinite(ctx.airTempC ?? NaN) || isFinite(ctx.windMs ?? NaN)) ? { airTempC: ctx.airTempC, windMs: ctx.windMs } : void 0;
   if (orientations.length === 0) {
-    return computePvPower(t2, lat, lon, cloudPct);
+    return computePvPower(t2, lat, lon, cloudPct, void 0, baseCtx);
   }
+  const sun = ctx?.raster ? getSunPosition(t2, lat, lon) : null;
   let acc = 0;
   for (let i2 = 0; i2 < orientations.length; i2++) {
     const arrayLat = coords[i2]?.lat ?? lat;
     const arrayLon = coords[i2]?.lon ?? lon;
-    acc += computePvPower(t2, arrayLat, arrayLon, cloudPct, orientations[i2]) * shares[i2];
+    const shaded = ctx?.raster && sun ? isPanelShaded(
+      ctx.raster,
+      arrayLat,
+      arrayLon,
+      heightsM[i2] ?? DEFAULT_PANEL_HEIGHT_M,
+      sun.altitude,
+      sun.azimuth
+    ) : false;
+    const arrayCtx = baseCtx || shaded ? { airTempC: baseCtx?.airTempC, windMs: baseCtx?.windMs, shading: shaded } : void 0;
+    acc += computePvPower(t2, arrayLat, arrayLon, cloudPct, orientations[i2], arrayCtx) * shares[i2];
   }
   return acc;
 }
@@ -29068,7 +29136,13 @@ function readCache(lat, lon, precision) {
       cloudMid: p2.cloudMid ?? [],
       cloudHigh: p2.cloudHigh ?? [],
       weatherCode: p2.weatherCode ?? [],
-      shortwave: p2.shortwave ?? []
+      shortwave: p2.shortwave ?? [],
+      //Older caches predate the temperature + wind fetch; treat
+      //missing arrays as "no data" so the thermal derating
+      //multiplier falls back to 1 and the prediction reduces
+      //to the legacy Haurwitz output cleanly.
+      temperature: p2.temperature ?? [],
+      windSpeed: p2.windSpeed ?? []
     };
   } catch {
     return null;
@@ -29087,7 +29161,9 @@ function writeCache(lat, lon, precision, data) {
         cloudMid: data.cloudMid,
         cloudHigh: data.cloudHigh,
         weatherCode: data.weatherCode,
-        shortwave: data.shortwave
+        shortwave: data.shortwave,
+        temperature: data.temperature,
+        windSpeed: data.windSpeed
       }
     };
     window.localStorage?.setItem(cacheKey(lat, lon, precision), JSON.stringify(obj));
@@ -29100,7 +29176,14 @@ const HOURLY_VARS = [
   "cloud_cover_low",
   "cloud_cover_mid",
   "cloud_cover_high",
-  "weather_code"
+  "weather_code",
+  //Drive the PV thermal-derating model in pv-thermal.ts. Cell
+  //temperature climbs above STC under sun and is cooled by wind,
+  //so the engine pulls both alongside cloud + irradiance. Providers
+  //that don't return them leave the multiplier at 1, and the
+  //prediction falls back to the legacy "cool cell" assumption.
+  "temperature_2m",
+  "wind_speed_10m"
 ];
 function readSeries(row, varName, models) {
   const direct = row?.hourly?.[varName];
@@ -29136,6 +29219,7 @@ function readWeatherCode(row, models) {
 }
 const fillCloud = (arr) => arr.map((v2) => v2 == null ? 0 : v2);
 const fillShortwave = (arr) => arr.map((v2) => v2 == null ? -1 : v2);
+const fillNaN = (arr) => arr.map((v2) => v2 == null ? NaN : v2);
 async function fetchHomePointData(lat, lon, elevation, precision, signal) {
   const cached = readCache(lat, lon, precision);
   if (cached) return cached;
@@ -29168,7 +29252,9 @@ async function fetchHomePointData(lat, lon, elevation, precision, signal) {
       cloudMid: midSeries,
       cloudHigh: highSeries,
       weatherCode: readWeatherCode(row, models),
-      shortwave: fillShortwave(readSeries(row, "shortwave_radiation_instant", models))
+      shortwave: fillShortwave(readSeries(row, "shortwave_radiation_instant", models)),
+      temperature: fillNaN(readSeries(row, "temperature_2m", models)),
+      windSpeed: fillNaN(readSeries(row, "wind_speed_10m", models))
     };
     writeCache(lat, lon, precision, data);
     return data;
@@ -35895,6 +35981,8 @@ const _HeliosEngine = class _HeliosEngine {
       cloudMid: 0,
       cloudHigh: 0,
       shortwave: -1,
+      temperatureC: NaN,
+      windMs: NaN,
       cloudIntensity: "clear"
     };
     const home = this._homeHourlyData;
@@ -35911,12 +35999,16 @@ const _HeliosEngine = class _HeliosEngine {
     const cHi = home.cloudHigh[idx] ?? 0;
     const sw = home.shortwave[idx] ?? -1;
     const wc = home.weatherCode[idx] ?? 0;
+    const ta = home.temperature[idx] ?? NaN;
+    const ws = home.windSpeed[idx] ?? NaN;
     return {
       cloudCover: cc,
       cloudLow: cLow,
       cloudMid: cMid,
       cloudHigh: cHi,
       shortwave: sw,
+      temperatureC: ta,
+      windMs: ws,
       cloudIntensity: weatherCodeToIntensity(wc, cc)
     };
   }
@@ -35990,7 +36082,9 @@ const _HeliosEngine = class _HeliosEngine {
         pvPower,
         pvPowerHaurwitz,
         pvPowerShortwave,
-        irradianceSource
+        irradianceSource,
+        temperatureC: w2.temperatureC,
+        windMs: w2.windMs
       }
     );
     this._updateCloudCoverDisc(w2.cloudCover, w2.cloudLow, w2.cloudMid, w2.cloudHigh);
@@ -37404,6 +37498,29 @@ const _HeliosEngine = class _HeliosEngine {
   //
   //Returns null until the first weather fetch completes, mirroring
   //the contract of projectSunScene / projectHomeLabelLayout. The
+  //Read-only view of the currently loaded LiDAR nDSM raster.
+  //Returns the same buffer the LiDAR View overlay paints, plus
+  //its geographic bbox; the caller treats it as immutable
+  //(reading only) so we hand the live reference rather than a
+  //copy. Null when no LiDAR provider covers the home or the
+  //last fetch failed.
+  getLidarRaster() {
+    return this._lidarRaster;
+  }
+  //Hourly air temperature + wind speed series aligned with
+  //getTimelineSeries' `times` array. Both arrays may contain
+  //NaN entries where the model didn't return a value; callers
+  //skip those rather than rendering them. Null when no weather
+  //payload has landed yet.
+  getAmbientSeries() {
+    const home = this._homeHourlyData;
+    if (!home || !home.times.length) return null;
+    return {
+      times: home.times,
+      temperature: home.temperature,
+      windSpeed: home.windSpeed
+    };
+  }
   //card is expected to call this whenever onWeatherUpdate fires
   //and re-render the chart.
   getTimelineSeries() {
@@ -37427,7 +37544,9 @@ const _HeliosEngine = class _HeliosEngine {
     return {
       times: home.times.slice(),
       irradiance,
-      cloud
+      cloud,
+      temperature: home.temperature.slice(),
+      windSpeed: home.windSpeed.slice()
     };
   }
   //Snapshot of the engine's live state. Consumed by the card's own
@@ -38062,12 +38181,17 @@ function renderPvChart(host) {
   const predictedSamples = [];
   if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
     const nowMs = Date.now();
+    const raster = host._engine?.getLidarRaster() ?? null;
     for (let i2 = 0; i2 < series.times.length; i2++) {
       const tMs = series.times[i2].getTime();
       if (tMs < nowMs) continue;
       if (tMs < startMs) continue;
       if (tMs > endMsAbs) continue;
-      const pct = computePvPowerWeighted(host.config, series.times[i2], lat, lon, series.cloud[i2] ?? 0);
+      const pct = computePvPowerWeighted(host.config, series.times[i2], lat, lon, series.cloud[i2] ?? 0, {
+        airTempC: series.temperature[i2],
+        windMs: series.windSpeed[i2],
+        raster
+      });
       if (pct <= 0) continue;
       predictedSamples.push({ t: series.times[i2], v: pct * k2 * nativeFromW });
     }
@@ -38241,12 +38365,17 @@ function computeDailyKwhTotals(host) {
   const coords = getHomeCoords(host.config, host.hass);
   if (k2 !== null && k2 > 0 && series && coords) {
     const nowMs = Date.now();
+    const raster = host._engine?.getLidarRaster() ?? null;
     for (let i2 = 0; i2 < series.times.length; i2++) {
       const tMs = series.times[i2].getTime();
       if (tMs < startMs || tMs > endMsAbs) continue;
       if (tMs < nowMs) continue;
       const cloud = series.cloud[i2] ?? 0;
-      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud);
+      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud, {
+        airTempC: series.temperature[i2],
+        windMs: series.windSpeed[i2],
+        raster
+      });
       if (pct <= 0) continue;
       const kwh = pct * k2 / 1e3;
       const dk = dayKey(tMs);
@@ -38269,10 +38398,11 @@ function computeForecastCalibration(host) {
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const ratios = [];
+  const raster = host._engine?.getLidarRaster() ?? null;
   for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++) {
     const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
     const dayEndMs = dayStartMs + 24 * HOUR_MS;
-    const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs);
+    const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
     if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
     const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
     if (actualKwh <= 0) continue;
@@ -38287,7 +38417,7 @@ function computeForecastCalibration(host) {
     daysUsed: ratios.length
   };
 }
-function predictedKwhForDay(config, series, coords, startMs, endMs) {
+function predictedKwhForDay(config, series, coords, startMs, endMs, raster) {
   const k2 = pvCalibK(config);
   if (k2 === null || k2 <= 0) return 0;
   let kwh = 0;
@@ -38295,7 +38425,11 @@ function predictedKwhForDay(config, series, coords, startMs, endMs) {
     const tMs = series.times[i2].getTime();
     if (tMs < startMs || tMs >= endMs) continue;
     const cloud = series.cloud[i2] ?? 0;
-    const pct = computePvPowerWeighted(config, series.times[i2], coords.lat, coords.lon, cloud);
+    const pct = computePvPowerWeighted(config, series.times[i2], coords.lat, coords.lon, cloud, {
+      airTempC: series.temperature?.[i2] ?? NaN,
+      windMs: series.windSpeed?.[i2] ?? NaN,
+      raster
+    });
     if (pct <= 0) continue;
     kwh += pct * k2 / 1e3;
   }
@@ -38429,11 +38563,16 @@ function computeTodayHourly(host) {
   const series = host._chartSeries;
   const coords = getHomeCoords(host.config, host.hass);
   if (k2 !== null && k2 > 0 && series && coords) {
+    const raster = host._engine?.getLidarRaster() ?? null;
     for (let i2 = 0; i2 < series.times.length; i2++) {
       const tMs = series.times[i2].getTime();
       if (tMs < startMs || tMs >= endMs) continue;
       const cloud = series.cloud[i2] ?? 0;
-      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud);
+      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud, {
+        airTempC: series.temperature[i2],
+        windMs: series.windSpeed[i2],
+        raster
+      });
       if (pct < 0) continue;
       const watts = pct * k2;
       const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
@@ -38555,12 +38694,17 @@ function computeTodayCumulative(host) {
   const series = host._chartSeries;
   const coords = getHomeCoords(host.config, host.hass);
   if (k2 !== null && k2 > 0 && series && coords) {
+    const raster = host._engine?.getLidarRaster() ?? null;
     for (let i2 = 0; i2 < series.times.length; i2++) {
       const tMs = series.times[i2].getTime();
       if (tMs < startMs || tMs >= endMs) continue;
       const binEnd = Math.floor(tMs / HOUR_MS) * HOUR_MS + HOUR_MS;
       const cloud = series.cloud[i2] ?? 0;
-      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud);
+      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud, {
+        airTempC: series.temperature[i2],
+        windMs: series.windSpeed[i2],
+        raster
+      });
       if (pct < 0) continue;
       predictedKwh += pct * k2 / 1e3;
       predictedSamples.push({ tMs: binEnd, kwh: predictedKwh });
@@ -38880,11 +39024,16 @@ function computeTomorrow(host) {
   let cloudSum = 0;
   let cloudWeight = 0;
   if (series && coords) {
+    const raster = host._engine?.getLidarRaster() ?? null;
     for (let i2 = 0; i2 < series.times.length; i2++) {
       const tMs = series.times[i2].getTime();
       if (tMs < tomorrowMs || tMs >= endMs) continue;
       const cloud = series.cloud[i2] ?? 0;
-      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud);
+      const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud, {
+        airTempC: series.temperature[i2],
+        windMs: series.windSpeed[i2],
+        raster
+      });
       if (pct > 0 && k2 !== null) {
         const watts = pct * k2;
         totalKwh += watts / 1e3;
@@ -40911,7 +41060,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.1"}`,
+      `%c☀ HELIOS%c v${"1.6.2"}`,
       labelStyle,
       versionStyle
     );
@@ -40935,7 +41084,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.1",
+        version: "1.6.2",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -40943,7 +41092,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -41247,7 +41396,11 @@ let HeliosCard = class extends i {
           }
         }
         const cloud = series.cloud[best] ?? 0;
-        const pct = computePvPowerWeighted(this.config, this._selectedTime, coords.lat, coords.lon, cloud);
+        const pct = computePvPowerWeighted(this.config, this._selectedTime, coords.lat, coords.lon, cloud, {
+          airTempC: series.temperature[best],
+          windMs: series.windSpeed[best],
+          raster: this._engine?.getLidarRaster() ?? null
+        });
         if (pct > 0) {
           pvPredictedRate = { value: pct * k2, unit: "W" };
         }
@@ -41440,7 +41593,6 @@ let HeliosCard = class extends i {
                             aria-pressed="${this._lidarViewMode ? "true" : "false"}"
                             @click="${() => toggleLidarView(this)}"
                         >
-                            <ha-icon icon="mdi:dots-grid"></ha-icon>
                             <span class="lidar-view-btn-label">LiDAR</span>
                         </button>
                     </div>
