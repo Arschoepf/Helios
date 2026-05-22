@@ -198,6 +198,166 @@ export function renderTimelineNightZones(host: ChartHost): TemplateResult
 }
 
 
+//PV value at the hover timestamp, expressed in the entity's
+//native power unit so the tooltip number matches the Y axis of
+//the PV chart and the user's own entity reading. Observed-history
+//pair around the cursor wins; falling back to the clear-sky model
+//(scaled by pv-peak-kwp + thermal derating + LiDAR shading) for
+//hours past "now" keeps the readout meaningful in the forecast
+//window. Returns NaN value when neither source can supply a
+//number at the cursor instant (no entity configured, sample gap,
+//etc).
+function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit: string }
+{
+    const luRaw = (host._pvUnit || '').trim();
+    if (!luRaw) return { value: NaN, unit: '' };
+    const lu             = luRaw.toLowerCase();
+    const isCumulative   = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
+    const displayUnit    = isCumulative
+        ? (lu === 'kwh' ? 'kW' : lu === 'mwh' ? 'MW' : 'W')
+        : luRaw;
+    const duLow = displayUnit.toLowerCase();
+    const nativeFromW    = duLow === 'kw' ? 1 / 1000
+                         : duLow === 'mw' ? 1 / 1_000_000
+                         : 1;
+
+    //Observed history. Cumulative entities differentiate between
+    //the bracketing pair (the same shape the chart uses); power
+    //entities linearly interpolate.
+    const hist = host._pvHistory;
+    if (hist && hist.times.length >= 2)
+    {
+        if (isCumulative)
+        {
+            for (let i = 1; i < hist.times.length; i++)
+            {
+                const t1 = hist.times[i].getTime();
+                if (targetMs > t1) continue;
+                const t0 = hist.times[i - 1].getTime();
+                if (targetMs < t0) break;
+                const dtH = (t1 - t0) / 3_600_000;
+                if (dtH <= 0 || dtH > 6) break;
+                const dv = hist.values[i] - hist.values[i - 1];
+                if (!isFinite(dv) || dv < 0) break;
+                return { value: dv / dtH, unit: displayUnit };
+            }
+        }
+        else
+        {
+            const v = interpAt(hist.times, hist.values, targetMs);
+            if (isFinite(v))
+            {
+                return { value: v, unit: displayUnit };
+            }
+        }
+    }
+
+    //Forecast for future hours. Reuses the per-array PV power
+    //model + thermal / shading hooks the chart already feeds.
+    const series = host._chartSeries;
+    const coords = getHomeCoords(host.config, host.hass);
+    const k      = pvCalibK(host.config);
+    if (k !== null && series && coords && series.times.length >= 2)
+    {
+        const raster = host._engine?.getLidarRaster() ?? null;
+        for (let i = 1; i < series.times.length; i++)
+        {
+            const t1 = series.times[i].getTime();
+            if (targetMs > t1) continue;
+            const t0 = series.times[i - 1].getTime();
+            if (targetMs < t0) break;
+            const w0 = computePvPowerWeighted(host.config, series.times[i - 1], coords.lat, coords.lon, series.cloud[i - 1] ?? 0, {
+                airTempC: series.temperature[i - 1],
+                windMs:   series.windSpeed[i - 1],
+                raster,
+            }) * k;
+            const w1 = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, series.cloud[i] ?? 0, {
+                airTempC: series.temperature[i],
+                windMs:   series.windSpeed[i],
+                raster,
+            }) * k;
+            const dt = t1 - t0;
+            if (dt <= 0) return { value: w1 * nativeFromW, unit: displayUnit };
+            const w  = w0 + (w1 - w0) * (targetMs - t0) / dt;
+            return { value: w * nativeFromW, unit: displayUnit };
+        }
+    }
+
+    return { value: NaN, unit: displayUnit };
+}
+
+
+//Hover tooltip chip, sits above the chart-card stack inside the
+//time-bar. Shows the hover timestamp + one colour-coded row per
+//series. Position clamps to [8 %, 92 %] so the chip never
+//overflows the timeline rails at the edges of the visible range.
+//The PV row is skipped silently when the entity isn't configured
+//(or no value is available at the cursor instant), so the chip
+//stays useful for forecast-only setups.
+export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
+{
+    const range    = host._timeRange;
+    const series   = host._chartSeries;
+    const hoverPct = host._chartHoverPct;
+    if (!range || !series || hoverPct === null) return html``;
+    if (hoverPct < 0 || hoverPct > 100)         return html``;
+
+    const startMs = range.start.getTime();
+    const rangeMs = range.end.getTime() - startMs;
+    if (rangeMs <= 0) return html``;
+    const hoverMs = startMs + (hoverPct / 100) * rangeMs;
+
+    const irrV = interpAt(series.times, series.irradiance, hoverMs);
+    const cldV = interpAt(series.times, series.cloud,      hoverMs);
+    const pv   = pvValueAtTime(host, hoverMs);
+    const hasPv = isFinite(pv.value);
+
+    const sunColor   = cfgHex(host.config?.['sun-color'],   DEFAULT_SUN_COLOR_HEX);
+    const cloudColor = cfgHex(host.config?.['cloud-color'], DEFAULT_CLOUD_COLOR_HEX);
+    const pvColor    = cfgHex(host.config?.['pv-color'],    DEFAULT_PV_COLOR_HEX);
+
+    const timeLabel = new Date(hoverMs).toLocaleTimeString([], {
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    });
+
+    const clampedPct = Math.max(8, Math.min(92, hoverPct));
+
+    //PV decimals: 1 for kW/MW under three digits, 0 otherwise. The
+    //user reads "1.2 kW" on residential gear but "1234 W" on the
+    //raw W entity, both compact.
+    const pvDecimals = !hasPv ? 0
+                     : pv.unit === 'W' ? 0
+                     : (Math.abs(pv.value) < 100 ? 1 : 0);
+
+    return html`
+        <div
+            class="tb-hover-tooltip"
+            style="left:${clampedPct.toFixed(2)}%"
+        >
+            <div class="tb-hover-tooltip-time">${timeLabel}</div>
+            ${isFinite(irrV) ? html`
+                <div class="tb-hover-tooltip-row">
+                    <span class="tb-hover-tooltip-dot" style="background:${sunColor}"></span>
+                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
+                </div>
+            ` : nothing}
+            ${isFinite(cldV) ? html`
+                <div class="tb-hover-tooltip-row">
+                    <span class="tb-hover-tooltip-dot" style="background:${cloudColor}"></span>
+                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cldV)))} %</span>
+                </div>
+            ` : nothing}
+            ${hasPv ? html`
+                <div class="tb-hover-tooltip-row">
+                    <span class="tb-hover-tooltip-dot" style="background:${pvColor}"></span>
+                    <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
+                </div>
+            ` : nothing}
+        </div>
+    `;
+}
+
+
 //Engine-resampled weather series. Same shape the engine snapshots
 //and pushes to the card on every refresh.
 export interface ChartSeries
@@ -212,8 +372,11 @@ export interface ChartSeries
     windSpeed:    number[];
 }
 
-//Structural surface the host card exposes to this module. All
-//fields read-only: the chart layer never mutates card state.
+//Structural surface the host card exposes to this module. The
+//`_chartHoverPct` field is intentionally writable: hover handlers
+//defined here mutate it on pointermove / pointerleave, exactly
+//like the dashboard's `_dashChartHoverTs`. All other fields stay
+//read-only.
 export interface ChartHost
 {
     readonly config:        HeliosConfig | undefined;
@@ -224,11 +387,79 @@ export interface ChartHost
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;
+    //Mutable hover-cursor position as a percent inside the visible
+    //time range (0..100), null when no hover is active. Written by
+    //the pointer handlers defined below.
+    _chartHoverPct:         number | null;
     //Exposed so the PV predictor inside the chart layer can pull
     //the loaded LiDAR raster for the per-array shading raycast.
     //Optional because the chart still renders fine without the
     //engine reference (shading just falls back to "no obstacle").
     readonly _engine?:      { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
+}
+
+
+//Linear-interpolate a series at a target absolute timestamp. The
+//series is assumed strictly increasing in time. Targets outside
+//the range clamp to the nearest endpoint; NaN slots break the
+//interpolation, the caller then sees NaN and skips rendering.
+//Used by the hover tooltip + dot positions across the irradiance,
+//cloud and PV curves so all three readouts share the same
+//interpolation contract.
+function interpAt(times: Date[], values: number[], targetMs: number): number
+{
+    const n = Math.min(times.length, values.length);
+    if (n === 0) return NaN;
+    if (targetMs <= times[0].getTime())
+    {
+        return isFinite(values[0]) ? values[0] : NaN;
+    }
+    if (targetMs >= times[n - 1].getTime())
+    {
+        const v = values[n - 1];
+        return isFinite(v) ? v : NaN;
+    }
+    for (let i = 1; i < n; i++)
+    {
+        const t1 = times[i].getTime();
+        if (targetMs > t1) continue;
+        const t0 = times[i - 1].getTime();
+        const v0 = values[i - 1];
+        const v1 = values[i];
+        if (!isFinite(v0) || !isFinite(v1)) return NaN;
+        const dt = t1 - t0;
+        if (dt <= 0) return v1;
+        return v0 + (v1 - v0) * (targetMs - t0) / dt;
+    }
+    return NaN;
+}
+
+
+//Hover-cursor pointer handlers. Attached on each chart card; the
+//card's bounding rect drives the fractional X conversion. A press
+//(e.buttons !== 0) clears the hover so a scrub drag never leaves
+//a stale dot behind: the scrub interaction itself lives on the
+//time-bar pointerdown above us, and once it captures the pointer
+//our pointermove no longer fires until release.
+export function handleChartHoverMove(host: ChartHost, e: PointerEvent): void
+{
+    if (e.buttons !== 0)
+    {
+        host._chartHoverPct = null;
+        return;
+    }
+    const card = e.currentTarget as HTMLElement | null;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    host._chartHoverPct = frac * 100;
+}
+
+
+export function handleChartHoverLeave(host: ChartHost): void
+{
+    host._chartHoverPct = null;
 }
 
 
@@ -300,6 +531,26 @@ export function renderChart(host: ChartHost): TemplateResult
 
     const sunColor   = cfgHex(host.config?.['sun-color'],   DEFAULT_SUN_COLOR_HEX);
     const cloudColor = cfgHex(host.config?.['cloud-color'], DEFAULT_CLOUD_COLOR_HEX);
+
+    //Hover dots + vertical guide. Both curves are interpolated at
+    //the hover timestamp so the dots ride the curves exactly,
+    //matching what the tooltip above the card reads out. NaN
+    //returns (out of range / missing samples) skip the dot quietly.
+    const hoverPct = host._chartHoverPct;
+    let hoverX:     number = 0;
+    let hoverYIrr:  number = NaN;
+    let hoverYCld:  number = NaN;
+    let showHover  = false;
+    if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100)
+    {
+        hoverX = (hoverPct / 100) * W;
+        const hoverMs = startMs + (hoverPct / 100) * rangeMs;
+        const irrV    = interpAt(series.times, series.irradiance, hoverMs);
+        const cldV    = interpAt(series.times, series.cloud,      hoverMs);
+        if (isFinite(irrV)) hoverYIrr = yIrr(irrV);
+        if (isFinite(cldV)) hoverYCld = yCloud(cldV);
+        showHover = isFinite(hoverYIrr) || isFinite(hoverYCld);
+    }
 
     //Day-boundary X positions in viewBox units (midnight of each
     //local day inside the time range). Drawn as faint dotted
@@ -381,6 +632,31 @@ export function renderChart(host: ChartHost): TemplateResult
                     x2="${x.toFixed(2)}" y2="${H}"
                 ></line>
             `)}
+            ${showHover ? svg`
+                <line
+                    class="hc-hover-guide"
+                    x1="${hoverX.toFixed(2)}" y1="0"
+                    x2="${hoverX.toFixed(2)}" y2="${H}"
+                ></line>
+                ${isFinite(hoverYCld) ? svg`
+                    <circle
+                        class="hc-hover-dot"
+                        cx="${hoverX.toFixed(2)}"
+                        cy="${hoverYCld.toFixed(2)}"
+                        r="2.4"
+                        fill="${cloudColor}"
+                    ></circle>
+                ` : ''}
+                ${isFinite(hoverYIrr) ? svg`
+                    <circle
+                        class="hc-hover-dot"
+                        cx="${hoverX.toFixed(2)}"
+                        cy="${hoverYIrr.toFixed(2)}"
+                        r="2.4"
+                        fill="${sunColor}"
+                    ></circle>
+                ` : ''}
+            ` : nothing}
         </svg>
     `;
 }
@@ -604,6 +880,44 @@ export function renderPvChart(host: ChartHost): TemplateResult
         predictedLine = `M ${pPoints.join(' L ')}`;
     }
 
+    //Hover dot, drawn at the interpolated PV value at hover time.
+    //Observed samples win; if there's no observed value at that
+    //instant (future, gap, outage), fall back to the predicted
+    //series so the dot keeps tracking. Same Y axis as the curve
+    //it rides on, so the dot reads as "this is where the curve
+    //sits at that moment" rather than free-floating.
+    const hoverPct = host._chartHoverPct;
+    let hoverX:    number = 0;
+    let hoverY:    number = NaN;
+    let showHover = false;
+    if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100)
+    {
+        hoverX = (hoverPct / 100) * W;
+        const hoverMs = startMs + (hoverPct / 100) * rangeMs;
+        let hoverV: number = NaN;
+        if (samples.length >= 1)
+        {
+            hoverV = interpAt(
+                samples.map(s => s.t),
+                samples.map(s => s.v),
+                hoverMs,
+            );
+        }
+        if (!isFinite(hoverV) && predictedSamples.length >= 1)
+        {
+            hoverV = interpAt(
+                predictedSamples.map(s => s.t),
+                predictedSamples.map(s => s.v),
+                hoverMs,
+            );
+        }
+        if (isFinite(hoverV))
+        {
+            hoverY = yOf(hoverV);
+            showHover = true;
+        }
+    }
+
     return html`
         <svg
             class="hc-chart-svg"
@@ -635,6 +949,20 @@ export function renderPvChart(host: ChartHost): TemplateResult
                     d="${predictedLine}"
                     stroke="${pvColor}"
                 ></path>
+            ` : nothing}
+            ${showHover ? svg`
+                <line
+                    class="hc-hover-guide"
+                    x1="${hoverX.toFixed(2)}" y1="0"
+                    x2="${hoverX.toFixed(2)}" y2="${H}"
+                ></line>
+                <circle
+                    class="hc-hover-dot"
+                    cx="${hoverX.toFixed(2)}"
+                    cy="${hoverY.toFixed(2)}"
+                    r="2.4"
+                    fill="${pvColor}"
+                ></circle>
             ` : nothing}
         </svg>
     `;

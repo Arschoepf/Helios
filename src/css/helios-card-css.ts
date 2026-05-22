@@ -1197,6 +1197,95 @@ export const heliosCardStyles = css`
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
+    /*  Hover guide line, drawn vertically across the chart at
+        the pointer's X. Same dotted recipe as the day-separator
+        lines but a touch more opaque so it reads as "interactive
+        focus" rather than ambient structure.                       */
+    .hc-hover-guide
+    {
+        stroke: rgba(0, 0, 0, 0.55);
+        stroke-width: 1;
+        stroke-dasharray: 2 2;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .hc-hover-guide { stroke: rgba(255, 255, 255, 0.65); }
+
+    /*  Per-curve hover dot, anchored at the interpolated Y of
+        each series. Stroked in card colour so the dot stays
+        legible whether it lands on a filled area or on the
+        background.                                                  */
+    .hc-hover-dot
+    {
+        stroke: #ffffff;
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .hc-hover-dot { stroke: rgba(20, 20, 20, 0.95); }
+
+    /*  Hover tooltip chip, sits above the chart-card stack
+        inside the time-bar. White chip with the same border +
+        shadow recipe as the .clock and .lidar-view chips so the
+        whole timeline reads as one chip family.                    */
+    .tb-hover-tooltip
+    {
+        position: absolute;
+        bottom: 100%;
+        margin-bottom: 4px;
+        transform: translateX(-50%);
+        background: #ffffff;
+        color: #000000;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        padding: 4px 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size: 11px;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 30;
+    }
+
+    .tb-hover-tooltip-time
+    {
+        font-weight: 600;
+        margin-bottom: 3px;
+        text-align: center;
+    }
+
+    .tb-hover-tooltip-row
+    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .tb-hover-tooltip-dot
+    {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .tb-hover-tooltip-value
+    {
+        flex: 1;
+        text-align: right;
+    }
+
+    ha-card.theme-dark .tb-hover-tooltip
+    {
+        background: rgba(30, 30, 30, 0.95);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.85);
+    }
+
+
     /*  Night-zone overlays. One absolutely-positioned div per
         sunset, next sunrise window, inserted as a sibling of the
         chart SVG inside the chart card. CSS diagonal hatching
@@ -1220,6 +1309,12 @@ export const heliosCardStyles = css`
             transparent       1.5px,
             transparent       6px
         );
+        /*  Thin vertical edges flagging the sunset (left) and
+            sunrise (right) transitions. Inset box-shadows so the
+            edges sit inside the zone's footprint and don't widen
+            its hit-box or shift adjacent overlays. */
+        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.45),
+                    inset -1px 0 0 0 rgba(0, 0, 0, 0.45);
     }
     ha-card.theme-dark .hc-night-zone
     {
@@ -1230,6 +1325,8 @@ export const heliosCardStyles = css`
             transparent              1.5px,
             transparent              6px
         );
+        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.45),
+                    inset -1px 0 0 0 rgba(255, 255, 255, 0.45);
     }
 
 
@@ -1366,10 +1463,13 @@ export const heliosCardStyles = css`
         Chromium / Firefox / WebKit.
 
         The chip is purely visual; the click action lives on the
-        adjacent .lidar-view-toggle-btn to its LEFT (mirroring the
-        clock + scrub-return pair). Square left corners + no left
-        border so the chip fuses with the toggle button's right
-        edge into one composite control.                            */
+        adjacent .lidar-view-toggle-btn. The .overlay-top-right rail
+        uses flex-direction: row-reverse so the DOM order
+        (button, then chip) renders visually as (chip, then button):
+        chip sits on the LEFT and the button on the RIGHT. The chip
+        therefore keeps its LEFT corners rounded and squares its
+        RIGHT corners, and lets the button drop its left border so
+        the chip's right border becomes the shared seam.            */
     .lidar-view-chip
     {
         display: inline-flex;
@@ -1381,10 +1481,10 @@ export const heliosCardStyles = css`
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
-        /*  Square left corners + no left border: the toggle
-            button's right border serves as the shared seam. */
-        border-radius: 0 3px 3px 0;
-        border-left: 0;
+        /*  Rounded LEFT corners only: the chip is on the LEFT of
+            the cluster, the right edge is the shared seam with the
+            toggle button and must stay square. */
+        border-radius: 3px 0 0 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
         font-size:   12px;
@@ -1397,12 +1497,13 @@ export const heliosCardStyles = css`
         z-index: 50;
     }
 
-    /*  LiDAR-view toggle button, sits to the LEFT of the .lidar-
-        view-chip and fuses with it via a shared seam (no border
-        between them). Mirror of the .live-return-btn on the top-
-        left rail; same 22 x 22 square, same 12 px icon, same
-        scrub-blue theme on activation, just flipped to the left
-        side.
+    /*  LiDAR-view toggle button, sits to the RIGHT of the .lidar-
+        view-chip (the .overlay-top-right rail uses row-reverse so
+        the DOM-first button ends up on the right). Fuses with the
+        chip via a shared seam (no border between them). Mirror of
+        the .live-return-btn on the top-left rail; same 22 x 22
+        square, same 12 px icon, same scrub-blue theme on activation,
+        just flipped to the right side.
 
         Three coverage states, set inline by the renderer:
           .is-uncovered  no LiDAR provider matches the home, the
@@ -1428,10 +1529,12 @@ export const heliosCardStyles = css`
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
-        /*  Square right corners + standard left rounding: the
-            chip's left border is dropped to use this button's
-            right border as the shared seam. */
-        border-radius: 3px 0 0 3px;
+        /*  Rounded RIGHT corners only + dropped left border: the
+            button sits on the RIGHT of the cluster, the left edge
+            is the shared seam and the chip's right border is what
+            the user sees there. */
+        border-radius: 0 3px 3px 0;
+        border-left: 0;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         cursor: pointer;
         pointer-events: auto;

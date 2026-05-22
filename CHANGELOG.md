@@ -5,6 +5,29 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.4
+
+Iterative pre-release on top of v1.6.3-beta.3.
+
+* **Hover tooltip on the timeline charts.** Moving the pointer
+  over either chart card now renders a vertical guide line +
+  three colour-coded dots (irradiance, cloud cover, PV) at the
+  cursor position, with a tooltip chip pinned above the cards
+  showing the timestamp + each value in its native unit. The PV
+  row is skipped silently when no `pv-power-entity` is wired up,
+  so the tooltip stays useful in forecast-only setups.
+* **Night-zone edges.** Each diagonal-hatched night window now
+  carries a thin vertical edge on its sunset (left) and sunrise
+  (right) boundaries, so the dusk and dawn transitions read as
+  precise events rather than fuzzy bands.
+* **LiDAR cluster seam fix.** The chip + toggle button pair sits
+  on a `row-reverse` rail, but the radii were still rounded as if
+  the chip were on the right: the seam showed a visible curve on
+  both sides. Chip now keeps its rounded LEFT corners only, the
+  button keeps its rounded RIGHT corners only, and the button
+  drops its left border so the chip's right border is the shared
+  seam.
+
 ## v1.6.3-beta.3
 
 Hotfix pre-release on top of v1.6.3-beta.2. Two follow-ups from

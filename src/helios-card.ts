@@ -35,7 +35,10 @@ import
     renderPvChart,
     renderTimelineTicks,
     renderTimelineDayLabels,
-    renderTimelineNightZones
+    renderTimelineNightZones,
+    renderTimelineHoverTooltip,
+    handleChartHoverMove,
+    handleChartHoverLeave
 } from './card/charts';
 import
 {
@@ -388,6 +391,11 @@ export class HeliosCard extends LitElement
     //epoch of the cursor position on the X axis; null when the pointer
     //is outside the chart or the chart isn't shown.
     @state() _dashChartHoverTs: number | null = null;
+    //Hover position on the timeline chart cards, expressed as a
+    //percent of the visible time range. Null when the pointer is
+    //outside the cards; drives the hover guide line, the per-curve
+    //dots and the tooltip chip rendered above the cards.
+    @state() _chartHoverPct: number | null = null;
     @state() _chartSeries: {
         times:        Date[];
         irradiance:   number[];
@@ -1147,8 +1155,13 @@ export class HeliosCard extends LitElement
                               of the main chart so the irradiance
                               area and the PV area visually balance
                               each other.  -->
+                        ${renderTimelineHoverTooltip(this)}
                         ${pvEntityId ? html`
-                            <div class="tb-chart-card tb-pv-card">
+                            <div
+                                class="tb-chart-card tb-pv-card"
+                                @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
+                                @pointerleave="${() => handleChartHoverLeave(this)}"
+                            >
                                 ${renderPvChart(this)}
                                 ${renderTimelineNightZones(this)}
                                 ${renderTimelineTicks(this)}
@@ -1164,7 +1177,11 @@ export class HeliosCard extends LitElement
                               the midline of this card; it's now a
                               sibling block below so the chips never
                               cover the curves they describe.  -->
-                        <div class="tb-chart-card">
+                        <div
+                            class="tb-chart-card"
+                            @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
+                            @pointerleave="${() => handleChartHoverLeave(this)}"
+                        >
                             ${renderChart(this)}
                             ${renderTimelineNightZones(this)}
                             ${renderTimelineTicks(this)}

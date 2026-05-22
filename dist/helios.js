@@ -3047,6 +3047,95 @@ const heliosCardStyles = i$3`
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
+    /*  Hover guide line, drawn vertically across the chart at
+        the pointer's X. Same dotted recipe as the day-separator
+        lines but a touch more opaque so it reads as "interactive
+        focus" rather than ambient structure.                       */
+    .hc-hover-guide
+    {
+        stroke: rgba(0, 0, 0, 0.55);
+        stroke-width: 1;
+        stroke-dasharray: 2 2;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .hc-hover-guide { stroke: rgba(255, 255, 255, 0.65); }
+
+    /*  Per-curve hover dot, anchored at the interpolated Y of
+        each series. Stroked in card colour so the dot stays
+        legible whether it lands on a filled area or on the
+        background.                                                  */
+    .hc-hover-dot
+    {
+        stroke: #ffffff;
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .hc-hover-dot { stroke: rgba(20, 20, 20, 0.95); }
+
+    /*  Hover tooltip chip, sits above the chart-card stack
+        inside the time-bar. White chip with the same border +
+        shadow recipe as the .clock and .lidar-view chips so the
+        whole timeline reads as one chip family.                    */
+    .tb-hover-tooltip
+    {
+        position: absolute;
+        bottom: 100%;
+        margin-bottom: 4px;
+        transform: translateX(-50%);
+        background: #ffffff;
+        color: #000000;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        padding: 4px 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size: 11px;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 30;
+    }
+
+    .tb-hover-tooltip-time
+    {
+        font-weight: 600;
+        margin-bottom: 3px;
+        text-align: center;
+    }
+
+    .tb-hover-tooltip-row
+    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .tb-hover-tooltip-dot
+    {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+
+    .tb-hover-tooltip-value
+    {
+        flex: 1;
+        text-align: right;
+    }
+
+    ha-card.theme-dark .tb-hover-tooltip
+    {
+        background: rgba(30, 30, 30, 0.95);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.85);
+    }
+
+
     /*  Night-zone overlays. One absolutely-positioned div per
         sunset, next sunrise window, inserted as a sibling of the
         chart SVG inside the chart card. CSS diagonal hatching
@@ -3070,6 +3159,12 @@ const heliosCardStyles = i$3`
             transparent       1.5px,
             transparent       6px
         );
+        /*  Thin vertical edges flagging the sunset (left) and
+            sunrise (right) transitions. Inset box-shadows so the
+            edges sit inside the zone's footprint and don't widen
+            its hit-box or shift adjacent overlays. */
+        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.45),
+                    inset -1px 0 0 0 rgba(0, 0, 0, 0.45);
     }
     ha-card.theme-dark .hc-night-zone
     {
@@ -3080,6 +3175,8 @@ const heliosCardStyles = i$3`
             transparent              1.5px,
             transparent              6px
         );
+        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.45),
+                    inset -1px 0 0 0 rgba(255, 255, 255, 0.45);
     }
 
 
@@ -3216,10 +3313,13 @@ const heliosCardStyles = i$3`
         Chromium / Firefox / WebKit.
 
         The chip is purely visual; the click action lives on the
-        adjacent .lidar-view-toggle-btn to its LEFT (mirroring the
-        clock + scrub-return pair). Square left corners + no left
-        border so the chip fuses with the toggle button's right
-        edge into one composite control.                            */
+        adjacent .lidar-view-toggle-btn. The .overlay-top-right rail
+        uses flex-direction: row-reverse so the DOM order
+        (button, then chip) renders visually as (chip, then button):
+        chip sits on the LEFT and the button on the RIGHT. The chip
+        therefore keeps its LEFT corners rounded and squares its
+        RIGHT corners, and lets the button drop its left border so
+        the chip's right border becomes the shared seam.            */
     .lidar-view-chip
     {
         display: inline-flex;
@@ -3231,10 +3331,10 @@ const heliosCardStyles = i$3`
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
-        /*  Square left corners + no left border: the toggle
-            button's right border serves as the shared seam. */
-        border-radius: 0 3px 3px 0;
-        border-left: 0;
+        /*  Rounded LEFT corners only: the chip is on the LEFT of
+            the cluster, the right edge is the shared seam with the
+            toggle button and must stay square. */
+        border-radius: 3px 0 0 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
         font-size:   12px;
@@ -3247,12 +3347,13 @@ const heliosCardStyles = i$3`
         z-index: 50;
     }
 
-    /*  LiDAR-view toggle button, sits to the LEFT of the .lidar-
-        view-chip and fuses with it via a shared seam (no border
-        between them). Mirror of the .live-return-btn on the top-
-        left rail; same 22 x 22 square, same 12 px icon, same
-        scrub-blue theme on activation, just flipped to the left
-        side.
+    /*  LiDAR-view toggle button, sits to the RIGHT of the .lidar-
+        view-chip (the .overlay-top-right rail uses row-reverse so
+        the DOM-first button ends up on the right). Fuses with the
+        chip via a shared seam (no border between them). Mirror of
+        the .live-return-btn on the top-left rail; same 22 x 22
+        square, same 12 px icon, same scrub-blue theme on activation,
+        just flipped to the right side.
 
         Three coverage states, set inline by the renderer:
           .is-uncovered  no LiDAR provider matches the home, the
@@ -3278,10 +3379,12 @@ const heliosCardStyles = i$3`
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
-        /*  Square right corners + standard left rounding: the
-            chip's left border is dropped to use this button's
-            right border as the shared seam. */
-        border-radius: 3px 0 0 3px;
+        /*  Rounded RIGHT corners only + dropped left border: the
+            button sits on the RIGHT of the cluster, the left edge
+            is the shared seam and the chip's right border is what
+            the user sees there. */
+        border-radius: 0 3px 3px 0;
+        border-left: 0;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         cursor: pointer;
         pointer-events: auto;
@@ -38255,6 +38358,152 @@ function renderTimelineNightZones(host) {
         `)}
     `;
 }
+function pvValueAtTime(host, targetMs) {
+  const luRaw = (host._pvUnit || "").trim();
+  if (!luRaw) return { value: NaN, unit: "" };
+  const lu = luRaw.toLowerCase();
+  const isCumulative = lu === "wh" || lu === "kwh" || lu === "mwh";
+  const displayUnit = isCumulative ? lu === "kwh" ? "kW" : lu === "mwh" ? "MW" : "W" : luRaw;
+  const duLow = displayUnit.toLowerCase();
+  const nativeFromW = duLow === "kw" ? 1 / 1e3 : duLow === "mw" ? 1 / 1e6 : 1;
+  const hist = host._pvHistory;
+  if (hist && hist.times.length >= 2) {
+    if (isCumulative) {
+      for (let i2 = 1; i2 < hist.times.length; i2++) {
+        const t1 = hist.times[i2].getTime();
+        if (targetMs > t1) continue;
+        const t0 = hist.times[i2 - 1].getTime();
+        if (targetMs < t0) break;
+        const dtH = (t1 - t0) / 36e5;
+        if (dtH <= 0 || dtH > 6) break;
+        const dv = hist.values[i2] - hist.values[i2 - 1];
+        if (!isFinite(dv) || dv < 0) break;
+        return { value: dv / dtH, unit: displayUnit };
+      }
+    } else {
+      const v2 = interpAt(hist.times, hist.values, targetMs);
+      if (isFinite(v2)) {
+        return { value: v2, unit: displayUnit };
+      }
+    }
+  }
+  const series = host._chartSeries;
+  const coords = getHomeCoords(host.config, host.hass);
+  const k2 = pvCalibK(host.config);
+  if (k2 !== null && series && coords && series.times.length >= 2) {
+    const raster = host._engine?.getLidarRaster() ?? null;
+    for (let i2 = 1; i2 < series.times.length; i2++) {
+      const t1 = series.times[i2].getTime();
+      if (targetMs > t1) continue;
+      const t0 = series.times[i2 - 1].getTime();
+      if (targetMs < t0) break;
+      const w0 = computePvPowerWeighted(host.config, series.times[i2 - 1], coords.lat, coords.lon, series.cloud[i2 - 1] ?? 0, {
+        airTempC: series.temperature[i2 - 1],
+        windMs: series.windSpeed[i2 - 1],
+        raster
+      }) * k2;
+      const w1 = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, series.cloud[i2] ?? 0, {
+        airTempC: series.temperature[i2],
+        windMs: series.windSpeed[i2],
+        raster
+      }) * k2;
+      const dt = t1 - t0;
+      if (dt <= 0) return { value: w1 * nativeFromW, unit: displayUnit };
+      const w2 = w0 + (w1 - w0) * (targetMs - t0) / dt;
+      return { value: w2 * nativeFromW, unit: displayUnit };
+    }
+  }
+  return { value: NaN, unit: displayUnit };
+}
+function renderTimelineHoverTooltip(host) {
+  const range = host._timeRange;
+  const series = host._chartSeries;
+  const hoverPct = host._chartHoverPct;
+  if (!range || !series || hoverPct === null) return b``;
+  if (hoverPct < 0 || hoverPct > 100) return b``;
+  const startMs = range.start.getTime();
+  const rangeMs = range.end.getTime() - startMs;
+  if (rangeMs <= 0) return b``;
+  const hoverMs = startMs + hoverPct / 100 * rangeMs;
+  const irrV = interpAt(series.times, series.irradiance, hoverMs);
+  const cldV = interpAt(series.times, series.cloud, hoverMs);
+  const pv = pvValueAtTime(host, hoverMs);
+  const hasPv = isFinite(pv.value);
+  const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
+  const cloudColor = cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
+  const pvColor = cfgHex(host.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
+  const timeLabel = new Date(hoverMs).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  });
+  const clampedPct = Math.max(8, Math.min(92, hoverPct));
+  const pvDecimals = !hasPv ? 0 : pv.unit === "W" ? 0 : Math.abs(pv.value) < 100 ? 1 : 0;
+  return b`
+        <div
+            class="tb-hover-tooltip"
+            style="left:${clampedPct.toFixed(2)}%"
+        >
+            <div class="tb-hover-tooltip-time">${timeLabel}</div>
+            ${isFinite(irrV) ? b`
+                <div class="tb-hover-tooltip-row">
+                    <span class="tb-hover-tooltip-dot" style="background:${sunColor}"></span>
+                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
+                </div>
+            ` : A}
+            ${isFinite(cldV) ? b`
+                <div class="tb-hover-tooltip-row">
+                    <span class="tb-hover-tooltip-dot" style="background:${cloudColor}"></span>
+                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cldV)))} %</span>
+                </div>
+            ` : A}
+            ${hasPv ? b`
+                <div class="tb-hover-tooltip-row">
+                    <span class="tb-hover-tooltip-dot" style="background:${pvColor}"></span>
+                    <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
+                </div>
+            ` : A}
+        </div>
+    `;
+}
+function interpAt(times, values2, targetMs) {
+  const n3 = Math.min(times.length, values2.length);
+  if (n3 === 0) return NaN;
+  if (targetMs <= times[0].getTime()) {
+    return isFinite(values2[0]) ? values2[0] : NaN;
+  }
+  if (targetMs >= times[n3 - 1].getTime()) {
+    const v2 = values2[n3 - 1];
+    return isFinite(v2) ? v2 : NaN;
+  }
+  for (let i2 = 1; i2 < n3; i2++) {
+    const t1 = times[i2].getTime();
+    if (targetMs > t1) continue;
+    const t0 = times[i2 - 1].getTime();
+    const v0 = values2[i2 - 1];
+    const v1 = values2[i2];
+    if (!isFinite(v0) || !isFinite(v1)) return NaN;
+    const dt = t1 - t0;
+    if (dt <= 0) return v1;
+    return v0 + (v1 - v0) * (targetMs - t0) / dt;
+  }
+  return NaN;
+}
+function handleChartHoverMove(host, e2) {
+  if (e2.buttons !== 0) {
+    host._chartHoverPct = null;
+    return;
+  }
+  const card = e2.currentTarget;
+  if (!card) return;
+  const rect = card.getBoundingClientRect();
+  if (rect.width <= 0) return;
+  const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
+  host._chartHoverPct = frac * 100;
+}
+function handleChartHoverLeave(host) {
+  host._chartHoverPct = null;
+}
 function renderChart(host) {
   const series = host._chartSeries;
   const range = host._timeRange;
@@ -38282,6 +38531,20 @@ function renderChart(host) {
   const cloudLine = `M ${cloudPoints.join(" L ")}`;
   const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
   const cloudColor = cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
+  const hoverPct = host._chartHoverPct;
+  let hoverX = 0;
+  let hoverYIrr = NaN;
+  let hoverYCld = NaN;
+  let showHover = false;
+  if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100) {
+    hoverX = hoverPct / 100 * W;
+    const hoverMs = startMs + hoverPct / 100 * rangeMs;
+    const irrV = interpAt(series.times, series.irradiance, hoverMs);
+    const cldV = interpAt(series.times, series.cloud, hoverMs);
+    if (isFinite(irrV)) hoverYIrr = yIrr(irrV);
+    if (isFinite(cldV)) hoverYCld = yCloud(cldV);
+    showHover = isFinite(hoverYIrr) || isFinite(hoverYCld);
+  }
   const startMsAbs = range.start.getTime();
   const endMsAbs = range.end.getTime();
   const dayXs = [];
@@ -38349,6 +38612,31 @@ function renderChart(host) {
                     x2="${x2.toFixed(2)}" y2="${H2}"
                 ></line>
             `)}
+            ${showHover ? w`
+                <line
+                    class="hc-hover-guide"
+                    x1="${hoverX.toFixed(2)}" y1="0"
+                    x2="${hoverX.toFixed(2)}" y2="${H2}"
+                ></line>
+                ${isFinite(hoverYCld) ? w`
+                    <circle
+                        class="hc-hover-dot"
+                        cx="${hoverX.toFixed(2)}"
+                        cy="${hoverYCld.toFixed(2)}"
+                        r="2.4"
+                        fill="${cloudColor}"
+                    ></circle>
+                ` : ""}
+                ${isFinite(hoverYIrr) ? w`
+                    <circle
+                        class="hc-hover-dot"
+                        cx="${hoverX.toFixed(2)}"
+                        cy="${hoverYIrr.toFixed(2)}"
+                        r="2.4"
+                        fill="${sunColor}"
+                    ></circle>
+                ` : ""}
+            ` : A}
         </svg>
     `;
 }
@@ -38475,6 +38763,33 @@ function renderPvChart(host) {
     const pPoints = predictedSamples.map((s2) => `${xOf(s2.t).toFixed(2)},${yOf(s2.v).toFixed(2)}`);
     predictedLine = `M ${pPoints.join(" L ")}`;
   }
+  const hoverPct = host._chartHoverPct;
+  let hoverX = 0;
+  let hoverY = NaN;
+  let showHover = false;
+  if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100) {
+    hoverX = hoverPct / 100 * W;
+    const hoverMs = startMs + hoverPct / 100 * rangeMs;
+    let hoverV = NaN;
+    if (samples.length >= 1) {
+      hoverV = interpAt(
+        samples.map((s2) => s2.t),
+        samples.map((s2) => s2.v),
+        hoverMs
+      );
+    }
+    if (!isFinite(hoverV) && predictedSamples.length >= 1) {
+      hoverV = interpAt(
+        predictedSamples.map((s2) => s2.t),
+        predictedSamples.map((s2) => s2.v),
+        hoverMs
+      );
+    }
+    if (isFinite(hoverV)) {
+      hoverY = yOf(hoverV);
+      showHover = true;
+    }
+  }
   return b`
         <svg
             class="hc-chart-svg"
@@ -38506,6 +38821,20 @@ function renderPvChart(host) {
                     d="${predictedLine}"
                     stroke="${pvColor}"
                 ></path>
+            ` : A}
+            ${showHover ? w`
+                <line
+                    class="hc-hover-guide"
+                    x1="${hoverX.toFixed(2)}" y1="0"
+                    x2="${hoverX.toFixed(2)}" y2="${H2}"
+                ></line>
+                <circle
+                    class="hc-hover-dot"
+                    cx="${hoverX.toFixed(2)}"
+                    cy="${hoverY.toFixed(2)}"
+                    r="2.4"
+                    fill="${pvColor}"
+                ></circle>
             ` : A}
         </svg>
     `;
@@ -41332,7 +41661,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.3"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.4"}`,
       labelStyle,
       versionStyle
     );
@@ -41356,7 +41685,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.3",
+        version: "1.6.3-beta.4",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41364,7 +41693,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -41445,6 +41774,7 @@ let HeliosCard = class extends i {
     this._homeSilhouettes = [];
     this._homeHover = false;
     this._dashChartHoverTs = null;
+    this._chartHoverPct = null;
     this._chartSeries = null;
     this._fetching = false;
     this._timeRange = null;
@@ -41797,8 +42127,13 @@ let HeliosCard = class extends i {
                               of the main chart so the irradiance
                               area and the PV area visually balance
                               each other.  -->
+                        ${renderTimelineHoverTooltip(this)}
                         ${pvEntityId ? b`
-                            <div class="tb-chart-card tb-pv-card">
+                            <div
+                                class="tb-chart-card tb-pv-card"
+                                @pointermove="${(e2) => handleChartHoverMove(this, e2)}"
+                                @pointerleave="${() => handleChartHoverLeave(this)}"
+                            >
                                 ${renderPvChart(this)}
                                 ${renderTimelineNightZones(this)}
                                 ${renderTimelineTicks(this)}
@@ -41814,7 +42149,11 @@ let HeliosCard = class extends i {
                               the midline of this card; it's now a
                               sibling block below so the chips never
                               cover the curves they describe.  -->
-                        <div class="tb-chart-card">
+                        <div
+                            class="tb-chart-card"
+                            @pointermove="${(e2) => handleChartHoverMove(this, e2)}"
+                            @pointerleave="${() => handleChartHoverLeave(this)}"
+                        >
                             ${renderChart(this)}
                             ${renderTimelineNightZones(this)}
                             ${renderTimelineTicks(this)}
@@ -42492,6 +42831,9 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_dashChartHoverTs", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_chartHoverPct", 2);
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_chartSeries", 2);
