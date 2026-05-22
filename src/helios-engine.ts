@@ -736,10 +736,16 @@ export class HeliosEngine
             zoom:            18,
             pitch:           55,
             bearing:         this.homeLat >= 0 ? 180 : 0,
-            minZoom:         18,
+            //Zoom range is [17, 18] now: the user can pinch out by
+            //one MapLibre step to see one block of context around
+            //the home, but can't zoom in past the resting pose (the
+            //3D camera + LiDAR overlay are tuned for this single
+            //altitude). detail-mode separately raises maxZoom for
+            //its dive animation and resets it on exit.
+            minZoom:         17,
             maxZoom:         18,
             dragPan:         false,
-            scrollZoom:      false,
+            scrollZoom:      true,
             doubleClickZoom: false,
             //MapLibre's default dragRotate binds to right-click drag,
             //which is not what users expect on a 3D card. We disable

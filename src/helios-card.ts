@@ -1119,7 +1119,6 @@ export class HeliosCard extends LitElement
         //provider covers the active home. Read off the engine, falls
         //back to null until the engine has resolved its first home.
         const lidarSourceId    = this._engine?.getActiveLidarSourceId() ?? null;
-        const lidarViewEnabled = lidarSourceId !== null;
         const cardClasses = [
             cardThemeClass,
             this._detailMode    ? 'detail-active'    : '',
@@ -1155,14 +1154,17 @@ export class HeliosCard extends LitElement
                         ` : nothing}
 
                         <!--  Chart card: hosts the area chart, the
-                              dotted day separators, the day-label
-                              chips on the midline, and the live +
-                              scrub cursors as HTML overlays.  -->
+                              dotted day separators, and the live +
+                              scrub cursors as HTML overlays. The
+                              day-label chip row used to overlay the
+                              midline of this card; it's now a
+                              sibling block below so the chips never
+                              cover the curves they describe.  -->
                         <div class="tb-chart-card">
                             ${renderChart(this)}
-                            ${renderTimelineDayLabels(this)}
                             ${renderTimelineTicks(this)}
                         </div>
+                        ${renderTimelineDayLabels(this)}
                     </div>
                 ` : nothing}
 
@@ -1205,19 +1207,51 @@ export class HeliosCard extends LitElement
                       instead of two competing spinners on opposite
                       sides of the card. Sits at the same 8 px edge
                       margin as the clock and the timeline.  -->
-                ${hasApiKey && (lidarViewEnabled || this._lidarViewMode) ? html`
-                    <div class="overlay-top-right">
-                        <button
-                            type="button"
-                            class="lidar-view-btn ${this._lidarViewMode ? 'is-on' : ''}"
-                            aria-label="${this._lidarViewMode ? 'Exit LiDAR View' : 'LiDAR View'}"
-                            aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
-                            @click="${() => toggleLidarView(this)}"
-                        >
-                            <span class="lidar-view-btn-label">LiDAR</span>
-                        </button>
-                    </div>
-                ` : nothing}
+                <!--  Top-right cluster, mirror of the top-left
+                      clock + scrub-return pair. The "LiDAR" chip is
+                      passive (purely a status label) and the toggle
+                      button sits to its LEFT, fused to the chip's
+                      left edge with a shared border. Three button
+                      states:
+                        - no provider covers the home  -> disabled,
+                          eye-off-outline icon, no click handler
+                        - public online provider       -> active,
+                          earth icon, click toggles LiDAR view
+                        - local-nDSM (YAML config)     -> active,
+                          harddisk icon, click toggles LiDAR view
+                      Active state mirrors the scrub-blue theme used
+                      on the opposite rail when LiDAR view is on, so
+                      the cluster doubles as the "you're in LiDAR
+                      view" signal the way the clock chip doubles as
+                      the "you're scrubbing" signal.                 */
+                ${hasApiKey ? (() => {
+                    const isLocal     = lidarSourceId === 'local-ndsm';
+                    const hasProvider = lidarSourceId !== null;
+                    const stateClass  = !hasProvider ? 'is-uncovered'
+                                       : isLocal     ? 'is-local'
+                                                     : 'is-online';
+                    const stateIcon   = !hasProvider ? 'mdi:cloud-off-outline'
+                                       : isLocal     ? 'mdi:harddisk'
+                                                     : 'mdi:earth';
+                    const stateLabel  = !hasProvider ? 'No LiDAR coverage at this location'
+                                       : isLocal     ? 'Toggle LiDAR view, local nDSM'
+                                                     : 'Toggle LiDAR view, online provider';
+                    return html`
+                        <div class="overlay-top-right">
+                            <button
+                                type="button"
+                                class="lidar-view-toggle-btn ${stateClass} ${this._lidarViewMode ? 'is-on' : ''}"
+                                ?disabled="${!hasProvider}"
+                                aria-label="${stateLabel}"
+                                aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
+                                @click="${hasProvider ? (() => toggleLidarView(this)) : undefined}"
+                            >
+                                <ha-icon icon="${stateIcon}"></ha-icon>
+                            </button>
+                            <div class="lidar-view-chip ${this._lidarViewMode ? 'is-on' : ''}">LiDAR</div>
+                        </div>
+                    `;
+                })() : nothing}
 
                 <!--  Top-left cluster: clock chip showing the active
                       timeline instant + (in scrub mode) a back-to-

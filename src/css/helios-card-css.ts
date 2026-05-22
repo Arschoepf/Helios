@@ -1191,20 +1191,27 @@ export const heliosCardStyles = css`
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
-    /*  Day labels, small white chips overlaying the chart midline.
-        Same chip language as the on-map cloud and W/m² readouts. */
+    /*  Day-label chip row, sits as a sibling below the chart card
+        with the same horizontal positioning so each chip stays
+        anchored to its date column. Used to overlay the chart's
+        midline; was promoted out of the chart card so the chips
+        never sit on top of the irradiance / cloud curves they're
+        labelling. The row's own height is the chip height + a
+        small breathing band, kept narrow so the timeline block
+        doesn't grow noticeably.                                    */
     .tb-day-labels
     {
-        position: absolute;
-        inset: 0;
+        position: relative;
+        height: 18px;
+        margin-top: 4px;
         pointer-events: none;
     }
 
     .tb-day-label
     {
         position: absolute;
-        top: 50%;
-        transform: translate(-50%, -50%);
+        top: 0;
+        transform: translateX(-50%);
         display: inline-flex;
         align-items: center;
         gap: 4px;
@@ -1306,68 +1313,122 @@ export const heliosCardStyles = css`
         column. Sized to mirror the .clock chip on the left so the
         two corners read as a symmetric pair. Stays at fixed width
         when toggled on/off so neighbour chips don't jump. */
-    .lidar-view-btn
+    /*  Passive "LiDAR" status chip on the top-right rail, mirror of
+        the .clock chip on the top-left. Same recipe: 12 px Roboto
+        600, line-height 1.2, padding 2 px 8 px, 22 px tall, mixed-
+        case label so the baseline metrics are unambiguous across
+        Chromium / Firefox / WebKit.
+
+        The chip is purely visual; the click action lives on the
+        adjacent .lidar-view-toggle-btn to its LEFT (mirroring the
+        clock + scrub-return pair). Square left corners + no left
+        border so the chip fuses with the toggle button's right
+        edge into one composite control.                            */
+    .lidar-view-chip
     {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        /*  Text-only "LiDAR" chip on the top-right rail. Layout
-            mirrors the .clock chip on the opposite rail exactly
-            (12 px Roboto 600, line-height 1.2, padding 2px 8px,
-            22 px tall) since that recipe centres consistently on
-            Chromium, Firefox and WebKit. Mixed-case "LiDAR" (no
-            text-transform) keeps the lowercase 'i' as an ascender
-            and the rest as cap-height + x-height letters, so the
-            baseline metrics are unambiguous, no engine-dependent
-            uppercase asymmetry to fight.                          */
         height: 22px;
         box-sizing: border-box;
         padding: 2px 8px;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
-        border-radius: 3px;
+        /*  Square left corners + no left border: the toggle
+            button's right border serves as the shared seam. */
+        border-radius: 0 3px 3px 0;
+        border-left: 0;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
         font-size:   12px;
         font-weight: 600;
         line-height: 1.2;
         white-space: nowrap;
-        cursor: pointer;
-        /*  Force full opacity at every state except :disabled (which
-            sets its own 0.35 for the visual "not available" hint).
-            The transition only covers background + color so a state
-            change (active / inactive) doesn't briefly pass through a
-            translucent state. */
-        opacity: 1;
-        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-        /*  The parent .overlay-top-right rail has pointer-events: none
-            (so the rail itself never steals map interactions when
-            empty). The button has to opt back in explicitly so its
-            click reaches the @click handler, mirroring what
-            .clock / .live-return-btn do on the opposite (top-left)
-            rail. Without this the button visually renders enabled but
-            ignores every click.
-
-            z-index: 50 puts the button above the LiDAR View canvas
-            overlay (z 30) so the toggle stays clickable while the
-            View is open, otherwise the canvas would swallow the
-            click that exits the mode. */
-        pointer-events: auto;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+        pointer-events: none;
         position: relative;
         z-index: 50;
     }
-    .lidar-view-btn:disabled
+
+    /*  LiDAR-view toggle button, sits to the LEFT of the .lidar-
+        view-chip and fuses with it via a shared seam (no border
+        between them). Mirror of the .live-return-btn on the top-
+        left rail; same 22 x 22 square, same 12 px icon, same
+        scrub-blue theme on activation, just flipped to the left
+        side.
+
+        Three coverage states, set inline by the renderer:
+          .is-uncovered  no LiDAR provider matches the home, the
+                         button is :disabled and inert
+          .is-online     a public WCS / WMS provider covers the
+                         home, the button toggles LiDAR view
+          .is-local      a BYO local-nDSM raster is configured AND
+                         covers the home, the button toggles LiDAR
+                         view; the harddisk glyph signals the user
+                         is on their own data
+        On activation (.is-on, set when _lidarViewMode is true) the
+        button + chip pair take the same scrub-blue plate the clock
+        chip + back-to-live pair uses when scrubbing the timeline.   */
+    .lidar-view-toggle-btn
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  22px;
+        height: 22px;
+        box-sizing: border-box;
+        padding: 0;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        /*  Square right corners + standard left rounding: the
+            chip's left border is dropped to use this button's
+            right border as the shared seam. */
+        border-radius: 3px 0 0 3px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        cursor: pointer;
+        pointer-events: auto;
+        position: relative;
+        z-index: 50;
+        opacity: 1;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .lidar-view-toggle-btn:hover  { background: #f2f2f2; }
+    .lidar-view-toggle-btn:active { background: #e6e6e6; }
+    .lidar-view-toggle-btn ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  Uncovered state: disabled, faded, no hover effect. The chip
+        next to it stays at full opacity, the user still reads
+        "LiDAR" but the button glyph reads "not available here". */
+    .lidar-view-toggle-btn.is-uncovered
     {
         opacity: 0.35;
         cursor: not-allowed;
     }
-    .lidar-view-btn.is-on
+    .lidar-view-toggle-btn.is-uncovered:hover  { background: #ffffff; }
+    .lidar-view-toggle-btn.is-uncovered:active { background: #ffffff; }
+
+    /*  Active state: both halves of the cluster flip to the same
+        scrub-blue plate as .clock.is-scrub + .live-return-btn on
+        the opposite rail. The pair reads as one continuous blue
+        control while LiDAR view is open, which is the visual
+        signal that the user is in a non-default mode.              */
+    .lidar-view-toggle-btn.is-on,
+    .lidar-view-chip.is-on
     {
-        background: #1f6feb;
+        background: rgba(31, 111, 235, 0.95);
         color: #ffffff;
-        border-color: #1f6feb;
+        border-color: rgba(20, 78, 168, 0.95);
     }
+    .lidar-view-toggle-btn.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .lidar-view-toggle-btn.is-on:active { background: rgba(20, 78, 168, 0.95); }
 
 
     /*  When LiDAR View is active, fade out every overlay layer so
@@ -1408,10 +1469,11 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Top corner overlays. Date/time chip on the left; back-to-live
-        + LiDAR busy chip column on the right. Both rails sit 8 px
-        from the card edge so they read as a paired pair anchored
-        to the frame, mirroring the timeline's edge margin. */
+    /*  Top corner overlays. Date/time + scrub-return cluster on the
+        left; LiDAR-view toggle + "LiDAR" status chip on the right.
+        Both rails are flex rows sitting 8 px from their card edge,
+        each one fusing two elements (chip + adjacent button) into
+        a single composite control via shared seams.                */
 
     /*  Date/time chip, same chip language as the on-map readouts.
         Explicit height (border-box) so the chip and the back-to-
@@ -1516,19 +1578,21 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Top-right overlay rail. Hosts the LiDAR View toggle button.
-        Mirrors the clock's top spacing on the opposite edge so the
-        two overlays sit at the same height.
+    /*  Top-right overlay rail. Hosts the LiDAR-view toggle button
+        fused with the passive LiDAR status chip, mirror of the
+        top-left clock + scrub-return pair. Mirrors the clock's
+        top spacing on the opposite edge so the two overlays sit
+        at the same height; flex-direction: row-reverse keeps the
+        chip on the right edge of the screen with the toggle
+        button to its left, mirroring the clock-on-the-left + back
+        -to-live-on-its-right pattern on the opposite rail.
 
-        z-index: 60 puts the rail (and therefore the button) above
-        the LiDAR View canvas (z 30) AND above the centre spinner
-        (z 50), so the toggle is always reachable. Pointer events
-        off on the rail itself so the empty rail never steals map
-        interactions; the button opts back in (.lidar-view-btn has
-        its own pointer-events: auto). Stacking contexts: because
-        we set z-index on this absolute container, children's own
-        z-index values are scoped to this rail; the rail's z-index
-        is the one that competes with siblings in ha-card. */
+        z-index: 60 puts the rail (and therefore both halves of
+        the cluster) above the LiDAR View canvas (z 30) AND above
+        the centre spinner (z 50), so the toggle is always
+        reachable. Pointer events off on the rail itself so the
+        empty rail never steals map interactions; the toggle
+        button opts back in via .lidar-view-toggle-btn rules. */
     .overlay-top-right
     {
         position: absolute;
@@ -1536,8 +1600,8 @@ export const heliosCardStyles = css`
         right: 8px;
         z-index: 60;
         display: flex;
-        flex-direction: column;
-        gap: 6px;
+        flex-direction: row-reverse;
+        align-items: center;
         pointer-events: none;
     }
 
@@ -2068,7 +2132,8 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label,
     ha-card.theme-dark .map-btn:not(.map-btn-on),
-    ha-card.theme-dark .lidar-view-btn:not(.is-on)
+    ha-card.theme-dark .lidar-view-chip:not(.is-on),
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -2092,7 +2157,7 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .cloud-pct-label ha-icon,
     ha-card.theme-dark .solar-pct-label ha-icon,
     ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
-    ha-card.theme-dark .lidar-view-btn:not(.is-on) ha-icon
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon
     {
         color: #e6e6e6;
     }

@@ -60,17 +60,16 @@ export interface ChartHost
 }
 
 
-//Two-half "sun vs cloud" SVG chart that sits above the timeline:
-//  - top half: irradiance W/m² (0..1000 W/m²), filled with the
-//    configured sun colour.
-//  - bottom half: cloud cover %, "the clouds press down". Filled
-//    with the configured cloud colour, mirrored gradient.
-//
-//The metaphor maps the user's mental model: when the sun pushes
-//past what the clouds press in, production is high; when the
-//clouds reach further than the sun's push, production is low.
-//The two areas inhabit non-overlapping pixel rows, so we never
-//have to worry about z-order or transparency stacking.
+//Single-baseline "irradiance + cloud" SVG chart sitting above the
+//timeline. Both curves share the bottom edge as zero and grow
+//upward: 1000 W/m² and 100 % cloud cover both touch the top edge.
+//Irradiance is drawn on top with a semi-opaque sun-colour fill;
+//cloud fills the area below it in the configured cloud colour with
+//lower opacity so the two curves coexist instead of competing for
+//pixel rows. This replaces the older "sun pushes up / clouds press
+//down" mirror layout, where the cloud area grew downward from the
+//midline; the new layout keeps the same vertical real estate but
+//is easier to read at a glance because both axes share an origin.
 export function renderChart(host: ChartHost): TemplateResult
 {
     const series = host._chartSeries;
@@ -82,11 +81,9 @@ export function renderChart(host: ChartHost): TemplateResult
 
     const W      = 1000;
     const H      = 100;
-    //Midline sits exactly halfway. The two halves get H/2 = 50
-    //pixels of vertical resolution each, enough to read the
-    //shape of a typical day at a glance.
-    const MID    = H / 2;
-    const HALF   = H / 2;
+    //Shared bottom baseline; both curves grow upward from y = H to
+    //y = 0. No midline split anymore.
+    const BASE   = H;
 
     const startMs = range.start.getTime();
     const rangeMs = range.end.getTime() - startMs;
@@ -98,27 +95,29 @@ export function renderChart(host: ChartHost): TemplateResult
     const xOf = (t: Date): number =>
         ((t.getTime() - startMs) / rangeMs) * W;
 
-    //Top area Y: 0 W/m² sits on the midline, 1000 W/m² sits at
-    //the top edge of the SVG. Anything above clamps to the top.
+    //Irradiance Y: 0 W/m² sits on the bottom edge, 1000 W/m² sits
+    //at the top edge. Anything above clamps to the top.
     const yIrr = (w: number): number =>
-        MID - Math.max(0, Math.min(1, w / 1000)) * HALF;
+        BASE - Math.max(0, Math.min(1, w / 1000)) * H;
 
-    //Bottom area Y: 0 % sits on the midline, 100 % sits at the
-    //bottom edge. Pure linear (cloud cover is already 0..100).
+    //Cloud Y: 0 % sits on the bottom edge, 100 % sits at the top
+    //edge. Same orientation as irradiance now, so 'thicker cloud'
+    //reads as 'taller fill' which matches a user's intuition.
     const yCloud = (pct: number): number =>
-        MID + Math.max(0, Math.min(1, pct / 100)) * HALF;
+        BASE - Math.max(0, Math.min(1, pct / 100)) * H;
 
     const irrPoints = series.times.map((t, i) =>
         `${xOf(t).toFixed(2)},${yIrr(series.irradiance[i] ?? 0).toFixed(2)}`);
     const cloudPoints = series.times.map((t, i) =>
         `${xOf(t).toFixed(2)},${yCloud(series.cloud[i] ?? 0).toFixed(2)}`);
 
-    //Both areas close back to the midline (not the SVG edge),
-    //so each half stays anchored to its own baseline.
+    //Both areas close back to the shared bottom baseline so the
+    //fills always anchor to y = H regardless of the first / last
+    //sample value.
     const x0 = xOf(series.times[0]);
     const xN = xOf(series.times[series.times.length - 1]);
-    const irrArea = `M ${x0},${MID} L ${irrPoints.join(' L ')} L ${xN},${MID} Z`;
-    const cloudArea = `M ${x0},${MID} L ${cloudPoints.join(' L ')} L ${xN},${MID} Z`;
+    const irrArea = `M ${x0},${BASE} L ${irrPoints.join(' L ')} L ${xN},${BASE} Z`;
+    const cloudArea = `M ${x0},${BASE} L ${cloudPoints.join(' L ')} L ${xN},${BASE} Z`;
 
     //Stroke-only paths layered on top of the filled areas to
     //accentuate the curve outline. Same point sequence as the
@@ -173,25 +172,28 @@ export function renderChart(host: ChartHost): TemplateResult
             viewBox="0 0 ${W} ${H}"
             preserveAspectRatio="none"
         >
-            <path
-                d="${irrArea}"
-                fill="${sunColor}"
-                fill-opacity="0.5"
-            ></path>
+            <!-- Cloud first as the background layer; the irradiance
+                 fill paints on top with the same alpha so the two
+                 curves coexist rather than competing. -->
             <path
                 d="${cloudArea}"
                 fill="${cloudColor}"
                 fill-opacity="0.5"
             ></path>
             <path
-                class="hc-chart-line"
-                d="${irrLine}"
-                stroke="${sunColor}"
+                d="${irrArea}"
+                fill="${sunColor}"
+                fill-opacity="0.5"
             ></path>
             <path
                 class="hc-chart-line"
                 d="${cloudLine}"
                 stroke="${cloudColor}"
+            ></path>
+            <path
+                class="hc-chart-line"
+                d="${irrLine}"
+                stroke="${sunColor}"
             ></path>
             ${dayXs.map(x => svg`
                 <line
@@ -200,16 +202,11 @@ export function renderChart(host: ChartHost): TemplateResult
                     x2="${x.toFixed(2)}" y2="${H}"
                 ></line>
             `)}
-            <line
-                class="hc-chart-mid"
-                x1="0" y1="${MID}"
-                x2="${W}" y2="${MID}"
-            ></line>
             ${hourXs.map(x => svg`
                 <line
                     class="hc-hour-tick"
-                    x1="${x.toFixed(2)}" y1="${MID - HOUR_TICK_HALF}"
-                    x2="${x.toFixed(2)}" y2="${MID + HOUR_TICK_HALF}"
+                    x1="${x.toFixed(2)}" y1="${H - HOUR_TICK_HALF * 2}"
+                    x2="${x.toFixed(2)}" y2="${H}"
                 ></line>
             `)}
         </svg>

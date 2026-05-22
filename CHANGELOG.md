@@ -5,6 +5,64 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.1
+
+Pre-release on top of v1.6.2 with four UI / UX iterations on the
+card chrome and the timeline chart.
+
+### LiDAR-view toggle, redesigned
+
+The top-right `LiDAR` chip used to be a single button that vanished
+entirely when no LiDAR provider covered the home. It is now a
+two-element cluster mirroring the top-left clock + scrub-return
+pair: a passive `LiDAR` status chip on the right with a 22 x 22
+toggle button fused to its left edge. The button is **always
+rendered** with one of three coverage states, set by the engine
+at render time:
+
+* No provider matches the home, `mdi:cloud-off-outline` icon,
+  button disabled (faded, no hover effect, click ignored).
+* Public online provider matches, `mdi:earth` icon, button active,
+  click toggles LiDAR view.
+* Local-nDSM provider configured + covering the home,
+  `mdi:harddisk` icon, button active, click toggles LiDAR view.
+  The harddisk glyph signals at a glance that the user is on
+  their own data.
+
+When LiDAR view is active, both halves of the cluster flip to the
+same scrub-blue plate the clock chip + back-to-live button take
+when scrubbing the timeline, so the pair doubles as the "you're in
+LiDAR view" signal the same way the clock signals "you're
+scrubbing". Dropped the conditional render gating.
+
+### Timeline cleanup
+
+* **Cloud-cover curve un-mirrored.** The chart now shares a single
+  bottom baseline: both irradiance (0..1000 W/m²) and cloud cover
+  (0..100 %) grow upward from `y = H` to `y = 0`. The old "sun
+  pushes up / cloud presses down" mirror split is gone. Cloud
+  paints first as the background fill, irradiance on top, both at
+  50 % alpha so the two curves coexist without competing for pixel
+  rows. The day-separator dotted lines and the chart card frame
+  are unchanged.
+* **Day-label chips moved below the chart.** The white `Wed · 8.4
+  kWh` chips used to overlay the chart's midline; they now sit as
+  a separate row directly below the chart card (4 px breathing
+  gap), so they never cover the curves they're labelling. Each
+  chip still anchors to its date column via `left: <pct>%`.
+
+### Map zoom
+
+The pinch / scroll zoom is back, gated to a `[17, 18]` range. The
+camera resting pose stays at zoom 18 (the same as before); the
+user can pinch / scroll out by one MapLibre step (zoom 17) to see
+one block of context around the home, but cannot zoom in past the
+resting pose, the 3D camera + LiDAR overlay are tuned for that
+single altitude. Detail mode separately raises the cap to 19.5
+for its dive animation and restores 18 on exit.
+
+---
+
 ## v1.6.2
 
 Precision release on top of v1.6.1: two upgrades to the PV
