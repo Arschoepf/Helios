@@ -2983,17 +2983,19 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
-    /*  Live cursor: thin discreet line spanning the full chart with
-        a small triangle handle at the top. Stays subtle on purpose,
-        the user is in live mode, the cursor is a passive "where now
-        is on the timeline" reference, not a focus target. */
+    /*  Live cursor: thin line spanning the full chart with a small
+        triangle handle at the top. Slightly wider + a hair more
+        opaque than earlier iterations so it stays readable through
+        the future-mask wash that paints on top of half the chart.
+        Still kept subtle: it's a passive "where now is" reference,
+        not a focus target. */
     .tb-cursor-now
     {
         position: absolute;
         top: 0;
         bottom: 0;
-        width: 1px;
-        background: rgba(0, 0, 0, 0.45);
+        width: 2px;
+        background: rgba(0, 0, 0, 0.65);
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
@@ -3008,9 +3010,9 @@ const heliosCardStyles = i$3`
         transform: translateX(-50%);
         width: 0;
         height: 0;
-        border-left:   3px solid transparent;
-        border-right:  3px solid transparent;
-        border-top:    4px solid rgba(0, 0, 0, 0.55);
+        border-left:   4px solid transparent;
+        border-right:  4px solid transparent;
+        border-top:    5px solid rgba(0, 0, 0, 0.75);
     }
 
     /*  Scrub cursor: prominent solid blue line spanning the full
@@ -3029,7 +3031,13 @@ const heliosCardStyles = i$3`
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
-        box-shadow: 0 0 4px rgba(31, 111, 235, 0.4);
+        /*  1 px white halo all the way down + a soft blue glow.
+            The white halo pulls the cursor off the future-mask wash
+            and the night-zone hatch underneath, so the user can
+            still see exactly where they're scrubbing even when the
+            cursor sits inside a faded region. */
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.95),
+                    0 0 4px rgba(31, 111, 235, 0.4);
     }
 
     .tb-cursor-sel::after
@@ -3145,6 +3153,28 @@ const heliosCardStyles = i$3`
         Repeating linear gradients render at the device pixel grid
         regardless of the chart SVG's preserveAspectRatio=none, so
         the stripes stay diagonal across any card width.            */
+    /*  Future-mask wash, sits on top of the curves and night zones
+        and stretches from "now" to the right edge of the card. The
+        wash uses the card background colour at moderate alpha so it
+        lightens the curves AND the night-zone hatches in a single
+        pass without redoubling on overlapping regions. Cursors sit
+        at z-index 4 and stay fully opaque.                          */
+    .hc-future-mask
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        pointer-events: none;
+        z-index: 3;
+        background: rgba(255, 255, 255, 0.55);
+    }
+    ha-card.theme-dark .hc-future-mask
+    {
+        background: rgba(20, 20, 22, 0.55);
+    }
+
+
     .hc-night-zone
     {
         position: absolute;
@@ -3160,25 +3190,25 @@ const heliosCardStyles = i$3`
             obscured the curves the user came to read.              */
         background-image: repeating-linear-gradient(
             45deg,
-            rgba(0, 0, 0, 0.07) 0,
-            rgba(0, 0, 0, 0.07) 1.5px,
+            rgba(0, 0, 0, 0.04) 0,
+            rgba(0, 0, 0, 0.04) 1.5px,
             transparent       1.5px,
             transparent       6px
         );
-        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.07),
-                    inset -1px 0 0 0 rgba(0, 0, 0, 0.07);
+        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.04),
+                    inset -1px 0 0 0 rgba(0, 0, 0, 0.04);
     }
     ha-card.theme-dark .hc-night-zone
     {
         background-image: repeating-linear-gradient(
             45deg,
-            rgba(255, 255, 255, 0.10) 0,
-            rgba(255, 255, 255, 0.10) 1.5px,
+            rgba(255, 255, 255, 0.06) 0,
+            rgba(255, 255, 255, 0.06) 1.5px,
             transparent              1.5px,
             transparent              6px
         );
-        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.10),
-                    inset -1px 0 0 0 rgba(255, 255, 255, 0.10);
+        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.06),
+                    inset -1px 0 0 0 rgba(255, 255, 255, 0.06);
     }
 
 
@@ -3193,7 +3223,7 @@ const heliosCardStyles = i$3`
     .tb-day-labels
     {
         position: relative;
-        height: 18px;
+        height: 22px;
         /*  No extra margin-top: the time-bar's flex gap (6 px)
             already separates the chip row from the chart card,
             and that same 6 px shows up below the row as the
@@ -3209,13 +3239,13 @@ const heliosCardStyles = i$3`
         transform: translateX(-50%);
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: 5px;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
-        padding: 1px 5px;
-        font-size:    9px;
+        padding: 2px 7px;
+        font-size:    11px;
         font-weight:  600;
         line-height:  1.2;
         letter-spacing: 0.2px;
@@ -4131,7 +4161,7 @@ const heliosCardStyles = i$3`
 
     ha-card.theme-dark .tb-cursor-now
     {
-        background: rgba(255, 255, 255, 0.55);
+        background: rgba(255, 255, 255, 0.75);
     }
 
     ha-card.theme-dark .tb-cursor-now::after
@@ -5284,6 +5314,7 @@ function onTimelinePointerUp(host, e2) {
   }
   host._trackElement = null;
   host._trackPointerId = null;
+  host._chartHoverPct = null;
 }
 function applyTimelinePointer(host, e2) {
   if (!host._timeRange) {
@@ -5299,6 +5330,7 @@ function applyTimelinePointer(host, e2) {
   }
   host._selectedTime = t2;
   host._isLiveMode = false;
+  host._chartHoverPct = frac * 100;
   host._engine?.setSelectedTime(t2);
 }
 function resetToLive(host) {
@@ -38364,6 +38396,23 @@ function renderTimelineNightZones(host) {
         `)}
     `;
 }
+function renderTimelineFutureMask(host) {
+  const range = host._timeRange;
+  if (!range) return b``;
+  const startMs = range.start.getTime();
+  const endMs = range.end.getTime();
+  const rangeMs = endMs - startMs;
+  if (rangeMs <= 0) return b``;
+  const nowMs = Date.now();
+  if (nowMs <= startMs || nowMs >= endMs) return b``;
+  const nowPct = (nowMs - startMs) / rangeMs * 100;
+  return b`
+        <div
+            class="hc-future-mask"
+            style="left:${nowPct.toFixed(2)}%"
+        ></div>
+    `;
+}
 function pvValueAtTime(host, targetMs) {
   const luRaw = (host._pvUnit || "").trim();
   if (!luRaw) return { value: NaN, unit: "" };
@@ -38384,12 +38433,12 @@ function pvValueAtTime(host, targetMs) {
         if (dtH <= 0 || dtH > 6) break;
         const dv = hist.values[i2] - hist.values[i2 - 1];
         if (!isFinite(dv) || dv < 0) break;
-        return { value: dv / dtH, unit: displayUnit };
+        return { value: Math.max(0, dv / dtH), unit: displayUnit };
       }
     } else {
       const v2 = interpAt(hist.times, hist.values, targetMs);
       if (isFinite(v2)) {
-        return { value: v2, unit: displayUnit };
+        return { value: Math.max(0, v2), unit: displayUnit };
       }
     }
   }
@@ -38414,9 +38463,9 @@ function pvValueAtTime(host, targetMs) {
         raster
       }) * k2;
       const dt = t1 - t0;
-      if (dt <= 0) return { value: w1 * nativeFromW, unit: displayUnit };
+      if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit };
       const w2 = w0 + (w1 - w0) * (targetMs - t0) / dt;
-      return { value: w2 * nativeFromW, unit: displayUnit };
+      return { value: Math.max(0, w2) * nativeFromW, unit: displayUnit };
     }
   }
   return { value: NaN, unit: displayUnit };
@@ -38792,7 +38841,7 @@ function renderPvChart(host) {
       );
     }
     if (isFinite(hoverV)) {
-      hoverY = yOf(hoverV);
+      hoverY = yOf(Math.max(0, hoverV));
       showHover = true;
     }
   }
@@ -41667,7 +41716,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.5"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.6"}`,
       labelStyle,
       versionStyle
     );
@@ -41691,7 +41740,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.5",
+        version: "1.6.3-beta.6",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41699,7 +41748,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.5"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.6"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -42142,6 +42191,7 @@ let HeliosCard = class extends i {
                             >
                                 ${renderPvChart(this)}
                                 ${renderTimelineNightZones(this)}
+                                ${renderTimelineFutureMask(this)}
                                 ${renderTimelineTicks(this)}
                             </div>
                         ` : A}
@@ -42162,6 +42212,7 @@ let HeliosCard = class extends i {
                         >
                             ${renderChart(this)}
                             ${renderTimelineNightZones(this)}
+                            ${renderTimelineFutureMask(this)}
                             ${renderTimelineTicks(this)}
                         </div>
                         ${renderTimelineDayLabels(this)}

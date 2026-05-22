@@ -1133,17 +1133,19 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Live cursor: thin discreet line spanning the full chart with
-        a small triangle handle at the top. Stays subtle on purpose,
-        the user is in live mode, the cursor is a passive "where now
-        is on the timeline" reference, not a focus target. */
+    /*  Live cursor: thin line spanning the full chart with a small
+        triangle handle at the top. Slightly wider + a hair more
+        opaque than earlier iterations so it stays readable through
+        the future-mask wash that paints on top of half the chart.
+        Still kept subtle: it's a passive "where now is" reference,
+        not a focus target. */
     .tb-cursor-now
     {
         position: absolute;
         top: 0;
         bottom: 0;
-        width: 1px;
-        background: rgba(0, 0, 0, 0.45);
+        width: 2px;
+        background: rgba(0, 0, 0, 0.65);
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
@@ -1158,9 +1160,9 @@ export const heliosCardStyles = css`
         transform: translateX(-50%);
         width: 0;
         height: 0;
-        border-left:   3px solid transparent;
-        border-right:  3px solid transparent;
-        border-top:    4px solid rgba(0, 0, 0, 0.55);
+        border-left:   4px solid transparent;
+        border-right:  4px solid transparent;
+        border-top:    5px solid rgba(0, 0, 0, 0.75);
     }
 
     /*  Scrub cursor: prominent solid blue line spanning the full
@@ -1179,7 +1181,13 @@ export const heliosCardStyles = css`
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
-        box-shadow: 0 0 4px rgba(31, 111, 235, 0.4);
+        /*  1 px white halo all the way down + a soft blue glow.
+            The white halo pulls the cursor off the future-mask wash
+            and the night-zone hatch underneath, so the user can
+            still see exactly where they're scrubbing even when the
+            cursor sits inside a faded region. */
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.95),
+                    0 0 4px rgba(31, 111, 235, 0.4);
     }
 
     .tb-cursor-sel::after
@@ -1295,6 +1303,28 @@ export const heliosCardStyles = css`
         Repeating linear gradients render at the device pixel grid
         regardless of the chart SVG's preserveAspectRatio=none, so
         the stripes stay diagonal across any card width.            */
+    /*  Future-mask wash, sits on top of the curves and night zones
+        and stretches from "now" to the right edge of the card. The
+        wash uses the card background colour at moderate alpha so it
+        lightens the curves AND the night-zone hatches in a single
+        pass without redoubling on overlapping regions. Cursors sit
+        at z-index 4 and stay fully opaque.                          */
+    .hc-future-mask
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        pointer-events: none;
+        z-index: 3;
+        background: rgba(255, 255, 255, 0.55);
+    }
+    ha-card.theme-dark .hc-future-mask
+    {
+        background: rgba(20, 20, 22, 0.55);
+    }
+
+
     .hc-night-zone
     {
         position: absolute;
@@ -1310,25 +1340,25 @@ export const heliosCardStyles = css`
             obscured the curves the user came to read.              */
         background-image: repeating-linear-gradient(
             45deg,
-            rgba(0, 0, 0, 0.07) 0,
-            rgba(0, 0, 0, 0.07) 1.5px,
+            rgba(0, 0, 0, 0.04) 0,
+            rgba(0, 0, 0, 0.04) 1.5px,
             transparent       1.5px,
             transparent       6px
         );
-        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.07),
-                    inset -1px 0 0 0 rgba(0, 0, 0, 0.07);
+        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.04),
+                    inset -1px 0 0 0 rgba(0, 0, 0, 0.04);
     }
     ha-card.theme-dark .hc-night-zone
     {
         background-image: repeating-linear-gradient(
             45deg,
-            rgba(255, 255, 255, 0.10) 0,
-            rgba(255, 255, 255, 0.10) 1.5px,
+            rgba(255, 255, 255, 0.06) 0,
+            rgba(255, 255, 255, 0.06) 1.5px,
             transparent              1.5px,
             transparent              6px
         );
-        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.10),
-                    inset -1px 0 0 0 rgba(255, 255, 255, 0.10);
+        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.06),
+                    inset -1px 0 0 0 rgba(255, 255, 255, 0.06);
     }
 
 
@@ -1343,7 +1373,7 @@ export const heliosCardStyles = css`
     .tb-day-labels
     {
         position: relative;
-        height: 18px;
+        height: 22px;
         /*  No extra margin-top: the time-bar's flex gap (6 px)
             already separates the chip row from the chart card,
             and that same 6 px shows up below the row as the
@@ -1359,13 +1389,13 @@ export const heliosCardStyles = css`
         transform: translateX(-50%);
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: 5px;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
-        padding: 1px 5px;
-        font-size:    9px;
+        padding: 2px 7px;
+        font-size:    11px;
         font-weight:  600;
         line-height:  1.2;
         letter-spacing: 0.2px;
@@ -2281,7 +2311,7 @@ export const heliosCardStyles = css`
 
     ha-card.theme-dark .tb-cursor-now
     {
-        background: rgba(255, 255, 255, 0.55);
+        background: rgba(255, 255, 255, 0.75);
     }
 
     ha-card.theme-dark .tb-cursor-now::after

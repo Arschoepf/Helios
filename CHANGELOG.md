@@ -5,6 +5,36 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.6
+
+Iterative pre-release on top of v1.6.3-beta.5. Second polish
+round on the timeline.
+
+* **Future-portion wash on both chart cards.** A semi-opaque
+  overlay anchored to "now" stretches to the right edge of each
+  card, fading the irradiance, cloud and PV curves, the night-zone
+  hatch and the card background in one pass. Past stays at full
+  punch; forecast reads as forecast.
+* **Night-zone hatch and edges dropped to 0.04 alpha** (0.06 in
+  dark mode). Combined with the future-mask wash above, the night
+  windows now ride underneath the curves instead of competing for
+  attention.
+* **Tooltip now follows touch drags on mobile.** The scrub handler
+  writes `_chartHoverPct` in lock-step with `_selectedTime`, so
+  the tooltip + per-curve dots track a finger drag exactly the
+  way a mouse hover does on desktop. Cleared on pointer release.
+* **PV readout clamps negative values to zero.** Net-meter
+  entities can briefly dip negative around dawn / dusk; the
+  tooltip now shows 0 W instead of "-2 W".
+* **Day-label chips a touch bigger.** Font 9 px -> 11 px, padding
+  +1 px on each axis, container row 18 px -> 22 px so the chip
+  ring still fits comfortably.
+* **Live + scrub cursors more readable through the wash.** Live
+  cursor is now 2 px (was 1 px) at 0.65 alpha (was 0.45) with a
+  slightly larger triangle handle on top. Scrub cursor keeps its
+  blue plate but gains a 1 px white halo so it pops out of the
+  faded forecast region and the night-zone hatch underneath.
+
 ## v1.6.3-beta.5
 
 Iterative pre-release on top of v1.6.3-beta.4. UX polish round

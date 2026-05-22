@@ -198,6 +198,35 @@ export function renderTimelineNightZones(host: ChartHost): TemplateResult
 }
 
 
+//Semi-opaque overlay covering the future portion of a chart card.
+//Paints on top of the curves + night-zones at z-index 3, leaving
+//the live + scrub cursors (z-index 4) untouched. Anchored to "now"
+//inside the active visible range, so the past portion (left of
+//the overlay) reads at full punch and the forecast portion (right
+//of the overlay) sits behind a wash that fades curves, fills and
+//hatch overlays in one go. Returns nothing when "now" sits
+//outside the range (a fully-past or fully-future window), so the
+//mask never shrinks to a sliver or fills the whole card.
+export function renderTimelineFutureMask(host: ChartHost): TemplateResult
+{
+    const range = host._timeRange;
+    if (!range) return html``;
+    const startMs = range.start.getTime();
+    const endMs   = range.end.getTime();
+    const rangeMs = endMs - startMs;
+    if (rangeMs <= 0) return html``;
+    const nowMs = Date.now();
+    if (nowMs <= startMs || nowMs >= endMs) return html``;
+    const nowPct = (nowMs - startMs) / rangeMs * 100;
+    return html`
+        <div
+            class="hc-future-mask"
+            style="left:${nowPct.toFixed(2)}%"
+        ></div>
+    `;
+}
+
+
 //PV value at the hover timestamp, expressed in the entity's
 //native power unit so the tooltip number matches the Y axis of
 //the PV chart and the user's own entity reading. Observed-history
@@ -223,7 +252,10 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
 
     //Observed history. Cumulative entities differentiate between
     //the bracketing pair (the same shape the chart uses); power
-    //entities linearly interpolate.
+    //entities linearly interpolate. Sensor noise (and net-meter
+    //entities swinging through zero at dawn / dusk) can hand back
+    //a small negative reading; we floor at zero so the tooltip
+    //never displays "-2 W" of production.
     const hist = host._pvHistory;
     if (hist && hist.times.length >= 2)
     {
@@ -239,7 +271,7 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
                 if (dtH <= 0 || dtH > 6) break;
                 const dv = hist.values[i] - hist.values[i - 1];
                 if (!isFinite(dv) || dv < 0) break;
-                return { value: dv / dtH, unit: displayUnit };
+                return { value: Math.max(0, dv / dtH), unit: displayUnit };
             }
         }
         else
@@ -247,7 +279,7 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
             const v = interpAt(hist.times, hist.values, targetMs);
             if (isFinite(v))
             {
-                return { value: v, unit: displayUnit };
+                return { value: Math.max(0, v), unit: displayUnit };
             }
         }
     }
@@ -277,9 +309,9 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
                 raster,
             }) * k;
             const dt = t1 - t0;
-            if (dt <= 0) return { value: w1 * nativeFromW, unit: displayUnit };
+            if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit };
             const w  = w0 + (w1 - w0) * (targetMs - t0) / dt;
-            return { value: w * nativeFromW, unit: displayUnit };
+            return { value: Math.max(0, w) * nativeFromW, unit: displayUnit };
         }
     }
 
@@ -913,7 +945,10 @@ export function renderPvChart(host: ChartHost): TemplateResult
         }
         if (isFinite(hoverV))
         {
-            hoverY = yOf(hoverV);
+            //Floor at zero: a net-meter entity can briefly dip below
+            //zero around dawn / dusk and the dot should still ride
+            //the visible curve, not dive off the bottom of the card.
+            hoverY = yOf(Math.max(0, hoverV));
             showHover = true;
         }
     }

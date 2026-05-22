@@ -36,6 +36,7 @@ import
     renderTimelineTicks,
     renderTimelineDayLabels,
     renderTimelineNightZones,
+    renderTimelineFutureMask,
     renderTimelineHoverTooltip,
     handleChartHoverMove,
     handleChartHoverLeave
@@ -1164,6 +1165,7 @@ export class HeliosCard extends LitElement
                             >
                                 ${renderPvChart(this)}
                                 ${renderTimelineNightZones(this)}
+                                ${renderTimelineFutureMask(this)}
                                 ${renderTimelineTicks(this)}
                             </div>
                         ` : nothing}
@@ -1184,6 +1186,7 @@ export class HeliosCard extends LitElement
                         >
                             ${renderChart(this)}
                             ${renderTimelineNightZones(this)}
+                            ${renderTimelineFutureMask(this)}
                             ${renderTimelineTicks(this)}
                         </div>
                         ${renderTimelineDayLabels(this)}
