@@ -278,6 +278,24 @@ export const heliosCardStyles = css`
         opacity: 0;
         transform: translateY(8px);
         animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        /*  position: relative so the card can take a z-index when
+            its tooltip is being hovered (see below). At rest the
+            z-index stays auto so no stacking context is created.  */
+        position: relative;
+    }
+    /*  Card lift on tooltip hover. When the user's cursor is on a
+        chip with a popover tooltip (.dash-stat-delta or .dash-stat-
+        refined), the whole card jumps to z-index 20 so the tooltip,
+        which sits at z-index 10 INSIDE the card's stacking context,
+        paints above sibling cards in the same row. Without this the
+        adjacent battery card naturally paints later in DOM order and
+        clips the tooltip. The :has() selector targets the actual
+        hover on either tooltip trigger, so the lift only happens
+        when the popover is actually visible.                       */
+    .dash-card:has(.dash-stat-delta:hover),
+    .dash-card:has(.dash-stat-refined:hover)
+    {
+        z-index: 20;
     }
     /*  Staggered reveal: today first, then the tomorrow + battery
         row appears with a single shared delay. Tomorrow + battery
@@ -749,6 +767,25 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .dash-today-chart-night
     {
         stroke: rgba(255, 255, 255, 0.10);
+    }
+
+    /*  Dotted day/night boundary lines at the sunrise and sunset
+        X positions. Same recipe as the timeline's day-separator
+        (.hc-day-sep) so the visual language matches: alpha 0.30,
+        1.5 / 2.5 dash, non-scaling stroke. The hatch tells the
+        user "this slice is night"; the dotted line marks the exact
+        moment the sun crossed the horizon.                         */
+    .dash-today-chart-twilight
+    {
+        stroke: rgba(0, 0, 0, 0.30);
+        stroke-width: 1;
+        stroke-dasharray: 1.5 2.5;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .dash-today-chart-twilight
+    {
+        stroke: rgba(255, 255, 255, 0.30);
     }
     .dash-today-chart-hover-line
     {

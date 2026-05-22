@@ -5,6 +5,35 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.13
+
+Three follow-ups on the beta.12 live-card review.
+
+* **Tomorrow card calibration tooltip can now paint above the
+  battery card.** The beta.12 fix (transform: none in the entry
+  keyframe) released the card's stacking context but the battery
+  card next to it still painted on top because of natural DOM
+  order. Robust fix : `.dash-card { position: relative }` + a
+  `:has(.dash-stat-delta:hover, .dash-stat-refined:hover)`
+  selector that lifts the hovered card to `z-index: 20` while
+  the popover is visible. The whole card jumps above the sibling
+  battery card, the tooltip rides along.
+* **Day / night vertical separator lines on the dashboard today
+  chart.** Two dotted lines at the sunrise + sunset X positions,
+  same dashed recipe as the timeline's `.hc-day-sep`
+  (`stroke: rgba(0, 0, 0, 0.30); stroke-dasharray: 1.5 2.5`),
+  light + dark themes. The hatch says "this slice is night"; the
+  dotted line marks the exact moment the sun crossed the horizon.
+* **Shadow recompute coalesced during scrub.** Dragging the
+  timeline cursor used to trigger a full LiDAR shadow paint per
+  pointer-move event (raster paint + PNG encode + image-source
+  update, ~10-40 ms each depending on `lidar-precision`); on a
+  fast drag at high precision this stacked up and made the cursor
+  visibly chase the pointer. Sweep now coalesces rapid
+  setSelectedTime() calls into one shadow refresh per 100 ms.
+  Light visuals (sun arc, PV chip, cloud disc) still update on
+  every move; only the costly raster paint is deferred.
+
 ## v1.6.3-beta.12
 
 Polish round on top of v1.6.3-beta.11. Mostly visual tweaks from

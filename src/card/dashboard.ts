@@ -797,6 +797,32 @@ export function renderDashTodayChart(
                         fill="url(#${hatchId})"
                     ></rect>
                 ` : nothing}
+                <!--  Dotted vertical lines at the sunrise / sunset
+                      X positions, matching the timeline's day-
+                      separator look (.hc-day-sep). Acts as a clear
+                      day/night boundary on top of the softer hatch
+                      shading. Dark + light themes pick up their
+                      stroke colour from .dash-today-chart-twilight
+                      below, same alpha as the hc-day-sep on the
+                      main chart.                                    -->
+                ${nightLeftEnd !== null ? svg`
+                    <line
+                        class="dash-today-chart-twilight"
+                        x1="${nightLeftEnd.toFixed(2)}"
+                        y1="${PAD_T.toFixed(2)}"
+                        x2="${nightLeftEnd.toFixed(2)}"
+                        y2="${(H - PAD_B).toFixed(2)}"
+                    ></line>
+                ` : nothing}
+                ${nightRightStart !== null ? svg`
+                    <line
+                        class="dash-today-chart-twilight"
+                        x1="${nightRightStart.toFixed(2)}"
+                        y1="${PAD_T.toFixed(2)}"
+                        x2="${nightRightStart.toFixed(2)}"
+                        y2="${(H - PAD_B).toFixed(2)}"
+                    ></line>
+                ` : nothing}
                 ${kwhTicks.map(v => svg`
                     <line class="dash-today-chart-grid"
                           x1="${PAD_L}"     y1="${yFor(v).toFixed(2)}"

@@ -643,6 +643,14 @@ export class HeliosEngine
     //home + building-radius.
     private _shadowCanvas?: HTMLCanvasElement;
 
+    //Debounce timer for the shadow / atmosphere refresh during a
+    //rapid scrub. Each setSelectedTime() call resets the timer; the
+    //actual refresh runs once when the timer expires. Keeps the
+    //live scrub gesture responsive (the curves + chips still
+    //update on every move; only the shadow raster paint, which is
+    //the costly bit at lidar-precision: high, is coalesced).
+    private _selectedTimeShadowTimer: number | null = null;
+
     //Cache of the 96 per-day sun arc samples. Sun position + clear-sky
     //irradiance depend only on the calendar day and the cloud cover,
     //not on the live map matrix, so we recompute the heavy trig only
@@ -3460,7 +3468,22 @@ export class HeliosEngine
             //"have we moved enough" guard would otherwise short-circuit.
             this._lastAtmosphereAlt = -999;
             this._renderForCurrentSelection();
-            this._refreshShadowsAndAtmosphere();
+            //Coalesce rapid scrub moves into a single shadow paint
+            //every ~100 ms. The light-weight visuals (sun arc, PV
+            //chip, cloud disc) already updated through
+            //_renderForCurrentSelection() above; only the costly
+            //shadow raster paint (LiDAR + atmosphere recompute) is
+            //deferred. Snapshots align with the final pointer
+            //position once the user pauses for 100 ms.
+            if (this._selectedTimeShadowTimer !== null)
+            {
+                window.clearTimeout(this._selectedTimeShadowTimer);
+            }
+            this._selectedTimeShadowTimer = window.setTimeout(() =>
+            {
+                this._selectedTimeShadowTimer = null;
+                this._refreshShadowsAndAtmosphere();
+            }, 100);
         }
     }
 
@@ -3808,6 +3831,11 @@ export class HeliosEngine
         bumpStat('enginesCleanedUp');
         _liveEngines.delete(this);
         this._clearWeatherTimer();
+        if (this._selectedTimeShadowTimer !== null)
+        {
+            window.clearTimeout(this._selectedTimeShadowTimer);
+            this._selectedTimeShadowTimer = null;
+        }
         window.clearInterval(this._skyTimer);
         window.clearTimeout(this._resizeDebounceTimer);
         this._fetchAbortController?.abort();

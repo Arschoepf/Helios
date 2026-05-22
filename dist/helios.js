@@ -2168,6 +2168,24 @@ const heliosCardStyles = i$3`
         opacity: 0;
         transform: translateY(8px);
         animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        /*  position: relative so the card can take a z-index when
+            its tooltip is being hovered (see below). At rest the
+            z-index stays auto so no stacking context is created.  */
+        position: relative;
+    }
+    /*  Card lift on tooltip hover. When the user's cursor is on a
+        chip with a popover tooltip (.dash-stat-delta or .dash-stat-
+        refined), the whole card jumps to z-index 20 so the tooltip,
+        which sits at z-index 10 INSIDE the card's stacking context,
+        paints above sibling cards in the same row. Without this the
+        adjacent battery card naturally paints later in DOM order and
+        clips the tooltip. The :has() selector targets the actual
+        hover on either tooltip trigger, so the lift only happens
+        when the popover is actually visible.                       */
+    .dash-card:has(.dash-stat-delta:hover),
+    .dash-card:has(.dash-stat-refined:hover)
+    {
+        z-index: 20;
     }
     /*  Staggered reveal: today first, then the tomorrow + battery
         row appears with a single shared delay. Tomorrow + battery
@@ -2639,6 +2657,25 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .dash-today-chart-night
     {
         stroke: rgba(255, 255, 255, 0.10);
+    }
+
+    /*  Dotted day/night boundary lines at the sunrise and sunset
+        X positions. Same recipe as the timeline's day-separator
+        (.hc-day-sep) so the visual language matches: alpha 0.30,
+        1.5 / 2.5 dash, non-scaling stroke. The hatch tells the
+        user "this slice is night"; the dotted line marks the exact
+        moment the sun crossed the horizon.                         */
+    .dash-today-chart-twilight
+    {
+        stroke: rgba(0, 0, 0, 0.30);
+        stroke-width: 1;
+        stroke-dasharray: 1.5 2.5;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .dash-today-chart-twilight
+    {
+        stroke: rgba(255, 255, 255, 0.30);
     }
     .dash-today-chart-hover-line
     {
@@ -36030,6 +36067,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarShadowDiagnostics = null;
     this._lidarShadowKey = "";
     this._lidarRaster = null;
+    this._selectedTimeShadowTimer = null;
     this._lidarViewActive = false;
     this._detailMode = false;
     this._postExitCooldownUntil = 0;
@@ -37903,7 +37941,13 @@ const _HeliosEngine = class _HeliosEngine {
     if (this._mapReady && this._homeHourlyData) {
       this._lastAtmosphereAlt = -999;
       this._renderForCurrentSelection();
-      this._refreshShadowsAndAtmosphere();
+      if (this._selectedTimeShadowTimer !== null) {
+        window.clearTimeout(this._selectedTimeShadowTimer);
+      }
+      this._selectedTimeShadowTimer = window.setTimeout(() => {
+        this._selectedTimeShadowTimer = null;
+        this._refreshShadowsAndAtmosphere();
+      }, 100);
     }
   }
   //Expose the hourly series the card needs to draw the chart.
@@ -38139,6 +38183,10 @@ const _HeliosEngine = class _HeliosEngine {
     bumpStat("enginesCleanedUp");
     _liveEngines.delete(this);
     this._clearWeatherTimer();
+    if (this._selectedTimeShadowTimer !== null) {
+      window.clearTimeout(this._selectedTimeShadowTimer);
+      this._selectedTimeShadowTimer = null;
+    }
     window.clearInterval(this._skyTimer);
     window.clearTimeout(this._resizeDebounceTimer);
     this._fetchAbortController?.abort();
@@ -39874,6 +39922,32 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                         height="${(H2 - PAD_T - PAD_B).toFixed(2)}"
                         fill="url(#${hatchId})"
                     ></rect>
+                ` : A}
+                <!--  Dotted vertical lines at the sunrise / sunset
+                      X positions, matching the timeline's day-
+                      separator look (.hc-day-sep). Acts as a clear
+                      day/night boundary on top of the softer hatch
+                      shading. Dark + light themes pick up their
+                      stroke colour from .dash-today-chart-twilight
+                      below, same alpha as the hc-day-sep on the
+                      main chart.                                    -->
+                ${nightLeftEnd !== null ? w`
+                    <line
+                        class="dash-today-chart-twilight"
+                        x1="${nightLeftEnd.toFixed(2)}"
+                        y1="${PAD_T.toFixed(2)}"
+                        x2="${nightLeftEnd.toFixed(2)}"
+                        y2="${(H2 - PAD_B).toFixed(2)}"
+                    ></line>
+                ` : A}
+                ${nightRightStart !== null ? w`
+                    <line
+                        class="dash-today-chart-twilight"
+                        x1="${nightRightStart.toFixed(2)}"
+                        y1="${PAD_T.toFixed(2)}"
+                        x2="${nightRightStart.toFixed(2)}"
+                        y2="${(H2 - PAD_B).toFixed(2)}"
+                    ></line>
                 ` : A}
                 ${kwhTicks.map((v2) => w`
                     <line class="dash-today-chart-grid"
@@ -42051,7 +42125,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.12"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.13"}`,
       labelStyle,
       versionStyle
     );
@@ -42075,7 +42149,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.12",
+        version: "1.6.3-beta.13",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -42083,7 +42157,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.12"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.13"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
