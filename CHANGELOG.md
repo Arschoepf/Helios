@@ -5,6 +5,23 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.2-beta.3
+
+Iterative pre-release on top of v1.6.2-beta.2. Same feature payload
+as the rest of the v1.6.2 line (PV thermal derating + LiDAR-aware
+shading); the diff is one UI revert on the LiDAR-View toggle.
+
+* `mdi:cube-scan` icon proved too abstract to immediately read as
+  "LiDAR overlay" on the dashboard. The button is now a plain
+  text-only `LiDAR` chip, mirroring the `.clock` chip layout
+  exactly (12 px Roboto 600, line-height 1.2, padding 2 px 8 px,
+  22 px tall). Mixed-case spelling (no text-transform) keeps the
+  baseline metrics unambiguous, so the label centres consistently
+  on Chromium, Firefox and WebKit, the same recipe the date chip
+  on the opposite rail uses without issue.
+
+---
+
 ## v1.6.2-beta.2
 
 Iterative pre-release on top of v1.6.2-beta.1. Same feature set

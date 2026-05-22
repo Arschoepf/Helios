@@ -1311,25 +1311,28 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        /*  Icon-only square chip on the top-right rail. The width
-            now equals the height so the cube-scan glyph sits
-            visibly centred whatever the browser's text metrics
-            quirks; the label was removed because rendering an 11 px
-            uppercase Roboto run inside an ha-card slot proved too
-            font-engine dependent (Chromium / Firefox / WebKit each
-            shifted the glyph box by a different fraction of a px
-            against the icon). The icon alone communicates the same
-            "LiDAR layer toggle" intent and stays pixel-perfect
-            across engines.                                          */
-        width:  22px;
+        /*  Text-only "LiDAR" chip on the top-right rail. Layout
+            mirrors the .clock chip on the opposite rail exactly
+            (12 px Roboto 600, line-height 1.2, padding 2px 8px,
+            22 px tall) since that recipe centres consistently on
+            Chromium, Firefox and WebKit. Mixed-case "LiDAR" (no
+            text-transform) keeps the lowercase 'i' as an ascender
+            and the rest as cap-height + x-height letters, so the
+            baseline metrics are unambiguous, no engine-dependent
+            uppercase asymmetry to fight.                          */
         height: 22px;
         box-sizing: border-box;
-        padding: 0;
+        padding: 2px 8px;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
         border-radius: 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size:   12px;
+        font-weight: 600;
+        line-height: 1.2;
+        white-space: nowrap;
         cursor: pointer;
         /*  Force full opacity at every state except :disabled (which
             sets its own 0.35 for the visual "not available" hint).
@@ -1353,18 +1356,6 @@ export const heliosCardStyles = css`
         pointer-events: auto;
         position: relative;
         z-index: 50;
-    }
-    .lidar-view-btn ha-icon
-    {
-        /*  The chip is icon-only now; bumping the glyph from 14 to
-            16 px fills the 22 px chip cleanly (1 px border + ~3 px
-            optical breathing room each side) and reads well even at
-            HA's smaller dashboard scales.                          */
-        --mdc-icon-size: 16px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 1;
     }
     .lidar-view-btn:disabled
     {

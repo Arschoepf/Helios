@@ -1214,7 +1214,7 @@ export class HeliosCard extends LitElement
                             aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
                             @click="${() => toggleLidarView(this)}"
                         >
-                            <ha-icon icon="mdi:cube-scan"></ha-icon>
+                            <span class="lidar-view-btn-label">LiDAR</span>
                         </button>
                     </div>
                 ` : nothing}
