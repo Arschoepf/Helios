@@ -2915,7 +2915,7 @@ const heliosCardStyles = i$3`
         border: 1px solid #000000;
         border-radius: 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        height: 64px;
+        height: 48px;
         overflow: hidden;
     }
 
@@ -3113,13 +3113,13 @@ const heliosCardStyles = i$3`
         gap: 6px;
     }
 
-    .tb-hover-tooltip-dot
+    .tb-hover-tooltip-icon
     {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
+        --mdc-icon-size: 13px;
+        display: inline-flex;
+        align-items: center;
         flex-shrink: 0;
+        line-height: 1;
     }
 
     .tb-hover-tooltip-value
@@ -3152,31 +3152,33 @@ const heliosCardStyles = i$3`
         bottom: 0;
         pointer-events: none;
         z-index: 3;
+        /*  Hatch + sunset/sunrise edges share the exact same RGBA
+            (rgba(0, 0, 0, 0.07) light, rgba(255, 255, 255, 0.10)
+            dark) so the boundary line reads as the densest part of
+            the same hatch rather than as a separate marker. Alpha
+            dropped relative to earlier iterations: too much density
+            obscured the curves the user came to read.              */
         background-image: repeating-linear-gradient(
             45deg,
-            rgba(0, 0, 0, 0.11) 0,
-            rgba(0, 0, 0, 0.11) 1.5px,
+            rgba(0, 0, 0, 0.07) 0,
+            rgba(0, 0, 0, 0.07) 1.5px,
             transparent       1.5px,
             transparent       6px
         );
-        /*  Thin vertical edges flagging the sunset (left) and
-            sunrise (right) transitions. Inset box-shadows so the
-            edges sit inside the zone's footprint and don't widen
-            its hit-box or shift adjacent overlays. */
-        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.45),
-                    inset -1px 0 0 0 rgba(0, 0, 0, 0.45);
+        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.07),
+                    inset -1px 0 0 0 rgba(0, 0, 0, 0.07);
     }
     ha-card.theme-dark .hc-night-zone
     {
         background-image: repeating-linear-gradient(
             45deg,
-            rgba(255, 255, 255, 0.14) 0,
-            rgba(255, 255, 255, 0.14) 1.5px,
+            rgba(255, 255, 255, 0.10) 0,
+            rgba(255, 255, 255, 0.10) 1.5px,
             transparent              1.5px,
             transparent              6px
         );
-        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.45),
-                    inset -1px 0 0 0 rgba(255, 255, 255, 0.45);
+        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.10),
+                    inset -1px 0 0 0 rgba(255, 255, 255, 0.10);
     }
 
 
@@ -3250,11 +3252,15 @@ const heliosCardStyles = i$3`
         font-style: italic;
     }
 
-    /*  Optional PV graph card stacked above the main chart. Half
-        the main height so the irradiance and PV areas balance. */
+    /*  Optional PV graph card stacked above the main chart. Same
+        height as the main chart so the two cards form a balanced
+        stack: production sits on top, irradiance + cloud cover
+        underneath, neither dominating the other. The combined
+        block keeps the same total vertical footprint the previous
+        (32 px PV + 64 px main) layout occupied. */
     .tb-pv-card
     {
-        height: 32px;
+        height: 48px;
     }
 
 
@@ -3341,11 +3347,23 @@ const heliosCardStyles = i$3`
         font-weight: 600;
         line-height: 1.2;
         white-space: nowrap;
+        cursor: pointer;
+        pointer-events: auto;
         transition: background 0.15s, color 0.15s, border-color 0.15s;
-        pointer-events: none;
         position: relative;
         z-index: 50;
     }
+    .lidar-view-chip:hover  { background: #f2f2f2; }
+    .lidar-view-chip:active { background: #e6e6e6; }
+    .lidar-view-chip.is-uncovered
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .lidar-view-chip.is-uncovered:hover  { background: #ffffff; }
+    .lidar-view-chip.is-uncovered:active { background: #ffffff; }
+    .lidar-view-chip.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .lidar-view-chip.is-on:active { background: rgba(20, 78, 168, 0.95); }
 
     /*  LiDAR-view toggle button, sits to the RIGHT of the .lidar-
         view-chip (the .overlay-top-right rail uses row-reverse so
@@ -35905,22 +35923,16 @@ const _HeliosEngine = class _HeliosEngine {
         zoom: 18,
         pitch: 55,
         bearing: this.homeLat >= 0 ? 180 : 0,
-        //Zoom range is [17, 18] now: the user can pinch out by
-        //one MapLibre step to see one block of context around
-        //the home, but can't zoom in past the resting pose (the
-        //3D camera + LiDAR overlay are tuned for this single
-        //altitude). detail-mode separately raises maxZoom for
-        //its dive animation and resets it on exit.
-        minZoom: 17,
+        //Zoom is locked to the resting pose. The 3D camera +
+        //LiDAR overlay are tuned for this single altitude, and
+        //letting the user wander off-zoom only opened the door
+        //to "why does my card look different from the docs"
+        //screenshots. detail-mode separately raises maxZoom
+        //for its dive animation and resets it on exit.
+        minZoom: 18,
         maxZoom: 18,
         dragPan: false,
-        //scrollZoom enabled with a higher per-tick rate so the
-        //tight [17, 18] range crosses in a single wheel notch
-        //instead of feeling like the cursor is fighting a stuck
-        //gear. MapLibre's default zoomRate (1/450) is tuned for
-        //world-scale maps with 22 zoom levels; a single-step
-        //range needs it bumped up roughly an order of magnitude.
-        scrollZoom: { around: "center" },
+        scrollZoom: false,
         doubleClickZoom: false,
         //MapLibre's default dragRotate binds to right-click drag,
         //which is not what users expect on a 3D card. We disable
@@ -35956,12 +35968,6 @@ const _HeliosEngine = class _HeliosEngine {
     } catch (_2) {
     }
     this.map.touchZoomRotate.enable({ around: "center" });
-    try {
-      const sz = this.map.scrollZoom;
-      sz?.setZoomRate?.(1 / 100);
-      sz?.setWheelZoomRate?.(1 / 100);
-    } catch (_2) {
-    }
     this._mapPinHandler = (e2) => {
       if (!this.map || !e2?.originalEvent) return;
       const c2 = this.map.getCenter();
@@ -38447,19 +38453,19 @@ function renderTimelineHoverTooltip(host) {
             <div class="tb-hover-tooltip-time">${timeLabel}</div>
             ${isFinite(irrV) ? b`
                 <div class="tb-hover-tooltip-row">
-                    <span class="tb-hover-tooltip-dot" style="background:${sunColor}"></span>
+                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
                     <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
                 </div>
             ` : A}
             ${isFinite(cldV) ? b`
                 <div class="tb-hover-tooltip-row">
-                    <span class="tb-hover-tooltip-dot" style="background:${cloudColor}"></span>
+                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:cloud-outline" style="color:${cloudColor}"></ha-icon>
                     <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cldV)))} %</span>
                 </div>
             ` : A}
             ${hasPv ? b`
                 <div class="tb-hover-tooltip-row">
-                    <span class="tb-hover-tooltip-dot" style="background:${pvColor}"></span>
+                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:flash" style="color:${pvColor}"></ha-icon>
                     <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
                 </div>
             ` : A}
@@ -41661,7 +41667,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.4"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.5"}`,
       labelStyle,
       versionStyle
     );
@@ -41685,7 +41691,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.4",
+        version: "1.6.3-beta.5",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41693,7 +41699,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.5"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -42224,6 +42230,7 @@ let HeliosCard = class extends i {
       const stateClass = !hasProvider ? "is-uncovered" : isLocal ? "is-local" : "is-online";
       const stateIcon = !hasProvider ? "mdi:cloud-off-outline" : isLocal ? "mdi:harddisk" : "mdi:earth";
       const stateLabel = !hasProvider ? "No LiDAR coverage at this location" : isLocal ? "Toggle LiDAR view, local nDSM" : "Toggle LiDAR view, online provider";
+      const onToggle = hasProvider ? () => toggleLidarView(this) : void 0;
       return b`
                         <div class="overlay-top-right">
                             <button
@@ -42232,11 +42239,18 @@ let HeliosCard = class extends i {
                                 ?disabled="${!hasProvider}"
                                 aria-label="${stateLabel}"
                                 aria-pressed="${this._lidarViewMode ? "true" : "false"}"
-                                @click="${hasProvider ? () => toggleLidarView(this) : void 0}"
+                                @click="${onToggle}"
                             >
                                 <ha-icon icon="${stateIcon}"></ha-icon>
                             </button>
-                            <div class="lidar-view-chip ${this._lidarViewMode ? "is-on" : ""}">LiDAR</div>
+                            <button
+                                type="button"
+                                class="lidar-view-chip ${stateClass} ${this._lidarViewMode ? "is-on" : ""}"
+                                ?disabled="${!hasProvider}"
+                                aria-label="${stateLabel}"
+                                aria-pressed="${this._lidarViewMode ? "true" : "false"}"
+                                @click="${onToggle}"
+                            >LiDAR</button>
                         </div>
                     `;
     })() : A}

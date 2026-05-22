@@ -5,6 +5,36 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.5
+
+Iterative pre-release on top of v1.6.3-beta.4. UX polish round
+on the timeline + LiDAR cluster.
+
+* **Balanced chart-card stack.** Production chart raised from 32 px
+  to 48 px and the irradiance + cloud chart lowered from 64 px to
+  48 px. Both cards now share the same height and the combined
+  block keeps the same total footprint, so production reads as a
+  first-class series rather than a sparkline below the main chart.
+* **Tooltip glyphs replace the colour dots.** Each row now leads
+  with an MDI icon coloured to its series: `mdi:white-balance-sunny`
+  for irradiance, `mdi:cloud-outline` for cloud cover,
+  `mdi:flash` for PV. Easier to scan at a glance than the
+  generic dots.
+* **Map zoom locked again.** Both `minZoom` and `maxZoom` are now
+  18, scroll-zoom disabled, and the wheel-zoom-rate tuning block
+  removed. The 3D camera + LiDAR overlay are pose-locked to that
+  altitude and the optional `[17, 18]` range from beta.1 only
+  invited "why does my card look different" screenshots.
+* **LiDAR chip is now a button too.** Both the chip and the
+  toggle button share the same click handler, so users can press
+  either half of the cluster to toggle LiDAR view. Same disabled
+  state when no provider covers the home.
+* **Night-zone overlay calmed down.** Hatch alpha dropped (0.11 -&gt;
+  0.07 light, 0.14 -&gt; 0.10 dark) and the sunset / sunrise edges
+  now share the exact same RGBA as the hatch fill, so the
+  boundary lines read as the densest part of the hatch rather
+  than as separate, eye-catching markers.
+
 ## v1.6.3-beta.4
 
 Iterative pre-release on top of v1.6.3-beta.3.

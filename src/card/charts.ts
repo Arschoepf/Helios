@@ -337,19 +337,19 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
             <div class="tb-hover-tooltip-time">${timeLabel}</div>
             ${isFinite(irrV) ? html`
                 <div class="tb-hover-tooltip-row">
-                    <span class="tb-hover-tooltip-dot" style="background:${sunColor}"></span>
+                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
                     <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
                 </div>
             ` : nothing}
             ${isFinite(cldV) ? html`
                 <div class="tb-hover-tooltip-row">
-                    <span class="tb-hover-tooltip-dot" style="background:${cloudColor}"></span>
+                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:cloud-outline" style="color:${cloudColor}"></ha-icon>
                     <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cldV)))} %</span>
                 </div>
             ` : nothing}
             ${hasPv ? html`
                 <div class="tb-hover-tooltip-row">
-                    <span class="tb-hover-tooltip-dot" style="background:${pvColor}"></span>
+                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:flash" style="color:${pvColor}"></ha-icon>
                     <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
                 </div>
             ` : nothing}

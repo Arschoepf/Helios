@@ -1258,6 +1258,7 @@ export class HeliosCard extends LitElement
                     const stateLabel  = !hasProvider ? 'No LiDAR coverage at this location'
                                        : isLocal     ? 'Toggle LiDAR view, local nDSM'
                                                      : 'Toggle LiDAR view, online provider';
+                    const onToggle = hasProvider ? (() => toggleLidarView(this)) : undefined;
                     return html`
                         <div class="overlay-top-right">
                             <button
@@ -1266,11 +1267,18 @@ export class HeliosCard extends LitElement
                                 ?disabled="${!hasProvider}"
                                 aria-label="${stateLabel}"
                                 aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
-                                @click="${hasProvider ? (() => toggleLidarView(this)) : undefined}"
+                                @click="${onToggle}"
                             >
                                 <ha-icon icon="${stateIcon}"></ha-icon>
                             </button>
-                            <div class="lidar-view-chip ${this._lidarViewMode ? 'is-on' : ''}">LiDAR</div>
+                            <button
+                                type="button"
+                                class="lidar-view-chip ${stateClass} ${this._lidarViewMode ? 'is-on' : ''}"
+                                ?disabled="${!hasProvider}"
+                                aria-label="${stateLabel}"
+                                aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
+                                @click="${onToggle}"
+                            >LiDAR</button>
                         </div>
                     `;
                 })() : nothing}

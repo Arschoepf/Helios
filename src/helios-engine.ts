@@ -736,22 +736,16 @@ export class HeliosEngine
             zoom:            18,
             pitch:           55,
             bearing:         this.homeLat >= 0 ? 180 : 0,
-            //Zoom range is [17, 18] now: the user can pinch out by
-            //one MapLibre step to see one block of context around
-            //the home, but can't zoom in past the resting pose (the
-            //3D camera + LiDAR overlay are tuned for this single
-            //altitude). detail-mode separately raises maxZoom for
-            //its dive animation and resets it on exit.
-            minZoom:         17,
+            //Zoom is locked to the resting pose. The 3D camera +
+            //LiDAR overlay are tuned for this single altitude, and
+            //letting the user wander off-zoom only opened the door
+            //to "why does my card look different from the docs"
+            //screenshots. detail-mode separately raises maxZoom
+            //for its dive animation and resets it on exit.
+            minZoom:         18,
             maxZoom:         18,
             dragPan:         false,
-            //scrollZoom enabled with a higher per-tick rate so the
-            //tight [17, 18] range crosses in a single wheel notch
-            //instead of feeling like the cursor is fighting a stuck
-            //gear. MapLibre's default zoomRate (1/450) is tuned for
-            //world-scale maps with 22 zoom levels; a single-step
-            //range needs it bumped up roughly an order of magnitude.
-            scrollZoom:      { around: 'center' },
+            scrollZoom:      false,
             doubleClickZoom: false,
             //MapLibre's default dragRotate binds to right-click drag,
             //which is not what users expect on a 3D card. We disable
@@ -805,19 +799,6 @@ export class HeliosEngine
         //which is exactly where the home projects, so the home stays
         //pinned no matter where the fingers land.
         this.map.touchZoomRotate.enable({ around: 'center' });
-
-        //Bump the scroll-wheel zoom rate up. MapLibre's default
-        //ScrollZoomHandler exposes setZoomRate() (per-event delta)
-        //and setWheelZoomRate() (per-wheel-tick delta); we raise
-        //both so a single notch covers the visible zoom range
-        //instead of trickling out over 10 notches.
-        try
-        {
-            const sz = (this.map as unknown as { scrollZoom?: { setZoomRate?: (n: number) => void; setWheelZoomRate?: (n: number) => void } }).scrollZoom;
-            sz?.setZoomRate?.(1 / 100);
-            sz?.setWheelZoomRate?.(1 / 100);
-        }
-        catch (_) { /* feature not available on this MapLibre build */ }
 
         //Hard pin the map centre on every user-driven transform: the
         //home must never leave the dead-centre of the card during a

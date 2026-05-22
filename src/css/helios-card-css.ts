@@ -1065,7 +1065,7 @@ export const heliosCardStyles = css`
         border: 1px solid #000000;
         border-radius: 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        height: 64px;
+        height: 48px;
         overflow: hidden;
     }
 
@@ -1263,13 +1263,13 @@ export const heliosCardStyles = css`
         gap: 6px;
     }
 
-    .tb-hover-tooltip-dot
+    .tb-hover-tooltip-icon
     {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
+        --mdc-icon-size: 13px;
+        display: inline-flex;
+        align-items: center;
         flex-shrink: 0;
+        line-height: 1;
     }
 
     .tb-hover-tooltip-value
@@ -1302,31 +1302,33 @@ export const heliosCardStyles = css`
         bottom: 0;
         pointer-events: none;
         z-index: 3;
+        /*  Hatch + sunset/sunrise edges share the exact same RGBA
+            (rgba(0, 0, 0, 0.07) light, rgba(255, 255, 255, 0.10)
+            dark) so the boundary line reads as the densest part of
+            the same hatch rather than as a separate marker. Alpha
+            dropped relative to earlier iterations: too much density
+            obscured the curves the user came to read.              */
         background-image: repeating-linear-gradient(
             45deg,
-            rgba(0, 0, 0, 0.11) 0,
-            rgba(0, 0, 0, 0.11) 1.5px,
+            rgba(0, 0, 0, 0.07) 0,
+            rgba(0, 0, 0, 0.07) 1.5px,
             transparent       1.5px,
             transparent       6px
         );
-        /*  Thin vertical edges flagging the sunset (left) and
-            sunrise (right) transitions. Inset box-shadows so the
-            edges sit inside the zone's footprint and don't widen
-            its hit-box or shift adjacent overlays. */
-        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.45),
-                    inset -1px 0 0 0 rgba(0, 0, 0, 0.45);
+        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.07),
+                    inset -1px 0 0 0 rgba(0, 0, 0, 0.07);
     }
     ha-card.theme-dark .hc-night-zone
     {
         background-image: repeating-linear-gradient(
             45deg,
-            rgba(255, 255, 255, 0.14) 0,
-            rgba(255, 255, 255, 0.14) 1.5px,
+            rgba(255, 255, 255, 0.10) 0,
+            rgba(255, 255, 255, 0.10) 1.5px,
             transparent              1.5px,
             transparent              6px
         );
-        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.45),
-                    inset -1px 0 0 0 rgba(255, 255, 255, 0.45);
+        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.10),
+                    inset -1px 0 0 0 rgba(255, 255, 255, 0.10);
     }
 
 
@@ -1400,11 +1402,15 @@ export const heliosCardStyles = css`
         font-style: italic;
     }
 
-    /*  Optional PV graph card stacked above the main chart. Half
-        the main height so the irradiance and PV areas balance. */
+    /*  Optional PV graph card stacked above the main chart. Same
+        height as the main chart so the two cards form a balanced
+        stack: production sits on top, irradiance + cloud cover
+        underneath, neither dominating the other. The combined
+        block keeps the same total vertical footprint the previous
+        (32 px PV + 64 px main) layout occupied. */
     .tb-pv-card
     {
-        height: 32px;
+        height: 48px;
     }
 
 
@@ -1491,11 +1497,23 @@ export const heliosCardStyles = css`
         font-weight: 600;
         line-height: 1.2;
         white-space: nowrap;
+        cursor: pointer;
+        pointer-events: auto;
         transition: background 0.15s, color 0.15s, border-color 0.15s;
-        pointer-events: none;
         position: relative;
         z-index: 50;
     }
+    .lidar-view-chip:hover  { background: #f2f2f2; }
+    .lidar-view-chip:active { background: #e6e6e6; }
+    .lidar-view-chip.is-uncovered
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .lidar-view-chip.is-uncovered:hover  { background: #ffffff; }
+    .lidar-view-chip.is-uncovered:active { background: #ffffff; }
+    .lidar-view-chip.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .lidar-view-chip.is-on:active { background: rgba(20, 78, 168, 0.95); }
 
     /*  LiDAR-view toggle button, sits to the RIGHT of the .lidar-
         view-chip (the .overlay-top-right rail uses row-reverse so
