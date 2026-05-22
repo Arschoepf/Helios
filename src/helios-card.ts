@@ -34,7 +34,8 @@ import
     renderChart,
     renderPvChart,
     renderTimelineTicks,
-    renderTimelineDayLabels
+    renderTimelineDayLabels,
+    renderTimelineSunEvents
 } from './card/charts';
 import
 {
@@ -1152,6 +1153,12 @@ export class HeliosCard extends LitElement
                                 ${renderTimelineTicks(this)}
                             </div>
                         ` : nothing}
+
+                        <!--  Sun-event icon row, sits above the chart
+                              card. Each sun-up / sun-down glyph caps
+                              its dotted vertical line that runs the
+                              full chart height inside the SVG.    -->
+                        ${renderTimelineSunEvents(this)}
 
                         <!--  Chart card: hosts the area chart, the
                               dotted day separators, and the live +

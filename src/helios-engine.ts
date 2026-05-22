@@ -745,7 +745,13 @@ export class HeliosEngine
             minZoom:         17,
             maxZoom:         18,
             dragPan:         false,
-            scrollZoom:      true,
+            //scrollZoom enabled with a higher per-tick rate so the
+            //tight [17, 18] range crosses in a single wheel notch
+            //instead of feeling like the cursor is fighting a stuck
+            //gear. MapLibre's default zoomRate (1/450) is tuned for
+            //world-scale maps with 22 zoom levels; a single-step
+            //range needs it bumped up roughly an order of magnitude.
+            scrollZoom:      { around: 'center' },
             doubleClickZoom: false,
             //MapLibre's default dragRotate binds to right-click drag,
             //which is not what users expect on a 3D card. We disable
@@ -799,6 +805,19 @@ export class HeliosEngine
         //which is exactly where the home projects, so the home stays
         //pinned no matter where the fingers land.
         this.map.touchZoomRotate.enable({ around: 'center' });
+
+        //Bump the scroll-wheel zoom rate up. MapLibre's default
+        //ScrollZoomHandler exposes setZoomRate() (per-event delta)
+        //and setWheelZoomRate() (per-wheel-tick delta); we raise
+        //both so a single notch covers the visible zoom range
+        //instead of trickling out over 10 notches.
+        try
+        {
+            const sz = (this.map as unknown as { scrollZoom?: { setZoomRate?: (n: number) => void; setWheelZoomRate?: (n: number) => void } }).scrollZoom;
+            sz?.setZoomRate?.(1 / 100);
+            sz?.setWheelZoomRate?.(1 / 100);
+        }
+        catch (_) { /* feature not available on this MapLibre build */ }
 
         //Hard pin the map centre on every user-driven transform: the
         //home must never leave the dead-centre of the card during a
@@ -2701,32 +2720,66 @@ export class HeliosEngine
             }
         }
 
-        //Marker glyph: a hand-built tilted-panel SVG, more
-        //recognisable as a solar panel than the MDI solar-panel
-        //glyph (which reads as horizontal bars / shutters). The
-        //trapezoid suggests a slightly-perspective view of a
-        //ground-mounted panel, with two white horizontal seams
-        //and two white vertical seams hinting at the cell grid.
-        //White drop-shadow halo keeps the icon legible on dark
-        //basemaps without the heavier "pin" chrome that the
-        //default MapLibre Marker draws.
+        //Marker element: a three-piece "lollipop" anchored at the
+        //array's ground position.
+        //
+        //  +---------+
+        //  | [panel] |  ← solar-panel SVG icon, lifted from the
+        //  +---------+    ground, reads as "the array lives here"
+        //       |
+        //       :       ← dotted vertical leader, same colour as
+        //       :         the icon but at lower opacity so it
+        //       |         doesn't fight the icon for attention
+        //       o       ← small filled circle "sitting" on the
+        //                 ground, marks the literal lat/lon
+        //                 reported by `pv-arrays[].latitude /
+        //                 longitude`
+        //
+        //The MapLibre marker is anchored on the BOTTOM of the
+        //element (set via `anchor: 'bottom'` below), so the ground
+        //sphere sits exactly at the configured lat/lon and the
+        //icon rides ~24 px (= roughly 2 m on the ground at the
+        //resting zoom 18) above it. The trapezoid panel glyph is
+        //the same hand-built drawing as before, just hoisted up.
+        const ICON_PX        = 18;
+        const LEADER_PX      = 18;
+        const SPHERE_PX      = 6;
         const buildMarkerEl = (color: string): HTMLDivElement =>
         {
             const el = document.createElement('div');
             el.className = 'helios-pv-array-marker';
             el.style.cssText =
-                'width:18px;height:18px;display:flex;'
-              + 'align-items:center;justify-content:center;'
-              + 'pointer-events:none;'
-              + 'filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));';
+                `display:flex;flex-direction:column;align-items:center;`
+              + `width:${ICON_PX}px;`
+              + `pointer-events:none;`
+              + `filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));`;
             el.innerHTML =
-                '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
-              + `<path d="M5 7 L19 7 L21 18 L3 18 Z" fill="${color}" stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/>`
-              + '<line x1="4.3" y1="10.7" x2="19.7" y2="10.7" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
-              + '<line x1="3.7" y1="14.4" x2="20.3" y2="14.4" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
-              + '<line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
-              + '<line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
-              + '</svg>';
+                //Icon: the original tilted-panel SVG.
+                `<svg class="pv-array-marker-icon" viewBox="0 0 24 24" `
+              +     `width="${ICON_PX}" height="${ICON_PX}" aria-hidden="true">`
+              +   `<path d="M5 7 L19 7 L21 18 L3 18 Z" fill="${color}" `
+              +     `stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/>`
+              +   `<line x1="4.3" y1="10.7" x2="19.7" y2="10.7" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>`
+              +   `<line x1="3.7" y1="14.4" x2="20.3" y2="14.4" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>`
+              +   `<line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>`
+              +   `<line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>`
+              + `</svg>`
+                //Dotted leader: a 1-px wide column made of stacked
+                //dots, painted in the PV colour at lower alpha so
+                //it reads as a connection without dominating.
+              + `<div class="pv-array-marker-leader" style="`
+              +   `width:1px;height:${LEADER_PX}px;`
+              +   `background:repeating-linear-gradient(to bottom, `
+              +     `${color} 0px, ${color} 1.5px, transparent 1.5px, transparent 4px);`
+              +   `opacity:0.65;"></div>`
+                //Ground sphere: small circle, same colour as the
+                //icon, with a white halo so it stays legible on
+                //busy basemaps.
+              + `<div class="pv-array-marker-sphere" style="`
+              +   `width:${SPHERE_PX}px;height:${SPHERE_PX}px;`
+              +   `border-radius:50%;`
+              +   `background:${color};`
+              +   `box-shadow:0 0 0 1px #ffffff, 0 1px 2px rgba(0,0,0,0.4);"></div>`;
             return el;
         };
 
@@ -2741,7 +2794,14 @@ export class HeliosEngine
             this._pvArrayMarkers = [];
             for (const p of positions)
             {
-                const marker = new maplibregl.Marker({ element: buildMarkerEl(pvHex) })
+                //anchor: 'bottom' pins the marker's bottom edge to
+                //the configured lat/lon. The marker's bottom edge
+                //hosts the ground sphere, so the sphere sits at
+                //the literal coordinate and the icon hovers above.
+                const marker = new maplibregl.Marker({
+                    element: buildMarkerEl(pvHex),
+                    anchor:  'bottom',
+                })
                     .setLngLat([p.lon, p.lat])
                     .addTo(this.map);
                 this._pvArrayMarkers.push(marker);
@@ -2753,13 +2813,21 @@ export class HeliosEngine
             {
                 this._pvArrayMarkers[i].setLngLat([positions[i].lon, positions[i].lat]);
                 //Colour might have changed via the PV colour picker
-                //even if the position list didn't. Re-paint just
-                //the panel <path> (the white grid lines stay white)
-                //rather than rebuilding the element, so MapLibre
-                //doesn't have to re-anchor the marker.
+                //even if the position list didn't. Repaint the three
+                //tinted pieces (panel SVG fill, dotted leader bg,
+                //ground sphere bg) in place so MapLibre doesn't have
+                //to re-anchor the marker.
                 const el = this._pvArrayMarkers[i].getElement();
-                const svgPath = el?.querySelector('svg path');
+                const svgPath = el?.querySelector('.pv-array-marker-icon path') as SVGPathElement | null;
                 if (svgPath) svgPath.setAttribute('fill', pvHex);
+                const leader = el?.querySelector('.pv-array-marker-leader') as HTMLElement | null;
+                if (leader)
+                {
+                    leader.style.background =
+                        `repeating-linear-gradient(to bottom, ${pvHex} 0px, ${pvHex} 1.5px, transparent 1.5px, transparent 4px)`;
+                }
+                const sphere = el?.querySelector('.pv-array-marker-sphere') as HTMLElement | null;
+                if (sphere) sphere.style.background = pvHex;
             }
         }
     }

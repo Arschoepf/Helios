@@ -5,6 +5,42 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.2
+
+Iterative pre-release on top of v1.6.3-beta.1.
+
+* **Sun-event markers on the timeline.** Each day inside the
+  visible range now gets two faint vertical dotted lines, one at
+  sunrise and one at sunset, with a small `mdi:weather-sunset-up`
+  / `mdi:weather-sunset-down` glyph capping each line above the
+  chart card. The lines render behind the irradiance + cloud
+  curves so they read as ambient structure rather than competing
+  with the data.
+* **PV array marker redesign.** A `pv-arrays` entry that carries
+  its own coordinates used to render as a single icon at the
+  configured lat / lon, which left the user guessing where the
+  icon was actually pointing on the ground. The marker is now a
+  three-piece "lollipop": a small filled sphere sitting at the
+  literal ground coordinate, a thin dotted leader rising above it,
+  and the existing solar-panel icon lifted ~2 m above the ground
+  on top. All three pieces share the configured PV colour.
+* **Map zoom rate.** The MapLibre scroll-wheel zoom rate was
+  raised from its world-scale default to one tuned for the card's
+  tight `[17, 18]` range, so a single wheel notch traverses the
+  visible zoom instead of trickling out over a dozen notches.
+* **Timeline anchoring.** The timeline drops 2 px lower against
+  the card bottom and the day-chip row's symmetric inset above
+  and below leaves it visually centred between the chart's bottom
+  edge and the card's bottom edge.
+* **Thermal-derating defaults softened.** `γ_pmp` lowered from
+  -0.0040 to -0.0035 /°C and NOCT from 45 to 44 °C, both at the
+  middle of the modern monocrystalline range instead of the
+  legacy textbook values. Trims roughly two percentage points
+  off the summer-noon thermal derating; the rolling forecast
+  calibration absorbs the residual.
+
+---
+
 ## v1.6.3-beta.1
 
 Pre-release on top of v1.6.2 with four UI / UX iterations on the

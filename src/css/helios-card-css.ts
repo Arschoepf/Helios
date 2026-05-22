@@ -1022,7 +1022,13 @@ export const heliosCardStyles = css`
     .time-bar
     {
         position: absolute;
-        bottom: 8px;
+        /*  Bottom inset matches the time-bar's internal flex gap.
+            With the day-label chip row pinned as the last flex
+            child, an equal inset above (gap to the chart card) and
+            below (gap to the card edge) centres the chip row in
+            the band between the chart card's bottom edge and the
+            card's bottom edge.                                       */
+        bottom: 6px;
         /*  Width is derived from --timeline-width-frac (0.5..1, set
             inline by the renderer). At 1 the bar hugs the card edges
             with the original 8 px breathing on each side. Below 1 it
@@ -1191,6 +1197,45 @@ export const heliosCardStyles = css`
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
+    /*  Sun-event icon row above the chart card. Pairs with the
+        dotted vertical lines drawn inside the chart SVG (the
+        .hc-sun-event class); the icon caps the top of the line.
+        Sized to host a 12 px MDI glyph with a touch of breathing
+        room above the chart card.                                  */
+    .tb-sun-events
+    {
+        position: relative;
+        height: 14px;
+        pointer-events: none;
+    }
+    .tb-sun-event-icon
+    {
+        position: absolute;
+        top: 0;
+        transform: translateX(-50%);
+        --mdc-icon-size: 12px;
+        color: rgba(0, 0, 0, 0.55);
+        line-height: 1;
+    }
+    ha-card.theme-dark .tb-sun-event-icon { color: rgba(255, 255, 255, 0.65); }
+
+    /*  Vertical dotted lines drawn behind the chart's irradiance
+        and cloud area paths (the chart SVG lists them before the
+        area paths in document order so they sit underneath). Same
+        dash pattern as the day-separator dotted lines so the two visual languages
+        feel related, but at lower alpha so the sun-events read as
+        secondary context rather than primary structure.            */
+    .hc-sun-event
+    {
+        stroke: rgba(0, 0, 0, 0.22);
+        stroke-width: 1;
+        stroke-dasharray: 1.5 2.5;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .hc-sun-event { stroke: rgba(255, 255, 255, 0.30); }
+
+
     /*  Day-label chip row, sits as a sibling below the chart card
         with the same horizontal positioning so each chip stays
         anchored to its date column. Used to overlay the chart's
@@ -1203,7 +1248,11 @@ export const heliosCardStyles = css`
     {
         position: relative;
         height: 18px;
-        margin-top: 4px;
+        /*  No extra margin-top: the time-bar's flex gap (6 px)
+            already separates the chip row from the chart card,
+            and that same 6 px shows up below the row as the
+            time-bar's bottom inset, vertically centring the chip
+            row in the band under the timeline.                    */
         pointer-events: none;
     }
 

@@ -24,6 +24,130 @@ import
 } from './pv';
 import { timelineConsumptionEnabled } from './timeline';
 import { getHomeCoords } from './init';
+import { getSunPosition } from '../engine/sun';
+
+
+//Binary-search the sun's altitude=0 crossing inside [dayStart, dayEnd]
+//in the requested direction (rising = first crossing where alt > 0,
+//setting = first crossing where alt ≤ 0 after being > 0). Returns
+//null at polar latitudes during the day-long polar day / night
+//windows where the sun never crosses the horizon, or when the
+//bracket is degenerate. Used by the timeline's per-day sunrise /
+//sunset markers; coarse 1-hour scan + 12 iterations of bisection
+//get the answer to seconds precision in ~22 getSunPosition calls
+//per event, well under the per-frame budget.
+function findSunCrossing(
+    lat: number,
+    lon: number,
+    dayStartMs: number,
+    dayEndMs:   number,
+    direction:  'rising' | 'setting'
+): Date | null
+{
+    const STEP_MS = 60 * 60 * 1000;
+    let prevAlt = getSunPosition(new Date(dayStartMs), lat, lon).altitude;
+    let bracketLo = 0;
+    let bracketHi = 0;
+    let found = false;
+    for (let t = dayStartMs + STEP_MS; t <= dayEndMs; t += STEP_MS)
+    {
+        const alt = getSunPosition(new Date(t), lat, lon).altitude;
+        if (direction === 'rising' && prevAlt <= 0 && alt > 0)
+        {
+            bracketLo = t - STEP_MS;
+            bracketHi = t;
+            found = true;
+            break;
+        }
+        if (direction === 'setting' && prevAlt > 0 && alt <= 0)
+        {
+            bracketLo = t - STEP_MS;
+            bracketHi = t;
+            found = true;
+            break;
+        }
+        prevAlt = alt;
+    }
+    if (!found) return null;
+    for (let i = 0; i < 12; i++)
+    {
+        const mid = (bracketLo + bracketHi) / 2;
+        const alt = getSunPosition(new Date(mid), lat, lon).altitude;
+        if ((direction === 'rising') === (alt > 0))
+        {
+            bracketHi = mid;
+        }
+        else
+        {
+            bracketLo = mid;
+        }
+    }
+    return new Date((bracketLo + bracketHi) / 2);
+}
+
+
+//Shared per-day sunrise / sunset event computation. Returns
+//{ pct, kind } pairs at fractional positions inside the visible
+//time range; consumed by both `renderChart` (to draw the vertical
+//dotted lines inside the SVG) and `renderTimelineSunEvents` (to
+//drop the sun-up / sun-down icons in a sibling row above the
+//chart card). Centralising the computation here keeps the two
+//visualisations in lock-step on any time-range or location change.
+function computeSunEvents(host: ChartHost): Array<{ pct: number; kind: 'sunrise' | 'sunset' }>
+{
+    const range = host._timeRange;
+    if (!range) return [];
+    const coords = getHomeCoords(host.config, host.hass);
+    if (!coords) return [];
+    const startMs = range.start.getTime();
+    const endMs   = range.end.getTime();
+    const rangeMs = endMs - startMs;
+    if (rangeMs <= 0) return [];
+
+    const out: Array<{ pct: number; kind: 'sunrise' | 'sunset' }> = [];
+    const cursor = new Date(range.start);
+    cursor.setHours(0, 0, 0, 0);
+    while (cursor.getTime() <= endMs)
+    {
+        const dayStart = cursor.getTime();
+        const dayEnd   = dayStart + 24 * 60 * 60 * 1000;
+        const rise = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, 'rising');
+        if (rise && rise.getTime() >= startMs && rise.getTime() <= endMs)
+        {
+            out.push({ pct: (rise.getTime() - startMs) / rangeMs * 100, kind: 'sunrise' });
+        }
+        const setT = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, 'setting');
+        if (setT && setT.getTime() >= startMs && setT.getTime() <= endMs)
+        {
+            out.push({ pct: (setT.getTime() - startMs) / rangeMs * 100, kind: 'sunset' });
+        }
+        cursor.setDate(cursor.getDate() + 1);
+    }
+    return out;
+}
+
+
+//Sun-event icon row, sits as a sibling above the chart card. Each
+//icon anchors to its sunrise / sunset X position and visually caps
+//the dotted vertical line that runs through the chart underneath.
+//Outside the chart card so the icon can sit above the curves
+//without depending on the chart card's overflow being visible.
+export function renderTimelineSunEvents(host: ChartHost): TemplateResult
+{
+    const events = computeSunEvents(host);
+    if (events.length === 0) return html``;
+    return html`
+        <div class="tb-sun-events">
+            ${events.map(e => html`
+                <ha-icon
+                    class="tb-sun-event-icon tb-sun-event-${e.kind}"
+                    icon="${e.kind === 'sunrise' ? 'mdi:weather-sunset-up' : 'mdi:weather-sunset-down'}"
+                    style="left:${e.pct.toFixed(2)}%"
+                ></ha-icon>
+            `)}
+        </div>
+    `;
+}
 
 
 //Engine-resampled weather series. Same shape the engine snapshots
@@ -166,12 +290,34 @@ export function renderChart(host: ChartHost): TemplateResult
     }
     const HOUR_TICK_HALF = 3;
 
+    //Per-day sunrise / sunset X positions. Computed via the
+    //shared `computeSunEvents` helper so the dotted vertical
+    //lines below match the icon row's positions above pixel-
+    //perfectly even after a scrub / range change.
+    const sunEvents = computeSunEvents(host).map(e => ({
+        x:    (e.pct / 100) * W,
+        kind: e.kind,
+    }));
+
     return html`
         <svg
             class="hc-chart-svg"
             viewBox="0 0 ${W} ${H}"
             preserveAspectRatio="none"
         >
+            <!-- Sun-event vertical lines first: behind the curves
+                 but in front of the chart-card background. Rendered
+                 here (not as DOM elements) so they participate in
+                 the chart's SVG coordinate space and stay pixel-
+                 perfect across the same scrub / pan paths the
+                 day-separator dotted lines already use. -->
+            ${sunEvents.map(e => svg`
+                <line
+                    class="hc-sun-event hc-sun-event-${e.kind}"
+                    x1="${e.x.toFixed(2)}" y1="0"
+                    x2="${e.x.toFixed(2)}" y2="${H}"
+                ></line>
+            `)}
             <!-- Cloud first as the background layer; the irradiance
                  fill paints on top with the same alpha so the two
                  curves coexist rather than competing. -->

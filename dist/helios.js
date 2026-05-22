@@ -2872,7 +2872,13 @@ const heliosCardStyles = i$3`
     .time-bar
     {
         position: absolute;
-        bottom: 8px;
+        /*  Bottom inset matches the time-bar's internal flex gap.
+            With the day-label chip row pinned as the last flex
+            child, an equal inset above (gap to the chart card) and
+            below (gap to the card edge) centres the chip row in
+            the band between the chart card's bottom edge and the
+            card's bottom edge.                                       */
+        bottom: 6px;
         /*  Width is derived from --timeline-width-frac (0.5..1, set
             inline by the renderer). At 1 the bar hugs the card edges
             with the original 8 px breathing on each side. Below 1 it
@@ -3041,6 +3047,45 @@ const heliosCardStyles = i$3`
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
+    /*  Sun-event icon row above the chart card. Pairs with the
+        dotted vertical lines drawn inside the chart SVG (the
+        .hc-sun-event class); the icon caps the top of the line.
+        Sized to host a 12 px MDI glyph with a touch of breathing
+        room above the chart card.                                  */
+    .tb-sun-events
+    {
+        position: relative;
+        height: 14px;
+        pointer-events: none;
+    }
+    .tb-sun-event-icon
+    {
+        position: absolute;
+        top: 0;
+        transform: translateX(-50%);
+        --mdc-icon-size: 12px;
+        color: rgba(0, 0, 0, 0.55);
+        line-height: 1;
+    }
+    ha-card.theme-dark .tb-sun-event-icon { color: rgba(255, 255, 255, 0.65); }
+
+    /*  Vertical dotted lines drawn behind the chart's irradiance
+        and cloud area paths (the chart SVG lists them before the
+        area paths in document order so they sit underneath). Same
+        dash pattern as the day-separator dotted lines so the two visual languages
+        feel related, but at lower alpha so the sun-events read as
+        secondary context rather than primary structure.            */
+    .hc-sun-event
+    {
+        stroke: rgba(0, 0, 0, 0.22);
+        stroke-width: 1;
+        stroke-dasharray: 1.5 2.5;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .hc-sun-event { stroke: rgba(255, 255, 255, 0.30); }
+
+
     /*  Day-label chip row, sits as a sibling below the chart card
         with the same horizontal positioning so each chip stays
         anchored to its date column. Used to overlay the chart's
@@ -3053,7 +3098,11 @@ const heliosCardStyles = i$3`
     {
         position: relative;
         height: 18px;
-        margin-top: 4px;
+        /*  No extra margin-top: the time-bar's flex gap (6 px)
+            already separates the chip row from the chart card,
+            and that same 6 px shows up below the row as the
+            time-bar's bottom inset, vertically centring the chip
+            row in the band under the timeline.                    */
         pointer-events: none;
     }
 
@@ -4157,11 +4206,11 @@ function formatDate(d2, rawFormat) {
     return tok;
   });
 }
-const NOCT_CELL_C = 45;
+const NOCT_CELL_C = 44;
 const NOCT_IRRADIANCE = 800;
 const NOCT_AIR_REF_C = 20;
 const WIND_COOLING_K = 1.5;
-const GAMMA_PMP_PER_C = -4e-3;
+const GAMMA_PMP_PER_C = -35e-4;
 const STC_REF_C = 25;
 function cellTemperatureC(airTempC, ghiWm2, windMs) {
   if (!isFinite(airTempC)) return NaN;
@@ -35765,7 +35814,13 @@ const _HeliosEngine = class _HeliosEngine {
         minZoom: 17,
         maxZoom: 18,
         dragPan: false,
-        scrollZoom: true,
+        //scrollZoom enabled with a higher per-tick rate so the
+        //tight [17, 18] range crosses in a single wheel notch
+        //instead of feeling like the cursor is fighting a stuck
+        //gear. MapLibre's default zoomRate (1/450) is tuned for
+        //world-scale maps with 22 zoom levels; a single-step
+        //range needs it bumped up roughly an order of magnitude.
+        scrollZoom: { around: "center" },
         doubleClickZoom: false,
         //MapLibre's default dragRotate binds to right-click drag,
         //which is not what users expect on a 3D card. We disable
@@ -35801,6 +35856,12 @@ const _HeliosEngine = class _HeliosEngine {
     } catch (_2) {
     }
     this.map.touchZoomRotate.enable({ around: "center" });
+    try {
+      const sz = this.map.scrollZoom;
+      sz?.setZoomRate?.(1 / 100);
+      sz?.setWheelZoomRate?.(1 / 100);
+    } catch (_2) {
+    }
     this._mapPinHandler = (e2) => {
       if (!this.map || !e2?.originalEvent) return;
       const c2 = this.map.getCenter();
@@ -37189,26 +37250,39 @@ const _HeliosEngine = class _HeliosEngine {
         positions.push({ lat, lon });
       }
     }
+    const ICON_PX = 18;
+    const LEADER_PX = 18;
+    const SPHERE_PX = 6;
     const buildMarkerEl = (color) => {
       const el = document.createElement("div");
       el.className = "helios-pv-array-marker";
-      el.style.cssText = "width:18px;height:18px;display:flex;align-items:center;justify-content:center;pointer-events:none;filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));";
-      el.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 7 L19 7 L21 18 L3 18 Z" fill="${color}" stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/><line x1="4.3" y1="10.7" x2="19.7" y2="10.7" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="3.7" y1="14.4" x2="20.3" y2="14.4" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/></svg>`;
+      el.style.cssText = `display:flex;flex-direction:column;align-items:center;width:${ICON_PX}px;pointer-events:none;filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));`;
+      el.innerHTML = //Icon: the original tilted-panel SVG.
+      `<svg class="pv-array-marker-icon" viewBox="0 0 24 24" width="${ICON_PX}" height="${ICON_PX}" aria-hidden="true"><path d="M5 7 L19 7 L21 18 L3 18 Z" fill="${color}" stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/><line x1="4.3" y1="10.7" x2="19.7" y2="10.7" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="3.7" y1="14.4" x2="20.3" y2="14.4" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/></svg><div class="pv-array-marker-leader" style="width:1px;height:${LEADER_PX}px;background:repeating-linear-gradient(to bottom, ${color} 0px, ${color} 1.5px, transparent 1.5px, transparent 4px);opacity:0.65;"></div><div class="pv-array-marker-sphere" style="width:${SPHERE_PX}px;height:${SPHERE_PX}px;border-radius:50%;background:${color};box-shadow:0 0 0 1px #ffffff, 0 1px 2px rgba(0,0,0,0.4);"></div>`;
       return el;
     };
     if (this._pvArrayMarkers.length !== positions.length) {
       for (const m2 of this._pvArrayMarkers) m2.remove();
       this._pvArrayMarkers = [];
       for (const p2 of positions) {
-        const marker = new maplibregl.Marker({ element: buildMarkerEl(pvHex) }).setLngLat([p2.lon, p2.lat]).addTo(this.map);
+        const marker = new maplibregl.Marker({
+          element: buildMarkerEl(pvHex),
+          anchor: "bottom"
+        }).setLngLat([p2.lon, p2.lat]).addTo(this.map);
         this._pvArrayMarkers.push(marker);
       }
     } else {
       for (let i2 = 0; i2 < positions.length; i2++) {
         this._pvArrayMarkers[i2].setLngLat([positions[i2].lon, positions[i2].lat]);
         const el = this._pvArrayMarkers[i2].getElement();
-        const svgPath = el?.querySelector("svg path");
+        const svgPath = el?.querySelector(".pv-array-marker-icon path");
         if (svgPath) svgPath.setAttribute("fill", pvHex);
+        const leader = el?.querySelector(".pv-array-marker-leader");
+        if (leader) {
+          leader.style.background = `repeating-linear-gradient(to bottom, ${pvHex} 0px, ${pvHex} 1.5px, transparent 1.5px, transparent 4px)`;
+        }
+        const sphere = el?.querySelector(".pv-array-marker-sphere");
+        if (sphere) sphere.style.background = pvHex;
       }
     }
   }
@@ -38082,6 +38156,82 @@ function wireEngineCallbacks(host) {
     host._shadowBusy = false;
   };
 }
+function findSunCrossing(lat, lon, dayStartMs, dayEndMs, direction) {
+  const STEP_MS = 60 * 60 * 1e3;
+  let prevAlt = getSunPosition(new Date(dayStartMs), lat, lon).altitude;
+  let bracketLo = 0;
+  let bracketHi = 0;
+  let found = false;
+  for (let t2 = dayStartMs + STEP_MS; t2 <= dayEndMs; t2 += STEP_MS) {
+    const alt = getSunPosition(new Date(t2), lat, lon).altitude;
+    if (direction === "rising" && prevAlt <= 0 && alt > 0) {
+      bracketLo = t2 - STEP_MS;
+      bracketHi = t2;
+      found = true;
+      break;
+    }
+    if (direction === "setting" && prevAlt > 0 && alt <= 0) {
+      bracketLo = t2 - STEP_MS;
+      bracketHi = t2;
+      found = true;
+      break;
+    }
+    prevAlt = alt;
+  }
+  if (!found) return null;
+  for (let i2 = 0; i2 < 12; i2++) {
+    const mid = (bracketLo + bracketHi) / 2;
+    const alt = getSunPosition(new Date(mid), lat, lon).altitude;
+    if (direction === "rising" === alt > 0) {
+      bracketHi = mid;
+    } else {
+      bracketLo = mid;
+    }
+  }
+  return new Date((bracketLo + bracketHi) / 2);
+}
+function computeSunEvents(host) {
+  const range = host._timeRange;
+  if (!range) return [];
+  const coords = getHomeCoords(host.config, host.hass);
+  if (!coords) return [];
+  const startMs = range.start.getTime();
+  const endMs = range.end.getTime();
+  const rangeMs = endMs - startMs;
+  if (rangeMs <= 0) return [];
+  const out = [];
+  const cursor = new Date(range.start);
+  cursor.setHours(0, 0, 0, 0);
+  while (cursor.getTime() <= endMs) {
+    const dayStart = cursor.getTime();
+    const dayEnd = dayStart + 24 * 60 * 60 * 1e3;
+    const rise = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, "rising");
+    if (rise && rise.getTime() >= startMs && rise.getTime() <= endMs) {
+      out.push({ pct: (rise.getTime() - startMs) / rangeMs * 100, kind: "sunrise" });
+    }
+    const setT = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, "setting");
+    if (setT && setT.getTime() >= startMs && setT.getTime() <= endMs) {
+      out.push({ pct: (setT.getTime() - startMs) / rangeMs * 100, kind: "sunset" });
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return out;
+}
+function renderTimelineSunEvents(host) {
+  const events = computeSunEvents(host);
+  if (events.length === 0) return b``;
+  return b`
+        <div class="tb-sun-events">
+            ${events.map((e2) => b`
+                <ha-icon
+                    class="tb-sun-event-icon tb-sun-event-${e2.kind}"
+                    icon="${e2.kind === "sunrise" ? "mdi:weather-sunset-up" : "mdi:weather-sunset-down"}"
+                    style="left:${e2.pct.toFixed(2)}%"
+                ></ha-icon>
+            `)}
+        </div>
+    `;
+}
 function renderChart(host) {
   const series = host._chartSeries;
   const range = host._timeRange;
@@ -38133,12 +38283,29 @@ function renderChart(host) {
     hCursor.setHours(hCursor.getHours() + 1);
   }
   const HOUR_TICK_HALF = 3;
+  const sunEvents = computeSunEvents(host).map((e2) => ({
+    x: e2.pct / 100 * W,
+    kind: e2.kind
+  }));
   return b`
         <svg
             class="hc-chart-svg"
             viewBox="0 0 ${W} ${H2}"
             preserveAspectRatio="none"
         >
+            <!-- Sun-event vertical lines first: behind the curves
+                 but in front of the chart-card background. Rendered
+                 here (not as DOM elements) so they participate in
+                 the chart's SVG coordinate space and stay pixel-
+                 perfect across the same scrub / pan paths the
+                 day-separator dotted lines already use. -->
+            ${sunEvents.map((e2) => w`
+                <line
+                    class="hc-sun-event hc-sun-event-${e2.kind}"
+                    x1="${e2.x.toFixed(2)}" y1="0"
+                    x2="${e2.x.toFixed(2)}" y2="${H2}"
+                ></line>
+            `)}
             <!-- Cloud first as the background layer; the irradiance
                  fill paints on top with the same alpha so the two
                  curves coexist rather than competing. -->
@@ -41159,7 +41326,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.1"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.2"}`,
       labelStyle,
       versionStyle
     );
@@ -41183,7 +41350,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.1",
+        version: "1.6.3-beta.2",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41191,7 +41358,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -41630,6 +41797,12 @@ let HeliosCard = class extends i {
                                 ${renderTimelineTicks(this)}
                             </div>
                         ` : A}
+
+                        <!--  Sun-event icon row, sits above the chart
+                              card. Each sun-up / sun-down glyph caps
+                              its dotted vertical line that runs the
+                              full chart height inside the SVG.    -->
+                        ${renderTimelineSunEvents(this)}
 
                         <!--  Chart card: hosts the area chart, the
                               dotted day separators, and the live +
