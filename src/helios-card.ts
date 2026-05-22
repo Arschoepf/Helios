@@ -35,7 +35,7 @@ import
     renderPvChart,
     renderTimelineTicks,
     renderTimelineDayLabels,
-    renderTimelineSunEvents
+    renderTimelineNightZones
 } from './card/charts';
 import
 {
@@ -1150,25 +1150,23 @@ export class HeliosCard extends LitElement
                         ${pvEntityId ? html`
                             <div class="tb-chart-card tb-pv-card">
                                 ${renderPvChart(this)}
+                                ${renderTimelineNightZones(this)}
                                 ${renderTimelineTicks(this)}
                             </div>
                         ` : nothing}
 
-                        <!--  Sun-event icon row, sits above the chart
-                              card. Each sun-up / sun-down glyph caps
-                              its dotted vertical line that runs the
-                              full chart height inside the SVG.    -->
-                        ${renderTimelineSunEvents(this)}
-
                         <!--  Chart card: hosts the area chart, the
-                              dotted day separators, and the live +
-                              scrub cursors as HTML overlays. The
-                              day-label chip row used to overlay the
-                              midline of this card; it's now a
+                              dotted day separators, the night-zone
+                              diagonal hatch overlay (one rect per
+                              sunset, next sunrise window) and the
+                              live + scrub cursors as HTML overlays.
+                              The day-label chip row used to overlay
+                              the midline of this card; it's now a
                               sibling block below so the chips never
                               cover the curves they describe.  -->
                         <div class="tb-chart-card">
                             ${renderChart(this)}
+                            ${renderTimelineNightZones(this)}
                             ${renderTimelineTicks(this)}
                         </div>
                         ${renderTimelineDayLabels(this)}
@@ -1220,17 +1218,17 @@ export class HeliosCard extends LitElement
                       button sits to its LEFT, fused to the chip's
                       left edge with a shared border. Three button
                       states:
-                        - no provider covers the home  -> disabled,
+                        - no provider covers the home, disabled,
                           eye-off-outline icon, no click handler
-                        - public online provider       -> active,
-                          earth icon, click toggles LiDAR view
-                        - local-nDSM (YAML config)     -> active,
-                          harddisk icon, click toggles LiDAR view
+                        - public online provider, active, earth
+                          icon, click toggles LiDAR view
+                        - local-nDSM (YAML config), active, harddisk
+                          icon, click toggles LiDAR view
                       Active state mirrors the scrub-blue theme used
                       on the opposite rail when LiDAR view is on, so
                       the cluster doubles as the "you're in LiDAR
                       view" signal the way the clock chip doubles as
-                      the "you're scrubbing" signal.                 */
+                      the "you're scrubbing" signal.                 -->
                 ${hasApiKey ? (() => {
                     const isLocal     = lidarSourceId === 'local-ndsm';
                     const hasProvider = lidarSourceId !== null;

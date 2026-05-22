@@ -5,17 +5,33 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.3
+
+Hotfix pre-release on top of v1.6.3-beta.2. Two follow-ups from
+field testing.
+
+* **Night zones on the timeline.** Each "sunset of day N to
+  sunrise of day N+1" window on the visible range now renders as
+  a diagonal hatch overlay on top of both the irradiance + cloud
+  card and the PV card. The hatching reads as "this slice is
+  night" at a glance without obscuring the underlying curves, and
+  replaces the beta.2 sun-up / sun-down glyph + dotted vertical
+  line treatment (too busy at a glance).
+* **LiDAR-view toggle visibility fix.** A stray HTML comment in
+  the card template was terminated with `*/` instead of `-->`,
+  swallowing the entire top-right LiDAR cluster on render. The
+  button is back even when no provider covers the home, in its
+  disabled `mdi:cloud-off-outline` state.
+
 ## v1.6.3-beta.2
 
 Iterative pre-release on top of v1.6.3-beta.1.
 
-* **Sun-event markers on the timeline.** Each day inside the
-  visible range now gets two faint vertical dotted lines, one at
-  sunrise and one at sunset, with a small `mdi:weather-sunset-up`
-  / `mdi:weather-sunset-down` glyph capping each line above the
-  chart card. The lines render behind the irradiance + cloud
-  curves so they read as ambient structure rather than competing
-  with the data.
+* **Sun-event markers on the timeline.** *(Removed in beta.3 in
+  favour of full night-zone hatched overlays.)* Each day inside
+  the visible range got two faint vertical dotted lines, one at
+  sunrise and one at sunset, capped above the chart card with a
+  `mdi:weather-sunset-up` / `mdi:weather-sunset-down` glyph.
 * **PV array marker redesign.** A `pv-arrays` entry that carries
   its own coordinates used to render as a single icon at the
   configured lat / lon, which left the user guessing where the

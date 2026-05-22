@@ -1197,43 +1197,40 @@ export const heliosCardStyles = css`
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
-    /*  Sun-event icon row above the chart card. Pairs with the
-        dotted vertical lines drawn inside the chart SVG (the
-        .hc-sun-event class); the icon caps the top of the line.
-        Sized to host a 12 px MDI glyph with a touch of breathing
-        room above the chart card.                                  */
-    .tb-sun-events
-    {
-        position: relative;
-        height: 14px;
-        pointer-events: none;
-    }
-    .tb-sun-event-icon
+    /*  Night-zone overlays. One absolutely-positioned div per
+        sunset, next sunrise window, inserted as a sibling of the
+        chart SVG inside the chart card. CSS diagonal hatching
+        sits on top of the curves but below the live + scrub
+        cursors (z-index 4), so dusk and dawn read as "this slice
+        is night" without obscuring the curve shape underneath.
+        Repeating linear gradients render at the device pixel grid
+        regardless of the chart SVG's preserveAspectRatio=none, so
+        the stripes stay diagonal across any card width.            */
+    .hc-night-zone
     {
         position: absolute;
         top: 0;
-        transform: translateX(-50%);
-        --mdc-icon-size: 12px;
-        color: rgba(0, 0, 0, 0.55);
-        line-height: 1;
-    }
-    ha-card.theme-dark .tb-sun-event-icon { color: rgba(255, 255, 255, 0.65); }
-
-    /*  Vertical dotted lines drawn behind the chart's irradiance
-        and cloud area paths (the chart SVG lists them before the
-        area paths in document order so they sit underneath). Same
-        dash pattern as the day-separator dotted lines so the two visual languages
-        feel related, but at lower alpha so the sun-events read as
-        secondary context rather than primary structure.            */
-    .hc-sun-event
-    {
-        stroke: rgba(0, 0, 0, 0.22);
-        stroke-width: 1;
-        stroke-dasharray: 1.5 2.5;
-        vector-effect: non-scaling-stroke;
+        bottom: 0;
         pointer-events: none;
+        z-index: 3;
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(0, 0, 0, 0.11) 0,
+            rgba(0, 0, 0, 0.11) 1.5px,
+            transparent       1.5px,
+            transparent       6px
+        );
     }
-    ha-card.theme-dark .hc-sun-event { stroke: rgba(255, 255, 255, 0.30); }
+    ha-card.theme-dark .hc-night-zone
+    {
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.14) 0,
+            rgba(255, 255, 255, 0.14) 1.5px,
+            transparent              1.5px,
+            transparent              6px
+        );
+    }
 
 
     /*  Day-label chip row, sits as a sibling below the chart card

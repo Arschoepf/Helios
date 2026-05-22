@@ -3047,43 +3047,40 @@ const heliosCardStyles = i$3`
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
-    /*  Sun-event icon row above the chart card. Pairs with the
-        dotted vertical lines drawn inside the chart SVG (the
-        .hc-sun-event class); the icon caps the top of the line.
-        Sized to host a 12 px MDI glyph with a touch of breathing
-        room above the chart card.                                  */
-    .tb-sun-events
-    {
-        position: relative;
-        height: 14px;
-        pointer-events: none;
-    }
-    .tb-sun-event-icon
+    /*  Night-zone overlays. One absolutely-positioned div per
+        sunset, next sunrise window, inserted as a sibling of the
+        chart SVG inside the chart card. CSS diagonal hatching
+        sits on top of the curves but below the live + scrub
+        cursors (z-index 4), so dusk and dawn read as "this slice
+        is night" without obscuring the curve shape underneath.
+        Repeating linear gradients render at the device pixel grid
+        regardless of the chart SVG's preserveAspectRatio=none, so
+        the stripes stay diagonal across any card width.            */
+    .hc-night-zone
     {
         position: absolute;
         top: 0;
-        transform: translateX(-50%);
-        --mdc-icon-size: 12px;
-        color: rgba(0, 0, 0, 0.55);
-        line-height: 1;
-    }
-    ha-card.theme-dark .tb-sun-event-icon { color: rgba(255, 255, 255, 0.65); }
-
-    /*  Vertical dotted lines drawn behind the chart's irradiance
-        and cloud area paths (the chart SVG lists them before the
-        area paths in document order so they sit underneath). Same
-        dash pattern as the day-separator dotted lines so the two visual languages
-        feel related, but at lower alpha so the sun-events read as
-        secondary context rather than primary structure.            */
-    .hc-sun-event
-    {
-        stroke: rgba(0, 0, 0, 0.22);
-        stroke-width: 1;
-        stroke-dasharray: 1.5 2.5;
-        vector-effect: non-scaling-stroke;
+        bottom: 0;
         pointer-events: none;
+        z-index: 3;
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(0, 0, 0, 0.11) 0,
+            rgba(0, 0, 0, 0.11) 1.5px,
+            transparent       1.5px,
+            transparent       6px
+        );
     }
-    ha-card.theme-dark .hc-sun-event { stroke: rgba(255, 255, 255, 0.30); }
+    ha-card.theme-dark .hc-night-zone
+    {
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.14) 0,
+            rgba(255, 255, 255, 0.14) 1.5px,
+            transparent              1.5px,
+            transparent              6px
+        );
+    }
 
 
     /*  Day-label chip row, sits as a sibling below the chart card
@@ -38190,7 +38187,7 @@ function findSunCrossing(lat, lon, dayStartMs, dayEndMs, direction) {
   }
   return new Date((bracketLo + bracketHi) / 2);
 }
-function computeSunEvents(host) {
+function computeNightIntervals(host) {
   const range = host._timeRange;
   if (!range) return [];
   const coords = getHomeCoords(host.config, host.hass);
@@ -38199,37 +38196,63 @@ function computeSunEvents(host) {
   const endMs = range.end.getTime();
   const rangeMs = endMs - startMs;
   if (rangeMs <= 0) return [];
-  const out = [];
+  const crossings = [];
   const cursor = new Date(range.start);
   cursor.setHours(0, 0, 0, 0);
-  while (cursor.getTime() <= endMs) {
+  cursor.setDate(cursor.getDate() - 1);
+  const walkEndMs = endMs + 24 * 60 * 60 * 1e3;
+  while (cursor.getTime() <= walkEndMs) {
     const dayStart = cursor.getTime();
     const dayEnd = dayStart + 24 * 60 * 60 * 1e3;
     const rise = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, "rising");
-    if (rise && rise.getTime() >= startMs && rise.getTime() <= endMs) {
-      out.push({ pct: (rise.getTime() - startMs) / rangeMs * 100, kind: "sunrise" });
-    }
     const setT = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, "setting");
-    if (setT && setT.getTime() >= startMs && setT.getTime() <= endMs) {
-      out.push({ pct: (setT.getTime() - startMs) / rangeMs * 100, kind: "sunset" });
-    }
+    if (rise) crossings.push({ ms: rise.getTime(), kind: "sunrise" });
+    if (setT) crossings.push({ ms: setT.getTime(), kind: "sunset" });
     cursor.setDate(cursor.getDate() + 1);
+  }
+  crossings.sort((a2, b2) => a2.ms - b2.ms);
+  const intervals = [];
+  let pendingSunset = null;
+  let sawAnySunrise = false;
+  for (const c2 of crossings) {
+    if (c2.kind === "sunset") {
+      pendingSunset = c2.ms;
+    } else {
+      if (pendingSunset !== null) {
+        intervals.push({ startMs: pendingSunset, endMs: c2.ms });
+        pendingSunset = null;
+      } else if (!sawAnySunrise) {
+        intervals.push({ startMs: -Infinity, endMs: c2.ms });
+      }
+      sawAnySunrise = true;
+    }
+  }
+  if (pendingSunset !== null) {
+    intervals.push({ startMs: pendingSunset, endMs: Infinity });
+  }
+  const out = [];
+  for (const iv of intervals) {
+    const s2 = Math.max(iv.startMs, startMs);
+    const e2 = Math.min(iv.endMs, endMs);
+    if (e2 > s2) {
+      out.push({
+        startPct: (s2 - startMs) / rangeMs * 100,
+        endPct: (e2 - startMs) / rangeMs * 100
+      });
+    }
   }
   return out;
 }
-function renderTimelineSunEvents(host) {
-  const events = computeSunEvents(host);
-  if (events.length === 0) return b``;
+function renderTimelineNightZones(host) {
+  const intervals = computeNightIntervals(host);
+  if (intervals.length === 0) return b``;
   return b`
-        <div class="tb-sun-events">
-            ${events.map((e2) => b`
-                <ha-icon
-                    class="tb-sun-event-icon tb-sun-event-${e2.kind}"
-                    icon="${e2.kind === "sunrise" ? "mdi:weather-sunset-up" : "mdi:weather-sunset-down"}"
-                    style="left:${e2.pct.toFixed(2)}%"
-                ></ha-icon>
-            `)}
-        </div>
+        ${intervals.map((iv) => b`
+            <div
+                class="hc-night-zone"
+                style="left:${iv.startPct.toFixed(2)}%; width:${(iv.endPct - iv.startPct).toFixed(2)}%"
+            ></div>
+        `)}
     `;
 }
 function renderChart(host) {
@@ -38283,29 +38306,12 @@ function renderChart(host) {
     hCursor.setHours(hCursor.getHours() + 1);
   }
   const HOUR_TICK_HALF = 3;
-  const sunEvents = computeSunEvents(host).map((e2) => ({
-    x: e2.pct / 100 * W,
-    kind: e2.kind
-  }));
   return b`
         <svg
             class="hc-chart-svg"
             viewBox="0 0 ${W} ${H2}"
             preserveAspectRatio="none"
         >
-            <!-- Sun-event vertical lines first: behind the curves
-                 but in front of the chart-card background. Rendered
-                 here (not as DOM elements) so they participate in
-                 the chart's SVG coordinate space and stay pixel-
-                 perfect across the same scrub / pan paths the
-                 day-separator dotted lines already use. -->
-            ${sunEvents.map((e2) => w`
-                <line
-                    class="hc-sun-event hc-sun-event-${e2.kind}"
-                    x1="${e2.x.toFixed(2)}" y1="0"
-                    x2="${e2.x.toFixed(2)}" y2="${H2}"
-                ></line>
-            `)}
             <!-- Cloud first as the background layer; the irradiance
                  fill paints on top with the same alpha so the two
                  curves coexist rather than competing. -->
@@ -41326,7 +41332,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.2"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.3"}`,
       labelStyle,
       versionStyle
     );
@@ -41350,7 +41356,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.2",
+        version: "1.6.3-beta.3",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41358,7 +41364,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -41794,25 +41800,23 @@ let HeliosCard = class extends i {
                         ${pvEntityId ? b`
                             <div class="tb-chart-card tb-pv-card">
                                 ${renderPvChart(this)}
+                                ${renderTimelineNightZones(this)}
                                 ${renderTimelineTicks(this)}
                             </div>
                         ` : A}
 
-                        <!--  Sun-event icon row, sits above the chart
-                              card. Each sun-up / sun-down glyph caps
-                              its dotted vertical line that runs the
-                              full chart height inside the SVG.    -->
-                        ${renderTimelineSunEvents(this)}
-
                         <!--  Chart card: hosts the area chart, the
-                              dotted day separators, and the live +
-                              scrub cursors as HTML overlays. The
-                              day-label chip row used to overlay the
-                              midline of this card; it's now a
+                              dotted day separators, the night-zone
+                              diagonal hatch overlay (one rect per
+                              sunset, next sunrise window) and the
+                              live + scrub cursors as HTML overlays.
+                              The day-label chip row used to overlay
+                              the midline of this card; it's now a
                               sibling block below so the chips never
                               cover the curves they describe.  -->
                         <div class="tb-chart-card">
                             ${renderChart(this)}
+                            ${renderTimelineNightZones(this)}
                             ${renderTimelineTicks(this)}
                         </div>
                         ${renderTimelineDayLabels(this)}
@@ -41864,17 +41868,17 @@ let HeliosCard = class extends i {
                       button sits to its LEFT, fused to the chip's
                       left edge with a shared border. Three button
                       states:
-                        - no provider covers the home  -> disabled,
+                        - no provider covers the home, disabled,
                           eye-off-outline icon, no click handler
-                        - public online provider       -> active,
-                          earth icon, click toggles LiDAR view
-                        - local-nDSM (YAML config)     -> active,
-                          harddisk icon, click toggles LiDAR view
+                        - public online provider, active, earth
+                          icon, click toggles LiDAR view
+                        - local-nDSM (YAML config), active, harddisk
+                          icon, click toggles LiDAR view
                       Active state mirrors the scrub-blue theme used
                       on the opposite rail when LiDAR view is on, so
                       the cluster doubles as the "you're in LiDAR
                       view" signal the way the clock chip doubles as
-                      the "you're scrubbing" signal.                 */
+                      the "you're scrubbing" signal.                 -->
                 ${hasApiKey ? (() => {
       const isLocal = lidarSourceId === "local-ndsm";
       const hasProvider = lidarSourceId !== null;

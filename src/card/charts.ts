@@ -86,14 +86,16 @@ function findSunCrossing(
 }
 
 
-//Shared per-day sunrise / sunset event computation. Returns
-//{ pct, kind } pairs at fractional positions inside the visible
-//time range; consumed by both `renderChart` (to draw the vertical
-//dotted lines inside the SVG) and `renderTimelineSunEvents` (to
-//drop the sun-up / sun-down icons in a sibling row above the
-//chart card). Centralising the computation here keeps the two
-//visualisations in lock-step on any time-range or location change.
-function computeSunEvents(host: ChartHost): Array<{ pct: number; kind: 'sunrise' | 'sunset' }>
+//Per-day night intervals clipped to the visible time range.
+//Each interval is a (sunset[N] -> sunrise[N+1]) pair returned as
+//{ startPct, endPct } fractional positions; consumed by
+//`renderTimelineNightZones` to lay diagonal-hatch overlays over
+//the chart cards. The walk pads one day on either side of the
+//visible window so the leading and trailing night chunks (the
+//morning before the first sunrise, the evening after the last
+//sunset) still resolve correctly when the window doesn't start
+//or end exactly on a solar boundary.
+function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPct: number }>
 {
     const range = host._timeRange;
     if (!range) return [];
@@ -104,48 +106,94 @@ function computeSunEvents(host: ChartHost): Array<{ pct: number; kind: 'sunrise'
     const rangeMs = endMs - startMs;
     if (rangeMs <= 0) return [];
 
-    const out: Array<{ pct: number; kind: 'sunrise' | 'sunset' }> = [];
+    type Crossing = { ms: number; kind: 'sunrise' | 'sunset' };
+    const crossings: Crossing[] = [];
+
     const cursor = new Date(range.start);
     cursor.setHours(0, 0, 0, 0);
-    while (cursor.getTime() <= endMs)
+    cursor.setDate(cursor.getDate() - 1);
+    const walkEndMs = endMs + 24 * 60 * 60 * 1000;
+    while (cursor.getTime() <= walkEndMs)
     {
         const dayStart = cursor.getTime();
         const dayEnd   = dayStart + 24 * 60 * 60 * 1000;
         const rise = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, 'rising');
-        if (rise && rise.getTime() >= startMs && rise.getTime() <= endMs)
-        {
-            out.push({ pct: (rise.getTime() - startMs) / rangeMs * 100, kind: 'sunrise' });
-        }
         const setT = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, 'setting');
-        if (setT && setT.getTime() >= startMs && setT.getTime() <= endMs)
-        {
-            out.push({ pct: (setT.getTime() - startMs) / rangeMs * 100, kind: 'sunset' });
-        }
+        if (rise) crossings.push({ ms: rise.getTime(), kind: 'sunrise' });
+        if (setT) crossings.push({ ms: setT.getTime(), kind: 'sunset' });
         cursor.setDate(cursor.getDate() + 1);
+    }
+    crossings.sort((a, b) => a.ms - b.ms);
+
+    const intervals: Array<{ startMs: number; endMs: number }> = [];
+    let pendingSunset: number | null = null;
+    let sawAnySunrise = false;
+    for (const c of crossings)
+    {
+        if (c.kind === 'sunset')
+        {
+            pendingSunset = c.ms;
+        }
+        else
+        {
+            if (pendingSunset !== null)
+            {
+                intervals.push({ startMs: pendingSunset, endMs: c.ms });
+                pendingSunset = null;
+            }
+            else if (!sawAnySunrise)
+            {
+                //Leading night: the window opens before the first
+                //sunset of our walk, so the morning chunk up to the
+                //first sunrise is still a night zone.
+                intervals.push({ startMs: -Infinity, endMs: c.ms });
+            }
+            sawAnySunrise = true;
+        }
+    }
+    if (pendingSunset !== null)
+    {
+        //Trailing night extending past the walk's last sunrise.
+        intervals.push({ startMs: pendingSunset, endMs: Infinity });
+    }
+
+    const out: Array<{ startPct: number; endPct: number }> = [];
+    for (const iv of intervals)
+    {
+        const s = Math.max(iv.startMs, startMs);
+        const e = Math.min(iv.endMs,   endMs);
+        if (e > s)
+        {
+            out.push({
+                startPct: (s - startMs) / rangeMs * 100,
+                endPct:   (e - startMs) / rangeMs * 100,
+            });
+        }
     }
     return out;
 }
 
 
-//Sun-event icon row, sits as a sibling above the chart card. Each
-//icon anchors to its sunrise / sunset X position and visually caps
-//the dotted vertical line that runs through the chart underneath.
-//Outside the chart card so the icon can sit above the curves
-//without depending on the chart card's overflow being visible.
-export function renderTimelineSunEvents(host: ChartHost): TemplateResult
+//Night-zone overlays for a chart card. Renders one absolutely-
+//positioned div per night interval, filled with a diagonal hatch
+//pattern. The divs are inserted inside the chart card so they
+//inherit the card's relative positioning + overflow clipping;
+//z-index lifts them above the SVG curves (which paint as flow
+//content) but stays below the live + scrub cursors (z-index 4).
+//The result reads as "this stretch of timeline is night", with
+//the underlying curves still legible through the low-alpha
+//diagonals.
+export function renderTimelineNightZones(host: ChartHost): TemplateResult
 {
-    const events = computeSunEvents(host);
-    if (events.length === 0) return html``;
+    const intervals = computeNightIntervals(host);
+    if (intervals.length === 0) return html``;
     return html`
-        <div class="tb-sun-events">
-            ${events.map(e => html`
-                <ha-icon
-                    class="tb-sun-event-icon tb-sun-event-${e.kind}"
-                    icon="${e.kind === 'sunrise' ? 'mdi:weather-sunset-up' : 'mdi:weather-sunset-down'}"
-                    style="left:${e.pct.toFixed(2)}%"
-                ></ha-icon>
-            `)}
-        </div>
+        ${intervals.map(iv => html`
+            <div
+                class="hc-night-zone"
+                style="left:${iv.startPct.toFixed(2)}%; width:${(iv.endPct - iv.startPct).toFixed(2)}%"
+            ></div>
+        `)}
     `;
 }
 
@@ -290,34 +338,12 @@ export function renderChart(host: ChartHost): TemplateResult
     }
     const HOUR_TICK_HALF = 3;
 
-    //Per-day sunrise / sunset X positions. Computed via the
-    //shared `computeSunEvents` helper so the dotted vertical
-    //lines below match the icon row's positions above pixel-
-    //perfectly even after a scrub / range change.
-    const sunEvents = computeSunEvents(host).map(e => ({
-        x:    (e.pct / 100) * W,
-        kind: e.kind,
-    }));
-
     return html`
         <svg
             class="hc-chart-svg"
             viewBox="0 0 ${W} ${H}"
             preserveAspectRatio="none"
         >
-            <!-- Sun-event vertical lines first: behind the curves
-                 but in front of the chart-card background. Rendered
-                 here (not as DOM elements) so they participate in
-                 the chart's SVG coordinate space and stay pixel-
-                 perfect across the same scrub / pan paths the
-                 day-separator dotted lines already use. -->
-            ${sunEvents.map(e => svg`
-                <line
-                    class="hc-sun-event hc-sun-event-${e.kind}"
-                    x1="${e.x.toFixed(2)}" y1="0"
-                    x2="${e.x.toFixed(2)}" y2="${H}"
-                ></line>
-            `)}
             <!-- Cloud first as the background layer; the irradiance
                  fill paints on top with the same alpha so the two
                  curves coexist rather than competing. -->
