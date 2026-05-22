@@ -10,12 +10,28 @@ import type maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 
 
-//Offscreen raster resolution for the shadow mask. 1024x1024 over a
-//building-radius bbox (up to ~2 km wide at max radius) gives ~2 m
-//per pixel at the worst case, finer than the LiDAR cell pitch we
-//feed in, so the polygon edges read as smooth anti-aliased curves
-//rather than visible stair-stepping.
-export const SHADOW_RASTER_SIZE = 1024;
+//Offscreen raster resolution for the shadow mask, indexed by the
+//user's `lidar-precision` choice:
+//
+//  - low / medium (default) , 1024×1024. ~2 m/px at the worst-case
+//    2 km bbox, PNG encode ~10 ms. Mobile-friendly, fits in 4 MB.
+//  - high , 2048×2048. ~1 m/px, polygon edges land on the LiDAR
+//    grid instead of being bilinearly smeared by MapLibre's raster
+//    downscale. PNG encode ~40 ms, canvas memory 4× the medium
+//    setting. Worth it on a desktop card showing dense forest /
+//    dense roofs; overkill on a phone dashboard.
+import type { LidarPrecisionLevel } from '../helios-config';
+
+const SHADOW_RASTER_SIZE_BY_PRECISION: Record<LidarPrecisionLevel, number> = {
+    low:    1024,
+    medium: 1024,
+    high:   2048,
+};
+
+export function shadowRasterSizeFor(level: LidarPrecisionLevel): number
+{
+    return SHADOW_RASTER_SIZE_BY_PRECISION[level] ?? 1024;
+}
 
 
 //Fully-transparent 1x1 PNG used as the initial image of the shadow

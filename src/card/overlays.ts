@@ -71,6 +71,10 @@ export interface LabelLayout
     batteryPowerLabel: { x: number; y: number };
     ringEdge:          { x: number; y: number };
     home:              { x: number; y: number };
+    //Perspective-projected ground disc around the home. Drawn as
+    //a polygon in the PV leader SVG; pulses with the bead arrival
+    //by scaling around its centre (which is `home`).
+    homeAnchorPoints:  string;
 }
 
 //One pair of arc samples mapped to a stroke-ready segment. The

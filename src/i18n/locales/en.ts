@@ -13,6 +13,7 @@ import type { Translations } from '../index';
 export const en: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home',
+    lidarViewChipLabel: 'LiDAR view',
 
     detail:
     {
@@ -72,7 +73,9 @@ export const en: Translations = {
         pvEntity:           'Production entity',
         pvEntityHelp:       'Pick a solar power or energy sensor (W, kW, Wh, kWh).',
         pvPeakPower:        'Peak power (kWp)',
-        pvPeakPowerHelp:    'Installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader\'s flow saturation. Leave empty to hide the forecast; observed production and the daily peak still render.',
+        pvPeakPowerHelp:    'Total installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader\'s flow saturation. Leave empty when you enter a per-string peak-kWp on each row below (the total is then the sum). Without either, no forecast is drawn; observed production and the daily peak still render.',
+        pvInverterMaxKw:    'Inverter max output (kW)',
+        pvInverterMaxKwHelp:'Optional clip on the forecast. Set this to your inverter\'s nameplate AC output when your panels can produce more than the inverter can deliver (typical European pairing: 6.4 kWp DC behind a 5 kW inverter). Leaves observation untouched (the inverter already clips in hardware) but caps the predicted curve, the daily kWh totals and the tooltip values so the readout never overshoots reality.',
         pvArraysSection:    'Panel orientation',
         pvArraysHelp:       'One entry per group of co-oriented panels. Leave a single entry with tilt 0 for a flat install. Add more entries when panels are split across multiple orientations (e.g. one row facing east, one facing west). The card forecasts each entry separately and weights the result by its share of the total kWp.',
         pvArrayTitle:       'Row {n}',
@@ -81,6 +84,8 @@ export const en: Translations = {
         pvArrayTilt:        'Tilt (°)',
         pvArrayAzimuth:     'Azimuth (°)',
         pvArrayShare:       'Share (%)',
+        pvArrayPeakKwp:     'Peak power (kWp)',
+        pvArrayPeakKwpHelp: 'Installed peak power of THIS row in kilowatt-peak. Sum across rows = total kWp; replaces the legacy global "Peak power" field plus the per-row share. Leave blank to fall back to the share-based weighting (legacy v1.6.2 path).',
         pvArrayAdd:         '+ Add row',
         pvArrayRemove:      'Remove',
         pvArrayNormHint:    'Shares don\'t add up to 100%, the forecast normalises them automatically.',
@@ -157,7 +162,7 @@ export const en: Translations = {
         lidarViewWireframeOpacity: 'Wireframe opacity',
         localLidarSection:     'Advanced — Local LiDAR (BYO)',
         localLidarHint:        'Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.',
-        localLidarToolsHint:   'Need to prepare a raster from scratch? The Helios repo ships Python helper tools under `tools/lidar/`, see the README there for the full pipeline (system GDAL install, `uv` setup, inspect / convert / synthetic test commands).',
+        localLidarToolsHint:   'Need to prepare a raster from scratch? The easy path is the companion site [helios-lidar.org](https://helios-lidar.org): drop in your raw LAZ / LAS file or a DSM + DTM raster pair, and it returns the 2-band COG Helios reads (band 1 = nDSM, band 2 = DTM) plus the ready-to-paste YAML for the keys below. Free, no install, no account. If you would rather run everything locally, the Helios repo also ships Python helpers under `tools/lidar/` for the same conversion.',
         localLidarEnabled:     'Use local data',
         localLidarUrl:         'GeoTIFF URL',
         localLidarMinLat:      'Min latitude',

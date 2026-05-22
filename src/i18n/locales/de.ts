@@ -3,6 +3,7 @@ import type { Translations } from '../index';
 export const de: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Sonne, Wolken, PV-Erzeugung, Batterie und LiDAR-Schatten am Haus, in 3D-Echtzeit',
+    lidarViewChipLabel: 'LiDAR-Ansicht',
 
     detail:
     {
@@ -61,8 +62,10 @@ export const de: Translations = {
         pvHint:             'Optional. Wenn gesetzt, erscheint nahe dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).',
         pvEntity:           'Produktions-Entität',
         pvEntityHelp:       'Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).',
-        pvPeakPower:        'Spitzenleistung (kWp)',
-        pvPeakPowerHelp:    'Installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, um die Prognose auszublenden; gemessene Produktion und Tagesspitze werden weiter angezeigt.',
+        pvPeakPower:        'Gesamt-Spitzenleistung (kWp)',
+        pvPeakPowerHelp:    'Gesamte installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, wenn du unten pro String eine Spitzenleistung eingibst (Gesamt = Summe). Ohne beides wird keine Prognose angezeigt; gemessene Produktion und Tagesspitze bleiben sichtbar.',
+        pvInverterMaxKw:    'Wechselrichter-Maximalleistung (kW)',
+        pvInverterMaxKwHelp:'Optionale Deckelung der Prognose. Gib hier die AC-Nennleistung deines Wechselrichters ein, wenn deine Module mehr DC erzeugen können als der Wechselrichter abgibt (typische europäische Kombination: 6,4 kWp DC hinter einem 5-kW-Wechselrichter). Beeinflusst die Messwerte nicht (der Wechselrichter begrenzt bereits in Hardware), deckelt aber die Prognosekurve, die täglichen kWh-Summen und die Tooltip-Werte, damit der Wert nie die Hardware-Realität überschreitet.',
         pvArraysSection:    'Modulausrichtung',
         pvArraysHelp:       'Ein Eintrag pro Gruppe gleich ausgerichteter Module. Lasse einen einzigen Eintrag mit Neigung 0 für eine flache Installation. Füge weitere Einträge hinzu, wenn deine Module auf mehrere Ausrichtungen verteilt sind (zum Beispiel eine Reihe nach Osten, eine nach Westen). Die Prognose wird pro Eintrag berechnet und nach dem Anteil an der Gesamt-kWp gewichtet.',
         pvArrayTitle:       'Reihe {n}',
@@ -71,6 +74,8 @@ export const de: Translations = {
         pvArrayTilt:        'Neigung (°)',
         pvArrayAzimuth:     'Azimut (°)',
         pvArrayShare:       'Anteil (%)',
+        pvArrayPeakKwp:     'Spitzenleistung (kWp)',
+        pvArrayPeakKwpHelp: 'Installierte Spitzenleistung DIESER Reihe in Kilowatt-Peak. Summe über alle Reihen = Gesamt-kWp; ersetzt das alte globale "Spitzenleistung"-Feld und den Anteil pro Reihe. Leer lassen, um auf die alte anteilsbasierte Gewichtung zurückzufallen (Pfad v1.6.2).',
         pvArrayAdd:         '+ Reihe hinzufügen',
         pvArrayRemove:      'Entfernen',
         pvArrayNormHint:    'Die Anteile ergeben nicht 100 %, die Prognose normalisiert sie automatisch.',
@@ -147,7 +152,7 @@ export const de: Translations = {
         lidarViewWireframeOpacity: 'Drahtgitter-Deckkraft',
         localLidarSection:     'Erweitert — Lokales LiDAR (BYO)',
         localLidarHint:        'Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb des definierten Bereichs ersetzt diese Quelle jeden nationalen Anbieter.',
-        localLidarToolsHint:   'Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).',
+        localLidarToolsHint:   'Du musst dein eigenes Raster aufbereiten? Am einfachsten geht das über die Begleitseite [helios-lidar.org](https://helios-lidar.org): lade deine rohe LAZ / LAS-Datei oder ein DSM + DTM-Paar hoch, und du erhältst das 2-Band-COG zurück, das Helios liest (Band 1 = nDSM, Band 2 = DTM) zusammen mit dem fertigen YAML-Block für die Schlüssel unten. Kostenlos, ohne Installation, ohne Konto. Wenn du lieber alles lokal erledigst, enthält das Helios-Repository auch Python-Helfer unter `tools/lidar/` für dieselbe Konvertierung.',
         localLidarEnabled:     'Lokale Daten verwenden',
         localLidarUrl:         'GeoTIFF-URL',
         localLidarMinLat:      'Min. Breitengrad',

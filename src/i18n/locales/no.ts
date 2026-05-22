@@ -12,6 +12,7 @@ import type { Translations } from '../index';
 export const no: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid',
+    lidarViewChipLabel: 'LiDAR-visning',
 
     detail:
     {
@@ -70,8 +71,10 @@ export const no: Translations = {
         pvHint:             'Valgfri. Når satt vises en chip nær huset med øyeblikkelig produksjon (beregnet over siste minutt), og en dedikert graf legges til over tidslinjen. Aksepterer enten en effektsensor (W/kW) eller en kumulativ energisensor (Wh/kWh).',
         pvEntity:           'Produksjons-entitet',
         pvEntityHelp:       'Velg en sensor for sol-effekt eller -energi (W, kW, Wh, kWh).',
-        pvPeakPower:        'Toppeffekt (kWp)',
-        pvPeakPowerHelp:    'Installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen i PV-grafen og strømningsmetningen for PV → hus-leaderen. La stå tom for å skjule prognosen; observert produksjon og dagens topp tegnes likevel.',
+        pvPeakPower:        'Total toppeffekt (kWp)',
+        pvPeakPowerHelp:    'Total installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen og strømningsmetningen for PV → hus-leaderen. La stå tom når du oppgir en toppeffekt per streng nedenfor (totalen er summen). Uten noen av delene tegnes ingen prognose; observert produksjon og dagens topp vises likevel.',
+        pvInverterMaxKw:    'Maks vekselretter-effekt (kW)',
+        pvInverterMaxKwHelp:'Valgfri begrensning på prognosen. Sett inn vekselretterens nominelle AC-effekt når panelene kan produsere mer enn vekselretteren kan levere (typisk europeisk kombinasjon: 6,4 kWp DC bak en 5 kW vekselretter). Påvirker ikke observasjon (vekselretteren begrenser allerede i maskinvare), men kapper prognosekurven, daglige kWh-summer og tooltip-verdier slik at avlesningen aldri overstiger maskinvarens virkelighet.',
         pvArraysSection:    'Panelorientering',
         pvArraysHelp:       'Én oppføring per felt paneler med samme orientering. La én oppføring stå med helning 0 for en flat installasjon. Legg til flere oppføringer når panelene er fordelt på flere retninger (for eksempel en rad mot øst og en mot vest). Prognosen beregnes per oppføring og vektes etter prosenten av total kWp.',
         pvArrayTitle:       'Rad {n}',
@@ -80,6 +83,8 @@ export const no: Translations = {
         pvArrayTilt:        'Helning (°)',
         pvArrayAzimuth:     'Azimut (°)',
         pvArrayShare:       'Andel (%)',
+        pvArrayPeakKwp:     'Toppeffekt (kWp)',
+        pvArrayPeakKwpHelp: 'Installert toppeffekt for DENNE raden i kilowatt-peak. Sum over alle rader = total kWp; erstatter det gamle globale «Toppeffekt»-feltet og andelen per rad. La stå tom for å falle tilbake til andelsbasert vekting (v1.6.2-stien).',
         pvArrayAdd:         '+ Legg til rad',
         pvArrayRemove:      'Fjern',
         pvArrayNormHint:    'Prosentene summerer ikke til 100 %, prognosen normaliserer dem automatisk.',
@@ -156,7 +161,7 @@ export const no: Translations = {
         lidarViewWireframeOpacity: 'Trådmodell-opasitet',
         localLidarSection:     'Avansert — Lokal LiDAR (BYO)',
         localLidarHint:        'Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.',
-        localLidarToolsHint:   'Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).',
+        localLidarToolsHint:   'Trenger du å lage et eget raster? Den enkleste veien er følgesettstedet [helios-lidar.org](https://helios-lidar.org): last opp den rå LAZ / LAS-filen din eller et DSM + DTM-par, så får du tilbake 2-bånds COG-en Helios leser (bånd 1 = nDSM, bånd 2 = DTM) sammen med den ferdige YAML-blokken for nøklene under. Gratis, ingen installasjon, ingen konto. Vil du heller gjøre alt lokalt, inneholder Helios-repoet også Python-hjelpere under `tools/lidar/` for samme konvertering.',
         localLidarEnabled:     'Bruk lokale data',
         localLidarUrl:         'GeoTIFF-URL',
         localLidarMinLat:      'Min breddegrad',

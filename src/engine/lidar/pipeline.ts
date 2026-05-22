@@ -28,18 +28,23 @@ import type { LidarShadowResult } from '../lidar';
 //                               component, the cell cap is derived from
 //                               this and the actual pixel pitch so
 //                               component size stays consistent across
-//                               precisions. ~80 m² is a 9 m × 9 m clump,
-//                               the size of a small tree group or a
-//                               single building, dense enough to cast a
-//                               readable shadow without flattening a
-//                               whole forest into one blob.
+//                               precisions. ~16 m² is a 4 m × 4 m clump,
+//                               the size of a single tree crown or one
+//                               wing of a small building; smaller clumps
+//                               trace irregular shapes (L-shaped roofs,
+//                               tree rows that zigzag) much closer to
+//                               their real outline once the per-clump
+//                               convex hull is taken in pass 3.
+//                               (Bumped down from 80 m² in v1.6.3 after
+//                               field reports that the cast shadow blob
+//                               looked too "smudged".)
 //  MIN_COMPONENT_CELLS        , floor on cells per component before we
 //                               bother emitting a polygon. Drops single-
 //                               cell noise that would render as speckled
 //                               dot shadows.
 const DEFAULT_HEIGHT_THRESH_M    = 5;
 const DEFAULT_HEIGHT_MAX_M       = 100;
-const DEFAULT_TARGET_AREA_M2     = 80;
+const DEFAULT_TARGET_AREA_M2     = 16;
 const DEFAULT_MIN_COMPONENT_CELLS = 3;
 
 const M_PER_DEG_LAT = 111_320;
@@ -74,10 +79,18 @@ export interface PipelineOptions
 //Run the shared consolidation pipeline on a height-above-ground
 //Float32Array. The caller is responsible for any DSM-DTM subtraction
 //or no-data sentinel scrubbing; pass NaN for cells you want skipped.
+//
+//Optional `terrain` parallel buffer (same shape, same indexing as
+//`heights`) carries the DTM band when the source COG ships one
+//(v1.6.3+ helios-lidar.org pipeline). It is forwarded verbatim
+//onto the result's `raster.terrain` field so the shading ray-march
+//can lift its comparison into absolute Z. Pure pass-through: the
+//shadow consolidation logic itself stays nDSM-only.
 export function processHeightRaster(
     heights: Float32Array,
     geo:     RasterGeo,
-    opts:    PipelineOptions = {}
+    opts:    PipelineOptions = {},
+    terrain?: Float32Array,
 ): LidarShadowResult
 {
     const heightThresh = opts.heightThreshM    ?? DEFAULT_HEIGHT_THRESH_M;
@@ -104,7 +117,11 @@ export function processHeightRaster(
     //consistent across providers regardless of their native pixel
     //pitch. Clamped so very low precision still produces multi-cell
     //components and very high precision doesn't blow the cap loose.
-    const maxCellsPerComponent = Math.max(4, Math.min(400,
+    //Upper bound 80 cells (was 400 pre-v1.6.3) caps the worst-case
+    //convex-hull extension to a single building wing or tree group;
+    //the shadow polygon then reads as a recognisable shape rather
+    //than a smudged blob.
+    const maxCellsPerComponent = Math.max(4, Math.min(80,
         Math.round(targetArea / Math.max(0.01, cellAreaM2))));
 
     const cropM = geo.cropRadiusMeters && geo.cropRadiusMeters > 0
@@ -245,10 +262,13 @@ export function processHeightRaster(
         //Forward the raw raster + geo so the engine can keep it for
         //the LiDAR View overlay. Same buffer reference, no copy: the
         //pipeline never mutates `heights` after the validity pass
-        //above, and the engine treats the buffer as read-only.
+        //above, and the engine treats the buffer as read-only. The
+        //terrain band, when provided, is forwarded with the same
+        //zero-copy contract.
         raster:
         {
             heights:    heights,
+            terrain,
             rasterSize,
             minLat,
             maxLat,

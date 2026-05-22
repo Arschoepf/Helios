@@ -3,6 +3,7 @@ import type { Translations } from '../index';
 export const nl: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime',
+    lidarViewChipLabel: 'LiDAR-weergave',
 
     detail:
     {
@@ -61,8 +62,10 @@ export const nl: Translations = {
         pvHint:             'Optioneel. Als ingesteld verschijnt bij het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).',
         pvEntity:           'Productie-entiteit',
         pvEntityHelp:       'Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).',
-        pvPeakPower:        'Piekvermogen (kWp)',
-        pvPeakPowerHelp:    'Geïnstalleerd piekvermogen van je panelen in kilowattpiek. Stuurt de gestippelde voorspellingslijn op de PV-grafiek en de stroomverzadiging van de PV → huis-leider. Laat leeg om de voorspelling te verbergen; gemeten productie en de dagelijkse piek blijven zichtbaar.',
+        pvPeakPower:        'Totaal piekvermogen (kWp)',
+        pvPeakPowerHelp:    'Geïnstalleerd totaal piekvermogen van je installatie in kilowattpiek. Stuurt de gestippelde voorspellingslijn en de stroomverzadiging van de PV → huis-leider. Laat leeg als je hieronder per string een piekvermogen invult (totaal = som). Zonder beide wordt geen voorspelling getekend; gemeten productie en de dagelijkse piek blijven zichtbaar.',
+        pvInverterMaxKw:    'Max omvormervermogen (kW)',
+        pvInverterMaxKwHelp:'Optionele begrenzing van de voorspelling. Vul het nominale AC-vermogen van je omvormer in wanneer je panelen meer DC kunnen leveren dan de omvormer aankan (typische Europese combinatie: 6,4 kWp DC achter een 5 kW omvormer). Beïnvloedt waarnemingen niet (de omvormer begrenst al in hardware), maar limiteert de voorspellingscurve, de dagelijkse kWh-totalen en de tooltip-waarden zodat de uitlezing nooit de hardwarewerkelijkheid overschrijdt.',
         pvArraysSection:    'Paneeloriëntatie',
         pvArraysHelp:       'Eén item per veld panelen met dezelfde oriëntatie. Laat één item staan met hellingshoek 0 voor een platte opstelling. Voeg extra items toe wanneer je panelen over meerdere richtingen verdeeld zijn (bijvoorbeeld een rij oost, een rij west). De prognose wordt per item berekend en gewogen op basis van het percentage van het totale kWp.',
         pvArrayTitle:       'Rij {n}',
@@ -71,6 +74,8 @@ export const nl: Translations = {
         pvArrayTilt:        'Helling (°)',
         pvArrayAzimuth:     'Azimut (°)',
         pvArrayShare:       'Aandeel (%)',
+        pvArrayPeakKwp:     'Piekvermogen (kWp)',
+        pvArrayPeakKwpHelp: 'Geïnstalleerd piekvermogen van DEZE rij in kilowattpiek. Som over alle rijen = totaal kWp; vervangt het oude globale veld "Piekvermogen" en het aandeel per rij. Laat leeg om terug te vallen op de oude weging op basis van aandeel (v1.6.2-pad).',
         pvArrayAdd:         '+ Rij toevoegen',
         pvArrayRemove:      'Verwijderen',
         pvArrayNormHint:    'De percentages komen niet uit op 100%, de prognose herschaalt ze automatisch.',
@@ -147,7 +152,7 @@ export const nl: Translations = {
         lidarViewWireframeOpacity: 'Dekking van het draadmodel',
         localLidarSection:     'Geavanceerd — Lokale LiDAR (BYO)',
         localLidarHint:        'Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio\'s die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen het gedefinieerde gebied vervangt deze bron elke nationale leverancier.',
-        localLidarToolsHint:   'Een eigen raster nodig? De Helios-repository bevat Python-hulpmiddelen onder `tools/lidar/`, zie de README daar voor de volledige pipeline (installatie van de GDAL-systeembibliotheek, `uv`-setup, inspect / convert / synthetisch test-commando\'s).',
+        localLidarToolsHint:   'Een eigen raster nodig? Het makkelijkst gaat dat via de begeleidende site [helios-lidar.org](https://helios-lidar.org): upload je ruwe LAZ / LAS-bestand of een DSM + DTM-paar, en je krijgt de 2-band COG terug die Helios leest (band 1 = nDSM, band 2 = DTM), samen met het kant-en-klare YAML-blok voor de onderstaande sleutels. Gratis, geen installatie, geen account. Wil je liever alles lokaal doen? Dan bevat de Helios-repository ook Python-helpers onder `tools/lidar/` voor dezelfde conversie.',
         localLidarEnabled:     'Lokale data gebruiken',
         localLidarUrl:         'GeoTIFF-URL',
         localLidarMinLat:      'Min. breedtegraad',

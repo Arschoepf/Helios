@@ -179,6 +179,51 @@ export class HeliosColorPicker extends LitElement
 }
 
 
+//Render a localised hint string that may contain markdown-style
+//links `[text](url)` as a Lit fragment with real `<a>` anchors.
+//No HTML parsing, no innerHTML: each link is built through Lit's
+//tagged template literal so the URL + text stay text-escaped.
+//
+//URL safety: anything that doesn't start with `http://` or
+//`https://` is rendered as plain text. Stops a malicious /
+//corrupted translation from sneaking in a `javascript:` URI.
+//
+//Used by editor hints that need a clickable link to
+//helios-lidar.org or other public docs.
+function renderMarkdownLinks(text: string): unknown[]
+{
+    const parts: unknown[] = [];
+    const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+    let cursor = 0;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null)
+    {
+        if (match.index > cursor)
+        {
+            parts.push(text.slice(cursor, match.index));
+        }
+        const label = match[1];
+        const url   = match[2];
+        if (/^https?:\/\//i.test(url))
+        {
+            parts.push(html`<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+        }
+        else
+        {
+            //Suspicious scheme, render as plain text so the user
+            //can see the URL but the browser doesn't follow it.
+            parts.push(`${label} (${url})`);
+        }
+        cursor = match.index + match[0].length;
+    }
+    if (cursor < text.length)
+    {
+        parts.push(text.slice(cursor));
+    }
+    return parts;
+}
+
+
 //Visual editor, exposes every config option through native HA form
 //controls (text inputs, color picker, entity picker). Wired into the
 //card via HeliosCard.getConfigElement().
@@ -363,6 +408,7 @@ export class HeliosCardEditor extends LitElement
         tilt:      number | null;
         azimuth:   number | null;
         share:     number | null;
+        peakKwp:   number | null;
         latitude:  number | null;
         longitude: number | null;
         height:    number | null;
@@ -392,21 +438,22 @@ export class HeliosCardEditor extends LitElement
                     tilt:      toNum(e['tilt']),
                     azimuth:   toNum(e['azimuth']),
                     share:     toNum(e['share']),
+                    peakKwp:   toNum(e['peak-kwp']),
                     latitude:  toNum(e['latitude']),
                     longitude: toNum(e['longitude']),
                     height:    toNum(e['height']),
                 };
             });
-            return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null }];
+            return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
         }
 
         const legacyTilt = toNum(this._cfg?.['pv-tilt']);
         const legacyAz   = toNum(this._cfg?.['pv-azimuth']);
         if (legacyTilt !== null || legacyAz !== null)
         {
-            return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, latitude: null, longitude: null, height: null }];
+            return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, peakKwp: null, latitude: null, longitude: null, height: null }];
         }
-        return [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null }];
+        return [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
     }
 
     //Persists a list of array entries to the config under `pv-arrays`
@@ -420,6 +467,7 @@ export class HeliosCardEditor extends LitElement
         tilt:      number | null;
         azimuth:   number | null;
         share:     number | null;
+        peakKwp:   number | null;
         latitude:  number | null;
         longitude: number | null;
         height:    number | null;
@@ -432,6 +480,7 @@ export class HeliosCardEditor extends LitElement
             if (e.tilt      !== null) o['tilt']      = e.tilt;
             if (e.azimuth   !== null) o['azimuth']   = e.azimuth;
             if (e.share     !== null) o['share']     = e.share;
+            if (e.peakKwp   !== null) o['peak-kwp']  = e.peakKwp;
             if (e.latitude  !== null) o['latitude']  = e.latitude;
             if (e.longitude !== null) o['longitude'] = e.longitude;
             if (e.height    !== null) o['height']    = e.height;
@@ -451,7 +500,7 @@ export class HeliosCardEditor extends LitElement
     //Updates a single field on entry `i` in the array list. Empty
     //input clears the field to null (mirrors `_numField`); any other
     //unparseable value is ignored so the previous typed value sticks.
-    private _arrayField(i: number, key: 'tilt' | 'azimuth' | 'share' | 'latitude' | 'longitude' | 'height', e: Event): void
+    private _arrayField(i: number, key: 'tilt' | 'azimuth' | 'share' | 'peakKwp' | 'latitude' | 'longitude' | 'height', e: Event): void
     {
         const list = this._readPvArrays();
         if (i < 0 || i >= list.length) return;
@@ -497,7 +546,7 @@ export class HeliosCardEditor extends LitElement
     {
         const list = this._readPvArrays();
         if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
-        list.push({ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null });
+        list.push({ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null });
         //Open the newly added pan in the editor by default: the user
         //just clicked to add it, so its body should be visible without
         //requiring a second click on the chevron. Existing pans keep
@@ -1002,6 +1051,18 @@ export class HeliosCardEditor extends LitElement
                 </label>
                 <div class="field-help">${t.editor.pvPeakPowerHelp}</div>
                 <label class="field">
+                    <span class="label">${t.editor.pvInverterMaxKw}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="5"
+                        .value="${c['pv-inverter-max-kw'] != null ? String(c['pv-inverter-max-kw']) : ''}"
+                        @change="${(e: Event) => this._numField('pv-inverter-max-kw', e)}"
+                    />
+                </label>
+                <div class="field-help">${t.editor.pvInverterMaxKwHelp}</div>
+                <label class="field">
                     <span class="label">${t.editor.pvColor}</span>
                     <helios-color-picker
                         .value="${cfgHex(c['pv-color'], DEFAULT_PV_COLOR_HEX)}"
@@ -1087,18 +1148,17 @@ export class HeliosCardEditor extends LitElement
                                             </label>
                                             <div class="field-help">${t.editor.pvArrayAzimuthHelp}</div>
                                             <label class="field">
-                                                <span class="label">${t.editor.pvArrayShare}</span>
+                                                <span class="label">${t.editor.pvArrayPeakKwp}</span>
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    max="100"
-                                                    step="1"
-                                                    placeholder="${arrays.length === 1 ? '100' : String(Math.round(100 / arrays.length))}"
-                                                    .value="${arr.share !== null ? String(arr.share) : ''}"
-                                                    @change="${(e: Event) => this._arrayField(i, 'share', e)}"
+                                                    step="0.1"
+                                                    placeholder="3.2"
+                                                    .value="${arr.peakKwp !== null ? String(arr.peakKwp) : ''}"
+                                                    @change="${(e: Event) => this._arrayField(i, 'peakKwp', e)}"
                                                 />
                                             </label>
-                                            <div class="field-help">${t.editor.pvArrayShareHelp}</div>
+                                            <div class="field-help">${t.editor.pvArrayPeakKwpHelp}</div>
                                             <label class="field">
                                                 <span class="label">${t.editor.pvArrayLatitude}</span>
                                                 <input
@@ -1320,7 +1380,7 @@ export class HeliosCardEditor extends LitElement
                 <details class="advanced-section" ?open="${this._openSection === 'lidar'}" @toggle="${(e: Event) => this._onSectionToggle('lidar', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.localLidarSection}</summary>
                     <div class="hint">${t.editor.localLidarHint}</div>
-                    <div class="hint" style="margin-bottom: 14px;">${t.editor.localLidarToolsHint}</div>
+                    <div class="hint" style="margin-bottom: 14px;">${renderMarkdownLinks(t.editor.localLidarToolsHint)}</div>
                     <div class="field">
                         <span class="label">${t.editor.localLidarEnabled}</span>
                         <div class="segmented-toggle">

@@ -18,6 +18,7 @@ import
     pvRateAtTime,
     pvNormalizeToWatts,
     pvCalibK,
+    pvInverterMaxW,
     computePvPowerWeighted,
     wipeLegacyPvCalibStorage,
     formatPvValue
@@ -29,12 +30,18 @@ import
     formatBatteryPower
 } from './card/battery';
 import { refreshSolarRadiation } from './card/radiation';
+import { computeForecastCalibration } from './card/calibration';
 import
 {
     renderChart,
     renderPvChart,
     renderTimelineTicks,
-    renderTimelineDayLabels
+    renderTimelineDayLabels,
+    renderTimelineNightZones,
+    renderTimelineFutureMask,
+    renderTimelineHoverTooltip,
+    handleChartHoverMove,
+    handleChartHoverLeave
 } from './card/charts';
 import
 {
@@ -387,6 +394,11 @@ export class HeliosCard extends LitElement
     //epoch of the cursor position on the X axis; null when the pointer
     //is outside the chart or the chart isn't shown.
     @state() _dashChartHoverTs: number | null = null;
+    //Hover position on the timeline chart cards, expressed as a
+    //percent of the visible time range. Null when the pointer is
+    //outside the cards; drives the hover guide line, the per-curve
+    //dots and the tooltip chip rendered above the cards.
+    @state() _chartHoverPct: number | null = null;
     @state() _chartSeries: {
         times:        Date[];
         irradiance:   number[];
@@ -814,7 +826,16 @@ export class HeliosCard extends LitElement
                 if (pct > 0)
                 {
                     //k is W per percent of STC, so pct × k is watts.
-                    pvPredictedRate = { value: pct * k, unit: 'W' };
+                    //Apply the 5-day rolling calibration ratio so the
+                    //chip agrees with the dotted forecast curve + the
+                    //tooltip value at the same scrub instant; clip at
+                    //the inverter's PMax so a bright forecast hour
+                    //doesn't overshoot the install's hardware ceiling.
+                    //Infinity cap = no clipping.
+                    const cal  = computeForecastCalibration(this);
+                    const calR = cal ? cal.ratio : 1;
+                    const w    = Math.min(pvInverterMaxW(this.config), pct * k * calR);
+                    pvPredictedRate = { value: w, unit: 'W' };
                 }
             }
         }
@@ -1119,7 +1140,6 @@ export class HeliosCard extends LitElement
         //provider covers the active home. Read off the engine, falls
         //back to null until the engine has resolved its first home.
         const lidarSourceId    = this._engine?.getActiveLidarSourceId() ?? null;
-        const lidarViewEnabled = lidarSourceId !== null;
         const cardClasses = [
             cardThemeClass,
             this._detailMode    ? 'detail-active'    : '',
@@ -1147,22 +1167,40 @@ export class HeliosCard extends LitElement
                               of the main chart so the irradiance
                               area and the PV area visually balance
                               each other.  -->
+                        ${renderTimelineHoverTooltip(this)}
                         ${pvEntityId ? html`
-                            <div class="tb-chart-card tb-pv-card">
+                            <div
+                                class="tb-chart-card tb-pv-card"
+                                @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
+                                @pointerleave="${() => handleChartHoverLeave(this)}"
+                            >
                                 ${renderPvChart(this)}
+                                ${renderTimelineNightZones(this)}
+                                ${renderTimelineFutureMask(this)}
                                 ${renderTimelineTicks(this)}
                             </div>
                         ` : nothing}
 
                         <!--  Chart card: hosts the area chart, the
-                              dotted day separators, the day-label
-                              chips on the midline, and the live +
-                              scrub cursors as HTML overlays.  -->
-                        <div class="tb-chart-card">
+                              dotted day separators, the night-zone
+                              diagonal hatch overlay (one rect per
+                              sunset, next sunrise window) and the
+                              live + scrub cursors as HTML overlays.
+                              The day-label chip row used to overlay
+                              the midline of this card; it's now a
+                              sibling block below so the chips never
+                              cover the curves they describe.  -->
+                        <div
+                            class="tb-chart-card"
+                            @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
+                            @pointerleave="${() => handleChartHoverLeave(this)}"
+                        >
                             ${renderChart(this)}
-                            ${renderTimelineDayLabels(this)}
+                            ${renderTimelineNightZones(this)}
+                            ${renderTimelineFutureMask(this)}
                             ${renderTimelineTicks(this)}
                         </div>
+                        ${renderTimelineDayLabels(this)}
                     </div>
                 ` : nothing}
 
@@ -1205,19 +1243,59 @@ export class HeliosCard extends LitElement
                       instead of two competing spinners on opposite
                       sides of the card. Sits at the same 8 px edge
                       margin as the clock and the timeline.  -->
-                ${hasApiKey && (lidarViewEnabled || this._lidarViewMode) ? html`
-                    <div class="overlay-top-right">
-                        <button
-                            type="button"
-                            class="lidar-view-btn ${this._lidarViewMode ? 'is-on' : ''}"
-                            aria-label="${this._lidarViewMode ? 'Exit LiDAR View' : 'LiDAR View'}"
-                            aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
-                            @click="${() => toggleLidarView(this)}"
-                        >
-                            <span class="lidar-view-btn-label">LiDAR</span>
-                        </button>
-                    </div>
-                ` : nothing}
+                <!--  Top-right cluster, mirror of the top-left
+                      clock + scrub-return pair. The "LiDAR" chip is
+                      passive (purely a status label) and the toggle
+                      button sits to its LEFT, fused to the chip's
+                      left edge with a shared border. Three button
+                      states:
+                        - no provider covers the home, disabled,
+                          eye-off-outline icon, no click handler
+                        - public online provider, active, earth
+                          icon, click toggles LiDAR view
+                        - local-nDSM (YAML config), active, harddisk
+                          icon, click toggles LiDAR view
+                      Active state mirrors the scrub-blue theme used
+                      on the opposite rail when LiDAR view is on, so
+                      the cluster doubles as the "you're in LiDAR
+                      view" signal the way the clock chip doubles as
+                      the "you're scrubbing" signal.                 -->
+                ${hasApiKey ? (() => {
+                    const isLocal     = lidarSourceId === 'local-ndsm';
+                    const hasProvider = lidarSourceId !== null;
+                    const stateClass  = !hasProvider ? 'is-uncovered'
+                                       : isLocal     ? 'is-local'
+                                                     : 'is-online';
+                    const stateIcon   = !hasProvider ? 'mdi:cloud-off-outline'
+                                       : isLocal     ? 'mdi:harddisk'
+                                                     : 'mdi:earth';
+                    const stateLabel  = !hasProvider ? 'No LiDAR coverage at this location'
+                                       : isLocal     ? 'Toggle LiDAR view, local nDSM'
+                                                     : 'Toggle LiDAR view, online provider';
+                    const onToggle = hasProvider ? (() => toggleLidarView(this)) : undefined;
+                    return html`
+                        <div class="overlay-top-right">
+                            <button
+                                type="button"
+                                class="lidar-view-toggle-btn ${stateClass} ${this._lidarViewMode ? 'is-on' : ''}"
+                                ?disabled="${!hasProvider}"
+                                aria-label="${stateLabel}"
+                                aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
+                                @click="${onToggle}"
+                            >
+                                <ha-icon icon="${stateIcon}"></ha-icon>
+                            </button>
+                            <button
+                                type="button"
+                                class="lidar-view-chip ${stateClass} ${this._lidarViewMode ? 'is-on' : ''}"
+                                ?disabled="${!hasProvider}"
+                                aria-label="${stateLabel}"
+                                aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
+                                @click="${onToggle}"
+                            >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
+                        </div>
+                    `;
+                })() : nothing}
 
                 <!--  Top-left cluster: clock chip showing the active
                       timeline instant + (in scrub mode) a back-to-
@@ -1451,6 +1529,78 @@ export class HeliosCard extends LitElement
                       because PV and the home share the same X anchor
                       so a straight segment is the right vocabulary.
                       Hidden when no PV entity is configured.  -->
+                <!--  Ground ring around the home. Drawn in its own SVG
+                      layer with an SVG mask built from the home's
+                      screen-space silhouette polygons (the same ones
+                      that drive the home-glow halo). The mask paints
+                      WHITE everywhere and BLACK over the extruded
+                      building's projected outline, so the ring is
+                      hidden wherever the 3D building stands in front
+                      of it. The eye reads the ring as a ground
+                      footprint the building physically stands inside,
+                      improving the perspective without having to
+                      route the ring through MapLibre's layer stack.
+                      Leader line + bead live in the next sibling SVG
+                      so they stay above the home as before.          -->
+                ${showPvLabel ? (() => {
+                    const maskId = `helios-home-anchor-mask-${this._instanceId}`;
+                    return html`
+                        <svg class="pv-home-anchor-svg">
+                            <defs>
+                                <mask id="${maskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="10000" height="10000">
+                                    <!--  White background , ring visible. -->
+                                    <rect x="0" y="0" width="10000" height="10000" fill="white" />
+                                    <!--  Black home silhouette , ring hidden
+                                          where the projected building
+                                          stands. Same base + top + wall
+                                          polygons the .home-glow-svg
+                                          renders, no extra projection
+                                          pass needed.                       -->
+                                    ${this._homeSilhouettes.map(sil => {
+                                        const N = Math.min(sil.base.length, sil.top.length);
+                                        if (N < 3) return nothing;
+                                        const basePts = sil.base.map(p => `${p.x},${p.y}`).join(' ');
+                                        const topPts  = sil.top .map(p => `${p.x},${p.y}`).join(' ');
+                                        const walls: string[] = [];
+                                        for (let i = 0; i < N; i++)
+                                        {
+                                            const j = (i + 1) % N;
+                                            walls.push(
+                                                `${sil.base[i].x},${sil.base[i].y} ` +
+                                                `${sil.base[j].x},${sil.base[j].y} ` +
+                                                `${sil.top [j].x},${sil.top [j].y} ` +
+                                                `${sil.top [i].x},${sil.top [i].y}`
+                                            );
+                                        }
+                                        return svg`
+                                            <polygon points="${basePts}" fill="black" />
+                                            <polygon points="${topPts}"  fill="black" />
+                                            ${walls.map(w => svg`
+                                                <polygon points="${w}" fill="black" />
+                                            `)}
+                                        `;
+                                    })}
+                                </mask>
+                            </defs>
+                            <g mask="url(#${maskId})">
+                                <g
+                                    class="pv-home-leader-anchor ${pvIdle ? '' : 'is-pulsing'}"
+                                    transform="translate(${layout!.home.x},${layout!.home.y})"
+                                    style="--pv-flow-duration:${pvFlowDuration}s"
+                                >
+                                    <polygon
+                                        class="pv-home-leader-anchor-disc"
+                                        points="${layout!.homeAnchorPoints}"
+                                        fill="none"
+                                        stroke="${pvColor}"
+                                        stroke-width="1.6"
+                                    ></polygon>
+                                </g>
+                            </g>
+                        </svg>
+                    `;
+                })() : nothing}
+
                 ${showPvLabel ? html`
                     <svg class="pv-home-leader-svg">
                         <line
@@ -1481,37 +1631,6 @@ export class HeliosCard extends LitElement
                                 ></animateMotion>
                             </circle>
                         ` : nothing}
-                        <!--  Anchor bead at the home end of the leader,
-                              same colour as the line so the two read
-                              as one continuous element. Sized slightly
-                              larger than the moving bead (r 5 vs 4)
-                              so the destination reads as the "target"
-                              rather than another in-flight particle.
-                              When production is non-zero we synchronise
-                              an SVG <animate> pulse on the r attribute
-                              with the bead's animateMotion cycle: the
-                              anchor swells from r 5 to r 9 during the
-                              last ~15 % of the cycle (i.e. as the bead
-                              approaches) and snaps back at the cycle
-                              boundary. Visual effect, the anchor
-                              "absorbs" each incoming bead.  -->
-                        <circle
-                            class="pv-home-leader-anchor"
-                            cx="${layout!.home.x}"
-                            cy="${layout!.home.y}"
-                            r="5"
-                            fill="${pvColor}"
-                        >
-                            ${!pvIdle ? svg`
-                                <animate
-                                    attributeName="r"
-                                    values="5;5;9;5"
-                                    keyTimes="0;0.80;0.97;1"
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                ></animate>
-                            ` : nothing}
-                        </circle>
                     </svg>
                 ` : nothing}
 
@@ -1737,27 +1856,15 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                <!--  Sunrise / sunset markers. ha-icon glyphs centred
-                      on the horizon crossings of the day's solar arc,
-                      coloured in the configured sun colour. The icon
-                      shape itself signals the meaning (sun rising /
-                      setting) so no label or rotation is needed.
-                      Skipped on polar days where the sun never
-                      crosses the horizon.  -->
-                ${showSun && sunScene!.sunrise ? html`
-                    <ha-icon
-                        class="solar-horizon-icon solar-horizon-sunrise"
-                        icon="mdi:weather-sunset-up"
-                        style="left:${sunScene!.sunrise.x}px; top:${sunScene!.sunrise.y}px; color:${sunColor}"
-                    ></ha-icon>
-                ` : nothing}
-                ${showSun && sunScene!.sunset ? html`
-                    <ha-icon
-                        class="solar-horizon-icon solar-horizon-sunset"
-                        icon="mdi:weather-sunset-down"
-                        style="left:${sunScene!.sunset.x}px; top:${sunScene!.sunset.y}px; color:${sunColor}"
-                    ></ha-icon>
-                ` : nothing}
+                <!--  Sunrise / sunset markers were drawn here as
+                      sun-coloured ha-icon glyphs anchored at the
+                      arc's horizon crossings. Removed in v1.6.3 :
+                      the arc shape itself already communicates
+                      "the sun rises here, sets there", the icons
+                      added visual noise and competed with the
+                      LiDAR shadow blobs sitting on the same
+                      horizon line.                                  -->
+
 
                 <!--  Home hover glow, sun-coloured halo around the
                       projected home silhouette. Reuses the same base

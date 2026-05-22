@@ -11,6 +11,7 @@ import type { Translations } from '../index';
 export const fr: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel',
+    lidarViewChipLabel: 'Vue LiDAR',
 
     detail:
     {
@@ -68,8 +69,10 @@ export const fr: Translations = {
         pvHint:             'Optionnel. Si renseigné, une pastille apparaît près de la maison avec la production instantanée (calculée sur la dernière minute) et un graphique dédié s\'ajoute au-dessus de la chronologie pour suivre la production. Capteur de puissance (W/kW) ou d\'énergie cumulée (Wh/kWh) acceptés indifféremment.',
         pvEntity:           'Entité de production',
         pvEntityHelp:       'Sélectionne un capteur de puissance ou d\'énergie photovoltaïque (W, kW, Wh, kWh).',
-        pvPeakPower:        'Puissance crête (kWp)',
-        pvPeakPowerHelp:    'Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.',
+        pvPeakPower:        'Puissance crête totale (kWp)',
+        pvPeakPowerHelp:    'Puissance crête totale de ton installation, en kilowatts-crête. Sert à tracer la courbe de prévision et à caler la cadence du flux PV → maison. Laisse vide quand tu renseignes une puissance crête par string ci-dessous (le total est alors la somme). Sans l\'un ni l\'autre, la prévision n\'est pas affichée ; la production observée et le pic du jour restent visibles.',
+        pvInverterMaxKw:    'Puissance max onduleur (kW)',
+        pvInverterMaxKwHelp:'Écrêtage optionnel sur la prévision. Renseigne la puissance AC nominale de ton onduleur si tes panneaux peuvent produire plus que ce qu\'il peut sortir (cas classique en Europe : 6,4 kWp DC derrière un onduleur 5 kW). N\'affecte pas l\'observation (l\'onduleur écrête déjà côté matériel) mais plafonne la courbe prévue, les totaux kWh quotidiens et la tooltip pour qu\'ils ne dépassent jamais la réalité matérielle.',
         pvArraysSection:    'Orientation des panneaux',
         pvArraysHelp:       'Une entrée par rangée de panneaux orientés à l\'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat. Ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l\'est, une autre à l\'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.',
         pvArrayTitle:       'Rangée {n}',
@@ -78,6 +81,8 @@ export const fr: Translations = {
         pvArrayTilt:        'Inclinaison (°)',
         pvArrayAzimuth:     'Azimut (°)',
         pvArrayShare:       'Part (%)',
+        pvArrayPeakKwp:     'Puissance crête (kWp)',
+        pvArrayPeakKwpHelp: 'Puissance crête installée de CETTE rangée en kilowatts-crête. La somme sur toutes les rangées = kWp total ; remplace l\'ancien champ « Puissance crête » global et le pourcentage par rangée. Laisse vide pour retomber sur l\'ancien mode par pourcentage (chemin v1.6.2).',
         pvArrayAdd:         '+ Ajouter une rangée',
         pvArrayRemove:      'Supprimer',
         pvArrayNormHint:    'Les parts ne totalisent pas 100 %, la prévision les normalise automatiquement.',
@@ -154,7 +159,7 @@ export const fr: Translations = {
         lidarViewWireframeOpacity: 'Opacité du fil de fer',
         localLidarSection:     'Avancé — LiDAR local (BYO)',
         localLidarHint:        'Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d\'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l\'intérieur de la zone définie, cette source remplace tout fournisseur national.',
-        localLidarToolsHint:   'Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d\'inspection / conversion / test synthétique).',
+        localLidarToolsHint:   'Tu pars de zéro ? Le plus simple est le site compagnon [helios-lidar.org](https://helios-lidar.org) : dépose ton fichier LAZ / LAS brut ou un couple DSM + DTM, et il te renvoie le COG 2 bandes que Helios consomme (bande 1 = nDSM, bande 2 = DTM) avec le bloc YAML prêt à coller pour les clés ci-dessous. Gratuit, sans installation, sans compte. Si tu préfères tout faire en local, le dépôt Helios contient aussi des helpers Python sous `tools/lidar/` qui réalisent la même conversion.',
         localLidarEnabled:     'Utiliser les données locales',
         localLidarUrl:         'URL du GeoTIFF',
         localLidarMinLat:      'Latitude min',

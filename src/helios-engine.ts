@@ -8,10 +8,11 @@ import { resolveLidarSource } from './engine/lidar';
 import { RASTER_DEFAULTS } from './engine/lidar/pipeline';
 import { LidarViewLayer } from './engine/lidar-view-layer';
 import { startAutoRotateLoop } from './engine/auto-rotate';
+import { maybePingHeartbeat } from './engine/anon-stats';
 import { setDetailMode as _setDetailMode } from './engine/detail-mode';
 import
 {
-    SHADOW_RASTER_SIZE,
+    shadowRasterSizeFor,
     BLANK_SHADOW_DATA_URL,
     shadowBoundsCornersLL,
     paintShadowRaster,
@@ -619,6 +620,7 @@ export class HeliosEngine
     private _lidarRaster:
         {
             heights:    Float32Array;
+            terrain?:   Float32Array;
             rasterSize: number;
             minLat:     number;
             maxLat:     number;
@@ -641,6 +643,14 @@ export class HeliosEngine
     //SHADOW_RASTER_SIZE; bounds are recomputed per refresh from the
     //home + building-radius.
     private _shadowCanvas?: HTMLCanvasElement;
+
+    //Debounce timer for the shadow / atmosphere refresh during a
+    //rapid scrub. Each setSelectedTime() call resets the timer; the
+    //actual refresh runs once when the timer expires. Keeps the
+    //live scrub gesture responsive (the curves + chips still
+    //update on every move; only the shadow raster paint, which is
+    //the costly bit at lidar-precision: high, is coalesced).
+    private _selectedTimeShadowTimer: number | null = null;
 
     //Cache of the 96 per-day sun arc samples. Sun position + clear-sky
     //irradiance depend only on the calendar day and the cloud cover,
@@ -691,6 +701,14 @@ export class HeliosEngine
 
         bumpStat('enginesCreated');
 
+        //Anonymous install heartbeat. Fires at most once per
+        //browser per 24 h, swallows every error, never blocks.
+        //Opt-out via `helios-anon-stats: false` or the browser's
+        //doNotTrack flag, see src/engine/anon-stats.ts for the
+        //full privacy contract.
+        try { maybePingHeartbeat(this.cfg); }
+        catch (_) { /* never let a side-effect break engine init */ }
+
         //Evict the oldest live engine if we're at the cap. Set
         //iteration follows insertion order so the first value is the
         //longest-lived, typically an orphaned editor-preview engine
@@ -736,6 +754,12 @@ export class HeliosEngine
             zoom:            18,
             pitch:           55,
             bearing:         this.homeLat >= 0 ? 180 : 0,
+            //Zoom is locked to the resting pose. The 3D camera +
+            //LiDAR overlay are tuned for this single altitude, and
+            //letting the user wander off-zoom only opened the door
+            //to "why does my card look different from the docs"
+            //screenshots. detail-mode separately raises maxZoom
+            //for its dive animation and resets it on exit.
             minZoom:         18,
             maxZoom:         18,
             dragPan:         false,
@@ -875,8 +899,21 @@ export class HeliosEngine
         canvas.style.touchAction = 'none';
 
         const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
+        //Vertical drag controls camera pitch. dy positive (drag down)
+        //tilts the camera flatter (less top-down, more horizon-on);
+        //dy negative (drag up) tilts it back toward the bird's-eye.
+        //Bounds: [15°, 85°]. The wider span lets the user dive
+        //almost top-down (15°) for a "map view" feel or peek almost
+        //flat against the ground (85°) for a "ground-level" feel,
+        //without ever allowing the camera to dip below the ground
+        //plane (90° would reveal the missing under-side of the
+        //basemap mesh).
+        const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
+        const PITCH_MIN_DEG = 15;
+        const PITCH_MAX_DEG = 85;
         let dragRotating  = false;
         let lastPointerX  = 0;
+        let lastPointerY  = 0;
         let activeId: number | null = null;
 
         const onDown = (e: PointerEvent) =>
@@ -893,6 +930,7 @@ export class HeliosEngine
             dragRotating = true;
             activeId     = e.pointerId;
             lastPointerX = e.clientX;
+            lastPointerY = e.clientY;
             this._autoRotateLastUserAction = Date.now();
             try { canvas.setPointerCapture(e.pointerId); }
             catch (_) {}
@@ -901,7 +939,9 @@ export class HeliosEngine
         {
             if (!dragRotating || !this.map || e.pointerId !== activeId) return;
             const dx = e.clientX - lastPointerX;
+            const dy = e.clientY - lastPointerY;
             lastPointerX = e.clientX;
+            lastPointerY = e.clientY;
             this._autoRotateLastUserAction = Date.now();
             //Positive dx (drag right) bumps bearing up so the map
             //content under the finger / cursor follows the gesture
@@ -909,6 +949,14 @@ export class HeliosEngine
             //3D widget. The negated form (subtract) read inverted on
             //both desktop and mobile.
             this.map.setBearing(this.map.getBearing() + dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+            //Vertical drag drives pitch. Subtract dy so drag UP tips
+            //the horizon down (flatter pitch) and drag DOWN brings
+            //the horizon up toward the bird's-eye. Clamp at the
+            //session bounds so the camera can never look past the
+            //ground.
+            const nextPitch = Math.max(PITCH_MIN_DEG, Math.min(PITCH_MAX_DEG,
+                this.map.getPitch() - dy * PITCH_SENSITIVITY_DEG_PER_PX));
+            this.map.setPitch(nextPitch);
         };
         const onEnd = (e: PointerEvent) =>
         {
@@ -1935,7 +1983,6 @@ export class HeliosEngine
             'helios-buildings',
             'helios-buildings-surroundings',
             'helios-buildings-home',
-            'helios-buildings-surroundings-outline',
             'helios-buildings-home-outline',
             'helios-buildings-home-outline-glow'
         ])
@@ -2143,23 +2190,14 @@ export class HeliosEngine
             }
         });
 
-        //Cell-shaded outlines: a thin black line on the surroundings'
-        //ground footprint, a thicker line on the home so the focal
-        //building reads even when its colour matches the surroundings.
-        //Drawn ON TOP of the extrusions so the outlines sit over the
-        //building edges at ground level.
-        this.map.addLayer(
-        {
-            id:     'helios-buildings-surroundings-outline',
-            source: 'helios-buildings-surroundings-src',
-            type:   'line',
-            paint:
-            {
-                'line-color':   '#000000',
-                'line-width':   1,
-                'line-opacity': 0.35
-            }
-        });
+        //Home gets a black outline at the building's ground footprint
+        //(see helios-buildings-home-outline below) so the focal
+        //structure reads even when its colour matches the basemap.
+        //Neighbouring buildings used to carry the same outline at a
+        //lower opacity for cell-shaded depth, but the surrounding
+        //lines piled up visually on dense streets and competed with
+        //the LiDAR shadows for attention, so the surroundings stay
+        //unstroked from v1.6.3 onwards.
         //Kick off the MapTiler buildings fetch in the background.
         //The shadow source is wired and will populate as soon as the
         //buildings GeoJSON lands.
@@ -2488,11 +2526,17 @@ export class HeliosEngine
                 });
                 if (this.map)
                 {
-                    if (!this._shadowCanvas)
+                    //Canvas size derives from the user's lidar-precision
+                    //(low / medium = 1024, high = 2048). Recreate the
+                    //backing canvas if the level changed since the last
+                    //paint, otherwise reuse the existing one across
+                    //refreshes so we don't allocate 16 MB per minute.
+                    const rasterSize = shadowRasterSizeFor(this._lidarPrecisionLevel());
+                    if (!this._shadowCanvas || this._shadowCanvas.width !== rasterSize)
                     {
                         this._shadowCanvas = document.createElement('canvas');
-                        this._shadowCanvas.width  = SHADOW_RASTER_SIZE;
-                        this._shadowCanvas.height = SHADOW_RASTER_SIZE;
+                        this._shadowCanvas.width  = rasterSize;
+                        this._shadowCanvas.height = rasterSize;
                     }
                     paintShadowRaster(
                         this.map,
@@ -2695,32 +2739,66 @@ export class HeliosEngine
             }
         }
 
-        //Marker glyph: a hand-built tilted-panel SVG, more
-        //recognisable as a solar panel than the MDI solar-panel
-        //glyph (which reads as horizontal bars / shutters). The
-        //trapezoid suggests a slightly-perspective view of a
-        //ground-mounted panel, with two white horizontal seams
-        //and two white vertical seams hinting at the cell grid.
-        //White drop-shadow halo keeps the icon legible on dark
-        //basemaps without the heavier "pin" chrome that the
-        //default MapLibre Marker draws.
+        //Marker element: a three-piece "lollipop" anchored at the
+        //array's ground position.
+        //
+        //  +---------+
+        //  | [panel] |  ← solar-panel SVG icon, lifted from the
+        //  +---------+    ground, reads as "the array lives here"
+        //       |
+        //       :       ← dotted vertical leader, same colour as
+        //       :         the icon but at lower opacity so it
+        //       |         doesn't fight the icon for attention
+        //       o       ← small filled circle "sitting" on the
+        //                 ground, marks the literal lat/lon
+        //                 reported by `pv-arrays[].latitude /
+        //                 longitude`
+        //
+        //The MapLibre marker is anchored on the BOTTOM of the
+        //element (set via `anchor: 'bottom'` below), so the ground
+        //sphere sits exactly at the configured lat/lon and the
+        //icon rides ~24 px (= roughly 2 m on the ground at the
+        //resting zoom 18) above it. The trapezoid panel glyph is
+        //the same hand-built drawing as before, just hoisted up.
+        const ICON_PX        = 18;
+        const LEADER_PX      = 18;
+        const SPHERE_PX      = 6;
         const buildMarkerEl = (color: string): HTMLDivElement =>
         {
             const el = document.createElement('div');
             el.className = 'helios-pv-array-marker';
             el.style.cssText =
-                'width:18px;height:18px;display:flex;'
-              + 'align-items:center;justify-content:center;'
-              + 'pointer-events:none;'
-              + 'filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));';
+                `display:flex;flex-direction:column;align-items:center;`
+              + `width:${ICON_PX}px;`
+              + `pointer-events:none;`
+              + `filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));`;
             el.innerHTML =
-                '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
-              + `<path d="M5 7 L19 7 L21 18 L3 18 Z" fill="${color}" stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/>`
-              + '<line x1="4.3" y1="10.7" x2="19.7" y2="10.7" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
-              + '<line x1="3.7" y1="14.4" x2="20.3" y2="14.4" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
-              + '<line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
-              + '<line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>'
-              + '</svg>';
+                //Icon: the original tilted-panel SVG.
+                `<svg class="pv-array-marker-icon" viewBox="0 0 24 24" `
+              +     `width="${ICON_PX}" height="${ICON_PX}" aria-hidden="true">`
+              +   `<path d="M5 7 L19 7 L21 18 L3 18 Z" fill="${color}" `
+              +     `stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/>`
+              +   `<line x1="4.3" y1="10.7" x2="19.7" y2="10.7" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>`
+              +   `<line x1="3.7" y1="14.4" x2="20.3" y2="14.4" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>`
+              +   `<line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>`
+              +   `<line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>`
+              + `</svg>`
+                //Dotted leader: a 1-px wide column made of stacked
+                //dots, painted in the PV colour at lower alpha so
+                //it reads as a connection without dominating.
+              + `<div class="pv-array-marker-leader" style="`
+              +   `width:1px;height:${LEADER_PX}px;`
+              +   `background:repeating-linear-gradient(to bottom, `
+              +     `${color} 0px, ${color} 1.5px, transparent 1.5px, transparent 4px);`
+              +   `opacity:0.65;"></div>`
+                //Ground sphere: small circle, same colour as the
+                //icon, with a white halo so it stays legible on
+                //busy basemaps.
+              + `<div class="pv-array-marker-sphere" style="`
+              +   `width:${SPHERE_PX}px;height:${SPHERE_PX}px;`
+              +   `border-radius:50%;`
+              +   `background:${color};`
+              +   `box-shadow:0 0 0 1px #ffffff, 0 1px 2px rgba(0,0,0,0.4);"></div>`;
             return el;
         };
 
@@ -2735,7 +2813,14 @@ export class HeliosEngine
             this._pvArrayMarkers = [];
             for (const p of positions)
             {
-                const marker = new maplibregl.Marker({ element: buildMarkerEl(pvHex) })
+                //anchor: 'bottom' pins the marker's bottom edge to
+                //the configured lat/lon. The marker's bottom edge
+                //hosts the ground sphere, so the sphere sits at
+                //the literal coordinate and the icon hovers above.
+                const marker = new maplibregl.Marker({
+                    element: buildMarkerEl(pvHex),
+                    anchor:  'bottom',
+                })
                     .setLngLat([p.lon, p.lat])
                     .addTo(this.map);
                 this._pvArrayMarkers.push(marker);
@@ -2747,13 +2832,21 @@ export class HeliosEngine
             {
                 this._pvArrayMarkers[i].setLngLat([positions[i].lon, positions[i].lat]);
                 //Colour might have changed via the PV colour picker
-                //even if the position list didn't. Re-paint just
-                //the panel <path> (the white grid lines stay white)
-                //rather than rebuilding the element, so MapLibre
-                //doesn't have to re-anchor the marker.
+                //even if the position list didn't. Repaint the three
+                //tinted pieces (panel SVG fill, dotted leader bg,
+                //ground sphere bg) in place so MapLibre doesn't have
+                //to re-anchor the marker.
                 const el = this._pvArrayMarkers[i].getElement();
-                const svgPath = el?.querySelector('svg path');
+                const svgPath = el?.querySelector('.pv-array-marker-icon path') as SVGPathElement | null;
                 if (svgPath) svgPath.setAttribute('fill', pvHex);
+                const leader = el?.querySelector('.pv-array-marker-leader') as HTMLElement | null;
+                if (leader)
+                {
+                    leader.style.background =
+                        `repeating-linear-gradient(to bottom, ${pvHex} 0px, ${pvHex} 1.5px, transparent 1.5px, transparent 4px)`;
+                }
+                const sphere = el?.querySelector('.pv-array-marker-sphere') as HTMLElement | null;
+                if (sphere) sphere.style.background = pvHex;
             }
         }
     }
@@ -2816,6 +2909,14 @@ export class HeliosEngine
         batteryPowerLabel: { x: number; y: number };
         ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
+        //SVG `polygon` `points` attribute for the PV home-anchor
+        //ground disc. Built by projecting 48 points on a horizontal
+        //circle of radius PV_HOME_ANCHOR_RADIUS_M metres around the
+        //home into screen pixels, then expressing each point
+        //relative to the home so the consuming SVG can wrap the
+        //polygon in a `<g transform="translate(home.x, home.y)">`
+        //and animate the pulse by scaling around the origin.
+        homeAnchorPoints:  string;
     } | null
     {
         if (!this.map)
@@ -2882,13 +2983,42 @@ export class HeliosEngine
         const pvX    = home.x;
         const pvY    = shelfY + BATTERY_CHIP_Y_OFFSET_PX;
 
+        //PV home-anchor ground disc, expressed as a polygon. We
+        //sample N points on a horizontal circle of radius
+        //PV_HOME_ANCHOR_RADIUS_M metres around the home (lat/lon
+        //offsets in the local tangent plane), project each through
+        //the current camera matrices, then express the result
+        //relative to the home so the SVG can wrap the polygon in a
+        //translate-to-home group. The disc lies flat on the ground
+        //plane, so at pitch=55° it projects to an ellipse with the
+        //major axis perpendicular to the camera's bearing and the
+        //minor axis along it, matching the perspective everywhere
+        //else on the map.
+        const PV_HOME_ANCHOR_RADIUS_M = 2.5;
+        const ANCHOR_SAMPLES          = 48;
+        const anchorLatPerM = 1 / 111_320;
+        const anchorLonPerM = anchorLatPerM / cosLat;
+        const anchorPts: string[] = [];
+        for (let i = 0; i < ANCHOR_SAMPLES; i++)
+        {
+            const a = (i / ANCHOR_SAMPLES) * Math.PI * 2;
+            const dE = Math.cos(a) * PV_HOME_ANCHOR_RADIUS_M;
+            const dN = Math.sin(a) * PV_HOME_ANCHOR_RADIUS_M;
+            const p  = m.project([
+                this.homeLon + dE * anchorLonPerM,
+                this.homeLat + dN * anchorLatPerM,
+            ]);
+            anchorPts.push(`${(p.x - home.x).toFixed(2)},${(p.y - home.y).toFixed(2)}`);
+        }
+
         return {
             cloudLabel:        { x: cloudLabelX,                    y: cloudLabelY },
             pvLabel:           { x: pvX,                            y: pvY         },
             batterySocLabel:   { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
             batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY      },
             ringEdge:          { x: ringEdgeX,                      y: ringEdgeY   },
-            home:              { x: home.x,                         y: home.y      }
+            home:              { x: home.x,                         y: home.y      },
+            homeAnchorPoints:  anchorPts.join(' '),
         };
     }
 
@@ -3347,7 +3477,22 @@ export class HeliosEngine
             //"have we moved enough" guard would otherwise short-circuit.
             this._lastAtmosphereAlt = -999;
             this._renderForCurrentSelection();
-            this._refreshShadowsAndAtmosphere();
+            //Coalesce rapid scrub moves into a single shadow paint
+            //every ~100 ms. The light-weight visuals (sun arc, PV
+            //chip, cloud disc) already updated through
+            //_renderForCurrentSelection() above; only the costly
+            //shadow raster paint (LiDAR + atmosphere recompute) is
+            //deferred. Snapshots align with the final pointer
+            //position once the user pauses for 100 ms.
+            if (this._selectedTimeShadowTimer !== null)
+            {
+                window.clearTimeout(this._selectedTimeShadowTimer);
+            }
+            this._selectedTimeShadowTimer = window.setTimeout(() =>
+            {
+                this._selectedTimeShadowTimer = null;
+                this._refreshShadowsAndAtmosphere();
+            }, 100);
         }
     }
 
@@ -3370,9 +3515,17 @@ export class HeliosEngine
     //(reading only) so we hand the live reference rather than a
     //copy. Null when no LiDAR provider covers the home or the
     //last fetch failed.
+    //
+    //The optional `terrain` field carries the DTM band when the
+    //source COG ships one (v1.6.3+ helios-lidar.org output); it
+    //lets the shading ray-march lift its comparison into absolute
+    //Z so sloped ground between the panel and a far obstacle is
+    //taken into account. Absent on every public provider and on
+    //legacy single-band local COGs.
     public getLidarRaster():
         | {
             heights:    Float32Array;
+            terrain?:   Float32Array;
             rasterSize: number;
             minLat:     number;
             maxLat:     number;
@@ -3687,6 +3840,11 @@ export class HeliosEngine
         bumpStat('enginesCleanedUp');
         _liveEngines.delete(this);
         this._clearWeatherTimer();
+        if (this._selectedTimeShadowTimer !== null)
+        {
+            window.clearTimeout(this._selectedTimeShadowTimer);
+            this._selectedTimeShadowTimer = null;
+        }
         window.clearInterval(this._skyTimer);
         window.clearTimeout(this._resizeDebounceTimer);
         this._fetchAbortController?.abort();
@@ -3798,7 +3956,6 @@ export class HeliosEngine
                 'helios-cloud-ring',
                 'helios-buildings-surroundings',
                 'helios-buildings-home',
-                'helios-buildings-surroundings-outline',
                 'helios-buildings-home-outline',
                 'helios-buildings-home-outline-glow',
                 'helios-building-shadows'

@@ -47,7 +47,7 @@ export interface LocalNdsmConfig
     maxLon: number;
 }
 
-//Normalise the resampled Float32Array in place. Exported so the
+//Normalise the resampled nDSM band in place. Exported so the
 //behaviour is verifiable from a unit-level test:
 //
 //  - source value == nodata sentinel        -> NaN
@@ -70,6 +70,29 @@ export function normaliseLocalNdsmRaster(
         if (!Number.isFinite(v))                  { band[i] = NaN; continue; }
         if (v < 0)                                { band[i] = 0;   continue; }
         //finite, non-negative: leave untouched.
+    }
+    return band;
+}
+
+//Normalise the optional DTM (terrain) band in place. Same nodata
+//handling as the nDSM, BUT no negative-floor: terrain elevation is
+//absolute, can legitimately sit below sea level (Death Valley
+//-86 m, Dead Sea -430 m) and we need the real value so the ray-
+//march's `sampleDtm - panelDtm` slope reads correctly. Non-finite
+//cells are still mapped to NaN so the ray-march skips them.
+export function normaliseLocalDtmRaster(
+    band:   Float32Array,
+    noData: number | null
+): Float32Array
+{
+    const hasNoData = noData !== null && Number.isFinite(noData);
+    for (let i = 0; i < band.length; i++)
+    {
+        const v = band[i];
+        if (hasNoData && v === noData) { band[i] = NaN; continue; }
+        if (!Number.isFinite(v))       { band[i] = NaN; continue; }
+        //finite: leave untouched (may be negative for below-sea
+        //elevations; that's the real terrain value, not no-data).
     }
     return band;
 }
@@ -107,13 +130,15 @@ export function createLocalNdsmSource(cfg: LocalNdsmConfig): LidarSource
             const rasterSize = Math.min(RASTER_DEFAULTS.maxRasterSize,
                 Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize)));
 
-            let band: Float32Array | null;
-            let noData: number | null;
+            let band:    Float32Array | null;
+            let terrain: Float32Array | null;
+            let noData:  number | null;
             try
             {
                 const r = await fetchFloat32GeoTiffWithNoData(url, rasterSize, opts.signal);
-                band   = r ? r.data   : null;
-                noData = r ? r.noData : null;
+                band    = r ? r.data    : null;
+                terrain = r ? r.terrain : null;
+                noData  = r ? r.noData  : null;
             }
             catch (_)
             {
@@ -122,6 +147,17 @@ export function createLocalNdsmSource(cfg: LocalNdsmConfig): LidarSource
             if (!band || band.length < rasterSize * rasterSize) return emptyResult();
 
             normaliseLocalNdsmRaster(band, noData);
+            //Same nodata sentinel for both bands in v1.6.3+; the
+            //single noData value reads from band 1's GDAL_NODATA
+            //tag, which the pipeline writes identically on band 2.
+            if (terrain && terrain.length >= rasterSize * rasterSize)
+            {
+                normaliseLocalDtmRaster(terrain, noData);
+            }
+            else
+            {
+                terrain = null;
+            }
 
             return processHeightRaster(band, {
                 rasterSize,
@@ -132,7 +168,7 @@ export function createLocalNdsmSource(cfg: LocalNdsmConfig): LidarSource
                 homeLat:          opts.homeLat,
                 homeLon:          opts.homeLon,
                 cropRadiusMeters: opts.cropRadiusMeters
-            });
+            }, {}, terrain ?? undefined);
         }
     };
 }

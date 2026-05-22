@@ -154,7 +154,7 @@ export const heliosCardStyles = css`
     .cloud-pct-label,
     .solar-svg,
     .solar-pct-label,
-    .solar-horizon-icon,
+    .pv-home-anchor-svg,
     .pv-home-leader-svg,
     .pv-pct-label,
     .battery-leader-svg,
@@ -173,7 +173,7 @@ export const heliosCardStyles = css`
     ha-card.detail-active .cloud-pct-label,
     ha-card.detail-active .solar-svg,
     ha-card.detail-active .solar-pct-label,
-    ha-card.detail-active .solar-horizon-icon,
+    ha-card.detail-active .pv-home-anchor-svg,
     ha-card.detail-active .pv-home-leader-svg,
     ha-card.detail-active .pv-pct-label,
     ha-card.detail-active .battery-leader-svg,
@@ -278,6 +278,24 @@ export const heliosCardStyles = css`
         opacity: 0;
         transform: translateY(8px);
         animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        /*  position: relative so the card can take a z-index when
+            its tooltip is being hovered (see below). At rest the
+            z-index stays auto so no stacking context is created.  */
+        position: relative;
+    }
+    /*  Card lift on tooltip hover. When the user's cursor is on a
+        chip with a popover tooltip (.dash-stat-delta or .dash-stat-
+        refined), the whole card jumps to z-index 20 so the tooltip,
+        which sits at z-index 10 INSIDE the card's stacking context,
+        paints above sibling cards in the same row. Without this the
+        adjacent battery card naturally paints later in DOM order and
+        clips the tooltip. The :has() selector targets the actual
+        hover on either tooltip trigger, so the lift only happens
+        when the popover is actually visible.                       */
+    .dash-card:has(.dash-stat-delta:hover),
+    .dash-card:has(.dash-stat-refined:hover)
+    {
+        z-index: 20;
     }
     /*  Staggered reveal: today first, then the tomorrow + battery
         row appears with a single shared delay. Tomorrow + battery
@@ -288,7 +306,14 @@ export const heliosCardStyles = css`
     .dash-card.dash-battery  { animation-delay: 0.18s; }
     @keyframes dash-card-in
     {
-        to { opacity: 1; transform: translateY(0); }
+        /*  End on transform:none, not translateY(0). A non-none
+            transform value creates a new stacking context, which
+            would trap the calibration-hint tooltip on the tomorrow
+            card inside its own card and let the battery card next
+            to it paint OVER the tooltip. The none value releases
+            stacking context once the entry animation finishes so
+            the tooltip z-index can paint above sibling cards.     */
+        to { opacity: 1; transform: none; }
     }
 
     ha-card.theme-dark .dash-card
@@ -727,29 +752,40 @@ export const heliosCardStyles = css`
         of the chart for each. The zero-length dash + round cap
         renders as discrete dots, more discreet than the now
         cursor's continuous dashes.                              */
-    .dash-today-chart-twilight
+    /*  Diagonal night-zone hatch lines, painted inside the
+        SVG pattern block referenced by the pre-dawn + post-dusk
+        rects. Same alpha + light-on-dark recipe the timeline's
+        .hc-night-zone uses, just expressed as an SVG stroke
+        because the dashboard chart lives inside an SVG. Stroke
+        width is tuned for the chart's native size (~240×60 px)
+        so the dots read as a soft diagonal grain.                */
+    .dash-today-chart-night
     {
-        stroke-width: 1;
-        stroke-dasharray: 0 3;
-        stroke-linecap: round;
-        vector-effect: non-scaling-stroke;
-        opacity: 0.55;
+        stroke: rgba(0, 0, 0, 0.07);
         pointer-events: none;
     }
-    .dash-today-chart-twilight-icon
+    ha-card.theme-dark .dash-today-chart-night
     {
-        position: absolute;
-        /*  Anchored to the top of the chart so the icons read as
-            flags capping their dotted lines, rather than buried in
-            the bottom axis-label gutter. Sits in the top padding
-            zone (PAD_T = 12 viewBox units) so it never overlaps
-            the curves' data area.                                */
-        top: 4px;
-        transform: translateX(-50%);
-        --mdc-icon-size: 18px;
-        opacity: 0.95;
+        stroke: rgba(255, 255, 255, 0.10);
+    }
+
+    /*  Dotted day/night boundary lines at the sunrise and sunset
+        X positions. Same recipe as the timeline's day-separator
+        (.hc-day-sep) so the visual language matches: alpha 0.30,
+        1.5 / 2.5 dash, non-scaling stroke. The hatch tells the
+        user "this slice is night"; the dotted line marks the exact
+        moment the sun crossed the horizon.                         */
+    .dash-today-chart-twilight
+    {
+        stroke: rgba(0, 0, 0, 0.30);
+        stroke-width: 1;
+        stroke-dasharray: 1.5 2.5;
+        vector-effect: non-scaling-stroke;
         pointer-events: none;
-        z-index: 2;
+    }
+    ha-card.theme-dark .dash-today-chart-twilight
+    {
+        stroke: rgba(255, 255, 255, 0.30);
     }
     .dash-today-chart-hover-line
     {
@@ -1022,7 +1058,13 @@ export const heliosCardStyles = css`
     .time-bar
     {
         position: absolute;
-        bottom: 8px;
+        /*  Bottom inset matches the time-bar's internal flex gap.
+            With the day-label chip row pinned as the last flex
+            child, an equal inset above (gap to the chart card) and
+            below (gap to the card edge) centres the chip row in
+            the band between the chart card's bottom edge and the
+            card's bottom edge.                                       */
+        bottom: 6px;
         /*  Width is derived from --timeline-width-frac (0.5..1, set
             inline by the renderer). At 1 the bar hugs the card edges
             with the original 8 px breathing on each side. Below 1 it
@@ -1059,7 +1101,7 @@ export const heliosCardStyles = css`
         border: 1px solid #000000;
         border-radius: 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        height: 64px;
+        height: 48px;
         overflow: hidden;
     }
 
@@ -1071,11 +1113,16 @@ export const heliosCardStyles = css`
     }
 
     /*  Stroke-only outline on top of the filled area so peaks read
-        cleanly even where the gradient fades towards the midline. */
+        cleanly even where the gradient fades towards the midline.
+        Stroke width 0.7 px (down from the v1.6.2 default 1.4 px)
+        so the curve reads as a hairline trace; on high-variation
+        days the previous 1.0 px ribbon stacked over itself on
+        every wobble and turned the dense regions into a smudged
+        band. At 0.7 px the curve stays a line at any zoom.        */
     .hc-chart-line
     {
         fill: none;
-        stroke-width: 1.4;
+        stroke-width: 0.7;
         stroke-linejoin: round;
         stroke-linecap: round;
         vector-effect: non-scaling-stroke;
@@ -1127,17 +1174,19 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Live cursor: thin discreet line spanning the full chart with
-        a small triangle handle at the top. Stays subtle on purpose,
-        the user is in live mode, the cursor is a passive "where now
-        is on the timeline" reference, not a focus target. */
+    /*  Live cursor: thin line spanning the full chart with a small
+        triangle handle at the top. Slightly wider + a hair more
+        opaque than earlier iterations so it stays readable through
+        the future-mask wash that paints on top of half the chart.
+        Still kept subtle: it's a passive "where now is" reference,
+        not a focus target. */
     .tb-cursor-now
     {
         position: absolute;
         top: 0;
         bottom: 0;
-        width: 1px;
-        background: rgba(0, 0, 0, 0.45);
+        width: 2px;
+        background: rgba(0, 0, 0, 0.65);
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
@@ -1152,9 +1201,9 @@ export const heliosCardStyles = css`
         transform: translateX(-50%);
         width: 0;
         height: 0;
-        border-left:   3px solid transparent;
-        border-right:  3px solid transparent;
-        border-top:    4px solid rgba(0, 0, 0, 0.55);
+        border-left:   4px solid transparent;
+        border-right:  4px solid transparent;
+        border-top:    5px solid rgba(0, 0, 0, 0.75);
     }
 
     /*  Scrub cursor: prominent solid blue line spanning the full
@@ -1191,70 +1240,300 @@ export const heliosCardStyles = css`
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
-    /*  Day labels, small white chips overlaying the chart midline.
-        Same chip language as the on-map cloud and W/m² readouts. */
-    .tb-day-labels
+    /*  Hover guide line, drawn vertically across the chart at
+        the pointer's X. Same dotted recipe as the day-separator
+        lines but a touch more opaque so it reads as "interactive
+        focus" rather than ambient structure.                       */
+    .hc-hover-guide
+    {
+        stroke: rgba(0, 0, 0, 0.55);
+        stroke-width: 1;
+        stroke-dasharray: 2 2;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .hc-hover-guide { stroke: rgba(255, 255, 255, 0.65); }
+
+    /*  Per-curve hover dot, anchored at the interpolated Y of
+        each series. Stroked in card colour so the dot stays
+        legible whether it lands on a filled area or on the
+        background.                                                  */
+    .hc-hover-dot
+    {
+        stroke: #ffffff;
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .hc-hover-dot { stroke: rgba(20, 20, 20, 0.95); }
+
+    /*  Hover tooltip chip, sits above the chart-card stack
+        inside the time-bar. White chip with the same border +
+        shadow recipe as the .clock and .lidar-view chips so the
+        whole timeline reads as one chip family.                    */
+    .tb-hover-tooltip
     {
         position: absolute;
-        inset: 0;
+        bottom: 100%;
+        margin-bottom: 4px;
+        transform: translateX(-50%);
+        background: #ffffff;
+        color: #000000;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        padding: 4px 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size: 11px;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 30;
+    }
+
+    .tb-hover-tooltip-time
+    {
+        font-weight: 600;
+        margin-bottom: 3px;
+        text-align: center;
+    }
+
+    .tb-hover-tooltip-row
+    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .tb-hover-tooltip-icon
+    {
+        --mdc-icon-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        flex-shrink: 0;
+        line-height: 1;
+    }
+
+    .tb-hover-tooltip-value
+    {
+        flex: 1;
+        text-align: right;
+    }
+
+    ha-card.theme-dark .tb-hover-tooltip
+    {
+        background: rgba(30, 30, 30, 0.95);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.85);
+    }
+
+
+    /*  Night-zone overlays. One absolutely-positioned div per
+        sunset, next sunrise window, inserted as a sibling of the
+        chart SVG inside the chart card. CSS diagonal hatching
+        sits on top of the curves but below the live + scrub
+        cursors (z-index 4), so dusk and dawn read as "this slice
+        is night" without obscuring the curve shape underneath.
+        Repeating linear gradients render at the device pixel grid
+        regardless of the chart SVG's preserveAspectRatio=none, so
+        the stripes stay diagonal across any card width.            */
+    /*  Future-mask wash, sits on top of the curves and night zones
+        and stretches from "now" to the right edge of the card. The
+        wash uses the card background colour at moderate alpha so it
+        lightens the curves AND the night-zone hatches in a single
+        pass without redoubling on overlapping regions. Cursors sit
+        at z-index 4 and stay fully opaque.                          */
+    .hc-future-mask
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        pointer-events: none;
+        z-index: 3;
+        background: rgba(255, 255, 255, 0.55);
+    }
+    ha-card.theme-dark .hc-future-mask
+    {
+        background: rgba(20, 20, 22, 0.55);
+    }
+
+
+    .hc-night-zone
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        pointer-events: none;
+        z-index: 3;
+        /*  Hatch + sunset/sunrise edges share the exact same RGBA
+            (rgba(0, 0, 0, 0.07) light, rgba(255, 255, 255, 0.10)
+            dark) so the boundary line reads as the densest part of
+            the same hatch rather than as a separate marker. Alpha
+            dropped relative to earlier iterations: too much density
+            obscured the curves the user came to read.              */
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(0, 0, 0, 0.04) 0,
+            rgba(0, 0, 0, 0.04) 1.5px,
+            transparent       1.5px,
+            transparent       6px
+        );
+        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.04),
+                    inset -1px 0 0 0 rgba(0, 0, 0, 0.04);
+    }
+    ha-card.theme-dark .hc-night-zone
+    {
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.06) 0,
+            rgba(255, 255, 255, 0.06) 1.5px,
+            transparent              1.5px,
+            transparent              6px
+        );
+        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.06),
+                    inset -1px 0 0 0 rgba(255, 255, 255, 0.06);
+    }
+
+
+    /*  Day strip: a single bordered bar spanning the full timeline
+        width, with one centred label per visible day and a 1 px
+        vertical separator at every midnight boundary between two
+        adjacent days. Same border + radius + shadow recipe as the
+        chart cards above so the timeline stack reads as one
+        composed instrument.                                        */
+    .tb-day-strip
+    {
+        position: relative;
+        height: 22px;
+        background: #ffffff;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
         pointer-events: none;
     }
 
-    .tb-day-label
+    .tb-day-strip-cell
     {
         position: absolute;
-        top: 50%;
-        transform: translate(-50%, -50%);
+        top: 0;
+        bottom: 0;
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 1px 5px;
-        font-size:    9px;
-        font-weight:  600;
-        line-height:  1.2;
+        justify-content: center;
+        gap: 5px;
+        padding: 0 4px;
+        box-sizing: border-box;
+        color: #000000;
+        line-height: 1.2;
         letter-spacing: 0.2px;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
+        text-overflow: clip;
         z-index: 2;
+        /*  Each cell is its own size container; the date + kWh
+            children scale + collapse using cqw / @container queries
+            so the text adapts to whatever horizontal real-estate
+            the visible time range gives the day (a 4-day window on
+            a narrow phone leaves ~25 % of the timeline per cell;
+            a 1-day window leaves the whole strip). Falls back to
+            the static font-size + display rules below on engines
+            without container-query support.                        */
+        container-type: inline-size;
+        container-name: tb-day-strip-cell;
     }
 
-    .tb-day-label-today
+    /*  Both the date and the kWh scale down with the cell width
+        via cqw (1 % of container inline size). The date sits at
+        a slightly bigger clamp than the kWh so the primary label
+        gets the visual weight; the kWh stays demoted as a
+        contextual annotation. Font weight is intentionally NOT
+        set here so it inherits from the cell (which gets is-today
+        bumped to 800) and from the per-element overrides further
+        down (.tb-day-strip-kwh keeps its lighter 500 weight +
+        opacity recipe).                                            */
+    .tb-day-strip-date
+    {
+        font-size: clamp(9px, 11cqw, 13px);
+    }
+    .tb-day-strip-kwh
+    {
+        font-size: clamp(7px, 9cqw, 11px);
+    }
+
+    .tb-day-strip-cell
+    {
+        font-weight: 600;
+    }
+    .tb-day-strip-cell.is-today
     {
         font-weight: 800;
     }
 
-    /*  Daily kWh total appended next to the date. Lighter weight +
-        smaller separator dot so the date stays the primary read.
-        Forecast variant (today's remainder + future days) is
-        italicised so the user can tell observation from estimate
-        at a glance, same convention the PV chip uses for predicted
-        values. */
-    .tb-day-label-kwh
+    /*  Last-resort fallback: a really cramped cell (4-day window on
+        a sub-300 px card) drops the kWh so the date stays the
+        single anchor visible. The clamp() above keeps the kWh
+        visible on every reasonable layout including a 4-day view
+        on a 700 px desktop card.                                   */
+    @container tb-day-strip-cell (max-width: 55px)
+    {
+        .tb-day-strip-kwh { display: none; }
+    }
+
+    /*  Vertical separator at each between-day boundary. Dotted
+        1 px line matching the chart's own day separators
+        (.hc-day-sep: stroke 0.30 alpha, dasharray 1.5 / 2.5), so
+        the strip extends the same visual language as the cards
+        above it. No separator at the outer edges since the strip
+        border already closes the line there.                       */
+    .tb-day-strip-sep
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        z-index: 1;
+        background-image: repeating-linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.30) 0,
+            rgba(0, 0, 0, 0.30) 1.5px,
+            transparent       1.5px,
+            transparent       4px
+        );
+    }
+
+    /*  Daily kWh total, sits next to the date label in the same
+        cell. Same lighter weight + opacity recipe as the previous
+        chip layout so the date stays the primary read; forecast
+        days italicise to flag "estimate, not observation".         */
+    .tb-day-strip-kwh
     {
         font-weight: 500;
         opacity: 0.75;
     }
-    .tb-day-label-kwh::before
+    .tb-day-strip-kwh::before
     {
         content: "·";
         margin-right: 4px;
         opacity: 0.5;
     }
-    .tb-day-label-kwh.is-forecast
+    .tb-day-strip-kwh.is-forecast
     {
         font-style: italic;
     }
 
-    /*  Optional PV graph card stacked above the main chart. Half
-        the main height so the irradiance and PV areas balance. */
+    /*  Optional PV graph card stacked above the main chart. Same
+        height as the main chart so the two cards form a balanced
+        stack: production sits on top, irradiance + cloud cover
+        underneath, neither dominating the other. The combined
+        block keeps the same total vertical footprint the previous
+        (32 px PV + 64 px main) layout occupied. */
     .tb-pv-card
     {
-        height: 32px;
+        height: 48px;
     }
 
 
@@ -1306,27 +1585,35 @@ export const heliosCardStyles = css`
         column. Sized to mirror the .clock chip on the left so the
         two corners read as a symmetric pair. Stays at fixed width
         when toggled on/off so neighbour chips don't jump. */
-    .lidar-view-btn
+    /*  Passive "LiDAR" status chip on the top-right rail, mirror of
+        the .clock chip on the top-left. Same recipe: 12 px Roboto
+        600, line-height 1.2, padding 2 px 8 px, 22 px tall, mixed-
+        case label so the baseline metrics are unambiguous across
+        Chromium / Firefox / WebKit.
+
+        The chip is purely visual; the click action lives on the
+        adjacent .lidar-view-toggle-btn. The .overlay-top-right rail
+        uses flex-direction: row-reverse so the DOM order
+        (button, then chip) renders visually as (chip, then button):
+        chip sits on the LEFT and the button on the RIGHT. The chip
+        therefore keeps its LEFT corners rounded and squares its
+        RIGHT corners, and lets the button drop its left border so
+        the chip's right border becomes the shared seam.            */
+    .lidar-view-chip
     {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        /*  Text-only "LiDAR" chip on the top-right rail. Layout
-            mirrors the .clock chip on the opposite rail exactly
-            (12 px Roboto 600, line-height 1.2, padding 2px 8px,
-            22 px tall) since that recipe centres consistently on
-            Chromium, Firefox and WebKit. Mixed-case "LiDAR" (no
-            text-transform) keeps the lowercase 'i' as an ascender
-            and the rest as cap-height + x-height letters, so the
-            baseline metrics are unambiguous, no engine-dependent
-            uppercase asymmetry to fight.                          */
         height: 22px;
         box-sizing: border-box;
         padding: 2px 8px;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
-        border-radius: 3px;
+        /*  Rounded LEFT corners only: the chip is on the LEFT of
+            the cluster, the right edge is the shared seam with the
+            toggle button and must stay square. */
+        border-radius: 3px 0 0 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
         font-size:   12px;
@@ -1334,40 +1621,104 @@ export const heliosCardStyles = css`
         line-height: 1.2;
         white-space: nowrap;
         cursor: pointer;
-        /*  Force full opacity at every state except :disabled (which
-            sets its own 0.35 for the visual "not available" hint).
-            The transition only covers background + color so a state
-            change (active / inactive) doesn't briefly pass through a
-            translucent state. */
-        opacity: 1;
-        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-        /*  The parent .overlay-top-right rail has pointer-events: none
-            (so the rail itself never steals map interactions when
-            empty). The button has to opt back in explicitly so its
-            click reaches the @click handler, mirroring what
-            .clock / .live-return-btn do on the opposite (top-left)
-            rail. Without this the button visually renders enabled but
-            ignores every click.
-
-            z-index: 50 puts the button above the LiDAR View canvas
-            overlay (z 30) so the toggle stays clickable while the
-            View is open, otherwise the canvas would swallow the
-            click that exits the mode. */
         pointer-events: auto;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
         position: relative;
         z-index: 50;
     }
-    .lidar-view-btn:disabled
+    .lidar-view-chip:hover  { background: #f2f2f2; }
+    .lidar-view-chip:active { background: #e6e6e6; }
+    .lidar-view-chip.is-uncovered
     {
         opacity: 0.35;
         cursor: not-allowed;
     }
-    .lidar-view-btn.is-on
+    .lidar-view-chip.is-uncovered:hover  { background: #ffffff; }
+    .lidar-view-chip.is-uncovered:active { background: #ffffff; }
+    .lidar-view-chip.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .lidar-view-chip.is-on:active { background: rgba(20, 78, 168, 0.95); }
+
+    /*  LiDAR-view toggle button, sits to the RIGHT of the .lidar-
+        view-chip (the .overlay-top-right rail uses row-reverse so
+        the DOM-first button ends up on the right). Fuses with the
+        chip via a shared seam (no border between them). Mirror of
+        the .live-return-btn on the top-left rail; same 22 x 22
+        square, same 12 px icon, same scrub-blue theme on activation,
+        just flipped to the right side.
+
+        Three coverage states, set inline by the renderer:
+          .is-uncovered  no LiDAR provider matches the home, the
+                         button is :disabled and inert
+          .is-online     a public WCS / WMS provider covers the
+                         home, the button toggles LiDAR view
+          .is-local      a BYO local-nDSM raster is configured AND
+                         covers the home, the button toggles LiDAR
+                         view; the harddisk glyph signals the user
+                         is on their own data
+        On activation (.is-on, set when _lidarViewMode is true) the
+        button + chip pair take the same scrub-blue plate the clock
+        chip + back-to-live pair uses when scrubbing the timeline.   */
+    .lidar-view-toggle-btn
     {
-        background: #1f6feb;
-        color: #ffffff;
-        border-color: #1f6feb;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  22px;
+        height: 22px;
+        box-sizing: border-box;
+        padding: 0;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        /*  Rounded RIGHT corners only + dropped left border: the
+            button sits on the RIGHT of the cluster, the left edge
+            is the shared seam and the chip's right border is what
+            the user sees there. */
+        border-radius: 0 3px 3px 0;
+        border-left: 0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        cursor: pointer;
+        pointer-events: auto;
+        position: relative;
+        z-index: 50;
+        opacity: 1;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
+    .lidar-view-toggle-btn:hover  { background: #f2f2f2; }
+    .lidar-view-toggle-btn:active { background: #e6e6e6; }
+    .lidar-view-toggle-btn ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  Uncovered state: disabled, faded, no hover effect. The chip
+        next to it stays at full opacity, the user still reads
+        "LiDAR" but the button glyph reads "not available here". */
+    .lidar-view-toggle-btn.is-uncovered
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .lidar-view-toggle-btn.is-uncovered:hover  { background: #ffffff; }
+    .lidar-view-toggle-btn.is-uncovered:active { background: #ffffff; }
+
+    /*  Active state: both halves of the cluster flip to the same
+        scrub-blue plate as .clock.is-scrub + .live-return-btn on
+        the opposite rail. The pair reads as one continuous blue
+        control while LiDAR view is open, which is the visual
+        signal that the user is in a non-default mode.              */
+    .lidar-view-toggle-btn.is-on,
+    .lidar-view-chip.is-on
+    {
+        background: rgba(31, 111, 235, 0.95);
+        color: #ffffff;
+        border-color: rgba(20, 78, 168, 0.95);
+    }
+    .lidar-view-toggle-btn.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .lidar-view-toggle-btn.is-on:active { background: rgba(20, 78, 168, 0.95); }
 
 
     /*  When LiDAR View is active, fade out every overlay layer so
@@ -1388,10 +1739,10 @@ export const heliosCardStyles = css`
     ha-card.lidar-view-active .time-bar,
     ha-card.lidar-view-active .solar-svg,
     ha-card.lidar-view-active .solar-pct-label,
-    ha-card.lidar-view-active .solar-horizon-icon,
     ha-card.lidar-view-active .cloud-svg,
     ha-card.lidar-view-active .cloud-leader-svg,
     ha-card.lidar-view-active .cloud-pct-label,
+    ha-card.lidar-view-active .pv-home-anchor-svg,
     ha-card.lidar-view-active .pv-home-leader-svg,
     ha-card.lidar-view-active .pv-pct-label,
     ha-card.lidar-view-active .battery-leader-svg,
@@ -1408,10 +1759,11 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Top corner overlays. Date/time chip on the left; back-to-live
-        + LiDAR busy chip column on the right. Both rails sit 8 px
-        from the card edge so they read as a paired pair anchored
-        to the frame, mirroring the timeline's edge margin. */
+    /*  Top corner overlays. Date/time + scrub-return cluster on the
+        left; LiDAR-view toggle + "LiDAR" status chip on the right.
+        Both rails are flex rows sitting 8 px from their card edge,
+        each one fusing two elements (chip + adjacent button) into
+        a single composite control via shared seams.                */
 
     /*  Date/time chip, same chip language as the on-map readouts.
         Explicit height (border-box) so the chip and the back-to-
@@ -1516,19 +1868,21 @@ export const heliosCardStyles = css`
         align-items: center;
     }
 
-    /*  Top-right overlay rail. Hosts the LiDAR View toggle button.
-        Mirrors the clock's top spacing on the opposite edge so the
-        two overlays sit at the same height.
+    /*  Top-right overlay rail. Hosts the LiDAR-view toggle button
+        fused with the passive LiDAR status chip, mirror of the
+        top-left clock + scrub-return pair. Mirrors the clock's
+        top spacing on the opposite edge so the two overlays sit
+        at the same height; flex-direction: row-reverse keeps the
+        chip on the right edge of the screen with the toggle
+        button to its left, mirroring the clock-on-the-left + back
+        -to-live-on-its-right pattern on the opposite rail.
 
-        z-index: 60 puts the rail (and therefore the button) above
-        the LiDAR View canvas (z 30) AND above the centre spinner
-        (z 50), so the toggle is always reachable. Pointer events
-        off on the rail itself so the empty rail never steals map
-        interactions; the button opts back in (.lidar-view-btn has
-        its own pointer-events: auto). Stacking contexts: because
-        we set z-index on this absolute container, children's own
-        z-index values are scoped to this rail; the rail's z-index
-        is the one that competes with siblings in ha-card. */
+        z-index: 60 puts the rail (and therefore both halves of
+        the cluster) above the LiDAR View canvas (z 30) AND above
+        the centre spinner (z 50), so the toggle is always
+        reachable. Pointer events off on the rail itself so the
+        empty rail never steals map interactions; the toggle
+        button opts back in via .lidar-view-toggle-btn rules. */
     .overlay-top-right
     {
         position: absolute;
@@ -1536,8 +1890,8 @@ export const heliosCardStyles = css`
         right: 8px;
         z-index: 60;
         display: flex;
-        flex-direction: column;
-        gap: 6px;
+        flex-direction: row-reverse;
+        align-items: center;
         pointer-events: none;
     }
 
@@ -1769,6 +2123,50 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.95;
     }
 
+    /*  PV home-anchor ring host SVG. Sits below every chip cluster
+        + leader line (z-index 1) but above the MapLibre canvas
+        (z-index 0), and below the home-glow silhouette (z-index 11)
+        so the projected building paints OVER the back half of the
+        ring. The eye reads the ring as a ground footprint the
+        building stands inside, which is what the perspective
+        projection promises geometrically.                           */
+    .pv-home-anchor-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    /*  PV home-anchor ring, drawn as a stroked polygon projected
+        through the map's perspective so it sits flat on the ground
+        around the home (an ellipse aplated by the camera pitch +
+        rotated by the camera bearing). Stroked rather than filled
+        so the home silhouette stays visible inside the ring. The
+        translate-to-home transform lives on the wrapping <g>; the
+        polygon points themselves are coordinates relative to
+        (0, 0), which lets the pulse animation scale the polygon
+        around the home centre by simply scaling the group around
+        its local origin.                                            */
+    .pv-home-leader-anchor       { transform-origin: 0 0; }
+    .pv-home-leader-anchor-disc
+    {
+        transform-origin: 0 0;
+        vector-effect: non-scaling-stroke;
+    }
+    .pv-home-leader-anchor.is-pulsing .pv-home-leader-anchor-disc
+    {
+        animation: pv-home-anchor-pulse var(--pv-flow-duration, 2s) ease-in-out infinite;
+    }
+    @keyframes pv-home-anchor-pulse
+    {
+        0%, 80% { transform: scale(1); }
+        92%     { transform: scale(1.55); }
+        100%    { transform: scale(1); }
+    }
+
 
     /*  Battery leaders.
         Both SoC ↔ PV and PV ↔ Power share the exact same visual
@@ -1911,30 +2309,28 @@ export const heliosCardStyles = css`
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
-    /*  Sunrise / sunset markers. ha-icon glyphs (mdi:weather-sunset-up
-        / -down) centred on the horizon crossings of the day's solar
-        arc, coloured in the configured sun colour via inline style.
-        The icon shape itself communicates "rising" vs "setting" so
-        no label or rotation is needed. */
-    .solar-horizon-icon
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        --mdc-icon-size: 18px;
-        pointer-events: none;
-        z-index: 6;
-        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
-    }
+    /*  Sunrise / sunset markers used to live here as ha-icon
+        glyphs anchored to the arc's horizon crossings. Removed in
+        v1.6.3 ; the arc shape itself reads as "sunrise / sunset".  */
 
 
     /*  Below-horizon segments, round dots at fixed spacing so the
         eye reads "this is happening underground" without colour or
         depth scaling having to carry the signal. dasharray "0 N"
-        with linecap round renders true circles on every browser. */
+        with linecap round renders true circles on every browser.
+        Stroke alpha is halved relative to the above-horizon arc
+        so the dotted leg recedes visually: the user reads the
+        bright arc as "the part of the day where there's sunlight"
+        and the dotted leg as ambient context underneath.            */
     .solar-svg .solar-arc-night
     {
         stroke-linecap: round;
         stroke-dasharray: 0 8;
+        stroke-opacity: 0.45;
+    }
+    .solar-svg .solar-arc-night.solar-arc-outline
+    {
+        stroke-opacity: 0.25;
     }
 
     /*  Incidence ray, dashes flow from the sun toward the home at
@@ -2050,7 +2446,7 @@ export const heliosCardStyles = css`
 
     ha-card.theme-dark .tb-cursor-now
     {
-        background: rgba(255, 255, 255, 0.55);
+        background: rgba(255, 255, 255, 0.75);
     }
 
     ha-card.theme-dark .tb-cursor-now::after
@@ -2064,11 +2460,12 @@ export const heliosCardStyles = css`
         they get the same dark override. */
     ha-card.theme-dark .clock,
     ha-card.theme-dark .tl-live-btn,
-    ha-card.theme-dark .tb-day-label,
+    ha-card.theme-dark .tb-day-strip,
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label,
     ha-card.theme-dark .map-btn:not(.map-btn-on),
-    ha-card.theme-dark .lidar-view-btn:not(.is-on)
+    ha-card.theme-dark .lidar-view-chip:not(.is-on),
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -2083,16 +2480,32 @@ export const heliosCardStyles = css`
         border-color: rgba(255, 255, 255, 0.20);
     }
 
-    ha-card.theme-dark .tb-day-label
+    /*  Day-strip dark-mode tweaks: text inside the cells switches
+        to the same pale ink the rest of the dark chips use, and
+        the vertical separators between days take the same border
+        alpha as the chip frame so the strip reads as one cohesive
+        component in either theme.                                 */
+    ha-card.theme-dark .tb-day-strip
     {
         background: #1f2021;
+    }
+    ha-card.theme-dark .tb-day-strip-cell { color: #e6e6e6; }
+    ha-card.theme-dark .tb-day-strip-sep
+    {
+        background-image: repeating-linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.30) 0,
+            rgba(255, 255, 255, 0.30) 1.5px,
+            transparent              1.5px,
+            transparent              4px
+        );
     }
 
     ha-card.theme-dark .tl-live-btn ha-icon,
     ha-card.theme-dark .cloud-pct-label ha-icon,
     ha-card.theme-dark .solar-pct-label ha-icon,
     ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
-    ha-card.theme-dark .lidar-view-btn:not(.is-on) ha-icon
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon
     {
         color: #e6e6e6;
     }

@@ -33,6 +33,14 @@ export interface TimelineHost extends OverlaysHost
     _isLiveMode:        boolean;
     _now:               Date;
 
+    //Hover cursor position on the timeline charts. The scrub handler
+    //below writes it in lock-step with _selectedTime so the hover
+    //tooltip + per-curve dots follow a touch drag on mobile (the
+    //chart-card pointer handlers don't fire once the time-bar
+    //captures the pointer; updating from here gives mobile users the
+    //same readout desktop users get on hover).
+    _chartHoverPct:     number | null;
+
     _trackElement:      HTMLElement | null;
     _trackPointerId:    number | null;
     _boundPointerMove:  (e: PointerEvent) => void;
@@ -117,6 +125,10 @@ export function onTimelinePointerUp(host: TimelineHost, e: PointerEvent): void
     }
     host._trackElement   = null;
     host._trackPointerId = null;
+    //Drop the hover once the gesture ends so the tooltip + dots
+    //disappear cleanly on touch release. Desktop hover keeps using
+    //the chart-card pointer handlers above this layer.
+    host._chartHoverPct  = null;
 }
 
 
@@ -146,8 +158,9 @@ export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
         return;
     }
 
-    host._selectedTime = t;
-    host._isLiveMode   = false;
+    host._selectedTime  = t;
+    host._isLiveMode    = false;
+    host._chartHoverPct = frac * 100;
     host._engine?.setSelectedTime(t);
 }
 

@@ -3,6 +3,7 @@ import type { Translations } from '../index';
 export const pt: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a tua casa, em 3D e tempo real',
+    lidarViewChipLabel: 'Vista LiDAR',
 
     detail:
     {
@@ -61,8 +62,10 @@ export const pt: Translations = {
         pvHint:             'Opcional. Quando definido, surge uma pastilha perto da casa com a produção instantânea (calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).',
         pvEntity:           'Entidade de produção',
         pvEntityHelp:       'Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).',
-        pvPeakPower:        'Potência de pico (kWp)',
-        pvPeakPowerHelp:    'Potência de pico instalada do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada no gráfico PV e a saturação do fluxo PV → casa. Deixa vazio para ocultar a previsão; a produção observada e o pico do dia continuam visíveis.',
+        pvPeakPower:        'Potência de pico total (kWp)',
+        pvPeakPowerHelp:    'Potência de pico instalada total do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada e a saturação do fluxo PV → casa. Deixa vazio quando indicas uma potência de pico por string abaixo (o total é a soma). Sem nenhuma das duas, a previsão não é traçada; a produção observada e o pico do dia continuam visíveis.',
+        pvInverterMaxKw:    'Potência máxima do inversor (kW)',
+        pvInverterMaxKwHelp:'Limite opcional na previsão. Define a potência AC nominal do teu inversor quando os painéis podem produzir mais do que o inversor entrega (combinação europeia típica: 6,4 kWp DC atrás de um inversor de 5 kW). Não afeta a observação (o inversor já limita por hardware), mas corta a curva prevista, os totais diários em kWh e os valores do tooltip para que a leitura nunca ultrapasse a realidade do hardware.',
         pvArraysSection:    'Orientação dos painéis',
         pvArraysHelp:       'Uma entrada por campo de painéis com a mesma orientação. Deixa uma única entrada com inclinação 0 para uma instalação plana. Acrescenta mais entradas quando os painéis estão repartidos por várias orientações (por exemplo uma fila a este e outra a oeste). A previsão é calculada por entrada e ponderada pela sua quota dos kWp totais.',
         pvArrayTitle:       'Fileira {n}',
@@ -71,6 +74,8 @@ export const pt: Translations = {
         pvArrayTilt:        'Inclinação (°)',
         pvArrayAzimuth:     'Azimute (°)',
         pvArrayShare:       'Quota (%)',
+        pvArrayPeakKwp:     'Potência de pico (kWp)',
+        pvArrayPeakKwpHelp: 'Potência de pico instalada DESTA fileira em quilowatts-pico. Soma de todas as fileiras = kWp total; substitui o antigo campo global «Potência de pico» e a quota por fileira. Deixa vazio para voltar à ponderação por quota (caminho v1.6.2).',
         pvArrayAdd:         '+ Adicionar fileira',
         pvArrayRemove:      'Remover',
         pvArrayNormHint:    'As quotas não somam 100 %, a previsão normaliza-as automaticamente.',
@@ -147,7 +152,7 @@ export const pt: Translations = {
         lidarViewWireframeOpacity: 'Opacidade da estrutura',
         localLidarSection:     'Avançado — LiDAR local (BYO)',
         localLidarHint:        'Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da área definida, esta fonte substitui qualquer fornecedor nacional.',
-        localLidarToolsHint:   'Precisas de preparar um raster do zero? O repositório Helios inclui ferramentas Python em `tools/lidar/`, consulta o README dessa pasta para o pipeline completo (instalação do GDAL de sistema, configuração do `uv`, comandos de inspeção / conversão / teste sintético).',
+        localLidarToolsHint:   'Precisas de preparar um raster do zero? A forma mais simples é o site complementar [helios-lidar.org](https://helios-lidar.org): envia o teu ficheiro LAZ / LAS bruto ou um par DSM + DTM e ele devolve o COG de 2 bandas que o Helios consome (banda 1 = nDSM, banda 2 = DTM) com o bloco YAML pronto para colar nas chaves abaixo. Grátis, sem instalação, sem conta. Se preferires fazer tudo localmente, o repositório Helios também inclui auxiliares Python em `tools/lidar/` para a mesma conversão.',
         localLidarEnabled:     'Usar dados locais',
         localLidarUrl:         'URL do GeoTIFF',
         localLidarMinLat:      'Latitude mín.',

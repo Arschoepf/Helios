@@ -175,7 +175,7 @@ The visual editor exposes a repeatable "Array" section with `+ Add array` / `Rem
 * **PV instantaneous rate**, for cumulative-energy sensors, the card maintains a 5-minute rolling buffer of state samples and differentiates over a ~60 s window, giving a real "what's being produced right now" reading instead of a misleading lifetime total.
 * **PV forecast (optional)**, when `pv-peak-kwp` is set, the card multiplies the live `effective_cover` by Haurwitz / Kasten-Czeplak per timestamp and scales by the installed peak power, painting a dotted prediction curve on the PV chart that the live observation tracks against. Scrubbing into the future flips the PV chip to the predicted figure (italicised, prefixed `≈`).
 * **PV thermal derating**, the same forecast pulls `temperature_2m` + `wind_speed_10m` from Open-Meteo and runs a Sandia NOCT cell-temperature model (`T_cell = T_air + (NOCT - 20) / 800 · GHI - 1.5 · wind`), then derates the predicted output with a `γ_pmp = -0.0040 /°C` temperature coefficient. On a hot summer noon at 35 °C / ~900 W/m² the predicted peak drops by ~13 %, which was previously being absorbed by the rolling calibration ratio as a flat multiplier. Falls back to a multiplier of 1 when the model didn't return temperature or wind at that hour.
-* **LiDAR-aware shading on the PV forecast**, when a LiDAR provider covers the home (or a BYO local nDSM is configured), the forecast additionally ray-marches from each `pv-arrays` entry along the sun direction against the loaded nDSM (2 m step, 200 m reach, bilinear sample) and zeroes the direct-beam component on arrays whose line-of-sight to the sun is blocked. Diffuse + ground-reflected components are kept, so a shaded panel doesn't drop to zero but to ~25-30 % of clear-sky output. For installs with `pv-arrays` declared at distinct coordinates, each entry is shaded independently, so a roof-east array shaded by a tall neighbour at 8 am doesn't affect the roof-west array on the same property.
+* **LiDAR-aware shading on the PV forecast**, when a LiDAR provider covers the home (or a BYO local nDSM is configured), the forecast additionally ray-marches from each `pv-arrays` entry along the sun direction against the loaded nDSM (2 m step, 200 m reach, bilinear sample) and zeroes the direct-beam component on arrays whose line-of-sight to the sun is blocked. Diffuse + ground-reflected components are kept, so a shaded panel doesn't drop to zero but to ~25-30 % of clear-sky output. For installs with `pv-arrays` declared at distinct coordinates, each entry is shaded independently, so a roof-east array shaded by a tall neighbour at 8 am doesn't affect the roof-west array on the same property. From v1.6.3 onwards, when the loaded raster ships a DTM band (every COG produced by [helios-lidar.org](https://helios-lidar.org)) the ray-march also accounts for terrain slope between the panel and the obstacle: a building 50 m east on terrain that rises 8 m reads as a 13 m obstacle, the same building on terrain that drops 8 m reads as -3 m and is correctly ignored. Single-band rasters (legacy locals, every public provider) keep the previous flat-ground behaviour.
 
 * **Forecast calibration (optional)**, the dashboard refines its predicted kWh by learning from the last 5 completed days' (actual / predicted) ratio. The ratio captures the residual biases the analytical model can't see (cloud-forecast skew, soiling, panel ageing) on top of the thermal + shading corrections already applied upstream, and is clamped to [0.5, 1.5] so a one-off sensor outage can't poison the average. Hidden silently when fewer than 2 past days carry enough production to derive a stable ratio.
 
@@ -235,9 +235,11 @@ If your region isn't covered by any of the public providers above but you have a
 
 The companion web tool at **[helios-lidar.org](https://helios-lidar.org)** does the GIS conversion server-side. You upload either a raw LAZ / LAS point cloud or a DSM + DTM raster pair from your country's open-data portal; the site spits back, after a couple of minutes:
 
-* a single Cloud-Optimized GeoTIFF (the nDSM Helios reads),
+* a 2-band Cloud-Optimized GeoTIFF (band 1 = nDSM = obstacle height above local ground, band 2 = DTM = ground elevation), used by the card's terrain-aware shading,
 * the exact YAML snippet to paste into your card config,
 * a 3D preview matching the card's own LiDAR View, so you can sanity-check the result before downloading.
+
+> **Already running Helios with a local nDSM from before v1.6.3?** Your existing file keeps working , the card detects the missing DTM band and falls back to flat-ground geometry as it did before. If your home is on a slope (hill, valley, mountain residential), re-running your original LAZ on helios-lidar.org produces a 2-band file the card uses to ray-march obstacles through the real terrain. Users on flat terrain see no difference either way.
 
 No QGIS, no GDAL, no PDAL, no Python install on your side. Free, no account, no ads, no tracking. The site is hosted on a small VPS I pay for myself and is the intended path for LAZ-only or DSM/DTM-only regions where the on-the-fly providers above don't yet reach. Country-specific tile-picker links (France IGN, Switzerland swissSURFACE3D, Netherlands AHN, Spain PNOA-LiDAR, UK Environment Agency, USA 3DEP + global OpenTopography aggregator) are listed directly on the upload page, with a short glossary explaining DSM / DTM / nDSM / LAS / LAZ / COG for first-time users.
 
@@ -252,6 +254,39 @@ The card config exposes a `lidar-local-ndsm-*` family (visible in the editor's c
 What "nDSM" means: a normalised Digital Surface Model = DSM (top of canopy / rooftops) − DTM (bare earth), so each pixel holds height-above-ground in metres. A bare-earth DTM or a raw DSM is *not* a valid input, the subtraction has to happen first. Host the resulting GeoTIFF anywhere your browser can fetch it: `/config/www/community/Helios/lidar/foo.tif` exposed as `/local/community/Helios/lidar/foo.tif` is the historical path; the YAML snippet that helios-lidar.org generates uses `/config/www/helios/foo.tif` exposed as `/local/helios/foo.tif` instead, both work.
 
 The BYO local nDSM provider was contributed by [@jourdant](https://github.com/jourdant) in [PR #5](https://github.com/ReikanYsora/Helios/pull/5), the preparation tooling in [PR #11](https://github.com/ReikanYsora/Helios/pull/11), with the original idea credited to [@stephenwq](https://github.com/stephenwq). Initial use case: NSW Australia (raster prepared from the [NSW elevation portal](https://elevation.fsdf.org.au/)), where no native provider exists in Helios yet. Big thanks to all three for closing the LiDAR-coverage gap for the rest of the world.
+
+---
+
+## Privacy , anonymous community signal
+
+From v1.6.3, the card sends **one tiny anonymous heartbeat** to `helios-lidar.org` so the landing page can show a live "Join the X users running Helios" counter. The whole point is informational + community-flavoured; nothing personal is collected.
+
+**What gets sent, in full:**
+
+```json
+{ "install_id": "<random UUID v4>" }
+```
+
+That is the entire body. A 36-character random UUID v4 generated client-side and persisted in your browser's `localStorage` under `helios-install-id`. It is fired at most **once per browser per 24 hours**.
+
+**What does NOT get sent / stored:**
+
+* No IP address (the heartbeat endpoint is configured not to log it)
+* No user-agent string
+* No Home Assistant version
+* No entity ids, no PV peak power, no battery state
+* No latitude / longitude, no country, no city
+* No timezone, no language
+
+The server upserts the UUID + a last-seen timestamp into a SQLite row. The public `GET /api/install-count` endpoint returns the count of distinct UUIDs seen in the last 30 days, nothing else. That count is what the landing page displays; **purely statistical**.
+
+**Opt-out, any of these silences the heartbeat completely:**
+
+* Set `helios-anon-stats: false` in your card config.
+* Browser-level `Do Not Track` (DNT) flag → automatic opt-out.
+* Private / incognito browsing with localStorage blocked → automatic opt-out.
+
+Source for the full contract: [`src/engine/anon-stats.ts`](src/engine/anon-stats.ts).
 
 ---
 

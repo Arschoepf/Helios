@@ -390,8 +390,10 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 
     if (!isCumulative)
     {
-        //Power sensor: just return the historical value.
-        return { value: hist.values[idx], unit: u };
+        //Power sensor: just return the historical value, floored at
+        //zero so a net-meter sensor that briefly dipped negative at
+        //dusk doesn't surface as "-2 W of production" on the chip.
+        return { value: Math.max(0, hist.values[idx]), unit: u };
     }
 
     //Cumulative: differentiate around the located index.
@@ -479,8 +481,11 @@ export function currentPvRate(host: PvHost): PvRate | null
 
     if (!isCumulative)
     {
-        //Instantaneous sensor, the live state IS the rate.
-        return { value: host._pvCurrent, unit: u };
+        //Instantaneous sensor, the live state IS the rate. Net-meter
+        //sensors can briefly read slightly negative around dawn / dusk
+        //or report a few watts of inverter standby at night; floor at
+        //zero so the chip never displays "-2 W of production".
+        return { value: Math.max(0, host._pvCurrent), unit: u };
     }
 
     //Choose the rate unit so the formatted readout reads as
@@ -607,22 +612,58 @@ export function pvNormalizeToWatts(value: number, unit: string): number
 
 //Manual PV peak power.
 //
-//The user enters their installed array's peak power (kWp) in the
-//card editor. We convert that to a calibration scalar k (W per
-//percent of STC) by k = kWp * 1000 / 100 = kWp * 10, then
-//multiply by the clear-sky percentage to draw the dotted forecast
-//line on the PV chart. No history scan, no auto-fit, no rolling
-//buffer, the user knows their install best.
+//Total installed peak power for the forecast scaling. Two sources,
+//in priority order:
 //
-//Returns null when `pv-peak-kwp` is unset or invalid; callers
-//then skip the prediction line and the peak-of-day highlights
-//for future days.
+//  1. Sum of per-string `pv-arrays[].peak-kwp` values. Preferred
+//     from v1.6.3 because each user enters the real nameplate for
+//     each string and the total is derived automatically. Drops
+//     the "60/40 share with 5 kWp total" abstraction users found
+//     confusing.
+//  2. Top-level `pv-peak-kwp` legacy value. Kept for back-compat;
+//     existing configs work unchanged.
+//
+//We convert kWp to the calibration scalar k (W per percent of STC)
+//by k = kWp * 1000 / 100 = kWp * 10, then multiply by the clear-
+//sky percentage to draw the dotted forecast line on the PV chart.
+//
+//Returns null when neither source is set or both are invalid;
+//callers then skip the prediction line and the peak-of-day
+//highlights for future days.
 export function pvCalibK(config: HeliosConfig | undefined): number | null
 {
-    const raw = config?.['pv-peak-kwp'];
-    const kwp = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-    if (!isFinite(kwp) || kwp <= 0) return null;
+    const arraysTotal = pvArrays(config).totalKwp;
+    let kwp: number;
+    if (arraysTotal > 0)
+    {
+        kwp = arraysTotal;
+    }
+    else
+    {
+        const raw = config?.['pv-peak-kwp'];
+        const v   = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+        if (!isFinite(v) || v <= 0) return null;
+        kwp = v;
+    }
     return kwp * 10;
+}
+
+
+//Inverter clipping cap in WATTS, derived from the top-level
+//`pv-inverter-max-kw` config key. Returns Infinity when unset or
+//invalid so callers can apply a `Math.min(value, cap)` clip
+//unconditionally without an extra branch.
+//
+//Only the forecast curve / chips / day-strip kWh totals consume
+//this; live PV observation is unaffected (the inverter has
+//already clipped the output in hardware before the entity
+//reported its value).
+export function pvInverterMaxW(config: HeliosConfig | undefined): number
+{
+    const raw = config?.['pv-inverter-max-kw'];
+    const kw  = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+    if (!isFinite(kw) || kw <= 0) return Infinity;
+    return kw * 1000;
 }
 
 
@@ -707,12 +748,18 @@ export function pvArrays(
     //clears a low garden fence that a ground-mounted array of
     //the same orientation would sit in the shadow of.
     heightsM:     number[];
+    //Total installed peak power of the configured arrays in kWp.
+    //Derived from per-string `peak-kwp` values when any are set;
+    //zero otherwise (legacy share-only configs leave the top-level
+    //`pv-peak-kwp` as the source of truth, see pvCalibK).
+    totalKwp:     number;
 }
 {
     const out: PanelOrientation[] = [];
     const sh:  number[]           = [];
     const co:  ({ lat: number; lon: number } | null)[] = [];
     const he:  number[]           = [];
+    const kw:  number[]           = [];
 
     //Parse a single coord value (lat or lon) from the editor's
     //free-form input. Empty / non-numeric / out-of-range values
@@ -749,6 +796,16 @@ export function pvArrays(
             const az    = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
             const azDeg = isFinite(az) ? ((az % 360) + 360) % 360 : 180;
 
+            //Per-string peak power in kWp (preferred from v1.6.3).
+            //NaN when blank; the caller's pv-peak-kwp covers it.
+            const rawPeakKwp = e['peak-kwp'];
+            let peakKwp: number = NaN;
+            if (rawPeakKwp !== undefined && rawPeakKwp !== null && rawPeakKwp !== '')
+            {
+                const k = typeof rawPeakKwp === 'number' ? rawPeakKwp : parseFloat(String(rawPeakKwp));
+                if (isFinite(k) && k > 0) peakKwp = k;
+            }
+
             const rawShare = e['share'];
             //undefined / null share means "equal split with siblings",
             //flag it with NaN and fill in after we know the count of
@@ -761,8 +818,19 @@ export function pvArrays(
             else
             {
                 const s = typeof rawShare === 'number' ? rawShare : parseFloat(String(rawShare));
-                if (!isFinite(s) || s <= 0) continue;
-                share = s;
+                if (!isFinite(s) || s <= 0)
+                {
+                    //A zero / negative share kills the entry only when no
+                    //per-string peak-kwp is provided. Otherwise the
+                    //peak-kwp carries the weight and the share is
+                    //ignored, so we still want to keep the entry.
+                    if (!isFinite(peakKwp)) continue;
+                    share = NaN;
+                }
+                else
+                {
+                    share = s;
+                }
             }
 
             //Per-array coords. Both lat AND lon must parse to
@@ -792,18 +860,41 @@ export function pvArrays(
             sh.push(share);
             co.push(coords);
             he.push(heightM);
+            kw.push(peakKwp);
         }
 
-        //Fill blank shares with the average of the explicit ones (or
-        //1.0 when every entry omitted a share). Keeps "no share field"
-        //behaving like equal-split even when mixed with explicit ones.
-        const explicit = sh.filter(s => isFinite(s));
-        const fillVal  = explicit.length > 0
-            ? explicit.reduce((a, b) => a + b, 0) / explicit.length
-            : 1;
-        for (let i = 0; i < sh.length; i++)
+        //Decide which weighting wins for this config:
+        //  - If ANY entry carries an explicit peak-kwp, the per-string
+        //    kWp values become the shares directly. Missing entries
+        //    pick up the mean of explicit ones so a mixed config
+        //    (some entries with peak-kwp, some without) still produces
+        //    a usable forecast instead of silently dropping the
+        //    incomplete arrays.
+        //  - Otherwise we fall back to the legacy share field. Blank
+        //    shares fill in with the mean of explicit ones (or 1.0
+        //    when every entry omitted a share); same equal-split
+        //    semantics existing configs rely on.
+        const explicitKw = kw.filter(v => isFinite(v));
+        if (explicitKw.length > 0)
         {
-            if (!isFinite(sh[i])) sh[i] = fillVal;
+            const meanKw = explicitKw.reduce((a, b) => a + b, 0) / explicitKw.length;
+            for (let i = 0; i < sh.length; i++)
+            {
+                const w = isFinite(kw[i]) ? kw[i] : meanKw;
+                kw[i] = w;
+                sh[i] = w;
+            }
+        }
+        else
+        {
+            const explicit = sh.filter(s => isFinite(s));
+            const fillVal  = explicit.length > 0
+                ? explicit.reduce((a, b) => a + b, 0) / explicit.length
+                : 1;
+            for (let i = 0; i < sh.length; i++)
+            {
+                if (!isFinite(sh[i])) sh[i] = fillVal;
+            }
         }
     }
 
@@ -823,8 +914,15 @@ export function pvArrays(
             sh.push(1);
             co.push(null);
             he.push(DEFAULT_PANEL_HEIGHT_M);
+            kw.push(NaN);
         }
     }
+
+    //Total kWp from the per-string `peak-kwp` field, when set. Zero
+    //when no entry supplied a peak-kwp (legacy share-only path);
+    //the caller's pvCalibK() then falls back to the top-level
+    //`pv-peak-kwp`.
+    const totalKwp = kw.reduce((a, b) => isFinite(b) ? a + b : a, 0);
 
     //Normalise to 1.0 so callers can multiply directly without an
     //extra divide per sample. Empty list stays empty → horizontal
@@ -835,7 +933,7 @@ export function pvArrays(
         for (let i = 0; i < sh.length; i++) sh[i] /= total;
     }
 
-    return { orientations: out, shares: sh, coords: co, heightsM: he };
+    return { orientations: out, shares: sh, coords: co, heightsM: he, totalKwp };
 }
 
 

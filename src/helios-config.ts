@@ -18,6 +18,15 @@ export interface HeliosConfig
     //(road names, building numbers, POI labels, place names) are
     //hidden for a cleaner, minimalist basemap. Default: true.
     'show-labels'?:           unknown;
+    //Anonymous install heartbeat opt-out. Default: true (heartbeat
+    //fires once per browser per 24 h, sending only a random
+    //UUIDv4 install_id to helios-lidar.org so the landing page
+    //can show "Join the N users running Helios"). Set to `false`
+    //to silence the heartbeat completely. The browser's
+    //`doNotTrack=1` flag and private-mode browsing also silence
+    //it automatically; see src/engine/anon-stats.ts for the full
+    //privacy contract.
+    'helios-anon-stats'?:     unknown;
     //Fixed-colour design system. Each metric has one configurable
     //colour reused everywhere it appears (timeline mirror chart +
     //on-arc sun disc for sun, on-ground disc + timeline lower half
@@ -46,7 +55,22 @@ export interface HeliosConfig
     //reflects the user's install. Without it, no prediction is drawn,
     //but live observation, peak-of-day highlight and chart axes keep
     //working off the actual PV entity.
+    //
+    //Superseded by per-string `pv-arrays[].peak-kwp` from v1.6.3:
+    //when any array entry carries a `peak-kwp`, the total install
+    //power is the sum of those values and `pv-peak-kwp` is ignored.
+    //Existing configs that only set `pv-peak-kwp` keep working
+    //unchanged through the legacy share-based weighting.
     'pv-peak-kwp'?:           unknown;
+    //Inverter clipping cap in kW (kilowatts of AC). Optional; when
+    //set, the forecast tops out at this value so an oversized DC
+    //array hooked to a smaller inverter (e.g. 6.4 kWp panels behind a
+    //5 kW inverter, a common European pairing) doesn't show a peak
+    //above what the user's hardware can actually deliver. Affects
+    //only the predicted curve / chips / day-strip kWh totals; live
+    //observation is unaffected (the inverter already does its own
+    //clipping in hardware, the entity reports the clipped value).
+    'pv-inverter-max-kw'?:    unknown;
     //Panel orientation. Optional; when unset the prediction model
     //assumes horizontal panels (0° tilt) and the orientation maths is
     //bypassed, preserving the original behaviour. Setting `pv-tilt`
@@ -66,15 +90,20 @@ export interface HeliosConfig
     'pv-azimuth'?:            unknown;
     //Multi-array PV layout. Optional list, each entry describes one
     //group of co-oriented panels:
-    //  tilt    : 0–90°  (clamped). 0 = horizontal, 90 = vertical.
-    //  azimuth : 0–360° clockwise from north (180 = south). Wrapped
-    //            into range, defaults to 180 when missing.
-    //  share   : relative weight of this group within the total
-    //            installed kWp. Auto-normalised so the shares used
-    //            at compute time always sum to 1.0, so 50/50, 60/60
-    //            and 1/1 all produce the same forecast. Missing
-    //            shares are treated as equal-split with their
-    //            siblings. Entries with share ≤ 0 are dropped.
+    //  tilt     : 0–90°  (clamped). 0 = horizontal, 90 = vertical.
+    //  azimuth  : 0–360° clockwise from north (180 = south). Wrapped
+    //             into range, defaults to 180 when missing.
+    //  peak-kwp : installed peak power of THIS string in kWp.
+    //             Preferred over `share` from v1.6.3: each user
+    //             enters the real nameplate for each string, the
+    //             total kWp is just the sum, and the weighting is
+    //             derived automatically. When any entry carries a
+    //             peak-kwp, the top-level `pv-peak-kwp` is ignored.
+    //  share    : legacy relative weight, in [0, 1] or any positive
+    //             scale. Auto-normalised so the shares used at
+    //             compute time always sum to 1.0. Only consulted
+    //             when NO entry carries a `peak-kwp`. Kept for
+    //             back-compat; existing configs work unchanged.
     //When `pv-arrays` is present and non-empty, the legacy
     //pv-tilt / pv-azimuth keys are ignored. Empty or absent →
     //fall back to the legacy single-orientation path (or the

@@ -604,6 +604,7 @@ const DEFAULT_TIMELINE_CONSUMPTION_ENABLED = true;
 const en = {
   cardName: "HELIOS",
   cardDescription: "☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home",
+  lidarViewChipLabel: "LiDAR view",
   detail: {
     exitHint: "Tap anywhere to exit",
     todayLabel: "Today",
@@ -658,7 +659,9 @@ const en = {
     pvEntity: "Production entity",
     pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
     pvPeakPower: "Peak power (kWp)",
-    pvPeakPowerHelp: "Installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty to hide the forecast; observed production and the daily peak still render.",
+    pvPeakPowerHelp: "Total installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty when you enter a per-string peak-kWp on each row below (the total is then the sum). Without either, no forecast is drawn; observed production and the daily peak still render.",
+    pvInverterMaxKw: "Inverter max output (kW)",
+    pvInverterMaxKwHelp: "Optional clip on the forecast. Set this to your inverter's nameplate AC output when your panels can produce more than the inverter can deliver (typical European pairing: 6.4 kWp DC behind a 5 kW inverter). Leaves observation untouched (the inverter already clips in hardware) but caps the predicted curve, the daily kWh totals and the tooltip values so the readout never overshoots reality.",
     pvArraysSection: "Panel orientation",
     pvArraysHelp: "One entry per group of co-oriented panels. Leave a single entry with tilt 0 for a flat install. Add more entries when panels are split across multiple orientations (e.g. one row facing east, one facing west). The card forecasts each entry separately and weights the result by its share of the total kWp.",
     pvArrayTitle: "Row {n}",
@@ -667,6 +670,8 @@ const en = {
     pvArrayTilt: "Tilt (°)",
     pvArrayAzimuth: "Azimuth (°)",
     pvArrayShare: "Share (%)",
+    pvArrayPeakKwp: "Peak power (kWp)",
+    pvArrayPeakKwpHelp: 'Installed peak power of THIS row in kilowatt-peak. Sum across rows = total kWp; replaces the legacy global "Peak power" field plus the per-row share. Leave blank to fall back to the share-based weighting (legacy v1.6.2 path).',
     pvArrayAdd: "+ Add row",
     pvArrayRemove: "Remove",
     pvArrayNormHint: "Shares don't add up to 100%, the forecast normalises them automatically.",
@@ -743,7 +748,7 @@ const en = {
     lidarViewWireframeOpacity: "Wireframe opacity",
     localLidarSection: "Advanced — Local LiDAR (BYO)",
     localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.",
-    localLidarToolsHint: "Need to prepare a raster from scratch? The Helios repo ships Python helper tools under `tools/lidar/`, see the README there for the full pipeline (system GDAL install, `uv` setup, inspect / convert / synthetic test commands).",
+    localLidarToolsHint: "Need to prepare a raster from scratch? The easy path is the companion site [helios-lidar.org](https://helios-lidar.org): drop in your raw LAZ / LAS file or a DSM + DTM raster pair, and it returns the 2-band COG Helios reads (band 1 = nDSM, band 2 = DTM) plus the ready-to-paste YAML for the keys below. Free, no install, no account. If you would rather run everything locally, the Helios repo also ships Python helpers under `tools/lidar/` for the same conversion.",
     localLidarEnabled: "Use local data",
     localLidarUrl: "GeoTIFF URL",
     localLidarMinLat: "Min latitude",
@@ -760,6 +765,7 @@ const en = {
 const fr = {
   cardName: "HELIOS",
   cardDescription: "☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel",
+  lidarViewChipLabel: "Vue LiDAR",
   detail: {
     exitHint: "Cliquez n'importe où pour quitter",
     todayLabel: "Aujourd'hui",
@@ -813,8 +819,10 @@ const fr = {
     pvHint: "Optionnel. Si renseigné, une pastille apparaît près de la maison avec la production instantanée (calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
     pvEntity: "Entité de production",
     pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
-    pvPeakPower: "Puissance crête (kWp)",
-    pvPeakPowerHelp: "Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.",
+    pvPeakPower: "Puissance crête totale (kWp)",
+    pvPeakPowerHelp: "Puissance crête totale de ton installation, en kilowatts-crête. Sert à tracer la courbe de prévision et à caler la cadence du flux PV → maison. Laisse vide quand tu renseignes une puissance crête par string ci-dessous (le total est alors la somme). Sans l'un ni l'autre, la prévision n'est pas affichée ; la production observée et le pic du jour restent visibles.",
+    pvInverterMaxKw: "Puissance max onduleur (kW)",
+    pvInverterMaxKwHelp: "Écrêtage optionnel sur la prévision. Renseigne la puissance AC nominale de ton onduleur si tes panneaux peuvent produire plus que ce qu'il peut sortir (cas classique en Europe : 6,4 kWp DC derrière un onduleur 5 kW). N'affecte pas l'observation (l'onduleur écrête déjà côté matériel) mais plafonne la courbe prévue, les totaux kWh quotidiens et la tooltip pour qu'ils ne dépassent jamais la réalité matérielle.",
     pvArraysSection: "Orientation des panneaux",
     pvArraysHelp: "Une entrée par rangée de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat. Ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
     pvArrayTitle: "Rangée {n}",
@@ -823,6 +831,8 @@ const fr = {
     pvArrayTilt: "Inclinaison (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Part (%)",
+    pvArrayPeakKwp: "Puissance crête (kWp)",
+    pvArrayPeakKwpHelp: "Puissance crête installée de CETTE rangée en kilowatts-crête. La somme sur toutes les rangées = kWp total ; remplace l'ancien champ « Puissance crête » global et le pourcentage par rangée. Laisse vide pour retomber sur l'ancien mode par pourcentage (chemin v1.6.2).",
     pvArrayAdd: "+ Ajouter une rangée",
     pvArrayRemove: "Supprimer",
     pvArrayNormHint: "Les parts ne totalisent pas 100 %, la prévision les normalise automatiquement.",
@@ -899,7 +909,7 @@ const fr = {
     lidarViewWireframeOpacity: "Opacité du fil de fer",
     localLidarSection: "Avancé — LiDAR local (BYO)",
     localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la zone définie, cette source remplace tout fournisseur national.",
-    localLidarToolsHint: "Tu pars de zéro ? Le dépôt Helios fournit des outils Python sous `tools/lidar/`, va voir le README de ce dossier pour la procédure complète (installation de GDAL système, configuration de `uv`, commandes d'inspection / conversion / test synthétique).",
+    localLidarToolsHint: "Tu pars de zéro ? Le plus simple est le site compagnon [helios-lidar.org](https://helios-lidar.org) : dépose ton fichier LAZ / LAS brut ou un couple DSM + DTM, et il te renvoie le COG 2 bandes que Helios consomme (bande 1 = nDSM, bande 2 = DTM) avec le bloc YAML prêt à coller pour les clés ci-dessous. Gratuit, sans installation, sans compte. Si tu préfères tout faire en local, le dépôt Helios contient aussi des helpers Python sous `tools/lidar/` qui réalisent la même conversion.",
     localLidarEnabled: "Utiliser les données locales",
     localLidarUrl: "URL du GeoTIFF",
     localLidarMinLat: "Latitude min",
@@ -916,6 +926,7 @@ const fr = {
 const de = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sonne, Wolken, PV-Erzeugung, Batterie und LiDAR-Schatten am Haus, in 3D-Echtzeit",
+  lidarViewChipLabel: "LiDAR-Ansicht",
   detail: {
     exitHint: "Tippe irgendwo, um zu schließen",
     todayLabel: "Heute",
@@ -969,8 +980,10 @@ const de = {
     pvHint: "Optional. Wenn gesetzt, erscheint nahe dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
     pvEntity: "Produktions-Entität",
     pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
-    pvPeakPower: "Spitzenleistung (kWp)",
-    pvPeakPowerHelp: "Installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, um die Prognose auszublenden; gemessene Produktion und Tagesspitze werden weiter angezeigt.",
+    pvPeakPower: "Gesamt-Spitzenleistung (kWp)",
+    pvPeakPowerHelp: "Gesamte installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, wenn du unten pro String eine Spitzenleistung eingibst (Gesamt = Summe). Ohne beides wird keine Prognose angezeigt; gemessene Produktion und Tagesspitze bleiben sichtbar.",
+    pvInverterMaxKw: "Wechselrichter-Maximalleistung (kW)",
+    pvInverterMaxKwHelp: "Optionale Deckelung der Prognose. Gib hier die AC-Nennleistung deines Wechselrichters ein, wenn deine Module mehr DC erzeugen können als der Wechselrichter abgibt (typische europäische Kombination: 6,4 kWp DC hinter einem 5-kW-Wechselrichter). Beeinflusst die Messwerte nicht (der Wechselrichter begrenzt bereits in Hardware), deckelt aber die Prognosekurve, die täglichen kWh-Summen und die Tooltip-Werte, damit der Wert nie die Hardware-Realität überschreitet.",
     pvArraysSection: "Modulausrichtung",
     pvArraysHelp: "Ein Eintrag pro Gruppe gleich ausgerichteter Module. Lasse einen einzigen Eintrag mit Neigung 0 für eine flache Installation. Füge weitere Einträge hinzu, wenn deine Module auf mehrere Ausrichtungen verteilt sind (zum Beispiel eine Reihe nach Osten, eine nach Westen). Die Prognose wird pro Eintrag berechnet und nach dem Anteil an der Gesamt-kWp gewichtet.",
     pvArrayTitle: "Reihe {n}",
@@ -979,6 +992,8 @@ const de = {
     pvArrayTilt: "Neigung (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Anteil (%)",
+    pvArrayPeakKwp: "Spitzenleistung (kWp)",
+    pvArrayPeakKwpHelp: 'Installierte Spitzenleistung DIESER Reihe in Kilowatt-Peak. Summe über alle Reihen = Gesamt-kWp; ersetzt das alte globale "Spitzenleistung"-Feld und den Anteil pro Reihe. Leer lassen, um auf die alte anteilsbasierte Gewichtung zurückzufallen (Pfad v1.6.2).',
     pvArrayAdd: "+ Reihe hinzufügen",
     pvArrayRemove: "Entfernen",
     pvArrayNormHint: "Die Anteile ergeben nicht 100 %, die Prognose normalisiert sie automatisch.",
@@ -1055,7 +1070,7 @@ const de = {
     lidarViewWireframeOpacity: "Drahtgitter-Deckkraft",
     localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
     localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb des definierten Bereichs ersetzt diese Quelle jeden nationalen Anbieter.",
-    localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Das Helios-Repository enthält Python-Helfer unter `tools/lidar/`, siehe das README dort für die komplette Pipeline (Installation der GDAL-Systembibliothek, `uv`-Setup, Inspektions- / Konvertierungs- / Test-Befehle).",
+    localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Am einfachsten geht das über die Begleitseite [helios-lidar.org](https://helios-lidar.org): lade deine rohe LAZ / LAS-Datei oder ein DSM + DTM-Paar hoch, und du erhältst das 2-Band-COG zurück, das Helios liest (Band 1 = nDSM, Band 2 = DTM) zusammen mit dem fertigen YAML-Block für die Schlüssel unten. Kostenlos, ohne Installation, ohne Konto. Wenn du lieber alles lokal erledigst, enthält das Helios-Repository auch Python-Helfer unter `tools/lidar/` für dieselbe Konvertierung.",
     localLidarEnabled: "Lokale Daten verwenden",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min. Breitengrad",
@@ -1072,6 +1087,7 @@ const de = {
 const es = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, nubes, producción FV, batería y sombras LiDAR sobre tu casa, en 3D y tiempo real",
+  lidarViewChipLabel: "Vista LiDAR",
   detail: {
     exitHint: "Toca en cualquier lugar para salir",
     todayLabel: "Hoy",
@@ -1125,8 +1141,10 @@ const es = {
     pvHint: "Opcional. Si se define, aparece una pastilla cerca de la casa con la producción instantánea (calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
     pvEntity: "Entidad de producción",
     pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
-    pvPeakPower: "Potencia pico (kWp)",
-    pvPeakPowerHelp: "Potencia pico instalada de tu campo en kilovatios-pico. Controla la curva de previsión punteada en el gráfico PV y la saturación del flujo PV → casa. Déjalo vacío para ocultar la previsión; la producción observada y el pico del día siguen mostrándose.",
+    pvPeakPower: "Potencia pico total (kWp)",
+    pvPeakPowerHelp: "Potencia pico instalada total de tu instalación en kilovatios-pico. Controla la curva de previsión punteada y la saturación del flujo PV → casa. Déjalo vacío cuando introduzcas una potencia pico por hilera abajo (el total es la suma). Sin ninguna de las dos, no se traza la previsión; la producción observada y el pico del día se siguen mostrando.",
+    pvInverterMaxKw: "Potencia máxima del inversor (kW)",
+    pvInverterMaxKwHelp: "Limitación opcional de la previsión. Indica la potencia AC nominal de tu inversor cuando los paneles pueden producir más de lo que el inversor entrega (combinación europea típica: 6,4 kWp DC tras un inversor de 5 kW). No afecta a la observación (el inversor ya limita por hardware), pero recorta la curva prevista, los totales diarios en kWh y los valores del tooltip para que la lectura nunca supere la realidad.",
     pvArraysSection: "Orientación de los paneles",
     pvArraysHelp: "Una entrada por grupo de paneles con la misma orientación. Deja una sola entrada con inclinación 0 para una instalación plana. Añade más entradas cuando tus paneles estén repartidos en varias orientaciones (por ejemplo, una fila al este y otra al oeste). La previsión se calcula por entrada y se pondera por su parte del total de kWp.",
     pvArrayTitle: "Hilera {n}",
@@ -1135,6 +1153,8 @@ const es = {
     pvArrayTilt: "Inclinación (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Parte (%)",
+    pvArrayPeakKwp: "Potencia pico (kWp)",
+    pvArrayPeakKwpHelp: "Potencia pico instalada de ESTA hilera en kilovatios-pico. La suma de todas las hileras = kWp total; sustituye al antiguo campo global «Potencia pico» y al porcentaje por hilera. Déjalo vacío para volver al modo de pesos por porcentaje (ruta v1.6.2).",
     pvArrayAdd: "+ Añadir hilera",
     pvArrayRemove: "Eliminar",
     pvArrayNormHint: "Las partes no suman 100 %, la previsión las normaliza automáticamente.",
@@ -1211,7 +1231,7 @@ const es = {
     lidarViewWireframeOpacity: "Opacidad de la malla",
     localLidarSection: "Avanzado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del área definida, esta fuente reemplaza cualquier proveedor nacional.",
-    localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? El repositorio de Helios incluye herramientas Python en `tools/lidar/`, consulta el README de esa carpeta para el pipeline completo (instalación de GDAL de sistema, configuración de `uv`, comandos de inspección / conversión / prueba sintética).",
+    localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? Lo más fácil es el sitio compañero [helios-lidar.org](https://helios-lidar.org): sube tu archivo LAZ / LAS sin procesar o un par DSM + DTM y te devuelve el COG de 2 bandas que Helios consume (banda 1 = nDSM, banda 2 = DTM) junto con el bloque YAML listo para pegar en las claves de abajo. Gratis, sin instalación, sin cuenta. Si prefieres hacerlo todo en local, el repositorio Helios también incluye ayudantes Python en `tools/lidar/` que realizan la misma conversión.",
     localLidarEnabled: "Usar datos locales",
     localLidarUrl: "URL del GeoTIFF",
     localLidarMinLat: "Latitud mín.",
@@ -1228,6 +1248,7 @@ const es = {
 const it = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sole, nuvole, produzione FV, batteria e ombre LiDAR sulla tua casa, in 3D e tempo reale",
+  lidarViewChipLabel: "Vista LiDAR",
   detail: {
     exitHint: "Tocca un punto qualsiasi per uscire",
     todayLabel: "Oggi",
@@ -1281,8 +1302,10 @@ const it = {
     pvHint: "Opzionale. Se impostato, una pastiglia appare vicino alla casa con la produzione istantanea (calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
     pvEntity: "Entità di produzione",
     pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
-    pvPeakPower: "Potenza di picco (kWp)",
-    pvPeakPowerHelp: "Potenza di picco installata del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata sul grafico PV e la saturazione del flusso PV → casa. Lascia vuoto per nascondere la previsione; la produzione osservata e il picco del giorno restano visibili.",
+    pvPeakPower: "Potenza di picco totale (kWp)",
+    pvPeakPowerHelp: "Potenza di picco installata totale del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata e la saturazione del flusso PV → casa. Lascia vuoto quando inserisci una potenza di picco per stringa qui sotto (il totale è la somma). Senza nessuna delle due, la previsione non viene tracciata; produzione osservata e picco del giorno restano visibili.",
+    pvInverterMaxKw: "Potenza max inverter (kW)",
+    pvInverterMaxKwHelp: "Limite opzionale sulla previsione. Imposta la potenza AC nominale dell'inverter quando i pannelli producono più di quanto l'inverter può erogare (abbinamento europeo tipico: 6,4 kWp DC dietro un inverter da 5 kW). Non influisce sulle misure (l'inverter limita già in hardware), ma comprime la curva prevista, i totali giornalieri in kWh e i valori del tooltip così la lettura non supera mai la realtà hardware.",
     pvArraysSection: "Orientamento dei pannelli",
     pvArraysHelp: "Una voce per ogni campo di pannelli con la stessa orientazione. Lascia una sola voce con inclinazione 0 per un'installazione piana. Aggiungi altre voci quando i pannelli sono distribuiti su più orientazioni (per esempio una fila a est e una a ovest). La previsione viene calcolata per ciascuna voce e pesata in base alla sua quota dei kWp totali.",
     pvArrayTitle: "Fila {n}",
@@ -1291,6 +1314,8 @@ const it = {
     pvArrayTilt: "Inclinazione (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Quota (%)",
+    pvArrayPeakKwp: "Potenza di picco (kWp)",
+    pvArrayPeakKwpHelp: "Potenza di picco installata di QUESTA fila in kilowatt-picco. Somma su tutte le file = kWp totale; sostituisce il vecchio campo globale «Potenza di picco» e la quota per fila. Lascia vuoto per tornare al peso per quota (percorso v1.6.2).",
     pvArrayAdd: "+ Aggiungi fila",
     pvArrayRemove: "Rimuovi",
     pvArrayNormHint: "Le quote non sommano a 100 %, la previsione le normalizza automaticamente.",
@@ -1367,7 +1392,7 @@ const it = {
     lidarViewWireframeOpacity: "Opacità del reticolo",
     localLidarSection: "Avanzato — LiDAR locale (BYO)",
     localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. All'interno dell'area definita, questa sorgente sostituisce qualsiasi provider nazionale.",
-    localLidarToolsHint: "Devi preparare un raster da zero? Il repository Helios include strumenti Python in `tools/lidar/`, vedi il README di quella cartella per la pipeline completa (installazione di GDAL di sistema, configurazione di `uv`, comandi di ispezione / conversione / test sintetico).",
+    localLidarToolsHint: "Devi preparare un raster da zero? La via più semplice è il sito gemello [helios-lidar.org](https://helios-lidar.org): carica il tuo file LAZ / LAS grezzo o una coppia DSM + DTM e ti restituisce il COG a 2 bande che Helios consuma (banda 1 = nDSM, banda 2 = DTM) insieme al blocco YAML pronto da incollare nelle chiavi sotto. Gratis, nessuna installazione, nessun account. Se preferisci fare tutto in locale, il repository Helios include anche helper Python in `tools/lidar/` per la stessa conversione.",
     localLidarEnabled: "Usa dati locali",
     localLidarUrl: "URL del GeoTIFF",
     localLidarMinLat: "Latitudine min",
@@ -1384,6 +1409,7 @@ const it = {
 const nl = {
   cardName: "HELIOS",
   cardDescription: "☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime",
+  lidarViewChipLabel: "LiDAR-weergave",
   detail: {
     exitHint: "Tik ergens om te sluiten",
     todayLabel: "Vandaag",
@@ -1437,8 +1463,10 @@ const nl = {
     pvHint: "Optioneel. Als ingesteld verschijnt bij het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
     pvEntity: "Productie-entiteit",
     pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
-    pvPeakPower: "Piekvermogen (kWp)",
-    pvPeakPowerHelp: "Geïnstalleerd piekvermogen van je panelen in kilowattpiek. Stuurt de gestippelde voorspellingslijn op de PV-grafiek en de stroomverzadiging van de PV → huis-leider. Laat leeg om de voorspelling te verbergen; gemeten productie en de dagelijkse piek blijven zichtbaar.",
+    pvPeakPower: "Totaal piekvermogen (kWp)",
+    pvPeakPowerHelp: "Geïnstalleerd totaal piekvermogen van je installatie in kilowattpiek. Stuurt de gestippelde voorspellingslijn en de stroomverzadiging van de PV → huis-leider. Laat leeg als je hieronder per string een piekvermogen invult (totaal = som). Zonder beide wordt geen voorspelling getekend; gemeten productie en de dagelijkse piek blijven zichtbaar.",
+    pvInverterMaxKw: "Max omvormervermogen (kW)",
+    pvInverterMaxKwHelp: "Optionele begrenzing van de voorspelling. Vul het nominale AC-vermogen van je omvormer in wanneer je panelen meer DC kunnen leveren dan de omvormer aankan (typische Europese combinatie: 6,4 kWp DC achter een 5 kW omvormer). Beïnvloedt waarnemingen niet (de omvormer begrenst al in hardware), maar limiteert de voorspellingscurve, de dagelijkse kWh-totalen en de tooltip-waarden zodat de uitlezing nooit de hardwarewerkelijkheid overschrijdt.",
     pvArraysSection: "Paneeloriëntatie",
     pvArraysHelp: "Eén item per veld panelen met dezelfde oriëntatie. Laat één item staan met hellingshoek 0 voor een platte opstelling. Voeg extra items toe wanneer je panelen over meerdere richtingen verdeeld zijn (bijvoorbeeld een rij oost, een rij west). De prognose wordt per item berekend en gewogen op basis van het percentage van het totale kWp.",
     pvArrayTitle: "Rij {n}",
@@ -1447,6 +1475,8 @@ const nl = {
     pvArrayTilt: "Helling (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Aandeel (%)",
+    pvArrayPeakKwp: "Piekvermogen (kWp)",
+    pvArrayPeakKwpHelp: 'Geïnstalleerd piekvermogen van DEZE rij in kilowattpiek. Som over alle rijen = totaal kWp; vervangt het oude globale veld "Piekvermogen" en het aandeel per rij. Laat leeg om terug te vallen op de oude weging op basis van aandeel (v1.6.2-pad).',
     pvArrayAdd: "+ Rij toevoegen",
     pvArrayRemove: "Verwijderen",
     pvArrayNormHint: "De percentages komen niet uit op 100%, de prognose herschaalt ze automatisch.",
@@ -1523,7 +1553,7 @@ const nl = {
     lidarViewWireframeOpacity: "Dekking van het draadmodel",
     localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
     localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen het gedefinieerde gebied vervangt deze bron elke nationale leverancier.",
-    localLidarToolsHint: "Een eigen raster nodig? De Helios-repository bevat Python-hulpmiddelen onder `tools/lidar/`, zie de README daar voor de volledige pipeline (installatie van de GDAL-systeembibliotheek, `uv`-setup, inspect / convert / synthetisch test-commando's).",
+    localLidarToolsHint: "Een eigen raster nodig? Het makkelijkst gaat dat via de begeleidende site [helios-lidar.org](https://helios-lidar.org): upload je ruwe LAZ / LAS-bestand of een DSM + DTM-paar, en je krijgt de 2-band COG terug die Helios leest (band 1 = nDSM, band 2 = DTM), samen met het kant-en-klare YAML-blok voor de onderstaande sleutels. Gratis, geen installatie, geen account. Wil je liever alles lokaal doen? Dan bevat de Helios-repository ook Python-helpers onder `tools/lidar/` voor dezelfde conversie.",
     localLidarEnabled: "Lokale data gebruiken",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min. breedtegraad",
@@ -1540,6 +1570,7 @@ const nl = {
 const pt = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a tua casa, em 3D e tempo real",
+  lidarViewChipLabel: "Vista LiDAR",
   detail: {
     exitHint: "Toca em qualquer lugar para sair",
     todayLabel: "Hoje",
@@ -1593,8 +1624,10 @@ const pt = {
     pvHint: "Opcional. Quando definido, surge uma pastilha perto da casa com a produção instantânea (calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
     pvEntity: "Entidade de produção",
     pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
-    pvPeakPower: "Potência de pico (kWp)",
-    pvPeakPowerHelp: "Potência de pico instalada do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada no gráfico PV e a saturação do fluxo PV → casa. Deixa vazio para ocultar a previsão; a produção observada e o pico do dia continuam visíveis.",
+    pvPeakPower: "Potência de pico total (kWp)",
+    pvPeakPowerHelp: "Potência de pico instalada total do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada e a saturação do fluxo PV → casa. Deixa vazio quando indicas uma potência de pico por string abaixo (o total é a soma). Sem nenhuma das duas, a previsão não é traçada; a produção observada e o pico do dia continuam visíveis.",
+    pvInverterMaxKw: "Potência máxima do inversor (kW)",
+    pvInverterMaxKwHelp: "Limite opcional na previsão. Define a potência AC nominal do teu inversor quando os painéis podem produzir mais do que o inversor entrega (combinação europeia típica: 6,4 kWp DC atrás de um inversor de 5 kW). Não afeta a observação (o inversor já limita por hardware), mas corta a curva prevista, os totais diários em kWh e os valores do tooltip para que a leitura nunca ultrapasse a realidade do hardware.",
     pvArraysSection: "Orientação dos painéis",
     pvArraysHelp: "Uma entrada por campo de painéis com a mesma orientação. Deixa uma única entrada com inclinação 0 para uma instalação plana. Acrescenta mais entradas quando os painéis estão repartidos por várias orientações (por exemplo uma fila a este e outra a oeste). A previsão é calculada por entrada e ponderada pela sua quota dos kWp totais.",
     pvArrayTitle: "Fileira {n}",
@@ -1603,6 +1636,8 @@ const pt = {
     pvArrayTilt: "Inclinação (°)",
     pvArrayAzimuth: "Azimute (°)",
     pvArrayShare: "Quota (%)",
+    pvArrayPeakKwp: "Potência de pico (kWp)",
+    pvArrayPeakKwpHelp: "Potência de pico instalada DESTA fileira em quilowatts-pico. Soma de todas as fileiras = kWp total; substitui o antigo campo global «Potência de pico» e a quota por fileira. Deixa vazio para voltar à ponderação por quota (caminho v1.6.2).",
     pvArrayAdd: "+ Adicionar fileira",
     pvArrayRemove: "Remover",
     pvArrayNormHint: "As quotas não somam 100 %, a previsão normaliza-as automaticamente.",
@@ -1679,7 +1714,7 @@ const pt = {
     lidarViewWireframeOpacity: "Opacidade da estrutura",
     localLidarSection: "Avançado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da área definida, esta fonte substitui qualquer fornecedor nacional.",
-    localLidarToolsHint: "Precisas de preparar um raster do zero? O repositório Helios inclui ferramentas Python em `tools/lidar/`, consulta o README dessa pasta para o pipeline completo (instalação do GDAL de sistema, configuração do `uv`, comandos de inspeção / conversão / teste sintético).",
+    localLidarToolsHint: "Precisas de preparar um raster do zero? A forma mais simples é o site complementar [helios-lidar.org](https://helios-lidar.org): envia o teu ficheiro LAZ / LAS bruto ou um par DSM + DTM e ele devolve o COG de 2 bandas que o Helios consome (banda 1 = nDSM, banda 2 = DTM) com o bloco YAML pronto para colar nas chaves abaixo. Grátis, sem instalação, sem conta. Se preferires fazer tudo localmente, o repositório Helios também inclui auxiliares Python em `tools/lidar/` para a mesma conversão.",
     localLidarEnabled: "Usar dados locais",
     localLidarUrl: "URL do GeoTIFF",
     localLidarMinLat: "Latitude mín.",
@@ -1696,6 +1731,7 @@ const pt = {
 const no = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid",
+  lidarViewChipLabel: "LiDAR-visning",
   detail: {
     exitHint: "Trykk hvor som helst for å gå ut",
     todayLabel: "I dag",
@@ -1749,8 +1785,10 @@ const no = {
     pvHint: "Valgfri. Når satt vises en chip nær huset med øyeblikkelig produksjon (beregnet over siste minutt), og en dedikert graf legges til over tidslinjen. Aksepterer enten en effektsensor (W/kW) eller en kumulativ energisensor (Wh/kWh).",
     pvEntity: "Produksjons-entitet",
     pvEntityHelp: "Velg en sensor for sol-effekt eller -energi (W, kW, Wh, kWh).",
-    pvPeakPower: "Toppeffekt (kWp)",
-    pvPeakPowerHelp: "Installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen i PV-grafen og strømningsmetningen for PV → hus-leaderen. La stå tom for å skjule prognosen; observert produksjon og dagens topp tegnes likevel.",
+    pvPeakPower: "Total toppeffekt (kWp)",
+    pvPeakPowerHelp: "Total installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen og strømningsmetningen for PV → hus-leaderen. La stå tom når du oppgir en toppeffekt per streng nedenfor (totalen er summen). Uten noen av delene tegnes ingen prognose; observert produksjon og dagens topp vises likevel.",
+    pvInverterMaxKw: "Maks vekselretter-effekt (kW)",
+    pvInverterMaxKwHelp: "Valgfri begrensning på prognosen. Sett inn vekselretterens nominelle AC-effekt når panelene kan produsere mer enn vekselretteren kan levere (typisk europeisk kombinasjon: 6,4 kWp DC bak en 5 kW vekselretter). Påvirker ikke observasjon (vekselretteren begrenser allerede i maskinvare), men kapper prognosekurven, daglige kWh-summer og tooltip-verdier slik at avlesningen aldri overstiger maskinvarens virkelighet.",
     pvArraysSection: "Panelorientering",
     pvArraysHelp: "Én oppføring per felt paneler med samme orientering. La én oppføring stå med helning 0 for en flat installasjon. Legg til flere oppføringer når panelene er fordelt på flere retninger (for eksempel en rad mot øst og en mot vest). Prognosen beregnes per oppføring og vektes etter prosenten av total kWp.",
     pvArrayTitle: "Rad {n}",
@@ -1759,6 +1797,8 @@ const no = {
     pvArrayTilt: "Helning (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Andel (%)",
+    pvArrayPeakKwp: "Toppeffekt (kWp)",
+    pvArrayPeakKwpHelp: "Installert toppeffekt for DENNE raden i kilowatt-peak. Sum over alle rader = total kWp; erstatter det gamle globale «Toppeffekt»-feltet og andelen per rad. La stå tom for å falle tilbake til andelsbasert vekting (v1.6.2-stien).",
     pvArrayAdd: "+ Legg til rad",
     pvArrayRemove: "Fjern",
     pvArrayNormHint: "Prosentene summerer ikke til 100 %, prognosen normaliserer dem automatisk.",
@@ -1835,7 +1875,7 @@ const no = {
     lidarViewWireframeOpacity: "Trådmodell-opasitet",
     localLidarSection: "Avansert — Lokal LiDAR (BYO)",
     localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.",
-    localLidarToolsHint: "Trenger du å lage et eget raster? Helios-repoet inneholder Python-verktøy under `tools/lidar/`, se README-en der for hele pipelinen (installasjon av system-GDAL, `uv`-oppsett, inspeksjons- / konverterings- / test-kommandoer).",
+    localLidarToolsHint: "Trenger du å lage et eget raster? Den enkleste veien er følgesettstedet [helios-lidar.org](https://helios-lidar.org): last opp den rå LAZ / LAS-filen din eller et DSM + DTM-par, så får du tilbake 2-bånds COG-en Helios leser (bånd 1 = nDSM, bånd 2 = DTM) sammen med den ferdige YAML-blokken for nøklene under. Gratis, ingen installasjon, ingen konto. Vil du heller gjøre alt lokalt, inneholder Helios-repoet også Python-hjelpere under `tools/lidar/` for samme konvertering.",
     localLidarEnabled: "Bruk lokale data",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min breddegrad",
@@ -2004,7 +2044,7 @@ const heliosCardStyles = i$3`
     .cloud-pct-label,
     .solar-svg,
     .solar-pct-label,
-    .solar-horizon-icon,
+    .pv-home-anchor-svg,
     .pv-home-leader-svg,
     .pv-pct-label,
     .battery-leader-svg,
@@ -2023,7 +2063,7 @@ const heliosCardStyles = i$3`
     ha-card.detail-active .cloud-pct-label,
     ha-card.detail-active .solar-svg,
     ha-card.detail-active .solar-pct-label,
-    ha-card.detail-active .solar-horizon-icon,
+    ha-card.detail-active .pv-home-anchor-svg,
     ha-card.detail-active .pv-home-leader-svg,
     ha-card.detail-active .pv-pct-label,
     ha-card.detail-active .battery-leader-svg,
@@ -2128,6 +2168,24 @@ const heliosCardStyles = i$3`
         opacity: 0;
         transform: translateY(8px);
         animation: dash-card-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        /*  position: relative so the card can take a z-index when
+            its tooltip is being hovered (see below). At rest the
+            z-index stays auto so no stacking context is created.  */
+        position: relative;
+    }
+    /*  Card lift on tooltip hover. When the user's cursor is on a
+        chip with a popover tooltip (.dash-stat-delta or .dash-stat-
+        refined), the whole card jumps to z-index 20 so the tooltip,
+        which sits at z-index 10 INSIDE the card's stacking context,
+        paints above sibling cards in the same row. Without this the
+        adjacent battery card naturally paints later in DOM order and
+        clips the tooltip. The :has() selector targets the actual
+        hover on either tooltip trigger, so the lift only happens
+        when the popover is actually visible.                       */
+    .dash-card:has(.dash-stat-delta:hover),
+    .dash-card:has(.dash-stat-refined:hover)
+    {
+        z-index: 20;
     }
     /*  Staggered reveal: today first, then the tomorrow + battery
         row appears with a single shared delay. Tomorrow + battery
@@ -2138,7 +2196,14 @@ const heliosCardStyles = i$3`
     .dash-card.dash-battery  { animation-delay: 0.18s; }
     @keyframes dash-card-in
     {
-        to { opacity: 1; transform: translateY(0); }
+        /*  End on transform:none, not translateY(0). A non-none
+            transform value creates a new stacking context, which
+            would trap the calibration-hint tooltip on the tomorrow
+            card inside its own card and let the battery card next
+            to it paint OVER the tooltip. The none value releases
+            stacking context once the entry animation finishes so
+            the tooltip z-index can paint above sibling cards.     */
+        to { opacity: 1; transform: none; }
     }
 
     ha-card.theme-dark .dash-card
@@ -2577,29 +2642,40 @@ const heliosCardStyles = i$3`
         of the chart for each. The zero-length dash + round cap
         renders as discrete dots, more discreet than the now
         cursor's continuous dashes.                              */
-    .dash-today-chart-twilight
+    /*  Diagonal night-zone hatch lines, painted inside the
+        SVG pattern block referenced by the pre-dawn + post-dusk
+        rects. Same alpha + light-on-dark recipe the timeline's
+        .hc-night-zone uses, just expressed as an SVG stroke
+        because the dashboard chart lives inside an SVG. Stroke
+        width is tuned for the chart's native size (~240×60 px)
+        so the dots read as a soft diagonal grain.                */
+    .dash-today-chart-night
     {
-        stroke-width: 1;
-        stroke-dasharray: 0 3;
-        stroke-linecap: round;
-        vector-effect: non-scaling-stroke;
-        opacity: 0.55;
+        stroke: rgba(0, 0, 0, 0.07);
         pointer-events: none;
     }
-    .dash-today-chart-twilight-icon
+    ha-card.theme-dark .dash-today-chart-night
     {
-        position: absolute;
-        /*  Anchored to the top of the chart so the icons read as
-            flags capping their dotted lines, rather than buried in
-            the bottom axis-label gutter. Sits in the top padding
-            zone (PAD_T = 12 viewBox units) so it never overlaps
-            the curves' data area.                                */
-        top: 4px;
-        transform: translateX(-50%);
-        --mdc-icon-size: 18px;
-        opacity: 0.95;
+        stroke: rgba(255, 255, 255, 0.10);
+    }
+
+    /*  Dotted day/night boundary lines at the sunrise and sunset
+        X positions. Same recipe as the timeline's day-separator
+        (.hc-day-sep) so the visual language matches: alpha 0.30,
+        1.5 / 2.5 dash, non-scaling stroke. The hatch tells the
+        user "this slice is night"; the dotted line marks the exact
+        moment the sun crossed the horizon.                         */
+    .dash-today-chart-twilight
+    {
+        stroke: rgba(0, 0, 0, 0.30);
+        stroke-width: 1;
+        stroke-dasharray: 1.5 2.5;
+        vector-effect: non-scaling-stroke;
         pointer-events: none;
-        z-index: 2;
+    }
+    ha-card.theme-dark .dash-today-chart-twilight
+    {
+        stroke: rgba(255, 255, 255, 0.30);
     }
     .dash-today-chart-hover-line
     {
@@ -2872,7 +2948,13 @@ const heliosCardStyles = i$3`
     .time-bar
     {
         position: absolute;
-        bottom: 8px;
+        /*  Bottom inset matches the time-bar's internal flex gap.
+            With the day-label chip row pinned as the last flex
+            child, an equal inset above (gap to the chart card) and
+            below (gap to the card edge) centres the chip row in
+            the band between the chart card's bottom edge and the
+            card's bottom edge.                                       */
+        bottom: 6px;
         /*  Width is derived from --timeline-width-frac (0.5..1, set
             inline by the renderer). At 1 the bar hugs the card edges
             with the original 8 px breathing on each side. Below 1 it
@@ -2909,7 +2991,7 @@ const heliosCardStyles = i$3`
         border: 1px solid #000000;
         border-radius: 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        height: 64px;
+        height: 48px;
         overflow: hidden;
     }
 
@@ -2921,11 +3003,16 @@ const heliosCardStyles = i$3`
     }
 
     /*  Stroke-only outline on top of the filled area so peaks read
-        cleanly even where the gradient fades towards the midline. */
+        cleanly even where the gradient fades towards the midline.
+        Stroke width 0.7 px (down from the v1.6.2 default 1.4 px)
+        so the curve reads as a hairline trace; on high-variation
+        days the previous 1.0 px ribbon stacked over itself on
+        every wobble and turned the dense regions into a smudged
+        band. At 0.7 px the curve stays a line at any zoom.        */
     .hc-chart-line
     {
         fill: none;
-        stroke-width: 1.4;
+        stroke-width: 0.7;
         stroke-linejoin: round;
         stroke-linecap: round;
         vector-effect: non-scaling-stroke;
@@ -2977,17 +3064,19 @@ const heliosCardStyles = i$3`
         pointer-events: none;
     }
 
-    /*  Live cursor: thin discreet line spanning the full chart with
-        a small triangle handle at the top. Stays subtle on purpose,
-        the user is in live mode, the cursor is a passive "where now
-        is on the timeline" reference, not a focus target. */
+    /*  Live cursor: thin line spanning the full chart with a small
+        triangle handle at the top. Slightly wider + a hair more
+        opaque than earlier iterations so it stays readable through
+        the future-mask wash that paints on top of half the chart.
+        Still kept subtle: it's a passive "where now is" reference,
+        not a focus target. */
     .tb-cursor-now
     {
         position: absolute;
         top: 0;
         bottom: 0;
-        width: 1px;
-        background: rgba(0, 0, 0, 0.45);
+        width: 2px;
+        background: rgba(0, 0, 0, 0.65);
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
@@ -3002,9 +3091,9 @@ const heliosCardStyles = i$3`
         transform: translateX(-50%);
         width: 0;
         height: 0;
-        border-left:   3px solid transparent;
-        border-right:  3px solid transparent;
-        border-top:    4px solid rgba(0, 0, 0, 0.55);
+        border-left:   4px solid transparent;
+        border-right:  4px solid transparent;
+        border-top:    5px solid rgba(0, 0, 0, 0.75);
     }
 
     /*  Scrub cursor: prominent solid blue line spanning the full
@@ -3041,70 +3130,300 @@ const heliosCardStyles = i$3`
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
     }
 
-    /*  Day labels, small white chips overlaying the chart midline.
-        Same chip language as the on-map cloud and W/m² readouts. */
-    .tb-day-labels
+    /*  Hover guide line, drawn vertically across the chart at
+        the pointer's X. Same dotted recipe as the day-separator
+        lines but a touch more opaque so it reads as "interactive
+        focus" rather than ambient structure.                       */
+    .hc-hover-guide
+    {
+        stroke: rgba(0, 0, 0, 0.55);
+        stroke-width: 1;
+        stroke-dasharray: 2 2;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .hc-hover-guide { stroke: rgba(255, 255, 255, 0.65); }
+
+    /*  Per-curve hover dot, anchored at the interpolated Y of
+        each series. Stroked in card colour so the dot stays
+        legible whether it lands on a filled area or on the
+        background.                                                  */
+    .hc-hover-dot
+    {
+        stroke: #ffffff;
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    ha-card.theme-dark .hc-hover-dot { stroke: rgba(20, 20, 20, 0.95); }
+
+    /*  Hover tooltip chip, sits above the chart-card stack
+        inside the time-bar. White chip with the same border +
+        shadow recipe as the .clock and .lidar-view chips so the
+        whole timeline reads as one chip family.                    */
+    .tb-hover-tooltip
     {
         position: absolute;
-        inset: 0;
+        bottom: 100%;
+        margin-bottom: 4px;
+        transform: translateX(-50%);
+        background: #ffffff;
+        color: #000000;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        padding: 4px 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size: 11px;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 30;
+    }
+
+    .tb-hover-tooltip-time
+    {
+        font-weight: 600;
+        margin-bottom: 3px;
+        text-align: center;
+    }
+
+    .tb-hover-tooltip-row
+    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .tb-hover-tooltip-icon
+    {
+        --mdc-icon-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        flex-shrink: 0;
+        line-height: 1;
+    }
+
+    .tb-hover-tooltip-value
+    {
+        flex: 1;
+        text-align: right;
+    }
+
+    ha-card.theme-dark .tb-hover-tooltip
+    {
+        background: rgba(30, 30, 30, 0.95);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.85);
+    }
+
+
+    /*  Night-zone overlays. One absolutely-positioned div per
+        sunset, next sunrise window, inserted as a sibling of the
+        chart SVG inside the chart card. CSS diagonal hatching
+        sits on top of the curves but below the live + scrub
+        cursors (z-index 4), so dusk and dawn read as "this slice
+        is night" without obscuring the curve shape underneath.
+        Repeating linear gradients render at the device pixel grid
+        regardless of the chart SVG's preserveAspectRatio=none, so
+        the stripes stay diagonal across any card width.            */
+    /*  Future-mask wash, sits on top of the curves and night zones
+        and stretches from "now" to the right edge of the card. The
+        wash uses the card background colour at moderate alpha so it
+        lightens the curves AND the night-zone hatches in a single
+        pass without redoubling on overlapping regions. Cursors sit
+        at z-index 4 and stay fully opaque.                          */
+    .hc-future-mask
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        pointer-events: none;
+        z-index: 3;
+        background: rgba(255, 255, 255, 0.55);
+    }
+    ha-card.theme-dark .hc-future-mask
+    {
+        background: rgba(20, 20, 22, 0.55);
+    }
+
+
+    .hc-night-zone
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        pointer-events: none;
+        z-index: 3;
+        /*  Hatch + sunset/sunrise edges share the exact same RGBA
+            (rgba(0, 0, 0, 0.07) light, rgba(255, 255, 255, 0.10)
+            dark) so the boundary line reads as the densest part of
+            the same hatch rather than as a separate marker. Alpha
+            dropped relative to earlier iterations: too much density
+            obscured the curves the user came to read.              */
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(0, 0, 0, 0.04) 0,
+            rgba(0, 0, 0, 0.04) 1.5px,
+            transparent       1.5px,
+            transparent       6px
+        );
+        box-shadow: inset  1px 0 0 0 rgba(0, 0, 0, 0.04),
+                    inset -1px 0 0 0 rgba(0, 0, 0, 0.04);
+    }
+    ha-card.theme-dark .hc-night-zone
+    {
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.06) 0,
+            rgba(255, 255, 255, 0.06) 1.5px,
+            transparent              1.5px,
+            transparent              6px
+        );
+        box-shadow: inset  1px 0 0 0 rgba(255, 255, 255, 0.06),
+                    inset -1px 0 0 0 rgba(255, 255, 255, 0.06);
+    }
+
+
+    /*  Day strip: a single bordered bar spanning the full timeline
+        width, with one centred label per visible day and a 1 px
+        vertical separator at every midnight boundary between two
+        adjacent days. Same border + radius + shadow recipe as the
+        chart cards above so the timeline stack reads as one
+        composed instrument.                                        */
+    .tb-day-strip
+    {
+        position: relative;
+        height: 22px;
+        background: #ffffff;
+        border: 1px solid #000000;
+        border-radius: 3px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
         pointer-events: none;
     }
 
-    .tb-day-label
+    .tb-day-strip-cell
     {
         position: absolute;
-        top: 50%;
-        transform: translate(-50%, -50%);
+        top: 0;
+        bottom: 0;
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px;
-        padding: 1px 5px;
-        font-size:    9px;
-        font-weight:  600;
-        line-height:  1.2;
+        justify-content: center;
+        gap: 5px;
+        padding: 0 4px;
+        box-sizing: border-box;
+        color: #000000;
+        line-height: 1.2;
         letter-spacing: 0.2px;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
+        text-overflow: clip;
         z-index: 2;
+        /*  Each cell is its own size container; the date + kWh
+            children scale + collapse using cqw / @container queries
+            so the text adapts to whatever horizontal real-estate
+            the visible time range gives the day (a 4-day window on
+            a narrow phone leaves ~25 % of the timeline per cell;
+            a 1-day window leaves the whole strip). Falls back to
+            the static font-size + display rules below on engines
+            without container-query support.                        */
+        container-type: inline-size;
+        container-name: tb-day-strip-cell;
     }
 
-    .tb-day-label-today
+    /*  Both the date and the kWh scale down with the cell width
+        via cqw (1 % of container inline size). The date sits at
+        a slightly bigger clamp than the kWh so the primary label
+        gets the visual weight; the kWh stays demoted as a
+        contextual annotation. Font weight is intentionally NOT
+        set here so it inherits from the cell (which gets is-today
+        bumped to 800) and from the per-element overrides further
+        down (.tb-day-strip-kwh keeps its lighter 500 weight +
+        opacity recipe).                                            */
+    .tb-day-strip-date
+    {
+        font-size: clamp(9px, 11cqw, 13px);
+    }
+    .tb-day-strip-kwh
+    {
+        font-size: clamp(7px, 9cqw, 11px);
+    }
+
+    .tb-day-strip-cell
+    {
+        font-weight: 600;
+    }
+    .tb-day-strip-cell.is-today
     {
         font-weight: 800;
     }
 
-    /*  Daily kWh total appended next to the date. Lighter weight +
-        smaller separator dot so the date stays the primary read.
-        Forecast variant (today's remainder + future days) is
-        italicised so the user can tell observation from estimate
-        at a glance, same convention the PV chip uses for predicted
-        values. */
-    .tb-day-label-kwh
+    /*  Last-resort fallback: a really cramped cell (4-day window on
+        a sub-300 px card) drops the kWh so the date stays the
+        single anchor visible. The clamp() above keeps the kWh
+        visible on every reasonable layout including a 4-day view
+        on a 700 px desktop card.                                   */
+    @container tb-day-strip-cell (max-width: 55px)
+    {
+        .tb-day-strip-kwh { display: none; }
+    }
+
+    /*  Vertical separator at each between-day boundary. Dotted
+        1 px line matching the chart's own day separators
+        (.hc-day-sep: stroke 0.30 alpha, dasharray 1.5 / 2.5), so
+        the strip extends the same visual language as the cards
+        above it. No separator at the outer edges since the strip
+        border already closes the line there.                       */
+    .tb-day-strip-sep
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        z-index: 1;
+        background-image: repeating-linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.30) 0,
+            rgba(0, 0, 0, 0.30) 1.5px,
+            transparent       1.5px,
+            transparent       4px
+        );
+    }
+
+    /*  Daily kWh total, sits next to the date label in the same
+        cell. Same lighter weight + opacity recipe as the previous
+        chip layout so the date stays the primary read; forecast
+        days italicise to flag "estimate, not observation".         */
+    .tb-day-strip-kwh
     {
         font-weight: 500;
         opacity: 0.75;
     }
-    .tb-day-label-kwh::before
+    .tb-day-strip-kwh::before
     {
         content: "·";
         margin-right: 4px;
         opacity: 0.5;
     }
-    .tb-day-label-kwh.is-forecast
+    .tb-day-strip-kwh.is-forecast
     {
         font-style: italic;
     }
 
-    /*  Optional PV graph card stacked above the main chart. Half
-        the main height so the irradiance and PV areas balance. */
+    /*  Optional PV graph card stacked above the main chart. Same
+        height as the main chart so the two cards form a balanced
+        stack: production sits on top, irradiance + cloud cover
+        underneath, neither dominating the other. The combined
+        block keeps the same total vertical footprint the previous
+        (32 px PV + 64 px main) layout occupied. */
     .tb-pv-card
     {
-        height: 32px;
+        height: 48px;
     }
 
 
@@ -3156,27 +3475,35 @@ const heliosCardStyles = i$3`
         column. Sized to mirror the .clock chip on the left so the
         two corners read as a symmetric pair. Stays at fixed width
         when toggled on/off so neighbour chips don't jump. */
-    .lidar-view-btn
+    /*  Passive "LiDAR" status chip on the top-right rail, mirror of
+        the .clock chip on the top-left. Same recipe: 12 px Roboto
+        600, line-height 1.2, padding 2 px 8 px, 22 px tall, mixed-
+        case label so the baseline metrics are unambiguous across
+        Chromium / Firefox / WebKit.
+
+        The chip is purely visual; the click action lives on the
+        adjacent .lidar-view-toggle-btn. The .overlay-top-right rail
+        uses flex-direction: row-reverse so the DOM order
+        (button, then chip) renders visually as (chip, then button):
+        chip sits on the LEFT and the button on the RIGHT. The chip
+        therefore keeps its LEFT corners rounded and squares its
+        RIGHT corners, and lets the button drop its left border so
+        the chip's right border becomes the shared seam.            */
+    .lidar-view-chip
     {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        /*  Text-only "LiDAR" chip on the top-right rail. Layout
-            mirrors the .clock chip on the opposite rail exactly
-            (12 px Roboto 600, line-height 1.2, padding 2px 8px,
-            22 px tall) since that recipe centres consistently on
-            Chromium, Firefox and WebKit. Mixed-case "LiDAR" (no
-            text-transform) keeps the lowercase 'i' as an ascender
-            and the rest as cap-height + x-height letters, so the
-            baseline metrics are unambiguous, no engine-dependent
-            uppercase asymmetry to fight.                          */
         height: 22px;
         box-sizing: border-box;
         padding: 2px 8px;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
-        border-radius: 3px;
+        /*  Rounded LEFT corners only: the chip is on the LEFT of
+            the cluster, the right edge is the shared seam with the
+            toggle button and must stay square. */
+        border-radius: 3px 0 0 3px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
         font-size:   12px;
@@ -3184,40 +3511,104 @@ const heliosCardStyles = i$3`
         line-height: 1.2;
         white-space: nowrap;
         cursor: pointer;
-        /*  Force full opacity at every state except :disabled (which
-            sets its own 0.35 for the visual "not available" hint).
-            The transition only covers background + color so a state
-            change (active / inactive) doesn't briefly pass through a
-            translucent state. */
-        opacity: 1;
-        transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-        /*  The parent .overlay-top-right rail has pointer-events: none
-            (so the rail itself never steals map interactions when
-            empty). The button has to opt back in explicitly so its
-            click reaches the @click handler, mirroring what
-            .clock / .live-return-btn do on the opposite (top-left)
-            rail. Without this the button visually renders enabled but
-            ignores every click.
-
-            z-index: 50 puts the button above the LiDAR View canvas
-            overlay (z 30) so the toggle stays clickable while the
-            View is open, otherwise the canvas would swallow the
-            click that exits the mode. */
         pointer-events: auto;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
         position: relative;
         z-index: 50;
     }
-    .lidar-view-btn:disabled
+    .lidar-view-chip:hover  { background: #f2f2f2; }
+    .lidar-view-chip:active { background: #e6e6e6; }
+    .lidar-view-chip.is-uncovered
     {
         opacity: 0.35;
         cursor: not-allowed;
     }
-    .lidar-view-btn.is-on
+    .lidar-view-chip.is-uncovered:hover  { background: #ffffff; }
+    .lidar-view-chip.is-uncovered:active { background: #ffffff; }
+    .lidar-view-chip.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .lidar-view-chip.is-on:active { background: rgba(20, 78, 168, 0.95); }
+
+    /*  LiDAR-view toggle button, sits to the RIGHT of the .lidar-
+        view-chip (the .overlay-top-right rail uses row-reverse so
+        the DOM-first button ends up on the right). Fuses with the
+        chip via a shared seam (no border between them). Mirror of
+        the .live-return-btn on the top-left rail; same 22 x 22
+        square, same 12 px icon, same scrub-blue theme on activation,
+        just flipped to the right side.
+
+        Three coverage states, set inline by the renderer:
+          .is-uncovered  no LiDAR provider matches the home, the
+                         button is :disabled and inert
+          .is-online     a public WCS / WMS provider covers the
+                         home, the button toggles LiDAR view
+          .is-local      a BYO local-nDSM raster is configured AND
+                         covers the home, the button toggles LiDAR
+                         view; the harddisk glyph signals the user
+                         is on their own data
+        On activation (.is-on, set when _lidarViewMode is true) the
+        button + chip pair take the same scrub-blue plate the clock
+        chip + back-to-live pair uses when scrubbing the timeline.   */
+    .lidar-view-toggle-btn
     {
-        background: #1f6feb;
-        color: #ffffff;
-        border-color: #1f6feb;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  22px;
+        height: 22px;
+        box-sizing: border-box;
+        padding: 0;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        /*  Rounded RIGHT corners only + dropped left border: the
+            button sits on the RIGHT of the cluster, the left edge
+            is the shared seam and the chip's right border is what
+            the user sees there. */
+        border-radius: 0 3px 3px 0;
+        border-left: 0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        cursor: pointer;
+        pointer-events: auto;
+        position: relative;
+        z-index: 50;
+        opacity: 1;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
+    .lidar-view-toggle-btn:hover  { background: #f2f2f2; }
+    .lidar-view-toggle-btn:active { background: #e6e6e6; }
+    .lidar-view-toggle-btn ha-icon
+    {
+        --mdc-icon-size: 12px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    /*  Uncovered state: disabled, faded, no hover effect. The chip
+        next to it stays at full opacity, the user still reads
+        "LiDAR" but the button glyph reads "not available here". */
+    .lidar-view-toggle-btn.is-uncovered
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .lidar-view-toggle-btn.is-uncovered:hover  { background: #ffffff; }
+    .lidar-view-toggle-btn.is-uncovered:active { background: #ffffff; }
+
+    /*  Active state: both halves of the cluster flip to the same
+        scrub-blue plate as .clock.is-scrub + .live-return-btn on
+        the opposite rail. The pair reads as one continuous blue
+        control while LiDAR view is open, which is the visual
+        signal that the user is in a non-default mode.              */
+    .lidar-view-toggle-btn.is-on,
+    .lidar-view-chip.is-on
+    {
+        background: rgba(31, 111, 235, 0.95);
+        color: #ffffff;
+        border-color: rgba(20, 78, 168, 0.95);
+    }
+    .lidar-view-toggle-btn.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .lidar-view-toggle-btn.is-on:active { background: rgba(20, 78, 168, 0.95); }
 
 
     /*  When LiDAR View is active, fade out every overlay layer so
@@ -3238,10 +3629,10 @@ const heliosCardStyles = i$3`
     ha-card.lidar-view-active .time-bar,
     ha-card.lidar-view-active .solar-svg,
     ha-card.lidar-view-active .solar-pct-label,
-    ha-card.lidar-view-active .solar-horizon-icon,
     ha-card.lidar-view-active .cloud-svg,
     ha-card.lidar-view-active .cloud-leader-svg,
     ha-card.lidar-view-active .cloud-pct-label,
+    ha-card.lidar-view-active .pv-home-anchor-svg,
     ha-card.lidar-view-active .pv-home-leader-svg,
     ha-card.lidar-view-active .pv-pct-label,
     ha-card.lidar-view-active .battery-leader-svg,
@@ -3258,10 +3649,11 @@ const heliosCardStyles = i$3`
     }
 
 
-    /*  Top corner overlays. Date/time chip on the left; back-to-live
-        + LiDAR busy chip column on the right. Both rails sit 8 px
-        from the card edge so they read as a paired pair anchored
-        to the frame, mirroring the timeline's edge margin. */
+    /*  Top corner overlays. Date/time + scrub-return cluster on the
+        left; LiDAR-view toggle + "LiDAR" status chip on the right.
+        Both rails are flex rows sitting 8 px from their card edge,
+        each one fusing two elements (chip + adjacent button) into
+        a single composite control via shared seams.                */
 
     /*  Date/time chip, same chip language as the on-map readouts.
         Explicit height (border-box) so the chip and the back-to-
@@ -3366,19 +3758,21 @@ const heliosCardStyles = i$3`
         align-items: center;
     }
 
-    /*  Top-right overlay rail. Hosts the LiDAR View toggle button.
-        Mirrors the clock's top spacing on the opposite edge so the
-        two overlays sit at the same height.
+    /*  Top-right overlay rail. Hosts the LiDAR-view toggle button
+        fused with the passive LiDAR status chip, mirror of the
+        top-left clock + scrub-return pair. Mirrors the clock's
+        top spacing on the opposite edge so the two overlays sit
+        at the same height; flex-direction: row-reverse keeps the
+        chip on the right edge of the screen with the toggle
+        button to its left, mirroring the clock-on-the-left + back
+        -to-live-on-its-right pattern on the opposite rail.
 
-        z-index: 60 puts the rail (and therefore the button) above
-        the LiDAR View canvas (z 30) AND above the centre spinner
-        (z 50), so the toggle is always reachable. Pointer events
-        off on the rail itself so the empty rail never steals map
-        interactions; the button opts back in (.lidar-view-btn has
-        its own pointer-events: auto). Stacking contexts: because
-        we set z-index on this absolute container, children's own
-        z-index values are scoped to this rail; the rail's z-index
-        is the one that competes with siblings in ha-card. */
+        z-index: 60 puts the rail (and therefore both halves of
+        the cluster) above the LiDAR View canvas (z 30) AND above
+        the centre spinner (z 50), so the toggle is always
+        reachable. Pointer events off on the rail itself so the
+        empty rail never steals map interactions; the toggle
+        button opts back in via .lidar-view-toggle-btn rules. */
     .overlay-top-right
     {
         position: absolute;
@@ -3386,8 +3780,8 @@ const heliosCardStyles = i$3`
         right: 8px;
         z-index: 60;
         display: flex;
-        flex-direction: column;
-        gap: 6px;
+        flex-direction: row-reverse;
+        align-items: center;
         pointer-events: none;
     }
 
@@ -3619,6 +4013,50 @@ const heliosCardStyles = i$3`
         stroke-opacity: 0.95;
     }
 
+    /*  PV home-anchor ring host SVG. Sits below every chip cluster
+        + leader line (z-index 1) but above the MapLibre canvas
+        (z-index 0), and below the home-glow silhouette (z-index 11)
+        so the projected building paints OVER the back half of the
+        ring. The eye reads the ring as a ground footprint the
+        building stands inside, which is what the perspective
+        projection promises geometrically.                           */
+    .pv-home-anchor-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    /*  PV home-anchor ring, drawn as a stroked polygon projected
+        through the map's perspective so it sits flat on the ground
+        around the home (an ellipse aplated by the camera pitch +
+        rotated by the camera bearing). Stroked rather than filled
+        so the home silhouette stays visible inside the ring. The
+        translate-to-home transform lives on the wrapping <g>; the
+        polygon points themselves are coordinates relative to
+        (0, 0), which lets the pulse animation scale the polygon
+        around the home centre by simply scaling the group around
+        its local origin.                                            */
+    .pv-home-leader-anchor       { transform-origin: 0 0; }
+    .pv-home-leader-anchor-disc
+    {
+        transform-origin: 0 0;
+        vector-effect: non-scaling-stroke;
+    }
+    .pv-home-leader-anchor.is-pulsing .pv-home-leader-anchor-disc
+    {
+        animation: pv-home-anchor-pulse var(--pv-flow-duration, 2s) ease-in-out infinite;
+    }
+    @keyframes pv-home-anchor-pulse
+    {
+        0%, 80% { transform: scale(1); }
+        92%     { transform: scale(1.55); }
+        100%    { transform: scale(1); }
+    }
+
 
     /*  Battery leaders.
         Both SoC ↔ PV and PV ↔ Power share the exact same visual
@@ -3761,30 +4199,28 @@ const heliosCardStyles = i$3`
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
-    /*  Sunrise / sunset markers. ha-icon glyphs (mdi:weather-sunset-up
-        / -down) centred on the horizon crossings of the day's solar
-        arc, coloured in the configured sun colour via inline style.
-        The icon shape itself communicates "rising" vs "setting" so
-        no label or rotation is needed. */
-    .solar-horizon-icon
-    {
-        position: absolute;
-        transform: translate(-50%, -50%);
-        --mdc-icon-size: 18px;
-        pointer-events: none;
-        z-index: 6;
-        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
-    }
+    /*  Sunrise / sunset markers used to live here as ha-icon
+        glyphs anchored to the arc's horizon crossings. Removed in
+        v1.6.3 ; the arc shape itself reads as "sunrise / sunset".  */
 
 
     /*  Below-horizon segments, round dots at fixed spacing so the
         eye reads "this is happening underground" without colour or
         depth scaling having to carry the signal. dasharray "0 N"
-        with linecap round renders true circles on every browser. */
+        with linecap round renders true circles on every browser.
+        Stroke alpha is halved relative to the above-horizon arc
+        so the dotted leg recedes visually: the user reads the
+        bright arc as "the part of the day where there's sunlight"
+        and the dotted leg as ambient context underneath.            */
     .solar-svg .solar-arc-night
     {
         stroke-linecap: round;
         stroke-dasharray: 0 8;
+        stroke-opacity: 0.45;
+    }
+    .solar-svg .solar-arc-night.solar-arc-outline
+    {
+        stroke-opacity: 0.25;
     }
 
     /*  Incidence ray, dashes flow from the sun toward the home at
@@ -3900,7 +4336,7 @@ const heliosCardStyles = i$3`
 
     ha-card.theme-dark .tb-cursor-now
     {
-        background: rgba(255, 255, 255, 0.55);
+        background: rgba(255, 255, 255, 0.75);
     }
 
     ha-card.theme-dark .tb-cursor-now::after
@@ -3914,11 +4350,12 @@ const heliosCardStyles = i$3`
         they get the same dark override. */
     ha-card.theme-dark .clock,
     ha-card.theme-dark .tl-live-btn,
-    ha-card.theme-dark .tb-day-label,
+    ha-card.theme-dark .tb-day-strip,
     ha-card.theme-dark .cloud-pct-label,
     ha-card.theme-dark .solar-pct-label,
     ha-card.theme-dark .map-btn:not(.map-btn-on),
-    ha-card.theme-dark .lidar-view-btn:not(.is-on)
+    ha-card.theme-dark .lidar-view-chip:not(.is-on),
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -3933,16 +4370,32 @@ const heliosCardStyles = i$3`
         border-color: rgba(255, 255, 255, 0.20);
     }
 
-    ha-card.theme-dark .tb-day-label
+    /*  Day-strip dark-mode tweaks: text inside the cells switches
+        to the same pale ink the rest of the dark chips use, and
+        the vertical separators between days take the same border
+        alpha as the chip frame so the strip reads as one cohesive
+        component in either theme.                                 */
+    ha-card.theme-dark .tb-day-strip
     {
         background: #1f2021;
+    }
+    ha-card.theme-dark .tb-day-strip-cell { color: #e6e6e6; }
+    ha-card.theme-dark .tb-day-strip-sep
+    {
+        background-image: repeating-linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.30) 0,
+            rgba(255, 255, 255, 0.30) 1.5px,
+            transparent              1.5px,
+            transparent              4px
+        );
     }
 
     ha-card.theme-dark .tl-live-btn ha-icon,
     ha-card.theme-dark .cloud-pct-label ha-icon,
     ha-card.theme-dark .solar-pct-label ha-icon,
     ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
-    ha-card.theme-dark .lidar-view-btn:not(.is-on) ha-icon
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon
     {
         color: #e6e6e6;
     }
@@ -4092,11 +4545,11 @@ function formatDate(d2, rawFormat) {
     return tok;
   });
 }
-const NOCT_CELL_C = 45;
+const NOCT_CELL_C = 44;
 const NOCT_IRRADIANCE = 800;
 const NOCT_AIR_REF_C = 20;
 const WIND_COOLING_K = 1.5;
-const GAMMA_PMP_PER_C = -4e-3;
+const GAMMA_PMP_PER_C = -35e-4;
 const STC_REF_C = 25;
 function cellTemperatureC(airTempC, ghiWm2, windMs) {
   if (!isFinite(airTempC)) return NaN;
@@ -4183,7 +4636,7 @@ function computeIrradianceWm2(date, lat, lon, cloudCoverPct) {
 }
 const D = Math.PI / 180;
 const M_PER_DEG_LAT$2 = 111320;
-function sampleNdsmAt(raster, lon, lat) {
+function bilinearSample(band, raster, lon, lat) {
   if (lon <= raster.minLon || lon >= raster.maxLon) return null;
   if (lat <= raster.minLat || lat >= raster.maxLat) return null;
   const N2 = raster.rasterSize;
@@ -4194,16 +4647,23 @@ function sampleNdsmAt(raster, lon, lat) {
   const ix = Math.floor(x2);
   const iy = Math.floor(y3);
   if (ix < 0 || ix >= N2 - 1 || iy < 0 || iy >= N2 - 1) return null;
-  const h00 = raster.heights[iy * N2 + ix];
-  const h10 = raster.heights[iy * N2 + ix + 1];
-  const h01 = raster.heights[(iy + 1) * N2 + ix];
-  const h11 = raster.heights[(iy + 1) * N2 + ix + 1];
+  const h00 = band[iy * N2 + ix];
+  const h10 = band[iy * N2 + ix + 1];
+  const h01 = band[(iy + 1) * N2 + ix];
+  const h11 = band[(iy + 1) * N2 + ix + 1];
   if (!isFinite(h00) || !isFinite(h10) || !isFinite(h01) || !isFinite(h11)) return null;
   const dx = x2 - ix;
   const dy = y3 - iy;
   const top = h00 * (1 - dx) + h10 * dx;
   const bot = h01 * (1 - dx) + h11 * dx;
   return top * (1 - dy) + bot * dy;
+}
+function sampleNdsmAt(raster, lon, lat) {
+  return bilinearSample(raster.heights, raster, lon, lat);
+}
+function sampleDtmAt(raster, lon, lat) {
+  if (!raster.terrain) return null;
+  return bilinearSample(raster.terrain, raster, lon, lat);
 }
 function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg, sunAzimuthDeg, stepM = 2, maxDistM = 200) {
   if (!raster) return false;
@@ -4216,13 +4676,21 @@ function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg,
   const mPerDegLon = M_PER_DEG_LAT$2 * Math.cos(panelLat * D);
   const dLatPerM = dyM / M_PER_DEG_LAT$2;
   const dLonPerM = dxM / mPerDegLon;
+  const panelDtm = sampleDtmAt(raster, panelLon, panelLat);
   for (let d2 = stepM; d2 <= maxDistM; d2 += stepM) {
     const lat = panelLat + dLatPerM * d2;
     const lon = panelLon + dLonPerM * d2;
-    const groundHeight = sampleNdsmAt(raster, lon, lat);
-    if (groundHeight === null) continue;
-    const rayHeight = panelHeightM + d2 * tanAlt;
-    if (groundHeight > rayHeight) return true;
+    const obstacleAboveGround = sampleNdsmAt(raster, lon, lat);
+    if (obstacleAboveGround === null) continue;
+    let relGround = 0;
+    if (panelDtm !== null) {
+      const sampleDtm = sampleDtmAt(raster, lon, lat);
+      if (sampleDtm === null) continue;
+      relGround = sampleDtm - panelDtm;
+    }
+    const obstacleZ = relGround + obstacleAboveGround;
+    const rayZ = panelHeightM + d2 * tanAlt;
+    if (obstacleZ > rayZ) return true;
   }
   return false;
 }
@@ -4393,7 +4861,7 @@ function pvRateAtTime(host, time) {
     idx = 0;
   }
   if (!isCumulative) {
-    return { value: hist.values[idx], unit: u2 };
+    return { value: Math.max(0, hist.values[idx]), unit: u2 };
   }
   let lo = idx;
   let hi = idx + 1 < hist.times.length ? idx + 1 : idx;
@@ -4437,7 +4905,7 @@ function currentPvRate(host) {
     isCumulative = lu === "wh" || lu === "kwh" || lu === "mwh";
   }
   if (!isCumulative) {
-    return { value: host._pvCurrent, unit: u2 };
+    return { value: Math.max(0, host._pvCurrent), unit: u2 };
   }
   let rateUnit;
   if (lu === "wh") rateUnit = "W";
@@ -4493,10 +4961,23 @@ function pvNormalizeToWatts(value, unit) {
   return 0;
 }
 function pvCalibK(config) {
-  const raw2 = config?.["pv-peak-kwp"];
-  const kwp = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-  if (!isFinite(kwp) || kwp <= 0) return null;
+  const arraysTotal = pvArrays(config).totalKwp;
+  let kwp;
+  if (arraysTotal > 0) {
+    kwp = arraysTotal;
+  } else {
+    const raw2 = config?.["pv-peak-kwp"];
+    const v2 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+    if (!isFinite(v2) || v2 <= 0) return null;
+    kwp = v2;
+  }
   return kwp * 10;
+}
+function pvInverterMaxW(config) {
+  const raw2 = config?.["pv-inverter-max-kw"];
+  const kw = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+  if (!isFinite(kw) || kw <= 0) return Infinity;
+  return kw * 1e3;
 }
 function wipeLegacyPvCalibStorage(hass, coords) {
   try {
@@ -4532,6 +5013,7 @@ function pvArrays(config) {
   const sh = [];
   const co = [];
   const he = [];
+  const kw = [];
   const parseCoord = (v2, max) => {
     if (v2 === void 0 || v2 === null || v2 === "") return null;
     const n3 = typeof v2 === "number" ? v2 : parseFloat(String(v2));
@@ -4550,14 +5032,24 @@ function pvArrays(config) {
       const rawAz = e2["azimuth"];
       const az = typeof rawAz === "number" ? rawAz : parseFloat(String(rawAz ?? ""));
       const azDeg = isFinite(az) ? (az % 360 + 360) % 360 : 180;
+      const rawPeakKwp = e2["peak-kwp"];
+      let peakKwp = NaN;
+      if (rawPeakKwp !== void 0 && rawPeakKwp !== null && rawPeakKwp !== "") {
+        const k2 = typeof rawPeakKwp === "number" ? rawPeakKwp : parseFloat(String(rawPeakKwp));
+        if (isFinite(k2) && k2 > 0) peakKwp = k2;
+      }
       const rawShare = e2["share"];
       let share;
       if (rawShare === void 0 || rawShare === null || rawShare === "") {
         share = NaN;
       } else {
         const s2 = typeof rawShare === "number" ? rawShare : parseFloat(String(rawShare));
-        if (!isFinite(s2) || s2 <= 0) continue;
-        share = s2;
+        if (!isFinite(s2) || s2 <= 0) {
+          if (!isFinite(peakKwp)) continue;
+          share = NaN;
+        } else {
+          share = s2;
+        }
       }
       const arrayLat = parseCoord(e2["latitude"], 90);
       const arrayLon = parseCoord(e2["longitude"], 180);
@@ -4572,11 +5064,22 @@ function pvArrays(config) {
       sh.push(share);
       co.push(coords);
       he.push(heightM);
+      kw.push(peakKwp);
     }
-    const explicit = sh.filter((s2) => isFinite(s2));
-    const fillVal = explicit.length > 0 ? explicit.reduce((a2, b2) => a2 + b2, 0) / explicit.length : 1;
-    for (let i2 = 0; i2 < sh.length; i2++) {
-      if (!isFinite(sh[i2])) sh[i2] = fillVal;
+    const explicitKw = kw.filter((v2) => isFinite(v2));
+    if (explicitKw.length > 0) {
+      const meanKw = explicitKw.reduce((a2, b2) => a2 + b2, 0) / explicitKw.length;
+      for (let i2 = 0; i2 < sh.length; i2++) {
+        const w2 = isFinite(kw[i2]) ? kw[i2] : meanKw;
+        kw[i2] = w2;
+        sh[i2] = w2;
+      }
+    } else {
+      const explicit = sh.filter((s2) => isFinite(s2));
+      const fillVal = explicit.length > 0 ? explicit.reduce((a2, b2) => a2 + b2, 0) / explicit.length : 1;
+      for (let i2 = 0; i2 < sh.length; i2++) {
+        if (!isFinite(sh[i2])) sh[i2] = fillVal;
+      }
     }
   }
   if (out.length === 0) {
@@ -4592,13 +5095,15 @@ function pvArrays(config) {
       sh.push(1);
       co.push(null);
       he.push(DEFAULT_PANEL_HEIGHT_M);
+      kw.push(NaN);
     }
   }
+  const totalKwp = kw.reduce((a2, b2) => isFinite(b2) ? a2 + b2 : a2, 0);
   const total = sh.reduce((a2, b2) => a2 + b2, 0);
   if (total > 0) {
     for (let i2 = 0; i2 < sh.length; i2++) sh[i2] /= total;
   }
-  return { orientations: out, shares: sh, coords: co, heightsM: he };
+  return { orientations: out, shares: sh, coords: co, heightsM: he, totalKwp };
 }
 function computePvPowerWeighted(config, t2, lat, lon, cloudPct, ctx) {
   const { orientations, shares, coords, heightsM } = pvArrays(config);
@@ -4963,142 +5468,6 @@ async function fetchSolarRadiationHistory(host, entityId, start, end) {
   } finally {
     host._solarRadiationFetching = false;
   }
-}
-function refreshOverlays(host) {
-  host._labelLayout = host._engine?.projectHomeLabelLayout() ?? null;
-  const t2 = host._selectedTime ?? host._now;
-  host._sunScene = host._engine ? host._engine.projectSunScene(t2) : null;
-  host._cloudScene = host._engine ? host._engine.projectCloudScene() : null;
-  host._homeSilhouettes = host._engine ? host._engine.projectHomeFootprints() : [];
-}
-function setAnimationsPaused(host, paused) {
-  host.classList.toggle("helios-paused", paused);
-  const root = host.shadowRoot;
-  if (!root) return;
-  const svgs = root.querySelectorAll("svg");
-  for (const svg of Array.from(svgs)) {
-    const s2 = svg;
-    try {
-      if (paused) s2.pauseAnimations?.();
-      else s2.unpauseAnimations?.();
-    } catch (_2) {
-    }
-  }
-}
-function buildArcSegments(arc, sunColor) {
-  const out = [];
-  for (let i2 = 0; i2 < arc.length - 1; i2++) {
-    const a2 = arc[i2];
-    const b2 = arc[i2 + 1];
-    out.push({
-      x1: a2.x,
-      y1: a2.y,
-      x2: b2.x,
-      y2: b2.y,
-      color: sunColor,
-      nearness: 0.5 * (a2.nearness + b2.nearness),
-      belowHorizon: a2.belowHorizon || b2.belowHorizon
-    });
-  }
-  return out;
-}
-function flowDuration(rate, saturation, minDuration = 0.4) {
-  if (!isFinite(rate) || rate <= 0) {
-    return 30;
-  }
-  const f2 = Math.min(1, rate / saturation);
-  const eased = 1 - Math.pow(1 - f2, 3);
-  return 30 - (30 - minDuration) * eased;
-}
-function tick(host) {
-  host._now = /* @__PURE__ */ new Date();
-  refreshOverlays(host);
-}
-function onTimelinePointerDown(host, e2) {
-  if (!host._timeRange) {
-    return;
-  }
-  if (host._engine?.isUserGestureSuppressed()) {
-    return;
-  }
-  const track = e2.currentTarget;
-  track.setPointerCapture(e2.pointerId);
-  host._trackElement = track;
-  host._trackPointerId = e2.pointerId;
-  track.addEventListener("pointermove", host._boundPointerMove);
-  track.addEventListener("pointerup", host._boundPointerUp);
-  track.addEventListener("pointercancel", host._boundPointerUp);
-  applyTimelinePointer(host, e2);
-}
-function onTimelinePointerMove(host, e2) {
-  if (e2.pointerId !== host._trackPointerId) {
-    return;
-  }
-  applyTimelinePointer(host, e2);
-}
-function onTimelinePointerUp(host, e2) {
-  if (e2.pointerId !== host._trackPointerId) {
-    return;
-  }
-  const track = host._trackElement;
-  if (track) {
-    try {
-      track.releasePointerCapture(e2.pointerId);
-    } catch (_2) {
-    }
-    track.removeEventListener("pointermove", host._boundPointerMove);
-    track.removeEventListener("pointerup", host._boundPointerUp);
-    track.removeEventListener("pointercancel", host._boundPointerUp);
-  }
-  host._trackElement = null;
-  host._trackPointerId = null;
-}
-function applyTimelinePointer(host, e2) {
-  if (!host._timeRange) {
-    return;
-  }
-  const track = e2.currentTarget;
-  const rect = track.getBoundingClientRect();
-  const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
-  const rangeMs = host._timeRange.end.getTime() - host._timeRange.start.getTime();
-  const t2 = new Date(host._timeRange.start.getTime() + frac * rangeMs);
-  if (host._selectedTime && host._selectedTime.getTime() === t2.getTime()) {
-    return;
-  }
-  host._selectedTime = t2;
-  host._isLiveMode = false;
-  host._engine?.setSelectedTime(t2);
-}
-function resetToLive(host) {
-  host._selectedTime = null;
-  host._isLiveMode = true;
-  host._engine?.setSelectedTime(null);
-}
-function timelineEnabled(config) {
-  const raw2 = config?.["timeline-enabled"];
-  if (typeof raw2 === "boolean") return raw2;
-  if (typeof raw2 === "string") {
-    const s2 = raw2.trim().toLowerCase();
-    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
-    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
-  }
-  return DEFAULT_TIMELINE_ENABLED;
-}
-function timelineWidthPct(config) {
-  const raw2 = config?.["timeline-width-pct"];
-  const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-  if (!isFinite(n3)) return DEFAULT_TIMELINE_WIDTH_PCT;
-  return Math.min(100, Math.max(50, n3));
-}
-function timelineConsumptionEnabled(config) {
-  const raw2 = config?.["timeline-consumption-enabled"];
-  if (typeof raw2 === "boolean") return raw2;
-  if (typeof raw2 === "string") {
-    const s2 = raw2.trim().toLowerCase();
-    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
-    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
-  }
-  return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
 }
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getDefaultExportFromCjs(x2) {
@@ -30836,11 +31205,11 @@ function convexHull(pts) {
 }
 const DEFAULT_HEIGHT_THRESH_M = 5;
 const DEFAULT_HEIGHT_MAX_M = 100;
-const DEFAULT_TARGET_AREA_M2 = 80;
+const DEFAULT_TARGET_AREA_M2 = 16;
 const DEFAULT_MIN_COMPONENT_CELLS = 3;
 const M_PER_DEG_LAT = 111320;
 const EARTH_RADIUS_M = 63710088e-1;
-function processHeightRaster(heights, geo, opts = {}) {
+function processHeightRaster(heights, geo, opts = {}, terrain) {
   const heightThresh = opts.heightThreshM ?? DEFAULT_HEIGHT_THRESH_M;
   const heightMax = opts.heightMaxM ?? DEFAULT_HEIGHT_MAX_M;
   const targetArea = opts.targetAreaM2 ?? DEFAULT_TARGET_AREA_M2;
@@ -30857,7 +31226,7 @@ function processHeightRaster(heights, geo, opts = {}) {
   const pxLatM = pxLat * M_PER_DEG_LAT;
   const cellAreaM2 = pxLatM * pxLatM;
   const maxCellsPerComponent = Math.max(4, Math.min(
-    400,
+    80,
     Math.round(targetArea / Math.max(0.01, cellAreaM2))
   ));
   const cropM = geo.cropRadiusMeters && geo.cropRadiusMeters > 0 ? geo.cropRadiusMeters : null;
@@ -30956,9 +31325,12 @@ function processHeightRaster(heights, geo, opts = {}) {
     //Forward the raw raster + geo so the engine can keep it for
     //the LiDAR View overlay. Same buffer reference, no copy: the
     //pipeline never mutates `heights` after the validity pass
-    //above, and the engine treats the buffer as read-only.
+    //above, and the engine treats the buffer as read-only. The
+    //terrain band, when provided, is forwarded with the same
+    //zero-copy contract.
     raster: {
       heights,
+      terrain,
       rasterSize,
       minLat,
       maxLat,
@@ -34253,32 +34625,38 @@ async function fetchFloat32GeoTiffWithNoData(url, rasterSize, signal) {
   } catch (_2) {
     noData = null;
   }
+  let sampleCount = 1;
+  try {
+    const anyImg = image;
+    if (typeof anyImg.getSamplesPerPixel === "function") {
+      const n3 = anyImg.getSamplesPerPixel();
+      if (typeof n3 === "number" && n3 >= 1) sampleCount = n3;
+    }
+  } catch (_2) {
+    sampleCount = 1;
+  }
+  const wantBands = sampleCount >= 2 ? [0, 1] : [0];
   let rasters;
   try {
     rasters = await image.readRasters({
       width: rasterSize,
       height: rasterSize,
       interleave: false,
-      samples: [0]
+      samples: wantBands
     });
   } catch (_2) {
     return null;
   }
-  let band;
-  if (Array.isArray(rasters)) {
-    if (rasters.length === 0) return null;
-    band = rasters[0];
-  } else {
-    band = rasters;
-  }
-  let data;
-  if (band instanceof Float32Array) {
-    data = band;
-  } else {
-    data = new Float32Array(band.length);
-    for (let i2 = 0; i2 < band.length; i2++) data[i2] = band[i2];
-  }
-  return { data, noData };
+  if (!Array.isArray(rasters) || rasters.length === 0) return null;
+  const toF32 = (b2) => {
+    if (b2 instanceof Float32Array) return b2;
+    const out = new Float32Array(b2.length);
+    for (let i2 = 0; i2 < b2.length; i2++) out[i2] = b2[i2];
+    return out;
+  };
+  const data = toF32(rasters[0]);
+  const terrain = rasters.length >= 2 ? toF32(rasters[1]) : null;
+  return { data, terrain, noData };
 }
 function maxRasters(a2, b2) {
   const N2 = Math.min(a2.length, b2.length);
@@ -34828,6 +35206,21 @@ function normaliseLocalNdsmRaster(band, noData) {
   }
   return band;
 }
+function normaliseLocalDtmRaster(band, noData) {
+  const hasNoData = noData !== null && Number.isFinite(noData);
+  for (let i2 = 0; i2 < band.length; i2++) {
+    const v2 = band[i2];
+    if (hasNoData && v2 === noData) {
+      band[i2] = NaN;
+      continue;
+    }
+    if (!Number.isFinite(v2)) {
+      band[i2] = NaN;
+      continue;
+    }
+  }
+  return band;
+}
 function createLocalNdsmSource(cfg) {
   const { url, minLat, maxLat, minLon, maxLon } = cfg;
   return {
@@ -34848,16 +35241,23 @@ function createLocalNdsmSource(cfg) {
         Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
       );
       let band;
+      let terrain;
       let noData;
       try {
         const r2 = await fetchFloat32GeoTiffWithNoData(url, rasterSize, opts.signal);
         band = r2 ? r2.data : null;
+        terrain = r2 ? r2.terrain : null;
         noData = r2 ? r2.noData : null;
       } catch (_2) {
         return emptyResult();
       }
       if (!band || band.length < rasterSize * rasterSize) return emptyResult();
       normaliseLocalNdsmRaster(band, noData);
+      if (terrain && terrain.length >= rasterSize * rasterSize) {
+        normaliseLocalDtmRaster(terrain, noData);
+      } else {
+        terrain = null;
+      }
       return processHeightRaster(band, {
         rasterSize,
         minLat,
@@ -34867,7 +35267,7 @@ function createLocalNdsmSource(cfg) {
         homeLat: opts.homeLat,
         homeLon: opts.homeLon,
         cropRadiusMeters: opts.cropRadiusMeters
-      });
+      }, {}, terrain ?? void 0);
     }
   };
 }
@@ -35334,6 +35734,84 @@ function startAutoRotateLoop(host) {
   };
   host._autoRotateRaf = requestAnimationFrame(tick2);
 }
+const STATS_ENDPOINT_URL = "https://helios-lidar.org/api/heartbeat";
+const INSTALL_ID_KEY = "helios-install-id";
+const LAST_PING_KEY = "helios-install-last-ping";
+const PING_INTERVAL_MS = 24 * 60 * 60 * 1e3;
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function generateUuidV4() {
+  const cryptoObj = globalThis.crypto;
+  if (cryptoObj && typeof cryptoObj.randomUUID === "function") {
+    return cryptoObj.randomUUID();
+  }
+  if (cryptoObj && typeof cryptoObj.getRandomValues === "function") {
+    const b2 = new Uint8Array(16);
+    cryptoObj.getRandomValues(b2);
+    b2[6] = b2[6] & 15 | 64;
+    b2[8] = b2[8] & 63 | 128;
+    const hex = [];
+    for (let i2 = 0; i2 < 16; i2++) hex.push(b2[i2].toString(16).padStart(2, "0"));
+    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+  }
+  return "00000000-0000-0000-0000-000000000000";
+}
+function readStorage(key) {
+  try {
+    return window.localStorage?.getItem(key) ?? null;
+  } catch (_2) {
+    return null;
+  }
+}
+function writeStorage(key, value) {
+  try {
+    window.localStorage?.setItem(key, value);
+    return true;
+  } catch (_2) {
+    return false;
+  }
+}
+function getInstallId() {
+  const existing = readStorage(INSTALL_ID_KEY);
+  if (existing && UUID_V4_RE.test(existing)) return existing;
+  const fresh = generateUuidV4();
+  if (!UUID_V4_RE.test(fresh)) return null;
+  if (!writeStorage(INSTALL_ID_KEY, fresh)) return null;
+  return fresh;
+}
+function isOptedOut(config) {
+  if (config && config["helios-anon-stats"] === false) return true;
+  try {
+    const dnt = navigator.doNotTrack;
+    if (dnt === "1") return true;
+  } catch (_2) {
+  }
+  return false;
+}
+function maybePingHeartbeat(config) {
+  if (isOptedOut(config)) return;
+  const installId = getInstallId();
+  if (installId === null) return;
+  const rawLast = readStorage(LAST_PING_KEY);
+  if (rawLast !== null) {
+    const lastMs = parseInt(rawLast, 10);
+    if (Number.isFinite(lastMs) && Date.now() - lastMs < PING_INTERVAL_MS) {
+      return;
+    }
+  }
+  writeStorage(LAST_PING_KEY, String(Date.now()));
+  try {
+    fetch(STATS_ENDPOINT_URL, {
+      method: "POST",
+      mode: "cors",
+      credentials: "omit",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ install_id: installId }),
+      keepalive: true
+    }).catch(() => {
+    });
+  } catch (_2) {
+  }
+}
 const DETAIL_MODE_ZOOM_TARGET = 19.5;
 const DETAIL_MODE_PITCH_TARGET = 80;
 const DETAIL_MODE_TRANSITION_MS = 800;
@@ -35410,7 +35888,14 @@ function diveCamera(host, targetZoom, targetPitch, bearingSweep, targetMode, onC
   };
   host._detailDiveRaf = requestAnimationFrame(tick2);
 }
-const SHADOW_RASTER_SIZE = 1024;
+const SHADOW_RASTER_SIZE_BY_PRECISION = {
+  low: 1024,
+  medium: 1024,
+  high: 2048
+};
+function shadowRasterSizeFor(level) {
+  return SHADOW_RASTER_SIZE_BY_PRECISION[level] ?? 1024;
+}
 const BLANK_SHADOW_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
 function shadowBoundsCornersLL(homeLat, homeLon, radiusMeters) {
   const cosLat = Math.cos(homeLat * Math.PI / 180);
@@ -35660,6 +36145,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarShadowDiagnostics = null;
     this._lidarShadowKey = "";
     this._lidarRaster = null;
+    this._selectedTimeShadowTimer = null;
     this._lidarViewActive = false;
     this._detailMode = false;
     this._postExitCooldownUntil = 0;
@@ -35668,6 +36154,10 @@ const _HeliosEngine = class _HeliosEngine {
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
     this.cfg = { ...config };
     bumpStat("enginesCreated");
+    try {
+      maybePingHeartbeat(this.cfg);
+    } catch (_2) {
+    }
     while (_liveEngines.size >= MAX_LIVE_ENGINES) {
       const oldest = _liveEngines.values().next().value;
       if (!oldest) break;
@@ -35691,6 +36181,12 @@ const _HeliosEngine = class _HeliosEngine {
         zoom: 18,
         pitch: 55,
         bearing: this.homeLat >= 0 ? 180 : 0,
+        //Zoom is locked to the resting pose. The 3D camera +
+        //LiDAR overlay are tuned for this single altitude, and
+        //letting the user wander off-zoom only opened the door
+        //to "why does my card look different from the docs"
+        //screenshots. detail-mode separately raises maxZoom
+        //for its dive animation and resets it on exit.
         minZoom: 18,
         maxZoom: 18,
         dragPan: false,
@@ -35764,8 +36260,12 @@ const _HeliosEngine = class _HeliosEngine {
     this._mapCanvas = canvas;
     canvas.style.touchAction = "none";
     const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
+    const PITCH_SENSITIVITY_DEG_PER_PX = 0.3;
+    const PITCH_MIN_DEG = 15;
+    const PITCH_MAX_DEG = 85;
     let dragRotating = false;
     let lastPointerX = 0;
+    let lastPointerY = 0;
     let activeId = null;
     const onDown = (e2) => {
       if (e2.pointerType === "mouse" && e2.button !== 0) return;
@@ -35774,6 +36274,7 @@ const _HeliosEngine = class _HeliosEngine {
       dragRotating = true;
       activeId = e2.pointerId;
       lastPointerX = e2.clientX;
+      lastPointerY = e2.clientY;
       this._autoRotateLastUserAction = Date.now();
       try {
         canvas.setPointerCapture(e2.pointerId);
@@ -35783,9 +36284,16 @@ const _HeliosEngine = class _HeliosEngine {
     const onMove = (e2) => {
       if (!dragRotating || !this.map || e2.pointerId !== activeId) return;
       const dx = e2.clientX - lastPointerX;
+      const dy = e2.clientY - lastPointerY;
       lastPointerX = e2.clientX;
+      lastPointerY = e2.clientY;
       this._autoRotateLastUserAction = Date.now();
       this.map.setBearing(this.map.getBearing() + dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+      const nextPitch = Math.max(PITCH_MIN_DEG, Math.min(
+        PITCH_MAX_DEG,
+        this.map.getPitch() - dy * PITCH_SENSITIVITY_DEG_PER_PX
+      ));
+      this.map.setPitch(nextPitch);
     };
     const onEnd = (e2) => {
       if (e2.pointerId !== activeId) return;
@@ -36599,7 +37107,6 @@ const _HeliosEngine = class _HeliosEngine {
       "helios-buildings",
       "helios-buildings-surroundings",
       "helios-buildings-home",
-      "helios-buildings-surroundings-outline",
       "helios-buildings-home-outline",
       "helios-buildings-home-outline-glow"
     ]) {
@@ -36745,18 +37252,6 @@ const _HeliosEngine = class _HeliosEngine {
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
           "fill-extrusion-opacity": 1
-        }
-      }
-    );
-    this.map.addLayer(
-      {
-        id: "helios-buildings-surroundings-outline",
-        source: "helios-buildings-surroundings-src",
-        type: "line",
-        paint: {
-          "line-color": "#000000",
-          "line-width": 1,
-          "line-opacity": 0.35
         }
       }
     );
@@ -36975,10 +37470,11 @@ const _HeliosEngine = class _HeliosEngine {
           }
         );
         if (this.map) {
-          if (!this._shadowCanvas) {
+          const rasterSize = shadowRasterSizeFor(this._lidarPrecisionLevel());
+          if (!this._shadowCanvas || this._shadowCanvas.width !== rasterSize) {
             this._shadowCanvas = document.createElement("canvas");
-            this._shadowCanvas.width = SHADOW_RASTER_SIZE;
-            this._shadowCanvas.height = SHADOW_RASTER_SIZE;
+            this._shadowCanvas.width = rasterSize;
+            this._shadowCanvas.height = rasterSize;
           }
           paintShadowRaster(
             this.map,
@@ -37118,26 +37614,39 @@ const _HeliosEngine = class _HeliosEngine {
         positions.push({ lat, lon });
       }
     }
+    const ICON_PX = 18;
+    const LEADER_PX = 18;
+    const SPHERE_PX = 6;
     const buildMarkerEl = (color) => {
       const el = document.createElement("div");
       el.className = "helios-pv-array-marker";
-      el.style.cssText = "width:18px;height:18px;display:flex;align-items:center;justify-content:center;pointer-events:none;filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));";
-      el.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 7 L19 7 L21 18 L3 18 Z" fill="${color}" stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/><line x1="4.3" y1="10.7" x2="19.7" y2="10.7" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="3.7" y1="14.4" x2="20.3" y2="14.4" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/></svg>`;
+      el.style.cssText = `display:flex;flex-direction:column;align-items:center;width:${ICON_PX}px;pointer-events:none;filter:drop-shadow(0 0 1.5px #ffffff) drop-shadow(0 1px 2px rgba(0,0,0,0.45));`;
+      el.innerHTML = //Icon: the original tilted-panel SVG.
+      `<svg class="pv-array-marker-icon" viewBox="0 0 24 24" width="${ICON_PX}" height="${ICON_PX}" aria-hidden="true"><path d="M5 7 L19 7 L21 18 L3 18 Z" fill="${color}" stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/><line x1="4.3" y1="10.7" x2="19.7" y2="10.7" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="3.7" y1="14.4" x2="20.3" y2="14.4" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/><line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/></svg><div class="pv-array-marker-leader" style="width:1px;height:${LEADER_PX}px;background:repeating-linear-gradient(to bottom, ${color} 0px, ${color} 1.5px, transparent 1.5px, transparent 4px);opacity:0.65;"></div><div class="pv-array-marker-sphere" style="width:${SPHERE_PX}px;height:${SPHERE_PX}px;border-radius:50%;background:${color};box-shadow:0 0 0 1px #ffffff, 0 1px 2px rgba(0,0,0,0.4);"></div>`;
       return el;
     };
     if (this._pvArrayMarkers.length !== positions.length) {
       for (const m2 of this._pvArrayMarkers) m2.remove();
       this._pvArrayMarkers = [];
       for (const p2 of positions) {
-        const marker = new maplibregl.Marker({ element: buildMarkerEl(pvHex) }).setLngLat([p2.lon, p2.lat]).addTo(this.map);
+        const marker = new maplibregl.Marker({
+          element: buildMarkerEl(pvHex),
+          anchor: "bottom"
+        }).setLngLat([p2.lon, p2.lat]).addTo(this.map);
         this._pvArrayMarkers.push(marker);
       }
     } else {
       for (let i2 = 0; i2 < positions.length; i2++) {
         this._pvArrayMarkers[i2].setLngLat([positions[i2].lon, positions[i2].lat]);
         const el = this._pvArrayMarkers[i2].getElement();
-        const svgPath = el?.querySelector("svg path");
+        const svgPath = el?.querySelector(".pv-array-marker-icon path");
         if (svgPath) svgPath.setAttribute("fill", pvHex);
+        const leader = el?.querySelector(".pv-array-marker-leader");
+        if (leader) {
+          leader.style.background = `repeating-linear-gradient(to bottom, ${pvHex} 0px, ${pvHex} 1.5px, transparent 1.5px, transparent 4px)`;
+        }
+        const sphere = el?.querySelector(".pv-array-marker-sphere");
+        if (sphere) sphere.style.background = pvHex;
       }
     }
   }
@@ -37216,13 +37725,29 @@ const _HeliosEngine = class _HeliosEngine {
     const shelfY = home.y - PV_CHIP_OFFSET_PX + BATTERY_CHIP_Y_OFFSET_PX;
     const pvX = home.x;
     const pvY = shelfY + BATTERY_CHIP_Y_OFFSET_PX;
+    const PV_HOME_ANCHOR_RADIUS_M = 2.5;
+    const ANCHOR_SAMPLES = 48;
+    const anchorLatPerM = 1 / 111320;
+    const anchorLonPerM = anchorLatPerM / cosLat;
+    const anchorPts = [];
+    for (let i2 = 0; i2 < ANCHOR_SAMPLES; i2++) {
+      const a2 = i2 / ANCHOR_SAMPLES * Math.PI * 2;
+      const dE = Math.cos(a2) * PV_HOME_ANCHOR_RADIUS_M;
+      const dN = Math.sin(a2) * PV_HOME_ANCHOR_RADIUS_M;
+      const p2 = m2.project([
+        this.homeLon + dE * anchorLonPerM,
+        this.homeLat + dN * anchorLatPerM
+      ]);
+      anchorPts.push(`${(p2.x - home.x).toFixed(2)},${(p2.y - home.y).toFixed(2)}`);
+    }
     return {
       cloudLabel: { x: cloudLabelX, y: cloudLabelY },
       pvLabel: { x: pvX, y: pvY },
       batterySocLabel: { x: pvX - BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       batteryPowerLabel: { x: pvX + BATTERY_CHIP_X_OFFSET_PX, y: shelfY },
       ringEdge: { x: ringEdgeX, y: ringEdgeY },
-      home: { x: home.x, y: home.y }
+      home: { x: home.x, y: home.y },
+      homeAnchorPoints: anchorPts.join(" ")
     };
   }
   //Project a 3D point (longitude, latitude, altitude_m) into
@@ -37498,7 +38023,13 @@ const _HeliosEngine = class _HeliosEngine {
     if (this._mapReady && this._homeHourlyData) {
       this._lastAtmosphereAlt = -999;
       this._renderForCurrentSelection();
-      this._refreshShadowsAndAtmosphere();
+      if (this._selectedTimeShadowTimer !== null) {
+        window.clearTimeout(this._selectedTimeShadowTimer);
+      }
+      this._selectedTimeShadowTimer = window.setTimeout(() => {
+        this._selectedTimeShadowTimer = null;
+        this._refreshShadowsAndAtmosphere();
+      }, 100);
     }
   }
   //Expose the hourly series the card needs to draw the chart.
@@ -37520,6 +38051,13 @@ const _HeliosEngine = class _HeliosEngine {
   //(reading only) so we hand the live reference rather than a
   //copy. Null when no LiDAR provider covers the home or the
   //last fetch failed.
+  //
+  //The optional `terrain` field carries the DTM band when the
+  //source COG ships one (v1.6.3+ helios-lidar.org output); it
+  //lets the shading ray-march lift its comparison into absolute
+  //Z so sloped ground between the panel and a far obstacle is
+  //taken into account. Absent on every public provider and on
+  //legacy single-band local COGs.
   getLidarRaster() {
     return this._lidarRaster;
   }
@@ -37727,6 +38265,10 @@ const _HeliosEngine = class _HeliosEngine {
     bumpStat("enginesCleanedUp");
     _liveEngines.delete(this);
     this._clearWeatherTimer();
+    if (this._selectedTimeShadowTimer !== null) {
+      window.clearTimeout(this._selectedTimeShadowTimer);
+      this._selectedTimeShadowTimer = null;
+    }
     window.clearInterval(this._skyTimer);
     window.clearTimeout(this._resizeDebounceTimer);
     this._fetchAbortController?.abort();
@@ -37789,7 +38331,6 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-cloud-ring",
         "helios-buildings-surroundings",
         "helios-buildings-home",
-        "helios-buildings-surroundings-outline",
         "helios-buildings-home-outline",
         "helios-buildings-home-outline-glow",
         "helios-building-shadows"
@@ -37848,6 +38389,52 @@ const _HeliosEngine = class _HeliosEngine {
 };
 _HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS = 30 * 60 * 1e3;
 let HeliosEngine = _HeliosEngine;
+function refreshOverlays(host) {
+  host._labelLayout = host._engine?.projectHomeLabelLayout() ?? null;
+  const t2 = host._selectedTime ?? host._now;
+  host._sunScene = host._engine ? host._engine.projectSunScene(t2) : null;
+  host._cloudScene = host._engine ? host._engine.projectCloudScene() : null;
+  host._homeSilhouettes = host._engine ? host._engine.projectHomeFootprints() : [];
+}
+function setAnimationsPaused(host, paused) {
+  host.classList.toggle("helios-paused", paused);
+  const root = host.shadowRoot;
+  if (!root) return;
+  const svgs = root.querySelectorAll("svg");
+  for (const svg of Array.from(svgs)) {
+    const s2 = svg;
+    try {
+      if (paused) s2.pauseAnimations?.();
+      else s2.unpauseAnimations?.();
+    } catch (_2) {
+    }
+  }
+}
+function buildArcSegments(arc, sunColor) {
+  const out = [];
+  for (let i2 = 0; i2 < arc.length - 1; i2++) {
+    const a2 = arc[i2];
+    const b2 = arc[i2 + 1];
+    out.push({
+      x1: a2.x,
+      y1: a2.y,
+      x2: b2.x,
+      y2: b2.y,
+      color: sunColor,
+      nearness: 0.5 * (a2.nearness + b2.nearness),
+      belowHorizon: a2.belowHorizon || b2.belowHorizon
+    });
+  }
+  return out;
+}
+function flowDuration(rate, saturation, minDuration = 0.4) {
+  if (!isFinite(rate) || rate <= 0) {
+    return 30;
+  }
+  const f2 = Math.min(1, rate / saturation);
+  const eased = 1 - Math.pow(1 - f2, 3);
+  return 30 - (30 - minDuration) * eased;
+}
 const VISUAL_CONFIG_KEYS = [
   "show-labels",
   "sun-color",
@@ -38011,6 +38598,453 @@ function wireEngineCallbacks(host) {
     host._shadowBusy = false;
   };
 }
+const WINDOW_DAYS = 5;
+const RATIO_MIN = 0.5;
+const RATIO_MAX = 1.5;
+const MIN_DAY_PREDICTED_KWH = 2;
+function computeForecastCalibration(host) {
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const hist = host._pvHistory;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 === null || k2 <= 0 || !series || !hist || !coords) return null;
+  const HOUR_MS = 36e5;
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const ratios = [];
+  const raster = host._engine?.getLidarRaster() ?? null;
+  for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++) {
+    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
+    const dayEndMs = dayStartMs + 24 * HOUR_MS;
+    const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
+    if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
+    const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
+    if (actualKwh <= 0) continue;
+    const r2 = actualKwh / predictedKwh;
+    if (!isFinite(r2) || r2 <= 0) continue;
+    ratios.push(Math.max(RATIO_MIN, Math.min(RATIO_MAX, r2)));
+  }
+  if (ratios.length < 2) return null;
+  const mean = ratios.reduce((a2, b2) => a2 + b2, 0) / ratios.length;
+  return {
+    ratio: Math.max(RATIO_MIN, Math.min(RATIO_MAX, mean)),
+    daysUsed: ratios.length
+  };
+}
+function predictedKwhForDay(config, series, coords, startMs, endMs, raster) {
+  const k2 = pvCalibK(config);
+  if (k2 === null || k2 <= 0) return 0;
+  let kwh = 0;
+  for (let i2 = 0; i2 < series.times.length; i2++) {
+    const tMs = series.times[i2].getTime();
+    if (tMs < startMs || tMs >= endMs) continue;
+    const cloud = series.cloud[i2] ?? 0;
+    const pct = computePvPowerWeighted(config, series.times[i2], coords.lat, coords.lon, cloud, {
+      airTempC: series.temperature?.[i2] ?? NaN,
+      windMs: series.windSpeed?.[i2] ?? NaN,
+      raster
+    });
+    if (pct <= 0) continue;
+    kwh += pct * k2 / 1e3;
+  }
+  return kwh;
+}
+function actualKwhForDay(hist, pvUnit, startMs, endMs) {
+  if (hist.times.length < 2) return 0;
+  const unit = (pvUnit || "").toLowerCase();
+  const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
+  const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
+  const HOUR_MS = 36e5;
+  if (isCumulativeEnergy) {
+    let kwh2 = 0;
+    for (let i2 = 1; i2 < hist.times.length; i2++) {
+      const tMs = hist.times[i2].getTime();
+      if (tMs < startMs || tMs >= endMs) continue;
+      const dv = hist.values[i2] - hist.values[i2 - 1];
+      if (!isFinite(dv) || dv < 0) continue;
+      kwh2 += dv * energyFactor;
+    }
+    return kwh2;
+  }
+  let kwh = 0;
+  for (let i2 = 1; i2 < hist.times.length; i2++) {
+    const tCurrMs = hist.times[i2].getTime();
+    if (tCurrMs < startMs || tCurrMs >= endMs) continue;
+    const tPrevMs = hist.times[i2 - 1].getTime();
+    const dtH = (tCurrMs - tPrevMs) / HOUR_MS;
+    if (dtH <= 0 || dtH > 6) continue;
+    const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
+    const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
+    if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+    kwh += (wPrev + wCurr) / 2 * dtH / 1e3;
+  }
+  return kwh;
+}
+function tick(host) {
+  host._now = /* @__PURE__ */ new Date();
+  refreshOverlays(host);
+}
+function onTimelinePointerDown(host, e2) {
+  if (!host._timeRange) {
+    return;
+  }
+  if (host._engine?.isUserGestureSuppressed()) {
+    return;
+  }
+  const track = e2.currentTarget;
+  track.setPointerCapture(e2.pointerId);
+  host._trackElement = track;
+  host._trackPointerId = e2.pointerId;
+  track.addEventListener("pointermove", host._boundPointerMove);
+  track.addEventListener("pointerup", host._boundPointerUp);
+  track.addEventListener("pointercancel", host._boundPointerUp);
+  applyTimelinePointer(host, e2);
+}
+function onTimelinePointerMove(host, e2) {
+  if (e2.pointerId !== host._trackPointerId) {
+    return;
+  }
+  applyTimelinePointer(host, e2);
+}
+function onTimelinePointerUp(host, e2) {
+  if (e2.pointerId !== host._trackPointerId) {
+    return;
+  }
+  const track = host._trackElement;
+  if (track) {
+    try {
+      track.releasePointerCapture(e2.pointerId);
+    } catch (_2) {
+    }
+    track.removeEventListener("pointermove", host._boundPointerMove);
+    track.removeEventListener("pointerup", host._boundPointerUp);
+    track.removeEventListener("pointercancel", host._boundPointerUp);
+  }
+  host._trackElement = null;
+  host._trackPointerId = null;
+  host._chartHoverPct = null;
+}
+function applyTimelinePointer(host, e2) {
+  if (!host._timeRange) {
+    return;
+  }
+  const track = e2.currentTarget;
+  const rect = track.getBoundingClientRect();
+  const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
+  const rangeMs = host._timeRange.end.getTime() - host._timeRange.start.getTime();
+  const t2 = new Date(host._timeRange.start.getTime() + frac * rangeMs);
+  if (host._selectedTime && host._selectedTime.getTime() === t2.getTime()) {
+    return;
+  }
+  host._selectedTime = t2;
+  host._isLiveMode = false;
+  host._chartHoverPct = frac * 100;
+  host._engine?.setSelectedTime(t2);
+}
+function resetToLive(host) {
+  host._selectedTime = null;
+  host._isLiveMode = true;
+  host._engine?.setSelectedTime(null);
+}
+function timelineEnabled(config) {
+  const raw2 = config?.["timeline-enabled"];
+  if (typeof raw2 === "boolean") return raw2;
+  if (typeof raw2 === "string") {
+    const s2 = raw2.trim().toLowerCase();
+    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+  }
+  return DEFAULT_TIMELINE_ENABLED;
+}
+function timelineWidthPct(config) {
+  const raw2 = config?.["timeline-width-pct"];
+  const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+  if (!isFinite(n3)) return DEFAULT_TIMELINE_WIDTH_PCT;
+  return Math.min(100, Math.max(50, n3));
+}
+function timelineConsumptionEnabled(config) {
+  const raw2 = config?.["timeline-consumption-enabled"];
+  if (typeof raw2 === "boolean") return raw2;
+  if (typeof raw2 === "string") {
+    const s2 = raw2.trim().toLowerCase();
+    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+  }
+  return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
+}
+function findSunCrossing(lat, lon, dayStartMs, dayEndMs, direction) {
+  const STEP_MS = 60 * 60 * 1e3;
+  let prevAlt = getSunPosition(new Date(dayStartMs), lat, lon).altitude;
+  let bracketLo = 0;
+  let bracketHi = 0;
+  let found = false;
+  for (let t2 = dayStartMs + STEP_MS; t2 <= dayEndMs; t2 += STEP_MS) {
+    const alt = getSunPosition(new Date(t2), lat, lon).altitude;
+    if (direction === "rising" && prevAlt <= 0 && alt > 0) {
+      bracketLo = t2 - STEP_MS;
+      bracketHi = t2;
+      found = true;
+      break;
+    }
+    if (direction === "setting" && prevAlt > 0 && alt <= 0) {
+      bracketLo = t2 - STEP_MS;
+      bracketHi = t2;
+      found = true;
+      break;
+    }
+    prevAlt = alt;
+  }
+  if (!found) return null;
+  for (let i2 = 0; i2 < 12; i2++) {
+    const mid = (bracketLo + bracketHi) / 2;
+    const alt = getSunPosition(new Date(mid), lat, lon).altitude;
+    if (direction === "rising" === alt > 0) {
+      bracketHi = mid;
+    } else {
+      bracketLo = mid;
+    }
+  }
+  return new Date((bracketLo + bracketHi) / 2);
+}
+function computeNightIntervals(host) {
+  const range = host._timeRange;
+  if (!range) return [];
+  const coords = getHomeCoords(host.config, host.hass);
+  if (!coords) return [];
+  const startMs = range.start.getTime();
+  const endMs = range.end.getTime();
+  const rangeMs = endMs - startMs;
+  if (rangeMs <= 0) return [];
+  const crossings = [];
+  const cursor = new Date(range.start);
+  cursor.setHours(0, 0, 0, 0);
+  cursor.setDate(cursor.getDate() - 1);
+  const walkEndMs = endMs + 24 * 60 * 60 * 1e3;
+  while (cursor.getTime() <= walkEndMs) {
+    const dayStart = cursor.getTime();
+    const dayEnd = dayStart + 24 * 60 * 60 * 1e3;
+    const rise = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, "rising");
+    const setT = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, "setting");
+    if (rise) crossings.push({ ms: rise.getTime(), kind: "sunrise" });
+    if (setT) crossings.push({ ms: setT.getTime(), kind: "sunset" });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  crossings.sort((a2, b2) => a2.ms - b2.ms);
+  const intervals = [];
+  let pendingSunset = null;
+  let sawAnySunrise = false;
+  for (const c2 of crossings) {
+    if (c2.kind === "sunset") {
+      pendingSunset = c2.ms;
+    } else {
+      if (pendingSunset !== null) {
+        intervals.push({ startMs: pendingSunset, endMs: c2.ms });
+        pendingSunset = null;
+      } else if (!sawAnySunrise) {
+        intervals.push({ startMs: -Infinity, endMs: c2.ms });
+      }
+      sawAnySunrise = true;
+    }
+  }
+  if (pendingSunset !== null) {
+    intervals.push({ startMs: pendingSunset, endMs: Infinity });
+  }
+  const out = [];
+  for (const iv of intervals) {
+    const s2 = Math.max(iv.startMs, startMs);
+    const e2 = Math.min(iv.endMs, endMs);
+    if (e2 > s2) {
+      out.push({
+        startPct: (s2 - startMs) / rangeMs * 100,
+        endPct: (e2 - startMs) / rangeMs * 100
+      });
+    }
+  }
+  return out;
+}
+function renderTimelineNightZones(host) {
+  const intervals = computeNightIntervals(host);
+  if (intervals.length === 0) return b``;
+  return b`
+        ${intervals.map((iv) => b`
+            <div
+                class="hc-night-zone"
+                style="left:${iv.startPct.toFixed(2)}%; width:${(iv.endPct - iv.startPct).toFixed(2)}%"
+            ></div>
+        `)}
+    `;
+}
+function renderTimelineFutureMask(host) {
+  const range = host._timeRange;
+  if (!range) return b``;
+  const startMs = range.start.getTime();
+  const endMs = range.end.getTime();
+  const rangeMs = endMs - startMs;
+  if (rangeMs <= 0) return b``;
+  const nowMs = Date.now();
+  if (nowMs <= startMs || nowMs >= endMs) return b``;
+  const nowPct = (nowMs - startMs) / rangeMs * 100;
+  return b`
+        <div
+            class="hc-future-mask"
+            style="left:${nowPct.toFixed(2)}%"
+        ></div>
+    `;
+}
+function pvValueAtTime(host, targetMs) {
+  const luRaw = (host._pvUnit || "").trim();
+  if (!luRaw) return { value: NaN, unit: "", isPredicted: false };
+  const lu = luRaw.toLowerCase();
+  const isCumulative = lu === "wh" || lu === "kwh" || lu === "mwh";
+  const displayUnit = isCumulative ? lu === "kwh" ? "kW" : lu === "mwh" ? "MW" : "W" : luRaw;
+  const duLow = displayUnit.toLowerCase();
+  const nativeFromW = duLow === "kw" ? 1 / 1e3 : duLow === "mw" ? 1 / 1e6 : 1;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (coords && getSunPosition(new Date(targetMs), coords.lat, coords.lon).altitude <= 0) {
+    return { value: 0, unit: displayUnit, isPredicted: false };
+  }
+  const hist = host._pvHistory;
+  const lastObsMs = hist && hist.times.length >= 1 ? hist.times[hist.times.length - 1].getTime() : -Infinity;
+  if (hist && hist.times.length >= 2 && targetMs <= lastObsMs) {
+    if (isCumulative) {
+      for (let i2 = 1; i2 < hist.times.length; i2++) {
+        const t1 = hist.times[i2].getTime();
+        if (targetMs > t1) continue;
+        const t0 = hist.times[i2 - 1].getTime();
+        if (targetMs < t0) break;
+        const dtH = (t1 - t0) / 36e5;
+        if (dtH <= 0 || dtH > 6) break;
+        const dv = hist.values[i2] - hist.values[i2 - 1];
+        if (!isFinite(dv) || dv < 0) break;
+        return { value: Math.max(0, dv / dtH), unit: displayUnit, isPredicted: false };
+      }
+    } else {
+      const v2 = interpAt(hist.times, hist.values, targetMs);
+      if (isFinite(v2)) {
+        return { value: Math.max(0, v2), unit: displayUnit, isPredicted: false };
+      }
+    }
+  }
+  const series = host._chartSeries;
+  const k2 = pvCalibK(host.config);
+  const cal = computeForecastCalibration(host);
+  const calR = cal ? cal.ratio : 1;
+  const capW = pvInverterMaxW(host.config);
+  if (k2 !== null && series && coords && series.times.length >= 2) {
+    const raster = host._engine?.getLidarRaster() ?? null;
+    for (let i2 = 1; i2 < series.times.length; i2++) {
+      const t1 = series.times[i2].getTime();
+      if (targetMs > t1) continue;
+      const t0 = series.times[i2 - 1].getTime();
+      if (targetMs < t0) break;
+      const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2 - 1], coords.lat, coords.lon, series.cloud[i2 - 1] ?? 0, {
+        airTempC: series.temperature[i2 - 1],
+        windMs: series.windSpeed[i2 - 1],
+        raster
+      }) * k2 * calR);
+      const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, series.cloud[i2] ?? 0, {
+        airTempC: series.temperature[i2],
+        windMs: series.windSpeed[i2],
+        raster
+      }) * k2 * calR);
+      const dt = t1 - t0;
+      if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
+      const w2 = w0 + (w1 - w0) * (targetMs - t0) / dt;
+      return { value: Math.max(0, w2) * nativeFromW, unit: displayUnit, isPredicted: true };
+    }
+  }
+  return { value: NaN, unit: displayUnit, isPredicted: false };
+}
+function renderTimelineHoverTooltip(host) {
+  const range = host._timeRange;
+  const series = host._chartSeries;
+  const hoverPct = host._chartHoverPct;
+  if (!range || !series || hoverPct === null) return b``;
+  if (hoverPct < 0 || hoverPct > 100) return b``;
+  const startMs = range.start.getTime();
+  const rangeMs = range.end.getTime() - startMs;
+  if (rangeMs <= 0) return b``;
+  const hoverMs = startMs + hoverPct / 100 * rangeMs;
+  const irrV = interpAt(series.times, series.irradiance, hoverMs);
+  const cldV = interpAt(series.times, series.cloud, hoverMs);
+  const pv = pvValueAtTime(host, hoverMs);
+  const hasPv = isFinite(pv.value);
+  const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
+  const cloudColor = cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
+  const pvBaseColor = cfgHex(host.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
+  const pvColor = pv.isPredicted ? lerpHexToward(pvBaseColor, "#ffffff", 0.55) : pvBaseColor;
+  const timeLabel = new Date(hoverMs).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  });
+  const clampedPct = Math.max(8, Math.min(92, hoverPct));
+  const pvDecimals = !hasPv ? 0 : pv.unit === "W" ? 0 : Math.abs(pv.value) < 100 ? 1 : 0;
+  return b`
+        <div
+            class="tb-hover-tooltip"
+            style="left:${clampedPct.toFixed(2)}%"
+        >
+            <div class="tb-hover-tooltip-time">${timeLabel}</div>
+            ${isFinite(irrV) ? b`
+                <div class="tb-hover-tooltip-row">
+                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
+                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
+                </div>
+            ` : A}
+            ${isFinite(cldV) ? b`
+                <div class="tb-hover-tooltip-row">
+                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:cloud-outline" style="color:${cloudColor}"></ha-icon>
+                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cldV)))} %</span>
+                </div>
+            ` : A}
+            ${hasPv ? b`
+                <div class="tb-hover-tooltip-row">
+                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:flash" style="color:${pvColor}"></ha-icon>
+                    <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
+                </div>
+            ` : A}
+        </div>
+    `;
+}
+function interpAt(times, values2, targetMs) {
+  const n3 = Math.min(times.length, values2.length);
+  if (n3 === 0) return NaN;
+  if (targetMs <= times[0].getTime()) {
+    return isFinite(values2[0]) ? values2[0] : NaN;
+  }
+  if (targetMs >= times[n3 - 1].getTime()) {
+    const v2 = values2[n3 - 1];
+    return isFinite(v2) ? v2 : NaN;
+  }
+  for (let i2 = 1; i2 < n3; i2++) {
+    const t1 = times[i2].getTime();
+    if (targetMs > t1) continue;
+    const t0 = times[i2 - 1].getTime();
+    const v0 = values2[i2 - 1];
+    const v1 = values2[i2];
+    if (!isFinite(v0) || !isFinite(v1)) return NaN;
+    const dt = t1 - t0;
+    if (dt <= 0) return v1;
+    return v0 + (v1 - v0) * (targetMs - t0) / dt;
+  }
+  return NaN;
+}
+function handleChartHoverMove(host, e2) {
+  if (e2.buttons !== 0) {
+    host._chartHoverPct = null;
+    return;
+  }
+  const card = e2.currentTarget;
+  if (!card) return;
+  const rect = card.getBoundingClientRect();
+  if (rect.width <= 0) return;
+  const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
+  host._chartHoverPct = frac * 100;
+}
+function handleChartHoverLeave(host) {
+  host._chartHoverPct = null;
+}
 function renderChart(host) {
   const series = host._chartSeries;
   const range = host._timeRange;
@@ -38019,26 +39053,39 @@ function renderChart(host) {
   }
   const W = 1e3;
   const H2 = 100;
-  const MID = H2 / 2;
-  const HALF = H2 / 2;
+  const BASE = H2;
   const startMs = range.start.getTime();
   const rangeMs = range.end.getTime() - startMs;
   if (rangeMs <= 0) {
     return b`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H2}" preserveAspectRatio="none"></svg>`;
   }
   const xOf = (t2) => (t2.getTime() - startMs) / rangeMs * W;
-  const yIrr = (w2) => MID - Math.max(0, Math.min(1, w2 / 1e3)) * HALF;
-  const yCloud = (pct) => MID + Math.max(0, Math.min(1, pct / 100)) * HALF;
+  const yIrr = (w2) => BASE - Math.max(0, Math.min(1, w2 / 1e3)) * H2;
+  const yCloud = (pct) => BASE - Math.max(0, Math.min(1, pct / 100)) * H2;
   const irrPoints = series.times.map((t2, i2) => `${xOf(t2).toFixed(2)},${yIrr(series.irradiance[i2] ?? 0).toFixed(2)}`);
   const cloudPoints = series.times.map((t2, i2) => `${xOf(t2).toFixed(2)},${yCloud(series.cloud[i2] ?? 0).toFixed(2)}`);
   const x0 = xOf(series.times[0]);
   const xN = xOf(series.times[series.times.length - 1]);
-  const irrArea = `M ${x0},${MID} L ${irrPoints.join(" L ")} L ${xN},${MID} Z`;
-  const cloudArea = `M ${x0},${MID} L ${cloudPoints.join(" L ")} L ${xN},${MID} Z`;
+  const irrArea = `M ${x0},${BASE} L ${irrPoints.join(" L ")} L ${xN},${BASE} Z`;
+  const cloudArea = `M ${x0},${BASE} L ${cloudPoints.join(" L ")} L ${xN},${BASE} Z`;
   const irrLine = `M ${irrPoints.join(" L ")}`;
   const cloudLine = `M ${cloudPoints.join(" L ")}`;
   const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
   const cloudColor = cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
+  const hoverPct = host._chartHoverPct;
+  let hoverX = 0;
+  let hoverYIrr = NaN;
+  let hoverYCld = NaN;
+  let showHover = false;
+  if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100) {
+    hoverX = hoverPct / 100 * W;
+    const hoverMs = startMs + hoverPct / 100 * rangeMs;
+    const irrV = interpAt(series.times, series.irradiance, hoverMs);
+    const cldV = interpAt(series.times, series.cloud, hoverMs);
+    if (isFinite(irrV)) hoverYIrr = yIrr(irrV);
+    if (isFinite(cldV)) hoverYCld = yCloud(cldV);
+    showHover = isFinite(hoverYIrr) || isFinite(hoverYCld);
+  }
   const startMsAbs = range.start.getTime();
   const endMsAbs = range.end.getTime();
   const dayXs = [];
@@ -38069,25 +39116,28 @@ function renderChart(host) {
             viewBox="0 0 ${W} ${H2}"
             preserveAspectRatio="none"
         >
-            <path
-                d="${irrArea}"
-                fill="${sunColor}"
-                fill-opacity="0.5"
-            ></path>
+            <!-- Cloud first as the background layer; the irradiance
+                 fill paints on top with the same alpha so the two
+                 curves coexist rather than competing. -->
             <path
                 d="${cloudArea}"
                 fill="${cloudColor}"
-                fill-opacity="0.5"
+                fill-opacity="0.25"
             ></path>
             <path
-                class="hc-chart-line"
-                d="${irrLine}"
-                stroke="${sunColor}"
+                d="${irrArea}"
+                fill="${sunColor}"
+                fill-opacity="0.25"
             ></path>
             <path
                 class="hc-chart-line"
                 d="${cloudLine}"
                 stroke="${cloudColor}"
+            ></path>
+            <path
+                class="hc-chart-line"
+                d="${irrLine}"
+                stroke="${sunColor}"
             ></path>
             ${dayXs.map((x2) => w`
                 <line
@@ -38096,18 +39146,38 @@ function renderChart(host) {
                     x2="${x2.toFixed(2)}" y2="${H2}"
                 ></line>
             `)}
-            <line
-                class="hc-chart-mid"
-                x1="0" y1="${MID}"
-                x2="${W}" y2="${MID}"
-            ></line>
             ${hourXs.map((x2) => w`
                 <line
                     class="hc-hour-tick"
-                    x1="${x2.toFixed(2)}" y1="${MID - HOUR_TICK_HALF}"
-                    x2="${x2.toFixed(2)}" y2="${MID + HOUR_TICK_HALF}"
+                    x1="${x2.toFixed(2)}" y1="${H2 - HOUR_TICK_HALF * 2}"
+                    x2="${x2.toFixed(2)}" y2="${H2}"
                 ></line>
             `)}
+            ${showHover ? w`
+                <line
+                    class="hc-hover-guide"
+                    x1="${hoverX.toFixed(2)}" y1="0"
+                    x2="${hoverX.toFixed(2)}" y2="${H2}"
+                ></line>
+                ${isFinite(hoverYCld) ? w`
+                    <circle
+                        class="hc-hover-dot"
+                        cx="${hoverX.toFixed(2)}"
+                        cy="${hoverYCld.toFixed(2)}"
+                        r="2.4"
+                        fill="${cloudColor}"
+                    ></circle>
+                ` : ""}
+                ${isFinite(hoverYIrr) ? w`
+                    <circle
+                        class="hc-hover-dot"
+                        cx="${hoverX.toFixed(2)}"
+                        cy="${hoverYIrr.toFixed(2)}"
+                        r="2.4"
+                        fill="${sunColor}"
+                    ></circle>
+                ` : ""}
+            ` : A}
         </svg>
     `;
 }
@@ -38194,6 +39264,9 @@ function renderPvChart(host) {
   const lat = coords?.lat;
   const lon = coords?.lon;
   const series = host._chartSeries;
+  const cal = computeForecastCalibration(host);
+  const calR = cal ? cal.ratio : 1;
+  const capW = pvInverterMaxW(host.config);
   const predictedSamples = [];
   if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
     const nowMs = Date.now();
@@ -38209,7 +39282,8 @@ function renderPvChart(host) {
         raster
       });
       if (pct <= 0) continue;
-      predictedSamples.push({ t: series.times[i2], v: pct * k2 * nativeFromW });
+      const wattsClipped = Math.min(capW, pct * k2 * calR);
+      predictedSamples.push({ t: series.times[i2], v: wattsClipped * nativeFromW });
     }
   }
   let yMax = 1;
@@ -38234,6 +39308,34 @@ function renderPvChart(host) {
     const pPoints = predictedSamples.map((s2) => `${xOf(s2.t).toFixed(2)},${yOf(s2.v).toFixed(2)}`);
     predictedLine = `M ${pPoints.join(" L ")}`;
   }
+  const hoverPct = host._chartHoverPct;
+  let hoverX = 0;
+  let hoverY = NaN;
+  let showHover = false;
+  if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100) {
+    hoverX = hoverPct / 100 * W;
+    const hoverMs = startMs + hoverPct / 100 * rangeMs;
+    let hoverV = NaN;
+    const lastObsMs = samples.length > 0 ? samples[samples.length - 1].t.getTime() : -Infinity;
+    if (samples.length >= 1 && hoverMs <= lastObsMs) {
+      hoverV = interpAt(
+        samples.map((s2) => s2.t),
+        samples.map((s2) => s2.v),
+        hoverMs
+      );
+    }
+    if (!isFinite(hoverV) && predictedSamples.length >= 1) {
+      hoverV = interpAt(
+        predictedSamples.map((s2) => s2.t),
+        predictedSamples.map((s2) => s2.v),
+        hoverMs
+      );
+    }
+    if (isFinite(hoverV)) {
+      hoverY = yOf(Math.max(0, hoverV));
+      showHover = true;
+    }
+  }
   return b`
         <svg
             class="hc-chart-svg"
@@ -38251,7 +39353,7 @@ function renderPvChart(host) {
                 <path
                     d="${area}"
                     fill="${pvColor}"
-                    fill-opacity="0.5"
+                    fill-opacity="0.25"
                 ></path>
                 <path
                     class="hc-chart-line"
@@ -38265,6 +39367,20 @@ function renderPvChart(host) {
                     d="${predictedLine}"
                     stroke="${pvColor}"
                 ></path>
+            ` : A}
+            ${showHover ? w`
+                <line
+                    class="hc-hover-guide"
+                    x1="${hoverX.toFixed(2)}" y1="0"
+                    x2="${hoverX.toFixed(2)}" y2="${H2}"
+                ></line>
+                <circle
+                    class="hc-hover-dot"
+                    cx="${hoverX.toFixed(2)}"
+                    cy="${hoverY.toFixed(2)}"
+                    r="2.4"
+                    fill="${pvColor}"
+                ></circle>
             ` : A}
         </svg>
     `;
@@ -38299,7 +39415,8 @@ function renderTimelineDayLabels(host) {
   today0.setHours(0, 0, 0, 0);
   const showConsumption = timelineConsumptionEnabled(host.config);
   const dailyKwh = showConsumption ? computeDailyKwhTotals(host) : /* @__PURE__ */ new Map();
-  const labels = [];
+  const cells = [];
+  const sepPcts = [];
   const cursor = new Date(start);
   cursor.setHours(0, 0, 0, 0);
   while (cursor.getTime() <= end.getTime()) {
@@ -38314,26 +39431,40 @@ function renderTimelineDayLabels(host) {
       const dayDelta = Math.round((cursor.getTime() - today0.getTime()) / 864e5);
       const isToday = dayDelta === 0;
       const label = formatDate(cursor, host.config?.["date-format"]);
-      const centre = pStart + w2 / 2;
-      const labelPct = Math.min(Math.max(centre, 6), 94);
       const kwh = dailyKwh.get(cursor.getTime());
       const isForecast = kwh !== void 0 && cursor.getTime() > today0.getTime();
       const kwhText = kwh !== void 0 && isFinite(kwh) && kwh >= 0.05 ? formatLocalisedNumber(host.hass, kwh, 1) + " kWh" : "";
-      labels.push(b`
-                <div
-                    class="tb-day-label ${isToday ? "tb-day-label-today" : ""}"
-                    style="left:${labelPct}%"
-                >
-                    <span class="tb-day-label-date">${label}</span>
-                    ${kwhText ? b`
-                        <span class="tb-day-label-kwh ${isForecast ? "is-forecast" : ""}">${kwhText}</span>
-                    ` : A}
-                </div>
-            `);
+      cells.push({
+        isToday,
+        centrePct: pStart + w2 / 2,
+        widthPct: w2,
+        label,
+        kwhText,
+        isForecast
+      });
+      sepPcts.push(pEnd);
     }
     cursor.setTime(next3.getTime());
   }
-  return b`<div class="tb-day-labels">${labels}</div>`;
+  if (sepPcts.length > 0) sepPcts.pop();
+  return b`
+        <div class="tb-day-strip">
+            ${cells.map((c2) => b`
+                <div
+                    class="tb-day-strip-cell ${c2.isToday ? "is-today" : ""}"
+                    style="left:${(c2.centrePct - c2.widthPct / 2).toFixed(2)}%; width:${c2.widthPct.toFixed(2)}%"
+                >
+                    <span class="tb-day-strip-date">${c2.label}</span>
+                    ${c2.kwhText ? b`
+                        <span class="tb-day-strip-kwh ${c2.isForecast ? "is-forecast" : ""}">${c2.kwhText}</span>
+                    ` : A}
+                </div>
+            `)}
+            ${sepPcts.map((p2) => b`
+                <div class="tb-day-strip-sep" style="left:${p2.toFixed(2)}%"></div>
+            `)}
+        </div>
+    `;
 }
 function computeDailyKwhTotals(host) {
   const out = /* @__PURE__ */ new Map();
@@ -38379,6 +39510,9 @@ function computeDailyKwhTotals(host) {
   const k2 = pvCalibK(host.config);
   const series = host._chartSeries;
   const coords = getHomeCoords(host.config, host.hass);
+  const cal = computeForecastCalibration(host);
+  const calR = cal ? cal.ratio : 1;
+  const capW = pvInverterMaxW(host.config);
   if (k2 !== null && k2 > 0 && series && coords) {
     const nowMs = Date.now();
     const raster = host._engine?.getLidarRaster() ?? null;
@@ -38393,94 +39527,13 @@ function computeDailyKwhTotals(host) {
         raster
       });
       if (pct <= 0) continue;
-      const kwh = pct * k2 / 1e3;
+      const watts = Math.min(capW, pct * k2 * calR);
+      const kwh = watts / 1e3;
       const dk = dayKey(tMs);
       out.set(dk, (out.get(dk) ?? 0) + kwh);
     }
   }
   return out;
-}
-const WINDOW_DAYS = 5;
-const RATIO_MIN = 0.5;
-const RATIO_MAX = 1.5;
-const MIN_DAY_PREDICTED_KWH = 2;
-function computeForecastCalibration(host) {
-  const k2 = pvCalibK(host.config);
-  const series = host._chartSeries;
-  const hist = host._pvHistory;
-  const coords = getHomeCoords(host.config, host.hass);
-  if (k2 === null || k2 <= 0 || !series || !hist || !coords) return null;
-  const HOUR_MS = 36e5;
-  const today0 = /* @__PURE__ */ new Date();
-  today0.setHours(0, 0, 0, 0);
-  const ratios = [];
-  const raster = host._engine?.getLidarRaster() ?? null;
-  for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++) {
-    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
-    const dayEndMs = dayStartMs + 24 * HOUR_MS;
-    const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
-    if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
-    const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
-    if (actualKwh <= 0) continue;
-    const r2 = actualKwh / predictedKwh;
-    if (!isFinite(r2) || r2 <= 0) continue;
-    ratios.push(Math.max(RATIO_MIN, Math.min(RATIO_MAX, r2)));
-  }
-  if (ratios.length < 2) return null;
-  const mean = ratios.reduce((a2, b2) => a2 + b2, 0) / ratios.length;
-  return {
-    ratio: Math.max(RATIO_MIN, Math.min(RATIO_MAX, mean)),
-    daysUsed: ratios.length
-  };
-}
-function predictedKwhForDay(config, series, coords, startMs, endMs, raster) {
-  const k2 = pvCalibK(config);
-  if (k2 === null || k2 <= 0) return 0;
-  let kwh = 0;
-  for (let i2 = 0; i2 < series.times.length; i2++) {
-    const tMs = series.times[i2].getTime();
-    if (tMs < startMs || tMs >= endMs) continue;
-    const cloud = series.cloud[i2] ?? 0;
-    const pct = computePvPowerWeighted(config, series.times[i2], coords.lat, coords.lon, cloud, {
-      airTempC: series.temperature?.[i2] ?? NaN,
-      windMs: series.windSpeed?.[i2] ?? NaN,
-      raster
-    });
-    if (pct <= 0) continue;
-    kwh += pct * k2 / 1e3;
-  }
-  return kwh;
-}
-function actualKwhForDay(hist, pvUnit, startMs, endMs) {
-  if (hist.times.length < 2) return 0;
-  const unit = (pvUnit || "").toLowerCase();
-  const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
-  const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
-  const HOUR_MS = 36e5;
-  if (isCumulativeEnergy) {
-    let kwh2 = 0;
-    for (let i2 = 1; i2 < hist.times.length; i2++) {
-      const tMs = hist.times[i2].getTime();
-      if (tMs < startMs || tMs >= endMs) continue;
-      const dv = hist.values[i2] - hist.values[i2 - 1];
-      if (!isFinite(dv) || dv < 0) continue;
-      kwh2 += dv * energyFactor;
-    }
-    return kwh2;
-  }
-  let kwh = 0;
-  for (let i2 = 1; i2 < hist.times.length; i2++) {
-    const tCurrMs = hist.times[i2].getTime();
-    if (tCurrMs < startMs || tCurrMs >= endMs) continue;
-    const tPrevMs = hist.times[i2 - 1].getTime();
-    const dtH = (tCurrMs - tPrevMs) / HOUR_MS;
-    if (dtH <= 0 || dtH > 6) continue;
-    const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
-    const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
-    if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
-    kwh += (wPrev + wCurr) / 2 * dtH / 1e3;
-  }
-  return kwh;
 }
 function renderDashboard(host) {
   const t2 = pickTranslations(host.hass?.language);
@@ -38746,7 +39799,7 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
   const peakPredictedValue = formatPvWatts(host.hass, data.peakPredictedW);
   const showPeakActual = data.peakActualHourTs !== null && data.peakActualW > 50;
   const showPeakPredicted = data.peakPredictedHourTs !== null && data.peakPredictedW > 50;
-  const producedKwh = cum.actualSamples.length > 0 ? cum.actualSamples[cum.actualSamples.length - 1].kwh : 0;
+  const producedKwh = cum.actualSamples.length > 0 ? Math.max(0, cum.actualSamples[cum.actualSamples.length - 1].kwh) : 0;
   const forecastKwh = cum.predictedSamples.length > 0 ? cum.predictedSamples[cum.predictedSamples.length - 1].kwh : 0;
   const nowMs = Date.now();
   const predictedAtNow = interpolateKwhAt(cum.predictedSamples, nowMs);
@@ -38897,6 +39950,9 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
   const referenceYPct = referenceY / H2 * 100;
   const tooltipBelow = referenceY <= H2 / 2;
   const clipId = `dash-today-chart-reveal-${host._instanceId}`;
+  const hatchId = `dash-today-chart-night-${host._instanceId}`;
+  const nightLeftEnd = showSunrise ? xFor(sunriseMs) : null;
+  const nightRightStart = showSunset ? xFor(sunsetMs) : null;
   return b`
         <div class="dash-today-chart">
             <svg class="dash-today-chart-svg"
@@ -38911,7 +39967,71 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                               x="0" y="0"
                               width="${W}" height="${H2}"/>
                     </clipPath>
+                    <!--  Diagonal night-zone hatch. Tiled at 6 px in
+                          viewBox units, rotated 45°. Pattern stays
+                          tile-aligned regardless of the chart's pre-
+                          serveAspectRatio because the SVG renders at
+                          near-native size in the dashboard. Dark-mode
+                          stroke is set via the .dash-today-chart-
+                          night CSS class on the line element below.   -->
+                    <pattern id="${hatchId}"
+                             patternUnits="userSpaceOnUse"
+                             width="6" height="6"
+                             patternTransform="rotate(45)">
+                        <line class="dash-today-chart-night"
+                              x1="0" y1="0" x2="0" y2="6"
+                              stroke-width="1.5"/>
+                    </pattern>
                 </defs>
+                <!--  Night zones: pre-dawn rect from the plot's left
+                      edge to sunrise, and post-dusk rect from sunset
+                      to the plot's right edge. Skipped on polar days
+                      where the sun never crosses the horizon (showSun
+                      flags stay false).                               -->
+                ${nightLeftEnd !== null && nightLeftEnd > PAD_L ? w`
+                    <rect
+                        x="${PAD_L.toFixed(2)}"
+                        y="${PAD_T.toFixed(2)}"
+                        width="${(nightLeftEnd - PAD_L).toFixed(2)}"
+                        height="${(H2 - PAD_T - PAD_B).toFixed(2)}"
+                        fill="url(#${hatchId})"
+                    ></rect>
+                ` : A}
+                ${nightRightStart !== null && nightRightStart < W - PAD_R ? w`
+                    <rect
+                        x="${nightRightStart.toFixed(2)}"
+                        y="${PAD_T.toFixed(2)}"
+                        width="${(W - PAD_R - nightRightStart).toFixed(2)}"
+                        height="${(H2 - PAD_T - PAD_B).toFixed(2)}"
+                        fill="url(#${hatchId})"
+                    ></rect>
+                ` : A}
+                <!--  Dotted vertical lines at the sunrise / sunset
+                      X positions, matching the timeline's day-
+                      separator look (.hc-day-sep). Acts as a clear
+                      day/night boundary on top of the softer hatch
+                      shading. Dark + light themes pick up their
+                      stroke colour from .dash-today-chart-twilight
+                      below, same alpha as the hc-day-sep on the
+                      main chart.                                    -->
+                ${nightLeftEnd !== null ? w`
+                    <line
+                        class="dash-today-chart-twilight"
+                        x1="${nightLeftEnd.toFixed(2)}"
+                        y1="${PAD_T.toFixed(2)}"
+                        x2="${nightLeftEnd.toFixed(2)}"
+                        y2="${(H2 - PAD_B).toFixed(2)}"
+                    ></line>
+                ` : A}
+                ${nightRightStart !== null ? w`
+                    <line
+                        class="dash-today-chart-twilight"
+                        x1="${nightRightStart.toFixed(2)}"
+                        y1="${PAD_T.toFixed(2)}"
+                        x2="${nightRightStart.toFixed(2)}"
+                        y2="${(H2 - PAD_B).toFixed(2)}"
+                    ></line>
+                ` : A}
                 ${kwhTicks.map((v2) => w`
                     <line class="dash-today-chart-grid"
                           x1="${PAD_L}"     y1="${yFor(v2).toFixed(2)}"
@@ -38926,18 +40046,6 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                               x2="${x2.toFixed(2)}" y2="${H2 - PAD_B}"/>
                     `;
   })}
-                ${showSunrise ? w`
-                    <line class="dash-today-chart-twilight"
-                          x1="${xFor(sunriseMs).toFixed(2)}" x2="${xFor(sunriseMs).toFixed(2)}"
-                          y1="${PAD_T}" y2="${H2 - PAD_B}"
-                          stroke="${sunColor}"/>
-                ` : A}
-                ${showSunset ? w`
-                    <line class="dash-today-chart-twilight"
-                          x1="${xFor(sunsetMs).toFixed(2)}" x2="${xFor(sunsetMs).toFixed(2)}"
-                          y1="${PAD_T}" y2="${H2 - PAD_B}"
-                          stroke="${sunColor}"/>
-                ` : A}
                 <g clip-path="url(#${clipId})">
                     ${predictedPath !== "" ? w`
                         <path class="dash-today-chart-predicted"
@@ -38986,18 +40094,14 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                     >${formatLocalisedNumber(host.hass, v2, yStep < 1 ? 1 : 0)}</span>
                 `)}
             </div>
-            ${showSunrise ? b`
-                <ha-icon class="dash-today-chart-twilight-icon"
-                         icon="mdi:weather-sunset-up"
-                         style="left: ${(xFor(sunriseMs) / W * 100).toFixed(2)}%; color: ${sunColor};"
-                ></ha-icon>
-            ` : A}
-            ${showSunset ? b`
-                <ha-icon class="dash-today-chart-twilight-icon"
-                         icon="mdi:weather-sunset-down"
-                         style="left: ${(xFor(sunsetMs) / W * 100).toFixed(2)}%; color: ${sunColor};"
-                ></ha-icon>
-            ` : A}
+            <!--  Twilight ha-icon glyphs (sunrise / sunset) used to
+                  sit here; they were replaced in v1.6.3 by the
+                  night-zone diagonal hatch rendered inside the SVG
+                  above. Same visual vocabulary as the timeline's
+                  .hc-night-zone overlay, and the hatch communicates
+                  "this slice is night" without competing with the
+                  PV curve for the user's attention.                   -->
+
             ${showHover ? b`
                 <div class="dash-today-chart-tooltip dash-today-chart-tooltip-${tooltipBelow ? "below" : "above"}"
                      style="left: ${hoverFracX.toFixed(2)}%; top: ${referenceYPct.toFixed(2)}%;"
@@ -39474,6 +40578,14 @@ const editorStyles = i$3`
         font-style: italic;
         margin: 8px 0 20px 0;
     }
+    .hint a
+    {
+        color: var(--primary-color, #03a9f4);
+        text-decoration: none;
+        font-style: normal;
+        font-weight: 500;
+    }
+    .hint a:hover { text-decoration: underline; }
 
     .field
     {
@@ -39969,6 +41081,29 @@ __decorateClass$1([
 HeliosColorPicker = __decorateClass$1([
   t("helios-color-picker")
 ], HeliosColorPicker);
+function renderMarkdownLinks(text) {
+  const parts = [];
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let cursor = 0;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > cursor) {
+      parts.push(text.slice(cursor, match.index));
+    }
+    const label = match[1];
+    const url = match[2];
+    if (/^https?:\/\//i.test(url)) {
+      parts.push(b`<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+    } else {
+      parts.push(`${label} (${url})`);
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
+  }
+  return parts;
+}
 let HeliosCardEditor = class extends i {
   constructor() {
     super(...arguments);
@@ -40134,19 +41269,20 @@ let HeliosCardEditor = class extends i {
           tilt: toNum2(e2["tilt"]),
           azimuth: toNum2(e2["azimuth"]),
           share: toNum2(e2["share"]),
+          peakKwp: toNum2(e2["peak-kwp"]),
           latitude: toNum2(e2["latitude"]),
           longitude: toNum2(e2["longitude"]),
           height: toNum2(e2["height"])
         };
       });
-      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null }];
+      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
     }
     const legacyTilt = toNum2(this._cfg?.["pv-tilt"]);
     const legacyAz = toNum2(this._cfg?.["pv-azimuth"]);
     if (legacyTilt !== null || legacyAz !== null) {
-      return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, latitude: null, longitude: null, height: null }];
+      return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, peakKwp: null, latitude: null, longitude: null, height: null }];
     }
-    return [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null }];
+    return [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
   }
   //Persists a list of array entries to the config under `pv-arrays`
   //and clears the legacy `pv-tilt` / `pv-azimuth` keys in the same
@@ -40161,6 +41297,7 @@ let HeliosCardEditor = class extends i {
       if (e2.tilt !== null) o2["tilt"] = e2.tilt;
       if (e2.azimuth !== null) o2["azimuth"] = e2.azimuth;
       if (e2.share !== null) o2["share"] = e2.share;
+      if (e2.peakKwp !== null) o2["peak-kwp"] = e2.peakKwp;
       if (e2.latitude !== null) o2["latitude"] = e2.latitude;
       if (e2.longitude !== null) o2["longitude"] = e2.longitude;
       if (e2.height !== null) o2["height"] = e2.height;
@@ -40202,7 +41339,7 @@ let HeliosCardEditor = class extends i {
   _arrayAdd() {
     const list = this._readPvArrays();
     if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
-    list.push({ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null });
+    list.push({ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null });
     this._openArrayIndices = /* @__PURE__ */ new Set([...this._openArrayIndices, list.length - 1]);
     this._writePvArrays(list);
   }
@@ -40621,6 +41758,18 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="field-help">${t2.editor.pvPeakPowerHelp}</div>
                 <label class="field">
+                    <span class="label">${t2.editor.pvInverterMaxKw}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="5"
+                        .value="${c2["pv-inverter-max-kw"] != null ? String(c2["pv-inverter-max-kw"]) : ""}"
+                        @change="${(e2) => this._numField("pv-inverter-max-kw", e2)}"
+                    />
+                </label>
+                <div class="field-help">${t2.editor.pvInverterMaxKwHelp}</div>
+                <label class="field">
                     <span class="label">${t2.editor.pvColor}</span>
                     <helios-color-picker
                         .value="${cfgHex(c2["pv-color"], DEFAULT_PV_COLOR_HEX)}"
@@ -40700,18 +41849,17 @@ let HeliosCardEditor = class extends i {
                                             </label>
                                             <div class="field-help">${t2.editor.pvArrayAzimuthHelp}</div>
                                             <label class="field">
-                                                <span class="label">${t2.editor.pvArrayShare}</span>
+                                                <span class="label">${t2.editor.pvArrayPeakKwp}</span>
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    max="100"
-                                                    step="1"
-                                                    placeholder="${arrays.length === 1 ? "100" : String(Math.round(100 / arrays.length))}"
-                                                    .value="${arr.share !== null ? String(arr.share) : ""}"
-                                                    @change="${(e2) => this._arrayField(i2, "share", e2)}"
+                                                    step="0.1"
+                                                    placeholder="3.2"
+                                                    .value="${arr.peakKwp !== null ? String(arr.peakKwp) : ""}"
+                                                    @change="${(e2) => this._arrayField(i2, "peakKwp", e2)}"
                                                 />
                                             </label>
-                                            <div class="field-help">${t2.editor.pvArrayShareHelp}</div>
+                                            <div class="field-help">${t2.editor.pvArrayPeakKwpHelp}</div>
                                             <label class="field">
                                                 <span class="label">${t2.editor.pvArrayLatitude}</span>
                                                 <input
@@ -40933,7 +42081,7 @@ let HeliosCardEditor = class extends i {
                 <details class="advanced-section" ?open="${this._openSection === "lidar"}" @toggle="${(e2) => this._onSectionToggle("lidar", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.localLidarSection}</summary>
                     <div class="hint">${t2.editor.localLidarHint}</div>
-                    <div class="hint" style="margin-bottom: 14px;">${t2.editor.localLidarToolsHint}</div>
+                    <div class="hint" style="margin-bottom: 14px;">${renderMarkdownLinks(t2.editor.localLidarToolsHint)}</div>
                     <div class="field">
                         <span class="label">${t2.editor.localLidarEnabled}</span>
                         <div class="segmented-toggle">
@@ -41091,7 +42239,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.2"}`,
+      `%c☀ HELIOS%c v${"1.6.3"}`,
       labelStyle,
       versionStyle
     );
@@ -41115,7 +42263,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.2",
+        version: "1.6.3",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41123,7 +42271,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -41204,6 +42352,7 @@ let HeliosCard = class extends i {
     this._homeSilhouettes = [];
     this._homeHover = false;
     this._dashChartHoverTs = null;
+    this._chartHoverPct = null;
     this._chartSeries = null;
     this._fetching = false;
     this._timeRange = null;
@@ -41433,7 +42582,10 @@ let HeliosCard = class extends i {
           raster: this._engine?.getLidarRaster() ?? null
         });
         if (pct > 0) {
-          pvPredictedRate = { value: pct * k2, unit: "W" };
+          const cal = computeForecastCalibration(this);
+          const calR = cal ? cal.ratio : 1;
+          const w2 = Math.min(pvInverterMaxW(this.config), pct * k2 * calR);
+          pvPredictedRate = { value: w2, unit: "W" };
         }
       }
     }
@@ -41530,7 +42682,6 @@ let HeliosCard = class extends i {
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
     const lidarSourceId = this._engine?.getActiveLidarSourceId() ?? null;
-    const lidarViewEnabled = lidarSourceId !== null;
     const cardClasses = [
       cardThemeClass,
       this._detailMode ? "detail-active" : "",
@@ -41557,22 +42708,40 @@ let HeliosCard = class extends i {
                               of the main chart so the irradiance
                               area and the PV area visually balance
                               each other.  -->
+                        ${renderTimelineHoverTooltip(this)}
                         ${pvEntityId ? b`
-                            <div class="tb-chart-card tb-pv-card">
+                            <div
+                                class="tb-chart-card tb-pv-card"
+                                @pointermove="${(e2) => handleChartHoverMove(this, e2)}"
+                                @pointerleave="${() => handleChartHoverLeave(this)}"
+                            >
                                 ${renderPvChart(this)}
+                                ${renderTimelineNightZones(this)}
+                                ${renderTimelineFutureMask(this)}
                                 ${renderTimelineTicks(this)}
                             </div>
                         ` : A}
 
                         <!--  Chart card: hosts the area chart, the
-                              dotted day separators, the day-label
-                              chips on the midline, and the live +
-                              scrub cursors as HTML overlays.  -->
-                        <div class="tb-chart-card">
+                              dotted day separators, the night-zone
+                              diagonal hatch overlay (one rect per
+                              sunset, next sunrise window) and the
+                              live + scrub cursors as HTML overlays.
+                              The day-label chip row used to overlay
+                              the midline of this card; it's now a
+                              sibling block below so the chips never
+                              cover the curves they describe.  -->
+                        <div
+                            class="tb-chart-card"
+                            @pointermove="${(e2) => handleChartHoverMove(this, e2)}"
+                            @pointerleave="${() => handleChartHoverLeave(this)}"
+                        >
                             ${renderChart(this)}
-                            ${renderTimelineDayLabels(this)}
+                            ${renderTimelineNightZones(this)}
+                            ${renderTimelineFutureMask(this)}
                             ${renderTimelineTicks(this)}
                         </div>
+                        ${renderTimelineDayLabels(this)}
                     </div>
                 ` : A}
 
@@ -41615,19 +42784,53 @@ let HeliosCard = class extends i {
                       instead of two competing spinners on opposite
                       sides of the card. Sits at the same 8 px edge
                       margin as the clock and the timeline.  -->
-                ${hasApiKey && (lidarViewEnabled || this._lidarViewMode) ? b`
-                    <div class="overlay-top-right">
-                        <button
-                            type="button"
-                            class="lidar-view-btn ${this._lidarViewMode ? "is-on" : ""}"
-                            aria-label="${this._lidarViewMode ? "Exit LiDAR View" : "LiDAR View"}"
-                            aria-pressed="${this._lidarViewMode ? "true" : "false"}"
-                            @click="${() => toggleLidarView(this)}"
-                        >
-                            <span class="lidar-view-btn-label">LiDAR</span>
-                        </button>
-                    </div>
-                ` : A}
+                <!--  Top-right cluster, mirror of the top-left
+                      clock + scrub-return pair. The "LiDAR" chip is
+                      passive (purely a status label) and the toggle
+                      button sits to its LEFT, fused to the chip's
+                      left edge with a shared border. Three button
+                      states:
+                        - no provider covers the home, disabled,
+                          eye-off-outline icon, no click handler
+                        - public online provider, active, earth
+                          icon, click toggles LiDAR view
+                        - local-nDSM (YAML config), active, harddisk
+                          icon, click toggles LiDAR view
+                      Active state mirrors the scrub-blue theme used
+                      on the opposite rail when LiDAR view is on, so
+                      the cluster doubles as the "you're in LiDAR
+                      view" signal the way the clock chip doubles as
+                      the "you're scrubbing" signal.                 -->
+                ${hasApiKey ? (() => {
+      const isLocal = lidarSourceId === "local-ndsm";
+      const hasProvider = lidarSourceId !== null;
+      const stateClass = !hasProvider ? "is-uncovered" : isLocal ? "is-local" : "is-online";
+      const stateIcon = !hasProvider ? "mdi:cloud-off-outline" : isLocal ? "mdi:harddisk" : "mdi:earth";
+      const stateLabel = !hasProvider ? "No LiDAR coverage at this location" : isLocal ? "Toggle LiDAR view, local nDSM" : "Toggle LiDAR view, online provider";
+      const onToggle = hasProvider ? () => toggleLidarView(this) : void 0;
+      return b`
+                        <div class="overlay-top-right">
+                            <button
+                                type="button"
+                                class="lidar-view-toggle-btn ${stateClass} ${this._lidarViewMode ? "is-on" : ""}"
+                                ?disabled="${!hasProvider}"
+                                aria-label="${stateLabel}"
+                                aria-pressed="${this._lidarViewMode ? "true" : "false"}"
+                                @click="${onToggle}"
+                            >
+                                <ha-icon icon="${stateIcon}"></ha-icon>
+                            </button>
+                            <button
+                                type="button"
+                                class="lidar-view-chip ${stateClass} ${this._lidarViewMode ? "is-on" : ""}"
+                                ?disabled="${!hasProvider}"
+                                aria-label="${stateLabel}"
+                                aria-pressed="${this._lidarViewMode ? "true" : "false"}"
+                                @click="${onToggle}"
+                            >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
+                        </div>
+                    `;
+    })() : A}
 
                 <!--  Top-left cluster: clock chip showing the active
                       timeline instant + (in scrub mode) a back-to-
@@ -41811,6 +43014,74 @@ let HeliosCard = class extends i {
                       because PV and the home share the same X anchor
                       so a straight segment is the right vocabulary.
                       Hidden when no PV entity is configured.  -->
+                <!--  Ground ring around the home. Drawn in its own SVG
+                      layer with an SVG mask built from the home's
+                      screen-space silhouette polygons (the same ones
+                      that drive the home-glow halo). The mask paints
+                      WHITE everywhere and BLACK over the extruded
+                      building's projected outline, so the ring is
+                      hidden wherever the 3D building stands in front
+                      of it. The eye reads the ring as a ground
+                      footprint the building physically stands inside,
+                      improving the perspective without having to
+                      route the ring through MapLibre's layer stack.
+                      Leader line + bead live in the next sibling SVG
+                      so they stay above the home as before.          -->
+                ${showPvLabel ? (() => {
+      const maskId = `helios-home-anchor-mask-${this._instanceId}`;
+      return b`
+                        <svg class="pv-home-anchor-svg">
+                            <defs>
+                                <mask id="${maskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="10000" height="10000">
+                                    <!--  White background , ring visible. -->
+                                    <rect x="0" y="0" width="10000" height="10000" fill="white" />
+                                    <!--  Black home silhouette , ring hidden
+                                          where the projected building
+                                          stands. Same base + top + wall
+                                          polygons the .home-glow-svg
+                                          renders, no extra projection
+                                          pass needed.                       -->
+                                    ${this._homeSilhouettes.map((sil) => {
+        const N2 = Math.min(sil.base.length, sil.top.length);
+        if (N2 < 3) return A;
+        const basePts = sil.base.map((p2) => `${p2.x},${p2.y}`).join(" ");
+        const topPts = sil.top.map((p2) => `${p2.x},${p2.y}`).join(" ");
+        const walls = [];
+        for (let i2 = 0; i2 < N2; i2++) {
+          const j = (i2 + 1) % N2;
+          walls.push(
+            `${sil.base[i2].x},${sil.base[i2].y} ${sil.base[j].x},${sil.base[j].y} ${sil.top[j].x},${sil.top[j].y} ${sil.top[i2].x},${sil.top[i2].y}`
+          );
+        }
+        return w`
+                                            <polygon points="${basePts}" fill="black" />
+                                            <polygon points="${topPts}"  fill="black" />
+                                            ${walls.map((w$1) => w`
+                                                <polygon points="${w$1}" fill="black" />
+                                            `)}
+                                        `;
+      })}
+                                </mask>
+                            </defs>
+                            <g mask="url(#${maskId})">
+                                <g
+                                    class="pv-home-leader-anchor ${pvIdle ? "" : "is-pulsing"}"
+                                    transform="translate(${layout.home.x},${layout.home.y})"
+                                    style="--pv-flow-duration:${pvFlowDuration}s"
+                                >
+                                    <polygon
+                                        class="pv-home-leader-anchor-disc"
+                                        points="${layout.homeAnchorPoints}"
+                                        fill="none"
+                                        stroke="${pvColor}"
+                                        stroke-width="1.6"
+                                    ></polygon>
+                                </g>
+                            </g>
+                        </svg>
+                    `;
+    })() : A}
+
                 ${showPvLabel ? b`
                     <svg class="pv-home-leader-svg">
                         <line
@@ -41841,37 +43112,6 @@ let HeliosCard = class extends i {
                                 ></animateMotion>
                             </circle>
                         ` : A}
-                        <!--  Anchor bead at the home end of the leader,
-                              same colour as the line so the two read
-                              as one continuous element. Sized slightly
-                              larger than the moving bead (r 5 vs 4)
-                              so the destination reads as the "target"
-                              rather than another in-flight particle.
-                              When production is non-zero we synchronise
-                              an SVG <animate> pulse on the r attribute
-                              with the bead's animateMotion cycle: the
-                              anchor swells from r 5 to r 9 during the
-                              last ~15 % of the cycle (i.e. as the bead
-                              approaches) and snaps back at the cycle
-                              boundary. Visual effect, the anchor
-                              "absorbs" each incoming bead.  -->
-                        <circle
-                            class="pv-home-leader-anchor"
-                            cx="${layout.home.x}"
-                            cy="${layout.home.y}"
-                            r="5"
-                            fill="${pvColor}"
-                        >
-                            ${!pvIdle ? w`
-                                <animate
-                                    attributeName="r"
-                                    values="5;5;9;5"
-                                    keyTimes="0;0.80;0.97;1"
-                                    dur="${pvFlowDuration}s"
-                                    repeatCount="indefinite"
-                                ></animate>
-                            ` : A}
-                        </circle>
                     </svg>
                 ` : A}
 
@@ -42062,27 +43302,15 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
-                <!--  Sunrise / sunset markers. ha-icon glyphs centred
-                      on the horizon crossings of the day's solar arc,
-                      coloured in the configured sun colour. The icon
-                      shape itself signals the meaning (sun rising /
-                      setting) so no label or rotation is needed.
-                      Skipped on polar days where the sun never
-                      crosses the horizon.  -->
-                ${showSun && sunScene.sunrise ? b`
-                    <ha-icon
-                        class="solar-horizon-icon solar-horizon-sunrise"
-                        icon="mdi:weather-sunset-up"
-                        style="left:${sunScene.sunrise.x}px; top:${sunScene.sunrise.y}px; color:${sunColor}"
-                    ></ha-icon>
-                ` : A}
-                ${showSun && sunScene.sunset ? b`
-                    <ha-icon
-                        class="solar-horizon-icon solar-horizon-sunset"
-                        icon="mdi:weather-sunset-down"
-                        style="left:${sunScene.sunset.x}px; top:${sunScene.sunset.y}px; color:${sunColor}"
-                    ></ha-icon>
-                ` : A}
+                <!--  Sunrise / sunset markers were drawn here as
+                      sun-coloured ha-icon glyphs anchored at the
+                      arc's horizon crossings. Removed in v1.6.3 :
+                      the arc shape itself already communicates
+                      "the sun rises here, sets there", the icons
+                      added visual noise and competed with the
+                      LiDAR shadow blobs sitting on the same
+                      horizon line.                                  -->
+
 
                 <!--  Home hover glow, sun-coloured halo around the
                       projected home silhouette. Reuses the same base
@@ -42219,6 +43447,9 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_dashChartHoverTs", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_chartHoverPct", 2);
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_chartSeries", 2);

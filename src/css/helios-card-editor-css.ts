@@ -216,6 +216,14 @@ export const editorStyles = css`
         font-style: italic;
         margin: 8px 0 20px 0;
     }
+    .hint a
+    {
+        color: var(--primary-color, #03a9f4);
+        text-decoration: none;
+        font-style: normal;
+        font-weight: 500;
+    }
+    .hint a:hover { text-decoration: underline; }
 
     .field
     {

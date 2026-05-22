@@ -5,6 +5,162 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3
+
+Headline release on top of v1.6.2. Sixteen beta iterations
+condensed below. The big themes :
+
+### Terrain-aware LiDAR shading
+
+The pre-1.6.3 ray-march in `pv-shading.ts` assumed flat ground at
+every cell of the nDSM, which under- or over-counted shading by
+the slope between the panel and a far obstacle on any non-flat
+install. The companion pipeline at [helios-lidar.org](https://helios-lidar.org)
+now ships a 2-band COG (band 1 = nDSM, band 2 = DTM) and the
+card lifts both into absolute Z anchored at the panel's local
+ground, so a 5 m building 50 m east on terrain that rises 8 m
+correctly reads as a 13 m obstacle (and a 5 m building on
+terrain that drops 8 m correctly reads as -3 m, i.e. below the
+panel and invisible to the sun). Legacy single-band rasters
+(public providers + pre-v1.6.3 local COGs) fall back to the
+flat-ground geometry transparently, no breakage.
+
+US-foot LAZ files (a common hurdle for North American users)
+also got fixed in the pipeline: the source CRS gets reprojected
+to the nearest UTM zone in metres before rasterisation, so
+6 ftUS-pitch panels no longer end up encoded as 6 m and skew
+the shading.
+
+### PV configuration : per-string kWp + inverter PMax
+
+`pv-arrays[].peak-kwp` replaces the abstract `share` field for
+multi-string installs. Each row carries its real nameplate;
+total install power is the sum, no more "60/40 with 5 kWp total"
+shorthand. New top-level `pv-inverter-max-kw` clips the forecast
+at the inverter's nameplate so an oversized DC array (typical
+European 6.4 kWp behind a 5 kW inverter) doesn't show a peak
+above what the hardware delivers. Editor + 8 locales updated.
+Legacy share-based configs keep working unchanged.
+
+### 5-day rolling forecast calibration, now everywhere
+
+The dashboard already nudged its "refined" headline by the
+5-day actual / model ratio; v1.6.3 propagates the same `cal.ratio`
+to the dotted forecast curve, the per-day kWh chips on the
+timeline strip, the hover tooltip's PV value, AND the live PV
+chip when scrubbing into the future. All four readouts now
+agree at any scrub instant.
+
+### Timeline overhaul
+
+* **Hover tooltip** on both chart cards (irradiance / cloud + PV).
+  Pointer-move draws a vertical guide line + colour-coded dots
+  (mdi:white-balance-sunny, mdi:cloud-outline, mdi:flash) at the
+  cursor position. PV row skipped silently when no entity is
+  configured. Works on mobile too: a touch drag updates the
+  tooltip the same way as desktop hover.
+* **Night zones** as diagonal-hatch overlays from sunset[N] to
+  sunrise[N+1] on both chart cards, with dotted vertical day /
+  night boundary lines. Same hatch + boundary on the dashboard's
+  today chart for one unified visual vocabulary.
+* **Future-mask wash** anchored at "now" so the forecast portion
+  of every curve + the night-zone hatch fades together. Past
+  reads punchy; forecast reads as forecast.
+* **Day-strip** below the cards: one bordered bar with dotted
+  midnight separators and per-day kWh totals; the cells size their
+  text via container queries so a 4-day mobile view doesn't
+  smash the date + kWh together.
+* **Balanced chart heights** (48 px each) so PV no longer looks
+  like a sparkline below the irradiance / cloud card.
+* **Cursor weights bumped** to read through the future wash.
+  Negative PV readings (net-meter dawn / dusk noise) clamp at 0
+  in the tooltip + the live chip + the dashboard headline.
+
+### Camera : pitch on vertical drag
+
+Vertical drag on the canvas tilts the camera; horizontal drag
+keeps the existing bearing rotation. Pitch clamped to
+[15°, 85°], so the user can dive almost top-down or peek almost
+flat against the ground without ever passing through it.
+Two-finger pinch-rotate stays with MapLibre's built-in handler.
+
+### PV home-anchor as a perspective ground ring
+
+The single screen-space disc at the home gets replaced by a
+2.5 m stroked ring projected through the map's camera matrices.
+Lies flat on the ground around the home, aplated by pitch and
+rotated by bearing. The back arc of the ring is masked by the
+home silhouette (same polygons the home-glow uses), so the
+building visually sits inside the ring. Pulse animation rides
+through the bead arrival cycle.
+
+### LiDAR cast-shadow quality
+
+The cluster cap dropped from 400 cells to 80 (~16 m² target
+area) so convex hulls trace L-roofs and zigzagging tree rows
+much closer to their real outline; the shadow raster size is
+tied to the existing `lidar-precision` knob (low / medium =
+1024 px, high = 2048 px) so the median user pays no extra
+mobile cost and power-users opt in to the sharper edges. Shadow
+recompute is also coalesced into a 100 ms debounce during
+timeline scrub, so dragging the cursor at high precision no
+longer feels glued.
+
+### Anonymous community signal
+
+The card now fires one tiny anonymous heartbeat to
+helios-lidar.org at most once per browser per 24 h. The whole
+body is a random UUIDv4 install_id; **no IP, no User-Agent, no
+HA version, no entity ids, no coordinates, no country**. The VPS
+counts distinct UUIDs in a 30-day window and exposes the total
+via `GET /api/install-count`, so the landing page can show
+"X Helios cards running on dashboards right now" alongside the
+all-time pipeline conversion count. Three opt-out paths, any of
+which silences the heartbeat: `helios-anon-stats: false` in the
+card config, browser-level `Do Not Track`, or private-mode
+browsing. Full privacy contract in `src/engine/anon-stats.ts`
+and in the README's new "Privacy , anonymous community signal"
+section.
+
+### Smaller polish that ships in 1.6.3 too
+
+* **LiDAR chip cluster** redesigned as a row-reverse pair (chip
+  on the left, mode toggle on the right), both clickable, with
+  three coverage states (no provider / online / local) and the
+  active-on theme matching the scrub clock on the opposite
+  corner. Chip text comes from the `lidarViewChipLabel` i18n
+  key ("Vue LiDAR" / "LiDAR view" / ...).
+* **Forecast curves at 0.7 px stroke** (was 1.4 px) so dense
+  variation reads as a hairline trace instead of a smudged band.
+* **PV predicted icon in the timeline tooltip** uses the lighter
+  `lerpHexToward(pvColor, '#ffffff', 0.55)` tint, matching the
+  dashboard's dotted forecast convention.
+* **Dashboard tomorrow card calibration tooltip** can finally
+  paint above the battery card (`:has()` selector lifts the
+  hovered card to a higher z-index).
+* **Editor BYO LiDAR hint** rewritten to lead with
+  helios-lidar.org (the easy path) and mention the local
+  `tools/lidar/` helpers as the fallback. Now renders the
+  inline `[text](url)` syntax as real `<a>` anchors via a
+  scheme-restricted markdown-link helper.
+* **Sunrise / sunset arc icons removed** ; the arc shape on the
+  3D map already signals them and the icons piled up visually
+  against the LiDAR shadow blobs on the horizon. Replaced by
+  diagonal night-zone hatching on the dashboard chart for the
+  same indication on the 2D charts.
+* **Neighbour-building outlines** dropped (visual noise on dense
+  streets); the home outline stays.
+* **Day-strip date font** bumped (`clamp(9px, 11cqw, 13px)`) and
+  the cells use container queries so the layout adapts to any
+  card width.
+* **Detail-panel `.dash-card` entry animation** ends on
+  `transform: none` so the stacking context releases after the
+  fade-in and tooltips can paint above sibling cards.
+* **HACS repo description** refreshed to match what the card
+  actually does in 1.6.x.
+
+---
+
 ## v1.6.2
 
 Precision release on top of v1.6.1: two upgrades to the PV

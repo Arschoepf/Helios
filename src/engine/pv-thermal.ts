@@ -37,11 +37,21 @@
 //and reuse the result alongside the existing cloud-attenuated
 //irradiance.
 
-export const NOCT_CELL_C        = 45;     //Nominal Operating Cell Temp
+//Nominal Operating Cell Temperature, in °C. Modern monocrystalline
+//modules typically spec 43-45 °C; we sit at the middle of that
+//range so the cell-temp estimate stays unbiased across a typical
+//residential fleet. Tied with WIND_COOLING_K below as a paired
+//"how hot does the cell run" knob.
+export const NOCT_CELL_C        = 44;
 export const NOCT_IRRADIANCE    = 800;    //W/m² used to spec NOCT
 export const NOCT_AIR_REF_C     = 20;     //°C, reference air at NOCT
 export const WIND_COOLING_K     = 1.5;    //°C drop per m/s of wind
-export const GAMMA_PMP_PER_C    = -0.0040;//mono-Si default temp coef
+//Power temperature coefficient γ_pmp in % per °C, monocrystalline-
+//silicon default. Most modern panels spec between -0.0030 and
+//-0.0040; -0.0035 is the middle and matches the bulk of recent
+//residential installs. The forecast-calibration ratio absorbs any
+//residual mismatch within a few sunny days.
+export const GAMMA_PMP_PER_C    = -0.0035;
 export const STC_REF_C          = 25;     //STC cell reference
 
 //Estimate the cell temperature in °C from the live weather context.
