@@ -80,6 +80,8 @@ export const it: Translations = {
         pvArrayLatitude:    'Latitudine pannelli',
         pvArrayLongitude:   'Longitudine pannelli',
         pvArrayCoordsHelp:  'Opzionale. Compila solo se questa fila NON è nello stesso posto della casa (installazione a terra a 300 m, garage separato, ecc.). Entrambi i campi devono essere compilati perché la posizione si applichi, altrimenti la previsione usa la posizione della casa. Sulla mappa apparirà una piccola sfera verde in quella posizione.',
+        pvArrayHeight:      'Altezza dei pannelli (m)',
+        pvArrayHeightHelp:  'Opzionale, valore predefinito 5. Altezza di questo gruppo di pannelli rispetto al suolo in metri; usata dalla previsione FV con ombreggiamento LiDAR per posizionare l’origine del ray-march nel controllo dell’ombra di un vicino o di un albero. Aumenta per un tetto del piano superiore (8-10 m), riduci per un montaggio a terra (0-1 m). Nessun effetto se nessun provider LiDAR copre la tua casa.',
         pvArrayCoordsPlaceholder: 'opzionale',
         pvColor:            'Colore di produzione',
         batterySection:     'Batteria domestica',

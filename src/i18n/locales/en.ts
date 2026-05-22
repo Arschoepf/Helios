@@ -90,6 +90,8 @@ export const en: Translations = {
         pvArrayLatitude:    'Panel latitude',
         pvArrayLongitude:   'Panel longitude',
         pvArrayCoordsHelp:  'Optional. Only set these when this row is NOT at the same place as the home (ground-mount 300 m away, detached garage, etc.). Both fields must be filled in for the position to apply, otherwise the forecast uses the home position. A small green sphere will appear on the map at that location.',
+        pvArrayHeight:      'Panel height (m)',
+        pvArrayHeightHelp:  'Optional, default 5. Height of this group of panels above ground in metres; used by the LiDAR-aware PV forecast to position the ray-march origin when checking whether the array is shaded by a neighbour or a tree. Raise it for an upper-floor roof (8-10 m), lower it for a ground-mounted array (0-1 m). Has no effect when no LiDAR provider covers the home.',
         pvArrayCoordsPlaceholder: 'optional',
         pvColor:            'Production color',
         batterySection:     'Home battery',

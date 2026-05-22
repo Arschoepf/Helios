@@ -87,6 +87,8 @@ export const fr: Translations = {
         pvArrayLatitude:    'Latitude des panneaux',
         pvArrayLongitude:   'Longitude des panneaux',
         pvArrayCoordsHelp:  'Optionnel. À renseigner uniquement si cette rangée n\'est PAS au même endroit que la maison (panneaux au sol à 300 m, garage isolé, etc.). Les deux champs doivent être remplis pour que la position s\'applique. Sinon la prévision utilise la position de la maison. Une petite sphère verte apparaîtra sur la carte à cette position.',
+        pvArrayHeight:      'Hauteur des panneaux (m)',
+        pvArrayHeightHelp:  'Optionnel, par défaut 5. Hauteur de ce groupe de panneaux au-dessus du sol en mètres ; utilisée par la prévision PV avec ombrage LiDAR pour positionner l’origine du raycast lors du test d’ombrage par un voisin ou un arbre. Augmentez pour un toit d’étage (8-10 m), abaissez pour un montage au sol (0-1 m). Sans effet si aucun fournisseur LiDAR ne couvre votre domicile.',
         pvArrayCoordsPlaceholder: 'optionnel',
         pvColor:            'Couleur de production',
         batterySection:     'Batterie domestique',
