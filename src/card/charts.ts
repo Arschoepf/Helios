@@ -18,6 +18,7 @@ import { cfgHex, formatDate, formatLocalisedNumber } from './format';
 import
 {
     pvCalibK,
+    pvInverterMaxW,
     pvNormalizeToWatts,
     computePvPowerWeighted,
     type PvHistory
@@ -314,11 +315,14 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     //Forecast for future hours. Reuses the per-array PV power
     //model + thermal / shading hooks the chart already feeds, plus
     //the 5-day rolling calibration ratio so the tooltip's forecast
-    //value matches the "refined" headline number on the dashboard.
+    //value matches the "refined" headline number on the dashboard,
+    //plus the optional inverter PMax clip so the reading never
+    //exceeds what the user's hardware can deliver.
     const series = host._chartSeries;
     const k      = pvCalibK(host.config);
     const cal    = computeForecastCalibration(host);
     const calR   = cal ? cal.ratio : 1;
+    const capW   = pvInverterMaxW(host.config);
     if (k !== null && series && coords && series.times.length >= 2)
     {
         const raster = host._engine?.getLidarRaster() ?? null;
@@ -328,16 +332,16 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
             if (targetMs > t1) continue;
             const t0 = series.times[i - 1].getTime();
             if (targetMs < t0) break;
-            const w0 = computePvPowerWeighted(host.config, series.times[i - 1], coords.lat, coords.lon, series.cloud[i - 1] ?? 0, {
+            const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i - 1], coords.lat, coords.lon, series.cloud[i - 1] ?? 0, {
                 airTempC: series.temperature[i - 1],
                 windMs:   series.windSpeed[i - 1],
                 raster,
-            }) * k * calR;
-            const w1 = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, series.cloud[i] ?? 0, {
+            }) * k * calR);
+            const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, series.cloud[i] ?? 0, {
                 airTempC: series.temperature[i],
                 windMs:   series.windSpeed[i],
                 raster,
-            }) * k * calR;
+            }) * k * calR);
             const dt = t1 - t0;
             if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit };
             const w  = w0 + (w1 - w0) * (targetMs - t0) / dt;
@@ -890,9 +894,12 @@ export function renderPvChart(host: ChartHost): TemplateResult
     //already shows in its "refined" headline, so the dotted forecast
     //curve below matches the number the user sees on the dash. Null
     //(less than 2 valid past days) leaves the ratio at 1 and the
-    //curve is the raw model output.
+    //curve is the raw model output. The optional inverter PMax then
+    //clips the resulting watts so the curve doesn't shoot above the
+    //user's hardware ceiling.
     const cal     = computeForecastCalibration(host);
     const calR    = cal ? cal.ratio : 1;
+    const capW    = pvInverterMaxW(host.config);
     const predictedSamples: Array<{ t: Date; v: number }> = [];
     if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
     {
@@ -910,7 +917,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
                 raster,
             });
             if (pct <= 0) continue;
-            predictedSamples.push({ t: series.times[i], v: pct * k * calR * nativeFromW });
+            const wattsClipped = Math.min(capW, pct * k * calR);
+            predictedSamples.push({ t: series.times[i], v: wattsClipped * nativeFromW });
         }
     }
 
@@ -1275,12 +1283,15 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
     //forecast, only past observation contributes). Forecast kWh
     //is multiplied by the 5-day rolling calibration ratio so the
     //per-day chips match the "refined" dashboard headline + the
-    //dotted forecast curve next to them.
+    //dotted forecast curve next to them, then clipped at the
+    //inverter PMax so a bright midday hour can't push the daily
+    //total above what the hardware would actually deliver.
     const k        = pvCalibK(host.config);   //W per percent of STC
     const series   = host._chartSeries;
     const coords   = getHomeCoords(host.config, host.hass);
     const cal      = computeForecastCalibration(host);
     const calR     = cal ? cal.ratio : 1;
+    const capW     = pvInverterMaxW(host.config);
     if (k !== null && k > 0 && series && coords)
     {
         //Index hourly forecast samples by hour-floor ms so we
@@ -1302,9 +1313,11 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
             });
             if (pct <= 0) continue;
             //pct × k = watts at this hour midpoint × 1h = Wh.
-            //Divide by 1000 to land in kWh.
-            const kwh = (pct * k * calR) / 1000;
-            const dk = dayKey(tMs);
+            //Divide by 1000 to land in kWh; clip first so the
+            //daily total honours the inverter cap.
+            const watts = Math.min(capW, pct * k * calR);
+            const kwh   = watts / 1000;
+            const dk    = dayKey(tMs);
             out.set(dk, (out.get(dk) ?? 0) + kwh);
         }
     }

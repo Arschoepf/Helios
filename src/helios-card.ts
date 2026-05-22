@@ -18,6 +18,7 @@ import
     pvRateAtTime,
     pvNormalizeToWatts,
     pvCalibK,
+    pvInverterMaxW,
     computePvPowerWeighted,
     wipeLegacyPvCalibStorage,
     formatPvValue
@@ -823,8 +824,12 @@ export class HeliosCard extends LitElement
                 });
                 if (pct > 0)
                 {
-                    //k is W per percent of STC, so pct × k is watts.
-                    pvPredictedRate = { value: pct * k, unit: 'W' };
+                    //k is W per percent of STC, so pct × k is watts;
+                    //clip at the inverter's PMax so a bright forecast
+                    //hour doesn't overshoot the install's hardware
+                    //ceiling. Infinity cap = no clipping.
+                    const w = Math.min(pvInverterMaxW(this.config), pct * k);
+                    pvPredictedRate = { value: w, unit: 'W' };
                 }
             }
         }

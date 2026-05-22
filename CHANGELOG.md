@@ -5,6 +5,72 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.11
+
+Polish round on top of v1.6.3-beta.10, picked up from a real-card
+review session. Mostly config + perf knobs plus a couple of small
+correctness fixes.
+
+### LiDAR shadow weight tied to `lidar-precision`
+
+The beta.10 sharpness bump (2048×2048 mask + smaller convex hulls)
+was effective but the 4× memory + ~40 ms PNG encode wasn't always
+worth it on a phone or a multi-card dashboard. The shadow raster
+size now depends on the user's existing `lidar-precision` knob:
+
+* `low` and `medium` (default) , 1024×1024, ~10 ms encode. Same
+  perf as v1.6.2 for the median user.
+* `high` , 2048×2048, ~40 ms encode. Opt-in sharpness for desktops
+  showing a single card.
+
+The cluster cap improvement (80 cells max, was 400) stays on
+everywhere , it's the cheaper half of the quality win.
+
+### Per-string `peak-kwp` + inverter PMax (config)
+
+Following community feedback that `share` was confusing ("you
+already know the kWp per string, why am I converting to a
+percentage?"), the PV config now supports a per-array peak-kWp
+field. When any `pv-arrays[].peak-kwp` is set, the total install
+power is the sum of those values and the legacy top-level
+`pv-peak-kwp` is ignored. Existing configs (share + global
+peak-kwp) keep working unchanged through the share-based path.
+
+New top-level `pv-inverter-max-kw` clips the forecast at the
+inverter's nameplate so an over-sized DC array hooked to a
+smaller inverter (typical European 6.4 kWp panels / 5 kW inverter
+pairing) doesn't draw a forecast peak above the hardware ceiling.
+Applies to the dotted predicted curve, the day-strip kWh totals,
+the live forecast chip and the hover tooltip. Live observation is
+unaffected , the inverter already clips in hardware before the
+entity reports its value. Editor surfaces both fields with full
+i18n across the 8 supported locales.
+
+### Camera now pitches as well as rotates
+
+Vertical drag on the canvas tilts the camera; horizontal drag
+keeps the existing bearing-rotation behaviour. Pitch is clamped to
+[25°, 75°] so the camera can never look past the ground or
+collapse into a flat overhead. Mouse left-drag + single-finger
+touch both work; two-finger pinch-rotate stays with MapLibre's
+built-in handler.
+
+### Smaller polish
+
+* Live PV chip above the home now floors at zero like the tooltip
+  did in beta.7. Net-meter sensors that briefly dip negative
+  around dawn / dusk no longer surface as "-2 W of production".
+* Sunrise / sunset glyphs on the solar arc gained a strong drop-
+  shadow stack so they read against the LiDAR shadow blobs at the
+  horizon line. Dark theme flips the inner ring to white-on-dark.
+* Neighbour-building outlines dropped. The 1 px black line at 0.35
+  opacity drawn around every surrounding building piled up
+  visually on dense streets and competed with the LiDAR shadows;
+  the home outline stays, the rest go quiet.
+* Chart curve strokes thinned from 1.4 px to 1.0 px so the line
+  reads as a curve rather than a ribbon on the now-balanced
+  48 px chart cards.
+
 ## v1.6.3-beta.10
 
 Iterative pre-release on top of v1.6.3-beta.9. Three sharpening

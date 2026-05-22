@@ -11,7 +11,7 @@ import { startAutoRotateLoop } from './engine/auto-rotate';
 import { setDetailMode as _setDetailMode } from './engine/detail-mode';
 import
 {
-    SHADOW_RASTER_SIZE,
+    shadowRasterSizeFor,
     BLANK_SHADOW_DATA_URL,
     shadowBoundsCornersLL,
     paintShadowRaster,
@@ -882,8 +882,19 @@ export class HeliosEngine
         canvas.style.touchAction = 'none';
 
         const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
+        //Vertical drag controls camera pitch. dy positive (drag down)
+        //tilts the camera flatter (less top-down, more horizon-on);
+        //dy negative (drag up) tilts it back toward the bird's-eye.
+        //Bounds: [25°, 75°]. 25° keeps the 3D scene from collapsing
+        //into a flat overhead, 75° stops short of the horizon so the
+        //camera can never dip below the ground and reveal the
+        //missing under-side of the basemap mesh.
+        const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
+        const PITCH_MIN_DEG = 25;
+        const PITCH_MAX_DEG = 75;
         let dragRotating  = false;
         let lastPointerX  = 0;
+        let lastPointerY  = 0;
         let activeId: number | null = null;
 
         const onDown = (e: PointerEvent) =>
@@ -900,6 +911,7 @@ export class HeliosEngine
             dragRotating = true;
             activeId     = e.pointerId;
             lastPointerX = e.clientX;
+            lastPointerY = e.clientY;
             this._autoRotateLastUserAction = Date.now();
             try { canvas.setPointerCapture(e.pointerId); }
             catch (_) {}
@@ -908,7 +920,9 @@ export class HeliosEngine
         {
             if (!dragRotating || !this.map || e.pointerId !== activeId) return;
             const dx = e.clientX - lastPointerX;
+            const dy = e.clientY - lastPointerY;
             lastPointerX = e.clientX;
+            lastPointerY = e.clientY;
             this._autoRotateLastUserAction = Date.now();
             //Positive dx (drag right) bumps bearing up so the map
             //content under the finger / cursor follows the gesture
@@ -916,6 +930,14 @@ export class HeliosEngine
             //3D widget. The negated form (subtract) read inverted on
             //both desktop and mobile.
             this.map.setBearing(this.map.getBearing() + dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+            //Vertical drag drives pitch. Subtract dy so drag UP tips
+            //the horizon down (flatter pitch) and drag DOWN brings
+            //the horizon up toward the bird's-eye. Clamp at the
+            //session bounds so the camera can never look past the
+            //ground.
+            const nextPitch = Math.max(PITCH_MIN_DEG, Math.min(PITCH_MAX_DEG,
+                this.map.getPitch() - dy * PITCH_SENSITIVITY_DEG_PER_PX));
+            this.map.setPitch(nextPitch);
         };
         const onEnd = (e: PointerEvent) =>
         {
@@ -1942,7 +1964,6 @@ export class HeliosEngine
             'helios-buildings',
             'helios-buildings-surroundings',
             'helios-buildings-home',
-            'helios-buildings-surroundings-outline',
             'helios-buildings-home-outline',
             'helios-buildings-home-outline-glow'
         ])
@@ -2150,23 +2171,14 @@ export class HeliosEngine
             }
         });
 
-        //Cell-shaded outlines: a thin black line on the surroundings'
-        //ground footprint, a thicker line on the home so the focal
-        //building reads even when its colour matches the surroundings.
-        //Drawn ON TOP of the extrusions so the outlines sit over the
-        //building edges at ground level.
-        this.map.addLayer(
-        {
-            id:     'helios-buildings-surroundings-outline',
-            source: 'helios-buildings-surroundings-src',
-            type:   'line',
-            paint:
-            {
-                'line-color':   '#000000',
-                'line-width':   1,
-                'line-opacity': 0.35
-            }
-        });
+        //Home gets a black outline at the building's ground footprint
+        //(see helios-buildings-home-outline below) so the focal
+        //structure reads even when its colour matches the basemap.
+        //Neighbouring buildings used to carry the same outline at a
+        //lower opacity for cell-shaded depth, but the surrounding
+        //lines piled up visually on dense streets and competed with
+        //the LiDAR shadows for attention, so the surroundings stay
+        //unstroked from v1.6.3 onwards.
         //Kick off the MapTiler buildings fetch in the background.
         //The shadow source is wired and will populate as soon as the
         //buildings GeoJSON lands.
@@ -2495,11 +2507,17 @@ export class HeliosEngine
                 });
                 if (this.map)
                 {
-                    if (!this._shadowCanvas)
+                    //Canvas size derives from the user's lidar-precision
+                    //(low / medium = 1024, high = 2048). Recreate the
+                    //backing canvas if the level changed since the last
+                    //paint, otherwise reuse the existing one across
+                    //refreshes so we don't allocate 16 MB per minute.
+                    const rasterSize = shadowRasterSizeFor(this._lidarPrecisionLevel());
+                    if (!this._shadowCanvas || this._shadowCanvas.width !== rasterSize)
                     {
                         this._shadowCanvas = document.createElement('canvas');
-                        this._shadowCanvas.width  = SHADOW_RASTER_SIZE;
-                        this._shadowCanvas.height = SHADOW_RASTER_SIZE;
+                        this._shadowCanvas.width  = rasterSize;
+                        this._shadowCanvas.height = rasterSize;
                     }
                     paintShadowRaster(
                         this.map,
@@ -3899,7 +3917,6 @@ export class HeliosEngine
                 'helios-cloud-ring',
                 'helios-buildings-surroundings',
                 'helios-buildings-home',
-                'helios-buildings-surroundings-outline',
                 'helios-buildings-home-outline',
                 'helios-buildings-home-outline-glow',
                 'helios-building-shadows'

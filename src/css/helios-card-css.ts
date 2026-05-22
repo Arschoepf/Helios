@@ -1079,11 +1079,14 @@ export const heliosCardStyles = css`
     }
 
     /*  Stroke-only outline on top of the filled area so peaks read
-        cleanly even where the gradient fades towards the midline. */
+        cleanly even where the gradient fades towards the midline.
+        Thinner stroke (1.0 px) than the v1.6.2 default (1.4 px) so
+        the curve reads as a line trace rather than a ribbon, which
+        is what the eye expects on a small-format chart card.       */
     .hc-chart-line
     {
         fill: none;
-        stroke-width: 1.4;
+        stroke-width: 1.0;
         stroke-linejoin: round;
         stroke-linecap: round;
         vector-effect: non-scaling-stroke;
@@ -2270,7 +2273,14 @@ export const heliosCardStyles = css`
         / -down) centred on the horizon crossings of the day's solar
         arc, coloured in the configured sun colour via inline style.
         The icon shape itself communicates "rising" vs "setting" so
-        no label or rotation is needed. */
+        no label or rotation is needed.
+
+        Drop-shadow stack: a tight black ring at full alpha pulls the
+        icon's silhouette off the LiDAR shadow blobs that pile up
+        behind the horizon line, and a wider soft black halo fades
+        the contrast against bright cloud-cover regions. Dark theme
+        flips the inner ring to white-on-near-black so the icon
+        stays legible against the dark plate.                       */
     .solar-horizon-icon
     {
         position: absolute;
@@ -2278,7 +2288,15 @@ export const heliosCardStyles = css`
         --mdc-icon-size: 18px;
         pointer-events: none;
         z-index: 6;
-        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+        filter:
+            drop-shadow(0 0 1px rgba(0, 0, 0, 0.95))
+            drop-shadow(0 0 4px rgba(0, 0, 0, 0.55));
+    }
+    ha-card.theme-dark .solar-horizon-icon
+    {
+        filter:
+            drop-shadow(0 0 1px rgba(255, 255, 255, 0.95))
+            drop-shadow(0 0 5px rgba(0, 0, 0, 0.75));
     }
 
 

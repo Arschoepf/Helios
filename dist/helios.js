@@ -658,7 +658,9 @@ const en = {
     pvEntity: "Production entity",
     pvEntityHelp: "Pick a solar power or energy sensor (W, kW, Wh, kWh).",
     pvPeakPower: "Peak power (kWp)",
-    pvPeakPowerHelp: "Installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty to hide the forecast; observed production and the daily peak still render.",
+    pvPeakPowerHelp: "Total installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader's flow saturation. Leave empty when you enter a per-string peak-kWp on each row below (the total is then the sum). Without either, no forecast is drawn; observed production and the daily peak still render.",
+    pvInverterMaxKw: "Inverter max output (kW)",
+    pvInverterMaxKwHelp: "Optional clip on the forecast. Set this to your inverter's nameplate AC output when your panels can produce more than the inverter can deliver (typical European pairing: 6.4 kWp DC behind a 5 kW inverter). Leaves observation untouched (the inverter already clips in hardware) but caps the predicted curve, the daily kWh totals and the tooltip values so the readout never overshoots reality.",
     pvArraysSection: "Panel orientation",
     pvArraysHelp: "One entry per group of co-oriented panels. Leave a single entry with tilt 0 for a flat install. Add more entries when panels are split across multiple orientations (e.g. one row facing east, one facing west). The card forecasts each entry separately and weights the result by its share of the total kWp.",
     pvArrayTitle: "Row {n}",
@@ -667,6 +669,8 @@ const en = {
     pvArrayTilt: "Tilt (°)",
     pvArrayAzimuth: "Azimuth (°)",
     pvArrayShare: "Share (%)",
+    pvArrayPeakKwp: "Peak power (kWp)",
+    pvArrayPeakKwpHelp: 'Installed peak power of THIS row in kilowatt-peak. Sum across rows = total kWp; replaces the legacy global "Peak power" field plus the per-row share. Leave blank to fall back to the share-based weighting (legacy v1.6.2 path).',
     pvArrayAdd: "+ Add row",
     pvArrayRemove: "Remove",
     pvArrayNormHint: "Shares don't add up to 100%, the forecast normalises them automatically.",
@@ -813,8 +817,10 @@ const fr = {
     pvHint: "Optionnel. Si renseigné, une pastille apparaît près de la maison avec la production instantanée (calculée sur la dernière minute) et un graphique dédié s'ajoute au-dessus de la chronologie pour suivre la production. Capteur de puissance (W/kW) ou d'énergie cumulée (Wh/kWh) acceptés indifféremment.",
     pvEntity: "Entité de production",
     pvEntityHelp: "Sélectionne un capteur de puissance ou d'énergie photovoltaïque (W, kW, Wh, kWh).",
-    pvPeakPower: "Puissance crête (kWp)",
-    pvPeakPowerHelp: "Puissance crête installée de tes panneaux, en kilowatts-crête. Sert à tracer la courbe de prévision en pointillés sur le graphique PV et à caler la cadence du flux PV → maison sur ton installation. Laisser vide masque la prévision, la production observée et le pic du jour restent affichés.",
+    pvPeakPower: "Puissance crête totale (kWp)",
+    pvPeakPowerHelp: "Puissance crête totale de ton installation, en kilowatts-crête. Sert à tracer la courbe de prévision et à caler la cadence du flux PV → maison. Laisse vide quand tu renseignes une puissance crête par string ci-dessous (le total est alors la somme). Sans l'un ni l'autre, la prévision n'est pas affichée ; la production observée et le pic du jour restent visibles.",
+    pvInverterMaxKw: "Puissance max onduleur (kW)",
+    pvInverterMaxKwHelp: "Écrêtage optionnel sur la prévision. Renseigne la puissance AC nominale de ton onduleur si tes panneaux peuvent produire plus que ce qu'il peut sortir (cas classique en Europe : 6,4 kWp DC derrière un onduleur 5 kW). N'affecte pas l'observation (l'onduleur écrête déjà côté matériel) mais plafonne la courbe prévue, les totaux kWh quotidiens et la tooltip pour qu'ils ne dépassent jamais la réalité matérielle.",
     pvArraysSection: "Orientation des panneaux",
     pvArraysHelp: "Une entrée par rangée de panneaux orientés à l'identique. Laisse une seule entrée avec une inclinaison à 0 pour une installation à plat. Ajoute des entrées supplémentaires quand tes panneaux sont répartis sur plusieurs orientations (par exemple une rangée à l'est, une autre à l'ouest). La prévision est calculée par entrée, puis pondérée par la part de chacune dans le total des kWp.",
     pvArrayTitle: "Rangée {n}",
@@ -823,6 +829,8 @@ const fr = {
     pvArrayTilt: "Inclinaison (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Part (%)",
+    pvArrayPeakKwp: "Puissance crête (kWp)",
+    pvArrayPeakKwpHelp: "Puissance crête installée de CETTE rangée en kilowatts-crête. La somme sur toutes les rangées = kWp total ; remplace l'ancien champ « Puissance crête » global et le pourcentage par rangée. Laisse vide pour retomber sur l'ancien mode par pourcentage (chemin v1.6.2).",
     pvArrayAdd: "+ Ajouter une rangée",
     pvArrayRemove: "Supprimer",
     pvArrayNormHint: "Les parts ne totalisent pas 100 %, la prévision les normalise automatiquement.",
@@ -969,8 +977,10 @@ const de = {
     pvHint: "Optional. Wenn gesetzt, erscheint nahe dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).",
     pvEntity: "Produktions-Entität",
     pvEntityHelp: "Wähle einen Leistungs- oder Energiesensor für die Photovoltaik (W, kW, Wh, kWh).",
-    pvPeakPower: "Spitzenleistung (kWp)",
-    pvPeakPowerHelp: "Installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, um die Prognose auszublenden; gemessene Produktion und Tagesspitze werden weiter angezeigt.",
+    pvPeakPower: "Gesamt-Spitzenleistung (kWp)",
+    pvPeakPowerHelp: "Gesamte installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, wenn du unten pro String eine Spitzenleistung eingibst (Gesamt = Summe). Ohne beides wird keine Prognose angezeigt; gemessene Produktion und Tagesspitze bleiben sichtbar.",
+    pvInverterMaxKw: "Wechselrichter-Maximalleistung (kW)",
+    pvInverterMaxKwHelp: "Optionale Deckelung der Prognose. Gib hier die AC-Nennleistung deines Wechselrichters ein, wenn deine Module mehr DC erzeugen können als der Wechselrichter abgibt (typische europäische Kombination: 6,4 kWp DC hinter einem 5-kW-Wechselrichter). Beeinflusst die Messwerte nicht (der Wechselrichter begrenzt bereits in Hardware), deckelt aber die Prognosekurve, die täglichen kWh-Summen und die Tooltip-Werte, damit der Wert nie die Hardware-Realität überschreitet.",
     pvArraysSection: "Modulausrichtung",
     pvArraysHelp: "Ein Eintrag pro Gruppe gleich ausgerichteter Module. Lasse einen einzigen Eintrag mit Neigung 0 für eine flache Installation. Füge weitere Einträge hinzu, wenn deine Module auf mehrere Ausrichtungen verteilt sind (zum Beispiel eine Reihe nach Osten, eine nach Westen). Die Prognose wird pro Eintrag berechnet und nach dem Anteil an der Gesamt-kWp gewichtet.",
     pvArrayTitle: "Reihe {n}",
@@ -979,6 +989,8 @@ const de = {
     pvArrayTilt: "Neigung (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Anteil (%)",
+    pvArrayPeakKwp: "Spitzenleistung (kWp)",
+    pvArrayPeakKwpHelp: 'Installierte Spitzenleistung DIESER Reihe in Kilowatt-Peak. Summe über alle Reihen = Gesamt-kWp; ersetzt das alte globale "Spitzenleistung"-Feld und den Anteil pro Reihe. Leer lassen, um auf die alte anteilsbasierte Gewichtung zurückzufallen (Pfad v1.6.2).',
     pvArrayAdd: "+ Reihe hinzufügen",
     pvArrayRemove: "Entfernen",
     pvArrayNormHint: "Die Anteile ergeben nicht 100 %, die Prognose normalisiert sie automatisch.",
@@ -1125,8 +1137,10 @@ const es = {
     pvHint: "Opcional. Si se define, aparece una pastilla cerca de la casa con la producción instantánea (calculada sobre el último minuto) y se añade un gráfico dedicado encima de la cronología. Acepta indistintamente un sensor de potencia (W/kW) o de energía acumulada (Wh/kWh).",
     pvEntity: "Entidad de producción",
     pvEntityHelp: "Elige un sensor de potencia o energía fotovoltaica (W, kW, Wh, kWh).",
-    pvPeakPower: "Potencia pico (kWp)",
-    pvPeakPowerHelp: "Potencia pico instalada de tu campo en kilovatios-pico. Controla la curva de previsión punteada en el gráfico PV y la saturación del flujo PV → casa. Déjalo vacío para ocultar la previsión; la producción observada y el pico del día siguen mostrándose.",
+    pvPeakPower: "Potencia pico total (kWp)",
+    pvPeakPowerHelp: "Potencia pico instalada total de tu instalación en kilovatios-pico. Controla la curva de previsión punteada y la saturación del flujo PV → casa. Déjalo vacío cuando introduzcas una potencia pico por hilera abajo (el total es la suma). Sin ninguna de las dos, no se traza la previsión; la producción observada y el pico del día se siguen mostrando.",
+    pvInverterMaxKw: "Potencia máxima del inversor (kW)",
+    pvInverterMaxKwHelp: "Limitación opcional de la previsión. Indica la potencia AC nominal de tu inversor cuando los paneles pueden producir más de lo que el inversor entrega (combinación europea típica: 6,4 kWp DC tras un inversor de 5 kW). No afecta a la observación (el inversor ya limita por hardware), pero recorta la curva prevista, los totales diarios en kWh y los valores del tooltip para que la lectura nunca supere la realidad.",
     pvArraysSection: "Orientación de los paneles",
     pvArraysHelp: "Una entrada por grupo de paneles con la misma orientación. Deja una sola entrada con inclinación 0 para una instalación plana. Añade más entradas cuando tus paneles estén repartidos en varias orientaciones (por ejemplo, una fila al este y otra al oeste). La previsión se calcula por entrada y se pondera por su parte del total de kWp.",
     pvArrayTitle: "Hilera {n}",
@@ -1135,6 +1149,8 @@ const es = {
     pvArrayTilt: "Inclinación (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Parte (%)",
+    pvArrayPeakKwp: "Potencia pico (kWp)",
+    pvArrayPeakKwpHelp: "Potencia pico instalada de ESTA hilera en kilovatios-pico. La suma de todas las hileras = kWp total; sustituye al antiguo campo global «Potencia pico» y al porcentaje por hilera. Déjalo vacío para volver al modo de pesos por porcentaje (ruta v1.6.2).",
     pvArrayAdd: "+ Añadir hilera",
     pvArrayRemove: "Eliminar",
     pvArrayNormHint: "Las partes no suman 100 %, la previsión las normaliza automáticamente.",
@@ -1281,8 +1297,10 @@ const it = {
     pvHint: "Opzionale. Se impostato, una pastiglia appare vicino alla casa con la produzione istantanea (calcolata sull'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).",
     pvEntity: "Entità di produzione",
     pvEntityHelp: "Scegli un sensore di potenza o energia fotovoltaica (W, kW, Wh, kWh).",
-    pvPeakPower: "Potenza di picco (kWp)",
-    pvPeakPowerHelp: "Potenza di picco installata del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata sul grafico PV e la saturazione del flusso PV → casa. Lascia vuoto per nascondere la previsione; la produzione osservata e il picco del giorno restano visibili.",
+    pvPeakPower: "Potenza di picco totale (kWp)",
+    pvPeakPowerHelp: "Potenza di picco installata totale del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata e la saturazione del flusso PV → casa. Lascia vuoto quando inserisci una potenza di picco per stringa qui sotto (il totale è la somma). Senza nessuna delle due, la previsione non viene tracciata; produzione osservata e picco del giorno restano visibili.",
+    pvInverterMaxKw: "Potenza max inverter (kW)",
+    pvInverterMaxKwHelp: "Limite opzionale sulla previsione. Imposta la potenza AC nominale dell'inverter quando i pannelli producono più di quanto l'inverter può erogare (abbinamento europeo tipico: 6,4 kWp DC dietro un inverter da 5 kW). Non influisce sulle misure (l'inverter limita già in hardware), ma comprime la curva prevista, i totali giornalieri in kWh e i valori del tooltip così la lettura non supera mai la realtà hardware.",
     pvArraysSection: "Orientamento dei pannelli",
     pvArraysHelp: "Una voce per ogni campo di pannelli con la stessa orientazione. Lascia una sola voce con inclinazione 0 per un'installazione piana. Aggiungi altre voci quando i pannelli sono distribuiti su più orientazioni (per esempio una fila a est e una a ovest). La previsione viene calcolata per ciascuna voce e pesata in base alla sua quota dei kWp totali.",
     pvArrayTitle: "Fila {n}",
@@ -1291,6 +1309,8 @@ const it = {
     pvArrayTilt: "Inclinazione (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Quota (%)",
+    pvArrayPeakKwp: "Potenza di picco (kWp)",
+    pvArrayPeakKwpHelp: "Potenza di picco installata di QUESTA fila in kilowatt-picco. Somma su tutte le file = kWp totale; sostituisce il vecchio campo globale «Potenza di picco» e la quota per fila. Lascia vuoto per tornare al peso per quota (percorso v1.6.2).",
     pvArrayAdd: "+ Aggiungi fila",
     pvArrayRemove: "Rimuovi",
     pvArrayNormHint: "Le quote non sommano a 100 %, la previsione le normalizza automaticamente.",
@@ -1437,8 +1457,10 @@ const nl = {
     pvHint: "Optioneel. Als ingesteld verschijnt bij het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).",
     pvEntity: "Productie-entiteit",
     pvEntityHelp: "Kies een sensor voor zonnevermogen of -energie (W, kW, Wh, kWh).",
-    pvPeakPower: "Piekvermogen (kWp)",
-    pvPeakPowerHelp: "Geïnstalleerd piekvermogen van je panelen in kilowattpiek. Stuurt de gestippelde voorspellingslijn op de PV-grafiek en de stroomverzadiging van de PV → huis-leider. Laat leeg om de voorspelling te verbergen; gemeten productie en de dagelijkse piek blijven zichtbaar.",
+    pvPeakPower: "Totaal piekvermogen (kWp)",
+    pvPeakPowerHelp: "Geïnstalleerd totaal piekvermogen van je installatie in kilowattpiek. Stuurt de gestippelde voorspellingslijn en de stroomverzadiging van de PV → huis-leider. Laat leeg als je hieronder per string een piekvermogen invult (totaal = som). Zonder beide wordt geen voorspelling getekend; gemeten productie en de dagelijkse piek blijven zichtbaar.",
+    pvInverterMaxKw: "Max omvormervermogen (kW)",
+    pvInverterMaxKwHelp: "Optionele begrenzing van de voorspelling. Vul het nominale AC-vermogen van je omvormer in wanneer je panelen meer DC kunnen leveren dan de omvormer aankan (typische Europese combinatie: 6,4 kWp DC achter een 5 kW omvormer). Beïnvloedt waarnemingen niet (de omvormer begrenst al in hardware), maar limiteert de voorspellingscurve, de dagelijkse kWh-totalen en de tooltip-waarden zodat de uitlezing nooit de hardwarewerkelijkheid overschrijdt.",
     pvArraysSection: "Paneeloriëntatie",
     pvArraysHelp: "Eén item per veld panelen met dezelfde oriëntatie. Laat één item staan met hellingshoek 0 voor een platte opstelling. Voeg extra items toe wanneer je panelen over meerdere richtingen verdeeld zijn (bijvoorbeeld een rij oost, een rij west). De prognose wordt per item berekend en gewogen op basis van het percentage van het totale kWp.",
     pvArrayTitle: "Rij {n}",
@@ -1447,6 +1469,8 @@ const nl = {
     pvArrayTilt: "Helling (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Aandeel (%)",
+    pvArrayPeakKwp: "Piekvermogen (kWp)",
+    pvArrayPeakKwpHelp: 'Geïnstalleerd piekvermogen van DEZE rij in kilowattpiek. Som over alle rijen = totaal kWp; vervangt het oude globale veld "Piekvermogen" en het aandeel per rij. Laat leeg om terug te vallen op de oude weging op basis van aandeel (v1.6.2-pad).',
     pvArrayAdd: "+ Rij toevoegen",
     pvArrayRemove: "Verwijderen",
     pvArrayNormHint: "De percentages komen niet uit op 100%, de prognose herschaalt ze automatisch.",
@@ -1593,8 +1617,10 @@ const pt = {
     pvHint: "Opcional. Quando definido, surge uma pastilha perto da casa com a produção instantânea (calculada sobre o último minuto) e um gráfico dedicado é adicionado acima da linha temporal. Aceita indistintamente um sensor de potência (W/kW) ou de energia cumulativa (Wh/kWh).",
     pvEntity: "Entidade de produção",
     pvEntityHelp: "Escolhe um sensor de potência ou energia fotovoltaica (W, kW, Wh, kWh).",
-    pvPeakPower: "Potência de pico (kWp)",
-    pvPeakPowerHelp: "Potência de pico instalada do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada no gráfico PV e a saturação do fluxo PV → casa. Deixa vazio para ocultar a previsão; a produção observada e o pico do dia continuam visíveis.",
+    pvPeakPower: "Potência de pico total (kWp)",
+    pvPeakPowerHelp: "Potência de pico instalada total do teu sistema em quilowatts-pico. Controla a curva de previsão pontilhada e a saturação do fluxo PV → casa. Deixa vazio quando indicas uma potência de pico por string abaixo (o total é a soma). Sem nenhuma das duas, a previsão não é traçada; a produção observada e o pico do dia continuam visíveis.",
+    pvInverterMaxKw: "Potência máxima do inversor (kW)",
+    pvInverterMaxKwHelp: "Limite opcional na previsão. Define a potência AC nominal do teu inversor quando os painéis podem produzir mais do que o inversor entrega (combinação europeia típica: 6,4 kWp DC atrás de um inversor de 5 kW). Não afeta a observação (o inversor já limita por hardware), mas corta a curva prevista, os totais diários em kWh e os valores do tooltip para que a leitura nunca ultrapasse a realidade do hardware.",
     pvArraysSection: "Orientação dos painéis",
     pvArraysHelp: "Uma entrada por campo de painéis com a mesma orientação. Deixa uma única entrada com inclinação 0 para uma instalação plana. Acrescenta mais entradas quando os painéis estão repartidos por várias orientações (por exemplo uma fila a este e outra a oeste). A previsão é calculada por entrada e ponderada pela sua quota dos kWp totais.",
     pvArrayTitle: "Fileira {n}",
@@ -1603,6 +1629,8 @@ const pt = {
     pvArrayTilt: "Inclinação (°)",
     pvArrayAzimuth: "Azimute (°)",
     pvArrayShare: "Quota (%)",
+    pvArrayPeakKwp: "Potência de pico (kWp)",
+    pvArrayPeakKwpHelp: "Potência de pico instalada DESTA fileira em quilowatts-pico. Soma de todas as fileiras = kWp total; substitui o antigo campo global «Potência de pico» e a quota por fileira. Deixa vazio para voltar à ponderação por quota (caminho v1.6.2).",
     pvArrayAdd: "+ Adicionar fileira",
     pvArrayRemove: "Remover",
     pvArrayNormHint: "As quotas não somam 100 %, a previsão normaliza-as automaticamente.",
@@ -1749,8 +1777,10 @@ const no = {
     pvHint: "Valgfri. Når satt vises en chip nær huset med øyeblikkelig produksjon (beregnet over siste minutt), og en dedikert graf legges til over tidslinjen. Aksepterer enten en effektsensor (W/kW) eller en kumulativ energisensor (Wh/kWh).",
     pvEntity: "Produksjons-entitet",
     pvEntityHelp: "Velg en sensor for sol-effekt eller -energi (W, kW, Wh, kWh).",
-    pvPeakPower: "Toppeffekt (kWp)",
-    pvPeakPowerHelp: "Installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen i PV-grafen og strømningsmetningen for PV → hus-leaderen. La stå tom for å skjule prognosen; observert produksjon og dagens topp tegnes likevel.",
+    pvPeakPower: "Total toppeffekt (kWp)",
+    pvPeakPowerHelp: "Total installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen og strømningsmetningen for PV → hus-leaderen. La stå tom når du oppgir en toppeffekt per streng nedenfor (totalen er summen). Uten noen av delene tegnes ingen prognose; observert produksjon og dagens topp vises likevel.",
+    pvInverterMaxKw: "Maks vekselretter-effekt (kW)",
+    pvInverterMaxKwHelp: "Valgfri begrensning på prognosen. Sett inn vekselretterens nominelle AC-effekt når panelene kan produsere mer enn vekselretteren kan levere (typisk europeisk kombinasjon: 6,4 kWp DC bak en 5 kW vekselretter). Påvirker ikke observasjon (vekselretteren begrenser allerede i maskinvare), men kapper prognosekurven, daglige kWh-summer og tooltip-verdier slik at avlesningen aldri overstiger maskinvarens virkelighet.",
     pvArraysSection: "Panelorientering",
     pvArraysHelp: "Én oppføring per felt paneler med samme orientering. La én oppføring stå med helning 0 for en flat installasjon. Legg til flere oppføringer når panelene er fordelt på flere retninger (for eksempel en rad mot øst og en mot vest). Prognosen beregnes per oppføring og vektes etter prosenten av total kWp.",
     pvArrayTitle: "Rad {n}",
@@ -1759,6 +1789,8 @@ const no = {
     pvArrayTilt: "Helning (°)",
     pvArrayAzimuth: "Azimut (°)",
     pvArrayShare: "Andel (%)",
+    pvArrayPeakKwp: "Toppeffekt (kWp)",
+    pvArrayPeakKwpHelp: "Installert toppeffekt for DENNE raden i kilowatt-peak. Sum over alle rader = total kWp; erstatter det gamle globale «Toppeffekt»-feltet og andelen per rad. La stå tom for å falle tilbake til andelsbasert vekting (v1.6.2-stien).",
     pvArrayAdd: "+ Legg til rad",
     pvArrayRemove: "Fjern",
     pvArrayNormHint: "Prosentene summerer ikke til 100 %, prognosen normaliserer dem automatisk.",
@@ -2929,11 +2961,14 @@ const heliosCardStyles = i$3`
     }
 
     /*  Stroke-only outline on top of the filled area so peaks read
-        cleanly even where the gradient fades towards the midline. */
+        cleanly even where the gradient fades towards the midline.
+        Thinner stroke (1.0 px) than the v1.6.2 default (1.4 px) so
+        the curve reads as a line trace rather than a ribbon, which
+        is what the eye expects on a small-format chart card.       */
     .hc-chart-line
     {
         fill: none;
-        stroke-width: 1.4;
+        stroke-width: 1.0;
         stroke-linejoin: round;
         stroke-linecap: round;
         vector-effect: non-scaling-stroke;
@@ -4120,7 +4155,14 @@ const heliosCardStyles = i$3`
         / -down) centred on the horizon crossings of the day's solar
         arc, coloured in the configured sun colour via inline style.
         The icon shape itself communicates "rising" vs "setting" so
-        no label or rotation is needed. */
+        no label or rotation is needed.
+
+        Drop-shadow stack: a tight black ring at full alpha pulls the
+        icon's silhouette off the LiDAR shadow blobs that pile up
+        behind the horizon line, and a wider soft black halo fades
+        the contrast against bright cloud-cover regions. Dark theme
+        flips the inner ring to white-on-near-black so the icon
+        stays legible against the dark plate.                       */
     .solar-horizon-icon
     {
         position: absolute;
@@ -4128,7 +4170,15 @@ const heliosCardStyles = i$3`
         --mdc-icon-size: 18px;
         pointer-events: none;
         z-index: 6;
-        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+        filter:
+            drop-shadow(0 0 1px rgba(0, 0, 0, 0.95))
+            drop-shadow(0 0 4px rgba(0, 0, 0, 0.55));
+    }
+    ha-card.theme-dark .solar-horizon-icon
+    {
+        filter:
+            drop-shadow(0 0 1px rgba(255, 255, 255, 0.95))
+            drop-shadow(0 0 5px rgba(0, 0, 0, 0.75));
     }
 
 
@@ -4789,7 +4839,7 @@ function pvRateAtTime(host, time) {
     idx = 0;
   }
   if (!isCumulative) {
-    return { value: hist.values[idx], unit: u2 };
+    return { value: Math.max(0, hist.values[idx]), unit: u2 };
   }
   let lo = idx;
   let hi = idx + 1 < hist.times.length ? idx + 1 : idx;
@@ -4833,7 +4883,7 @@ function currentPvRate(host) {
     isCumulative = lu === "wh" || lu === "kwh" || lu === "mwh";
   }
   if (!isCumulative) {
-    return { value: host._pvCurrent, unit: u2 };
+    return { value: Math.max(0, host._pvCurrent), unit: u2 };
   }
   let rateUnit;
   if (lu === "wh") rateUnit = "W";
@@ -4889,10 +4939,23 @@ function pvNormalizeToWatts(value, unit) {
   return 0;
 }
 function pvCalibK(config) {
-  const raw2 = config?.["pv-peak-kwp"];
-  const kwp = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-  if (!isFinite(kwp) || kwp <= 0) return null;
+  const arraysTotal = pvArrays(config).totalKwp;
+  let kwp;
+  if (arraysTotal > 0) {
+    kwp = arraysTotal;
+  } else {
+    const raw2 = config?.["pv-peak-kwp"];
+    const v2 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+    if (!isFinite(v2) || v2 <= 0) return null;
+    kwp = v2;
+  }
   return kwp * 10;
+}
+function pvInverterMaxW(config) {
+  const raw2 = config?.["pv-inverter-max-kw"];
+  const kw = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+  if (!isFinite(kw) || kw <= 0) return Infinity;
+  return kw * 1e3;
 }
 function wipeLegacyPvCalibStorage(hass, coords) {
   try {
@@ -4928,6 +4991,7 @@ function pvArrays(config) {
   const sh = [];
   const co = [];
   const he = [];
+  const kw = [];
   const parseCoord = (v2, max) => {
     if (v2 === void 0 || v2 === null || v2 === "") return null;
     const n3 = typeof v2 === "number" ? v2 : parseFloat(String(v2));
@@ -4946,14 +5010,24 @@ function pvArrays(config) {
       const rawAz = e2["azimuth"];
       const az = typeof rawAz === "number" ? rawAz : parseFloat(String(rawAz ?? ""));
       const azDeg = isFinite(az) ? (az % 360 + 360) % 360 : 180;
+      const rawPeakKwp = e2["peak-kwp"];
+      let peakKwp = NaN;
+      if (rawPeakKwp !== void 0 && rawPeakKwp !== null && rawPeakKwp !== "") {
+        const k2 = typeof rawPeakKwp === "number" ? rawPeakKwp : parseFloat(String(rawPeakKwp));
+        if (isFinite(k2) && k2 > 0) peakKwp = k2;
+      }
       const rawShare = e2["share"];
       let share;
       if (rawShare === void 0 || rawShare === null || rawShare === "") {
         share = NaN;
       } else {
         const s2 = typeof rawShare === "number" ? rawShare : parseFloat(String(rawShare));
-        if (!isFinite(s2) || s2 <= 0) continue;
-        share = s2;
+        if (!isFinite(s2) || s2 <= 0) {
+          if (!isFinite(peakKwp)) continue;
+          share = NaN;
+        } else {
+          share = s2;
+        }
       }
       const arrayLat = parseCoord(e2["latitude"], 90);
       const arrayLon = parseCoord(e2["longitude"], 180);
@@ -4968,11 +5042,22 @@ function pvArrays(config) {
       sh.push(share);
       co.push(coords);
       he.push(heightM);
+      kw.push(peakKwp);
     }
-    const explicit = sh.filter((s2) => isFinite(s2));
-    const fillVal = explicit.length > 0 ? explicit.reduce((a2, b2) => a2 + b2, 0) / explicit.length : 1;
-    for (let i2 = 0; i2 < sh.length; i2++) {
-      if (!isFinite(sh[i2])) sh[i2] = fillVal;
+    const explicitKw = kw.filter((v2) => isFinite(v2));
+    if (explicitKw.length > 0) {
+      const meanKw = explicitKw.reduce((a2, b2) => a2 + b2, 0) / explicitKw.length;
+      for (let i2 = 0; i2 < sh.length; i2++) {
+        const w2 = isFinite(kw[i2]) ? kw[i2] : meanKw;
+        kw[i2] = w2;
+        sh[i2] = w2;
+      }
+    } else {
+      const explicit = sh.filter((s2) => isFinite(s2));
+      const fillVal = explicit.length > 0 ? explicit.reduce((a2, b2) => a2 + b2, 0) / explicit.length : 1;
+      for (let i2 = 0; i2 < sh.length; i2++) {
+        if (!isFinite(sh[i2])) sh[i2] = fillVal;
+      }
     }
   }
   if (out.length === 0) {
@@ -4988,13 +5073,15 @@ function pvArrays(config) {
       sh.push(1);
       co.push(null);
       he.push(DEFAULT_PANEL_HEIGHT_M);
+      kw.push(NaN);
     }
   }
+  const totalKwp = kw.reduce((a2, b2) => isFinite(b2) ? a2 + b2 : a2, 0);
   const total = sh.reduce((a2, b2) => a2 + b2, 0);
   if (total > 0) {
     for (let i2 = 0; i2 < sh.length; i2++) sh[i2] /= total;
   }
-  return { orientations: out, shares: sh, coords: co, heightsM: he };
+  return { orientations: out, shares: sh, coords: co, heightsM: he, totalKwp };
 }
 function computePvPowerWeighted(config, t2, lat, lon, cloudPct, ctx) {
   const { orientations, shares, coords, heightsM } = pvArrays(config);
@@ -35839,7 +35926,14 @@ function diveCamera(host, targetZoom, targetPitch, bearingSweep, targetMode, onC
   };
   host._detailDiveRaf = requestAnimationFrame(tick2);
 }
-const SHADOW_RASTER_SIZE = 2048;
+const SHADOW_RASTER_SIZE_BY_PRECISION = {
+  low: 1024,
+  medium: 1024,
+  high: 2048
+};
+function shadowRasterSizeFor(level) {
+  return SHADOW_RASTER_SIZE_BY_PRECISION[level] ?? 1024;
+}
 const BLANK_SHADOW_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
 function shadowBoundsCornersLL(homeLat, homeLon, radiusMeters) {
   const cosLat = Math.cos(homeLat * Math.PI / 180);
@@ -36199,8 +36293,12 @@ const _HeliosEngine = class _HeliosEngine {
     this._mapCanvas = canvas;
     canvas.style.touchAction = "none";
     const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
+    const PITCH_SENSITIVITY_DEG_PER_PX = 0.3;
+    const PITCH_MIN_DEG = 25;
+    const PITCH_MAX_DEG = 75;
     let dragRotating = false;
     let lastPointerX = 0;
+    let lastPointerY = 0;
     let activeId = null;
     const onDown = (e2) => {
       if (e2.pointerType === "mouse" && e2.button !== 0) return;
@@ -36209,6 +36307,7 @@ const _HeliosEngine = class _HeliosEngine {
       dragRotating = true;
       activeId = e2.pointerId;
       lastPointerX = e2.clientX;
+      lastPointerY = e2.clientY;
       this._autoRotateLastUserAction = Date.now();
       try {
         canvas.setPointerCapture(e2.pointerId);
@@ -36218,9 +36317,16 @@ const _HeliosEngine = class _HeliosEngine {
     const onMove = (e2) => {
       if (!dragRotating || !this.map || e2.pointerId !== activeId) return;
       const dx = e2.clientX - lastPointerX;
+      const dy = e2.clientY - lastPointerY;
       lastPointerX = e2.clientX;
+      lastPointerY = e2.clientY;
       this._autoRotateLastUserAction = Date.now();
       this.map.setBearing(this.map.getBearing() + dx * ROTATE_SENSITIVITY_DEG_PER_PX);
+      const nextPitch = Math.max(PITCH_MIN_DEG, Math.min(
+        PITCH_MAX_DEG,
+        this.map.getPitch() - dy * PITCH_SENSITIVITY_DEG_PER_PX
+      ));
+      this.map.setPitch(nextPitch);
     };
     const onEnd = (e2) => {
       if (e2.pointerId !== activeId) return;
@@ -37034,7 +37140,6 @@ const _HeliosEngine = class _HeliosEngine {
       "helios-buildings",
       "helios-buildings-surroundings",
       "helios-buildings-home",
-      "helios-buildings-surroundings-outline",
       "helios-buildings-home-outline",
       "helios-buildings-home-outline-glow"
     ]) {
@@ -37180,18 +37285,6 @@ const _HeliosEngine = class _HeliosEngine {
           "fill-extrusion-height": ["get", "render_height"],
           "fill-extrusion-base": ["get", "render_min_height"],
           "fill-extrusion-opacity": 1
-        }
-      }
-    );
-    this.map.addLayer(
-      {
-        id: "helios-buildings-surroundings-outline",
-        source: "helios-buildings-surroundings-src",
-        type: "line",
-        paint: {
-          "line-color": "#000000",
-          "line-width": 1,
-          "line-opacity": 0.35
         }
       }
     );
@@ -37410,10 +37503,11 @@ const _HeliosEngine = class _HeliosEngine {
           }
         );
         if (this.map) {
-          if (!this._shadowCanvas) {
+          const rasterSize = shadowRasterSizeFor(this._lidarPrecisionLevel());
+          if (!this._shadowCanvas || this._shadowCanvas.width !== rasterSize) {
             this._shadowCanvas = document.createElement("canvas");
-            this._shadowCanvas.width = SHADOW_RASTER_SIZE;
-            this._shadowCanvas.height = SHADOW_RASTER_SIZE;
+            this._shadowCanvas.width = rasterSize;
+            this._shadowCanvas.height = rasterSize;
           }
           paintShadowRaster(
             this.map,
@@ -38260,7 +38354,6 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-cloud-ring",
         "helios-buildings-surroundings",
         "helios-buildings-home",
-        "helios-buildings-surroundings-outline",
         "helios-buildings-home-outline",
         "helios-buildings-home-outline-glow",
         "helios-building-shadows"
@@ -38721,6 +38814,7 @@ function pvValueAtTime(host, targetMs) {
   const k2 = pvCalibK(host.config);
   const cal = computeForecastCalibration(host);
   const calR = cal ? cal.ratio : 1;
+  const capW = pvInverterMaxW(host.config);
   if (k2 !== null && series && coords && series.times.length >= 2) {
     const raster = host._engine?.getLidarRaster() ?? null;
     for (let i2 = 1; i2 < series.times.length; i2++) {
@@ -38728,16 +38822,16 @@ function pvValueAtTime(host, targetMs) {
       if (targetMs > t1) continue;
       const t0 = series.times[i2 - 1].getTime();
       if (targetMs < t0) break;
-      const w0 = computePvPowerWeighted(host.config, series.times[i2 - 1], coords.lat, coords.lon, series.cloud[i2 - 1] ?? 0, {
+      const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2 - 1], coords.lat, coords.lon, series.cloud[i2 - 1] ?? 0, {
         airTempC: series.temperature[i2 - 1],
         windMs: series.windSpeed[i2 - 1],
         raster
-      }) * k2 * calR;
-      const w1 = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, series.cloud[i2] ?? 0, {
+      }) * k2 * calR);
+      const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, series.cloud[i2] ?? 0, {
         airTempC: series.temperature[i2],
         windMs: series.windSpeed[i2],
         raster
-      }) * k2 * calR;
+      }) * k2 * calR);
       const dt = t1 - t0;
       if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit };
       const w2 = w0 + (w1 - w0) * (targetMs - t0) / dt;
@@ -39056,6 +39150,7 @@ function renderPvChart(host) {
   const series = host._chartSeries;
   const cal = computeForecastCalibration(host);
   const calR = cal ? cal.ratio : 1;
+  const capW = pvInverterMaxW(host.config);
   const predictedSamples = [];
   if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
     const nowMs = Date.now();
@@ -39071,7 +39166,8 @@ function renderPvChart(host) {
         raster
       });
       if (pct <= 0) continue;
-      predictedSamples.push({ t: series.times[i2], v: pct * k2 * calR * nativeFromW });
+      const wattsClipped = Math.min(capW, pct * k2 * calR);
+      predictedSamples.push({ t: series.times[i2], v: wattsClipped * nativeFromW });
     }
   }
   let yMax = 1;
@@ -39300,6 +39396,7 @@ function computeDailyKwhTotals(host) {
   const coords = getHomeCoords(host.config, host.hass);
   const cal = computeForecastCalibration(host);
   const calR = cal ? cal.ratio : 1;
+  const capW = pvInverterMaxW(host.config);
   if (k2 !== null && k2 > 0 && series && coords) {
     const nowMs = Date.now();
     const raster = host._engine?.getLidarRaster() ?? null;
@@ -39314,7 +39411,8 @@ function computeDailyKwhTotals(host) {
         raster
       });
       if (pct <= 0) continue;
-      const kwh = pct * k2 * calR / 1e3;
+      const watts = Math.min(capW, pct * k2 * calR);
+      const kwh = watts / 1e3;
       const dk = dayKey(tMs);
       out.set(dk, (out.get(dk) ?? 0) + kwh);
     }
@@ -40973,19 +41071,20 @@ let HeliosCardEditor = class extends i {
           tilt: toNum2(e2["tilt"]),
           azimuth: toNum2(e2["azimuth"]),
           share: toNum2(e2["share"]),
+          peakKwp: toNum2(e2["peak-kwp"]),
           latitude: toNum2(e2["latitude"]),
           longitude: toNum2(e2["longitude"]),
           height: toNum2(e2["height"])
         };
       });
-      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null }];
+      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
     }
     const legacyTilt = toNum2(this._cfg?.["pv-tilt"]);
     const legacyAz = toNum2(this._cfg?.["pv-azimuth"]);
     if (legacyTilt !== null || legacyAz !== null) {
-      return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, latitude: null, longitude: null, height: null }];
+      return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, peakKwp: null, latitude: null, longitude: null, height: null }];
     }
-    return [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null }];
+    return [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
   }
   //Persists a list of array entries to the config under `pv-arrays`
   //and clears the legacy `pv-tilt` / `pv-azimuth` keys in the same
@@ -41000,6 +41099,7 @@ let HeliosCardEditor = class extends i {
       if (e2.tilt !== null) o2["tilt"] = e2.tilt;
       if (e2.azimuth !== null) o2["azimuth"] = e2.azimuth;
       if (e2.share !== null) o2["share"] = e2.share;
+      if (e2.peakKwp !== null) o2["peak-kwp"] = e2.peakKwp;
       if (e2.latitude !== null) o2["latitude"] = e2.latitude;
       if (e2.longitude !== null) o2["longitude"] = e2.longitude;
       if (e2.height !== null) o2["height"] = e2.height;
@@ -41041,7 +41141,7 @@ let HeliosCardEditor = class extends i {
   _arrayAdd() {
     const list = this._readPvArrays();
     if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
-    list.push({ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null });
+    list.push({ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null });
     this._openArrayIndices = /* @__PURE__ */ new Set([...this._openArrayIndices, list.length - 1]);
     this._writePvArrays(list);
   }
@@ -41460,6 +41560,18 @@ let HeliosCardEditor = class extends i {
                 </label>
                 <div class="field-help">${t2.editor.pvPeakPowerHelp}</div>
                 <label class="field">
+                    <span class="label">${t2.editor.pvInverterMaxKw}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        placeholder="5"
+                        .value="${c2["pv-inverter-max-kw"] != null ? String(c2["pv-inverter-max-kw"]) : ""}"
+                        @change="${(e2) => this._numField("pv-inverter-max-kw", e2)}"
+                    />
+                </label>
+                <div class="field-help">${t2.editor.pvInverterMaxKwHelp}</div>
+                <label class="field">
                     <span class="label">${t2.editor.pvColor}</span>
                     <helios-color-picker
                         .value="${cfgHex(c2["pv-color"], DEFAULT_PV_COLOR_HEX)}"
@@ -41539,18 +41651,17 @@ let HeliosCardEditor = class extends i {
                                             </label>
                                             <div class="field-help">${t2.editor.pvArrayAzimuthHelp}</div>
                                             <label class="field">
-                                                <span class="label">${t2.editor.pvArrayShare}</span>
+                                                <span class="label">${t2.editor.pvArrayPeakKwp}</span>
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    max="100"
-                                                    step="1"
-                                                    placeholder="${arrays.length === 1 ? "100" : String(Math.round(100 / arrays.length))}"
-                                                    .value="${arr.share !== null ? String(arr.share) : ""}"
-                                                    @change="${(e2) => this._arrayField(i2, "share", e2)}"
+                                                    step="0.1"
+                                                    placeholder="3.2"
+                                                    .value="${arr.peakKwp !== null ? String(arr.peakKwp) : ""}"
+                                                    @change="${(e2) => this._arrayField(i2, "peakKwp", e2)}"
                                                 />
                                             </label>
-                                            <div class="field-help">${t2.editor.pvArrayShareHelp}</div>
+                                            <div class="field-help">${t2.editor.pvArrayPeakKwpHelp}</div>
                                             <label class="field">
                                                 <span class="label">${t2.editor.pvArrayLatitude}</span>
                                                 <input
@@ -41930,7 +42041,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.10"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.11"}`,
       labelStyle,
       versionStyle
     );
@@ -41954,7 +42065,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.10",
+        version: "1.6.3-beta.11",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41962,7 +42073,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.10"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.11"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -42273,7 +42384,8 @@ let HeliosCard = class extends i {
           raster: this._engine?.getLidarRaster() ?? null
         });
         if (pct > 0) {
-          pvPredictedRate = { value: pct * k2, unit: "W" };
+          const w2 = Math.min(pvInverterMaxW(this.config), pct * k2);
+          pvPredictedRate = { value: w2, unit: "W" };
         }
       }
     }

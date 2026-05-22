@@ -125,6 +125,12 @@ export interface Translations
         //observation only.
         pvPeakPower:              string;
         pvPeakPowerHelp:          string;
+        //Inverter clipping cap, in kW of AC output. Optional. When
+        //set, the forecast tops out at this value so an over-sized
+        //DC array hooked to a smaller inverter doesn't render a
+        //peak above what the hardware can actually deliver.
+        pvInverterMaxKw:          string;
+        pvInverterMaxKwHelp:      string;
         //Multi-array PV layout. Each array entry exposes its own
         //tilt (0..90, 0 = horizontal, 90 = vertical / balcony),
         //azimuth (0..360 clockwise from north, 180 = south), and
@@ -143,6 +149,10 @@ export interface Translations
         pvArrayTilt:              string;
         pvArrayAzimuth:           string;
         pvArrayShare:             string;
+        //Per-string peak power in kWp. Preferred over `share` from
+        //v1.6.3; the total install power is the sum across rows.
+        pvArrayPeakKwp:           string;
+        pvArrayPeakKwpHelp:       string;
         pvArrayAdd:               string;
         pvArrayRemove:            string;
         pvArrayNormHint:          string;
