@@ -2005,6 +2005,7 @@ const heliosCardStyles = i$3`
     .solar-svg,
     .solar-pct-label,
     .solar-horizon-icon,
+    .pv-home-anchor-svg,
     .pv-home-leader-svg,
     .pv-pct-label,
     .battery-leader-svg,
@@ -2024,6 +2025,7 @@ const heliosCardStyles = i$3`
     ha-card.detail-active .solar-svg,
     ha-card.detail-active .solar-pct-label,
     ha-card.detail-active .solar-horizon-icon,
+    ha-card.detail-active .pv-home-anchor-svg,
     ha-card.detail-active .pv-home-leader-svg,
     ha-card.detail-active .pv-pct-label,
     ha-card.detail-active .battery-leader-svg,
@@ -3547,6 +3549,7 @@ const heliosCardStyles = i$3`
     ha-card.lidar-view-active .cloud-svg,
     ha-card.lidar-view-active .cloud-leader-svg,
     ha-card.lidar-view-active .cloud-pct-label,
+    ha-card.lidar-view-active .pv-home-anchor-svg,
     ha-card.lidar-view-active .pv-home-leader-svg,
     ha-card.lidar-view-active .pv-pct-label,
     ha-card.lidar-view-active .battery-leader-svg,
@@ -3925,6 +3928,23 @@ const heliosCardStyles = i$3`
     {
         stroke: #191a1b;
         stroke-opacity: 0.95;
+    }
+
+    /*  PV home-anchor ring host SVG. Sits below every chip cluster
+        + leader line (z-index 1) but above the MapLibre canvas
+        (z-index 0), and below the home-glow silhouette (z-index 11)
+        so the projected building paints OVER the back half of the
+        ring. The eye reads the ring as a ground footprint the
+        building stands inside, which is what the perspective
+        projection promises geometrically.                           */
+    .pv-home-anchor-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
     }
 
     /*  PV home-anchor ring, drawn as a stroked polygon projected
@@ -31214,7 +31234,7 @@ function convexHull(pts) {
 }
 const DEFAULT_HEIGHT_THRESH_M = 5;
 const DEFAULT_HEIGHT_MAX_M = 100;
-const DEFAULT_TARGET_AREA_M2 = 80;
+const DEFAULT_TARGET_AREA_M2 = 16;
 const DEFAULT_MIN_COMPONENT_CELLS = 3;
 const M_PER_DEG_LAT = 111320;
 const EARTH_RADIUS_M = 63710088e-1;
@@ -31235,7 +31255,7 @@ function processHeightRaster(heights, geo, opts = {}, terrain) {
   const pxLatM = pxLat * M_PER_DEG_LAT;
   const cellAreaM2 = pxLatM * pxLatM;
   const maxCellsPerComponent = Math.max(4, Math.min(
-    400,
+    80,
     Math.round(targetArea / Math.max(0.01, cellAreaM2))
   ));
   const cropM = geo.cropRadiusMeters && geo.cropRadiusMeters > 0 ? geo.cropRadiusMeters : null;
@@ -35819,7 +35839,7 @@ function diveCamera(host, targetZoom, targetPitch, bearingSweep, targetMode, onC
   };
   host._detailDiveRaf = requestAnimationFrame(tick2);
 }
-const SHADOW_RASTER_SIZE = 1024;
+const SHADOW_RASTER_SIZE = 2048;
 const BLANK_SHADOW_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
 function shadowBoundsCornersLL(homeLat, homeLon, radiusMeters) {
   const cosLat = Math.cos(homeLat * Math.PI / 180);
@@ -41910,7 +41930,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3-beta.9"}`,
+      `%c☀ HELIOS%c v${"1.6.3-beta.10"}`,
       labelStyle,
       versionStyle
     );
@@ -41934,7 +41954,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3-beta.9",
+        version: "1.6.3-beta.10",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -41942,7 +41962,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3-beta.9"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.3-beta.10"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -42682,6 +42702,74 @@ let HeliosCard = class extends i {
                       because PV and the home share the same X anchor
                       so a straight segment is the right vocabulary.
                       Hidden when no PV entity is configured.  -->
+                <!--  Ground ring around the home. Drawn in its own SVG
+                      layer with an SVG mask built from the home's
+                      screen-space silhouette polygons (the same ones
+                      that drive the home-glow halo). The mask paints
+                      WHITE everywhere and BLACK over the extruded
+                      building's projected outline, so the ring is
+                      hidden wherever the 3D building stands in front
+                      of it. The eye reads the ring as a ground
+                      footprint the building physically stands inside,
+                      improving the perspective without having to
+                      route the ring through MapLibre's layer stack.
+                      Leader line + bead live in the next sibling SVG
+                      so they stay above the home as before.          -->
+                ${showPvLabel ? (() => {
+      const maskId = `helios-home-anchor-mask-${this._instanceId}`;
+      return b`
+                        <svg class="pv-home-anchor-svg">
+                            <defs>
+                                <mask id="${maskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="10000" height="10000">
+                                    <!--  White background , ring visible. -->
+                                    <rect x="0" y="0" width="10000" height="10000" fill="white" />
+                                    <!--  Black home silhouette , ring hidden
+                                          where the projected building
+                                          stands. Same base + top + wall
+                                          polygons the .home-glow-svg
+                                          renders, no extra projection
+                                          pass needed.                       -->
+                                    ${this._homeSilhouettes.map((sil) => {
+        const N2 = Math.min(sil.base.length, sil.top.length);
+        if (N2 < 3) return A;
+        const basePts = sil.base.map((p2) => `${p2.x},${p2.y}`).join(" ");
+        const topPts = sil.top.map((p2) => `${p2.x},${p2.y}`).join(" ");
+        const walls = [];
+        for (let i2 = 0; i2 < N2; i2++) {
+          const j = (i2 + 1) % N2;
+          walls.push(
+            `${sil.base[i2].x},${sil.base[i2].y} ${sil.base[j].x},${sil.base[j].y} ${sil.top[j].x},${sil.top[j].y} ${sil.top[i2].x},${sil.top[i2].y}`
+          );
+        }
+        return w`
+                                            <polygon points="${basePts}" fill="black" />
+                                            <polygon points="${topPts}"  fill="black" />
+                                            ${walls.map((w$1) => w`
+                                                <polygon points="${w$1}" fill="black" />
+                                            `)}
+                                        `;
+      })}
+                                </mask>
+                            </defs>
+                            <g mask="url(#${maskId})">
+                                <g
+                                    class="pv-home-leader-anchor ${pvIdle ? "" : "is-pulsing"}"
+                                    transform="translate(${layout.home.x},${layout.home.y})"
+                                    style="--pv-flow-duration:${pvFlowDuration}s"
+                                >
+                                    <polygon
+                                        class="pv-home-leader-anchor-disc"
+                                        points="${layout.homeAnchorPoints}"
+                                        fill="none"
+                                        stroke="${pvColor}"
+                                        stroke-width="1.6"
+                                    ></polygon>
+                                </g>
+                            </g>
+                        </svg>
+                    `;
+    })() : A}
+
                 ${showPvLabel ? b`
                     <svg class="pv-home-leader-svg">
                         <line
@@ -42712,33 +42800,6 @@ let HeliosCard = class extends i {
                                 ></animateMotion>
                             </circle>
                         ` : A}
-                        <!--  Anchor at the home end of the leader, drawn
-                              as a ground disc projected through the
-                              map's perspective so it lies flat on the
-                              ground around the home rather than
-                              looking like a screen-space puck. The
-                              engine samples 48 points on a horizontal
-                              5 m circle around the home in world
-                              coordinates and serialises them relative
-                              to the home into homeAnchorPoints; we
-                              wrap the polygon in a translate-to-home
-                              group so the pulse animation can scale
-                              the polygon around (0, 0) and stay
-                              centred on the home through the bead's
-                              arrival cycle.                            -->
-                        <g
-                            class="pv-home-leader-anchor ${pvIdle ? "" : "is-pulsing"}"
-                            transform="translate(${layout.home.x},${layout.home.y})"
-                            style="--pv-flow-duration:${pvFlowDuration}s"
-                        >
-                            <polygon
-                                class="pv-home-leader-anchor-disc"
-                                points="${layout.homeAnchorPoints}"
-                                fill="none"
-                                stroke="${pvColor}"
-                                stroke-width="1.6"
-                            ></polygon>
-                        </g>
                     </svg>
                 ` : A}
 

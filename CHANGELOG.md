@@ -5,6 +5,34 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.3-beta.10
+
+Iterative pre-release on top of v1.6.3-beta.9. Three sharpening
+tweaks on the rendered scene.
+
+* **Sharper LiDAR cast shadows.** Two changes compound:
+  - Shadow raster bumped from 1024 to 2048 pixels per side, so
+    each pixel of the cast-shadow mask covers ~ 1 m at the worst-
+    case 2 km bbox instead of ~ 2 m. Mask edges no longer get
+    bilinearly smeared when MapLibre downscales the source to
+    screen size.
+  - Flood-fill clump target dropped from 80 m² to 16 m², and the
+    upper cap from 400 cells to 80 cells. Each clump is then
+    summarised by a smaller convex hull that traces irregular
+    shapes (L-roofs, zigzagging tree rows) much closer to their
+    real outline, removing the "smudged blob" look on dense
+    forest + dense roof scenes. PNG encode goes from ~ 10 ms to
+    ~ 40 ms per shadow refresh, still comfortably under the sun
+    movement cadence that drives refreshes (5 min in live mode).
+* **PV anchor ring sits behind the home silhouette.** Drawn in
+  its own SVG layer with an SVG mask built from the same screen-
+  space silhouette polygons the home-glow uses. The mask paints
+  white everywhere and black over the projected building, so the
+  back arc of the ring (the half occluded by the 3D extrusion)
+  is hidden. The ring now reads as a ground footprint the
+  building stands inside, improving the perspective without
+  routing the ring through MapLibre's layer stack.
+
 ## v1.6.3-beta.9
 
 Final pre-release on top of v1.6.3-beta.8 before the 1.6.3 GA.

@@ -155,6 +155,7 @@ export const heliosCardStyles = css`
     .solar-svg,
     .solar-pct-label,
     .solar-horizon-icon,
+    .pv-home-anchor-svg,
     .pv-home-leader-svg,
     .pv-pct-label,
     .battery-leader-svg,
@@ -174,6 +175,7 @@ export const heliosCardStyles = css`
     ha-card.detail-active .solar-svg,
     ha-card.detail-active .solar-pct-label,
     ha-card.detail-active .solar-horizon-icon,
+    ha-card.detail-active .pv-home-anchor-svg,
     ha-card.detail-active .pv-home-leader-svg,
     ha-card.detail-active .pv-pct-label,
     ha-card.detail-active .battery-leader-svg,
@@ -1697,6 +1699,7 @@ export const heliosCardStyles = css`
     ha-card.lidar-view-active .cloud-svg,
     ha-card.lidar-view-active .cloud-leader-svg,
     ha-card.lidar-view-active .cloud-pct-label,
+    ha-card.lidar-view-active .pv-home-anchor-svg,
     ha-card.lidar-view-active .pv-home-leader-svg,
     ha-card.lidar-view-active .pv-pct-label,
     ha-card.lidar-view-active .battery-leader-svg,
@@ -2075,6 +2078,23 @@ export const heliosCardStyles = css`
     {
         stroke: #191a1b;
         stroke-opacity: 0.95;
+    }
+
+    /*  PV home-anchor ring host SVG. Sits below every chip cluster
+        + leader line (z-index 1) but above the MapLibre canvas
+        (z-index 0), and below the home-glow silhouette (z-index 11)
+        so the projected building paints OVER the back half of the
+        ring. The eye reads the ring as a ground footprint the
+        building stands inside, which is what the perspective
+        projection promises geometrically.                           */
+    .pv-home-anchor-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
     }
 
     /*  PV home-anchor ring, drawn as a stroked polygon projected

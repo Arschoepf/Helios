@@ -1518,6 +1518,78 @@ export class HeliosCard extends LitElement
                       because PV and the home share the same X anchor
                       so a straight segment is the right vocabulary.
                       Hidden when no PV entity is configured.  -->
+                <!--  Ground ring around the home. Drawn in its own SVG
+                      layer with an SVG mask built from the home's
+                      screen-space silhouette polygons (the same ones
+                      that drive the home-glow halo). The mask paints
+                      WHITE everywhere and BLACK over the extruded
+                      building's projected outline, so the ring is
+                      hidden wherever the 3D building stands in front
+                      of it. The eye reads the ring as a ground
+                      footprint the building physically stands inside,
+                      improving the perspective without having to
+                      route the ring through MapLibre's layer stack.
+                      Leader line + bead live in the next sibling SVG
+                      so they stay above the home as before.          -->
+                ${showPvLabel ? (() => {
+                    const maskId = `helios-home-anchor-mask-${this._instanceId}`;
+                    return html`
+                        <svg class="pv-home-anchor-svg">
+                            <defs>
+                                <mask id="${maskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="10000" height="10000">
+                                    <!--  White background , ring visible. -->
+                                    <rect x="0" y="0" width="10000" height="10000" fill="white" />
+                                    <!--  Black home silhouette , ring hidden
+                                          where the projected building
+                                          stands. Same base + top + wall
+                                          polygons the .home-glow-svg
+                                          renders, no extra projection
+                                          pass needed.                       -->
+                                    ${this._homeSilhouettes.map(sil => {
+                                        const N = Math.min(sil.base.length, sil.top.length);
+                                        if (N < 3) return nothing;
+                                        const basePts = sil.base.map(p => `${p.x},${p.y}`).join(' ');
+                                        const topPts  = sil.top .map(p => `${p.x},${p.y}`).join(' ');
+                                        const walls: string[] = [];
+                                        for (let i = 0; i < N; i++)
+                                        {
+                                            const j = (i + 1) % N;
+                                            walls.push(
+                                                `${sil.base[i].x},${sil.base[i].y} ` +
+                                                `${sil.base[j].x},${sil.base[j].y} ` +
+                                                `${sil.top [j].x},${sil.top [j].y} ` +
+                                                `${sil.top [i].x},${sil.top [i].y}`
+                                            );
+                                        }
+                                        return svg`
+                                            <polygon points="${basePts}" fill="black" />
+                                            <polygon points="${topPts}"  fill="black" />
+                                            ${walls.map(w => svg`
+                                                <polygon points="${w}" fill="black" />
+                                            `)}
+                                        `;
+                                    })}
+                                </mask>
+                            </defs>
+                            <g mask="url(#${maskId})">
+                                <g
+                                    class="pv-home-leader-anchor ${pvIdle ? '' : 'is-pulsing'}"
+                                    transform="translate(${layout!.home.x},${layout!.home.y})"
+                                    style="--pv-flow-duration:${pvFlowDuration}s"
+                                >
+                                    <polygon
+                                        class="pv-home-leader-anchor-disc"
+                                        points="${layout!.homeAnchorPoints}"
+                                        fill="none"
+                                        stroke="${pvColor}"
+                                        stroke-width="1.6"
+                                    ></polygon>
+                                </g>
+                            </g>
+                        </svg>
+                    `;
+                })() : nothing}
+
                 ${showPvLabel ? html`
                     <svg class="pv-home-leader-svg">
                         <line
@@ -1548,33 +1620,6 @@ export class HeliosCard extends LitElement
                                 ></animateMotion>
                             </circle>
                         ` : nothing}
-                        <!--  Anchor at the home end of the leader, drawn
-                              as a ground disc projected through the
-                              map's perspective so it lies flat on the
-                              ground around the home rather than
-                              looking like a screen-space puck. The
-                              engine samples 48 points on a horizontal
-                              5 m circle around the home in world
-                              coordinates and serialises them relative
-                              to the home into homeAnchorPoints; we
-                              wrap the polygon in a translate-to-home
-                              group so the pulse animation can scale
-                              the polygon around (0, 0) and stay
-                              centred on the home through the bead's
-                              arrival cycle.                            -->
-                        <g
-                            class="pv-home-leader-anchor ${pvIdle ? '' : 'is-pulsing'}"
-                            transform="translate(${layout!.home.x},${layout!.home.y})"
-                            style="--pv-flow-duration:${pvFlowDuration}s"
-                        >
-                            <polygon
-                                class="pv-home-leader-anchor-disc"
-                                points="${layout!.homeAnchorPoints}"
-                                fill="none"
-                                stroke="${pvColor}"
-                                stroke-width="1.6"
-                            ></polygon>
-                        </g>
                     </svg>
                 ` : nothing}
 

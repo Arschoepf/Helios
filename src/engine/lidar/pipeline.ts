@@ -28,18 +28,23 @@ import type { LidarShadowResult } from '../lidar';
 //                               component, the cell cap is derived from
 //                               this and the actual pixel pitch so
 //                               component size stays consistent across
-//                               precisions. ~80 m² is a 9 m × 9 m clump,
-//                               the size of a small tree group or a
-//                               single building, dense enough to cast a
-//                               readable shadow without flattening a
-//                               whole forest into one blob.
+//                               precisions. ~16 m² is a 4 m × 4 m clump,
+//                               the size of a single tree crown or one
+//                               wing of a small building; smaller clumps
+//                               trace irregular shapes (L-shaped roofs,
+//                               tree rows that zigzag) much closer to
+//                               their real outline once the per-clump
+//                               convex hull is taken in pass 3.
+//                               (Bumped down from 80 m² in v1.6.3 after
+//                               field reports that the cast shadow blob
+//                               looked too "smudged".)
 //  MIN_COMPONENT_CELLS        , floor on cells per component before we
 //                               bother emitting a polygon. Drops single-
 //                               cell noise that would render as speckled
 //                               dot shadows.
 const DEFAULT_HEIGHT_THRESH_M    = 5;
 const DEFAULT_HEIGHT_MAX_M       = 100;
-const DEFAULT_TARGET_AREA_M2     = 80;
+const DEFAULT_TARGET_AREA_M2     = 16;
 const DEFAULT_MIN_COMPONENT_CELLS = 3;
 
 const M_PER_DEG_LAT = 111_320;
@@ -112,7 +117,11 @@ export function processHeightRaster(
     //consistent across providers regardless of their native pixel
     //pitch. Clamped so very low precision still produces multi-cell
     //components and very high precision doesn't blow the cap loose.
-    const maxCellsPerComponent = Math.max(4, Math.min(400,
+    //Upper bound 80 cells (was 400 pre-v1.6.3) caps the worst-case
+    //convex-hull extension to a single building wing or tree group;
+    //the shadow polygon then reads as a recognisable shape rather
+    //than a smudged blob.
+    const maxCellsPerComponent = Math.max(4, Math.min(80,
         Math.round(targetArea / Math.max(0.01, cellAreaM2))));
 
     const cropM = geo.cropRadiusMeters && geo.cropRadiusMeters > 0

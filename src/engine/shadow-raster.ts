@@ -10,12 +10,15 @@ import type maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 
 
-//Offscreen raster resolution for the shadow mask. 1024x1024 over a
-//building-radius bbox (up to ~2 km wide at max radius) gives ~2 m
-//per pixel at the worst case, finer than the LiDAR cell pitch we
-//feed in, so the polygon edges read as smooth anti-aliased curves
-//rather than visible stair-stepping.
-export const SHADOW_RASTER_SIZE = 1024;
+//Offscreen raster resolution for the shadow mask. 2048x2048 over a
+//building-radius bbox (up to ~2 km wide at max radius) gives ~1 m
+//per pixel at the worst case, matching the LiDAR cell pitch we feed
+//in so polygon edges land on the LiDAR grid rather than being
+//bilinearly smeared by MapLibre's raster downscale. The PNG encode
+//is ~40 ms at 2048 vs ~10 ms at 1024 on commodity hardware,
+//comfortably under the sun-movement cadence that triggers shadow
+//refreshes (every 5 minutes in live mode).
+export const SHADOW_RASTER_SIZE = 2048;
 
 
 //Fully-transparent 1x1 PNG used as the initial image of the shadow
