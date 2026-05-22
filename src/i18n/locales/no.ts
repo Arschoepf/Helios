@@ -89,6 +89,8 @@ export const no: Translations = {
         pvArrayLatitude:    'Breddegrad panel',
         pvArrayLongitude:   'Lengdegrad panel',
         pvArrayCoordsHelp:  'Valgfritt. Fyll bare ut hvis denne raden IKKE ligger på samme sted som boligen (bakkemontert 300 m unna, frittstående garasje osv.). Begge feltene må fylles ut for at posisjonen skal brukes, ellers bruker estimatet boligens posisjon. En liten grønn kule vises på kartet i den posisjonen.',
+        pvArrayHeight:      'Panelhøyde (m)',
+        pvArrayHeightHelp:  'Valgfritt, standard 5. Høyde for denne panelgruppen over bakken i meter; brukes av den LiDAR-bevisste PV-prognosen til å plassere ray-march-opphavet ved kontroll av skygge fra en nabo eller et tre. Øk for et tak i øverste etasje (8-10 m), reduser for en bakkemontering (0-1 m). Ingen effekt hvis ingen LiDAR-leverandør dekker hjemmet ditt.',
         pvArrayCoordsPlaceholder: 'valgfritt',
         pvColor:            'Produksjonsfarge',
         batterySection:     'Husbatteri',

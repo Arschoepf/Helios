@@ -676,6 +676,8 @@ const en = {
     pvArrayLatitude: "Panel latitude",
     pvArrayLongitude: "Panel longitude",
     pvArrayCoordsHelp: "Optional. Only set these when this row is NOT at the same place as the home (ground-mount 300 m away, detached garage, etc.). Both fields must be filled in for the position to apply, otherwise the forecast uses the home position. A small green sphere will appear on the map at that location.",
+    pvArrayHeight: "Panel height (m)",
+    pvArrayHeightHelp: "Optional, default 5. Height of this group of panels above ground in metres; used by the LiDAR-aware PV forecast to position the ray-march origin when checking whether the array is shaded by a neighbour or a tree. Raise it for an upper-floor roof (8-10 m), lower it for a ground-mounted array (0-1 m). Has no effect when no LiDAR provider covers the home.",
     pvArrayCoordsPlaceholder: "optional",
     pvColor: "Production color",
     batterySection: "Home battery",
@@ -830,6 +832,8 @@ const fr = {
     pvArrayLatitude: "Latitude des panneaux",
     pvArrayLongitude: "Longitude des panneaux",
     pvArrayCoordsHelp: "Optionnel. À renseigner uniquement si cette rangée n'est PAS au même endroit que la maison (panneaux au sol à 300 m, garage isolé, etc.). Les deux champs doivent être remplis pour que la position s'applique. Sinon la prévision utilise la position de la maison. Une petite sphère verte apparaîtra sur la carte à cette position.",
+    pvArrayHeight: "Hauteur des panneaux (m)",
+    pvArrayHeightHelp: "Optionnel, par défaut 5. Hauteur de ce groupe de panneaux au-dessus du sol en mètres ; utilisée par la prévision PV avec ombrage LiDAR pour positionner l’origine du raycast lors du test d’ombrage par un voisin ou un arbre. Augmentez pour un toit d’étage (8-10 m), abaissez pour un montage au sol (0-1 m). Sans effet si aucun fournisseur LiDAR ne couvre votre domicile.",
     pvArrayCoordsPlaceholder: "optionnel",
     pvColor: "Couleur de production",
     batterySection: "Batterie domestique",
@@ -984,6 +988,8 @@ const de = {
     pvArrayLatitude: "Modul-Breitengrad",
     pvArrayLongitude: "Modul-Längengrad",
     pvArrayCoordsHelp: "Optional. Nur ausfüllen, wenn diese Reihe NICHT am selben Ort steht wie das Haus (Freilandanlage 300 m entfernt, separate Garage usw.). Beide Felder müssen ausgefüllt sein, damit die Position übernommen wird, sonst verwendet die Prognose den Standort des Hauses. Eine kleine grüne Kugel erscheint dann auf der Karte an dieser Position.",
+    pvArrayHeight: "Modulhöhe (m)",
+    pvArrayHeightHelp: "Optional, Standardwert 5. Höhe dieser Modulgruppe über dem Boden in Metern; wird von der LiDAR-bewussten PV-Vorhersage verwendet, um den Ursprung des Raycasts beim Beschattungstest durch einen Nachbarn oder Baum zu positionieren. Für ein Obergeschossdach erhöhen (8-10 m), für eine Bodenmontage absenken (0-1 m). Ohne Wirkung, wenn kein LiDAR-Anbieter Ihr Zuhause abdeckt.",
     pvArrayCoordsPlaceholder: "optional",
     pvColor: "Produktionsfarbe",
     batterySection: "Hausbatterie",
@@ -1138,6 +1144,8 @@ const es = {
     pvArrayLatitude: "Latitud de los paneles",
     pvArrayLongitude: "Longitud de los paneles",
     pvArrayCoordsHelp: "Opcional. Rellénalo solo si esta hilera NO está en el mismo sitio que la casa (instalación al suelo a 300 m, garaje independiente, etc.). Ambos campos deben estar rellenados para que la posición se aplique; si no, la previsión usa la posición de la casa. Aparecerá una pequeña esfera verde en el mapa en esa posición.",
+    pvArrayHeight: "Altura de los paneles (m)",
+    pvArrayHeightHelp: "Opcional, valor por defecto 5. Altura de este grupo de paneles sobre el suelo en metros; usada por la previsión FV con sombreado LiDAR para posicionar el origen del trazado de rayos al comprobar si el grupo está en sombra por un vecino o un árbol. Auméntala para un tejado de planta superior (8-10 m), redúcela para una instalación a nivel de suelo (0-1 m). Sin efecto si ningún proveedor LiDAR cubre tu hogar.",
     pvArrayCoordsPlaceholder: "opcional",
     pvColor: "Color de producción",
     batterySection: "Batería doméstica",
@@ -1292,6 +1300,8 @@ const it = {
     pvArrayLatitude: "Latitudine pannelli",
     pvArrayLongitude: "Longitudine pannelli",
     pvArrayCoordsHelp: "Opzionale. Compila solo se questa fila NON è nello stesso posto della casa (installazione a terra a 300 m, garage separato, ecc.). Entrambi i campi devono essere compilati perché la posizione si applichi, altrimenti la previsione usa la posizione della casa. Sulla mappa apparirà una piccola sfera verde in quella posizione.",
+    pvArrayHeight: "Altezza dei pannelli (m)",
+    pvArrayHeightHelp: "Opzionale, valore predefinito 5. Altezza di questo gruppo di pannelli rispetto al suolo in metri; usata dalla previsione FV con ombreggiamento LiDAR per posizionare l’origine del ray-march nel controllo dell’ombra di un vicino o di un albero. Aumenta per un tetto del piano superiore (8-10 m), riduci per un montaggio a terra (0-1 m). Nessun effetto se nessun provider LiDAR copre la tua casa.",
     pvArrayCoordsPlaceholder: "opzionale",
     pvColor: "Colore di produzione",
     batterySection: "Batteria domestica",
@@ -1446,6 +1456,8 @@ const nl = {
     pvArrayLatitude: "Breedtegraad panelen",
     pvArrayLongitude: "Lengtegraad panelen",
     pvArrayCoordsHelp: "Optioneel. Alleen invullen wanneer deze rij NIET op dezelfde locatie staat als het huis (grondopstelling 300 m verderop, vrijstaande garage, enz.). Beide velden moeten ingevuld zijn om de positie toe te passen; anders gebruikt de voorspelling de positie van het huis. Op de kaart verschijnt een kleine groene bol op die locatie.",
+    pvArrayHeight: "Paneelhoogte (m)",
+    pvArrayHeightHelp: "Optioneel, standaard 5. Hoogte van deze groep panelen boven de grond in meters; gebruikt door de LiDAR-bewuste PV-prognose om de oorsprong van de ray-march te plaatsen bij het controleren van schaduw door een buur of boom. Verhoog voor een dak op een bovenverdieping (8-10 m), verlaag voor een grondmontage (0-1 m). Geen effect als geen LiDAR-provider je woning dekt.",
     pvArrayCoordsPlaceholder: "optioneel",
     pvColor: "Productiekleur",
     batterySection: "Thuisbatterij",
@@ -1600,6 +1612,8 @@ const pt = {
     pvArrayLatitude: "Latitude dos painéis",
     pvArrayLongitude: "Longitude dos painéis",
     pvArrayCoordsHelp: "Opcional. Preenche apenas se esta fileira NÃO estiver no mesmo sítio que a casa (instalação no solo a 300 m, garagem isolada, etc.). Ambos os campos têm de estar preenchidos para a posição ser aplicada; caso contrário, a previsão usa a posição da casa. Uma pequena esfera verde aparecerá no mapa nessa posição.",
+    pvArrayHeight: "Altura dos painéis (m)",
+    pvArrayHeightHelp: "Opcional, valor padrão 5. Altura deste grupo de painéis acima do solo em metros; usada pela previsão FV com sombreamento LiDAR para posicionar a origem do ray-march ao verificar se o grupo está sombreado por um vizinho ou árvore. Aumente para um telhado de andar superior (8-10 m), diminua para uma montagem ao nível do solo (0-1 m). Sem efeito se nenhum provedor LiDAR cobrir o seu lar.",
     pvArrayCoordsPlaceholder: "opcional",
     pvColor: "Cor de produção",
     batterySection: "Bateria doméstica",
@@ -1754,6 +1768,8 @@ const no = {
     pvArrayLatitude: "Breddegrad panel",
     pvArrayLongitude: "Lengdegrad panel",
     pvArrayCoordsHelp: "Valgfritt. Fyll bare ut hvis denne raden IKKE ligger på samme sted som boligen (bakkemontert 300 m unna, frittstående garasje osv.). Begge feltene må fylles ut for at posisjonen skal brukes, ellers bruker estimatet boligens posisjon. En liten grønn kule vises på kartet i den posisjonen.",
+    pvArrayHeight: "Panelhøyde (m)",
+    pvArrayHeightHelp: "Valgfritt, standard 5. Høyde for denne panelgruppen over bakken i meter; brukes av den LiDAR-bevisste PV-prognosen til å plassere ray-march-opphavet ved kontroll av skygge fra en nabo eller et tre. Øk for et tak i øverste etasje (8-10 m), reduser for en bakkemontering (0-1 m). Ingen effekt hvis ingen LiDAR-leverandør dekker hjemmet ditt.",
     pvArrayCoordsPlaceholder: "valgfritt",
     pvColor: "Produksjonsfarge",
     batterySection: "Husbatteri",
@@ -40119,17 +40135,18 @@ let HeliosCardEditor = class extends i {
           azimuth: toNum2(e2["azimuth"]),
           share: toNum2(e2["share"]),
           latitude: toNum2(e2["latitude"]),
-          longitude: toNum2(e2["longitude"])
+          longitude: toNum2(e2["longitude"]),
+          height: toNum2(e2["height"])
         };
       });
-      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null }];
+      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null }];
     }
     const legacyTilt = toNum2(this._cfg?.["pv-tilt"]);
     const legacyAz = toNum2(this._cfg?.["pv-azimuth"]);
     if (legacyTilt !== null || legacyAz !== null) {
-      return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, latitude: null, longitude: null }];
+      return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, latitude: null, longitude: null, height: null }];
     }
-    return [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null }];
+    return [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null }];
   }
   //Persists a list of array entries to the config under `pv-arrays`
   //and clears the legacy `pv-tilt` / `pv-azimuth` keys in the same
@@ -40146,6 +40163,7 @@ let HeliosCardEditor = class extends i {
       if (e2.share !== null) o2["share"] = e2.share;
       if (e2.latitude !== null) o2["latitude"] = e2.latitude;
       if (e2.longitude !== null) o2["longitude"] = e2.longitude;
+      if (e2.height !== null) o2["height"] = e2.height;
       return o2;
     });
     const next3 = { ...this._cfg, "pv-arrays": arrays };
@@ -40184,7 +40202,7 @@ let HeliosCardEditor = class extends i {
   _arrayAdd() {
     const list = this._readPvArrays();
     if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
-    list.push({ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null });
+    list.push({ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null });
     this._openArrayIndices = /* @__PURE__ */ new Set([...this._openArrayIndices, list.length - 1]);
     this._writePvArrays(list);
   }
@@ -40719,6 +40737,19 @@ let HeliosCardEditor = class extends i {
                                                 />
                                             </label>
                                             <div class="field-help">${t2.editor.pvArrayCoordsHelp}</div>
+                                            <label class="field">
+                                                <span class="label">${t2.editor.pvArrayHeight}</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="60"
+                                                    step="0.5"
+                                                    placeholder="5"
+                                                    .value="${arr.height !== null ? String(arr.height) : ""}"
+                                                    @change="${(e2) => this._arrayField(i2, "height", e2)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t2.editor.pvArrayHeightHelp}</div>
                                         </div>
                                     </details>
                                 `;

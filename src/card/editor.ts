@@ -365,6 +365,7 @@ export class HeliosCardEditor extends LitElement
         share:     number | null;
         latitude:  number | null;
         longitude: number | null;
+        height:    number | null;
     }[]
     {
         const toNum = (v: unknown): number | null =>
@@ -392,19 +393,20 @@ export class HeliosCardEditor extends LitElement
                     azimuth:   toNum(e['azimuth']),
                     share:     toNum(e['share']),
                     latitude:  toNum(e['latitude']),
-                    longitude: toNum(e['longitude'])
+                    longitude: toNum(e['longitude']),
+                    height:    toNum(e['height']),
                 };
             });
-            return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null }];
+            return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null }];
         }
 
         const legacyTilt = toNum(this._cfg?.['pv-tilt']);
         const legacyAz   = toNum(this._cfg?.['pv-azimuth']);
         if (legacyTilt !== null || legacyAz !== null)
         {
-            return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, latitude: null, longitude: null }];
+            return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, latitude: null, longitude: null, height: null }];
         }
-        return [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null }];
+        return [{ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null }];
     }
 
     //Persists a list of array entries to the config under `pv-arrays`
@@ -420,6 +422,7 @@ export class HeliosCardEditor extends LitElement
         share:     number | null;
         latitude:  number | null;
         longitude: number | null;
+        height:    number | null;
     }[]): void
     {
         const arrays = list.map(e =>
@@ -431,6 +434,7 @@ export class HeliosCardEditor extends LitElement
             if (e.share     !== null) o['share']     = e.share;
             if (e.latitude  !== null) o['latitude']  = e.latitude;
             if (e.longitude !== null) o['longitude'] = e.longitude;
+            if (e.height    !== null) o['height']    = e.height;
             return o;
         });
         const next = { ...this._cfg, 'pv-arrays': arrays } as HeliosConfig;
@@ -447,7 +451,7 @@ export class HeliosCardEditor extends LitElement
     //Updates a single field on entry `i` in the array list. Empty
     //input clears the field to null (mirrors `_numField`); any other
     //unparseable value is ignored so the previous typed value sticks.
-    private _arrayField(i: number, key: 'tilt' | 'azimuth' | 'share' | 'latitude' | 'longitude', e: Event): void
+    private _arrayField(i: number, key: 'tilt' | 'azimuth' | 'share' | 'latitude' | 'longitude' | 'height', e: Event): void
     {
         const list = this._readPvArrays();
         if (i < 0 || i >= list.length) return;
@@ -493,7 +497,7 @@ export class HeliosCardEditor extends LitElement
     {
         const list = this._readPvArrays();
         if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
-        list.push({ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null });
+        list.push({ name: null, tilt: null, azimuth: null, share: null, latitude: null, longitude: null, height: null });
         //Open the newly added pan in the editor by default: the user
         //just clicked to add it, so its body should be visible without
         //requiring a second click on the chevron. Existing pans keep
@@ -1120,6 +1124,19 @@ export class HeliosCardEditor extends LitElement
                                                 />
                                             </label>
                                             <div class="field-help">${t.editor.pvArrayCoordsHelp}</div>
+                                            <label class="field">
+                                                <span class="label">${t.editor.pvArrayHeight}</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="60"
+                                                    step="0.5"
+                                                    placeholder="5"
+                                                    .value="${arr.height !== null ? String(arr.height) : ''}"
+                                                    @change="${(e: Event) => this._arrayField(i, 'height', e)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t.editor.pvArrayHeightHelp}</div>
                                         </div>
                                     </details>
                                 `;

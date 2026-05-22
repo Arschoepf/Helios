@@ -80,6 +80,8 @@ export const nl: Translations = {
         pvArrayLatitude:    'Breedtegraad panelen',
         pvArrayLongitude:   'Lengtegraad panelen',
         pvArrayCoordsHelp:  'Optioneel. Alleen invullen wanneer deze rij NIET op dezelfde locatie staat als het huis (grondopstelling 300 m verderop, vrijstaande garage, enz.). Beide velden moeten ingevuld zijn om de positie toe te passen; anders gebruikt de voorspelling de positie van het huis. Op de kaart verschijnt een kleine groene bol op die locatie.',
+        pvArrayHeight:      'Paneelhoogte (m)',
+        pvArrayHeightHelp:  'Optioneel, standaard 5. Hoogte van deze groep panelen boven de grond in meters; gebruikt door de LiDAR-bewuste PV-prognose om de oorsprong van de ray-march te plaatsen bij het controleren van schaduw door een buur of boom. Verhoog voor een dak op een bovenverdieping (8-10 m), verlaag voor een grondmontage (0-1 m). Geen effect als geen LiDAR-provider je woning dekt.',
         pvArrayCoordsPlaceholder: 'optioneel',
         pvColor:            'Productiekleur',
         batterySection:     'Thuisbatterij',

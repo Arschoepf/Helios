@@ -80,6 +80,8 @@ export const es: Translations = {
         pvArrayLatitude:    'Latitud de los paneles',
         pvArrayLongitude:   'Longitud de los paneles',
         pvArrayCoordsHelp:  'Opcional. Rellénalo solo si esta hilera NO está en el mismo sitio que la casa (instalación al suelo a 300 m, garaje independiente, etc.). Ambos campos deben estar rellenados para que la posición se aplique; si no, la previsión usa la posición de la casa. Aparecerá una pequeña esfera verde en el mapa en esa posición.',
+        pvArrayHeight:      'Altura de los paneles (m)',
+        pvArrayHeightHelp:  'Opcional, valor por defecto 5. Altura de este grupo de paneles sobre el suelo en metros; usada por la previsión FV con sombreado LiDAR para posicionar el origen del trazado de rayos al comprobar si el grupo está en sombra por un vecino o un árbol. Auméntala para un tejado de planta superior (8-10 m), redúcela para una instalación a nivel de suelo (0-1 m). Sin efecto si ningún proveedor LiDAR cubre tu hogar.',
         pvArrayCoordsPlaceholder: 'opcional',
         pvColor:            'Color de producción',
         batterySection:     'Batería doméstica',

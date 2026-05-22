@@ -80,6 +80,8 @@ export const de: Translations = {
         pvArrayLatitude:    'Modul-Breitengrad',
         pvArrayLongitude:   'Modul-Längengrad',
         pvArrayCoordsHelp:  'Optional. Nur ausfüllen, wenn diese Reihe NICHT am selben Ort steht wie das Haus (Freilandanlage 300 m entfernt, separate Garage usw.). Beide Felder müssen ausgefüllt sein, damit die Position übernommen wird, sonst verwendet die Prognose den Standort des Hauses. Eine kleine grüne Kugel erscheint dann auf der Karte an dieser Position.',
+        pvArrayHeight:      'Modulhöhe (m)',
+        pvArrayHeightHelp:  'Optional, Standardwert 5. Höhe dieser Modulgruppe über dem Boden in Metern; wird von der LiDAR-bewussten PV-Vorhersage verwendet, um den Ursprung des Raycasts beim Beschattungstest durch einen Nachbarn oder Baum zu positionieren. Für ein Obergeschossdach erhöhen (8-10 m), für eine Bodenmontage absenken (0-1 m). Ohne Wirkung, wenn kein LiDAR-Anbieter Ihr Zuhause abdeckt.',
         pvArrayCoordsPlaceholder: 'optional',
         pvColor:            'Produktionsfarbe',
         batterySection:     'Hausbatterie',

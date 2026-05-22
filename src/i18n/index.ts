@@ -162,6 +162,11 @@ export interface Translations
         pvArrayLongitude:         string;
         pvArrayCoordsHelp:        string;
         pvArrayCoordsPlaceholder: string;
+        //Height of this group of panels above ground in metres.
+        //Used by the LiDAR-aware PV forecast to position the
+        //ray-march origin for the per-array shading check.
+        pvArrayHeight:            string;
+        pvArrayHeightHelp:        string;
         pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;
