@@ -35734,84 +35734,6 @@ function startAutoRotateLoop(host) {
   };
   host._autoRotateRaf = requestAnimationFrame(tick2);
 }
-const STATS_ENDPOINT_URL = "https://helios-lidar.org/api/heartbeat";
-const INSTALL_ID_KEY = "helios-install-id";
-const LAST_PING_KEY = "helios-install-last-ping";
-const PING_INTERVAL_MS = 24 * 60 * 60 * 1e3;
-const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-function generateUuidV4() {
-  const cryptoObj = globalThis.crypto;
-  if (cryptoObj && typeof cryptoObj.randomUUID === "function") {
-    return cryptoObj.randomUUID();
-  }
-  if (cryptoObj && typeof cryptoObj.getRandomValues === "function") {
-    const b2 = new Uint8Array(16);
-    cryptoObj.getRandomValues(b2);
-    b2[6] = b2[6] & 15 | 64;
-    b2[8] = b2[8] & 63 | 128;
-    const hex = [];
-    for (let i2 = 0; i2 < 16; i2++) hex.push(b2[i2].toString(16).padStart(2, "0"));
-    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
-  }
-  return "00000000-0000-0000-0000-000000000000";
-}
-function readStorage(key) {
-  try {
-    return window.localStorage?.getItem(key) ?? null;
-  } catch (_2) {
-    return null;
-  }
-}
-function writeStorage(key, value) {
-  try {
-    window.localStorage?.setItem(key, value);
-    return true;
-  } catch (_2) {
-    return false;
-  }
-}
-function getInstallId() {
-  const existing = readStorage(INSTALL_ID_KEY);
-  if (existing && UUID_V4_RE.test(existing)) return existing;
-  const fresh = generateUuidV4();
-  if (!UUID_V4_RE.test(fresh)) return null;
-  if (!writeStorage(INSTALL_ID_KEY, fresh)) return null;
-  return fresh;
-}
-function isOptedOut(config) {
-  if (config && config["helios-anon-stats"] === false) return true;
-  try {
-    const dnt = navigator.doNotTrack;
-    if (dnt === "1") return true;
-  } catch (_2) {
-  }
-  return false;
-}
-function maybePingHeartbeat(config) {
-  if (isOptedOut(config)) return;
-  const installId = getInstallId();
-  if (installId === null) return;
-  const rawLast = readStorage(LAST_PING_KEY);
-  if (rawLast !== null) {
-    const lastMs = parseInt(rawLast, 10);
-    if (Number.isFinite(lastMs) && Date.now() - lastMs < PING_INTERVAL_MS) {
-      return;
-    }
-  }
-  writeStorage(LAST_PING_KEY, String(Date.now()));
-  try {
-    fetch(STATS_ENDPOINT_URL, {
-      method: "POST",
-      mode: "cors",
-      credentials: "omit",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ install_id: installId }),
-      keepalive: true
-    }).catch(() => {
-    });
-  } catch (_2) {
-  }
-}
 const DETAIL_MODE_ZOOM_TARGET = 19.5;
 const DETAIL_MODE_PITCH_TARGET = 80;
 const DETAIL_MODE_TRANSITION_MS = 800;
@@ -36154,10 +36076,6 @@ const _HeliosEngine = class _HeliosEngine {
     this.homeElevation = typeof haElevation === "number" && Number.isFinite(haElevation) ? haElevation : void 0;
     this.cfg = { ...config };
     bumpStat("enginesCreated");
-    try {
-      maybePingHeartbeat(this.cfg);
-    } catch (_2) {
-    }
     while (_liveEngines.size >= MAX_LIVE_ENGINES) {
       const oldest = _liveEngines.values().next().value;
       if (!oldest) break;
@@ -42239,7 +42157,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.3"}`,
+      `%c☀ HELIOS%c v${"1.6.4"}`,
       labelStyle,
       versionStyle
     );
@@ -42263,7 +42181,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.3",
+        version: "1.6.4",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -42271,7 +42189,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.6.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

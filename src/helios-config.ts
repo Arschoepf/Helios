@@ -18,15 +18,6 @@ export interface HeliosConfig
     //(road names, building numbers, POI labels, place names) are
     //hidden for a cleaner, minimalist basemap. Default: true.
     'show-labels'?:           unknown;
-    //Anonymous install heartbeat opt-out. Default: true (heartbeat
-    //fires once per browser per 24 h, sending only a random
-    //UUIDv4 install_id to helios-lidar.org so the landing page
-    //can show "Join the N users running Helios"). Set to `false`
-    //to silence the heartbeat completely. The browser's
-    //`doNotTrack=1` flag and private-mode browsing also silence
-    //it automatically; see src/engine/anon-stats.ts for the full
-    //privacy contract.
-    'helios-anon-stats'?:     unknown;
     //Fixed-colour design system. Each metric has one configurable
     //colour reused everywhere it appears (timeline mirror chart +
     //on-arc sun disc for sun, on-ground disc + timeline lower half

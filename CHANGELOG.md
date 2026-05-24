@@ -5,6 +5,23 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.6.4
+
+Point release on top of v1.6.3 with one behavioural change.
+
+### Heartbeat ping removed
+
+The anonymous install heartbeat introduced in v1.6.3 (a once-per-
+day POST of a random UUIDv4 to helios-lidar.org) is gone. The
+card no longer emits any beacon, and the `helios-anon-stats`
+config key is no longer read. Anyone setting it explicitly to
+`false` can leave the line in their YAML (it's now a no-op) or
+remove it.
+
+Install analytics are now derived from public GitHub Releases
+download counts on the helios-lidar.org landing page, which keeps
+the same informational value without a client-side ping.
+
 ## v1.6.3
 
 Headline release on top of v1.6.2. Sixteen beta iterations
@@ -105,22 +122,6 @@ mobile cost and power-users opt in to the sharper edges. Shadow
 recompute is also coalesced into a 100 ms debounce during
 timeline scrub, so dragging the cursor at high precision no
 longer feels glued.
-
-### Anonymous community signal
-
-The card now fires one tiny anonymous heartbeat to
-helios-lidar.org at most once per browser per 24 h. The whole
-body is a random UUIDv4 install_id; **no IP, no User-Agent, no
-HA version, no entity ids, no coordinates, no country**. The VPS
-counts distinct UUIDs in a 30-day window and exposes the total
-via `GET /api/install-count`, so the landing page can show
-"X Helios cards running on dashboards right now" alongside the
-all-time pipeline conversion count. Three opt-out paths, any of
-which silences the heartbeat: `helios-anon-stats: false` in the
-card config, browser-level `Do Not Track`, or private-mode
-browsing. Full privacy contract in `src/engine/anon-stats.ts`
-and in the README's new "Privacy , anonymous community signal"
-section.
 
 ### Smaller polish that ships in 1.6.3 too
 
