@@ -132,6 +132,29 @@ export function refreshPv(host: PvHost): void
                     buf.shift();
                 }
             }
+
+            //Extend `_pvHistory`'s tail with the live sample so the
+            //chart's right edge tracks the live state between hourly
+            //history re-fetches. The history fetch is keyed by
+            //(entity, fetch-range) and `range.end` is pinned to the
+            //hourly weather grid, so without this the plotted PV
+            //curve flatlines at the value captured at the last hour
+            //boundary even while the chip keeps ticking. The next
+            //full fetch (when the hour rolls over) replaces the
+            //array wholesale, so we don't accumulate duplicates.
+            const hist = host._pvHistory;
+            if (hist)
+            {
+                const lastIdx = hist.times.length - 1;
+                const lastTs  = lastIdx >= 0 ? hist.times[lastIdx].getTime() : 0;
+                if (ts > lastTs)
+                {
+                    host._pvHistory = {
+                        times:  [...hist.times,  new Date(ts)],
+                        values: [...hist.values, next],
+                    };
+                }
+            }
         }
     }
     else

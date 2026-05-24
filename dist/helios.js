@@ -4729,6 +4729,17 @@ function refreshPv(host) {
           buf.shift();
         }
       }
+      const hist = host._pvHistory;
+      if (hist) {
+        const lastIdx = hist.times.length - 1;
+        const lastTs = lastIdx >= 0 ? hist.times[lastIdx].getTime() : 0;
+        if (ts > lastTs) {
+          host._pvHistory = {
+            times: [...hist.times, new Date(ts)],
+            values: [...hist.values, next3]
+          };
+        }
+      }
     }
   } else {
     if (host._pvCurrent !== null) {
