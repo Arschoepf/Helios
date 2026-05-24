@@ -330,8 +330,11 @@ import { it } from './locales/it';
 import { nl } from './locales/nl';
 import { pt } from './locales/pt';
 import { no } from './locales/no';
+import { pl } from './locales/pl';
+import { cs } from './locales/cs';
+import { sv } from './locales/sv';
 
-const LOCALES: Record<string, Translations> = { en, fr, de, es, it, nl, pt, no };
+const LOCALES: Record<string, Translations> = { en, fr, de, es, it, nl, pt, no, pl, cs, sv };
 
 const FALLBACK: Translations = en;
 
