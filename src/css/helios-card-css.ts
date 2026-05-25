@@ -1765,6 +1765,7 @@ export const heliosCardStyles = css`
         intercepting pointer events. Top-right chip cluster stays
         live so the user can toggle the dome back off.            */
     ha-card.shading-dome-active .overlay-top-left,
+    ha-card.shading-dome-active .overlay-top-right,
     ha-card.shading-dome-active .home-glow-svg,
     ha-card.shading-dome-active .home-hitbox,
     ha-card.shading-dome-active .home-silhouette-svg,
@@ -1785,9 +1786,11 @@ export const heliosCardStyles = css`
         transition: opacity 0.25s ease;
     }
     /*  Top-centre cluster keeps its dome chip visible while the
-        dome is active so the user can always exit; the LiDAR
-        cluster on the right stays visible for the same reason. */
-    ha-card.shading-dome-active .overlay-top-right,
+        dome is active so the user can always exit. The LiDAR
+        cluster on the right is intentionally hidden: forcing a
+        dome-exit before LiDAR can be re-opened gives the user a
+        clean "back to map, then into LiDAR" sequence instead of
+        chaining mode switches in one click.                     */
     ha-card.shading-dome-active .overlay-top-center
     {
         opacity: 1;
@@ -1916,7 +1919,8 @@ export const heliosCardStyles = css`
     {
         position: absolute;
         bottom: 14px;
-        left: 12px;
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 50;
         display: inline-flex;
         align-items: center;
@@ -1926,6 +1930,28 @@ export const heliosCardStyles = css`
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
         pointer-events: auto;
+    }
+    /*  Tick wrapper: the slider sits in a relative container so
+        the 25/50/75 tick spans can be absolutely positioned over
+        the track without disturbing the slider's native thumb
+        hit-area.                                                 */
+    .shading-dome-cloud-track-wrap
+    {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 14px;
+    }
+    .shading-dome-cloud-tick
+    {
+        position: absolute;
+        top: 50%;
+        width: 2px;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.55);
+        border-radius: 1px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
     }
     .shading-dome-cloud-icon
     {

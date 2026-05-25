@@ -4270,6 +4270,7 @@ const heliosCardStyles = i$3`
         intercepting pointer events. Top-right chip cluster stays
         live so the user can toggle the dome back off.            */
     ha-card.shading-dome-active .overlay-top-left,
+    ha-card.shading-dome-active .overlay-top-right,
     ha-card.shading-dome-active .home-glow-svg,
     ha-card.shading-dome-active .home-hitbox,
     ha-card.shading-dome-active .home-silhouette-svg,
@@ -4290,9 +4291,11 @@ const heliosCardStyles = i$3`
         transition: opacity 0.25s ease;
     }
     /*  Top-centre cluster keeps its dome chip visible while the
-        dome is active so the user can always exit; the LiDAR
-        cluster on the right stays visible for the same reason. */
-    ha-card.shading-dome-active .overlay-top-right,
+        dome is active so the user can always exit. The LiDAR
+        cluster on the right is intentionally hidden: forcing a
+        dome-exit before LiDAR can be re-opened gives the user a
+        clean "back to map, then into LiDAR" sequence instead of
+        chaining mode switches in one click.                     */
     ha-card.shading-dome-active .overlay-top-center
     {
         opacity: 1;
@@ -4421,7 +4424,8 @@ const heliosCardStyles = i$3`
     {
         position: absolute;
         bottom: 14px;
-        left: 12px;
+        left: 50%;
+        transform: translateX(-50%);
         z-index: 50;
         display: inline-flex;
         align-items: center;
@@ -4431,6 +4435,28 @@ const heliosCardStyles = i$3`
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
         pointer-events: auto;
+    }
+    /*  Tick wrapper: the slider sits in a relative container so
+        the 25/50/75 tick spans can be absolutely positioned over
+        the track without disturbing the slider's native thumb
+        hit-area.                                                 */
+    .shading-dome-cloud-track-wrap
+    {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 14px;
+    }
+    .shading-dome-cloud-tick
+    {
+        position: absolute;
+        top: 50%;
+        width: 2px;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.55);
+        border-radius: 1px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
     }
     .shading-dome-cloud-icon
     {
@@ -39672,12 +39698,13 @@ function renderShadingDomeOverlay(host) {
                   stroke-width="0.4" />
         `);
     if (c2.aged > 0) {
-      const opacity = Math.max(0.25, Math.min(0.85, c2.aged / 6));
+      const opacity = Math.max(0.18, Math.min(0.55, c2.aged / 8));
       coloredNodes.push(w`
                 <path d="${c2.path}"
                       fill="${ratioToFill$1(c2.ratio)}"
                       fill-opacity="${opacity}"
-                      stroke="none" />
+                      stroke="rgba(255,255,255,0.35)"
+                      stroke-width="0.5" />
             `);
     }
   }
@@ -39704,19 +39731,8 @@ function renderShadingDomeOverlay(host) {
     ` : A;
   return b`
         <svg class="shading-dome-svg" style="opacity:${alpha.toFixed(2)}">
-            <defs>
-                <!--  Gaussian blur applied to the coloured-cell layer
-                      so the heatmap reads as a smooth field instead
-                      of a quilt of crisp polygons. stdDeviation tuned
-                      against the typical cell size on screen (a few
-                      pixels) so neighbour cells bleed into each other
-                      but the dome's overall shape stays recognisable. -->
-                <filter id="shading-dome-smooth" x="-10%" y="-10%" width="120%" height="120%">
-                    <feGaussianBlur stdDeviation="6" />
-                </filter>
-            </defs>
             <g class="shading-dome-cells-wire">${wireframeNodes}</g>
-            <g class="shading-dome-cells-color" filter="url(#shading-dome-smooth)">${coloredNodes}</g>
+            <g class="shading-dome-cells-color">${coloredNodes}</g>
             <g class="shading-dome-ribbon">${ribbonNodes}</g>
             <g class="shading-dome-sun">${sunMarker}</g>
         </svg>
@@ -39728,11 +39744,19 @@ function renderShadingDomeCloudPicker(host, onChange) {
   return b`
         <div class="shading-dome-cloud-slider" aria-label="Cloud cover">
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--sun"   icon="mdi:weather-sunny"></ha-icon>
-            <input type="range" min="0" max="100" step="1"
-                   class="shading-dome-cloud-range"
-                   .value="${String(pct)}"
-                   aria-label="Cloud cover percentage"
-                   @input="${(e2) => onChange(Number(e2.target.value))}" />
+            <div class="shading-dome-cloud-track-wrap">
+                <input type="range" min="0" max="100" step="1"
+                       class="shading-dome-cloud-range"
+                       .value="${String(pct)}"
+                       aria-label="Cloud cover percentage"
+                       @input="${(e2) => onChange(Number(e2.target.value))}" />
+                <!--  Visual ticks for the 25/50/75 % checkpoints.
+                      pointer-events:none so they never block the
+                      native range thumb drag underneath.         -->
+                <span class="shading-dome-cloud-tick" style="left:25%"></span>
+                <span class="shading-dome-cloud-tick" style="left:50%"></span>
+                <span class="shading-dome-cloud-tick" style="left:75%"></span>
+            </div>
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--cloud" icon="mdi:weather-cloudy"></ha-icon>
             <span class="shading-dome-cloud-value">${pct}%</span>
         </div>
@@ -43991,7 +44015,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.6"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.7"}`,
       labelStyle,
       versionStyle
     );
@@ -44015,7 +44039,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.6",
+        version: "1.7.0-alpha.7",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44023,7 +44047,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.6"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.7"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -44566,10 +44590,7 @@ let HeliosCard = class extends i {
       const stateClass = !hasProvider ? "is-uncovered" : isLocal ? "is-local" : "is-online";
       const stateIcon = !hasProvider ? "mdi:cloud-off-outline" : isLocal ? "mdi:harddisk" : "mdi:earth";
       const stateLabel = !hasProvider ? "No LiDAR coverage at this location" : isLocal ? "Toggle LiDAR view, local nDSM" : "Toggle LiDAR view, online provider";
-      const onToggle = hasProvider ? () => {
-        if (this._shadingDomeMode) toggleShadingDome(this);
-        toggleLidarView(this);
-      } : void 0;
+      const onToggle = hasProvider ? () => toggleLidarView(this) : void 0;
       return b`
                         <div class="overlay-top-right">
                             <button

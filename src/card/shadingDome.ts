@@ -270,12 +270,11 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
     //  1. Wireframe of the full grid (every populated + empty
     //     cell as a thin outline) so the lattice structure is
     //     always visible and the dome reads as a hemisphere.
-    //  2. Coloured fills for populated cells only, wrapped in a
-    //     Gaussian-blur filter so each cell's fill bleeds into
-    //     its neighbours and the heatmap reads as a smooth field
-    //     rather than a quilt of crisp polygons. Net effect: a
-    //     vertex-colour-like gradient between data points without
-    //     leaving SVG / needing a Canvas re-rasterisation.
+    //  2. Crisp coloured fills for populated cells only. Each
+    //     cell carries its decay-weighted opacity directly; no
+    //     blur, so the boundaries between cells stay sharp and
+    //     the user can tell exactly which (azimuth, altitude)
+    //     bin is being shown.
     const wireframeNodes: TemplateResult[] = [];
     const coloredNodes:   TemplateResult[] = [];
     for (const c of scene.cellPolys)
@@ -288,15 +287,13 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
         `);
         if (c.aged > 0)
         {
-            //Opacity scales with the cell's decay-adjusted weight
-            //so freshly-observed bins read brighter than stale
-            //ones, and the blur smooths across the rest.
-            const opacity = Math.max(0.25, Math.min(0.85, c.aged / 6));
+            const opacity = Math.max(0.18, Math.min(0.55, c.aged / 8));
             coloredNodes.push(svg`
                 <path d="${c.path}"
                       fill="${ratioToFill(c.ratio)}"
                       fill-opacity="${opacity}"
-                      stroke="none" />
+                      stroke="rgba(255,255,255,0.35)"
+                      stroke-width="0.5" />
             `);
         }
     }
@@ -332,19 +329,8 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
 
     return html`
         <svg class="shading-dome-svg" style="opacity:${alpha.toFixed(2)}">
-            <defs>
-                <!--  Gaussian blur applied to the coloured-cell layer
-                      so the heatmap reads as a smooth field instead
-                      of a quilt of crisp polygons. stdDeviation tuned
-                      against the typical cell size on screen (a few
-                      pixels) so neighbour cells bleed into each other
-                      but the dome's overall shape stays recognisable. -->
-                <filter id="shading-dome-smooth" x="-10%" y="-10%" width="120%" height="120%">
-                    <feGaussianBlur stdDeviation="6" />
-                </filter>
-            </defs>
             <g class="shading-dome-cells-wire">${wireframeNodes}</g>
-            <g class="shading-dome-cells-color" filter="url(#shading-dome-smooth)">${coloredNodes}</g>
+            <g class="shading-dome-cells-color">${coloredNodes}</g>
             <g class="shading-dome-ribbon">${ribbonNodes}</g>
             <g class="shading-dome-sun">${sunMarker}</g>
         </svg>
@@ -369,11 +355,19 @@ export function renderShadingDomeCloudPicker(
     return html`
         <div class="shading-dome-cloud-slider" aria-label="Cloud cover">
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--sun"   icon="mdi:weather-sunny"></ha-icon>
-            <input type="range" min="0" max="100" step="1"
-                   class="shading-dome-cloud-range"
-                   .value="${String(pct)}"
-                   aria-label="Cloud cover percentage"
-                   @input="${(e: Event) => onChange(Number((e.target as HTMLInputElement).value))}" />
+            <div class="shading-dome-cloud-track-wrap">
+                <input type="range" min="0" max="100" step="1"
+                       class="shading-dome-cloud-range"
+                       .value="${String(pct)}"
+                       aria-label="Cloud cover percentage"
+                       @input="${(e: Event) => onChange(Number((e.target as HTMLInputElement).value))}" />
+                <!--  Visual ticks for the 25/50/75 % checkpoints.
+                      pointer-events:none so they never block the
+                      native range thumb drag underneath.         -->
+                <span class="shading-dome-cloud-tick" style="left:25%"></span>
+                <span class="shading-dome-cloud-tick" style="left:50%"></span>
+                <span class="shading-dome-cloud-tick" style="left:75%"></span>
+            </div>
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--cloud" icon="mdi:weather-cloudy"></ha-icon>
             <span class="shading-dome-cloud-value">${pct}%</span>
         </div>
