@@ -202,8 +202,15 @@ function bigClipCloudFromBin(bin: number): number
 //map has accumulated enough confident cells to actually show
 //something interesting. Cheap: O(cells), called from the card
 //render path which already loads the map on first chart pass.
+//
+//ALPHA-ONLY OVERRIDE: returns true unconditionally so the user
+//can demo the dome rendering without waiting 1-3 sunny days for
+//the map to populate. Restore the gated logic below before any
+//1.7.0 beta / stable release.
 export function shouldShowDomeChip(): boolean
 {
+    return true;
+    // eslint-disable-next-line no-unreachable
     const map = loadMap();
     if (!map || !map.cells) return false;
     const stats = describeMap(map, Date.now());

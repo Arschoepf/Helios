@@ -39411,7 +39411,6 @@ function describeMap(map, nowMs) {
 }
 const DOME_FADE_IN_MS = 380;
 const DOME_FADE_OUT_MS = 280;
-const MIN_CONFIDENT_CELLS_FOR_CHIP = 3;
 function toggleShadingDome(host) {
   if (!host._engine) return;
   if (!host._shadingDomeMode) {
@@ -39492,10 +39491,7 @@ function bigClipCloudFromBin(bin) {
   return (lo + hi) / 2;
 }
 function shouldShowDomeChip() {
-  const map = loadMap();
-  if (!map || !map.cells) return false;
-  const stats = describeMap(map, Date.now());
-  return stats.confidentCells >= MIN_CONFIDENT_CELLS_FOR_CHIP;
+  return true;
 }
 function shadingDomeFadeAlpha(host) {
   const now = performance.now();
@@ -43834,7 +43830,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.1"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.2"}`,
       labelStyle,
       versionStyle
     );
@@ -43858,7 +43854,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.1",
+        version: "1.7.0-alpha.2",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -43866,7 +43862,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
