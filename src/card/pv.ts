@@ -187,7 +187,14 @@ export function refreshPv(host: PvHost): void
     {
         return;
     }
-    const CALIBRATION_PAST_DAYS = 7;
+    //30-day history window: feeds both the 5-day scalar
+    //calibration (which only walks its own internal 5 days) and
+    //the 30-day shading-map trainer (which uses all of it). HA
+    //returns whatever the recorder retained; users on the
+    //default 10-day retention still get a 3x improvement over
+    //the old 7-day window, users with 30+ day retention get the
+    //full benefit and the dome is pre-filled at first load.
+    const CALIBRATION_PAST_DAYS = 30;
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
     const fetchStart = new Date(today0.getTime() - CALIBRATION_PAST_DAYS * 24 * 3_600_000);

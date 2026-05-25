@@ -39,13 +39,13 @@ const HA_USER_DATA_KEY = 'helios-shading-map';
 const PUSH_DEBOUNCE_MS = 30_000;
 
 
-//How far back to walk on each refresh. Matches the scalar
-//calibration's 5-day window so any sample that contributed to the
-//calibration ratio also contributes to the shading map. We add a
-//small margin so a freshly-loaded card whose `lastTrainedMs` was
-//never set picks up the same horizon as the calibration without
-//needing a separate priming pass.
-const TRAINING_WINDOW_DAYS = 7;
+//How far back to walk on each refresh. 30 days lines up with the
+//PV history fetch + the Open-Meteo past_days payload, so a fresh
+//install with no shading map ends up training on every observed
+//bucket from the last month rather than only the last week. The
+//watermark makes this cheap on subsequent passes (we only touch
+//the buckets that landed since the previous run).
+const TRAINING_WINDOW_DAYS = 30;
 
 //30-minute buckets. Halves the slot length so each cell gets
 //twice the data, captures shading events that come and go

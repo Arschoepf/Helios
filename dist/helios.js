@@ -5634,7 +5634,7 @@ function refreshPv(host) {
   if (!host._timeRange || host._pvFetching) {
     return;
   }
-  const CALIBRATION_PAST_DAYS = 7;
+  const CALIBRATION_PAST_DAYS = 30;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const fetchStart = new Date(today0.getTime() - CALIBRATION_PAST_DAYS * 24 * 36e5);
@@ -30319,7 +30319,7 @@ ${n4.shaderPreludeCode.vertexSource}`, define: n4.shaderDefine }, defaultProject
 })(maplibreGl);
 var maplibreGlExports = maplibreGl.exports;
 const maplibregl = /* @__PURE__ */ getDefaultExportFromCjs(maplibreGlExports);
-const PAST_DAYS = 7;
+const PAST_DAYS = 30;
 const FORECAST_DAYS = 3;
 const RATE_LIMIT_BACKOFF_MS = [
   5 * 6e4,
@@ -40127,7 +40127,7 @@ function timelineConsumptionEnabled(config) {
 }
 const HA_USER_DATA_KEY = "helios-shading-map";
 const PUSH_DEBOUNCE_MS = 3e4;
-const TRAINING_WINDOW_DAYS = 7;
+const TRAINING_WINDOW_DAYS = 30;
 const HOUR_MS = 36e5;
 const BUCKET_MS = 30 * 6e4;
 const BUCKETS_PER_HOUR = 2;
@@ -44056,7 +44056,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.9"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.10"}`,
       labelStyle,
       versionStyle
     );
@@ -44080,7 +44080,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.9",
+        version: "1.7.0-alpha.10",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44088,7 +44088,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.9"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.10"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
