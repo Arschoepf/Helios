@@ -39360,7 +39360,7 @@ const CLOUD_BIN_EDGES = [0, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100];
 const CLOUD_BIN_COUNT = CLOUD_BIN_EDGES.length - 1;
 const HALFLIFE_DAYS = 60;
 const DAY_MS = 864e5;
-const MIN_EFFECTIVE_SAMPLES = 3;
+const MIN_EFFECTIVE_SAMPLES = 2;
 const RATIO_MIN$1 = 0.3;
 const RATIO_MAX$1 = 1.7;
 const STORAGE_KEY = "helios-shading-map:v2";
@@ -44056,7 +44056,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.10"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.11"}`,
       labelStyle,
       versionStyle
     );
@@ -44080,7 +44080,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.10",
+        version: "1.7.0-alpha.11",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44088,7 +44088,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.10"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.11"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

@@ -39,9 +39,12 @@ const DAY_MS = 86_400_000;
 
 //Confidence floor for using the map's value at all. Below this
 //effective sample count the lookup returns null and the caller
-//falls back to the scalar calibration. 3 is the smallest number
-//where the within-cell EMA isn't dominated by the first sample.
-const MIN_EFFECTIVE_SAMPLES = 3;
+//falls back to the scalar calibration. 2 keeps the lookups
+//tolerant enough that a fresh 30-day install reaches a useful
+//count of trusted cells within days; the kernel-smoothed
+//averaging across the 27-cell neighbourhood absorbs the extra
+//noise from cells that have only 2 raw observations.
+const MIN_EFFECTIVE_SAMPLES = 2;
 
 //Per-cell hard cap on the multiplier so a single corrupt
 //actual / predicted pair (sensor outage producing zero, e.g.)
