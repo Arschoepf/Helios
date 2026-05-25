@@ -1311,7 +1311,7 @@ export class HeliosCard extends LitElement
                                     title="Default layer UI"
                                     @click="${onLayer}"
                                 >
-                                    <ha-icon icon="mdi:view-dashboard-variant"></ha-icon>
+                                    <ha-icon icon="mdi:solar-power-variant"></ha-icon>
                                 </button>
                                 <button
                                     type="button"
@@ -1332,7 +1332,7 @@ export class HeliosCard extends LitElement
                                     title="Adaptive shading dome"
                                     @click="${onDome}"
                                 >
-                                    <ha-icon icon="mdi:dome-light"></ha-icon>
+                                    <ha-icon icon="mdi:radar"></ha-icon>
                                 </button>
                             </div>
                         </div>

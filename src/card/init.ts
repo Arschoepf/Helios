@@ -384,27 +384,28 @@ function wireEngineCallbacks(host: InitHost): void
     //Cloud-disc hover is wired directly on the SVG element via
     //@mousemove / @mouseleave (see the render path's solar-svg),
     //so the engine doesn't surface a hover callback for it.
-    //rAF-coalesced dome re-projection. MapLibre fires move events
-    //in bursts of 5-10 per frame during an inertial pan, which used
-    //to trigger 5-10 full dome re-projections (648 cells * 4 corner
-    //projections each, + 96 sun-arc samples with kernel lookups).
-    //We now schedule at most one re-projection per animation frame
-    //and drop the rest. Inertial pans go from ~9 MFlops/s of dome
-    //work to ~1 MFlops/s with no visual difference.
-    let domeRaf: number | null = null;
+    //rAF-coalesced overlay refresh. MapLibre fires move events
+    //in bursts of 5-10 per frame during an inertial pan; without
+    //coalescing, refreshOverlays + the dome re-projection both
+    //ran several times per frame (sun arc reprojects 96 samples,
+    //home silhouettes reproject all extrusion footprints, dome
+    //reprojects 648 cells * 4 corners + 96 ribbon samples). With
+    //the rAF gate, at most one full overlay pass per frame, no
+    //matter how many move events MapLibre fires.
+    let overlayRaf: number | null = null;
     host._engine.onMapTransform = () =>
     {
         //If the card is paused (off-screen or in a hidden tab) the
         //browser still fires move events for tile-load completions,
         //but the user can't see anything, so skip the per-frame
-        //sun-arc + dome work entirely. Both come back on the next
-        //render once the IntersectionObserver re-enables the engine.
+        //work entirely. Comes back on the next render once the
+        //IntersectionObserver re-enables the engine.
         if (host._engine?.isPaused()) return;
-        refreshOverlays(host);
-        if (domeRaf !== null) return;
-        domeRaf = requestAnimationFrame(() =>
+        if (overlayRaf !== null) return;
+        overlayRaf = requestAnimationFrame(() =>
         {
-            domeRaf = null;
+            overlayRaf = null;
+            refreshOverlays(host);
             refreshShadingDomeScene(host as unknown as ShadingDomeHost);
         });
     };

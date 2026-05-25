@@ -1793,47 +1793,49 @@ export const heliosCardStyles = css`
     }
     /*  Three-segment mode bar (Layer UI / LiDAR / Ombres). Sits
         in the top-right rail in place of the old LiDAR chip pair.
-        Each segment is icon-only with a title tooltip; the
-        currently-active segment takes the same scrub-blue plate
-        the clock chip uses while scrubbing so the user has one
-        consistent visual language for "you are in a non-default
-        mode". The segments are glued together via shared borders
-        and matching corner radii, matching the chip-cluster
-        recipe the LiDAR chip used to use on its own.             */
+        Stacked VERTICALLY with iOS-friendly 40 px touch targets
+        so the trio is comfortable on a phone in landscape. Each
+        segment is icon-only with a title tooltip; the active
+        segment takes the same scrub-blue plate the clock chip
+        uses while scrubbing so the user has one consistent
+        visual language for "you are in a non-default mode".
+        Segments are glued together via shared borders and
+        matching corner radii.                                    */
     .mode-bar
     {
         display: inline-flex;
-        align-items: center;
+        flex-direction: column;
+        align-items: stretch;
         pointer-events: auto;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        border-radius: 3px;
+        border-radius: 6px;
     }
     .mode-bar-seg
     {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width:  22px;
-        height: 22px;
+        width:  40px;
+        height: 40px;
         box-sizing: border-box;
         padding: 0;
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
-        border-right: 0;
+        border-bottom: 0;
         cursor: pointer;
         position: relative;
         z-index: 50;
         opacity: 1;
         transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
-    .mode-bar-seg:first-child { border-radius: 3px 0 0 3px; }
-    .mode-bar-seg:last-child  { border-radius: 0 3px 3px 0; border-right: 1px solid #000000; }
+    .mode-bar-seg:first-child { border-radius: 6px 6px 0 0; }
+    .mode-bar-seg:last-child  { border-radius: 0 0 6px 6px; border-bottom: 1px solid #000000; }
     .mode-bar-seg:hover       { background: #f2f2f2; }
     .mode-bar-seg:active      { background: #e6e6e6; }
     .mode-bar-seg ha-icon
     {
-        --mdc-icon-size: 14px;
+        --mdc-icon-size: 22px;
         color: inherit;
         display: inline-flex;
         align-items: center;
@@ -1853,20 +1855,18 @@ export const heliosCardStyles = css`
     }
     .mode-bar-seg.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
     .mode-bar-seg.is-on:active { background: rgba(20, 78, 168, 0.95); }
-    /*  The seam between two adjacent segments needs the LEFT
-        border on the right neighbour to match whichever segment
-        is "winning" the seam. Easiest: when the LEFT segment is
-        .is-on, paint a 1 px overlay on its right edge that
-        matches the on-state border so the seam reads as part of
-        the active plate. Cheap and avoids per-pair CSS combos. */
+    /*  Vertical seam between an active segment and the next one
+        down: paint a 1 px overlay on the top of the lower
+        segment so the seam reads as part of the active plate
+        instead of the inactive segment's border below it.       */
     .mode-bar-seg.is-on + .mode-bar-seg::before
     {
         content: '';
         position: absolute;
-        top: -1px;
-        bottom: -1px;
         left: -1px;
-        width: 1px;
+        right: -1px;
+        top: -1px;
+        height: 1px;
         background: rgba(20, 78, 168, 0.95);
         pointer-events: none;
     }
@@ -2121,8 +2121,8 @@ export const heliosCardStyles = css`
         right: 8px;
         z-index: 60;
         display: flex;
-        flex-direction: row-reverse;
-        align-items: center;
+        flex-direction: column;
+        align-items: flex-end;
         pointer-events: none;
     }
 
@@ -2756,7 +2756,7 @@ export const heliosCardStyles = css`
     }
     ha-card.theme-dark .mode-bar-seg:last-child
     {
-        border-right-color: rgba(255, 255, 255, 0.20);
+        border-bottom-color: rgba(255, 255, 255, 0.20);
     }
 
     ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
