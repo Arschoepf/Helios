@@ -605,6 +605,7 @@ const en = {
   cardName: "HELIOS",
   cardDescription: "☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home",
   lidarViewChipLabel: "LiDAR view",
+  shadingDomeChipLabel: "Shadows",
   detail: {
     exitHint: "Tap anywhere to exit",
     todayLabel: "Today",
@@ -777,6 +778,7 @@ const fr = {
   cardName: "HELIOS",
   cardDescription: "☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel",
   lidarViewChipLabel: "Vue LiDAR",
+  shadingDomeChipLabel: "Ombres",
   detail: {
     exitHint: "Cliquez n'importe où pour quitter",
     todayLabel: "Aujourd'hui",
@@ -949,6 +951,7 @@ const de = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sonne, Wolken, PV-Erzeugung, Batterie und LiDAR-Schatten am Haus, in 3D-Echtzeit",
   lidarViewChipLabel: "LiDAR-Ansicht",
+  shadingDomeChipLabel: "Schatten",
   detail: {
     exitHint: "Tippe irgendwo, um zu schließen",
     todayLabel: "Heute",
@@ -1121,6 +1124,7 @@ const es = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, nubes, producción FV, batería y sombras LiDAR sobre tu casa, en 3D y tiempo real",
   lidarViewChipLabel: "Vista LiDAR",
+  shadingDomeChipLabel: "Sombras",
   detail: {
     exitHint: "Toca en cualquier lugar para salir",
     todayLabel: "Hoy",
@@ -1293,6 +1297,7 @@ const it = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sole, nuvole, produzione FV, batteria e ombre LiDAR sulla tua casa, in 3D e tempo reale",
   lidarViewChipLabel: "Vista LiDAR",
+  shadingDomeChipLabel: "Ombre",
   detail: {
     exitHint: "Tocca un punto qualsiasi per uscire",
     todayLabel: "Oggi",
@@ -1465,6 +1470,7 @@ const nl = {
   cardName: "HELIOS",
   cardDescription: "☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime",
   lidarViewChipLabel: "LiDAR-weergave",
+  shadingDomeChipLabel: "Schaduwen",
   detail: {
     exitHint: "Tik ergens om te sluiten",
     todayLabel: "Vandaag",
@@ -1637,6 +1643,7 @@ const pt = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a tua casa, em 3D e tempo real",
   lidarViewChipLabel: "Vista LiDAR",
+  shadingDomeChipLabel: "Sombras",
   detail: {
     exitHint: "Toca em qualquer lugar para sair",
     todayLabel: "Hoje",
@@ -1809,6 +1816,7 @@ const no = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid",
   lidarViewChipLabel: "LiDAR-visning",
+  shadingDomeChipLabel: "Skygger",
   detail: {
     exitHint: "Trykk hvor som helst for å gå ut",
     todayLabel: "I dag",
@@ -1981,6 +1989,7 @@ const pl = {
   cardName: "HELIOS",
   cardDescription: "☀️ Słońce, chmury, produkcja PV, bateria i cienie LiDAR na Twoim domu, w 3D w czasie rzeczywistym",
   lidarViewChipLabel: "Widok LiDAR",
+  shadingDomeChipLabel: "Cienie",
   detail: {
     exitHint: "Kliknij gdziekolwiek, aby wyjść",
     todayLabel: "Dziś",
@@ -2153,6 +2162,7 @@ const cs = {
   cardName: "HELIOS",
   cardDescription: "☀️ Slunce, mraky, FV produkce, baterie a LiDAR stíny na vašem domě, ve 3D v reálném čase",
   lidarViewChipLabel: "Zobrazení LiDAR",
+  shadingDomeChipLabel: "Stíny",
   detail: {
     exitHint: "Klikněte kamkoli pro ukončení",
     todayLabel: "Dnes",
@@ -2325,6 +2335,7 @@ const sv = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, moln, PV-produktion, batteri och LiDAR-skuggor på ditt hem, i 3D i realtid",
   lidarViewChipLabel: "LiDAR-vy",
+  shadingDomeChipLabel: "Skuggor",
   detail: {
     exitHint: "Klicka var som helst för att avsluta",
     todayLabel: "Idag",
@@ -4226,6 +4237,7 @@ const heliosCardStyles = i$3`
         minus the LiDAR button itself), the home hitbox / glow, and
         the timeline. Easier to audit if any future overlay needs
         to be hidden in LiDAR View by looking at this single block. */
+    ha-card.lidar-view-active .overlay-top-center,
     ha-card.lidar-view-active .overlay-top-left,
     ha-card.lidar-view-active .home-glow-svg,
     ha-card.lidar-view-active .home-hitbox,
@@ -4277,52 +4289,112 @@ const heliosCardStyles = i$3`
         pointer-events: none;
         transition: opacity 0.25s ease;
     }
-    ha-card.shading-dome-active .overlay-top-right
+    /*  Top-centre cluster keeps its dome chip visible while the
+        dome is active so the user can always exit; the LiDAR
+        cluster on the right stays visible for the same reason. */
+    ha-card.shading-dome-active .overlay-top-right,
+    ha-card.shading-dome-active .overlay-top-center
     {
         opacity: 1;
         pointer-events: auto;
     }
-    /*  Dome chip + button: same shape family as the LiDAR chip
-        directly above so the cluster reads as a stack of two
-        related tools rather than two unrelated controls.        */
-    .shading-dome-toggle-btn,
+    /*  Top-centre rail: holds the shading-dome chip cluster
+        between the date / time clock on the LEFT and the LiDAR
+        cluster on the RIGHT. Positioned with the same top inset
+        as the two side rails so all three sit at the same y.
+        Centred via the standard "left:50% + translateX(-50%)"
+        trick rather than flex justify-content so the rail's
+        height stays constant whatever the chip cluster decides
+        to be.                                                    */
+    .overlay-top-center
+    {
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: flex;
+        flex-direction: row-reverse;
+        align-items: center;
+        pointer-events: none;
+    }
+
+    /*  Dome chip + button: same chip-on-left / icon-on-right
+        glued shape as the LiDAR pair. DOM order is button then
+        chip; the row-reverse on .overlay-top-center swaps the
+        visual order so the chip ends up on the LEFT and the
+        icon button on the RIGHT, with a shared seam where the
+        chip's right border meets the button's left edge. Active
+        state uses the same scrub-blue plate as the LiDAR cluster
+        so the two clusters read as the same family.            */
     .shading-dome-chip
     {
-        appearance: none;
-        background: rgba(0, 0, 0, 0.45);
-        color: rgba(255, 255, 255, 0.85);
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        border-radius: 6px;
-        padding: 4px 10px;
-        font-size: 12px;
-        font-weight: 600;
-        font-family: inherit;
-        line-height: 1;
-        cursor: pointer;
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-        transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+        justify-content: center;
+        height: 22px;
+        box-sizing: border-box;
+        padding: 2px 8px;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 3px 0 0 3px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size:   12px;
+        font-weight: 600;
+        line-height: 1.2;
+        white-space: nowrap;
+        cursor: pointer;
+        pointer-events: auto;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+        position: relative;
+        z-index: 50;
     }
+    .shading-dome-chip:hover  { background: #f2f2f2; }
+    .shading-dome-chip:active { background: #e6e6e6; }
     .shading-dome-toggle-btn
     {
-        padding: 6px;
-        --mdc-icon-size: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  22px;
+        height: 22px;
+        box-sizing: border-box;
+        padding: 0;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-radius: 0 3px 3px 0;
+        border-left: 0;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        cursor: pointer;
+        pointer-events: auto;
+        position: relative;
+        z-index: 50;
+        opacity: 1;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
-    .shading-dome-toggle-btn:hover,
-    .shading-dome-chip:hover
+    .shading-dome-toggle-btn:hover  { background: #f2f2f2; }
+    .shading-dome-toggle-btn:active { background: #e6e6e6; }
+    .shading-dome-toggle-btn ha-icon
     {
-        background: rgba(0, 0, 0, 0.6);
-        border-color: rgba(255, 215, 130, 0.55);
-        color: #fde68a;
+        --mdc-icon-size: 12px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
     }
     .shading-dome-toggle-btn.is-on,
     .shading-dome-chip.is-on
     {
-        background: #fde68a;
-        color: #1f2937;
-        border-color: #fde68a;
+        background: rgba(31, 111, 235, 0.95);
+        color: #ffffff;
+        border-color: rgba(20, 78, 168, 0.95);
     }
+    .shading-dome-toggle-btn.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .shading-dome-toggle-btn.is-on:active { background: rgba(20, 78, 168, 0.95); }
+    .shading-dome-chip.is-on:hover        { background: rgba(24, 92, 199, 0.95); }
+    .shading-dome-chip.is-on:active       { background: rgba(20, 78, 168, 0.95); }
     /*  Dome SVG: full-card overlay, sits below the click chrome so
         it never blocks pointer events. Fade alpha comes from inline
         style driven by the dome fade RAF.                          */
@@ -4341,15 +4413,17 @@ const heliosCardStyles = i$3`
     .shading-dome-cloud-picker
     {
         position: absolute;
-        top: 56px;
-        right: 10px;
-        z-index: 8;
+        top: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
         display: inline-flex;
         background: rgba(0, 0, 0, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
         padding: 2px;
         gap: 0;
+        pointer-events: auto;
     }
     .shading-dome-cloud-pill
     {
@@ -43830,7 +43904,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.2"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.3"}`,
       labelStyle,
       versionStyle
     );
@@ -43854,7 +43928,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.2",
+        version: "1.7.0-alpha.3",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -43862,7 +43936,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -44426,30 +44500,40 @@ let HeliosCard = class extends i {
                                 aria-pressed="${this._lidarViewMode ? "true" : "false"}"
                                 @click="${onToggle}"
                             >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
-                            ${domeChipVisible ? b`
-                                <button
-                                    type="button"
-                                    class="shading-dome-toggle-btn ${this._shadingDomeMode ? "is-on" : ""}"
-                                    aria-label="Toggle adaptive shading dome"
-                                    aria-pressed="${this._shadingDomeMode ? "true" : "false"}"
-                                    @click="${() => {
+                        </div>
+                    `;
+    })() : A}
+
+                <!--  Top-centre cluster: shading-dome chip + button,
+                      same chip-on-left / icon-on-right glued shape
+                      as the LiDAR cluster on the right rail, sized
+                      to mirror the clock chip on the left rail so
+                      the three clusters line up at the same y. The
+                      cluster only renders when the chip is allowed
+                      to surface (gated by shouldShowDomeChip()).  -->
+                ${hasApiKey && domeChipVisible ? (() => {
+      const onDomeToggle = () => {
         if (this._lidarViewMode) toggleLidarView(this);
         toggleShadingDome(this);
-      }}"
-                                >
-                                    <ha-icon icon="mdi:weather-sunny-alert"></ha-icon>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="shading-dome-chip ${this._shadingDomeMode ? "is-on" : ""}"
-                                    aria-label="Toggle adaptive shading dome"
-                                    aria-pressed="${this._shadingDomeMode ? "true" : "false"}"
-                                    @click="${() => {
-        if (this._lidarViewMode) toggleLidarView(this);
-        toggleShadingDome(this);
-      }}"
-                                >Dome</button>
-                            ` : A}
+      };
+      return b`
+                        <div class="overlay-top-center">
+                            <button
+                                type="button"
+                                class="shading-dome-toggle-btn ${this._shadingDomeMode ? "is-on" : ""}"
+                                aria-label="Toggle adaptive shading dome"
+                                aria-pressed="${this._shadingDomeMode ? "true" : "false"}"
+                                @click="${onDomeToggle}"
+                            >
+                                <ha-icon icon="mdi:weather-sunny-alert"></ha-icon>
+                            </button>
+                            <button
+                                type="button"
+                                class="shading-dome-chip ${this._shadingDomeMode ? "is-on" : ""}"
+                                aria-label="Toggle adaptive shading dome"
+                                aria-pressed="${this._shadingDomeMode ? "true" : "false"}"
+                                @click="${onDomeToggle}"
+                            >${pickTranslations(this.hass?.language).shadingDomeChipLabel}</button>
                         </div>
                     `;
     })() : A}

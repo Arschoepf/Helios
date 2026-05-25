@@ -1320,32 +1320,42 @@ export class HeliosCard extends LitElement
                                 aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
                                 @click="${onToggle}"
                             >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
-                            ${domeChipVisible ? html`
-                                <button
-                                    type="button"
-                                    class="shading-dome-toggle-btn ${this._shadingDomeMode ? 'is-on' : ''}"
-                                    aria-label="Toggle adaptive shading dome"
-                                    aria-pressed="${this._shadingDomeMode ? 'true' : 'false'}"
-                                    @click="${() => {
-                                        //Mutually exclusive with LiDAR view: close
-                                        //LiDAR first so the two never paint at once.
-                                        if (this._lidarViewMode) toggleLidarView(this);
-                                        toggleShadingDome(this);
-                                    }}"
-                                >
-                                    <ha-icon icon="mdi:weather-sunny-alert"></ha-icon>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="shading-dome-chip ${this._shadingDomeMode ? 'is-on' : ''}"
-                                    aria-label="Toggle adaptive shading dome"
-                                    aria-pressed="${this._shadingDomeMode ? 'true' : 'false'}"
-                                    @click="${() => {
-                                        if (this._lidarViewMode) toggleLidarView(this);
-                                        toggleShadingDome(this);
-                                    }}"
-                                >Dome</button>
-                            ` : nothing}
+                        </div>
+                    `;
+                })() : nothing}
+
+                <!--  Top-centre cluster: shading-dome chip + button,
+                      same chip-on-left / icon-on-right glued shape
+                      as the LiDAR cluster on the right rail, sized
+                      to mirror the clock chip on the left rail so
+                      the three clusters line up at the same y. The
+                      cluster only renders when the chip is allowed
+                      to surface (gated by shouldShowDomeChip()).  -->
+                ${hasApiKey && domeChipVisible ? (() => {
+                    const onDomeToggle = () => {
+                        //Mutually exclusive with LiDAR view: close
+                        //LiDAR first so the two never paint at once.
+                        if (this._lidarViewMode) toggleLidarView(this);
+                        toggleShadingDome(this);
+                    };
+                    return html`
+                        <div class="overlay-top-center">
+                            <button
+                                type="button"
+                                class="shading-dome-toggle-btn ${this._shadingDomeMode ? 'is-on' : ''}"
+                                aria-label="Toggle adaptive shading dome"
+                                aria-pressed="${this._shadingDomeMode ? 'true' : 'false'}"
+                                @click="${onDomeToggle}"
+                            >
+                                <ha-icon icon="mdi:weather-sunny-alert"></ha-icon>
+                            </button>
+                            <button
+                                type="button"
+                                class="shading-dome-chip ${this._shadingDomeMode ? 'is-on' : ''}"
+                                aria-label="Toggle adaptive shading dome"
+                                aria-pressed="${this._shadingDomeMode ? 'true' : 'false'}"
+                                @click="${onDomeToggle}"
+                            >${pickTranslations(this.hass?.language).shadingDomeChipLabel}</button>
                         </div>
                     `;
                 })() : nothing}

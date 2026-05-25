@@ -5,6 +5,7 @@ export const nl: Translations = {
     cardDescription: '☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime',
     lidarViewChipLabel: 'LiDAR-weergave',
 
+    shadingDomeChipLabel: 'Schaduwen',
     detail:
     {
         exitHint: 'Tik ergens om te sluiten',

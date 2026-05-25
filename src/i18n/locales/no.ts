@@ -14,6 +14,7 @@ export const no: Translations = {
     cardDescription: '☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid',
     lidarViewChipLabel: 'LiDAR-visning',
 
+    shadingDomeChipLabel: 'Skygger',
     detail:
     {
         exitHint: 'Trykk hvor som helst for å gå ut',

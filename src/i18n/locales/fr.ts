@@ -13,6 +13,7 @@ export const fr: Translations = {
     cardDescription: '☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel',
     lidarViewChipLabel: 'Vue LiDAR',
 
+    shadingDomeChipLabel: 'Ombres',
     detail:
     {
         exitHint: 'Cliquez n\'importe où pour quitter',

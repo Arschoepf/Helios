@@ -24,6 +24,11 @@ export interface Translations
     //icon). Stays short, ~10 chars max, to balance the clock chip
     //width on the opposite corner.
     lidarViewChipLabel: string;
+    //Label on the shading-dome chip in the top-centre cluster.
+    //Same short noun-phrase convention as lidarViewChipLabel; the
+    //chip toggles the dome overlay where the learned PV residuals
+    //are painted on the celestial hemisphere above the home.
+    shadingDomeChipLabel: string;
 
     //Detail dashboard, opened by clicking the home. The camera eases
     //in (zoom + pitch) and a full-card overlay takes over while the

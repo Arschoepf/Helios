@@ -8,6 +8,7 @@ export const sv: Translations = {
     cardDescription: '☀️ Sol, moln, PV-produktion, batteri och LiDAR-skuggor på ditt hem, i 3D i realtid',
     lidarViewChipLabel: 'LiDAR-vy',
 
+    shadingDomeChipLabel: 'Skuggor',
     detail:
     {
         exitHint: 'Klicka var som helst för att avsluta',

@@ -8,6 +8,7 @@ export const pl: Translations = {
     cardDescription: '☀️ Słońce, chmury, produkcja PV, bateria i cienie LiDAR na Twoim domu, w 3D w czasie rzeczywistym',
     lidarViewChipLabel: 'Widok LiDAR',
 
+    shadingDomeChipLabel: 'Cienie',
     detail:
     {
         exitHint: 'Kliknij gdziekolwiek, aby wyjść',

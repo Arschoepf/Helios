@@ -5,6 +5,7 @@ export const de: Translations = {
     cardDescription: '☀️ Sonne, Wolken, PV-Erzeugung, Batterie und LiDAR-Schatten am Haus, in 3D-Echtzeit',
     lidarViewChipLabel: 'LiDAR-Ansicht',
 
+    shadingDomeChipLabel: 'Schatten',
     detail:
     {
         exitHint: 'Tippe irgendwo, um zu schließen',

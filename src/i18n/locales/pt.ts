@@ -5,6 +5,7 @@ export const pt: Translations = {
     cardDescription: '☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a tua casa, em 3D e tempo real',
     lidarViewChipLabel: 'Vista LiDAR',
 
+    shadingDomeChipLabel: 'Sombras',
     detail:
     {
         exitHint: 'Toca em qualquer lugar para sair',

@@ -8,6 +8,7 @@ export const cs: Translations = {
     cardDescription: '☀️ Slunce, mraky, FV produkce, baterie a LiDAR stíny na vašem domě, ve 3D v reálném čase',
     lidarViewChipLabel: 'Zobrazení LiDAR',
 
+    shadingDomeChipLabel: 'Stíny',
     detail:
     {
         exitHint: 'Klikněte kamkoli pro ukončení',
