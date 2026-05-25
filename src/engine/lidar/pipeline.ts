@@ -35,9 +35,9 @@ import type { LidarShadowResult } from '../lidar';
 //                               tree rows that zigzag) much closer to
 //                               their real outline once the per-clump
 //                               convex hull is taken in pass 3.
-//                               (Bumped down from 80 m² in v1.6.3 after
-//                               field reports that the cast shadow blob
-//                               looked too "smudged".)
+//                               (Tuned down from a wider initial cap
+//                               after field reports that the cast
+//                               shadow blob looked too "smudged".)
 //  MIN_COMPONENT_CELLS        , floor on cells per component before we
 //                               bother emitting a polygon. Drops single-
 //                               cell noise that would render as speckled
@@ -82,7 +82,7 @@ export interface PipelineOptions
 //
 //Optional `terrain` parallel buffer (same shape, same indexing as
 //`heights`) carries the DTM band when the source COG ships one
-//(v1.6.3+ helios-lidar.org pipeline). It is forwarded verbatim
+//(the helios-lidar.org 2-band pipeline). It is forwarded verbatim
 //onto the result's `raster.terrain` field so the shading ray-march
 //can lift its comparison into absolute Z. Pure pass-through: the
 //shadow consolidation logic itself stays nDSM-only.
@@ -117,10 +117,9 @@ export function processHeightRaster(
     //consistent across providers regardless of their native pixel
     //pitch. Clamped so very low precision still produces multi-cell
     //components and very high precision doesn't blow the cap loose.
-    //Upper bound 80 cells (was 400 pre-v1.6.3) caps the worst-case
-    //convex-hull extension to a single building wing or tree group;
-    //the shadow polygon then reads as a recognisable shape rather
-    //than a smudged blob.
+    //Upper bound 80 cells caps the worst-case convex-hull extension
+    //to a single building wing or tree group; the shadow polygon
+    //then reads as a recognisable shape rather than a smudged blob.
     const maxCellsPerComponent = Math.max(4, Math.min(80,
         Math.round(targetArea / Math.max(0.01, cellAreaM2))));
 

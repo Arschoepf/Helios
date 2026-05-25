@@ -3619,11 +3619,11 @@ const heliosCardStyles = i$3`
 
     /*  Stroke-only outline on top of the filled area so peaks read
         cleanly even where the gradient fades towards the midline.
-        Stroke width 0.7 px (down from the v1.6.2 default 1.4 px)
-        so the curve reads as a hairline trace; on high-variation
-        days the previous 1.0 px ribbon stacked over itself on
-        every wobble and turned the dense regions into a smudged
-        band. At 0.7 px the curve stays a line at any zoom.        */
+        Stroke width 0.7 px so the curve reads as a hairline
+        trace; a wider stroke (the earlier 1.4 px default) stacked
+        over itself on every wobble on high-variation days and
+        turned the dense regions into a smudged band. At 0.7 px
+        the curve stays a line at any zoom.                       */
     .hc-chart-line
     {
         fill: none;
@@ -5069,8 +5069,8 @@ const heliosCardStyles = i$3`
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
     /*  Sunrise / sunset markers used to live here as ha-icon
-        glyphs anchored to the arc's horizon crossings. Removed in
-        v1.6.3 ; the arc shape itself reads as "sunrise / sunset".  */
+        glyphs anchored to the arc's horizon crossings. Removed:
+        the arc shape itself reads as "sunrise / sunset".          */
 
 
     /*  Below-horizon segments, round dots at fixed spacing so the
@@ -36947,6 +36947,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._selectedTime = null;
     this._lastAtmosphereAlt = -999;
     this._rateLimitStreak = 0;
+    this._paused = false;
     this._sensorIrradianceSamples = null;
     this._autoRotateLastFrame = 0;
     this._autoRotateLastUserAction = 0;
@@ -37447,7 +37448,10 @@ const _HeliosEngine = class _HeliosEngine {
     window.clearInterval(this._skyTimer);
     this._lastAtmosphereAlt = -999;
     this._refreshShadowsAndAtmosphere();
-    this._skyTimer = window.setInterval(() => this._refreshShadowsAndAtmosphere(), 6e4);
+    this._skyTimer = window.setInterval(() => {
+      if (this._paused) return;
+      this._refreshShadowsAndAtmosphere();
+    }, 6e4);
     if (this._homeHourlyData) {
       this._renderForCurrentSelection();
     }
@@ -38250,7 +38254,7 @@ const _HeliosEngine = class _HeliosEngine {
       const shadowsOn = this._shadowsEnabled();
       const radius = this._buildingRadiusMeters();
       const lidarRef = this._lidarShadowFeatures;
-      const sig = `${shadowsOn ? "1" : "0"}|${altitude.toFixed(2)}|${azimuth.toFixed(2)}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|L${lidarRef ? lidarRef.features.length : -1}|B${this._buildingsData ? this._buildingsData.home.features.length + this._buildingsData.surroundings.features.length : -1}`;
+      const sig = `${shadowsOn ? "1" : "0"}|${altitude.toFixed(1)}|${azimuth.toFixed(1)}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|L${lidarRef ? lidarRef.features.length : -1}|B${this._buildingsData ? this._buildingsData.home.features.length + this._buildingsData.surroundings.features.length : -1}`;
       if (sig !== this._lastShadowSig) {
         this._lastShadowSig = sig;
         let input = { type: "FeatureCollection", features: [] };
@@ -38460,6 +38464,22 @@ const _HeliosEngine = class _HeliosEngine {
         if (sphere) sphere.style.background = pvHex;
       }
     }
+  }
+  //Card-side gate based on the IntersectionObserver: when the
+  //card is off-screen (scrolled out of view, hidden in a
+  //collapsed conditional, sitting in a non-focused tab) the
+  //card calls setPaused(true) and we stop the periodic shadow
+  //refresh + skip the dome re-projection. Resume on visibility.
+  //One immediate refresh on un-pause so the sun position the
+  //user sees matches now, not "where the sun was when the card
+  //scrolled out 10 minutes ago".
+  setPaused(paused) {
+    if (this._paused === paused) return;
+    this._paused = paused;
+    if (!paused) this._refreshShadowsAndAtmosphere();
+  }
+  isPaused() {
+    return this._paused;
   }
   //True while the post-exit cooldown is active. The card consults
   //this to gate timeline scrubs; the engine consults it internally
@@ -38970,7 +38990,7 @@ const _HeliosEngine = class _HeliosEngine {
   //last fetch failed.
   //
   //The optional `terrain` field carries the DTM band when the
-  //source COG ships one (v1.6.3+ helios-lidar.org output); it
+  //source COG ships one (helios-lidar.org 2-band output); it
   //lets the shading ray-march lift its comparison into absolute
   //Z so sloped ground between the panel and a far obstacle is
   //taken into account. Absent on every public provider and on
@@ -39660,9 +39680,20 @@ function refreshShadingDomeScene(host) {
   }
   const now = /* @__PURE__ */ new Date();
   const cloudPct = Math.max(0, Math.min(100, host._shadingDomeCloudPct));
-  const cloudBin = Math.min(3, Math.floor(cloudPct / 25));
+  const cloudBin = Math.min(7, Math.floor(cloudPct / 12.5));
+  const lookupCache = /* @__PURE__ */ new Map();
+  const cellLookup = (az, alt, cloud) => {
+    const bin = binFor(az, alt, cloud);
+    if (!bin) return null;
+    const key = cellKey(bin);
+    const cached = lookupCache.get(key);
+    if (cached !== void 0) return cached;
+    const result = lookupRatio(map, az, alt, cloud, nowMs);
+    lookupCache.set(key, result);
+    return result;
+  };
   const scene = host._engine.projectShadingDome({
-    cellLookup: (az, alt, cloud) => lookupRatio(map, az, alt, cloud, nowMs),
+    cellLookup,
     decodedCells,
     cloudBinForArc: cloudBin,
     liveCloudPct: cloudPct,
@@ -39866,12 +39897,24 @@ function initVisibilityObserver(host) {
   if (host._visibilityObserver || typeof IntersectionObserver === "undefined") {
     return;
   }
+  let intersecting = true;
+  const applyState = () => {
+    const tabHidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+    const paused = !intersecting || tabHidden;
+    setAnimationsPaused(host, paused);
+    host._engine?.setPaused(paused);
+  };
   host._visibilityObserver = new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      setAnimationsPaused(host, !entry.isIntersecting);
+      intersecting = entry.isIntersecting;
     }
+    applyState();
   }, { threshold: 0 });
   host._visibilityObserver.observe(host);
+  if (typeof document !== "undefined") {
+    host._onVisibilityChange = applyState;
+    document.addEventListener("visibilitychange", host._onVisibilityChange);
+  }
 }
 function initEngine(host) {
   host._initInflight = true;
@@ -39936,9 +39979,15 @@ function wireEngineCallbacks(host) {
     host._chartSeries = host._engine?.getTimelineSeries() ?? null;
     refreshOverlays(host);
   };
+  let domeRaf = null;
   host._engine.onMapTransform = () => {
+    if (host._engine?.isPaused()) return;
     refreshOverlays(host);
-    refreshShadingDomeScene(host);
+    if (domeRaf !== null) return;
+    domeRaf = requestAnimationFrame(() => {
+      domeRaf = null;
+      refreshShadingDomeScene(host);
+    });
   };
   host._engine.onContextLost = () => {
     host._lastHomeKey = "";
@@ -41667,9 +41716,9 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                 `)}
             </div>
             <!--  Twilight ha-icon glyphs (sunrise / sunset) used to
-                  sit here; they were replaced in v1.6.3 by the
-                  night-zone diagonal hatch rendered inside the SVG
-                  above. Same visual vocabulary as the timeline's
+                  sit here; they were replaced by the night-zone
+                  diagonal hatch rendered inside the SVG above.
+                  Same visual vocabulary as the timeline's
                   .hc-night-zone overlay, and the hatch communicates
                   "this slice is night" without competing with the
                   PV curve for the user's attention.                   -->
@@ -44056,7 +44105,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.11"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.12"}`,
       labelStyle,
       versionStyle
     );
@@ -44080,7 +44129,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.11",
+        version: "1.7.0-alpha.12",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44088,7 +44137,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.11"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.12"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -44313,6 +44362,10 @@ let HeliosCard = class extends i {
     window.clearInterval(this._timer);
     this._visibilityObserver?.disconnect();
     this._visibilityObserver = void 0;
+    if (this._onVisibilityChange) {
+      document.removeEventListener("visibilitychange", this._onVisibilityChange);
+      this._onVisibilityChange = void 0;
+    }
     if (this._initDebounceTimer !== void 0) {
       window.clearTimeout(this._initDebounceTimer);
       this._initDebounceTimer = void 0;
@@ -45162,11 +45215,11 @@ let HeliosCard = class extends i {
 
                 <!--  Sunrise / sunset markers were drawn here as
                       sun-coloured ha-icon glyphs anchored at the
-                      arc's horizon crossings. Removed in v1.6.3 :
-                      the arc shape itself already communicates
-                      "the sun rises here, sets there", the icons
-                      added visual noise and competed with the
-                      LiDAR shadow blobs sitting on the same
+                      arc's horizon crossings. Removed: the arc
+                      shape itself already communicates "the sun
+                      rises here, sets there", the icons added
+                      visual noise and competed with the LiDAR
+                      shadow blobs sitting on the same
                       horizon line.                                  -->
 
 

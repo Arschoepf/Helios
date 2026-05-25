@@ -33,9 +33,9 @@
 //and is always populated. `terrain` is the optional DTM band
 //(ground elevation per cell in the source vertical datum). When
 //the provider supplies a 2-band COG the engine reads both; when
-//the COG is a legacy single-band file (every nDSM shipped before
-//v1.6.3) the terrain field is left undefined and the ray-march
-//falls back to the old flat-ground behaviour.
+//the COG is a legacy single-band file the terrain field is left
+//undefined and the ray-march falls back to the flat-ground
+//behaviour.
 export interface NdsmRaster
 {
     heights:    Float32Array;
@@ -129,7 +129,7 @@ export function sampleDtmAt(
 //handled by the irradiance fast-path upstream, so we don't double-
 //count it here).
 //
-//Terrain awareness: when the raster carries a DTM band (v1.6.3+
+//Terrain awareness: when the raster carries a DTM band (the
 //2-band COGs), the ray-march compares both the ray and the
 //obstacle in absolute Z anchored at the panel's local ground
 //height. Sloped ground between the panel and a far obstacle is

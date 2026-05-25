@@ -160,8 +160,8 @@ export interface Translations
         pvArrayTilt:              string;
         pvArrayAzimuth:           string;
         pvArrayShare:             string;
-        //Per-string peak power in kWp. Preferred over `share` from
-        //v1.6.3; the total install power is the sum across rows.
+        //Per-string peak power in kWp. Preferred over `share`; the
+        //total install power is the sum across rows.
         pvArrayPeakKwp:           string;
         pvArrayPeakKwpHelp:       string;
         pvArrayAdd:               string;

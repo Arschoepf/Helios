@@ -47,9 +47,9 @@ export interface HeliosConfig
     //but live observation, peak-of-day highlight and chart axes keep
     //working off the actual PV entity.
     //
-    //Superseded by per-string `pv-arrays[].peak-kwp` from v1.6.3:
-    //when any array entry carries a `peak-kwp`, the total install
-    //power is the sum of those values and `pv-peak-kwp` is ignored.
+    //Superseded by per-string `pv-arrays[].peak-kwp`: when any
+    //array entry carries a `peak-kwp`, the total install power is
+    //the sum of those values and `pv-peak-kwp` is ignored.
     //Existing configs that only set `pv-peak-kwp` keep working
     //unchanged through the legacy share-based weighting.
     'pv-peak-kwp'?:           unknown;
@@ -85,10 +85,10 @@ export interface HeliosConfig
     //  azimuth  : 0–360° clockwise from north (180 = south). Wrapped
     //             into range, defaults to 180 when missing.
     //  peak-kwp : installed peak power of THIS string in kWp.
-    //             Preferred over `share` from v1.6.3: each user
-    //             enters the real nameplate for each string, the
-    //             total kWp is just the sum, and the weighting is
-    //             derived automatically. When any entry carries a
+    //             Preferred over `share`: each user enters the real
+    //             nameplate for each string, the total kWp is just
+    //             the sum, and the weighting is derived
+    //             automatically. When any entry carries a
     //             peak-kwp, the top-level `pv-peak-kwp` is ignored.
     //  share    : legacy relative weight, in [0, 1] or any positive
     //             scale. Auto-normalised so the shares used at

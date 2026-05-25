@@ -894,9 +894,9 @@ export function renderDashTodayChart(
                 `)}
             </div>
             <!--  Twilight ha-icon glyphs (sunrise / sunset) used to
-                  sit here; they were replaced in v1.6.3 by the
-                  night-zone diagonal hatch rendered inside the SVG
-                  above. Same visual vocabulary as the timeline's
+                  sit here; they were replaced by the night-zone
+                  diagonal hatch rendered inside the SVG above.
+                  Same visual vocabulary as the timeline's
                   .hc-night-zone overlay, and the hatch communicates
                   "this slice is night" without competing with the
                   PV curve for the user's attention.                   -->

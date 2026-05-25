@@ -182,32 +182,57 @@ export interface InitHost extends OverlaysHost
     _initInflight:       boolean;
     _initDebounceTimer?: number;
     _visibilityObserver?: IntersectionObserver;
+    //Document-level visibilitychange listener. Stored on the host
+    //so disconnectedCallback can removeEventListener cleanly when
+    //the card unmounts (each card has its own listener instance).
+    _onVisibilityChange?: () => void;
 
     requestUpdate(): void;
 }
 
 
 //IntersectionObserver hook: pause every CSS animation and every SVG
-//SMIL animation when the card scrolls out of the viewport. The
-//rotation loop (a requestAnimationFrame in the engine) is left
-//running because (a) the browser auto-throttles rAF on hidden
-//tabs and (b) the card looks alive when the user scrolls back.
-//Only the SVG overlay animations are paused, they're the ones
-//that run continuously regardless of map state.
+//SMIL animation when the card scrolls out of the viewport, AND pause
+//the engine's 60 s shadow-refresh timer + the dome re-projection on
+//map moves. The rotation loop (a requestAnimationFrame in the engine)
+//is left running because the browser auto-throttles rAF on hidden
+//tabs and the card looks alive when the user scrolls back. The
+//Page Visibility API is layered on top so a Helios card sitting in
+//a hidden HA tab also goes quiet, not just one scrolled out of
+//view of a focused tab.
 export function initVisibilityObserver(host: InitHost): void
 {
     if (host._visibilityObserver || typeof IntersectionObserver === 'undefined')
     {
         return;
     }
+    //Combined paused state: invisible if the card is off-screen
+    //(IntersectionObserver) OR the whole tab is hidden (Page
+    //Visibility API). Either condition kills the heavy work.
+    let intersecting = true;
+    const applyState = () =>
+    {
+        const tabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+        const paused    = !intersecting || tabHidden;
+        setAnimationsPaused(host, paused);
+        host._engine?.setPaused(paused);
+    };
     host._visibilityObserver = new IntersectionObserver(entries =>
     {
         for (const entry of entries)
         {
-            setAnimationsPaused(host, !entry.isIntersecting);
+            intersecting = entry.isIntersecting;
         }
+        applyState();
     }, { threshold: 0 });
     host._visibilityObserver.observe(host as unknown as Element);
+    if (typeof document !== 'undefined')
+    {
+        //One global listener per card. Removed in the card's
+        //disconnectedCallback via _onVisibilityChange below.
+        host._onVisibilityChange = applyState;
+        document.addEventListener('visibilitychange', host._onVisibilityChange);
+    }
 }
 
 
@@ -359,15 +384,29 @@ function wireEngineCallbacks(host: InitHost): void
     //Cloud-disc hover is wired directly on the SVG element via
     //@mousemove / @mouseleave (see the render path's solar-svg),
     //so the engine doesn't surface a hover callback for it.
+    //rAF-coalesced dome re-projection. MapLibre fires move events
+    //in bursts of 5-10 per frame during an inertial pan, which used
+    //to trigger 5-10 full dome re-projections (648 cells * 4 corner
+    //projections each, + 96 sun-arc samples with kernel lookups).
+    //We now schedule at most one re-projection per animation frame
+    //and drop the rest. Inertial pans go from ~9 MFlops/s of dome
+    //work to ~1 MFlops/s with no visual difference.
+    let domeRaf: number | null = null;
     host._engine.onMapTransform = () =>
     {
+        //If the card is paused (off-screen or in a hidden tab) the
+        //browser still fires move events for tile-load completions,
+        //but the user can't see anything, so skip the per-frame
+        //sun-arc + dome work entirely. Both come back on the next
+        //render once the IntersectionObserver re-enables the engine.
+        if (host._engine?.isPaused()) return;
         refreshOverlays(host);
-        //Shading-dome re-projection mirrors what refreshOverlays
-        //does for the sun arc + clouds: matrix-multiply the cached
-        //cell + arc inputs through the current frame's projection.
-        //Cheap enough to call unconditionally; the helper exits
-        //immediately when the dome isn't active.
-        refreshShadingDomeScene(host as unknown as ShadingDomeHost);
+        if (domeRaf !== null) return;
+        domeRaf = requestAnimationFrame(() =>
+        {
+            domeRaf = null;
+            refreshShadingDomeScene(host as unknown as ShadingDomeHost);
+        });
     };
     //WebGL context loss recovery, iOS Safari recycles contexts
     //under memory pressure. The engine emits this hook from its

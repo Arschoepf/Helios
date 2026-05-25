@@ -74,8 +74,8 @@ export interface LidarShadowResult
         heights:    Float32Array;
         //Optional DTM band (ground elevation in the source vertical
         //datum, NaN where no-data). Populated by the local-nDSM
-        //provider when it reads a v1.6.3+ 2-band COG; absent on
-        //single-band COGs (legacy locals) and on every public
+        //provider when it reads a 2-band COG; absent on legacy
+        //single-band COGs and on every public
         //provider (their WCS layers only expose the nDSM). The
         //shading ray-march in pv-shading.ts falls back to flat-
         //ground geometry whenever the field is undefined, so the

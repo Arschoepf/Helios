@@ -240,7 +240,7 @@ export function lookupRatio(
     if (den <= 0) return null;
     const ratio = num / den;
     const confidence = Math.min(1, den / MIN_EFFECTIVE_SAMPLES);
-    if (confidence < 0.33) return null;   //den < 1 effective sample, not enough yet
+    if (confidence < 0.33) return null;   //den below a third of MIN_EFFECTIVE_SAMPLES, not enough kernel weight yet
     return { ratio, confidence };
 }
 

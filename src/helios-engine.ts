@@ -391,6 +391,13 @@ export class HeliosEngine
     private _weatherTimer?:         number;
     private _skyTimer?:             number;
     private _resizeObserver?:       ResizeObserver;
+    //When true, the 60 s shadow-refresh timer skips its work and
+    //the card-level onMapTransform handler short-circuits the dome
+    //re-projection. Toggled by the card based on the
+    //IntersectionObserver: a Helios card scrolled out of viewport
+    //or sitting in a hidden HA tab pays nothing for the engine
+    //until it comes back.
+    private _paused = false;
 
     //_weatherTimer holds either a setInterval id (regular refresh) or
     //a setTimeout id (rate-limit back-off). The two ID spaces overlap
@@ -1359,7 +1366,15 @@ export class HeliosEngine
         //Sky/atmosphere refresh, every 60s. _refreshShadowsAndAtmosphere
         //internally short-circuits when the sun has not moved enough to
         //cause a visible change, so the cost on mobile is negligible.
-        this._skyTimer = window.setInterval(() => this._refreshShadowsAndAtmosphere(), 60_000);
+        //Outer skip when paused (card invisible) so we don't even
+        //enter the signature check + cache lookup until it's visible
+        //again; saves the heaviest path (PNG re-encode on signature
+        //miss) entirely while scrolled away.
+        this._skyTimer = window.setInterval(() =>
+        {
+            if (this._paused) return;
+            this._refreshShadowsAndAtmosphere();
+        }, 60_000);
 
         if (this._homeHourlyData)
         {
@@ -2188,7 +2203,7 @@ export class HeliosEngine
         //lower opacity for cell-shaded depth, but the surrounding
         //lines piled up visually on dense streets and competed with
         //the LiDAR shadows for attention, so the surroundings stay
-        //unstroked from v1.6.3 onwards.
+        //unstroked.
         //Kick off the MapTiler buildings fetch in the background.
         //The shadow source is wired and will populate as soon as the
         //buildings GeoJSON lands.
@@ -2470,12 +2485,14 @@ export class HeliosEngine
             //Signature of every input the shadow raster depends on.
             //Same signature = same image; the project + canvas paint +
             //PNG encode round-trip can be skipped entirely. Altitude
-            //and azimuth are rounded to 0.01 deg, ~36 seconds of sun
-            //motion, well below the visual threshold for a shadow shift.
+            //and azimuth are rounded to 0.1 deg, ~6 minutes of sun
+            //motion, well below the visual threshold for a shadow
+            //shift but coarse enough that a timeline scrub no longer
+            //triggers a 20 ms PNG encode every half-second.
             const lidarRef = this._lidarShadowFeatures;
             const sig =
                 `${shadowsOn ? '1' : '0'}` +
-                `|${altitude.toFixed(2)}|${azimuth.toFixed(2)}` +
+                `|${altitude.toFixed(1)}|${azimuth.toFixed(1)}` +
                 `|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}` +
                 `|${radius}` +
                 `|L${lidarRef ? lidarRef.features.length : -1}` +
@@ -2840,6 +2857,26 @@ export class HeliosEngine
                 if (sphere) sphere.style.background = pvHex;
             }
         }
+    }
+
+    //Card-side gate based on the IntersectionObserver: when the
+    //card is off-screen (scrolled out of view, hidden in a
+    //collapsed conditional, sitting in a non-focused tab) the
+    //card calls setPaused(true) and we stop the periodic shadow
+    //refresh + skip the dome re-projection. Resume on visibility.
+    //One immediate refresh on un-pause so the sun position the
+    //user sees matches now, not "where the sun was when the card
+    //scrolled out 10 minutes ago".
+    public setPaused(paused: boolean): void
+    {
+        if (this._paused === paused) return;
+        this._paused = paused;
+        if (!paused) this._refreshShadowsAndAtmosphere();
+    }
+
+    public isPaused(): boolean
+    {
+        return this._paused;
     }
 
     //True while the post-exit cooldown is active. The card consults
@@ -3488,7 +3525,7 @@ export class HeliosEngine
         cellLookup: (azimuthDeg: number, altitudeDeg: number, cloudPct: number) =>
             { ratio: number; confidence: number } | null;
         decodedCells: Array<{ azimuthDeg: number; altitudeDeg: number; cloudBin: number; ratio: number; aged: number }>;
-        cloudBinForArc: number;   //0..3, which cloud-cover bin to sample for today's arc
+        cloudBinForArc: number;   //0..7, which cloud-cover bin to sample for today's arc
         liveCloudPct:   number;   //real-time cloud cover, used to pick the dome cells visualised
         now:            Date;
     }): {
@@ -3667,7 +3704,7 @@ export class HeliosEngine
     //last fetch failed.
     //
     //The optional `terrain` field carries the DTM band when the
-    //source COG ships one (v1.6.3+ helios-lidar.org output); it
+    //source COG ships one (helios-lidar.org 2-band output); it
     //lets the shading ray-march lift its comparison into absolute
     //Z so sloped ground between the panel and a far obstacle is
     //taken into account. Absent on every public provider and on

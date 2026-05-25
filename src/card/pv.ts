@@ -177,12 +177,14 @@ export function refreshPv(host: PvHost): void
     //would queue thousands of identical requests.
     //
     //Range extension: the timeline UI itself only renders the
-    //last 2 past days, but the forecast calibration needs ~5-7
+    //last 2 past days, but the forecast calibration needs ~5
     //past days of observed PV to derive a stable ratio against
-    //the model. Stretch the fetch window back to 7 days even
-    //though the chart will only plot the trailing 2; the extra
-    //samples just sit unused by the chart and feed the
-    //calibration without an extra HA round-trip.
+    //the model, and the shading-map trainer can use up to 30
+    //days to pre-fill its grid. We stretch the fetch window back
+    //to 30 days even though the chart will only plot the
+    //trailing 2; the extra samples just sit unused by the chart
+    //and feed both the calibration and the trainer without an
+    //extra HA round-trip.
     if (!host._timeRange || host._pvFetching)
     {
         return;
@@ -646,10 +648,9 @@ export function pvNormalizeToWatts(value: number, unit: string): number
 //in priority order:
 //
 //  1. Sum of per-string `pv-arrays[].peak-kwp` values. Preferred
-//     from v1.6.3 because each user enters the real nameplate for
-//     each string and the total is derived automatically. Drops
-//     the "60/40 share with 5 kWp total" abstraction users found
-//     confusing.
+//     because each user enters the real nameplate for each string
+//     and the total is derived automatically. Drops the "60/40
+//     share with 5 kWp total" abstraction users found confusing.
 //  2. Top-level `pv-peak-kwp` legacy value. Kept for back-compat;
 //     existing configs work unchanged.
 //
@@ -826,7 +827,7 @@ export function pvArrays(
             const az    = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
             const azDeg = isFinite(az) ? ((az % 360) + 360) % 360 : 180;
 
-            //Per-string peak power in kWp (preferred from v1.6.3).
+            //Per-string peak power in kWp (preferred path).
             //NaN when blank; the caller's pv-peak-kwp covers it.
             const rawPeakKwp = e['peak-kwp'];
             let peakKwp: number = NaN;

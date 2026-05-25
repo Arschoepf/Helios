@@ -1114,11 +1114,11 @@ export const heliosCardStyles = css`
 
     /*  Stroke-only outline on top of the filled area so peaks read
         cleanly even where the gradient fades towards the midline.
-        Stroke width 0.7 px (down from the v1.6.2 default 1.4 px)
-        so the curve reads as a hairline trace; on high-variation
-        days the previous 1.0 px ribbon stacked over itself on
-        every wobble and turned the dense regions into a smudged
-        band. At 0.7 px the curve stays a line at any zoom.        */
+        Stroke width 0.7 px so the curve reads as a hairline
+        trace; a wider stroke (the earlier 1.4 px default) stacked
+        over itself on every wobble on high-variation days and
+        turned the dense regions into a smudged band. At 0.7 px
+        the curve stays a line at any zoom.                       */
     .hc-chart-line
     {
         fill: none;
@@ -2564,8 +2564,8 @@ export const heliosCardStyles = css`
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
     /*  Sunrise / sunset markers used to live here as ha-icon
-        glyphs anchored to the arc's horizon crossings. Removed in
-        v1.6.3 ; the arc shape itself reads as "sunrise / sunset".  */
+        glyphs anchored to the arc's horizon crossings. Removed:
+        the arc shape itself reads as "sunrise / sunset".          */
 
 
     /*  Below-horizon segments, round dots at fixed spacing so the

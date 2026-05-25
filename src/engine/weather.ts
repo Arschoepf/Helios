@@ -30,7 +30,7 @@ export interface SampleHourly
 }
 
 
-//Forecast window: 7 days back + 2 days forward (today included on
+//Forecast window: 30 days back + 2 days forward (today included on
 //the forecast side). The timeline itself only renders the last 2
 //past days (its slider stays tight and scrubbable), but the wider
 //past_days payload is needed by both the forecast calibration
@@ -42,10 +42,10 @@ export interface SampleHourly
 //inner window.
 const PAST_DAYS     = 30;
 //Open-Meteo counts today inside `forecast_days`, so FORECAST_DAYS=3
-//yields today + 2 future days. Combined with PAST_DAYS=2, the
-//timeline spans 5 days total, 2 past, today, 2 forecast, which is
-//the practical window: beyond +2 days the cloud-cover forecast loses
-//predictive value.
+//yields today + 2 future days. Combined with PAST_DAYS=30, the
+//cached series spans 33 days total, but the timeline only plots
+//the most recent 2 past + today + 2 forecast since beyond +2 days
+//the cloud-cover forecast loses predictive value.
 const FORECAST_DAYS = 3;
 
 //Exponential back-off on consecutive HTTP 429 (rate-limited)

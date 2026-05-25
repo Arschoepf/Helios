@@ -147,9 +147,9 @@ export function createLocalNdsmSource(cfg: LocalNdsmConfig): LidarSource
             if (!band || band.length < rasterSize * rasterSize) return emptyResult();
 
             normaliseLocalNdsmRaster(band, noData);
-            //Same nodata sentinel for both bands in v1.6.3+; the
-            //single noData value reads from band 1's GDAL_NODATA
-            //tag, which the pipeline writes identically on band 2.
+            //Same nodata sentinel for both bands; the single noData
+            //value reads from band 1's GDAL_NODATA tag, which the
+            //pipeline writes identically on band 2.
             if (terrain && terrain.length >= rasterSize * rasterSize)
             {
                 normaliseLocalDtmRaster(terrain, noData);

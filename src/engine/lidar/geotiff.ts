@@ -127,8 +127,8 @@ export function subtractRasters(
 //Same byte path as fetchFloat32GeoTiff() but also returns the
 //GDAL_NODATA sentinel parsed from the GeoTIFF metadata (or null when
 //the tag is absent), the band 1 data, AND the band 2 data when the
-//source COG ships one (v1.6.3+ helios-lidar.org pipeline outputs
-//a 2-band COG with band 1 = nDSM, band 2 = DTM). Used by the local-
+//source COG ships one (the helios-lidar.org pipeline outputs a
+//2-band COG with band 1 = nDSM, band 2 = DTM). Used by the local-
 //nDSM provider so it can map nodata cells to NaN before the shared
 //pipeline runs; the public providers stay on the simpler helper
 //above and keep their existing byte-for-byte behaviour.
@@ -180,9 +180,10 @@ export async function fetchFloat32GeoTiffWithNoData(
     catch (_) { noData = null; }
 
     //Probe the source band count so we can read band 2 (DTM) only
-    //when it actually exists. v1.6.3+ COGs ship 2 bands; legacy
-    //COGs uploaded before that or built from a single-band source
-    //expose only band 1, and getSamplesPerPixel returns 1.
+    //when it actually exists. Current helios-lidar.org COGs ship
+    //2 bands; legacy single-band COGs uploaded earlier or built
+    //from a single-band source expose only band 1, and
+    //getSamplesPerPixel returns 1.
     let sampleCount = 1;
     try
     {

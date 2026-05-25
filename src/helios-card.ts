@@ -634,6 +634,11 @@ export class HeliosCard extends LitElement
         window.clearInterval(this._timer);
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
+        if (this._onVisibilityChange)
+        {
+            document.removeEventListener('visibilitychange', this._onVisibilityChange);
+            this._onVisibilityChange = undefined;
+        }
         //If the card dies before the debounce fires, drop the pending
         //init so a short-lived instance never spawns an engine it won't
         //use.
@@ -660,6 +665,11 @@ export class HeliosCard extends LitElement
     //Only the SVG overlay animations are paused, they're the ones
     //that run continuously regardless of map state.
     _visibilityObserver?: IntersectionObserver;
+    //Document-level visibilitychange listener; set up by
+    //initVisibilityObserver() and torn down in disconnectedCallback
+    //so a card removed from the DOM doesn't leak a global handler
+    //(and a re-mounted card doesn't double-subscribe).
+    _onVisibilityChange?: () => void;
 
 
     //Engine init policy: re-init only when one of the *identity inputs*
@@ -1930,11 +1940,11 @@ export class HeliosCard extends LitElement
 
                 <!--  Sunrise / sunset markers were drawn here as
                       sun-coloured ha-icon glyphs anchored at the
-                      arc's horizon crossings. Removed in v1.6.3 :
-                      the arc shape itself already communicates
-                      "the sun rises here, sets there", the icons
-                      added visual noise and competed with the
-                      LiDAR shadow blobs sitting on the same
+                      arc's horizon crossings. Removed: the arc
+                      shape itself already communicates "the sun
+                      rises here, sets there", the icons added
+                      visual noise and competed with the LiDAR
+                      shadow blobs sitting on the same
                       horizon line.                                  -->
 
 

@@ -19,6 +19,8 @@
 import { svg, html, nothing, type TemplateResult } from 'lit';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import {
+    binFor,
+    cellKey,
     decodeCellKey,
     describeMap,
     loadMap,
@@ -48,7 +50,7 @@ export interface ShadingDomeHost extends OverlaysHost
     _shadingDomeFadeRaf?:       number;
     //Cloud cover percentage selected by the continuous slider.
     //0 = clear, 100 = overcast. The lookup bins it down to one
-    //of the four engine bins; the slider reads continuously so
+    //of the eight engine bins; the slider reads continuously so
     //the user thinks in real percentages.
     _shadingDomeCloudPct:       number;
     _shadingDomeScene:          ShadingDomeScene | null;
@@ -174,11 +176,32 @@ export function refreshShadingDomeScene(host: ShadingDomeHost): void
 
     const now = new Date();
     //Slider drives a continuous percent; bin it down for the
-    //lookup so it maps to one of the four engine bins.
+    //lookup so it maps to one of the eight engine bins.
     const cloudPct = Math.max(0, Math.min(100, host._shadingDomeCloudPct));
-    const cloudBin = Math.min(3, Math.floor(cloudPct / 25));
+    const cloudBin = Math.min(7, Math.floor(cloudPct / 12.5));
+
+    //Per-frame memoisation cache for the sun-arc ribbon lookups.
+    //The arc samples the sun every 15 min over a single day; many
+    //consecutive samples land in the SAME (az, alt, cloud) bin
+    //because the sun walks ~3.75 deg per sample but the azimuth
+    //bin is 10 deg wide. Caching by bin-key turns the ribbon's
+    //96 lookups into ~30 actual kernel computations, which
+    //dominates the dome's CPU cost on every re-projection.
+    const lookupCache = new Map<string, { ratio: number; confidence: number } | null>();
+    const cellLookup = (az: number, alt: number, cloud: number) =>
+    {
+        const bin = binFor(az, alt, cloud);
+        if (!bin) return null;
+        const key = cellKey(bin);
+        const cached = lookupCache.get(key);
+        if (cached !== undefined) return cached;
+        const result = lookupRatio(map, az, alt, cloud, nowMs);
+        lookupCache.set(key, result);
+        return result;
+    };
+
     const scene = host._engine.projectShadingDome({
-        cellLookup:     (az, alt, cloud) => lookupRatio(map, az, alt, cloud, nowMs),
+        cellLookup,
         decodedCells,
         cloudBinForArc: cloudBin,
         liveCloudPct:   cloudPct,
@@ -339,12 +362,12 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
 
 
 //Continuous cloud-cover slider with a sun glyph on the LEFT and
-//a heavy-cloud glyph on the RIGHT. Replaces the 4-pill segmented
-//control: the slider reads as "the dome shows the model's view
-//of THIS amount of cloud cover", which is a more direct user
-//mental model than picking from named bins. The percent is binned
-//down to one of the four engine bins at lookup time so the
-//underlying data model is unchanged.
+//a heavy-cloud glyph on the RIGHT. The slider reads as "the dome
+//shows the model's view of THIS amount of cloud cover", which is
+//a more direct user mental model than picking from named bins.
+//step=12.5 snaps to the eight engine bins so the cursor only
+//lands on a real boundary; the percent is binned down at lookup
+//time so the underlying data model stays continuous on the wire.
 export function renderShadingDomeCloudPicker(
     host: ShadingDomeHost,
     onChange: (pct: number) => void,
