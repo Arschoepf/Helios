@@ -27,6 +27,32 @@ import { timelineConsumptionEnabled } from './timeline';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
 import { computeForecastCalibration } from './calibration';
+import { currentShadingMap, trainShadingMap } from './shadingTrainer';
+import { lookupRatio, blendedRatio, type ShadingMap } from '../engine/shadingMap';
+
+
+//Resolve the per-point forecast multiplier: blend the learned
+//shading-map ratio (if the corresponding cell is confident
+//enough) with the scalar 5-day calibration ratio (always
+//available as a fallback). Same shape at every call site so the
+//instant tooltip + the hourly chart + the per-day kWh totals all
+//apply identical corrections; that's how a tree's late-afternoon
+//shadow ends up showing in both the dashboard headline and the
+//refined curve simultaneously.
+function effectiveForecastRatio(
+    map:    ShadingMap,
+    time:   Date,
+    lat:    number,
+    lon:    number,
+    cloud:  number,
+    calR:   number,
+    nowMs:  number,
+): number
+{
+    const sun = getSunPosition(time, lat, lon);
+    if (!sun || sun.altitude <= 0) return calR;
+    return blendedRatio(lookupRatio(map, sun.azimuth, sun.altitude, cloud, nowMs), calR);
+}
 
 
 //Binary-search the sun's altitude=0 crossing inside [dayStart, dayEnd]
@@ -322,7 +348,10 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     const k      = pvCalibK(host.config);
     const cal    = computeForecastCalibration(host);
     const calR   = cal ? cal.ratio : 1;
-    const capW   = pvInverterMaxW(host.config);
+    trainShadingMap(host);
+    const shading = currentShadingMap();
+    const nowMs   = Date.now();
+    const capW    = pvInverterMaxW(host.config);
     if (k !== null && series && coords && series.times.length >= 2)
     {
         const raster = host._engine?.getLidarRaster() ?? null;
@@ -332,16 +361,20 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
             if (targetMs > t1) continue;
             const t0 = series.times[i - 1].getTime();
             if (targetMs < t0) break;
-            const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i - 1], coords.lat, coords.lon, series.cloud[i - 1] ?? 0, {
+            const cloud0 = series.cloud[i - 1] ?? 0;
+            const cloud1 = series.cloud[i] ?? 0;
+            const eff0   = effectiveForecastRatio(shading, series.times[i - 1], coords.lat, coords.lon, cloud0, calR, nowMs);
+            const eff1   = effectiveForecastRatio(shading, series.times[i],     coords.lat, coords.lon, cloud1, calR, nowMs);
+            const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i - 1], coords.lat, coords.lon, cloud0, {
                 airTempC: series.temperature[i - 1],
                 windMs:   series.windSpeed[i - 1],
                 raster,
-            }) * k * calR);
-            const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, series.cloud[i] ?? 0, {
+            }) * k * eff0);
+            const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud1, {
                 airTempC: series.temperature[i],
                 windMs:   series.windSpeed[i],
                 raster,
-            }) * k * calR);
+            }) * k * eff1);
             const dt = t1 - t0;
             if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
             const w  = w0 + (w1 - w0) * (targetMs - t0) / dt;
@@ -904,6 +937,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
     //user's hardware ceiling.
     const cal     = computeForecastCalibration(host);
     const calR    = cal ? cal.ratio : 1;
+    trainShadingMap(host);
+    const shading = currentShadingMap();
     const capW    = pvInverterMaxW(host.config);
     const predictedSamples: Array<{ t: Date; v: number }> = [];
     if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
@@ -916,13 +951,15 @@ export function renderPvChart(host: ChartHost): TemplateResult
             if (tMs <  nowMs)   continue;             //future only
             if (tMs <  startMs) continue;
             if (tMs >  endMsAbs) continue;
-            const pct = computePvPowerWeighted(host.config, series.times[i], lat, lon, series.cloud[i] ?? 0, {
+            const cloud = series.cloud[i] ?? 0;
+            const pct = computePvPowerWeighted(host.config, series.times[i], lat, lon, cloud, {
                 airTempC: series.temperature[i],
                 windMs:   series.windSpeed[i],
                 raster,
             });
             if (pct <= 0) continue;
-            const wattsClipped = Math.min(capW, pct * k * calR);
+            const eff = effectiveForecastRatio(shading, series.times[i], lat, lon, cloud, calR, nowMs);
+            const wattsClipped = Math.min(capW, pct * k * eff);
             predictedSamples.push({ t: series.times[i], v: wattsClipped * nativeFromW });
         }
     }
@@ -1296,6 +1333,8 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
     const coords   = getHomeCoords(host.config, host.hass);
     const cal      = computeForecastCalibration(host);
     const calR     = cal ? cal.ratio : 1;
+    trainShadingMap(host);
+    const shading  = currentShadingMap();
     const capW     = pvInverterMaxW(host.config);
     if (k !== null && k > 0 && series && coords)
     {
@@ -1320,7 +1359,8 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
             //pct × k = watts at this hour midpoint × 1h = Wh.
             //Divide by 1000 to land in kWh; clip first so the
             //daily total honours the inverter cap.
-            const watts = Math.min(capW, pct * k * calR);
+            const eff   = effectiveForecastRatio(shading, series.times[i], coords.lat, coords.lon, cloud, calR, nowMs);
+            const watts = Math.min(capW, pct * k * eff);
             const kwh   = watts / 1000;
             const dk    = dayKey(tMs);
             out.set(dk, (out.get(dk) ?? 0) + kwh);

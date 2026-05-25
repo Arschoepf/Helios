@@ -29973,7 +29973,7 @@ function pickModelsForLocation(lat, lon, precision) {
   return [GLOBAL, "gfs_seamless"];
 }
 const CACHE_KEY_PREFIX = "helios-weather-cache:";
-const CACHE_TTL_MS = 30 * 6e4;
+const CACHE_TTL_MS$1 = 30 * 6e4;
 function cacheKey(lat, lon, precision) {
   return `${CACHE_KEY_PREFIX}${precision}:${lat.toFixed(3)},${lon.toFixed(3)}`;
 }
@@ -30000,7 +30000,7 @@ function readCache(lat, lon, precision) {
     const raw2 = window.localStorage?.getItem(cacheKey(lat, lon, precision));
     if (!raw2) return null;
     const obj = JSON.parse(raw2);
-    if (Date.now() - obj.storedAt > CACHE_TTL_MS) return null;
+    if (Date.now() - obj.storedAt > CACHE_TTL_MS$1) return null;
     if (new Date(obj.storedAt).toDateString() !== (/* @__PURE__ */ new Date()).toDateString()) {
       return null;
     }
@@ -39011,8 +39011,8 @@ function wireEngineCallbacks(host) {
   };
 }
 const WINDOW_DAYS = 5;
-const RATIO_MIN = 0.5;
-const RATIO_MAX = 1.5;
+const RATIO_MIN$1 = 0.5;
+const RATIO_MAX$1 = 1.5;
 const MIN_DAY_PREDICTED_KWH = 2;
 function computeForecastCalibration(host) {
   const k2 = pvCalibK(host.config);
@@ -39020,26 +39020,26 @@ function computeForecastCalibration(host) {
   const hist = host._pvHistory;
   const coords = getHomeCoords(host.config, host.hass);
   if (k2 === null || k2 <= 0 || !series || !hist || !coords) return null;
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const ratios = [];
   const raster = host._engine?.getLidarRaster() ?? null;
   for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++) {
-    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
-    const dayEndMs = dayStartMs + 24 * HOUR_MS;
+    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS2;
+    const dayEndMs = dayStartMs + 24 * HOUR_MS2;
     const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
     if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
     const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
     if (actualKwh <= 0) continue;
     const r2 = actualKwh / predictedKwh;
     if (!isFinite(r2) || r2 <= 0) continue;
-    ratios.push(Math.max(RATIO_MIN, Math.min(RATIO_MAX, r2)));
+    ratios.push(Math.max(RATIO_MIN$1, Math.min(RATIO_MAX$1, r2)));
   }
   if (ratios.length < 2) return null;
   const mean = ratios.reduce((a2, b2) => a2 + b2, 0) / ratios.length;
   return {
-    ratio: Math.max(RATIO_MIN, Math.min(RATIO_MAX, mean)),
+    ratio: Math.max(RATIO_MIN$1, Math.min(RATIO_MAX$1, mean)),
     daysUsed: ratios.length
   };
 }
@@ -39066,7 +39066,7 @@ function actualKwhForDay(hist, pvUnit, startMs, endMs) {
   const unit = (pvUnit || "").toLowerCase();
   const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
   const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   if (isCumulativeEnergy) {
     let kwh2 = 0;
     for (let i2 = 1; i2 < hist.times.length; i2++) {
@@ -39083,7 +39083,7 @@ function actualKwhForDay(hist, pvUnit, startMs, endMs) {
     const tCurrMs = hist.times[i2].getTime();
     if (tCurrMs < startMs || tCurrMs >= endMs) continue;
     const tPrevMs = hist.times[i2 - 1].getTime();
-    const dtH = (tCurrMs - tPrevMs) / HOUR_MS;
+    const dtH = (tCurrMs - tPrevMs) / HOUR_MS2;
     if (dtH <= 0 || dtH > 6) continue;
     const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
     const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
@@ -39183,6 +39183,253 @@ function timelineConsumptionEnabled(config) {
     if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
   }
   return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
+}
+const AZIMUTH_BIN_DEG = 10;
+const ALTITUDE_BIN_DEG = 5;
+const AZIMUTH_BIN_COUNT = 36;
+const ALTITUDE_BIN_COUNT = 18;
+const CLOUD_BIN_EDGES = [0, 25, 50, 75, 100];
+const CLOUD_BIN_COUNT = CLOUD_BIN_EDGES.length - 1;
+const HALFLIFE_DAYS = 60;
+const DAY_MS = 864e5;
+const MIN_EFFECTIVE_SAMPLES = 3;
+const RATIO_MIN = 0.3;
+const RATIO_MAX = 1.7;
+const STORAGE_KEY = "helios-shading-map:v1";
+function binFor(azimuthDeg, altitudeDeg, cloudPct) {
+  if (!isFinite(azimuthDeg) || !isFinite(altitudeDeg) || !isFinite(cloudPct)) return null;
+  if (altitudeDeg <= 0) return null;
+  const az = Math.floor((azimuthDeg % 360 + 360) % 360 / AZIMUTH_BIN_DEG) | 0;
+  const alt = Math.max(0, Math.min(ALTITUDE_BIN_COUNT - 1, Math.floor(altitudeDeg / ALTITUDE_BIN_DEG)));
+  let cloud = CLOUD_BIN_COUNT - 1;
+  const c2 = Math.max(0, Math.min(100, cloudPct));
+  for (let i2 = 0; i2 < CLOUD_BIN_COUNT; i2++) {
+    if (c2 < CLOUD_BIN_EDGES[i2 + 1] || i2 === CLOUD_BIN_COUNT - 1) {
+      cloud = i2;
+      break;
+    }
+  }
+  return { az, alt, cloud };
+}
+function cellKey(c2) {
+  return `${c2.az}|${c2.alt}|${c2.cloud}`;
+}
+function emptyMap() {
+  return { version: 1, lastTrainedMs: 0, cells: {} };
+}
+function applyObservation(map, sunAzimuthDeg, sunAltitudeDeg, cloudPct, actualW, predictedW, timestampMs) {
+  if (!isFinite(actualW) || !isFinite(predictedW) || !isFinite(timestampMs)) return false;
+  if (predictedW < 80 || actualW < 0) return false;
+  const ratio = actualW / predictedW;
+  if (!isFinite(ratio) || ratio <= 0) return false;
+  const clamped = Math.max(RATIO_MIN, Math.min(RATIO_MAX, ratio));
+  const bin = binFor(sunAzimuthDeg, sunAltitudeDeg, cloudPct);
+  if (!bin) return false;
+  const key = cellKey(bin);
+  const cell = map.cells[key];
+  if (!cell) {
+    map.cells[key] = { ema: clamped, w: 1, t: timestampMs };
+    return true;
+  }
+  const dDays = Math.max(0, (timestampMs - cell.t) / DAY_MS);
+  const retained = cell.w * Math.pow(0.5, dDays / HALFLIFE_DAYS);
+  const newW = retained + 1;
+  cell.ema = (cell.ema * retained + clamped) / newW;
+  cell.w = newW;
+  cell.t = timestampMs;
+  return true;
+}
+function lookupRatio(map, sunAzimuthDeg, sunAltitudeDeg, cloudPct, nowMs) {
+  const target = binFor(sunAzimuthDeg, sunAltitudeDeg, cloudPct);
+  if (!target) return null;
+  const SIGMA2 = 2;
+  let num = 0;
+  let den = 0;
+  for (let dAz = -1; dAz <= 1; dAz++) {
+    for (let dAlt = -1; dAlt <= 1; dAlt++) {
+      for (let dC = -1; dC <= 1; dC++) {
+        const az = ((target.az + dAz) % AZIMUTH_BIN_COUNT + AZIMUTH_BIN_COUNT) % AZIMUTH_BIN_COUNT;
+        const alt = target.alt + dAlt;
+        if (alt < 0 || alt >= ALTITUDE_BIN_COUNT) continue;
+        const cloud = target.cloud + dC;
+        if (cloud < 0 || cloud >= CLOUD_BIN_COUNT) continue;
+        const cell = map.cells[cellKey({ az, alt, cloud })];
+        if (!cell) continue;
+        const dDays = Math.max(0, (nowMs - cell.t) / DAY_MS);
+        const aged = cell.w * Math.pow(0.5, dDays / HALFLIFE_DAYS);
+        if (aged <= 0) continue;
+        const dist2 = dAz * dAz + dAlt * dAlt + dC * dC;
+        const kernel = Math.exp(-dist2 / SIGMA2);
+        const weight = aged * kernel;
+        num += weight * cell.ema;
+        den += weight;
+      }
+    }
+  }
+  if (den <= 0) return null;
+  const ratio = num / den;
+  const confidence = Math.min(1, den / MIN_EFFECTIVE_SAMPLES);
+  if (confidence < 0.33) return null;
+  return { ratio, confidence };
+}
+function blendedRatio(lookup, fallback) {
+  if (!lookup) return fallback;
+  return lookup.ratio * lookup.confidence + fallback * (1 - lookup.confidence);
+}
+function safeStorage() {
+  try {
+    if (typeof window === "undefined") return null;
+    const ls = window.localStorage;
+    if (!ls) return null;
+    return ls;
+  } catch (_2) {
+    return null;
+  }
+}
+function loadMap(storage = safeStorage()) {
+  if (!storage) return emptyMap();
+  try {
+    const raw2 = storage.getItem(STORAGE_KEY);
+    if (!raw2) return emptyMap();
+    const parsed = JSON.parse(raw2);
+    if (!parsed || parsed.version !== 1 || typeof parsed.cells !== "object") return emptyMap();
+    return {
+      version: 1,
+      lastTrainedMs: typeof parsed.lastTrainedMs === "number" ? parsed.lastTrainedMs : 0,
+      cells: parsed.cells || {}
+    };
+  } catch (_2) {
+    return emptyMap();
+  }
+}
+function saveMap(map, storage = safeStorage()) {
+  if (!storage) return;
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify(map));
+  } catch (_2) {
+  }
+}
+const TRAINING_WINDOW_DAYS = 7;
+const HOUR_MS = 36e5;
+function trainShadingMap(host) {
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const hist = host._pvHistory;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 === null || k2 <= 0 || !series || !hist || !coords) return 0;
+  if (hist.times.length < 2 || series.times.length < 2) return 0;
+  const map = loadMap();
+  const now = Date.now();
+  const windowStart = now - TRAINING_WINDOW_DAYS * 24 * HOUR_MS;
+  const watermark = Math.max(windowStart, (map.lastTrainedMs || 0) - HOUR_MS);
+  const raster = host._engine?.getLidarRaster() ?? null;
+  const pvUnit = host._pvUnit;
+  const sensorIsEnergy = isCumulativeEnergyUnit(pvUnit);
+  let updated = 0;
+  let highestProcessedMs = map.lastTrainedMs || 0;
+  for (let i2 = 0; i2 < series.times.length; i2++) {
+    const hourStartMs = series.times[i2].getTime();
+    const hourEndMs = hourStartMs + HOUR_MS;
+    if (hourEndMs <= watermark) continue;
+    if (hourEndMs > now) continue;
+    if (hourStartMs < windowStart) continue;
+    const cloud = series.cloud[i2] ?? 0;
+    const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud, {
+      airTempC: series.temperature?.[i2] ?? NaN,
+      windMs: series.windSpeed?.[i2] ?? NaN,
+      raster
+    });
+    const predictedW = pct * k2;
+    if (!isFinite(predictedW) || predictedW <= 0) continue;
+    const actualW = actualWattsForHour(hist, pvUnit, sensorIsEnergy, hourStartMs, hourEndMs);
+    if (actualW === null) continue;
+    const sun = getSunPosition(series.times[i2], coords.lat, coords.lon);
+    if (!sun || sun.altitude <= 0) continue;
+    if (applyObservation(
+      map,
+      sun.azimuth,
+      sun.altitude,
+      cloud,
+      actualW,
+      predictedW,
+      hourStartMs + HOUR_MS / 2
+      //bucket centre for time-decay anchoring
+    )) {
+      updated++;
+    }
+    if (hourEndMs > highestProcessedMs) highestProcessedMs = hourEndMs;
+  }
+  if (updated > 0) {
+    map.lastTrainedMs = highestProcessedMs;
+    saveMap(map);
+  }
+  return updated;
+}
+let _cachedMap = null;
+let _cachedLoadedAt = 0;
+const CACHE_TTL_MS = 5e3;
+function currentShadingMap() {
+  const now = Date.now();
+  if (_cachedMap && now - _cachedLoadedAt < CACHE_TTL_MS) return _cachedMap;
+  _cachedMap = loadMap();
+  _cachedLoadedAt = now;
+  return _cachedMap;
+}
+function isCumulativeEnergyUnit(unit) {
+  const u2 = (unit || "").toLowerCase();
+  return u2 === "wh" || u2 === "kwh" || u2 === "mwh";
+}
+function actualWattsForHour(hist, pvUnit, asEnergy, startMs, endMs) {
+  if (hist.times.length < 2) return null;
+  if (asEnergy) return actualWattsFromEnergyHour(hist, pvUnit, startMs, endMs);
+  return actualWattsFromPowerHour(hist, pvUnit, startMs, endMs);
+}
+function actualWattsFromEnergyHour(hist, pvUnit, startMs, endMs) {
+  const unit = pvUnit.toLowerCase();
+  const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
+  let kwh = 0;
+  let saw = false;
+  for (let i2 = 1; i2 < hist.times.length; i2++) {
+    const tMs = hist.times[i2].getTime();
+    if (tMs < startMs || tMs >= endMs) continue;
+    const dv = hist.values[i2] - hist.values[i2 - 1];
+    if (!isFinite(dv) || dv < 0) continue;
+    kwh += dv * energyFactor;
+    saw = true;
+  }
+  if (!saw) return null;
+  return kwh * 1e3;
+}
+function actualWattsFromPowerHour(hist, pvUnit, startMs, endMs) {
+  let area = 0;
+  let span = 0;
+  let saw = false;
+  for (let i2 = 1; i2 < hist.times.length; i2++) {
+    const tCurr = hist.times[i2].getTime();
+    const tPrev = hist.times[i2 - 1].getTime();
+    const segStart = Math.max(tPrev, startMs);
+    const segEnd = Math.min(tCurr, endMs);
+    if (segEnd <= segStart) continue;
+    const dt = tCurr - tPrev;
+    if (dt <= 0 || dt > 30 * 6e4) continue;
+    const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
+    const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
+    if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+    const f0 = (segStart - tPrev) / dt;
+    const f1 = (segEnd - tPrev) / dt;
+    const wA = wPrev + (wCurr - wPrev) * f0;
+    const wB = wPrev + (wCurr - wPrev) * f1;
+    area += (wA + wB) / 2 * (segEnd - segStart);
+    span += segEnd - segStart;
+    saw = true;
+  }
+  if (!saw || span <= 0) return null;
+  return area / span;
+}
+function effectiveForecastRatio(map, time, lat, lon, cloud, calR, nowMs) {
+  const sun = getSunPosition(time, lat, lon);
+  if (!sun || sun.altitude <= 0) return calR;
+  return blendedRatio(lookupRatio(map, sun.azimuth, sun.altitude, cloud, nowMs), calR);
 }
 function findSunCrossing(lat, lon, dayStartMs, dayEndMs, direction) {
   const STEP_MS = 60 * 60 * 1e3;
@@ -39341,6 +39588,9 @@ function pvValueAtTime(host, targetMs) {
   const k2 = pvCalibK(host.config);
   const cal = computeForecastCalibration(host);
   const calR = cal ? cal.ratio : 1;
+  trainShadingMap(host);
+  const shading = currentShadingMap();
+  const nowMs = Date.now();
   const capW = pvInverterMaxW(host.config);
   if (k2 !== null && series && coords && series.times.length >= 2) {
     const raster = host._engine?.getLidarRaster() ?? null;
@@ -39349,16 +39599,20 @@ function pvValueAtTime(host, targetMs) {
       if (targetMs > t1) continue;
       const t0 = series.times[i2 - 1].getTime();
       if (targetMs < t0) break;
-      const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2 - 1], coords.lat, coords.lon, series.cloud[i2 - 1] ?? 0, {
+      const cloud0 = series.cloud[i2 - 1] ?? 0;
+      const cloud1 = series.cloud[i2] ?? 0;
+      const eff0 = effectiveForecastRatio(shading, series.times[i2 - 1], coords.lat, coords.lon, cloud0, calR, nowMs);
+      const eff1 = effectiveForecastRatio(shading, series.times[i2], coords.lat, coords.lon, cloud1, calR, nowMs);
+      const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2 - 1], coords.lat, coords.lon, cloud0, {
         airTempC: series.temperature[i2 - 1],
         windMs: series.windSpeed[i2 - 1],
         raster
-      }) * k2 * calR);
-      const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, series.cloud[i2] ?? 0, {
+      }) * k2 * eff0);
+      const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud1, {
         airTempC: series.temperature[i2],
         windMs: series.windSpeed[i2],
         raster
-      }) * k2 * calR);
+      }) * k2 * eff1);
       const dt = t1 - t0;
       if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
       const w2 = w0 + (w1 - w0) * (targetMs - t0) / dt;
@@ -39678,6 +39932,8 @@ function renderPvChart(host) {
   const series = host._chartSeries;
   const cal = computeForecastCalibration(host);
   const calR = cal ? cal.ratio : 1;
+  trainShadingMap(host);
+  const shading = currentShadingMap();
   const capW = pvInverterMaxW(host.config);
   const predictedSamples = [];
   if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
@@ -39688,13 +39944,15 @@ function renderPvChart(host) {
       if (tMs < nowMs) continue;
       if (tMs < startMs) continue;
       if (tMs > endMsAbs) continue;
-      const pct = computePvPowerWeighted(host.config, series.times[i2], lat, lon, series.cloud[i2] ?? 0, {
+      const cloud = series.cloud[i2] ?? 0;
+      const pct = computePvPowerWeighted(host.config, series.times[i2], lat, lon, cloud, {
         airTempC: series.temperature[i2],
         windMs: series.windSpeed[i2],
         raster
       });
       if (pct <= 0) continue;
-      const wattsClipped = Math.min(capW, pct * k2 * calR);
+      const eff = effectiveForecastRatio(shading, series.times[i2], lat, lon, cloud, calR, nowMs);
+      const wattsClipped = Math.min(capW, pct * k2 * eff);
       predictedSamples.push({ t: series.times[i2], v: wattsClipped * nativeFromW });
     }
   }
@@ -39924,6 +40182,8 @@ function computeDailyKwhTotals(host) {
   const coords = getHomeCoords(host.config, host.hass);
   const cal = computeForecastCalibration(host);
   const calR = cal ? cal.ratio : 1;
+  trainShadingMap(host);
+  const shading = currentShadingMap();
   const capW = pvInverterMaxW(host.config);
   if (k2 !== null && k2 > 0 && series && coords) {
     const nowMs = Date.now();
@@ -39939,7 +40199,8 @@ function computeDailyKwhTotals(host) {
         raster
       });
       if (pct <= 0) continue;
-      const watts = Math.min(capW, pct * k2 * calR);
+      const eff = effectiveForecastRatio(shading, series.times[i2], coords.lat, coords.lon, cloud, calR, nowMs);
+      const watts = Math.min(capW, pct * k2 * eff);
       const kwh = watts / 1e3;
       const dk = dayKey(tMs);
       out.set(dk, (out.get(dk) ?? 0) + kwh);
@@ -39976,16 +40237,16 @@ function renderDashboard(host) {
     `;
 }
 function computeTodayHourly(host) {
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const startMs = today0.getTime();
-  const endMs = startMs + 24 * HOUR_MS;
+  const endMs = startMs + 24 * HOUR_MS2;
   const nowMs = Date.now();
   const bins = [];
   for (let h2 = 0; h2 < 24; h2++) {
     bins.push({
-      hourTs: startMs + h2 * HOUR_MS,
+      hourTs: startMs + h2 * HOUR_MS2,
       observedW: null,
       forecastW: null
     });
@@ -40028,7 +40289,7 @@ function computeTodayHourly(host) {
       if (tMs < startMs || tMs >= endMs) continue;
       const w2 = isCumulativeEnergy ? values2[i2] * 1e3 : pvNormalizeToWatts(values2[i2], host._pvUnit);
       if (!isFinite(w2)) continue;
-      const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+      const hourTs = Math.floor(tMs / HOUR_MS2) * HOUR_MS2;
       sums.set(hourTs, (sums.get(hourTs) ?? 0) + w2);
       counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
     }
@@ -40056,8 +40317,8 @@ function computeTodayHourly(host) {
       });
       if (pct < 0) continue;
       const watts = pct * k2;
-      const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-      const idx = (hourTs - startMs) / HOUR_MS;
+      const hourTs = Math.floor(tMs / HOUR_MS2) * HOUR_MS2;
+      const idx = (hourTs - startMs) / HOUR_MS2;
       if (idx >= 0 && idx < 24) {
         bins[idx].forecastW = watts;
       }
@@ -40086,7 +40347,7 @@ function computeTodayHourly(host) {
       peakPredictedHourTs = b2.hourTs;
     }
     if (b2.observedW !== null) producedKwh += b2.observedW / 1e3;
-    if (b2.hourTs + HOUR_MS <= nowMs) {
+    if (b2.hourTs + HOUR_MS2 <= nowMs) {
       if (b2.observedW !== null) forecastKwh += b2.observedW / 1e3;
     } else if (b2.hourTs > nowMs) {
       if (b2.forecastW !== null) forecastKwh += b2.forecastW / 1e3;
@@ -40121,11 +40382,11 @@ function interpolateKwhAt(pts, t2) {
   return a2.kwh + (t2 - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
 }
 function computeTodayCumulative(host) {
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const startMs = today0.getTime();
-  const endMs = startMs + 24 * HOUR_MS;
+  const endMs = startMs + 24 * HOUR_MS2;
   const nowMs = Date.now();
   const actualSamples = [];
   actualSamples.push({ tMs: startMs, kwh: 0 });
@@ -40152,7 +40413,7 @@ function computeTodayCumulative(host) {
         const w2 = pvNormalizeToWatts(hist.values[i2], host._pvUnit);
         if (!isFinite(w2)) continue;
         if (prevT !== null && prevW !== null) {
-          const dh = (tMs - prevT) / HOUR_MS;
+          const dh = (tMs - prevT) / HOUR_MS2;
           if (dh > 0 && dh <= 6) {
             actualKwh += (prevW + w2) / 2 / 1e3 * dh;
           }
@@ -40179,7 +40440,7 @@ function computeTodayCumulative(host) {
     for (let i2 = 0; i2 < series.times.length; i2++) {
       const tMs = series.times[i2].getTime();
       if (tMs < startMs || tMs >= endMs) continue;
-      const binEnd = Math.floor(tMs / HOUR_MS) * HOUR_MS + HOUR_MS;
+      const binEnd = Math.floor(tMs / HOUR_MS2) * HOUR_MS2 + HOUR_MS2;
       const cloud = series.cloud[i2] ?? 0;
       const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud, {
         airTempC: series.temperature[i2],
@@ -40199,8 +40460,8 @@ function computeTodayCumulative(host) {
 function renderDashTodaySection(host, t2, pvColor, sunColor) {
   const data = computeTodayHourly(host);
   const cum = computeTodayCumulative(host);
-  const HOUR_MS = 36e5;
-  const formatPeakTime = (hourTs) => hourTs !== null ? new Date(hourTs + HOUR_MS / 2).toLocaleTimeString([], {
+  const HOUR_MS2 = 36e5;
+  const formatPeakTime = (hourTs) => hourTs !== null ? new Date(hourTs + HOUR_MS2 / 2).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23"
@@ -40303,11 +40564,11 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
 function renderDashTodayChart(host, pvColor, sunColor, cum) {
   if (cum.maxKwh < 0.05) return A;
   const t2 = pickTranslations(host.hass?.language);
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const startMs = today0.getTime();
-  const endMs = startMs + 24 * HOUR_MS;
+  const endMs = startMs + 24 * HOUR_MS2;
   const nowMs = Date.now();
   const W = 240, H2 = 60;
   const PAD_L = 22, PAD_R = 4, PAD_T = 12, PAD_B = 10;
@@ -40450,7 +40711,7 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                           x2="${W - PAD_R}" y2="${yFor(v2).toFixed(2)}"/>
                 `)}
                 ${hourTicks.map((h2) => {
-    const tMs = startMs + h2 * HOUR_MS;
+    const tMs = startMs + h2 * HOUR_MS2;
     const x2 = xFor(tMs);
     return w`
                         <line class="dash-today-chart-grid"
@@ -40542,11 +40803,11 @@ function formatPvWatts(hass, w2) {
   return Math.round(w2) + " W";
 }
 function computeTomorrow(host) {
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
-  const tomorrowMs = today0.getTime() + 24 * HOUR_MS;
-  const endMs = tomorrowMs + 24 * HOUR_MS;
+  const tomorrowMs = today0.getTime() + 24 * HOUR_MS2;
+  const endMs = tomorrowMs + 24 * HOUR_MS2;
   const series = host._chartSeries;
   const coords = getHomeCoords(host.config, host.hass);
   const k2 = pvCalibK(host.config);
@@ -40571,7 +40832,7 @@ function computeTomorrow(host) {
         totalKwh += watts / 1e3;
         if (watts > peakW) {
           peakW = watts;
-          peakHourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+          peakHourTs = Math.floor(tMs / HOUR_MS2) * HOUR_MS2;
         }
         cloudSum += cloud * pct;
         cloudWeight += pct;
@@ -40583,8 +40844,8 @@ function computeTomorrow(host) {
 }
 function renderDashTomorrowSection(host, t2, sunColor, _cloudColor, pvColor) {
   const data = computeTomorrow(host);
-  const HOUR_MS = 36e5;
-  const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
+  const HOUR_MS2 = 36e5;
+  const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS2 / 2).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23"
