@@ -1299,7 +1299,15 @@ export class HeliosCard extends LitElement
                     const stateLabel  = !hasProvider ? 'No LiDAR coverage at this location'
                                        : isLocal     ? 'Toggle LiDAR view, local nDSM'
                                                      : 'Toggle LiDAR view, online provider';
-                    const onToggle = hasProvider ? (() => toggleLidarView(this)) : undefined;
+                    const onToggle = hasProvider ? (() => {
+                        //Mutually exclusive with the shading-dome view:
+                        //close the dome first so the two never paint
+                        //at once and the toggle never ends up in a
+                        //half-state where one mode's CSS class hides
+                        //the other's chip.
+                        if (this._shadingDomeMode) toggleShadingDome(this);
+                        toggleLidarView(this);
+                    }) : undefined;
                     return html`
                         <div class="overlay-top-right">
                             <button

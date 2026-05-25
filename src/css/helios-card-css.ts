@@ -1905,17 +1905,15 @@ export const heliosCardStyles = css`
     /*  Cloud-bin picker: small segmented control hugging the top
         edge under the dome chip cluster. Pills mirror the dome's
         accent so it reads as part of the same widget.             */
-    /*  Vertical layout: the picker rides up the LEFT edge of the
-        card so the dome's celestial hemisphere stays visually
-        unobstructed in the centre. Centred vertically so the
-        cluster doesn't compete with the clock chip in the top-
-        left corner.                                              */
+    /*  Vertical layout: the picker sits at the BOTTOM-LEFT corner
+        of the card so the dome's celestial hemisphere stays
+        visually unobstructed and the picker is out of the way of
+        the clock chip in the top-left corner.                    */
     .shading-dome-cloud-picker
     {
         position: absolute;
-        top: 50%;
+        bottom: 12px;
         left: 8px;
-        transform: translateY(-50%);
         z-index: 50;
         display: inline-flex;
         flex-direction: column;
@@ -2657,7 +2655,9 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .solar-pct-label,
     ha-card.theme-dark .map-btn:not(.map-btn-on),
     ha-card.theme-dark .lidar-view-chip:not(.is-on),
-    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on)
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on),
+    ha-card.theme-dark .shading-dome-chip:not(.is-on),
+    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -2697,9 +2697,20 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .cloud-pct-label ha-icon,
     ha-card.theme-dark .solar-pct-label ha-icon,
     ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
-    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon,
+    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on) ha-icon
     {
         color: #e6e6e6;
+    }
+    ha-card.theme-dark .shading-dome-chip:not(.is-on):hover,
+    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on):hover
+    {
+        background: #292a2b;
+    }
+    ha-card.theme-dark .shading-dome-chip:not(.is-on):active,
+    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on):active
+    {
+        background: #353637;
     }
 
     ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
