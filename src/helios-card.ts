@@ -71,7 +71,6 @@ import { toggleLidarView } from './card/lidar-view';
 import {
     renderShadingDomeOverlay,
     renderShadingDomeCloudPicker,
-    shouldShowDomeChip,
     toggleShadingDome,
     refreshShadingDomeScene,
 } from './card/shadingDome';
@@ -1173,14 +1172,6 @@ export class HeliosCard extends LitElement
         //provider covers the active home. Read off the engine, falls
         //back to null until the engine has resolved its first home.
         const lidarSourceId    = this._engine?.getActiveLidarSourceId() ?? null;
-        //Dome chip gating: only surface the button when the
-        //shading map has accumulated enough data to actually show
-        //something interesting. The threshold (3 confident cells)
-        //typically takes 1-3 sunny days on a working install, so
-        //the chip "appears" as a positive surprise once the layer
-        //is ready instead of frustrating the user for a fortnight
-        //with a button that opens an empty canvas.
-        const domeChipVisible = shouldShowDomeChip();
         const cardClasses = [
             cardThemeClass,
             this._detailMode      ? 'detail-active'        : '',
@@ -1273,108 +1264,77 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                <!--  Top-right column. Hosts the LiDAR View toggle:
-                      always present when coords are known so its slot
-                      stays stable across homes; disabled when no LiDAR
-                      provider covers the active home. The back-to-live
-                      button lives top-left next to the clock since both
-                      relate to "where am I in time". The shadow-busy
-                      indicator now rides the centre spinner-sun (which
-                      also shows during the initial weather fetch) so
-                      the user has a single, prominent loading signal
-                      instead of two competing spinners on opposite
-                      sides of the card. Sits at the same 8 px edge
-                      margin as the clock and the timeline.  -->
-                <!--  Top-right cluster, mirror of the top-left
-                      clock + scrub-return pair. The "LiDAR" chip is
-                      passive (purely a status label) and the toggle
-                      button sits to its LEFT, fused to the chip's
-                      left edge with a shared border. Three button
-                      states:
-                        - no provider covers the home, disabled,
-                          eye-off-outline icon, no click handler
-                        - public online provider, active, earth
-                          icon, click toggles LiDAR view
-                        - local-nDSM (YAML config), active, harddisk
-                          icon, click toggles LiDAR view
-                      Active state mirrors the scrub-blue theme used
-                      on the opposite rail when LiDAR view is on, so
-                      the cluster doubles as the "you're in LiDAR
-                      view" signal the way the clock chip doubles as
-                      the "you're scrubbing" signal.                 -->
+                <!--  Top-right mode bar: three glued segments picking
+                      which canvas state the card is in. The default
+                      Layer UI is the regular HUD (sun arc, clouds,
+                      leader lines, chips), LiDAR View paints the
+                      cell cloud over a quiet basemap, Ombres paints
+                      the celestial dome of learned residuals above
+                      the home. The three modes are mutually
+                      exclusive; the bar shows which one is active
+                      and lets the user switch in a single click.
+                      Each segment is icon-only with a title
+                      tooltip; the active segment takes the same
+                      scrub-blue plate the clock chip uses while
+                      scrubbing, for visual consistency with the
+                      other mode-indicating chips.                   -->
                 ${hasApiKey ? (() => {
                     const isLocal     = lidarSourceId === 'local-ndsm';
                     const hasProvider = lidarSourceId !== null;
-                    const stateClass  = !hasProvider ? 'is-uncovered'
-                                       : isLocal     ? 'is-local'
-                                                     : 'is-online';
-                    const stateIcon   = !hasProvider ? 'mdi:cloud-off-outline'
+                    const lidarIcon   = !hasProvider ? 'mdi:cloud-off-outline'
                                        : isLocal     ? 'mdi:harddisk'
                                                      : 'mdi:earth';
-                    const stateLabel  = !hasProvider ? 'No LiDAR coverage at this location'
-                                       : isLocal     ? 'Toggle LiDAR view, local nDSM'
-                                                     : 'Toggle LiDAR view, online provider';
-                    //Note: the LiDAR cluster is hidden by CSS when
-                    //the shading dome is active, so this handler is
-                    //only reachable from the regular HUD. No need to
-                    //double-check the dome flag here.
-                    const onToggle = hasProvider ? (() => toggleLidarView(this)) : undefined;
-                    return html`
-                        <div class="overlay-top-right">
-                            <button
-                                type="button"
-                                class="lidar-view-toggle-btn ${stateClass} ${this._lidarViewMode ? 'is-on' : ''}"
-                                ?disabled="${!hasProvider}"
-                                aria-label="${stateLabel}"
-                                aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
-                                @click="${onToggle}"
-                            >
-                                <ha-icon icon="${stateIcon}"></ha-icon>
-                            </button>
-                            <button
-                                type="button"
-                                class="lidar-view-chip ${stateClass} ${this._lidarViewMode ? 'is-on' : ''}"
-                                ?disabled="${!hasProvider}"
-                                aria-label="${stateLabel}"
-                                aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
-                                @click="${onToggle}"
-                            >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
-                        </div>
-                    `;
-                })() : nothing}
-
-                <!--  Top-centre cluster: shading-dome chip + button,
-                      same chip-on-left / icon-on-right glued shape
-                      as the LiDAR cluster on the right rail, sized
-                      to mirror the clock chip on the left rail so
-                      the three clusters line up at the same y. The
-                      cluster only renders when the chip is allowed
-                      to surface (gated by shouldShowDomeChip()).  -->
-                ${hasApiKey && domeChipVisible ? (() => {
-                    const onDomeToggle = () => {
-                        //Mutually exclusive with LiDAR view: close
-                        //LiDAR first so the two never paint at once.
-                        if (this._lidarViewMode) toggleLidarView(this);
-                        toggleShadingDome(this);
+                    const lidarTitle  = !hasProvider ? 'No LiDAR coverage at this location'
+                                       : isLocal     ? 'LiDAR view, local nDSM'
+                                                     : 'LiDAR view, online provider';
+                    const isLayer = !this._lidarViewMode && !this._shadingDomeMode;
+                    const onLayer = () => {
+                        if (this._lidarViewMode)   toggleLidarView(this);
+                        if (this._shadingDomeMode) toggleShadingDome(this);
+                    };
+                    const onLidar = hasProvider ? (() => {
+                        if (this._shadingDomeMode) toggleShadingDome(this);
+                        if (!this._lidarViewMode)  toggleLidarView(this);
+                    }) : undefined;
+                    const onDome = () => {
+                        if (this._lidarViewMode)   toggleLidarView(this);
+                        if (!this._shadingDomeMode) toggleShadingDome(this);
                     };
                     return html`
-                        <div class="overlay-top-center">
-                            <button
-                                type="button"
-                                class="shading-dome-toggle-btn ${this._shadingDomeMode ? 'is-on' : ''}"
-                                aria-label="Toggle adaptive shading dome"
-                                aria-pressed="${this._shadingDomeMode ? 'true' : 'false'}"
-                                @click="${onDomeToggle}"
-                            >
-                                <ha-icon icon="mdi:weather-sunny-alert"></ha-icon>
-                            </button>
-                            <button
-                                type="button"
-                                class="shading-dome-chip ${this._shadingDomeMode ? 'is-on' : ''}"
-                                aria-label="Toggle adaptive shading dome"
-                                aria-pressed="${this._shadingDomeMode ? 'true' : 'false'}"
-                                @click="${onDomeToggle}"
-                            >${pickTranslations(this.hass?.language).shadingDomeChipLabel}</button>
+                        <div class="overlay-top-right">
+                            <div class="mode-bar" role="radiogroup" aria-label="View mode">
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg ${isLayer ? 'is-on' : ''}"
+                                    role="radio"
+                                    aria-checked="${isLayer ? 'true' : 'false'}"
+                                    title="Default layer UI"
+                                    @click="${onLayer}"
+                                >
+                                    <ha-icon icon="mdi:view-dashboard-variant"></ha-icon>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg ${this._lidarViewMode ? 'is-on' : ''} ${!hasProvider ? 'is-disabled' : ''}"
+                                    role="radio"
+                                    aria-checked="${this._lidarViewMode ? 'true' : 'false'}"
+                                    ?disabled="${!hasProvider}"
+                                    title="${lidarTitle}"
+                                    @click="${onLidar}"
+                                >
+                                    <ha-icon icon="${lidarIcon}"></ha-icon>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg ${this._shadingDomeMode ? 'is-on' : ''}"
+                                    role="radio"
+                                    aria-checked="${this._shadingDomeMode ? 'true' : 'false'}"
+                                    title="Adaptive shading dome"
+                                    @click="${onDome}"
+                                >
+                                    <ha-icon icon="mdi:dome-light"></ha-icon>
+                                </button>
+                            </div>
                         </div>
                     `;
                 })() : nothing}

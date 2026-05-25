@@ -1732,7 +1732,6 @@ export const heliosCardStyles = css`
         minus the LiDAR button itself), the home hitbox / glow, and
         the timeline. Easier to audit if any future overlay needs
         to be hidden in LiDAR View by looking at this single block. */
-    ha-card.lidar-view-active .overlay-top-center,
     ha-card.lidar-view-active .overlay-top-left,
     ha-card.lidar-view-active .home-glow-svg,
     ha-card.lidar-view-active .home-hitbox,
@@ -1765,7 +1764,6 @@ export const heliosCardStyles = css`
         intercepting pointer events. Top-right chip cluster stays
         live so the user can toggle the dome back off.            */
     ha-card.shading-dome-active .overlay-top-left,
-    ha-card.shading-dome-active .overlay-top-right,
     ha-card.shading-dome-active .home-glow-svg,
     ha-card.shading-dome-active .home-hitbox,
     ha-card.shading-dome-active .home-silhouette-svg,
@@ -1785,73 +1783,32 @@ export const heliosCardStyles = css`
         pointer-events: none;
         transition: opacity 0.25s ease;
     }
-    /*  Top-centre cluster keeps its dome chip visible while the
-        dome is active so the user can always exit. The LiDAR
-        cluster on the right is intentionally hidden: forcing a
-        dome-exit before LiDAR can be re-opened gives the user a
-        clean "back to map, then into LiDAR" sequence instead of
-        chaining mode switches in one click.                     */
-    ha-card.shading-dome-active .overlay-top-center
+    /*  Top-right cluster (mode bar) stays visible while the
+        dome is active so the user can always switch modes via
+        the same widget that took them in.                       */
+    ha-card.shading-dome-active .overlay-top-right
     {
         opacity: 1;
         pointer-events: auto;
     }
-    /*  Top-centre rail: holds the shading-dome chip cluster
-        between the date / time clock on the LEFT and the LiDAR
-        cluster on the RIGHT. Positioned with the same top inset
-        as the two side rails so all three sit at the same y.
-        Centred via the standard "left:50% + translateX(-50%)"
-        trick rather than flex justify-content so the rail's
-        height stays constant whatever the chip cluster decides
-        to be.                                                    */
-    .overlay-top-center
-    {
-        position: absolute;
-        top: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 50;
-        display: flex;
-        flex-direction: row-reverse;
-        align-items: center;
-        pointer-events: none;
-    }
-
-    /*  Dome chip + button: same chip-on-left / icon-on-right
-        glued shape as the LiDAR pair. DOM order is button then
-        chip; the row-reverse on .overlay-top-center swaps the
-        visual order so the chip ends up on the LEFT and the
-        icon button on the RIGHT, with a shared seam where the
-        chip's right border meets the button's left edge. Active
-        state uses the same scrub-blue plate as the LiDAR cluster
-        so the two clusters read as the same family.            */
-    .shading-dome-chip
+    /*  Three-segment mode bar (Layer UI / LiDAR / Ombres). Sits
+        in the top-right rail in place of the old LiDAR chip pair.
+        Each segment is icon-only with a title tooltip; the
+        currently-active segment takes the same scrub-blue plate
+        the clock chip uses while scrubbing so the user has one
+        consistent visual language for "you are in a non-default
+        mode". The segments are glued together via shared borders
+        and matching corner radii, matching the chip-cluster
+        recipe the LiDAR chip used to use on its own.             */
+    .mode-bar
     {
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        height: 22px;
-        box-sizing: border-box;
-        padding: 2px 8px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px 0 0 3px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size:   12px;
-        font-weight: 600;
-        line-height: 1.2;
-        white-space: nowrap;
-        cursor: pointer;
         pointer-events: auto;
-        transition: background 0.15s, color 0.15s, border-color 0.15s;
-        position: relative;
-        z-index: 50;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        border-radius: 3px;
     }
-    .shading-dome-chip:hover  { background: #f2f2f2; }
-    .shading-dome-chip:active { background: #e6e6e6; }
-    .shading-dome-toggle-btn
+    .mode-bar-seg
     {
         display: inline-flex;
         align-items: center;
@@ -1863,36 +1820,56 @@ export const heliosCardStyles = css`
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
-        border-radius: 0 3px 3px 0;
-        border-left: 0;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        border-right: 0;
         cursor: pointer;
-        pointer-events: auto;
         position: relative;
         z-index: 50;
         opacity: 1;
         transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
-    .shading-dome-toggle-btn:hover  { background: #f2f2f2; }
-    .shading-dome-toggle-btn:active { background: #e6e6e6; }
-    .shading-dome-toggle-btn ha-icon
+    .mode-bar-seg:first-child { border-radius: 3px 0 0 3px; }
+    .mode-bar-seg:last-child  { border-radius: 0 3px 3px 0; border-right: 1px solid #000000; }
+    .mode-bar-seg:hover       { background: #f2f2f2; }
+    .mode-bar-seg:active      { background: #e6e6e6; }
+    .mode-bar-seg ha-icon
     {
-        --mdc-icon-size: 12px;
+        --mdc-icon-size: 14px;
         color: inherit;
         display: inline-flex;
         align-items: center;
     }
-    .shading-dome-toggle-btn.is-on,
-    .shading-dome-chip.is-on
+    .mode-bar-seg.is-disabled
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .mode-bar-seg.is-disabled:hover,
+    .mode-bar-seg.is-disabled:active { background: #ffffff; }
+    .mode-bar-seg.is-on
     {
         background: rgba(31, 111, 235, 0.95);
         color: #ffffff;
         border-color: rgba(20, 78, 168, 0.95);
     }
-    .shading-dome-toggle-btn.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
-    .shading-dome-toggle-btn.is-on:active { background: rgba(20, 78, 168, 0.95); }
-    .shading-dome-chip.is-on:hover        { background: rgba(24, 92, 199, 0.95); }
-    .shading-dome-chip.is-on:active       { background: rgba(20, 78, 168, 0.95); }
+    .mode-bar-seg.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .mode-bar-seg.is-on:active { background: rgba(20, 78, 168, 0.95); }
+    /*  The seam between two adjacent segments needs the LEFT
+        border on the right neighbour to match whichever segment
+        is "winning" the seam. Easiest: when the LEFT segment is
+        .is-on, paint a 1 px overlay on its right edge that
+        matches the on-state border so the seam reads as part of
+        the active plate. Cheap and avoids per-pair CSS combos. */
+    .mode-bar-seg.is-on + .mode-bar-seg::before
+    {
+        content: '';
+        position: absolute;
+        top: -1px;
+        bottom: -1px;
+        left: -1px;
+        width: 1px;
+        background: rgba(20, 78, 168, 0.95);
+        pointer-events: none;
+    }
     /*  Dome SVG: full-card overlay, sits below the click chrome so
         it never blocks pointer events. Fade alpha comes from inline
         style driven by the dome fade RAF.                          */
@@ -2720,8 +2697,7 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .map-btn:not(.map-btn-on),
     ha-card.theme-dark .lidar-view-chip:not(.is-on),
     ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on),
-    ha-card.theme-dark .shading-dome-chip:not(.is-on),
-    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on)
+    ha-card.theme-dark .mode-bar-seg:not(.is-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -2762,19 +2738,25 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .solar-pct-label ha-icon,
     ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
     ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon,
-    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on) ha-icon
+    ha-card.theme-dark .mode-bar-seg:not(.is-on) ha-icon
     {
         color: #e6e6e6;
     }
-    ha-card.theme-dark .shading-dome-chip:not(.is-on):hover,
-    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on):hover
+    ha-card.theme-dark .mode-bar-seg:not(.is-on):not(.is-disabled):hover
     {
         background: #292a2b;
     }
-    ha-card.theme-dark .shading-dome-chip:not(.is-on):active,
-    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on):active
+    ha-card.theme-dark .mode-bar-seg:not(.is-on):not(.is-disabled):active
     {
         background: #353637;
+    }
+    ha-card.theme-dark .mode-bar-seg
+    {
+        border-color: rgba(255, 255, 255, 0.20);
+    }
+    ha-card.theme-dark .mode-bar-seg:last-child
+    {
+        border-right-color: rgba(255, 255, 255, 0.20);
     }
 
     ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }

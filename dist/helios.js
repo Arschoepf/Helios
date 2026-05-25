@@ -4237,7 +4237,6 @@ const heliosCardStyles = i$3`
         minus the LiDAR button itself), the home hitbox / glow, and
         the timeline. Easier to audit if any future overlay needs
         to be hidden in LiDAR View by looking at this single block. */
-    ha-card.lidar-view-active .overlay-top-center,
     ha-card.lidar-view-active .overlay-top-left,
     ha-card.lidar-view-active .home-glow-svg,
     ha-card.lidar-view-active .home-hitbox,
@@ -4270,7 +4269,6 @@ const heliosCardStyles = i$3`
         intercepting pointer events. Top-right chip cluster stays
         live so the user can toggle the dome back off.            */
     ha-card.shading-dome-active .overlay-top-left,
-    ha-card.shading-dome-active .overlay-top-right,
     ha-card.shading-dome-active .home-glow-svg,
     ha-card.shading-dome-active .home-hitbox,
     ha-card.shading-dome-active .home-silhouette-svg,
@@ -4290,73 +4288,32 @@ const heliosCardStyles = i$3`
         pointer-events: none;
         transition: opacity 0.25s ease;
     }
-    /*  Top-centre cluster keeps its dome chip visible while the
-        dome is active so the user can always exit. The LiDAR
-        cluster on the right is intentionally hidden: forcing a
-        dome-exit before LiDAR can be re-opened gives the user a
-        clean "back to map, then into LiDAR" sequence instead of
-        chaining mode switches in one click.                     */
-    ha-card.shading-dome-active .overlay-top-center
+    /*  Top-right cluster (mode bar) stays visible while the
+        dome is active so the user can always switch modes via
+        the same widget that took them in.                       */
+    ha-card.shading-dome-active .overlay-top-right
     {
         opacity: 1;
         pointer-events: auto;
     }
-    /*  Top-centre rail: holds the shading-dome chip cluster
-        between the date / time clock on the LEFT and the LiDAR
-        cluster on the RIGHT. Positioned with the same top inset
-        as the two side rails so all three sit at the same y.
-        Centred via the standard "left:50% + translateX(-50%)"
-        trick rather than flex justify-content so the rail's
-        height stays constant whatever the chip cluster decides
-        to be.                                                    */
-    .overlay-top-center
-    {
-        position: absolute;
-        top: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 50;
-        display: flex;
-        flex-direction: row-reverse;
-        align-items: center;
-        pointer-events: none;
-    }
-
-    /*  Dome chip + button: same chip-on-left / icon-on-right
-        glued shape as the LiDAR pair. DOM order is button then
-        chip; the row-reverse on .overlay-top-center swaps the
-        visual order so the chip ends up on the LEFT and the
-        icon button on the RIGHT, with a shared seam where the
-        chip's right border meets the button's left edge. Active
-        state uses the same scrub-blue plate as the LiDAR cluster
-        so the two clusters read as the same family.            */
-    .shading-dome-chip
+    /*  Three-segment mode bar (Layer UI / LiDAR / Ombres). Sits
+        in the top-right rail in place of the old LiDAR chip pair.
+        Each segment is icon-only with a title tooltip; the
+        currently-active segment takes the same scrub-blue plate
+        the clock chip uses while scrubbing so the user has one
+        consistent visual language for "you are in a non-default
+        mode". The segments are glued together via shared borders
+        and matching corner radii, matching the chip-cluster
+        recipe the LiDAR chip used to use on its own.             */
+    .mode-bar
     {
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        height: 22px;
-        box-sizing: border-box;
-        padding: 2px 8px;
-        background: #ffffff;
-        color:      #000000;
-        border:     1px solid #000000;
-        border-radius: 3px 0 0 3px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size:   12px;
-        font-weight: 600;
-        line-height: 1.2;
-        white-space: nowrap;
-        cursor: pointer;
         pointer-events: auto;
-        transition: background 0.15s, color 0.15s, border-color 0.15s;
-        position: relative;
-        z-index: 50;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        border-radius: 3px;
     }
-    .shading-dome-chip:hover  { background: #f2f2f2; }
-    .shading-dome-chip:active { background: #e6e6e6; }
-    .shading-dome-toggle-btn
+    .mode-bar-seg
     {
         display: inline-flex;
         align-items: center;
@@ -4368,36 +4325,56 @@ const heliosCardStyles = i$3`
         background: #ffffff;
         color:      #000000;
         border:     1px solid #000000;
-        border-radius: 0 3px 3px 0;
-        border-left: 0;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        border-right: 0;
         cursor: pointer;
-        pointer-events: auto;
         position: relative;
         z-index: 50;
         opacity: 1;
         transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
-    .shading-dome-toggle-btn:hover  { background: #f2f2f2; }
-    .shading-dome-toggle-btn:active { background: #e6e6e6; }
-    .shading-dome-toggle-btn ha-icon
+    .mode-bar-seg:first-child { border-radius: 3px 0 0 3px; }
+    .mode-bar-seg:last-child  { border-radius: 0 3px 3px 0; border-right: 1px solid #000000; }
+    .mode-bar-seg:hover       { background: #f2f2f2; }
+    .mode-bar-seg:active      { background: #e6e6e6; }
+    .mode-bar-seg ha-icon
     {
-        --mdc-icon-size: 12px;
+        --mdc-icon-size: 14px;
         color: inherit;
         display: inline-flex;
         align-items: center;
     }
-    .shading-dome-toggle-btn.is-on,
-    .shading-dome-chip.is-on
+    .mode-bar-seg.is-disabled
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .mode-bar-seg.is-disabled:hover,
+    .mode-bar-seg.is-disabled:active { background: #ffffff; }
+    .mode-bar-seg.is-on
     {
         background: rgba(31, 111, 235, 0.95);
         color: #ffffff;
         border-color: rgba(20, 78, 168, 0.95);
     }
-    .shading-dome-toggle-btn.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
-    .shading-dome-toggle-btn.is-on:active { background: rgba(20, 78, 168, 0.95); }
-    .shading-dome-chip.is-on:hover        { background: rgba(24, 92, 199, 0.95); }
-    .shading-dome-chip.is-on:active       { background: rgba(20, 78, 168, 0.95); }
+    .mode-bar-seg.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .mode-bar-seg.is-on:active { background: rgba(20, 78, 168, 0.95); }
+    /*  The seam between two adjacent segments needs the LEFT
+        border on the right neighbour to match whichever segment
+        is "winning" the seam. Easiest: when the LEFT segment is
+        .is-on, paint a 1 px overlay on its right edge that
+        matches the on-state border so the seam reads as part of
+        the active plate. Cheap and avoids per-pair CSS combos. */
+    .mode-bar-seg.is-on + .mode-bar-seg::before
+    {
+        content: '';
+        position: absolute;
+        top: -1px;
+        bottom: -1px;
+        left: -1px;
+        width: 1px;
+        background: rgba(20, 78, 168, 0.95);
+        pointer-events: none;
+    }
     /*  Dome SVG: full-card overlay, sits below the click chrome so
         it never blocks pointer events. Fade alpha comes from inline
         style driven by the dome fade RAF.                          */
@@ -5225,8 +5202,7 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .map-btn:not(.map-btn-on),
     ha-card.theme-dark .lidar-view-chip:not(.is-on),
     ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on),
-    ha-card.theme-dark .shading-dome-chip:not(.is-on),
-    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on)
+    ha-card.theme-dark .mode-bar-seg:not(.is-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -5267,19 +5243,25 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .solar-pct-label ha-icon,
     ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
     ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon,
-    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on) ha-icon
+    ha-card.theme-dark .mode-bar-seg:not(.is-on) ha-icon
     {
         color: #e6e6e6;
     }
-    ha-card.theme-dark .shading-dome-chip:not(.is-on):hover,
-    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on):hover
+    ha-card.theme-dark .mode-bar-seg:not(.is-on):not(.is-disabled):hover
     {
         background: #292a2b;
     }
-    ha-card.theme-dark .shading-dome-chip:not(.is-on):active,
-    ha-card.theme-dark .shading-dome-toggle-btn:not(.is-on):active
+    ha-card.theme-dark .mode-bar-seg:not(.is-on):not(.is-disabled):active
     {
         background: #353637;
+    }
+    ha-card.theme-dark .mode-bar-seg
+    {
+        border-color: rgba(255, 255, 255, 0.20);
+    }
+    ha-card.theme-dark .mode-bar-seg:last-child
+    {
+        border-right-color: rgba(255, 255, 255, 0.20);
     }
 
     ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
@@ -37051,6 +37033,7 @@ const _HeliosEngine = class _HeliosEngine {
     this.map.on("style.load", this._mapStyleLoadHandler);
     this._mapLoadHandler = () => {
       this.map?.resize();
+      this._applyMapBounds();
       startAutoRotateLoop(this);
     };
     this.map.on("load", this._mapLoadHandler);
@@ -37873,6 +37856,31 @@ const _HeliosEngine = class _HeliosEngine {
       return DEFAULT_BUILDING_RADIUS_M;
     }
     return Math.min(500, Math.max(20, v2));
+  }
+  //Clamp MapLibre's camera bounds to a tight bbox around the home,
+  //sized at 2x the display radius (small margin for the pitched
+  //viewport corners). With pan + zoom disabled the camera never
+  //moves anyway, but the bounds tell MapLibre the area outside
+  //the disc is unreachable, which dampens speculative tile fetches
+  //at the horizon of the pitched view during rotation. Re-called
+  //after a config edit (building-radius change) re-runs the engine
+  //init path so the bounds always match the live display radius.
+  _applyMapBounds() {
+    if (!this.map) return;
+    const radiusM = this._buildingRadiusMeters();
+    const halfBbox = radiusM * 2;
+    const D2 = Math.PI / 180;
+    const mPerDegLat = 111320;
+    const mPerDegLon = 111320 * Math.cos(this.homeLat * D2);
+    const dLat = halfBbox / mPerDegLat;
+    const dLon = halfBbox / mPerDegLon;
+    try {
+      this.map.setMaxBounds([
+        [this.homeLon - dLon, this.homeLat - dLat],
+        [this.homeLon + dLon, this.homeLat + dLat]
+      ]);
+    } catch (_2) {
+    }
   }
   //Resolves the configured surroundings opacity (0..1). Falls back
   //to DEFAULT_BUILDING_OPACITY for missing or invalid input.
@@ -39700,9 +39708,6 @@ function refreshShadingDomeScene(host) {
     now
   });
   host._shadingDomeScene = scene;
-}
-function shouldShowDomeChip() {
-  return true;
 }
 function shadingDomeFadeAlpha(host) {
   const now = performance.now();
@@ -44105,7 +44110,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.12"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.13"}`,
       labelStyle,
       versionStyle
     );
@@ -44129,7 +44134,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.12",
+        version: "1.7.0-alpha.13",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44137,7 +44142,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.12"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.13"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -44557,7 +44562,6 @@ let HeliosCard = class extends i {
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
     const lidarSourceId = this._engine?.getActiveLidarSourceId() ?? null;
-    const domeChipVisible = shouldShowDomeChip();
     const cardClasses = [
       cardThemeClass,
       this._detailMode ? "detail-active" : "",
@@ -44649,96 +44653,73 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
-                <!--  Top-right column. Hosts the LiDAR View toggle:
-                      always present when coords are known so its slot
-                      stays stable across homes; disabled when no LiDAR
-                      provider covers the active home. The back-to-live
-                      button lives top-left next to the clock since both
-                      relate to "where am I in time". The shadow-busy
-                      indicator now rides the centre spinner-sun (which
-                      also shows during the initial weather fetch) so
-                      the user has a single, prominent loading signal
-                      instead of two competing spinners on opposite
-                      sides of the card. Sits at the same 8 px edge
-                      margin as the clock and the timeline.  -->
-                <!--  Top-right cluster, mirror of the top-left
-                      clock + scrub-return pair. The "LiDAR" chip is
-                      passive (purely a status label) and the toggle
-                      button sits to its LEFT, fused to the chip's
-                      left edge with a shared border. Three button
-                      states:
-                        - no provider covers the home, disabled,
-                          eye-off-outline icon, no click handler
-                        - public online provider, active, earth
-                          icon, click toggles LiDAR view
-                        - local-nDSM (YAML config), active, harddisk
-                          icon, click toggles LiDAR view
-                      Active state mirrors the scrub-blue theme used
-                      on the opposite rail when LiDAR view is on, so
-                      the cluster doubles as the "you're in LiDAR
-                      view" signal the way the clock chip doubles as
-                      the "you're scrubbing" signal.                 -->
+                <!--  Top-right mode bar: three glued segments picking
+                      which canvas state the card is in. The default
+                      Layer UI is the regular HUD (sun arc, clouds,
+                      leader lines, chips), LiDAR View paints the
+                      cell cloud over a quiet basemap, Ombres paints
+                      the celestial dome of learned residuals above
+                      the home. The three modes are mutually
+                      exclusive; the bar shows which one is active
+                      and lets the user switch in a single click.
+                      Each segment is icon-only with a title
+                      tooltip; the active segment takes the same
+                      scrub-blue plate the clock chip uses while
+                      scrubbing, for visual consistency with the
+                      other mode-indicating chips.                   -->
                 ${hasApiKey ? (() => {
       const isLocal = lidarSourceId === "local-ndsm";
       const hasProvider = lidarSourceId !== null;
-      const stateClass = !hasProvider ? "is-uncovered" : isLocal ? "is-local" : "is-online";
-      const stateIcon = !hasProvider ? "mdi:cloud-off-outline" : isLocal ? "mdi:harddisk" : "mdi:earth";
-      const stateLabel = !hasProvider ? "No LiDAR coverage at this location" : isLocal ? "Toggle LiDAR view, local nDSM" : "Toggle LiDAR view, online provider";
-      const onToggle = hasProvider ? () => toggleLidarView(this) : void 0;
-      return b`
-                        <div class="overlay-top-right">
-                            <button
-                                type="button"
-                                class="lidar-view-toggle-btn ${stateClass} ${this._lidarViewMode ? "is-on" : ""}"
-                                ?disabled="${!hasProvider}"
-                                aria-label="${stateLabel}"
-                                aria-pressed="${this._lidarViewMode ? "true" : "false"}"
-                                @click="${onToggle}"
-                            >
-                                <ha-icon icon="${stateIcon}"></ha-icon>
-                            </button>
-                            <button
-                                type="button"
-                                class="lidar-view-chip ${stateClass} ${this._lidarViewMode ? "is-on" : ""}"
-                                ?disabled="${!hasProvider}"
-                                aria-label="${stateLabel}"
-                                aria-pressed="${this._lidarViewMode ? "true" : "false"}"
-                                @click="${onToggle}"
-                            >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
-                        </div>
-                    `;
-    })() : A}
-
-                <!--  Top-centre cluster: shading-dome chip + button,
-                      same chip-on-left / icon-on-right glued shape
-                      as the LiDAR cluster on the right rail, sized
-                      to mirror the clock chip on the left rail so
-                      the three clusters line up at the same y. The
-                      cluster only renders when the chip is allowed
-                      to surface (gated by shouldShowDomeChip()).  -->
-                ${hasApiKey && domeChipVisible ? (() => {
-      const onDomeToggle = () => {
+      const lidarIcon = !hasProvider ? "mdi:cloud-off-outline" : isLocal ? "mdi:harddisk" : "mdi:earth";
+      const lidarTitle = !hasProvider ? "No LiDAR coverage at this location" : isLocal ? "LiDAR view, local nDSM" : "LiDAR view, online provider";
+      const isLayer = !this._lidarViewMode && !this._shadingDomeMode;
+      const onLayer = () => {
         if (this._lidarViewMode) toggleLidarView(this);
-        toggleShadingDome(this);
+        if (this._shadingDomeMode) toggleShadingDome(this);
+      };
+      const onLidar = hasProvider ? () => {
+        if (this._shadingDomeMode) toggleShadingDome(this);
+        if (!this._lidarViewMode) toggleLidarView(this);
+      } : void 0;
+      const onDome = () => {
+        if (this._lidarViewMode) toggleLidarView(this);
+        if (!this._shadingDomeMode) toggleShadingDome(this);
       };
       return b`
-                        <div class="overlay-top-center">
-                            <button
-                                type="button"
-                                class="shading-dome-toggle-btn ${this._shadingDomeMode ? "is-on" : ""}"
-                                aria-label="Toggle adaptive shading dome"
-                                aria-pressed="${this._shadingDomeMode ? "true" : "false"}"
-                                @click="${onDomeToggle}"
-                            >
-                                <ha-icon icon="mdi:weather-sunny-alert"></ha-icon>
-                            </button>
-                            <button
-                                type="button"
-                                class="shading-dome-chip ${this._shadingDomeMode ? "is-on" : ""}"
-                                aria-label="Toggle adaptive shading dome"
-                                aria-pressed="${this._shadingDomeMode ? "true" : "false"}"
-                                @click="${onDomeToggle}"
-                            >${pickTranslations(this.hass?.language).shadingDomeChipLabel}</button>
+                        <div class="overlay-top-right">
+                            <div class="mode-bar" role="radiogroup" aria-label="View mode">
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg ${isLayer ? "is-on" : ""}"
+                                    role="radio"
+                                    aria-checked="${isLayer ? "true" : "false"}"
+                                    title="Default layer UI"
+                                    @click="${onLayer}"
+                                >
+                                    <ha-icon icon="mdi:view-dashboard-variant"></ha-icon>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg ${this._lidarViewMode ? "is-on" : ""} ${!hasProvider ? "is-disabled" : ""}"
+                                    role="radio"
+                                    aria-checked="${this._lidarViewMode ? "true" : "false"}"
+                                    ?disabled="${!hasProvider}"
+                                    title="${lidarTitle}"
+                                    @click="${onLidar}"
+                                >
+                                    <ha-icon icon="${lidarIcon}"></ha-icon>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg ${this._shadingDomeMode ? "is-on" : ""}"
+                                    role="radio"
+                                    aria-checked="${this._shadingDomeMode ? "true" : "false"}"
+                                    title="Adaptive shading dome"
+                                    @click="${onDome}"
+                                >
+                                    <ha-icon icon="mdi:dome-light"></ha-icon>
+                                </button>
+                            </div>
                         </div>
                     `;
     })() : A}

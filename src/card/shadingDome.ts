@@ -22,7 +22,6 @@ import {
     binFor,
     cellKey,
     decodeCellKey,
-    describeMap,
     loadMap,
     lookupRatio,
     type ShadingMap,
@@ -32,13 +31,6 @@ import type { HeliosEngine } from '../helios-engine';
 
 const DOME_FADE_IN_MS  = 380;
 const DOME_FADE_OUT_MS = 280;
-
-//Threshold below which the dome chip is hidden entirely (no
-//cluttering the HUD with a button that opens an empty canvas).
-//Three cells with a kernel-smoothed lookup typically take a
-//handful of sunny hours to accumulate; below that we're not
-//confidently showing anything.
-const MIN_CONFIDENT_CELLS_FOR_CHIP = 3;
 
 
 export interface ShadingDomeHost extends OverlaysHost
@@ -211,23 +203,13 @@ export function refreshShadingDomeScene(host: ShadingDomeHost): void
 }
 
 
-//Should the dome chip surface at all? Hidden until the user's
-//map has accumulated enough confident cells to actually show
-//something interesting. Cheap: O(cells), called from the card
-//render path which already loads the map on first chart pass.
-//
-//ALPHA-ONLY OVERRIDE: returns true unconditionally so the user
-//can demo the dome rendering without waiting 1-3 sunny days for
-//the map to populate. Restore the gated logic below before any
-//1.7.0 beta / stable release.
+//Dome visibility gating used to gate the chip on confident cell
+//count; the new mode-bar always exposes the segment so this is
+//unused. Kept exported (returns true) in case a future surface
+//wants to opt in to the same gating again.
 export function shouldShowDomeChip(): boolean
 {
     return true;
-    // eslint-disable-next-line no-unreachable
-    const map = loadMap();
-    if (!map || !map.cells) return false;
-    const stats = describeMap(map, Date.now());
-    return stats.confidentCells >= MIN_CONFIDENT_CELLS_FOR_CHIP;
 }
 
 

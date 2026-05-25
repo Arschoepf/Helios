@@ -841,6 +841,14 @@ export class HeliosEngine
         this._mapLoadHandler = () =>
         {
             this.map?.resize();
+            //Clamp the camera to a bounding box scaled to the
+            //display radius around the home. No pan + no zoom in
+            //Helios so the camera never moves anyway, but the
+            //bounds tell MapLibre's internal tile management not
+            //to consider areas outside the disc as "reachable",
+            //which reduces speculative tile fetches at the edges
+            //of the pitched viewport during rotation.
+            this._applyMapBounds();
             startAutoRotateLoop(this);
         };
         this.map.on('load', this._mapLoadHandler);
@@ -1925,6 +1933,34 @@ export class HeliosEngine
         //the editor also caps at 500 so anything above can only come
         //from a hand-edited YAML config.
         return Math.min(500, Math.max(20, v));
+    }
+
+    //Clamp MapLibre's camera bounds to a tight bbox around the home,
+    //sized at 2x the display radius (small margin for the pitched
+    //viewport corners). With pan + zoom disabled the camera never
+    //moves anyway, but the bounds tell MapLibre the area outside
+    //the disc is unreachable, which dampens speculative tile fetches
+    //at the horizon of the pitched view during rotation. Re-called
+    //after a config edit (building-radius change) re-runs the engine
+    //init path so the bounds always match the live display radius.
+    private _applyMapBounds(): void
+    {
+        if (!this.map) return;
+        const radiusM   = this._buildingRadiusMeters();
+        const halfBbox  = radiusM * 2;   //2 x radius keeps the pitched horizon inside
+        const D         = Math.PI / 180;
+        const mPerDegLat = 111_320;
+        const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
+        const dLat = halfBbox / mPerDegLat;
+        const dLon = halfBbox / mPerDegLon;
+        try
+        {
+            this.map.setMaxBounds([
+                [this.homeLon - dLon, this.homeLat - dLat],
+                [this.homeLon + dLon, this.homeLat + dLat],
+            ]);
+        }
+        catch (_) { /* style not ready yet, retried via _mapLoadHandler */ }
     }
 
     //Resolves the configured surroundings opacity (0..1). Falls back
