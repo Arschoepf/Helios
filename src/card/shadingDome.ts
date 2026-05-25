@@ -356,17 +356,22 @@ export function renderShadingDomeCloudPicker(
         <div class="shading-dome-cloud-slider" aria-label="Cloud cover">
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--sun"   icon="mdi:weather-sunny"></ha-icon>
             <div class="shading-dome-cloud-track-wrap">
-                <input type="range" min="0" max="100" step="1"
+                <input type="range" min="0" max="100" step="12.5"
                        class="shading-dome-cloud-range"
                        .value="${String(pct)}"
                        aria-label="Cloud cover percentage"
                        @input="${(e: Event) => onChange(Number((e.target as HTMLInputElement).value))}" />
-                <!--  Visual ticks for the 25/50/75 % checkpoints.
-                      pointer-events:none so they never block the
-                      native range thumb drag underneath.         -->
+                <!--  Visual ticks for every snap point on the
+                      8-bin scale (12.5 % intervals). The slider
+                      snaps to these via step=12.5 so each tick
+                      tells the user "you can land here".         -->
+                <span class="shading-dome-cloud-tick" style="left:12.5%"></span>
                 <span class="shading-dome-cloud-tick" style="left:25%"></span>
+                <span class="shading-dome-cloud-tick" style="left:37.5%"></span>
                 <span class="shading-dome-cloud-tick" style="left:50%"></span>
+                <span class="shading-dome-cloud-tick" style="left:62.5%"></span>
                 <span class="shading-dome-cloud-tick" style="left:75%"></span>
+                <span class="shading-dome-cloud-tick" style="left:87.5%"></span>
             </div>
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--cloud" icon="mdi:weather-cloudy"></ha-icon>
             <span class="shading-dome-cloud-value">${pct}%</span>

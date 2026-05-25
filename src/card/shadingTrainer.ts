@@ -47,11 +47,16 @@ const PUSH_DEBOUNCE_MS = 30_000;
 //needing a separate priming pass.
 const TRAINING_WINDOW_DAYS = 7;
 
-//One-hour buckets aligned to the hourly weather series. Anything
-//finer would chase noise from the sensor; anything coarser would
-//lose the "sun at azimuth X for one hour" resolution the map is
-//meant to capture.
-const HOUR_MS = 3_600_000;
+//30-minute buckets. Halves the slot length so each cell gets
+//twice the data, captures shading events that come and go
+//within an hour (a parked car, a passing isolated cloud, a tree
+//branch swinging in wind), and stays well above the per-sample
+//noise floor of any reasonable PV sensor. Open-Meteo cloud
+//cover is hourly so we linearly interpolate between consecutive
+//hourly samples to get the bucket's representative cloud value.
+const HOUR_MS     = 3_600_000;
+const BUCKET_MS   = 30 * 60_000;
+const BUCKETS_PER_HOUR = 2;
 
 
 //Run one training pass + persist. Cheap to call repeatedly: only
@@ -75,10 +80,10 @@ export function trainShadingMap(host: ChartHost): number
     const map = loadMap();
     const now = Date.now();
     const windowStart = now - TRAINING_WINDOW_DAYS * 24 * HOUR_MS;
-    //Skip buckets we've already processed. Subtract one hour so a
-    //bucket that was still partially in the future last time gets
-    //a second look once it fully landed in the past.
-    const watermark = Math.max(windowStart, (map.lastTrainedMs || 0) - HOUR_MS);
+    //Skip buckets we've already processed. Subtract one bucket so
+    //a bucket that was partially in the future last time gets a
+    //second look once it fully landed in the past.
+    const watermark = Math.max(windowStart, (map.lastTrainedMs || 0) - BUCKET_MS);
 
     const raster   = host._engine?.getLidarRaster() ?? null;
     const pvUnit   = host._pvUnit;
@@ -87,51 +92,62 @@ export function trainShadingMap(host: ChartHost): number
     let updated = 0;
     let highestProcessedMs = map.lastTrainedMs || 0;
 
-    //Walk the hourly forecast series; each entry is the
-    //model's view of one wall-clock hour. We compare it against
-    //the actual production averaged over the same hour. The
-    //series is already chronological + hour-aligned by the engine,
-    //so a single forward sweep covers everything in O(N).
-    for (let i = 0; i < series.times.length; i++)
+    //Walk every 30-min bucket between the hourly samples we already
+    //have. For each bucket we interpolate the cloud cover from the
+    //surrounding hourly Open-Meteo samples, replay the model at
+    //the bucket midpoint, and compare against the actual production
+    //averaged over the bucket. This gives us 2x the observations
+    //per cell vs the legacy hourly-only loop without changing the
+    //per-cell data model.
+    for (let i = 0; i < series.times.length - 1; i++)
     {
-        const hourStartMs = series.times[i].getTime();
-        const hourEndMs   = hourStartMs + HOUR_MS;
-        if (hourEndMs <= watermark) continue;          //already trained
-        if (hourEndMs > now)        continue;          //future, no actual yet
-        if (hourStartMs < windowStart) continue;       //older than the window
+        const t0Ms = series.times[i].getTime();
+        const t1Ms = series.times[i + 1].getTime();
+        if (t1Ms - t0Ms !== HOUR_MS) continue;   //skip non-hourly gaps
+        const cloud0 = series.cloud[i]     ?? 0;
+        const cloud1 = series.cloud[i + 1] ?? 0;
+        const temp0  = series.temperature?.[i]     ?? NaN;
+        const temp1  = series.temperature?.[i + 1] ?? NaN;
+        const wind0  = series.windSpeed?.[i]     ?? NaN;
+        const wind1  = series.windSpeed?.[i + 1] ?? NaN;
 
-        const cloud = series.cloud[i] ?? 0;
-        //pct = % of STC; multiplying by k gives the model's
-        //expected watts at the hour midpoint. Same call the live
-        //tooltip + chart make, so the residual we compute here
-        //matches the residual the forecast will show.
-        const pct = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
-            airTempC: series.temperature?.[i] ?? NaN,
-            windMs:   series.windSpeed?.[i]   ?? NaN,
-            raster,
-        });
-        const predictedW = pct * k;
-        if (!isFinite(predictedW) || predictedW <= 0) continue;
-
-        const actualW = actualWattsForHour(hist, pvUnit, sensorIsEnergy, hourStartMs, hourEndMs);
-        if (actualW === null) continue;
-
-        const sun = getSunPosition(series.times[i], coords.lat, coords.lon);
-        if (!sun || sun.altitude <= 0) continue;
-
-        if (applyObservation(
-            map,
-            sun.azimuth,
-            sun.altitude,
-            cloud,
-            actualW,
-            predictedW,
-            hourStartMs + HOUR_MS / 2,   //bucket centre for time-decay anchoring
-        ))
+        for (let b = 0; b < BUCKETS_PER_HOUR; b++)
         {
-            updated++;
+            const bucketStartMs = t0Ms + b * BUCKET_MS;
+            const bucketEndMs   = bucketStartMs + BUCKET_MS;
+            if (bucketEndMs <= watermark) continue;
+            if (bucketEndMs > now)        continue;
+            if (bucketStartMs < windowStart) continue;
+
+            //Linear interpolation across the parent hour. b=0
+            //samples a quarter into the hour (centre of bucket 0),
+            //b=1 three-quarters in (centre of bucket 1).
+            const frac    = (b + 0.5) / BUCKETS_PER_HOUR;
+            const cloud   = cloud0 + (cloud1 - cloud0) * frac;
+            const airT    = lerpFinite(temp0, temp1, frac);
+            const windMs  = lerpFinite(wind0, wind1, frac);
+            const tMid    = new Date(bucketStartMs + BUCKET_MS / 2);
+
+            const pct = computePvPowerWeighted(host.config, tMid, coords.lat, coords.lon, cloud, {
+                airTempC: airT,
+                windMs,
+                raster,
+            });
+            const predictedW = pct * k;
+            if (!isFinite(predictedW) || predictedW <= 0) continue;
+
+            const actualW = actualWattsForBucket(hist, pvUnit, sensorIsEnergy, bucketStartMs, bucketEndMs);
+            if (actualW === null) continue;
+
+            const sun = getSunPosition(tMid, coords.lat, coords.lon);
+            if (!sun || sun.altitude <= 0) continue;
+
+            if (applyObservation(map, sun.azimuth, sun.altitude, cloud, actualW, predictedW, tMid.getTime()))
+            {
+                updated++;
+            }
+            if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
         }
-        if (hourEndMs > highestProcessedMs) highestProcessedMs = hourEndMs;
     }
 
     if (updated > 0)
@@ -182,7 +198,18 @@ function isCumulativeEnergyUnit(unit: string): boolean
     return u === 'wh' || u === 'kwh' || u === 'mwh';
 }
 
-function actualWattsForHour(
+//Linear interpolation that gracefully falls back when one of the
+//endpoints is NaN (typical when the weather series has a single
+//missing field at one of the hour boundaries).
+function lerpFinite(a: number, b: number, frac: number): number
+{
+    if (!isFinite(a) && !isFinite(b)) return NaN;
+    if (!isFinite(a)) return b;
+    if (!isFinite(b)) return a;
+    return a + (b - a) * frac;
+}
+
+function actualWattsForBucket(
     hist:     PvHistory,
     pvUnit:   string,
     asEnergy: boolean,
@@ -191,11 +218,11 @@ function actualWattsForHour(
 ): number | null
 {
     if (hist.times.length < 2) return null;
-    if (asEnergy) return actualWattsFromEnergyHour(hist, pvUnit, startMs, endMs);
-    return actualWattsFromPowerHour(hist, pvUnit, startMs, endMs);
+    if (asEnergy) return actualWattsFromEnergyBucket(hist, pvUnit, startMs, endMs);
+    return actualWattsFromPowerBucket(hist, pvUnit, startMs, endMs);
 }
 
-function actualWattsFromEnergyHour(
+function actualWattsFromEnergyBucket(
     hist:    PvHistory,
     pvUnit:  string,
     startMs: number,
@@ -216,11 +243,13 @@ function actualWattsFromEnergyHour(
         saw = true;
     }
     if (!saw) return null;
-    //kWh per hour bucket = average kW = average W * 1000.
-    return kwh * 1000;
+    //Bucket-average watts = (kWh in window) / (window hours) * 1000.
+    const windowHours = (endMs - startMs) / 3_600_000;
+    if (windowHours <= 0) return null;
+    return (kwh / windowHours) * 1000;
 }
 
-function actualWattsFromPowerHour(
+function actualWattsFromPowerBucket(
     hist:    PvHistory,
     pvUnit:  string,
     startMs: number,

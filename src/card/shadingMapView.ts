@@ -263,7 +263,7 @@ export function renderShadingMapSection(opts: {
             ` : nothing}
         </div>
         <div class="shading-grid">
-            ${[0, 1, 2, 3].slice(0, CLOUD_BIN_COUNT_EXPORT).map(b => renderCloudDisc(b, decoded, nowMs))}
+            ${Array.from({ length: CLOUD_BIN_COUNT_EXPORT }, (_, b) => renderCloudDisc(b, decoded, nowMs))}
         </div>
         <div class="shading-actions">
             <button type="button" @click="${handleExport}">${t.editor.shadingExport}</button>

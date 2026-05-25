@@ -39350,14 +39350,14 @@ const AZIMUTH_BIN_DEG = 10;
 const ALTITUDE_BIN_DEG = 5;
 const AZIMUTH_BIN_COUNT = 36;
 const ALTITUDE_BIN_COUNT = 18;
-const CLOUD_BIN_EDGES = [0, 25, 50, 75, 100];
+const CLOUD_BIN_EDGES = [0, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100];
 const CLOUD_BIN_COUNT = CLOUD_BIN_EDGES.length - 1;
 const HALFLIFE_DAYS = 60;
 const DAY_MS = 864e5;
 const MIN_EFFECTIVE_SAMPLES = 3;
 const RATIO_MIN$1 = 0.3;
 const RATIO_MAX$1 = 1.7;
-const STORAGE_KEY = "helios-shading-map:v1";
+const STORAGE_KEY = "helios-shading-map:v2";
 function binFor(azimuthDeg, altitudeDeg, cloudPct) {
   if (!isFinite(azimuthDeg) || !isFinite(altitudeDeg) || !isFinite(cloudPct)) return null;
   if (altitudeDeg <= 0) return null;
@@ -39377,7 +39377,7 @@ function cellKey(c2) {
   return `${c2.az}|${c2.alt}|${c2.cloud}`;
 }
 function emptyMap() {
-  return { version: 1, lastTrainedMs: 0, cells: {} };
+  return { version: 2, lastTrainedMs: 0, cells: {} };
 }
 function applyObservation(map, sunAzimuthDeg, sunAltitudeDeg, cloudPct, actualW, predictedW, timestampMs) {
   if (!isFinite(actualW) || !isFinite(predictedW) || !isFinite(timestampMs)) return false;
@@ -39454,9 +39454,9 @@ function loadMap(storage = safeStorage()) {
     const raw2 = storage.getItem(STORAGE_KEY);
     if (!raw2) return emptyMap();
     const parsed = JSON.parse(raw2);
-    if (!parsed || parsed.version !== 1 || typeof parsed.cells !== "object") return emptyMap();
+    if (!parsed || parsed.version !== 2 || typeof parsed.cells !== "object") return emptyMap();
     return {
-      version: 1,
+      version: 2,
       lastTrainedMs: typeof parsed.lastTrainedMs === "number" ? parsed.lastTrainedMs : 0,
       cells: parsed.cells || {}
     };
@@ -39483,7 +39483,7 @@ function resetMap(storage = safeStorage()) {
 }
 function mergeMaps(a2, b2, nowMs = Date.now()) {
   const out = {
-    version: 1,
+    version: 2,
     lastTrainedMs: Math.max(a2.lastTrainedMs || 0, b2.lastTrainedMs || 0),
     cells: {}
   };
@@ -39525,7 +39525,7 @@ function importMapJson(raw2) {
   try {
     const parsed = JSON.parse(raw2);
     if (!parsed || typeof parsed !== "object") return null;
-    if (parsed.version !== 1) return null;
+    if (parsed.version !== 2) return null;
     if (!parsed.cells || typeof parsed.cells !== "object") return null;
     const cells = {};
     for (const key of Object.keys(parsed.cells)) {
@@ -39535,7 +39535,7 @@ function importMapJson(raw2) {
       cells[key] = { ema: c2.ema, w: c2.w, t: c2.t };
     }
     return {
-      version: 1,
+      version: 2,
       lastTrainedMs: typeof parsed.lastTrainedMs === "number" ? parsed.lastTrainedMs : 0,
       cells
     };
@@ -39557,7 +39557,16 @@ function decodeCellKey(key, cell) {
     cell
   };
 }
-const CLOUD_BIN_LABELS = ["0-25%", "25-50%", "50-75%", "75-100%"];
+const CLOUD_BIN_LABELS = [
+  "0-12.5%",
+  "12.5-25%",
+  "25-37.5%",
+  "37.5-50%",
+  "50-62.5%",
+  "62.5-75%",
+  "75-87.5%",
+  "87.5-100%"
+];
 const CLOUD_BIN_COUNT_EXPORT = CLOUD_BIN_COUNT;
 function describeMap(map, nowMs) {
   let confidentCells = 0;
@@ -39745,17 +39754,22 @@ function renderShadingDomeCloudPicker(host, onChange) {
         <div class="shading-dome-cloud-slider" aria-label="Cloud cover">
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--sun"   icon="mdi:weather-sunny"></ha-icon>
             <div class="shading-dome-cloud-track-wrap">
-                <input type="range" min="0" max="100" step="1"
+                <input type="range" min="0" max="100" step="12.5"
                        class="shading-dome-cloud-range"
                        .value="${String(pct)}"
                        aria-label="Cloud cover percentage"
                        @input="${(e2) => onChange(Number(e2.target.value))}" />
-                <!--  Visual ticks for the 25/50/75 % checkpoints.
-                      pointer-events:none so they never block the
-                      native range thumb drag underneath.         -->
+                <!--  Visual ticks for every snap point on the
+                      8-bin scale (12.5 % intervals). The slider
+                      snaps to these via step=12.5 so each tick
+                      tells the user "you can land here".         -->
+                <span class="shading-dome-cloud-tick" style="left:12.5%"></span>
                 <span class="shading-dome-cloud-tick" style="left:25%"></span>
+                <span class="shading-dome-cloud-tick" style="left:37.5%"></span>
                 <span class="shading-dome-cloud-tick" style="left:50%"></span>
+                <span class="shading-dome-cloud-tick" style="left:62.5%"></span>
                 <span class="shading-dome-cloud-tick" style="left:75%"></span>
+                <span class="shading-dome-cloud-tick" style="left:87.5%"></span>
             </div>
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--cloud" icon="mdi:weather-cloudy"></ha-icon>
             <span class="shading-dome-cloud-value">${pct}%</span>
@@ -40104,6 +40118,8 @@ const HA_USER_DATA_KEY = "helios-shading-map";
 const PUSH_DEBOUNCE_MS = 3e4;
 const TRAINING_WINDOW_DAYS = 7;
 const HOUR_MS = 36e5;
+const BUCKET_MS = 30 * 6e4;
+const BUCKETS_PER_HOUR = 2;
 function trainShadingMap(host) {
   const k2 = pvCalibK(host.config);
   const series = host._chartSeries;
@@ -40115,43 +40131,49 @@ function trainShadingMap(host) {
   const map = loadMap();
   const now = Date.now();
   const windowStart = now - TRAINING_WINDOW_DAYS * 24 * HOUR_MS;
-  const watermark = Math.max(windowStart, (map.lastTrainedMs || 0) - HOUR_MS);
+  const watermark = Math.max(windowStart, (map.lastTrainedMs || 0) - BUCKET_MS);
   const raster = host._engine?.getLidarRaster() ?? null;
   const pvUnit = host._pvUnit;
   const sensorIsEnergy = isCumulativeEnergyUnit(pvUnit);
   let updated = 0;
   let highestProcessedMs = map.lastTrainedMs || 0;
-  for (let i2 = 0; i2 < series.times.length; i2++) {
-    const hourStartMs = series.times[i2].getTime();
-    const hourEndMs = hourStartMs + HOUR_MS;
-    if (hourEndMs <= watermark) continue;
-    if (hourEndMs > now) continue;
-    if (hourStartMs < windowStart) continue;
-    const cloud = series.cloud[i2] ?? 0;
-    const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud, {
-      airTempC: series.temperature?.[i2] ?? NaN,
-      windMs: series.windSpeed?.[i2] ?? NaN,
-      raster
-    });
-    const predictedW = pct * k2;
-    if (!isFinite(predictedW) || predictedW <= 0) continue;
-    const actualW = actualWattsForHour(hist, pvUnit, sensorIsEnergy, hourStartMs, hourEndMs);
-    if (actualW === null) continue;
-    const sun = getSunPosition(series.times[i2], coords.lat, coords.lon);
-    if (!sun || sun.altitude <= 0) continue;
-    if (applyObservation(
-      map,
-      sun.azimuth,
-      sun.altitude,
-      cloud,
-      actualW,
-      predictedW,
-      hourStartMs + HOUR_MS / 2
-      //bucket centre for time-decay anchoring
-    )) {
-      updated++;
+  for (let i2 = 0; i2 < series.times.length - 1; i2++) {
+    const t0Ms = series.times[i2].getTime();
+    const t1Ms = series.times[i2 + 1].getTime();
+    if (t1Ms - t0Ms !== HOUR_MS) continue;
+    const cloud0 = series.cloud[i2] ?? 0;
+    const cloud1 = series.cloud[i2 + 1] ?? 0;
+    const temp0 = series.temperature?.[i2] ?? NaN;
+    const temp1 = series.temperature?.[i2 + 1] ?? NaN;
+    const wind0 = series.windSpeed?.[i2] ?? NaN;
+    const wind1 = series.windSpeed?.[i2 + 1] ?? NaN;
+    for (let b2 = 0; b2 < BUCKETS_PER_HOUR; b2++) {
+      const bucketStartMs = t0Ms + b2 * BUCKET_MS;
+      const bucketEndMs = bucketStartMs + BUCKET_MS;
+      if (bucketEndMs <= watermark) continue;
+      if (bucketEndMs > now) continue;
+      if (bucketStartMs < windowStart) continue;
+      const frac = (b2 + 0.5) / BUCKETS_PER_HOUR;
+      const cloud = cloud0 + (cloud1 - cloud0) * frac;
+      const airT = lerpFinite(temp0, temp1, frac);
+      const windMs = lerpFinite(wind0, wind1, frac);
+      const tMid = new Date(bucketStartMs + BUCKET_MS / 2);
+      const pct = computePvPowerWeighted(host.config, tMid, coords.lat, coords.lon, cloud, {
+        airTempC: airT,
+        windMs,
+        raster
+      });
+      const predictedW = pct * k2;
+      if (!isFinite(predictedW) || predictedW <= 0) continue;
+      const actualW = actualWattsForBucket(hist, pvUnit, sensorIsEnergy, bucketStartMs, bucketEndMs);
+      if (actualW === null) continue;
+      const sun = getSunPosition(tMid, coords.lat, coords.lon);
+      if (!sun || sun.altitude <= 0) continue;
+      if (applyObservation(map, sun.azimuth, sun.altitude, cloud, actualW, predictedW, tMid.getTime())) {
+        updated++;
+      }
+      if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
     }
-    if (hourEndMs > highestProcessedMs) highestProcessedMs = hourEndMs;
   }
   if (updated > 0) {
     map.lastTrainedMs = highestProcessedMs;
@@ -40179,12 +40201,18 @@ function isCumulativeEnergyUnit(unit) {
   const u2 = (unit || "").toLowerCase();
   return u2 === "wh" || u2 === "kwh" || u2 === "mwh";
 }
-function actualWattsForHour(hist, pvUnit, asEnergy, startMs, endMs) {
-  if (hist.times.length < 2) return null;
-  if (asEnergy) return actualWattsFromEnergyHour(hist, pvUnit, startMs, endMs);
-  return actualWattsFromPowerHour(hist, pvUnit, startMs, endMs);
+function lerpFinite(a2, b2, frac) {
+  if (!isFinite(a2) && !isFinite(b2)) return NaN;
+  if (!isFinite(a2)) return b2;
+  if (!isFinite(b2)) return a2;
+  return a2 + (b2 - a2) * frac;
 }
-function actualWattsFromEnergyHour(hist, pvUnit, startMs, endMs) {
+function actualWattsForBucket(hist, pvUnit, asEnergy, startMs, endMs) {
+  if (hist.times.length < 2) return null;
+  if (asEnergy) return actualWattsFromEnergyBucket(hist, pvUnit, startMs, endMs);
+  return actualWattsFromPowerBucket(hist, pvUnit, startMs, endMs);
+}
+function actualWattsFromEnergyBucket(hist, pvUnit, startMs, endMs) {
   const unit = pvUnit.toLowerCase();
   const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
   let kwh = 0;
@@ -40198,9 +40226,11 @@ function actualWattsFromEnergyHour(hist, pvUnit, startMs, endMs) {
     saw = true;
   }
   if (!saw) return null;
-  return kwh * 1e3;
+  const windowHours = (endMs - startMs) / 36e5;
+  if (windowHours <= 0) return null;
+  return kwh / windowHours * 1e3;
 }
-function actualWattsFromPowerHour(hist, pvUnit, startMs, endMs) {
+function actualWattsFromPowerBucket(hist, pvUnit, startMs, endMs) {
   let area = 0;
   let span = 0;
   let saw = false;
@@ -42668,7 +42698,7 @@ function renderShadingMapSection(opts) {
             ` : A}
         </div>
         <div class="shading-grid">
-            ${[0, 1, 2, 3].slice(0, CLOUD_BIN_COUNT_EXPORT).map((b2) => renderCloudDisc(b2, decoded, nowMs))}
+            ${Array.from({ length: CLOUD_BIN_COUNT_EXPORT }, (_2, b2) => renderCloudDisc(b2, decoded, nowMs))}
         </div>
         <div class="shading-actions">
             <button type="button" @click="${handleExport}">${t2.editor.shadingExport}</button>
@@ -44015,7 +44045,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.7"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.8"}`,
       labelStyle,
       versionStyle
     );
@@ -44039,7 +44069,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.7",
+        version: "1.7.0-alpha.8",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44047,7 +44077,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.7"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.8"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

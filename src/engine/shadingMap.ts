@@ -21,10 +21,13 @@ const AZIMUTH_BIN_DEG  = 10;   //36 bins covering [0, 360)
 const ALTITUDE_BIN_DEG = 5;    //18 bins covering [0, 90)
 const AZIMUTH_BIN_COUNT  = 36;
 const ALTITUDE_BIN_COUNT = 18;
-//Cloud cover bins: clear / partly / mostly / overcast. We avoid
-//finer resolution because the Open-Meteo cloud field is noisy
-//enough that 4 bins already track most of the structure.
-const CLOUD_BIN_EDGES = [0, 25, 50, 75, 100];   //inclusive low, exclusive high (last is inclusive)
+//Cloud cover bins: 8 bins at 12.5 % each. The light-to-overcast
+//transmittance curve is highly non-linear (a 70-90 % sky lets
+//roughly twice as much through as a 90-100 % sky), so finer
+//resolution near the upper end matters more than the user might
+//assume; we keep uniform width across the range for symmetry
+//and let the EMA / kernel smoothing absorb the noise.
+const CLOUD_BIN_EDGES = [0, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100];   //inclusive low, exclusive high (last is inclusive)
 const CLOUD_BIN_COUNT = CLOUD_BIN_EDGES.length - 1;
 
 //Half-life over which an observation loses half its weight. 60 d
@@ -46,7 +49,12 @@ const MIN_EFFECTIVE_SAMPLES = 3;
 const RATIO_MIN = 0.3;
 const RATIO_MAX = 1.7;
 
-const STORAGE_KEY = 'helios-shading-map:v1';
+//v2: schema bump when the cloud-cover dimension went from 4 to
+//8 bins. Old keys like `az|alt|3` meant 75-100 % under v1 but
+//mean 37.5-50 % under v2, so loading v1 data into the v2 schema
+//would corrupt the cells silently. Cleanest: ignore v1 entirely
+//and let the model relearn from scratch.
+const STORAGE_KEY = 'helios-shading-map:v2';
 
 
 export interface ShadingCell
@@ -66,7 +74,7 @@ export interface ShadingMap
 {
     //Versioned shape so a future schema change can invalidate the
     //stored payload without crashing the card on first load.
-    version: 1;
+    version: 2;
     //Watermark used by the trainer so it only feeds new
     //observations into the map instead of re-counting the same
     //hour every refresh.
@@ -109,7 +117,7 @@ export function cellKey(c: BinCoord): string
 
 export function emptyMap(): ShadingMap
 {
-    return { version: 1, lastTrainedMs: 0, cells: {} };
+    return { version: 2, lastTrainedMs: 0, cells: {} };
 }
 
 
@@ -276,11 +284,11 @@ export function loadMap(storage: MapStorage | null = safeStorage()): ShadingMap
         const raw = storage.getItem(STORAGE_KEY);
         if (!raw) return emptyMap();
         const parsed = JSON.parse(raw) as ShadingMap;
-        if (!parsed || parsed.version !== 1 || typeof parsed.cells !== 'object') return emptyMap();
+        if (!parsed || parsed.version !== 2 || typeof parsed.cells !== 'object') return emptyMap();
         //Trust the cell shape; future schema bumps invalidate via the
         //version field. Empty `cells` is fine, that's a fresh install.
         return {
-            version: 1,
+            version: 2,
             lastTrainedMs: typeof parsed.lastTrainedMs === 'number' ? parsed.lastTrainedMs : 0,
             cells: parsed.cells || {},
         };
@@ -317,7 +325,7 @@ export function resetMap(storage: MapStorage | null = safeStorage()): ShadingMap
 export function mergeMaps(a: ShadingMap, b: ShadingMap, nowMs: number = Date.now()): ShadingMap
 {
     const out: ShadingMap = {
-        version: 1,
+        version: 2,
         lastTrainedMs: Math.max(a.lastTrainedMs || 0, b.lastTrainedMs || 0),
         cells: {},
     };
@@ -369,7 +377,7 @@ export function importMapJson(raw: string): ShadingMap | null
     {
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object') return null;
-        if (parsed.version !== 1) return null;
+        if (parsed.version !== 2) return null;
         if (!parsed.cells || typeof parsed.cells !== 'object') return null;
         const cells: Record<string, ShadingCell> = {};
         for (const key of Object.keys(parsed.cells))
@@ -380,7 +388,7 @@ export function importMapJson(raw: string): ShadingMap | null
             cells[key] = { ema: c.ema, w: c.w, t: c.t };
         }
         return {
-            version: 1,
+            version: 2,
             lastTrainedMs: typeof parsed.lastTrainedMs === 'number' ? parsed.lastTrainedMs : 0,
             cells,
         };
@@ -419,7 +427,10 @@ export function decodeCellKey(key: string, cell: ShadingCell): DecodedCell | nul
 
 //Convenience for callers that want the labels for the cloud bins
 //in a UI selector. Mirrors CLOUD_BIN_EDGES.
-export const CLOUD_BIN_LABELS = ['0-25%', '25-50%', '50-75%', '75-100%'];
+export const CLOUD_BIN_LABELS = [
+    '0-12.5%', '12.5-25%', '25-37.5%', '37.5-50%',
+    '50-62.5%', '62.5-75%', '75-87.5%', '87.5-100%',
+];
 export const CLOUD_BIN_COUNT_EXPORT = CLOUD_BIN_COUNT;
 export const HALFLIFE_DAYS_EXPORT = HALFLIFE_DAYS;
 
