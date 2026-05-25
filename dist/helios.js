@@ -4437,11 +4437,17 @@ const heliosCardStyles = i$3`
         pointer-events: auto;
     }
     /*  Tick wrapper: the slider sits in a relative container so
-        the 25/50/75 tick spans can be absolutely positioned over
-        the track without disturbing the slider's native thumb
-        hit-area.                                                 */
+        the tick spans can be absolutely positioned over the
+        track without disturbing the slider's native thumb
+        hit-area. --thumb-r feeds the calc() positions on each
+        tick so they land on the actual thumb centre at every
+        snap point, not on the wrap's geometric percentage. The
+        native thumb's centre travels between (thumb-r) and
+        (track-width - thumb-r), so we use the same offset for
+        the tick positions.                                       */
     .shading-dome-cloud-track-wrap
     {
+        --thumb-r: 7px;
         position: relative;
         display: inline-flex;
         align-items: center;
@@ -39703,8 +39709,8 @@ function renderShadingDomeOverlay(host) {
     wireframeNodes.push(w`
             <path d="${c2.path}"
                   fill="none"
-                  stroke="rgba(255,255,255,0.16)"
-                  stroke-width="0.4" />
+                  stroke="rgba(255,255,255,0.09)"
+                  stroke-width="0.35" />
         `);
     if (c2.aged > 0) {
       const opacity = Math.max(0.18, Math.min(0.55, c2.aged / 8));
@@ -39712,8 +39718,8 @@ function renderShadingDomeOverlay(host) {
                 <path d="${c2.path}"
                       fill="${ratioToFill$1(c2.ratio)}"
                       fill-opacity="${opacity}"
-                      stroke="rgba(255,255,255,0.35)"
-                      stroke-width="0.5" />
+                      stroke="rgba(255,255,255,0.22)"
+                      stroke-width="0.45" />
             `);
     }
   }
@@ -39762,14 +39768,19 @@ function renderShadingDomeCloudPicker(host, onChange) {
                 <!--  Visual ticks for every snap point on the
                       8-bin scale (12.5 % intervals). The slider
                       snaps to these via step=12.5 so each tick
-                      tells the user "you can land here".         -->
-                <span class="shading-dome-cloud-tick" style="left:12.5%"></span>
-                <span class="shading-dome-cloud-tick" style="left:25%"></span>
-                <span class="shading-dome-cloud-tick" style="left:37.5%"></span>
-                <span class="shading-dome-cloud-tick" style="left:50%"></span>
-                <span class="shading-dome-cloud-tick" style="left:62.5%"></span>
-                <span class="shading-dome-cloud-tick" style="left:75%"></span>
-                <span class="shading-dome-cloud-tick" style="left:87.5%"></span>
+                      tells the user "you can land here".
+                      Position uses calc() with the thumb radius
+                      (--thumb-r, 7 px) so each tick lands on the
+                      actual thumb centre at that value, not on
+                      the geometric percentage of the wrap (which
+                      would be off by ~half-a-thumb-width).      -->
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.125)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.250)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.375)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.500)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.625)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.750)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.875)"></span>
             </div>
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--cloud" icon="mdi:weather-cloudy"></ha-icon>
             <span class="shading-dome-cloud-value">${pct}%</span>
@@ -44045,7 +44056,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.8"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.9"}`,
       labelStyle,
       versionStyle
     );
@@ -44069,7 +44080,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.8",
+        version: "1.7.0-alpha.9",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44077,7 +44088,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.8"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.9"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

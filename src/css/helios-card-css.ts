@@ -1932,11 +1932,17 @@ export const heliosCardStyles = css`
         pointer-events: auto;
     }
     /*  Tick wrapper: the slider sits in a relative container so
-        the 25/50/75 tick spans can be absolutely positioned over
-        the track without disturbing the slider's native thumb
-        hit-area.                                                 */
+        the tick spans can be absolutely positioned over the
+        track without disturbing the slider's native thumb
+        hit-area. --thumb-r feeds the calc() positions on each
+        tick so they land on the actual thumb centre at every
+        snap point, not on the wrap's geometric percentage. The
+        native thumb's centre travels between (thumb-r) and
+        (track-width - thumb-r), so we use the same offset for
+        the tick positions.                                       */
     .shading-dome-cloud-track-wrap
     {
+        --thumb-r: 7px;
         position: relative;
         display: inline-flex;
         align-items: center;

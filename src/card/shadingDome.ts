@@ -282,8 +282,8 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
         wireframeNodes.push(svg`
             <path d="${c.path}"
                   fill="none"
-                  stroke="rgba(255,255,255,0.16)"
-                  stroke-width="0.4" />
+                  stroke="rgba(255,255,255,0.09)"
+                  stroke-width="0.35" />
         `);
         if (c.aged > 0)
         {
@@ -292,8 +292,8 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
                 <path d="${c.path}"
                       fill="${ratioToFill(c.ratio)}"
                       fill-opacity="${opacity}"
-                      stroke="rgba(255,255,255,0.35)"
-                      stroke-width="0.5" />
+                      stroke="rgba(255,255,255,0.22)"
+                      stroke-width="0.45" />
             `);
         }
     }
@@ -364,14 +364,19 @@ export function renderShadingDomeCloudPicker(
                 <!--  Visual ticks for every snap point on the
                       8-bin scale (12.5 % intervals). The slider
                       snaps to these via step=12.5 so each tick
-                      tells the user "you can land here".         -->
-                <span class="shading-dome-cloud-tick" style="left:12.5%"></span>
-                <span class="shading-dome-cloud-tick" style="left:25%"></span>
-                <span class="shading-dome-cloud-tick" style="left:37.5%"></span>
-                <span class="shading-dome-cloud-tick" style="left:50%"></span>
-                <span class="shading-dome-cloud-tick" style="left:62.5%"></span>
-                <span class="shading-dome-cloud-tick" style="left:75%"></span>
-                <span class="shading-dome-cloud-tick" style="left:87.5%"></span>
+                      tells the user "you can land here".
+                      Position uses calc() with the thumb radius
+                      (--thumb-r, 7 px) so each tick lands on the
+                      actual thumb centre at that value, not on
+                      the geometric percentage of the wrap (which
+                      would be off by ~half-a-thumb-width).      -->
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.125)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.250)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.375)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.500)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.625)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.750)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.875)"></span>
             </div>
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--cloud" icon="mdi:weather-cloudy"></ha-icon>
             <span class="shading-dome-cloud-value">${pct}%</span>
