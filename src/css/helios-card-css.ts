@@ -1905,17 +1905,24 @@ export const heliosCardStyles = css`
     /*  Cloud-bin picker: small segmented control hugging the top
         edge under the dome chip cluster. Pills mirror the dome's
         accent so it reads as part of the same widget.             */
+    /*  Vertical layout: the picker rides up the LEFT edge of the
+        card so the dome's celestial hemisphere stays visually
+        unobstructed in the centre. Centred vertically so the
+        cluster doesn't compete with the clock chip in the top-
+        left corner.                                              */
     .shading-dome-cloud-picker
     {
         position: absolute;
-        top: 40px;
-        left: 50%;
-        transform: translateX(-50%);
+        top: 50%;
+        left: 8px;
+        transform: translateY(-50%);
         z-index: 50;
         display: inline-flex;
+        flex-direction: column;
+        align-items: stretch;
         background: rgba(0, 0, 0, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 999px;
+        border-radius: 14px;
         padding: 2px;
         gap: 0;
         pointer-events: auto;
@@ -1929,9 +1936,11 @@ export const heliosCardStyles = css`
         font: inherit;
         font-size: 11px;
         font-weight: 600;
-        padding: 4px 10px;
-        border-radius: 999px;
+        padding: 5px 10px;
+        border-radius: 12px;
         cursor: pointer;
+        text-align: center;
+        white-space: nowrap;
         transition: background 120ms ease, color 120ms ease;
     }
     .shading-dome-cloud-pill:hover { color: #fff; }

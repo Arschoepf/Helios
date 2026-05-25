@@ -276,19 +276,35 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
     const scene = host._shadingDomeScene;
     if (!scene) return nothing;
 
-    //Background cells: pre-aged opacity, capped at 0.35 so the
-    //background never competes with the ribbon for attention.
+    //Background cells: the full grid renders so the lattice of
+    //the dome is always visible (you see the structure even on
+    //day 1 with an empty map). Populated cells fill with the
+    //ratio colour at decay-weighted opacity. Empty cells show as
+    //a thin neutral outline only so the background never competes
+    //with the ribbon for attention.
     const cellNodes: TemplateResult[] = [];
     for (const c of scene.cellPolys)
     {
-        const opacity = Math.max(0.08, Math.min(0.35, c.aged / 10));
-        cellNodes.push(svg`
-            <path d="${c.path}"
-                  fill="${ratioToFill(c.ratio)}"
-                  fill-opacity="${opacity}"
-                  stroke="rgba(0,0,0,0.18)"
-                  stroke-width="0.4" />
-        `);
+        if (c.aged > 0)
+        {
+            const opacity = Math.max(0.12, Math.min(0.45, c.aged / 8));
+            cellNodes.push(svg`
+                <path d="${c.path}"
+                      fill="${ratioToFill(c.ratio)}"
+                      fill-opacity="${opacity}"
+                      stroke="rgba(255,255,255,0.35)"
+                      stroke-width="0.6" />
+            `);
+        }
+        else
+        {
+            cellNodes.push(svg`
+                <path d="${c.path}"
+                      fill="rgba(255,255,255,0.02)"
+                      stroke="rgba(255,255,255,0.18)"
+                      stroke-width="0.4" />
+            `);
+        }
     }
 
     //Ribbon: paint as small connected line segments so the colour

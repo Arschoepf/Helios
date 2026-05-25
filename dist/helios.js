@@ -4410,17 +4410,24 @@ const heliosCardStyles = i$3`
     /*  Cloud-bin picker: small segmented control hugging the top
         edge under the dome chip cluster. Pills mirror the dome's
         accent so it reads as part of the same widget.             */
+    /*  Vertical layout: the picker rides up the LEFT edge of the
+        card so the dome's celestial hemisphere stays visually
+        unobstructed in the centre. Centred vertically so the
+        cluster doesn't compete with the clock chip in the top-
+        left corner.                                              */
     .shading-dome-cloud-picker
     {
         position: absolute;
-        top: 40px;
-        left: 50%;
-        transform: translateX(-50%);
+        top: 50%;
+        left: 8px;
+        transform: translateY(-50%);
         z-index: 50;
         display: inline-flex;
+        flex-direction: column;
+        align-items: stretch;
         background: rgba(0, 0, 0, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 999px;
+        border-radius: 14px;
         padding: 2px;
         gap: 0;
         pointer-events: auto;
@@ -4434,9 +4441,11 @@ const heliosCardStyles = i$3`
         font: inherit;
         font-size: 11px;
         font-weight: 600;
-        padding: 4px 10px;
-        border-radius: 999px;
+        padding: 5px 10px;
+        border-radius: 12px;
         cursor: pointer;
+        text-align: center;
+        white-space: nowrap;
         transition: background 120ms ease, color 120ms ease;
     }
     .shading-dome-cloud-pill:hover { color: #fff; }
@@ -38780,20 +38789,38 @@ const _HeliosEngine = class _HeliosEngine {
     if (!homeScreen) return null;
     const HALF_AZ = 5;
     const HALF_ALT = 2.5;
-    const cellPolys = [];
+    const AZ_BIN_COUNT = 36;
+    const ALT_BIN_COUNT = 18;
+    const populated = /* @__PURE__ */ new Map();
     for (const c2 of opts.decodedCells) {
       if (c2.cloudBin !== opts.cloudBinForArc) continue;
-      const az0 = c2.azimuthDeg - HALF_AZ;
-      const az1 = c2.azimuthDeg + HALF_AZ;
-      const al0 = Math.max(0.5, c2.altitudeDeg - HALF_ALT);
-      const al1 = Math.min(89, c2.altitudeDeg + HALF_ALT);
-      const p1 = this._projectSpherePoint(az0, al0);
-      const p2 = this._projectSpherePoint(az1, al0);
-      const p3 = this._projectSpherePoint(az1, al1);
-      const p4 = this._projectSpherePoint(az0, al1);
-      if (!p1 || !p2 || !p3 || !p4) continue;
-      const path = `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} L ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z`;
-      cellPolys.push({ path, ratio: c2.ratio, aged: c2.aged, cloudBin: c2.cloudBin });
+      const azBin = Math.floor(c2.azimuthDeg / 10);
+      const altBin = Math.floor(c2.altitudeDeg / 5);
+      populated.set(`${azBin}|${altBin}`, { ratio: c2.ratio, aged: c2.aged });
+    }
+    const cellPolys = [];
+    for (let azBin = 0; azBin < AZ_BIN_COUNT; azBin++) {
+      const azCentre = azBin * 10 + 5;
+      for (let altBin = 0; altBin < ALT_BIN_COUNT; altBin++) {
+        const altCentre = altBin * 5 + 2.5;
+        const az0 = azCentre - HALF_AZ;
+        const az1 = azCentre + HALF_AZ;
+        const al0 = Math.max(0.5, altCentre - HALF_ALT);
+        const al1 = Math.min(89, altCentre + HALF_ALT);
+        const p1 = this._projectSpherePoint(az0, al0);
+        const p2 = this._projectSpherePoint(az1, al0);
+        const p3 = this._projectSpherePoint(az1, al1);
+        const p4 = this._projectSpherePoint(az0, al1);
+        if (!p1 || !p2 || !p3 || !p4) continue;
+        const path = `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} L ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z`;
+        const hit = populated.get(`${azBin}|${altBin}`);
+        cellPolys.push({
+          path,
+          ratio: hit ? hit.ratio : 1,
+          aged: hit ? hit.aged : 0,
+          cloudBin: opts.cloudBinForArc
+        });
+      }
     }
     const todayArc = [];
     const dayStart = new Date(opts.now);
@@ -39599,14 +39626,23 @@ function renderShadingDomeOverlay(host) {
   if (!scene) return A;
   const cellNodes = [];
   for (const c2 of scene.cellPolys) {
-    const opacity = Math.max(0.08, Math.min(0.35, c2.aged / 10));
-    cellNodes.push(w`
-            <path d="${c2.path}"
-                  fill="${ratioToFill$1(c2.ratio)}"
-                  fill-opacity="${opacity}"
-                  stroke="rgba(0,0,0,0.18)"
-                  stroke-width="0.4" />
-        `);
+    if (c2.aged > 0) {
+      const opacity = Math.max(0.12, Math.min(0.45, c2.aged / 8));
+      cellNodes.push(w`
+                <path d="${c2.path}"
+                      fill="${ratioToFill$1(c2.ratio)}"
+                      fill-opacity="${opacity}"
+                      stroke="rgba(255,255,255,0.35)"
+                      stroke-width="0.6" />
+            `);
+    } else {
+      cellNodes.push(w`
+                <path d="${c2.path}"
+                      fill="rgba(255,255,255,0.02)"
+                      stroke="rgba(255,255,255,0.18)"
+                      stroke-width="0.4" />
+            `);
+    }
   }
   const ribbonNodes = [];
   const arc = scene.todayArc;
@@ -43904,7 +43940,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.3"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.4"}`,
       labelStyle,
       versionStyle
     );
@@ -43928,7 +43964,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.3",
+        version: "1.7.0-alpha.4",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -43936,7 +43972,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

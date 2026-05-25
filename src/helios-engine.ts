@@ -3507,31 +3507,54 @@ export class HeliosEngine
         const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
         if (!homeScreen) return null;
 
-        //--- Background dome: one annular-sector polygon per populated
-        //cell. Only paint cells whose cloudBin matches the live one,
-        //so the dome reflects what's currently in the sky; the user
-        //sees how the model corrects "the weather we're actually in"
-        //rather than a confusing average across all four cloud bins.
+        //--- Background dome: one annular-sector polygon per CELL
+        //of the full (azimuth, altitude) grid, regardless of
+        //whether the shading map has data for it. Cells with
+        //observed data carry their ratio + aged weight so the
+        //render layer paints them coloured; empty cells come
+        //through with aged = 0 and ratio = 1 so the render layer
+        //can stroke just the outline. This way the full lattice
+        //of the dome is visible (you see the structure even on
+        //day 1) and populated zones light up as the model learns.
         const HALF_AZ  = 5;   //matches AZIMUTH_BIN_DEG  / 2 in shadingMap.ts
         const HALF_ALT = 2.5; //matches ALTITUDE_BIN_DEG / 2
-        const cellPolys: Array<{ path: string; ratio: number; aged: number; cloudBin: number }> = [];
+        const AZ_BIN_COUNT  = 36;
+        const ALT_BIN_COUNT = 18;
+        //Index populated cells by (az, alt) for the chosen cloud
+        //bin so the grid loop can look them up in O(1) per cell.
+        const populated: Map<string, { ratio: number; aged: number }> = new Map();
         for (const c of opts.decodedCells)
         {
             if (c.cloudBin !== opts.cloudBinForArc) continue;
-            //Four corners of the cell on the sphere. Sample with a
-            //tight clamp on altitude to avoid going below the
-            //horizon (where projection collapses to the home).
-            const az0 = c.azimuthDeg  - HALF_AZ;
-            const az1 = c.azimuthDeg  + HALF_AZ;
-            const al0 = Math.max(0.5, c.altitudeDeg - HALF_ALT);
-            const al1 = Math.min(89,  c.altitudeDeg + HALF_ALT);
-            const p1 = this._projectSpherePoint(az0, al0);
-            const p2 = this._projectSpherePoint(az1, al0);
-            const p3 = this._projectSpherePoint(az1, al1);
-            const p4 = this._projectSpherePoint(az0, al1);
-            if (!p1 || !p2 || !p3 || !p4) continue;
-            const path = `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} L ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z`;
-            cellPolys.push({ path, ratio: c.ratio, aged: c.aged, cloudBin: c.cloudBin });
+            const azBin  = Math.floor(c.azimuthDeg  / 10);
+            const altBin = Math.floor(c.altitudeDeg / 5);
+            populated.set(`${azBin}|${altBin}`, { ratio: c.ratio, aged: c.aged });
+        }
+        const cellPolys: Array<{ path: string; ratio: number; aged: number; cloudBin: number }> = [];
+        for (let azBin = 0; azBin < AZ_BIN_COUNT; azBin++)
+        {
+            const azCentre = azBin * 10 + 5;
+            for (let altBin = 0; altBin < ALT_BIN_COUNT; altBin++)
+            {
+                const altCentre = altBin * 5 + 2.5;
+                const az0 = azCentre  - HALF_AZ;
+                const az1 = azCentre  + HALF_AZ;
+                const al0 = Math.max(0.5, altCentre - HALF_ALT);
+                const al1 = Math.min(89,  altCentre + HALF_ALT);
+                const p1 = this._projectSpherePoint(az0, al0);
+                const p2 = this._projectSpherePoint(az1, al0);
+                const p3 = this._projectSpherePoint(az1, al1);
+                const p4 = this._projectSpherePoint(az0, al1);
+                if (!p1 || !p2 || !p3 || !p4) continue;
+                const path = `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} L ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z`;
+                const hit = populated.get(`${azBin}|${altBin}`);
+                cellPolys.push({
+                    path,
+                    ratio:    hit ? hit.ratio : 1,
+                    aged:     hit ? hit.aged  : 0,
+                    cloudBin: opts.cloudBinForArc,
+                });
+            }
         }
 
         //--- Foreground ribbon: today's sun arc, one polyline sample
