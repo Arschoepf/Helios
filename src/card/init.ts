@@ -12,6 +12,7 @@
 import type { HeliosConfig } from '../helios-config';
 import { HeliosEngine } from '../helios-engine';
 import { refreshOverlays, setAnimationsPaused, type OverlaysHost } from './overlays';
+import { refreshShadingDomeScene, type ShadingDomeHost } from './shadingDome';
 import type { ChartSeries } from './charts';
 
 
@@ -361,6 +362,12 @@ function wireEngineCallbacks(host: InitHost): void
     host._engine.onMapTransform = () =>
     {
         refreshOverlays(host);
+        //Shading-dome re-projection mirrors what refreshOverlays
+        //does for the sun arc + clouds: matrix-multiply the cached
+        //cell + arc inputs through the current frame's projection.
+        //Cheap enough to call unconditionally; the helper exits
+        //immediately when the dome isn't active.
+        refreshShadingDomeScene(host as unknown as ShadingDomeHost);
     };
     //WebGL context loss recovery, iOS Safari recycles contexts
     //under memory pressure. The engine emits this hook from its

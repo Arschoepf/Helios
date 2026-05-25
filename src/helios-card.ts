@@ -68,6 +68,13 @@ import
     timelineWidthPct
 } from './card/timeline';
 import { toggleLidarView } from './card/lidar-view';
+import {
+    renderShadingDomeOverlay,
+    renderShadingDomeCloudPicker,
+    shouldShowDomeChip,
+    toggleShadingDome,
+    refreshShadingDomeScene,
+} from './card/shadingDome';
 import
 {
     computeConfigSig,
@@ -440,6 +447,17 @@ export class HeliosCard extends LitElement
     _lidarFadeInStartMs:  number | null = null;
     _lidarFadeOutStartMs: number | null = null;
     _lidarFadeRaf?:       number;
+
+    //Shading-dome overlay state. Mutually exclusive with the LiDAR
+    //view (the click handlers below close one before opening the
+    //other). _shadingDomeCloudBin persists the user's bin pick
+    //inside the card lifetime so a toggle off/on keeps the slice.
+    @state() _shadingDomeMode = false;
+    _shadingDomeFadeInStartMs:  number | null = null;
+    _shadingDomeFadeOutStartMs: number | null = null;
+    _shadingDomeFadeRaf?:       number;
+    _shadingDomeCloudBin = 0;
+    _shadingDomeScene: import('./card/shadingDome').ShadingDomeScene | null = null;
 
     private _timer?:           number;
     _lastHomeKey       = '';
@@ -1140,10 +1158,19 @@ export class HeliosCard extends LitElement
         //provider covers the active home. Read off the engine, falls
         //back to null until the engine has resolved its first home.
         const lidarSourceId    = this._engine?.getActiveLidarSourceId() ?? null;
+        //Dome chip gating: only surface the button when the
+        //shading map has accumulated enough data to actually show
+        //something interesting. The threshold (3 confident cells)
+        //typically takes 1-3 sunny days on a working install, so
+        //the chip "appears" as a positive surprise once the layer
+        //is ready instead of frustrating the user for a fortnight
+        //with a button that opens an empty canvas.
+        const domeChipVisible = shouldShowDomeChip();
         const cardClasses = [
             cardThemeClass,
-            this._detailMode    ? 'detail-active'    : '',
-            this._lidarViewMode ? 'lidar-view-active' : ''
+            this._detailMode      ? 'detail-active'        : '',
+            this._lidarViewMode   ? 'lidar-view-active'    : '',
+            this._shadingDomeMode ? 'shading-dome-active'  : '',
         ].filter(Boolean).join(' ');
 
         return html`
@@ -1293,6 +1320,32 @@ export class HeliosCard extends LitElement
                                 aria-pressed="${this._lidarViewMode ? 'true' : 'false'}"
                                 @click="${onToggle}"
                             >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
+                            ${domeChipVisible ? html`
+                                <button
+                                    type="button"
+                                    class="shading-dome-toggle-btn ${this._shadingDomeMode ? 'is-on' : ''}"
+                                    aria-label="Toggle adaptive shading dome"
+                                    aria-pressed="${this._shadingDomeMode ? 'true' : 'false'}"
+                                    @click="${() => {
+                                        //Mutually exclusive with LiDAR view: close
+                                        //LiDAR first so the two never paint at once.
+                                        if (this._lidarViewMode) toggleLidarView(this);
+                                        toggleShadingDome(this);
+                                    }}"
+                                >
+                                    <ha-icon icon="mdi:weather-sunny-alert"></ha-icon>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="shading-dome-chip ${this._shadingDomeMode ? 'is-on' : ''}"
+                                    aria-label="Toggle adaptive shading dome"
+                                    aria-pressed="${this._shadingDomeMode ? 'true' : 'false'}"
+                                    @click="${() => {
+                                        if (this._lidarViewMode) toggleLidarView(this);
+                                        toggleShadingDome(this);
+                                    }}"
+                                >Dome</button>
+                            ` : nothing}
                         </div>
                     `;
                 })() : nothing}
@@ -1933,6 +1986,21 @@ export class HeliosCard extends LitElement
                       rather than a content click, otherwise every
                       internal scroll / tap would close the panel.  -->
                 ${this._detailMode ? renderDashboard(this) : nothing}
+
+                <!--  Adaptive shading-dome overlay. SVG is full-card,
+                      absolutely positioned, pointer-events disabled
+                      so it never intercepts clicks meant for the
+                      map. Fades in via inline opacity driven by the
+                      fade RAF loop. The cloud-bin picker rides
+                      flush against the top-right chip cluster so
+                      the slice selector is right next to the chip
+                      that opened the view.                          -->
+                ${renderShadingDomeOverlay(this)}
+                ${this._shadingDomeMode ? renderShadingDomeCloudPicker(this, (bin) => {
+                    this._shadingDomeCloudBin = bin;
+                    refreshShadingDomeScene(this);
+                    this.requestUpdate();
+                }) : nothing}
 
             </ha-card>
         `;

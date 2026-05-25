@@ -4252,6 +4252,126 @@ const heliosCardStyles = i$3`
         pointer-events: auto;
     }
 
+    /*  Shading-dome view: mirrors the LiDAR fade-out list so the
+        rest of the HUD steps aside when the dome takes over the
+        canvas, then the dome SVG itself overlays the map without
+        intercepting pointer events. Top-right chip cluster stays
+        live so the user can toggle the dome back off.            */
+    ha-card.shading-dome-active .overlay-top-left,
+    ha-card.shading-dome-active .home-glow-svg,
+    ha-card.shading-dome-active .home-hitbox,
+    ha-card.shading-dome-active .home-silhouette-svg,
+    ha-card.shading-dome-active .time-bar,
+    ha-card.shading-dome-active .solar-svg,
+    ha-card.shading-dome-active .solar-pct-label,
+    ha-card.shading-dome-active .cloud-svg,
+    ha-card.shading-dome-active .cloud-leader-svg,
+    ha-card.shading-dome-active .cloud-pct-label,
+    ha-card.shading-dome-active .pv-home-anchor-svg,
+    ha-card.shading-dome-active .pv-home-leader-svg,
+    ha-card.shading-dome-active .pv-pct-label,
+    ha-card.shading-dome-active .battery-leader-svg,
+    ha-card.shading-dome-active .battery-pct-label
+    {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+    ha-card.shading-dome-active .overlay-top-right
+    {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    /*  Dome chip + button: same shape family as the LiDAR chip
+        directly above so the cluster reads as a stack of two
+        related tools rather than two unrelated controls.        */
+    .shading-dome-toggle-btn,
+    .shading-dome-chip
+    {
+        appearance: none;
+        background: rgba(0, 0, 0, 0.45);
+        color: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        line-height: 1;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+    }
+    .shading-dome-toggle-btn
+    {
+        padding: 6px;
+        --mdc-icon-size: 16px;
+    }
+    .shading-dome-toggle-btn:hover,
+    .shading-dome-chip:hover
+    {
+        background: rgba(0, 0, 0, 0.6);
+        border-color: rgba(255, 215, 130, 0.55);
+        color: #fde68a;
+    }
+    .shading-dome-toggle-btn.is-on,
+    .shading-dome-chip.is-on
+    {
+        background: #fde68a;
+        color: #1f2937;
+        border-color: #fde68a;
+    }
+    /*  Dome SVG: full-card overlay, sits below the click chrome so
+        it never blocks pointer events. Fade alpha comes from inline
+        style driven by the dome fade RAF.                          */
+    .shading-dome-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 7;
+    }
+    /*  Cloud-bin picker: small segmented control hugging the top
+        edge under the dome chip cluster. Pills mirror the dome's
+        accent so it reads as part of the same widget.             */
+    .shading-dome-cloud-picker
+    {
+        position: absolute;
+        top: 56px;
+        right: 10px;
+        z-index: 8;
+        display: inline-flex;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        padding: 2px;
+        gap: 0;
+    }
+    .shading-dome-cloud-pill
+    {
+        appearance: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        border: 0;
+        font: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: background 120ms ease, color 120ms ease;
+    }
+    .shading-dome-cloud-pill:hover { color: #fff; }
+    .shading-dome-cloud-pill.is-on
+    {
+        background: #fde68a;
+        color: #1f2937;
+    }
+
 
     /*  Top corner overlays. Date/time + scrub-return cluster on the
         left; LiDAR-view toggle + "LiDAR" status chip on the right.
@@ -38542,6 +38662,94 @@ const _HeliosEngine = class _HeliosEngine {
       altitudeM: up
     };
   }
+  //Project an arbitrary (azimuth, altitude) angular position above
+  //the home onto the same sphere the sun arc uses, then forward
+  //to screen pixels. Used by the shading-dome overlay to paint
+  //every populated cell of the learned residual grid on the
+  //celestial hemisphere the same way the sun is.
+  _projectSpherePoint(azimuthDeg, altitudeDeg) {
+    const D2 = Math.PI / 180;
+    const a2 = altitudeDeg * D2;
+    const z2 = azimuthDeg * D2;
+    const east = SUN_ARC_RADIUS_M * Math.cos(a2) * Math.sin(z2);
+    const north = SUN_ARC_RADIUS_M * Math.cos(a2) * Math.cos(z2);
+    const up = SUN_ARC_RADIUS_M * Math.sin(a2);
+    const mPerDegLat = 111320;
+    const mPerDegLon = 111320 * Math.cos(this.homeLat * D2);
+    const lon = this.homeLon + east / mPerDegLon;
+    const lat = this.homeLat + north / mPerDegLat;
+    return this._projectScenePoint(lon, lat, up);
+  }
+  //Layout the shading-dome overlay: every populated cell of the
+  //learned residual grid projected onto the celestial hemisphere
+  //above the home, plus today's solar arc carrying the
+  //per-sample residual ratio so the user can see "the sun walks
+  //through this red cell at 17h, that's the tree".
+  //
+  //`cellPolys`  — one entry per cell, four corner pixels of the
+  //               annular sector (az ± 5 deg × alt ± 2.5 deg)
+  //               projected onto the sphere; cells with any
+  //               corner behind the camera are dropped.
+  //`todayArc`   — sun-position samples for today, each with the
+  //               shading-map ratio looked up at its (az, alt,
+  //               liveCloud) coordinates and the kernel-smoothed
+  //               confidence.
+  //`homeScreen` — ground anchor reused by the SVG for centred
+  //               labels.
+  //
+  //`now` lets the caller pin the dome to a different day if it
+  //ever needs to (timeline scrubbing, debug). Defaults to wall
+  //clock so the bright arc is always today.
+  projectShadingDome(opts) {
+    if (!this.map) return null;
+    const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+    if (!homeScreen) return null;
+    const HALF_AZ = 5;
+    const HALF_ALT = 2.5;
+    const cellPolys = [];
+    for (const c2 of opts.decodedCells) {
+      if (c2.cloudBin !== opts.cloudBinForArc) continue;
+      const az0 = c2.azimuthDeg - HALF_AZ;
+      const az1 = c2.azimuthDeg + HALF_AZ;
+      const al0 = Math.max(0.5, c2.altitudeDeg - HALF_ALT);
+      const al1 = Math.min(89, c2.altitudeDeg + HALF_ALT);
+      const p1 = this._projectSpherePoint(az0, al0);
+      const p2 = this._projectSpherePoint(az1, al0);
+      const p3 = this._projectSpherePoint(az1, al1);
+      const p4 = this._projectSpherePoint(az0, al1);
+      if (!p1 || !p2 || !p3 || !p4) continue;
+      const path = `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} L ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z`;
+      cellPolys.push({ path, ratio: c2.ratio, aged: c2.aged, cloudBin: c2.cloudBin });
+    }
+    const todayArc = [];
+    const dayStart = new Date(opts.now);
+    dayStart.setHours(0, 0, 0, 0);
+    const N2 = SUN_ARC_SAMPLES;
+    const stepMs = 24 * 60 * 60 * 1e3 / N2;
+    for (let i2 = 0; i2 < N2; i2++) {
+      const t2 = new Date(dayStart.getTime() + i2 * stepMs);
+      const sun = getSunPosition(t2, this.homeLat, this.homeLon);
+      const belowHorizon = sun.altitude <= 0;
+      const proj = belowHorizon ? null : this._projectSpherePoint(sun.azimuth, sun.altitude);
+      if (!proj) continue;
+      const lookup = opts.cellLookup(sun.azimuth, sun.altitude, opts.liveCloudPct);
+      todayArc.push({
+        x: proj.x,
+        y: proj.y,
+        ratio: lookup ? lookup.ratio : 1,
+        confidence: lookup ? lookup.confidence : 0,
+        altitudeDeg: sun.altitude,
+        belowHorizon
+      });
+    }
+    let sunScreen = null;
+    const sunNow = getSunPosition(opts.now, this.homeLat, this.homeLon);
+    if (sunNow.altitude > 0) {
+      const p2 = this._projectSpherePoint(sunNow.azimuth, sunNow.altitude);
+      if (p2) sunScreen = { x: p2.x, y: p2.y, altitudeDeg: sunNow.altitude };
+    }
+    return { homeScreen, cellPolys, todayArc, sun: sunScreen };
+  }
   setSelectedTime(time) {
     this._selectedTime = time;
     if (time === null) {
@@ -38968,343 +39176,6 @@ function flowDuration(rate, saturation, minDuration = 0.4) {
   const eased = 1 - Math.pow(1 - f2, 3);
   return 30 - (30 - minDuration) * eased;
 }
-const VISUAL_CONFIG_KEYS = [
-  "show-labels",
-  "sun-color",
-  "cloud-color",
-  //pv-color is card-level; included so the sig changes and Lit
-  //re-renders the chart. pv-power-entity triggers a fresh fetch.
-  "pv-color",
-  "pv-power-entity",
-  //map-style triggers a MapLibre setStyle(), the engine reloads
-  //the cloud disc, buildings and labels on the resulting
-  //`style.load`.
-  "map-style",
-  "battery-soc-entity",
-  "battery-power-entity",
-  "battery-color",
-  //solar-radiation-entity, when set, feeds the engine sensor
-  //samples that override Open-Meteo for the live + past
-  //irradiance values. A change must refresh the engine so
-  //the override (or its absence) is picked up immediately.
-  "solar-radiation-entity",
-  //card-theme is card-level (light/dark skin) but must be in the
-  //sig so Lit re-renders when the user toggles it.
-  "card-theme",
-  //building-radius / cluster-radius invalidate cache and refetch;
-  //opacity / color are cheap paint-property updates.
-  "building-radius",
-  "building-cluster-radius",
-  "building-opacity",
-  "building-color",
-  "pixel-ratio",
-  //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must
-  //invalidate the engine sig so the shadow pipeline reruns
-  //against the new provider config (toggle, URL or bbox).
-  "lidar-local-ndsm-enabled",
-  "lidar-local-ndsm-url",
-  "lidar-local-ndsm-min-lat",
-  "lidar-local-ndsm-max-lat",
-  "lidar-local-ndsm-min-lon",
-  "lidar-local-ndsm-max-lon"
-];
-const INIT_DEBOUNCE_MS = 500;
-function parseConfigCoord(raw2) {
-  if (typeof raw2 === "number") {
-    return isFinite(raw2) ? raw2 : null;
-  }
-  if (typeof raw2 === "string") {
-    const trimmed = raw2.trim();
-    if (trimmed === "") return null;
-    const n3 = Number(trimmed);
-    return isFinite(n3) ? n3 : null;
-  }
-  return null;
-}
-function getHomeCoords(config, hass) {
-  const w2 = window;
-  const o2 = w2.__heliosLocationOverride;
-  if (o2 && typeof o2.lat === "number" && typeof o2.lon === "number" && isFinite(o2.lat) && isFinite(o2.lon)) {
-    return { lat: o2.lat, lon: o2.lon };
-  }
-  const cfgLat = parseConfigCoord(config?.["home-latitude"]);
-  const cfgLon = parseConfigCoord(config?.["home-longitude"]);
-  if (cfgLat !== null && cfgLon !== null && cfgLat >= -90 && cfgLat <= 90 && cfgLon >= -180 && cfgLon <= 180) {
-    return { lat: cfgLat, lon: cfgLon };
-  }
-  const lat = hass?.config?.latitude;
-  const lon = hass?.config?.longitude;
-  if (typeof lat !== "number" || typeof lon !== "number") return null;
-  return { lat, lon };
-}
-function computeConfigSig(config) {
-  if (!config) {
-    return "";
-  }
-  return VISUAL_CONFIG_KEYS.map((k2) => `${k2}=${config[k2] ?? ""}`).join("|");
-}
-function initVisibilityObserver(host) {
-  if (host._visibilityObserver || typeof IntersectionObserver === "undefined") {
-    return;
-  }
-  host._visibilityObserver = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      setAnimationsPaused(host, !entry.isIntersecting);
-    }
-  }, { threshold: 0 });
-  host._visibilityObserver.observe(host);
-}
-function initEngine(host) {
-  host._initInflight = true;
-  if (host._initDebounceTimer !== void 0) {
-    window.clearTimeout(host._initDebounceTimer);
-  }
-  host._initDebounceTimer = window.setTimeout(() => {
-    host._initDebounceTimer = void 0;
-    initEngineNow(host);
-  }, INIT_DEBOUNCE_MS);
-}
-function initEngineNow(host) {
-  requestAnimationFrame(() => {
-    const cardEl = host;
-    const container = cardEl.shadowRoot?.getElementById("map-container");
-    if (!container || !host.config || !host.hass?.config) {
-      host._initInflight = false;
-      return;
-    }
-    const coords = getHomeCoords(host.config, host.hass);
-    if (!coords) {
-      host._initInflight = false;
-      return;
-    }
-    const { lat, lon } = coords;
-    const elevation = host.hass.config.elevation;
-    const hadPreviousEngine = host._engine !== void 0;
-    host._engine?.cleanup();
-    host._engine = void 0;
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
-    }
-    const spawnNewEngine = () => {
-      if (!host.config || !host.hass?.config) {
-        host._initInflight = false;
-        return;
-      }
-      host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
-      wireEngineCallbacks(host);
-      host._initInflight = false;
-    };
-    if (hadPreviousEngine) {
-      requestAnimationFrame(spawnNewEngine);
-      return;
-    }
-    spawnNewEngine();
-  });
-}
-function wireEngineCallbacks(host) {
-  if (!host._engine) return;
-  host.requestUpdate();
-  host._engine.onFetchStart = () => {
-    host._fetching = true;
-  };
-  host._engine.onFetchEnd = () => {
-    host._fetching = false;
-  };
-  host._engine.onWeatherUpdate = (data) => {
-    host._cloudCover = data.cloudCover;
-    host._timeRange = data.timeRange;
-    host._isLiveMode = data.isLiveTime;
-    host._chartSeries = host._engine?.getTimelineSeries() ?? null;
-    refreshOverlays(host);
-  };
-  host._engine.onMapTransform = () => {
-    refreshOverlays(host);
-  };
-  host._engine.onContextLost = () => {
-    host._lastHomeKey = "";
-    if (!host._initInflight) initEngine(host);
-  };
-  host._engine.onShadowComputeStart = () => {
-    host._shadowBusy = true;
-  };
-  host._engine.onShadowComputeEnd = () => {
-    host._shadowBusy = false;
-  };
-}
-const WINDOW_DAYS = 5;
-const RATIO_MIN$1 = 0.5;
-const RATIO_MAX$1 = 1.5;
-const MIN_DAY_PREDICTED_KWH = 2;
-function computeForecastCalibration(host) {
-  const k2 = pvCalibK(host.config);
-  const series = host._chartSeries;
-  const hist = host._pvHistory;
-  const coords = getHomeCoords(host.config, host.hass);
-  if (k2 === null || k2 <= 0 || !series || !hist || !coords) return null;
-  const HOUR_MS2 = 36e5;
-  const today0 = /* @__PURE__ */ new Date();
-  today0.setHours(0, 0, 0, 0);
-  const ratios = [];
-  const raster = host._engine?.getLidarRaster() ?? null;
-  for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++) {
-    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS2;
-    const dayEndMs = dayStartMs + 24 * HOUR_MS2;
-    const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
-    if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
-    const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
-    if (actualKwh <= 0) continue;
-    const r2 = actualKwh / predictedKwh;
-    if (!isFinite(r2) || r2 <= 0) continue;
-    ratios.push(Math.max(RATIO_MIN$1, Math.min(RATIO_MAX$1, r2)));
-  }
-  if (ratios.length < 2) return null;
-  const mean = ratios.reduce((a2, b2) => a2 + b2, 0) / ratios.length;
-  return {
-    ratio: Math.max(RATIO_MIN$1, Math.min(RATIO_MAX$1, mean)),
-    daysUsed: ratios.length
-  };
-}
-function predictedKwhForDay(config, series, coords, startMs, endMs, raster) {
-  const k2 = pvCalibK(config);
-  if (k2 === null || k2 <= 0) return 0;
-  let kwh = 0;
-  for (let i2 = 0; i2 < series.times.length; i2++) {
-    const tMs = series.times[i2].getTime();
-    if (tMs < startMs || tMs >= endMs) continue;
-    const cloud = series.cloud[i2] ?? 0;
-    const pct = computePvPowerWeighted(config, series.times[i2], coords.lat, coords.lon, cloud, {
-      airTempC: series.temperature?.[i2] ?? NaN,
-      windMs: series.windSpeed?.[i2] ?? NaN,
-      raster
-    });
-    if (pct <= 0) continue;
-    kwh += pct * k2 / 1e3;
-  }
-  return kwh;
-}
-function actualKwhForDay(hist, pvUnit, startMs, endMs) {
-  if (hist.times.length < 2) return 0;
-  const unit = (pvUnit || "").toLowerCase();
-  const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
-  const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
-  const HOUR_MS2 = 36e5;
-  if (isCumulativeEnergy) {
-    let kwh2 = 0;
-    for (let i2 = 1; i2 < hist.times.length; i2++) {
-      const tMs = hist.times[i2].getTime();
-      if (tMs < startMs || tMs >= endMs) continue;
-      const dv = hist.values[i2] - hist.values[i2 - 1];
-      if (!isFinite(dv) || dv < 0) continue;
-      kwh2 += dv * energyFactor;
-    }
-    return kwh2;
-  }
-  let kwh = 0;
-  for (let i2 = 1; i2 < hist.times.length; i2++) {
-    const tCurrMs = hist.times[i2].getTime();
-    if (tCurrMs < startMs || tCurrMs >= endMs) continue;
-    const tPrevMs = hist.times[i2 - 1].getTime();
-    const dtH = (tCurrMs - tPrevMs) / HOUR_MS2;
-    if (dtH <= 0 || dtH > 6) continue;
-    const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
-    const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
-    if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
-    kwh += (wPrev + wCurr) / 2 * dtH / 1e3;
-  }
-  return kwh;
-}
-function tick(host) {
-  host._now = /* @__PURE__ */ new Date();
-  refreshOverlays(host);
-}
-function onTimelinePointerDown(host, e2) {
-  if (!host._timeRange) {
-    return;
-  }
-  if (host._engine?.isUserGestureSuppressed()) {
-    return;
-  }
-  const track = e2.currentTarget;
-  track.setPointerCapture(e2.pointerId);
-  host._trackElement = track;
-  host._trackPointerId = e2.pointerId;
-  track.addEventListener("pointermove", host._boundPointerMove);
-  track.addEventListener("pointerup", host._boundPointerUp);
-  track.addEventListener("pointercancel", host._boundPointerUp);
-  applyTimelinePointer(host, e2);
-}
-function onTimelinePointerMove(host, e2) {
-  if (e2.pointerId !== host._trackPointerId) {
-    return;
-  }
-  applyTimelinePointer(host, e2);
-}
-function onTimelinePointerUp(host, e2) {
-  if (e2.pointerId !== host._trackPointerId) {
-    return;
-  }
-  const track = host._trackElement;
-  if (track) {
-    try {
-      track.releasePointerCapture(e2.pointerId);
-    } catch (_2) {
-    }
-    track.removeEventListener("pointermove", host._boundPointerMove);
-    track.removeEventListener("pointerup", host._boundPointerUp);
-    track.removeEventListener("pointercancel", host._boundPointerUp);
-  }
-  host._trackElement = null;
-  host._trackPointerId = null;
-  host._chartHoverPct = null;
-}
-function applyTimelinePointer(host, e2) {
-  if (!host._timeRange) {
-    return;
-  }
-  const track = e2.currentTarget;
-  const rect = track.getBoundingClientRect();
-  const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
-  const rangeMs = host._timeRange.end.getTime() - host._timeRange.start.getTime();
-  const t2 = new Date(host._timeRange.start.getTime() + frac * rangeMs);
-  if (host._selectedTime && host._selectedTime.getTime() === t2.getTime()) {
-    return;
-  }
-  host._selectedTime = t2;
-  host._isLiveMode = false;
-  host._chartHoverPct = frac * 100;
-  host._engine?.setSelectedTime(t2);
-}
-function resetToLive(host) {
-  host._selectedTime = null;
-  host._isLiveMode = true;
-  host._engine?.setSelectedTime(null);
-}
-function timelineEnabled(config) {
-  const raw2 = config?.["timeline-enabled"];
-  if (typeof raw2 === "boolean") return raw2;
-  if (typeof raw2 === "string") {
-    const s2 = raw2.trim().toLowerCase();
-    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
-    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
-  }
-  return DEFAULT_TIMELINE_ENABLED;
-}
-function timelineWidthPct(config) {
-  const raw2 = config?.["timeline-width-pct"];
-  const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
-  if (!isFinite(n3)) return DEFAULT_TIMELINE_WIDTH_PCT;
-  return Math.min(100, Math.max(50, n3));
-}
-function timelineConsumptionEnabled(config) {
-  const raw2 = config?.["timeline-consumption-enabled"];
-  if (typeof raw2 === "boolean") return raw2;
-  if (typeof raw2 === "string") {
-    const s2 = raw2.trim().toLowerCase();
-    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
-    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
-  }
-  return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
-}
 const AZIMUTH_BIN_DEG = 10;
 const ALTITUDE_BIN_DEG = 5;
 const AZIMUTH_BIN_COUNT = 36;
@@ -39314,8 +39185,8 @@ const CLOUD_BIN_COUNT = CLOUD_BIN_EDGES.length - 1;
 const HALFLIFE_DAYS = 60;
 const DAY_MS = 864e5;
 const MIN_EFFECTIVE_SAMPLES = 3;
-const RATIO_MIN = 0.3;
-const RATIO_MAX = 1.7;
+const RATIO_MIN$1 = 0.3;
+const RATIO_MAX$1 = 1.7;
 const STORAGE_KEY = "helios-shading-map:v1";
 function binFor(azimuthDeg, altitudeDeg, cloudPct) {
   if (!isFinite(azimuthDeg) || !isFinite(altitudeDeg) || !isFinite(cloudPct)) return null;
@@ -39343,7 +39214,7 @@ function applyObservation(map, sunAzimuthDeg, sunAltitudeDeg, cloudPct, actualW,
   if (predictedW < 80 || actualW < 0) return false;
   const ratio = actualW / predictedW;
   if (!isFinite(ratio) || ratio <= 0) return false;
-  const clamped = Math.max(RATIO_MIN, Math.min(RATIO_MAX, ratio));
+  const clamped = Math.max(RATIO_MIN$1, Math.min(RATIO_MAX$1, ratio));
   const bin = binFor(sunAzimuthDeg, sunAltitudeDeg, cloudPct);
   if (!bin) return false;
   const key = cellKey(bin);
@@ -39537,6 +39408,516 @@ function describeMap(map, nowMs) {
     }
   }
   return { cells: keys.length, confidentCells, strongestUnder, strongestOver };
+}
+const DOME_FADE_IN_MS = 380;
+const DOME_FADE_OUT_MS = 280;
+const MIN_CONFIDENT_CELLS_FOR_CHIP = 3;
+function toggleShadingDome(host) {
+  if (!host._engine) return;
+  if (!host._shadingDomeMode) {
+    host._shadingDomeFadeOutStartMs = null;
+    host._shadingDomeFadeInStartMs = performance.now();
+    host._shadingDomeMode = true;
+    refreshShadingDomeScene(host);
+    refreshOverlays(host);
+    startShadingDomeFadeLoop(host);
+  } else {
+    host._shadingDomeFadeInStartMs = null;
+    host._shadingDomeFadeOutStartMs = performance.now();
+    startShadingDomeFadeLoop(host);
+  }
+}
+function startShadingDomeFadeLoop(host) {
+  if (host._shadingDomeFadeRaf !== void 0) return;
+  const tick2 = () => {
+    const now = performance.now();
+    const inStart = host._shadingDomeFadeInStartMs;
+    const outStart = host._shadingDomeFadeOutStartMs;
+    if (outStart !== null && now - outStart >= DOME_FADE_OUT_MS) {
+      host._shadingDomeFadeOutStartMs = null;
+      host._shadingDomeMode = false;
+      host._shadingDomeScene = null;
+      refreshOverlays(host);
+    }
+    if (inStart !== null && now - inStart >= DOME_FADE_IN_MS) {
+      host._shadingDomeFadeInStartMs = null;
+    }
+    host.requestUpdate();
+    if (host._shadingDomeFadeInStartMs !== null || host._shadingDomeFadeOutStartMs !== null) {
+      host._shadingDomeFadeRaf = requestAnimationFrame(tick2);
+    } else {
+      host._shadingDomeFadeRaf = void 0;
+    }
+  };
+  host._shadingDomeFadeRaf = requestAnimationFrame(tick2);
+}
+function refreshShadingDomeScene(host) {
+  if (!host._shadingDomeMode || !host._engine) {
+    host._shadingDomeScene = null;
+    return;
+  }
+  const map = loadMap();
+  const nowMs = Date.now();
+  const decodedCells = [];
+  for (const key of Object.keys(map.cells)) {
+    const cell = map.cells[key];
+    const d2 = decodeCellKey(key, cell);
+    if (!d2) continue;
+    const dDays = Math.max(0, (nowMs - cell.t) / 864e5);
+    const aged = cell.w * Math.pow(0.5, dDays / 60);
+    if (aged <= 0.05) continue;
+    decodedCells.push({
+      azimuthDeg: d2.azimuthDeg,
+      altitudeDeg: d2.altitudeDeg,
+      cloudBin: d2.cloudBin,
+      ratio: cell.ema,
+      aged
+    });
+  }
+  const now = /* @__PURE__ */ new Date();
+  const liveCloudPct = bigClipCloudFromBin(host._shadingDomeCloudBin);
+  const scene = host._engine.projectShadingDome({
+    cellLookup: (az, alt, cloud) => lookupRatio(map, az, alt, cloud, nowMs),
+    decodedCells,
+    cloudBinForArc: host._shadingDomeCloudBin,
+    liveCloudPct,
+    now
+  });
+  host._shadingDomeScene = scene;
+}
+function bigClipCloudFromBin(bin) {
+  const edges = [0, 25, 50, 75, 100];
+  const lo = edges[Math.max(0, Math.min(3, bin))];
+  const hi = edges[Math.max(0, Math.min(3, bin)) + 1];
+  return (lo + hi) / 2;
+}
+function shouldShowDomeChip() {
+  const map = loadMap();
+  if (!map || !map.cells) return false;
+  const stats = describeMap(map, Date.now());
+  return stats.confidentCells >= MIN_CONFIDENT_CELLS_FOR_CHIP;
+}
+function shadingDomeFadeAlpha(host) {
+  const now = performance.now();
+  if (host._shadingDomeFadeInStartMs !== null) {
+    return Math.max(0, Math.min(1, (now - host._shadingDomeFadeInStartMs) / DOME_FADE_IN_MS));
+  }
+  if (host._shadingDomeFadeOutStartMs !== null) {
+    return 1 - Math.max(0, Math.min(1, (now - host._shadingDomeFadeOutStartMs) / DOME_FADE_OUT_MS));
+  }
+  return host._shadingDomeMode ? 1 : 0;
+}
+function ratioToFill$1(ratio) {
+  const r2 = Math.max(0.3, Math.min(1.7, ratio));
+  if (r2 < 1) {
+    const t22 = (1 - r2) / 0.7;
+    const red2 = 235;
+    const green2 = Math.round(235 * (1 - t22 * 0.85));
+    const blue2 = Math.round(235 * (1 - t22 * 0.85));
+    return `rgb(${red2}, ${green2}, ${blue2})`;
+  }
+  const t2 = (r2 - 1) / 0.7;
+  const red = Math.round(235 * (1 - t2 * 0.85));
+  const green = 235;
+  const blue = Math.round(235 * (1 - t2 * 0.85));
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+function renderShadingDomeOverlay(host) {
+  const alpha = shadingDomeFadeAlpha(host);
+  if (alpha <= 0) return A;
+  const scene = host._shadingDomeScene;
+  if (!scene) return A;
+  const cellNodes = [];
+  for (const c2 of scene.cellPolys) {
+    const opacity = Math.max(0.08, Math.min(0.35, c2.aged / 10));
+    cellNodes.push(w`
+            <path d="${c2.path}"
+                  fill="${ratioToFill$1(c2.ratio)}"
+                  fill-opacity="${opacity}"
+                  stroke="rgba(0,0,0,0.18)"
+                  stroke-width="0.4" />
+        `);
+  }
+  const ribbonNodes = [];
+  const arc = scene.todayArc;
+  for (let i2 = 1; i2 < arc.length; i2++) {
+    const a2 = arc[i2 - 1];
+    const b2 = arc[i2];
+    if (a2.belowHorizon || b2.belowHorizon) continue;
+    const colour = b2.confidence > 0 ? ratioToFill$1(b2.ratio) : "#f8e89c";
+    const opacity = 0.55 + 0.4 * Math.max(0, Math.min(1, b2.confidence));
+    ribbonNodes.push(w`
+            <line x1="${a2.x.toFixed(1)}" y1="${a2.y.toFixed(1)}"
+                  x2="${b2.x.toFixed(1)}" y2="${b2.y.toFixed(1)}"
+                  stroke="${colour}" stroke-opacity="${opacity}"
+                  stroke-width="3.5" stroke-linecap="round" />
+        `);
+  }
+  const sunMarker = scene.sun ? w`
+        <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
+                r="7" fill="#fde68a" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" />
+        <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
+                r="12" fill="none" stroke="rgba(253, 230, 138, 0.45)" stroke-width="1.5" />
+    ` : A;
+  return b`
+        <svg class="shading-dome-svg" style="opacity:${alpha.toFixed(2)}">
+            <g class="shading-dome-cells">${cellNodes}</g>
+            <g class="shading-dome-ribbon">${ribbonNodes}</g>
+            <g class="shading-dome-sun">${sunMarker}</g>
+        </svg>
+    `;
+}
+function renderShadingDomeCloudPicker(host, onPick) {
+  if (shadingDomeFadeAlpha(host) <= 0) return A;
+  return b`
+        <div class="shading-dome-cloud-picker" role="radiogroup" aria-label="Cloud cover bin">
+            ${CLOUD_BIN_LABELS.map((label, idx) => b`
+                <button type="button"
+                        class="shading-dome-cloud-pill ${host._shadingDomeCloudBin === idx ? "is-on" : ""}"
+                        role="radio"
+                        aria-checked="${host._shadingDomeCloudBin === idx ? "true" : "false"}"
+                        @click="${() => onPick(idx)}">${label}</button>
+            `)}
+        </div>
+    `;
+}
+const VISUAL_CONFIG_KEYS = [
+  "show-labels",
+  "sun-color",
+  "cloud-color",
+  //pv-color is card-level; included so the sig changes and Lit
+  //re-renders the chart. pv-power-entity triggers a fresh fetch.
+  "pv-color",
+  "pv-power-entity",
+  //map-style triggers a MapLibre setStyle(), the engine reloads
+  //the cloud disc, buildings and labels on the resulting
+  //`style.load`.
+  "map-style",
+  "battery-soc-entity",
+  "battery-power-entity",
+  "battery-color",
+  //solar-radiation-entity, when set, feeds the engine sensor
+  //samples that override Open-Meteo for the live + past
+  //irradiance values. A change must refresh the engine so
+  //the override (or its absence) is picked up immediately.
+  "solar-radiation-entity",
+  //card-theme is card-level (light/dark skin) but must be in the
+  //sig so Lit re-renders when the user toggles it.
+  "card-theme",
+  //building-radius / cluster-radius invalidate cache and refetch;
+  //opacity / color are cheap paint-property updates.
+  "building-radius",
+  "building-cluster-radius",
+  "building-opacity",
+  "building-color",
+  "pixel-ratio",
+  //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must
+  //invalidate the engine sig so the shadow pipeline reruns
+  //against the new provider config (toggle, URL or bbox).
+  "lidar-local-ndsm-enabled",
+  "lidar-local-ndsm-url",
+  "lidar-local-ndsm-min-lat",
+  "lidar-local-ndsm-max-lat",
+  "lidar-local-ndsm-min-lon",
+  "lidar-local-ndsm-max-lon"
+];
+const INIT_DEBOUNCE_MS = 500;
+function parseConfigCoord(raw2) {
+  if (typeof raw2 === "number") {
+    return isFinite(raw2) ? raw2 : null;
+  }
+  if (typeof raw2 === "string") {
+    const trimmed = raw2.trim();
+    if (trimmed === "") return null;
+    const n3 = Number(trimmed);
+    return isFinite(n3) ? n3 : null;
+  }
+  return null;
+}
+function getHomeCoords(config, hass) {
+  const w2 = window;
+  const o2 = w2.__heliosLocationOverride;
+  if (o2 && typeof o2.lat === "number" && typeof o2.lon === "number" && isFinite(o2.lat) && isFinite(o2.lon)) {
+    return { lat: o2.lat, lon: o2.lon };
+  }
+  const cfgLat = parseConfigCoord(config?.["home-latitude"]);
+  const cfgLon = parseConfigCoord(config?.["home-longitude"]);
+  if (cfgLat !== null && cfgLon !== null && cfgLat >= -90 && cfgLat <= 90 && cfgLon >= -180 && cfgLon <= 180) {
+    return { lat: cfgLat, lon: cfgLon };
+  }
+  const lat = hass?.config?.latitude;
+  const lon = hass?.config?.longitude;
+  if (typeof lat !== "number" || typeof lon !== "number") return null;
+  return { lat, lon };
+}
+function computeConfigSig(config) {
+  if (!config) {
+    return "";
+  }
+  return VISUAL_CONFIG_KEYS.map((k2) => `${k2}=${config[k2] ?? ""}`).join("|");
+}
+function initVisibilityObserver(host) {
+  if (host._visibilityObserver || typeof IntersectionObserver === "undefined") {
+    return;
+  }
+  host._visibilityObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      setAnimationsPaused(host, !entry.isIntersecting);
+    }
+  }, { threshold: 0 });
+  host._visibilityObserver.observe(host);
+}
+function initEngine(host) {
+  host._initInflight = true;
+  if (host._initDebounceTimer !== void 0) {
+    window.clearTimeout(host._initDebounceTimer);
+  }
+  host._initDebounceTimer = window.setTimeout(() => {
+    host._initDebounceTimer = void 0;
+    initEngineNow(host);
+  }, INIT_DEBOUNCE_MS);
+}
+function initEngineNow(host) {
+  requestAnimationFrame(() => {
+    const cardEl = host;
+    const container = cardEl.shadowRoot?.getElementById("map-container");
+    if (!container || !host.config || !host.hass?.config) {
+      host._initInflight = false;
+      return;
+    }
+    const coords = getHomeCoords(host.config, host.hass);
+    if (!coords) {
+      host._initInflight = false;
+      return;
+    }
+    const { lat, lon } = coords;
+    const elevation = host.hass.config.elevation;
+    const hadPreviousEngine = host._engine !== void 0;
+    host._engine?.cleanup();
+    host._engine = void 0;
+    while (container.firstChild) {
+      container.removeChild(container.firstChild);
+    }
+    const spawnNewEngine = () => {
+      if (!host.config || !host.hass?.config) {
+        host._initInflight = false;
+        return;
+      }
+      host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
+      wireEngineCallbacks(host);
+      host._initInflight = false;
+    };
+    if (hadPreviousEngine) {
+      requestAnimationFrame(spawnNewEngine);
+      return;
+    }
+    spawnNewEngine();
+  });
+}
+function wireEngineCallbacks(host) {
+  if (!host._engine) return;
+  host.requestUpdate();
+  host._engine.onFetchStart = () => {
+    host._fetching = true;
+  };
+  host._engine.onFetchEnd = () => {
+    host._fetching = false;
+  };
+  host._engine.onWeatherUpdate = (data) => {
+    host._cloudCover = data.cloudCover;
+    host._timeRange = data.timeRange;
+    host._isLiveMode = data.isLiveTime;
+    host._chartSeries = host._engine?.getTimelineSeries() ?? null;
+    refreshOverlays(host);
+  };
+  host._engine.onMapTransform = () => {
+    refreshOverlays(host);
+    refreshShadingDomeScene(host);
+  };
+  host._engine.onContextLost = () => {
+    host._lastHomeKey = "";
+    if (!host._initInflight) initEngine(host);
+  };
+  host._engine.onShadowComputeStart = () => {
+    host._shadowBusy = true;
+  };
+  host._engine.onShadowComputeEnd = () => {
+    host._shadowBusy = false;
+  };
+}
+const WINDOW_DAYS = 5;
+const RATIO_MIN = 0.5;
+const RATIO_MAX = 1.5;
+const MIN_DAY_PREDICTED_KWH = 2;
+function computeForecastCalibration(host) {
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const hist = host._pvHistory;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 === null || k2 <= 0 || !series || !hist || !coords) return null;
+  const HOUR_MS2 = 36e5;
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const ratios = [];
+  const raster = host._engine?.getLidarRaster() ?? null;
+  for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++) {
+    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS2;
+    const dayEndMs = dayStartMs + 24 * HOUR_MS2;
+    const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
+    if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
+    const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
+    if (actualKwh <= 0) continue;
+    const r2 = actualKwh / predictedKwh;
+    if (!isFinite(r2) || r2 <= 0) continue;
+    ratios.push(Math.max(RATIO_MIN, Math.min(RATIO_MAX, r2)));
+  }
+  if (ratios.length < 2) return null;
+  const mean = ratios.reduce((a2, b2) => a2 + b2, 0) / ratios.length;
+  return {
+    ratio: Math.max(RATIO_MIN, Math.min(RATIO_MAX, mean)),
+    daysUsed: ratios.length
+  };
+}
+function predictedKwhForDay(config, series, coords, startMs, endMs, raster) {
+  const k2 = pvCalibK(config);
+  if (k2 === null || k2 <= 0) return 0;
+  let kwh = 0;
+  for (let i2 = 0; i2 < series.times.length; i2++) {
+    const tMs = series.times[i2].getTime();
+    if (tMs < startMs || tMs >= endMs) continue;
+    const cloud = series.cloud[i2] ?? 0;
+    const pct = computePvPowerWeighted(config, series.times[i2], coords.lat, coords.lon, cloud, {
+      airTempC: series.temperature?.[i2] ?? NaN,
+      windMs: series.windSpeed?.[i2] ?? NaN,
+      raster
+    });
+    if (pct <= 0) continue;
+    kwh += pct * k2 / 1e3;
+  }
+  return kwh;
+}
+function actualKwhForDay(hist, pvUnit, startMs, endMs) {
+  if (hist.times.length < 2) return 0;
+  const unit = (pvUnit || "").toLowerCase();
+  const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
+  const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
+  const HOUR_MS2 = 36e5;
+  if (isCumulativeEnergy) {
+    let kwh2 = 0;
+    for (let i2 = 1; i2 < hist.times.length; i2++) {
+      const tMs = hist.times[i2].getTime();
+      if (tMs < startMs || tMs >= endMs) continue;
+      const dv = hist.values[i2] - hist.values[i2 - 1];
+      if (!isFinite(dv) || dv < 0) continue;
+      kwh2 += dv * energyFactor;
+    }
+    return kwh2;
+  }
+  let kwh = 0;
+  for (let i2 = 1; i2 < hist.times.length; i2++) {
+    const tCurrMs = hist.times[i2].getTime();
+    if (tCurrMs < startMs || tCurrMs >= endMs) continue;
+    const tPrevMs = hist.times[i2 - 1].getTime();
+    const dtH = (tCurrMs - tPrevMs) / HOUR_MS2;
+    if (dtH <= 0 || dtH > 6) continue;
+    const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
+    const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
+    if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+    kwh += (wPrev + wCurr) / 2 * dtH / 1e3;
+  }
+  return kwh;
+}
+function tick(host) {
+  host._now = /* @__PURE__ */ new Date();
+  refreshOverlays(host);
+}
+function onTimelinePointerDown(host, e2) {
+  if (!host._timeRange) {
+    return;
+  }
+  if (host._engine?.isUserGestureSuppressed()) {
+    return;
+  }
+  const track = e2.currentTarget;
+  track.setPointerCapture(e2.pointerId);
+  host._trackElement = track;
+  host._trackPointerId = e2.pointerId;
+  track.addEventListener("pointermove", host._boundPointerMove);
+  track.addEventListener("pointerup", host._boundPointerUp);
+  track.addEventListener("pointercancel", host._boundPointerUp);
+  applyTimelinePointer(host, e2);
+}
+function onTimelinePointerMove(host, e2) {
+  if (e2.pointerId !== host._trackPointerId) {
+    return;
+  }
+  applyTimelinePointer(host, e2);
+}
+function onTimelinePointerUp(host, e2) {
+  if (e2.pointerId !== host._trackPointerId) {
+    return;
+  }
+  const track = host._trackElement;
+  if (track) {
+    try {
+      track.releasePointerCapture(e2.pointerId);
+    } catch (_2) {
+    }
+    track.removeEventListener("pointermove", host._boundPointerMove);
+    track.removeEventListener("pointerup", host._boundPointerUp);
+    track.removeEventListener("pointercancel", host._boundPointerUp);
+  }
+  host._trackElement = null;
+  host._trackPointerId = null;
+  host._chartHoverPct = null;
+}
+function applyTimelinePointer(host, e2) {
+  if (!host._timeRange) {
+    return;
+  }
+  const track = e2.currentTarget;
+  const rect = track.getBoundingClientRect();
+  const frac = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
+  const rangeMs = host._timeRange.end.getTime() - host._timeRange.start.getTime();
+  const t2 = new Date(host._timeRange.start.getTime() + frac * rangeMs);
+  if (host._selectedTime && host._selectedTime.getTime() === t2.getTime()) {
+    return;
+  }
+  host._selectedTime = t2;
+  host._isLiveMode = false;
+  host._chartHoverPct = frac * 100;
+  host._engine?.setSelectedTime(t2);
+}
+function resetToLive(host) {
+  host._selectedTime = null;
+  host._isLiveMode = true;
+  host._engine?.setSelectedTime(null);
+}
+function timelineEnabled(config) {
+  const raw2 = config?.["timeline-enabled"];
+  if (typeof raw2 === "boolean") return raw2;
+  if (typeof raw2 === "string") {
+    const s2 = raw2.trim().toLowerCase();
+    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+  }
+  return DEFAULT_TIMELINE_ENABLED;
+}
+function timelineWidthPct(config) {
+  const raw2 = config?.["timeline-width-pct"];
+  const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
+  if (!isFinite(n3)) return DEFAULT_TIMELINE_WIDTH_PCT;
+  return Math.min(100, Math.max(50, n3));
+}
+function timelineConsumptionEnabled(config) {
+  const raw2 = config?.["timeline-consumption-enabled"];
+  if (typeof raw2 === "boolean") return raw2;
+  if (typeof raw2 === "string") {
+    const s2 = raw2.trim().toLowerCase();
+    if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
+    if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
+  }
+  return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
 }
 const HA_USER_DATA_KEY = "helios-shading-map";
 const PUSH_DEBOUNCE_MS = 3e4;
@@ -43453,7 +43834,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.0"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.1"}`,
       labelStyle,
       versionStyle
     );
@@ -43477,7 +43858,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.0",
+        version: "1.7.0-alpha.1",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -43485,7 +43866,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.0"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -43577,6 +43958,11 @@ let HeliosCard = class extends i {
     this._lidarViewMode = false;
     this._lidarFadeInStartMs = null;
     this._lidarFadeOutStartMs = null;
+    this._shadingDomeMode = false;
+    this._shadingDomeFadeInStartMs = null;
+    this._shadingDomeFadeOutStartMs = null;
+    this._shadingDomeCloudBin = 0;
+    this._shadingDomeScene = null;
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
@@ -43896,10 +44282,12 @@ let HeliosCard = class extends i {
     const cardTheme = String(this.config?.["card-theme"] ?? "light").toLowerCase();
     const cardThemeClass = cardTheme === "dark" ? "theme-dark" : "theme-light";
     const lidarSourceId = this._engine?.getActiveLidarSourceId() ?? null;
+    const domeChipVisible = shouldShowDomeChip();
     const cardClasses = [
       cardThemeClass,
       this._detailMode ? "detail-active" : "",
-      this._lidarViewMode ? "lidar-view-active" : ""
+      this._lidarViewMode ? "lidar-view-active" : "",
+      this._shadingDomeMode ? "shading-dome-active" : ""
     ].filter(Boolean).join(" ");
     return b`
             <ha-card class="${cardClasses}">
@@ -44042,6 +44430,30 @@ let HeliosCard = class extends i {
                                 aria-pressed="${this._lidarViewMode ? "true" : "false"}"
                                 @click="${onToggle}"
                             >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
+                            ${domeChipVisible ? b`
+                                <button
+                                    type="button"
+                                    class="shading-dome-toggle-btn ${this._shadingDomeMode ? "is-on" : ""}"
+                                    aria-label="Toggle adaptive shading dome"
+                                    aria-pressed="${this._shadingDomeMode ? "true" : "false"}"
+                                    @click="${() => {
+        if (this._lidarViewMode) toggleLidarView(this);
+        toggleShadingDome(this);
+      }}"
+                                >
+                                    <ha-icon icon="mdi:weather-sunny-alert"></ha-icon>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="shading-dome-chip ${this._shadingDomeMode ? "is-on" : ""}"
+                                    aria-label="Toggle adaptive shading dome"
+                                    aria-pressed="${this._shadingDomeMode ? "true" : "false"}"
+                                    @click="${() => {
+        if (this._lidarViewMode) toggleLidarView(this);
+        toggleShadingDome(this);
+      }}"
+                                >Dome</button>
+                            ` : A}
                         </div>
                     `;
     })() : A}
@@ -44590,6 +45002,21 @@ let HeliosCard = class extends i {
                       internal scroll / tap would close the panel.  -->
                 ${this._detailMode ? renderDashboard(this) : A}
 
+                <!--  Adaptive shading-dome overlay. SVG is full-card,
+                      absolutely positioned, pointer-events disabled
+                      so it never intercepts clicks meant for the
+                      map. Fades in via inline opacity driven by the
+                      fade RAF loop. The cloud-bin picker rides
+                      flush against the top-right chip cluster so
+                      the slice selector is right next to the chip
+                      that opened the view.                          -->
+                ${renderShadingDomeOverlay(this)}
+                ${this._shadingDomeMode ? renderShadingDomeCloudPicker(this, (bin) => {
+      this._shadingDomeCloudBin = bin;
+      refreshShadingDomeScene(this);
+      this.requestUpdate();
+    }) : A}
+
             </ha-card>
         `;
   }
@@ -44688,6 +45115,9 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_lidarViewMode", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_shadingDomeMode", 2);
 HeliosCard = __decorateClass([
   t("helios-card")
 ], HeliosCard);

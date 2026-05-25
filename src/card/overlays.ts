@@ -132,6 +132,11 @@ export function refreshOverlays(host: OverlaysHost): void
     //no canvas redraw. The card just drives the fade-in/out alpha
     //via _startLidarFadeLoop; MapLibre re-issues the layer's draw
     //call on every transform automatically.
+
+    //Shading-dome scene re-projection is wired separately from the
+    //card's onMapTransform handler so this module stays free of a
+    //circular dependency on shadingDome (which imports
+    //refreshOverlays in turn).
 }
 
 

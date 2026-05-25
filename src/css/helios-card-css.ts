@@ -1758,6 +1758,126 @@ export const heliosCardStyles = css`
         pointer-events: auto;
     }
 
+    /*  Shading-dome view: mirrors the LiDAR fade-out list so the
+        rest of the HUD steps aside when the dome takes over the
+        canvas, then the dome SVG itself overlays the map without
+        intercepting pointer events. Top-right chip cluster stays
+        live so the user can toggle the dome back off.            */
+    ha-card.shading-dome-active .overlay-top-left,
+    ha-card.shading-dome-active .home-glow-svg,
+    ha-card.shading-dome-active .home-hitbox,
+    ha-card.shading-dome-active .home-silhouette-svg,
+    ha-card.shading-dome-active .time-bar,
+    ha-card.shading-dome-active .solar-svg,
+    ha-card.shading-dome-active .solar-pct-label,
+    ha-card.shading-dome-active .cloud-svg,
+    ha-card.shading-dome-active .cloud-leader-svg,
+    ha-card.shading-dome-active .cloud-pct-label,
+    ha-card.shading-dome-active .pv-home-anchor-svg,
+    ha-card.shading-dome-active .pv-home-leader-svg,
+    ha-card.shading-dome-active .pv-pct-label,
+    ha-card.shading-dome-active .battery-leader-svg,
+    ha-card.shading-dome-active .battery-pct-label
+    {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+    ha-card.shading-dome-active .overlay-top-right
+    {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    /*  Dome chip + button: same shape family as the LiDAR chip
+        directly above so the cluster reads as a stack of two
+        related tools rather than two unrelated controls.        */
+    .shading-dome-toggle-btn,
+    .shading-dome-chip
+    {
+        appearance: none;
+        background: rgba(0, 0, 0, 0.45);
+        color: rgba(255, 255, 255, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        line-height: 1;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+    }
+    .shading-dome-toggle-btn
+    {
+        padding: 6px;
+        --mdc-icon-size: 16px;
+    }
+    .shading-dome-toggle-btn:hover,
+    .shading-dome-chip:hover
+    {
+        background: rgba(0, 0, 0, 0.6);
+        border-color: rgba(255, 215, 130, 0.55);
+        color: #fde68a;
+    }
+    .shading-dome-toggle-btn.is-on,
+    .shading-dome-chip.is-on
+    {
+        background: #fde68a;
+        color: #1f2937;
+        border-color: #fde68a;
+    }
+    /*  Dome SVG: full-card overlay, sits below the click chrome so
+        it never blocks pointer events. Fade alpha comes from inline
+        style driven by the dome fade RAF.                          */
+    .shading-dome-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 7;
+    }
+    /*  Cloud-bin picker: small segmented control hugging the top
+        edge under the dome chip cluster. Pills mirror the dome's
+        accent so it reads as part of the same widget.             */
+    .shading-dome-cloud-picker
+    {
+        position: absolute;
+        top: 56px;
+        right: 10px;
+        z-index: 8;
+        display: inline-flex;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        padding: 2px;
+        gap: 0;
+    }
+    .shading-dome-cloud-pill
+    {
+        appearance: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        border: 0;
+        font: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: background 120ms ease, color 120ms ease;
+    }
+    .shading-dome-cloud-pill:hover { color: #fff; }
+    .shading-dome-cloud-pill.is-on
+    {
+        background: #fde68a;
+        color: #1f2937;
+    }
+
 
     /*  Top corner overlays. Date/time + scrub-return cluster on the
         left; LiDAR-view toggle + "LiDAR" status chip on the right.

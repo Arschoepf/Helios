@@ -3441,6 +3441,142 @@ export class HeliosEngine
         };
     }
 
+    //Project an arbitrary (azimuth, altitude) angular position above
+    //the home onto the same sphere the sun arc uses, then forward
+    //to screen pixels. Used by the shading-dome overlay to paint
+    //every populated cell of the learned residual grid on the
+    //celestial hemisphere the same way the sun is.
+    private _projectSpherePoint(
+        azimuthDeg: number, altitudeDeg: number
+    ): { x: number; y: number; depth: number } | null
+    {
+        const D = Math.PI / 180;
+        const a = altitudeDeg * D;
+        const z = azimuthDeg  * D;
+        const east  = SUN_ARC_RADIUS_M * Math.cos(a) * Math.sin(z);
+        const north = SUN_ARC_RADIUS_M * Math.cos(a) * Math.cos(z);
+        const up    = SUN_ARC_RADIUS_M * Math.sin(a);
+        const mPerDegLat = 111_320;
+        const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
+        const lon = this.homeLon + east  / mPerDegLon;
+        const lat = this.homeLat + north / mPerDegLat;
+        return this._projectScenePoint(lon, lat, up);
+    }
+
+
+    //Layout the shading-dome overlay: every populated cell of the
+    //learned residual grid projected onto the celestial hemisphere
+    //above the home, plus today's solar arc carrying the
+    //per-sample residual ratio so the user can see "the sun walks
+    //through this red cell at 17h, that's the tree".
+    //
+    //`cellPolys`  — one entry per cell, four corner pixels of the
+    //               annular sector (az ± 5 deg × alt ± 2.5 deg)
+    //               projected onto the sphere; cells with any
+    //               corner behind the camera are dropped.
+    //`todayArc`   — sun-position samples for today, each with the
+    //               shading-map ratio looked up at its (az, alt,
+    //               liveCloud) coordinates and the kernel-smoothed
+    //               confidence.
+    //`homeScreen` — ground anchor reused by the SVG for centred
+    //               labels.
+    //
+    //`now` lets the caller pin the dome to a different day if it
+    //ever needs to (timeline scrubbing, debug). Defaults to wall
+    //clock so the bright arc is always today.
+    public projectShadingDome(opts: {
+        cellLookup: (azimuthDeg: number, altitudeDeg: number, cloudPct: number) =>
+            { ratio: number; confidence: number } | null;
+        decodedCells: Array<{ azimuthDeg: number; altitudeDeg: number; cloudBin: number; ratio: number; aged: number }>;
+        cloudBinForArc: number;   //0..3, which cloud-cover bin to sample for today's arc
+        liveCloudPct:   number;   //real-time cloud cover, used to pick the dome cells visualised
+        now:            Date;
+    }): {
+        homeScreen: { x: number; y: number };
+        cellPolys:  Array<{
+            path: string; ratio: number; aged: number; cloudBin: number;
+        }>;
+        todayArc:   Array<{
+            x: number; y: number; ratio: number; confidence: number;
+            altitudeDeg: number; belowHorizon: boolean;
+        }>;
+        sun:        { x: number; y: number; altitudeDeg: number } | null;
+    } | null
+    {
+        if (!this.map) return null;
+        const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+        if (!homeScreen) return null;
+
+        //--- Background dome: one annular-sector polygon per populated
+        //cell. Only paint cells whose cloudBin matches the live one,
+        //so the dome reflects what's currently in the sky; the user
+        //sees how the model corrects "the weather we're actually in"
+        //rather than a confusing average across all four cloud bins.
+        const HALF_AZ  = 5;   //matches AZIMUTH_BIN_DEG  / 2 in shadingMap.ts
+        const HALF_ALT = 2.5; //matches ALTITUDE_BIN_DEG / 2
+        const cellPolys: Array<{ path: string; ratio: number; aged: number; cloudBin: number }> = [];
+        for (const c of opts.decodedCells)
+        {
+            if (c.cloudBin !== opts.cloudBinForArc) continue;
+            //Four corners of the cell on the sphere. Sample with a
+            //tight clamp on altitude to avoid going below the
+            //horizon (where projection collapses to the home).
+            const az0 = c.azimuthDeg  - HALF_AZ;
+            const az1 = c.azimuthDeg  + HALF_AZ;
+            const al0 = Math.max(0.5, c.altitudeDeg - HALF_ALT);
+            const al1 = Math.min(89,  c.altitudeDeg + HALF_ALT);
+            const p1 = this._projectSpherePoint(az0, al0);
+            const p2 = this._projectSpherePoint(az1, al0);
+            const p3 = this._projectSpherePoint(az1, al1);
+            const p4 = this._projectSpherePoint(az0, al1);
+            if (!p1 || !p2 || !p3 || !p4) continue;
+            const path = `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} L ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z`;
+            cellPolys.push({ path, ratio: c.ratio, aged: c.aged, cloudBin: c.cloudBin });
+        }
+
+        //--- Foreground ribbon: today's sun arc, one polyline sample
+        //per 15 min. Each sample carries the residual ratio from the
+        //shading-map lookup at its (azimuth, altitude, liveCloud) so
+        //the ribbon literally bends red where the model over-
+        //predicts at this time of year, regardless of the season.
+        const todayArc: Array<{ x: number; y: number; ratio: number; confidence: number; altitudeDeg: number; belowHorizon: boolean }> = [];
+        const dayStart = new Date(opts.now);
+        dayStart.setHours(0, 0, 0, 0);
+        const N = SUN_ARC_SAMPLES;
+        const stepMs = (24 * 60 * 60 * 1000) / N;
+        for (let i = 0; i < N; i++)
+        {
+            const t = new Date(dayStart.getTime() + i * stepMs);
+            const sun = getSunPosition(t, this.homeLat, this.homeLon);
+            const belowHorizon = sun.altitude <= 0;
+            const proj = belowHorizon
+                ? null
+                : this._projectSpherePoint(sun.azimuth, sun.altitude);
+            if (!proj) continue;
+            const lookup = opts.cellLookup(sun.azimuth, sun.altitude, opts.liveCloudPct);
+            todayArc.push({
+                x:           proj.x,
+                y:           proj.y,
+                ratio:       lookup ? lookup.ratio : 1,
+                confidence:  lookup ? lookup.confidence : 0,
+                altitudeDeg: sun.altitude,
+                belowHorizon,
+            });
+        }
+
+        //--- Sun marker: present-position pin so the user can see
+        //"where the sun is right now" inside the dome view.
+        let sunScreen: { x: number; y: number; altitudeDeg: number } | null = null;
+        const sunNow = getSunPosition(opts.now, this.homeLat, this.homeLon);
+        if (sunNow.altitude > 0)
+        {
+            const p = this._projectSpherePoint(sunNow.azimuth, sunNow.altitude);
+            if (p) sunScreen = { x: p.x, y: p.y, altitudeDeg: sunNow.altitude };
+        }
+
+        return { homeScreen, cellPolys, todayArc, sun: sunScreen };
+    }
+
     public setSelectedTime(time: Date | null): void
     {
         this._selectedTime = time;
