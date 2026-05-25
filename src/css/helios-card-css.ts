@@ -1905,47 +1905,79 @@ export const heliosCardStyles = css`
     /*  Cloud-bin picker: small segmented control hugging the top
         edge under the dome chip cluster. Pills mirror the dome's
         accent so it reads as part of the same widget.             */
-    /*  Vertical layout: the picker sits at the BOTTOM-LEFT corner
-        of the card so the dome's celestial hemisphere stays
-        visually unobstructed and the picker is out of the way of
-        the clock chip in the top-left corner.                    */
-    .shading-dome-cloud-picker
+    /*  Continuous cloud-cover slider, bottom-left corner of the
+        card while the dome is on. Sun glyph on the LEFT, heavy-
+        cloud glyph on the RIGHT, the slider in between reads as
+        the cloud-cover knob driving the dome's view. The percent
+        value chip on the far RIGHT is the immediate readout of
+        the slider position; lets the user know they're at 35 %
+        rather than guessing from the handle's position.          */
+    .shading-dome-cloud-slider
     {
         position: absolute;
-        bottom: 12px;
-        left: 8px;
+        bottom: 14px;
+        left: 12px;
         z-index: 50;
         display: inline-flex;
-        flex-direction: column;
-        align-items: stretch;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
         background: rgba(0, 0, 0, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 14px;
-        padding: 2px;
-        gap: 0;
+        border-radius: 999px;
         pointer-events: auto;
     }
-    .shading-dome-cloud-pill
+    .shading-dome-cloud-icon
+    {
+        --mdc-icon-size: 18px;
+        color: rgba(255, 255, 255, 0.85);
+        display: inline-flex;
+        align-items: center;
+    }
+    .shading-dome-cloud-icon--sun   { color: #fde68a; }
+    .shading-dome-cloud-icon--cloud { color: #cbd5e1; }
+    .shading-dome-cloud-range
     {
         appearance: none;
-        background: transparent;
-        color: rgba(255, 255, 255, 0.7);
-        border: 0;
-        font: inherit;
+        -webkit-appearance: none;
+        width: 160px;
+        height: 4px;
+        background: linear-gradient(to right, #fde68a 0%, #cbd5e1 100%);
+        border-radius: 999px;
+        outline: none;
+        cursor: pointer;
+        margin: 0;
+    }
+    .shading-dome-cloud-range::-webkit-slider-thumb
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .shading-dome-cloud-range::-moz-range-thumb
+    {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .shading-dome-cloud-value
+    {
+        min-width: 36px;
+        text-align: right;
         font-size: 11px;
         font-weight: 600;
-        padding: 5px 10px;
-        border-radius: 12px;
-        cursor: pointer;
-        text-align: center;
-        white-space: nowrap;
-        transition: background 120ms ease, color 120ms ease;
-    }
-    .shading-dome-cloud-pill:hover { color: #fff; }
-    .shading-dome-cloud-pill.is-on
-    {
-        background: #fde68a;
-        color: #1f2937;
+        color: rgba(255, 255, 255, 0.85);
+        font-variant-numeric: tabular-nums;
     }
 
 

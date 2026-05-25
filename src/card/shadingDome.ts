@@ -19,7 +19,6 @@
 import { svg, html, nothing, type TemplateResult } from 'lit';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import {
-    CLOUD_BIN_LABELS,
     decodeCellKey,
     describeMap,
     loadMap,
@@ -47,10 +46,11 @@ export interface ShadingDomeHost extends OverlaysHost
     _shadingDomeFadeInStartMs:  number | null;
     _shadingDomeFadeOutStartMs: number | null;
     _shadingDomeFadeRaf?:       number;
-    //Cloud bin currently shown by the dome. Persists for the
-    //session so the user's selection survives a toggle off/on
-    //inside the same card lifetime.
-    _shadingDomeCloudBin:       number;
+    //Cloud cover percentage selected by the continuous slider.
+    //0 = clear, 100 = overcast. The lookup bins it down to one
+    //of the four engine bins; the slider reads continuously so
+    //the user thinks in real percentages.
+    _shadingDomeCloudPct:       number;
     _shadingDomeScene:          ShadingDomeScene | null;
     //LitElement.requestUpdate(), invoked each frame during the
     //fade so the inline SVG opacity transitions smoothly. The
@@ -173,28 +173,18 @@ export function refreshShadingDomeScene(host: ShadingDomeHost): void
     }
 
     const now = new Date();
-    const liveCloudPct = bigClipCloudFromBin(host._shadingDomeCloudBin);
+    //Slider drives a continuous percent; bin it down for the
+    //lookup so it maps to one of the four engine bins.
+    const cloudPct = Math.max(0, Math.min(100, host._shadingDomeCloudPct));
+    const cloudBin = Math.min(3, Math.floor(cloudPct / 25));
     const scene = host._engine.projectShadingDome({
         cellLookup:     (az, alt, cloud) => lookupRatio(map, az, alt, cloud, nowMs),
         decodedCells,
-        cloudBinForArc: host._shadingDomeCloudBin,
-        liveCloudPct,
+        cloudBinForArc: cloudBin,
+        liveCloudPct:   cloudPct,
         now,
     });
     host._shadingDomeScene = scene;
-}
-
-
-//Helper: pick a representative cloud-cover percentage for the
-//selected bin. Used to feed the sun-arc lookup so it samples the
-//same slice of the shading map that we're painting in the dome
-//background.
-function bigClipCloudFromBin(bin: number): number
-{
-    const edges = [0, 25, 50, 75, 100];
-    const lo = edges[Math.max(0, Math.min(3, bin))];
-    const hi = edges[Math.max(0, Math.min(3, bin)) + 1];
-    return (lo + hi) / 2;
 }
 
 
@@ -276,33 +266,37 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
     const scene = host._shadingDomeScene;
     if (!scene) return nothing;
 
-    //Background cells: the full grid renders so the lattice of
-    //the dome is always visible (you see the structure even on
-    //day 1 with an empty map). Populated cells fill with the
-    //ratio colour at decay-weighted opacity. Empty cells show as
-    //a thin neutral outline only so the background never competes
-    //with the ribbon for attention.
-    const cellNodes: TemplateResult[] = [];
+    //Two cell layers, drawn back-to-front:
+    //  1. Wireframe of the full grid (every populated + empty
+    //     cell as a thin outline) so the lattice structure is
+    //     always visible and the dome reads as a hemisphere.
+    //  2. Coloured fills for populated cells only, wrapped in a
+    //     Gaussian-blur filter so each cell's fill bleeds into
+    //     its neighbours and the heatmap reads as a smooth field
+    //     rather than a quilt of crisp polygons. Net effect: a
+    //     vertex-colour-like gradient between data points without
+    //     leaving SVG / needing a Canvas re-rasterisation.
+    const wireframeNodes: TemplateResult[] = [];
+    const coloredNodes:   TemplateResult[] = [];
     for (const c of scene.cellPolys)
     {
+        wireframeNodes.push(svg`
+            <path d="${c.path}"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.16)"
+                  stroke-width="0.4" />
+        `);
         if (c.aged > 0)
         {
-            const opacity = Math.max(0.12, Math.min(0.45, c.aged / 8));
-            cellNodes.push(svg`
+            //Opacity scales with the cell's decay-adjusted weight
+            //so freshly-observed bins read brighter than stale
+            //ones, and the blur smooths across the rest.
+            const opacity = Math.max(0.25, Math.min(0.85, c.aged / 6));
+            coloredNodes.push(svg`
                 <path d="${c.path}"
                       fill="${ratioToFill(c.ratio)}"
                       fill-opacity="${opacity}"
-                      stroke="rgba(255,255,255,0.35)"
-                      stroke-width="0.6" />
-            `);
-        }
-        else
-        {
-            cellNodes.push(svg`
-                <path d="${c.path}"
-                      fill="rgba(255,255,255,0.02)"
-                      stroke="rgba(255,255,255,0.18)"
-                      stroke-width="0.4" />
+                      stroke="none" />
             `);
         }
     }
@@ -338,7 +332,19 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
 
     return html`
         <svg class="shading-dome-svg" style="opacity:${alpha.toFixed(2)}">
-            <g class="shading-dome-cells">${cellNodes}</g>
+            <defs>
+                <!--  Gaussian blur applied to the coloured-cell layer
+                      so the heatmap reads as a smooth field instead
+                      of a quilt of crisp polygons. stdDeviation tuned
+                      against the typical cell size on screen (a few
+                      pixels) so neighbour cells bleed into each other
+                      but the dome's overall shape stays recognisable. -->
+                <filter id="shading-dome-smooth" x="-10%" y="-10%" width="120%" height="120%">
+                    <feGaussianBlur stdDeviation="6" />
+                </filter>
+            </defs>
+            <g class="shading-dome-cells-wire">${wireframeNodes}</g>
+            <g class="shading-dome-cells-color" filter="url(#shading-dome-smooth)">${coloredNodes}</g>
             <g class="shading-dome-ribbon">${ribbonNodes}</g>
             <g class="shading-dome-sun">${sunMarker}</g>
         </svg>
@@ -346,25 +352,30 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
 }
 
 
-//Cloud-bin selector chip strip. Sits next to the dome when on.
-//Compact 4-pill segmented control mirroring the bins of the
-//shading map; click a pill, the scene re-projects with that
-//slice as the active background + ribbon source.
+//Continuous cloud-cover slider with a sun glyph on the LEFT and
+//a heavy-cloud glyph on the RIGHT. Replaces the 4-pill segmented
+//control: the slider reads as "the dome shows the model's view
+//of THIS amount of cloud cover", which is a more direct user
+//mental model than picking from named bins. The percent is binned
+//down to one of the four engine bins at lookup time so the
+//underlying data model is unchanged.
 export function renderShadingDomeCloudPicker(
     host: ShadingDomeHost,
-    onPick: (bin: number) => void,
+    onChange: (pct: number) => void,
 ): TemplateResult | typeof nothing
 {
     if (shadingDomeFadeAlpha(host) <= 0) return nothing;
+    const pct = Math.round(Math.max(0, Math.min(100, host._shadingDomeCloudPct)));
     return html`
-        <div class="shading-dome-cloud-picker" role="radiogroup" aria-label="Cloud cover bin">
-            ${CLOUD_BIN_LABELS.map((label, idx) => html`
-                <button type="button"
-                        class="shading-dome-cloud-pill ${host._shadingDomeCloudBin === idx ? 'is-on' : ''}"
-                        role="radio"
-                        aria-checked="${host._shadingDomeCloudBin === idx ? 'true' : 'false'}"
-                        @click="${() => onPick(idx)}">${label}</button>
-            `)}
+        <div class="shading-dome-cloud-slider" aria-label="Cloud cover">
+            <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--sun"   icon="mdi:weather-sunny"></ha-icon>
+            <input type="range" min="0" max="100" step="1"
+                   class="shading-dome-cloud-range"
+                   .value="${String(pct)}"
+                   aria-label="Cloud cover percentage"
+                   @input="${(e: Event) => onChange(Number((e.target as HTMLInputElement).value))}" />
+            <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--cloud" icon="mdi:weather-cloudy"></ha-icon>
+            <span class="shading-dome-cloud-value">${pct}%</span>
         </div>
     `;
 }

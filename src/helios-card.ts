@@ -456,7 +456,12 @@ export class HeliosCard extends LitElement
     _shadingDomeFadeInStartMs:  number | null = null;
     _shadingDomeFadeOutStartMs: number | null = null;
     _shadingDomeFadeRaf?:       number;
-    _shadingDomeCloudBin = 0;
+    //Cloud cover percentage selected by the continuous slider in
+    //the bottom-left of the dome view. 0 = clear sky, 100 = full
+    //overcast. The engine's lookup is bin-based; the bin is
+    //derived from this pct so the user reads the slider as a
+    //continuous knob even though the underlying data is binned.
+    _shadingDomeCloudPct = 0;
     _shadingDomeScene: import('./card/shadingDome').ShadingDomeScene | null = null;
 
     private _timer?:           number;
@@ -2014,8 +2019,8 @@ export class HeliosCard extends LitElement
                       the slice selector is right next to the chip
                       that opened the view.                          -->
                 ${renderShadingDomeOverlay(this)}
-                ${this._shadingDomeMode ? renderShadingDomeCloudPicker(this, (bin) => {
-                    this._shadingDomeCloudBin = bin;
+                ${this._shadingDomeMode ? renderShadingDomeCloudPicker(this, (pct) => {
+                    this._shadingDomeCloudPct = pct;
                     refreshShadingDomeScene(this);
                     this.requestUpdate();
                 }) : nothing}

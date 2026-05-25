@@ -4410,47 +4410,79 @@ const heliosCardStyles = i$3`
     /*  Cloud-bin picker: small segmented control hugging the top
         edge under the dome chip cluster. Pills mirror the dome's
         accent so it reads as part of the same widget.             */
-    /*  Vertical layout: the picker sits at the BOTTOM-LEFT corner
-        of the card so the dome's celestial hemisphere stays
-        visually unobstructed and the picker is out of the way of
-        the clock chip in the top-left corner.                    */
-    .shading-dome-cloud-picker
+    /*  Continuous cloud-cover slider, bottom-left corner of the
+        card while the dome is on. Sun glyph on the LEFT, heavy-
+        cloud glyph on the RIGHT, the slider in between reads as
+        the cloud-cover knob driving the dome's view. The percent
+        value chip on the far RIGHT is the immediate readout of
+        the slider position; lets the user know they're at 35 %
+        rather than guessing from the handle's position.          */
+    .shading-dome-cloud-slider
     {
         position: absolute;
-        bottom: 12px;
-        left: 8px;
+        bottom: 14px;
+        left: 12px;
         z-index: 50;
         display: inline-flex;
-        flex-direction: column;
-        align-items: stretch;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
         background: rgba(0, 0, 0, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 14px;
-        padding: 2px;
-        gap: 0;
+        border-radius: 999px;
         pointer-events: auto;
     }
-    .shading-dome-cloud-pill
+    .shading-dome-cloud-icon
+    {
+        --mdc-icon-size: 18px;
+        color: rgba(255, 255, 255, 0.85);
+        display: inline-flex;
+        align-items: center;
+    }
+    .shading-dome-cloud-icon--sun   { color: #fde68a; }
+    .shading-dome-cloud-icon--cloud { color: #cbd5e1; }
+    .shading-dome-cloud-range
     {
         appearance: none;
-        background: transparent;
-        color: rgba(255, 255, 255, 0.7);
-        border: 0;
-        font: inherit;
+        -webkit-appearance: none;
+        width: 160px;
+        height: 4px;
+        background: linear-gradient(to right, #fde68a 0%, #cbd5e1 100%);
+        border-radius: 999px;
+        outline: none;
+        cursor: pointer;
+        margin: 0;
+    }
+    .shading-dome-cloud-range::-webkit-slider-thumb
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .shading-dome-cloud-range::-moz-range-thumb
+    {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .shading-dome-cloud-value
+    {
+        min-width: 36px;
+        text-align: right;
         font-size: 11px;
         font-weight: 600;
-        padding: 5px 10px;
-        border-radius: 12px;
-        cursor: pointer;
-        text-align: center;
-        white-space: nowrap;
-        transition: background 120ms ease, color 120ms ease;
-    }
-    .shading-dome-cloud-pill:hover { color: #fff; }
-    .shading-dome-cloud-pill.is-on
-    {
-        background: #fde68a;
-        color: #1f2937;
+        color: rgba(255, 255, 255, 0.85);
+        font-variant-numeric: tabular-nums;
     }
 
 
@@ -39586,21 +39618,16 @@ function refreshShadingDomeScene(host) {
     });
   }
   const now = /* @__PURE__ */ new Date();
-  const liveCloudPct = bigClipCloudFromBin(host._shadingDomeCloudBin);
+  const cloudPct = Math.max(0, Math.min(100, host._shadingDomeCloudPct));
+  const cloudBin = Math.min(3, Math.floor(cloudPct / 25));
   const scene = host._engine.projectShadingDome({
     cellLookup: (az, alt, cloud) => lookupRatio(map, az, alt, cloud, nowMs),
     decodedCells,
-    cloudBinForArc: host._shadingDomeCloudBin,
-    liveCloudPct,
+    cloudBinForArc: cloudBin,
+    liveCloudPct: cloudPct,
     now
   });
   host._shadingDomeScene = scene;
-}
-function bigClipCloudFromBin(bin) {
-  const edges = [0, 25, 50, 75, 100];
-  const lo = edges[Math.max(0, Math.min(3, bin))];
-  const hi = edges[Math.max(0, Math.min(3, bin)) + 1];
-  return (lo + hi) / 2;
 }
 function shouldShowDomeChip() {
   return true;
@@ -39635,23 +39662,22 @@ function renderShadingDomeOverlay(host) {
   if (alpha <= 0) return A;
   const scene = host._shadingDomeScene;
   if (!scene) return A;
-  const cellNodes = [];
+  const wireframeNodes = [];
+  const coloredNodes = [];
   for (const c2 of scene.cellPolys) {
+    wireframeNodes.push(w`
+            <path d="${c2.path}"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.16)"
+                  stroke-width="0.4" />
+        `);
     if (c2.aged > 0) {
-      const opacity = Math.max(0.12, Math.min(0.45, c2.aged / 8));
-      cellNodes.push(w`
+      const opacity = Math.max(0.25, Math.min(0.85, c2.aged / 6));
+      coloredNodes.push(w`
                 <path d="${c2.path}"
                       fill="${ratioToFill$1(c2.ratio)}"
                       fill-opacity="${opacity}"
-                      stroke="rgba(255,255,255,0.35)"
-                      stroke-width="0.6" />
-            `);
-    } else {
-      cellNodes.push(w`
-                <path d="${c2.path}"
-                      fill="rgba(255,255,255,0.02)"
-                      stroke="rgba(255,255,255,0.18)"
-                      stroke-width="0.4" />
+                      stroke="none" />
             `);
     }
   }
@@ -39678,23 +39704,37 @@ function renderShadingDomeOverlay(host) {
     ` : A;
   return b`
         <svg class="shading-dome-svg" style="opacity:${alpha.toFixed(2)}">
-            <g class="shading-dome-cells">${cellNodes}</g>
+            <defs>
+                <!--  Gaussian blur applied to the coloured-cell layer
+                      so the heatmap reads as a smooth field instead
+                      of a quilt of crisp polygons. stdDeviation tuned
+                      against the typical cell size on screen (a few
+                      pixels) so neighbour cells bleed into each other
+                      but the dome's overall shape stays recognisable. -->
+                <filter id="shading-dome-smooth" x="-10%" y="-10%" width="120%" height="120%">
+                    <feGaussianBlur stdDeviation="6" />
+                </filter>
+            </defs>
+            <g class="shading-dome-cells-wire">${wireframeNodes}</g>
+            <g class="shading-dome-cells-color" filter="url(#shading-dome-smooth)">${coloredNodes}</g>
             <g class="shading-dome-ribbon">${ribbonNodes}</g>
             <g class="shading-dome-sun">${sunMarker}</g>
         </svg>
     `;
 }
-function renderShadingDomeCloudPicker(host, onPick) {
+function renderShadingDomeCloudPicker(host, onChange) {
   if (shadingDomeFadeAlpha(host) <= 0) return A;
+  const pct = Math.round(Math.max(0, Math.min(100, host._shadingDomeCloudPct)));
   return b`
-        <div class="shading-dome-cloud-picker" role="radiogroup" aria-label="Cloud cover bin">
-            ${CLOUD_BIN_LABELS.map((label, idx) => b`
-                <button type="button"
-                        class="shading-dome-cloud-pill ${host._shadingDomeCloudBin === idx ? "is-on" : ""}"
-                        role="radio"
-                        aria-checked="${host._shadingDomeCloudBin === idx ? "true" : "false"}"
-                        @click="${() => onPick(idx)}">${label}</button>
-            `)}
+        <div class="shading-dome-cloud-slider" aria-label="Cloud cover">
+            <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--sun"   icon="mdi:weather-sunny"></ha-icon>
+            <input type="range" min="0" max="100" step="1"
+                   class="shading-dome-cloud-range"
+                   .value="${String(pct)}"
+                   aria-label="Cloud cover percentage"
+                   @input="${(e2) => onChange(Number(e2.target.value))}" />
+            <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--cloud" icon="mdi:weather-cloudy"></ha-icon>
+            <span class="shading-dome-cloud-value">${pct}%</span>
         </div>
     `;
 }
@@ -43951,7 +43991,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.5"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.6"}`,
       labelStyle,
       versionStyle
     );
@@ -43975,7 +44015,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.5",
+        version: "1.7.0-alpha.6",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -43983,7 +44023,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.5"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.6"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -44078,7 +44118,7 @@ let HeliosCard = class extends i {
     this._shadingDomeMode = false;
     this._shadingDomeFadeInStartMs = null;
     this._shadingDomeFadeOutStartMs = null;
-    this._shadingDomeCloudBin = 0;
+    this._shadingDomeCloudPct = 0;
     this._shadingDomeScene = null;
     this._lastHomeKey = "";
     this._lastConfigSig = "";
@@ -45141,8 +45181,8 @@ let HeliosCard = class extends i {
                       the slice selector is right next to the chip
                       that opened the view.                          -->
                 ${renderShadingDomeOverlay(this)}
-                ${this._shadingDomeMode ? renderShadingDomeCloudPicker(this, (bin) => {
-      this._shadingDomeCloudBin = bin;
+                ${this._shadingDomeMode ? renderShadingDomeCloudPicker(this, (pct) => {
+      this._shadingDomeCloudPct = pct;
       refreshShadingDomeScene(this);
       this.requestUpdate();
     }) : A}
