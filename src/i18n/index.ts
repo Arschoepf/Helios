@@ -319,6 +319,24 @@ export interface Translations
         resetCacheButton:         string;
         resetCacheWarning:        string;
         resetCacheDone:           string;
+        //Shading-map debug section. The scalar self-calibration
+        //multiplier captures static biases; the shading map sits
+        //on top of it and learns per-(sun-position, cloud-cover)
+        //residuals so structured shadows (a tree, a neighbouring
+        //roof) bend the forecast at the right times of day under
+        //the right weather. This section shows what the map has
+        //learned and offers export / import / reset.
+        shadingSection:           string;
+        shadingHint:              string;
+        shadingStatsCells:        string;
+        shadingStatsConfident:    string;
+        shadingStatsUnder:        string;
+        shadingStatsOver:         string;
+        shadingExport:            string;
+        shadingImport:            string;
+        shadingImportError:       string;
+        shadingReset:             string;
+        shadingResetConfirm:      string;
     };
 }
 

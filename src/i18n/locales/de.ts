@@ -163,6 +163,17 @@ export const de: Translations = {
         resetSectionHint:      'Wartungswerkzeuge, um die lokal gespeicherten Daten der Karte zu löschen.',
         resetCacheButton:      'Datencache zurücksetzen',
         resetCacheWarning:     'Achtung: löscht das zwischengespeicherte Open-Meteo-Wetter und den PV-Verlauf im Speicher für ALLE auf dieser Seite geöffneten Helios-Karten. Die verfeinerte Prognose verliert ihre 5-Tage-Kalibrierung, bis sie erneut abgerufen wird (je nach HA-Server einige Minuten). Daten in Home Assistant bleiben unverändert.',
-        resetCacheDone:        'Cache geleert ✓'
+        resetCacheDone:        'Cache geleert ✓',
+        shadingSection:        'Adaptive shading map',
+        shadingHint:           'A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.',
+        shadingStatsCells:     'cells with data',
+        shadingStatsConfident: 'cells trusted by the forecast',
+        shadingStatsUnder:     'strongest under-production:',
+        shadingStatsOver:      'strongest over-production:',
+        shadingExport:         'Export map',
+        shadingImport:         'Import map',
+        shadingImportError:    'That file is not a valid Helios shading map.',
+        shadingReset:          'Reset map',
+        shadingResetConfirm:   'Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills.'
     }
 };

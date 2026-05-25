@@ -759,7 +759,18 @@ const en = {
     resetSectionHint: "Maintenance tools to wipe data the card has cached locally.",
     resetCacheButton: "Reset data cache",
     resetCacheWarning: "Warning: this clears the cached Open-Meteo weather and the in-memory PV history for EVERY Helios card open on this page. The refined forecast will lose its 5 days of calibration until they're re-fetched (a few minutes depending on your HA server). Your data inside Home Assistant is never touched.",
-    resetCacheDone: "Cache cleared ✓"
+    resetCacheDone: "Cache cleared ✓",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const fr = {
@@ -920,7 +931,18 @@ const fr = {
     resetSectionHint: "Outils de maintenance pour purger les données mises en cache par la carte.",
     resetCacheButton: "Réinitialiser le cache des données",
     resetCacheWarning: "Attention : ce bouton vide la météo Open-Meteo en cache local et l'historique PV en mémoire pour TOUTES les cartes Helios ouvertes. La prévision affinée perdra ses 5 derniers jours de calibration le temps qu'ils soient récupérés à nouveau (quelques minutes selon ton serveur HA). Tes données dans Home Assistant ne sont jamais touchées.",
-    resetCacheDone: "Cache vidé ✓"
+    resetCacheDone: "Cache vidé ✓",
+    shadingSection: "Carte d'ombre adaptative",
+    shadingHint: "Une couche d'apprentissage par-dessus la calibration 5 jours : chaque cellule de la grille polaire ci-dessous garde la moyenne du rapport réel/prévu observée quand le soleil était à cette position et que la couverture nuageuse était dans cette tranche. Permet à la prévision de plier au bon moment de la journée pour les ombres d'arbres, les toits voisins et tout obstacle invisible au LiDAR. Se construit à partir de vos propres données sur quelques semaines ; en attendant, la calibration scalaire prend le relais.",
+    shadingStatsCells: "cellules avec données",
+    shadingStatsConfident: "cellules utilisées par la prévision",
+    shadingStatsUnder: "sous-production la plus forte :",
+    shadingStatsOver: "sur-production la plus forte :",
+    shadingExport: "Exporter la carte",
+    shadingImport: "Importer une carte",
+    shadingImportError: "Ce fichier n'est pas une carte d'ombre Helios valide.",
+    shadingReset: "Réinitialiser la carte",
+    shadingResetConfirm: "Effacer toutes les cellules apprises par la carte d'ombre ? La prévision repartira sur la calibration scalaire pendant quelques semaines, le temps que la carte se reconstruise."
   }
 };
 const de = {
@@ -1081,7 +1103,18 @@ const de = {
     resetSectionHint: "Wartungswerkzeuge, um die lokal gespeicherten Daten der Karte zu löschen.",
     resetCacheButton: "Datencache zurücksetzen",
     resetCacheWarning: "Achtung: löscht das zwischengespeicherte Open-Meteo-Wetter und den PV-Verlauf im Speicher für ALLE auf dieser Seite geöffneten Helios-Karten. Die verfeinerte Prognose verliert ihre 5-Tage-Kalibrierung, bis sie erneut abgerufen wird (je nach HA-Server einige Minuten). Daten in Home Assistant bleiben unverändert.",
-    resetCacheDone: "Cache geleert ✓"
+    resetCacheDone: "Cache geleert ✓",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const es = {
@@ -1242,7 +1275,18 @@ const es = {
     resetSectionHint: "Herramientas de mantenimiento para borrar los datos almacenados localmente por la tarjeta.",
     resetCacheButton: "Restablecer caché de datos",
     resetCacheWarning: "Atención: borra la meteorología de Open-Meteo en caché y el historial PV en memoria de TODAS las tarjetas Helios abiertas en esta página. La previsión ajustada perderá sus 5 días de calibración hasta que se vuelvan a obtener (unos minutos según tu servidor HA). Los datos en Home Assistant no se tocan nunca.",
-    resetCacheDone: "Caché borrada ✓"
+    resetCacheDone: "Caché borrada ✓",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const it = {
@@ -1403,7 +1447,18 @@ const it = {
     resetSectionHint: "Strumenti di manutenzione per cancellare i dati memorizzati localmente dalla card.",
     resetCacheButton: "Reset cache dati",
     resetCacheWarning: "Attenzione: cancella i dati meteo Open-Meteo in cache e lo storico PV in memoria per TUTTE le card Helios aperte in questa pagina. La previsione rifinita perderà i suoi 5 giorni di calibrazione finché non saranno scaricati di nuovo (qualche minuto a seconda del tuo server HA). I dati su Home Assistant non vengono mai toccati.",
-    resetCacheDone: "Cache svuotata ✓"
+    resetCacheDone: "Cache svuotata ✓",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const nl = {
@@ -1564,7 +1619,18 @@ const nl = {
     resetSectionHint: "Onderhoudstools om de lokaal door de kaart bewaarde gegevens te wissen.",
     resetCacheButton: "Datacache resetten",
     resetCacheWarning: "Let op: dit wist de gecachete Open-Meteo weergegevens en de PV-geschiedenis in het geheugen van ELKE Helios-kaart die op deze pagina open staat. De bijgestelde verwachting verliest haar 5 dagen kalibratie totdat die opnieuw zijn opgehaald (enkele minuten afhankelijk van je HA-server). Gegevens in Home Assistant worden nooit aangeraakt.",
-    resetCacheDone: "Cache geleegd ✓"
+    resetCacheDone: "Cache geleegd ✓",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const pt = {
@@ -1725,7 +1791,18 @@ const pt = {
     resetSectionHint: "Ferramentas de manutenção para limpar os dados armazenados localmente pelo cartão.",
     resetCacheButton: "Repor cache de dados",
     resetCacheWarning: "Atenção: limpa a meteorologia Open-Meteo em cache e o histórico PV em memória de TODOS os cartões Helios abertos nesta página. A previsão ajustada perderá os seus 5 dias de calibração até serem novamente obtidos (alguns minutos consoante o teu servidor HA). Os dados no Home Assistant nunca são tocados.",
-    resetCacheDone: "Cache limpa ✓"
+    resetCacheDone: "Cache limpa ✓",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const no = {
@@ -1886,7 +1963,18 @@ const no = {
     resetSectionHint: "Vedlikeholdsverktøy for å tømme data som kortet har bufret lokalt.",
     resetCacheButton: "Tilbakestill databuffer",
     resetCacheWarning: "Advarsel: dette tømmer den bufrede Open-Meteo-væren og PV-historikken i minnet for ALLE Helios-kort som er åpne på denne siden. Det justerte estimatet mister sin 5-dagers kalibrering inntil den hentes på nytt (noen minutter avhengig av HA-serveren din). Data i Home Assistant røres aldri.",
-    resetCacheDone: "Buffer tømt ✓"
+    resetCacheDone: "Buffer tømt ✓",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const pl = {
@@ -2047,7 +2135,18 @@ const pl = {
     resetSectionHint: "Narzędzia konserwacyjne do wymazania danych, które karta zapisała lokalnie.",
     resetCacheButton: "Resetuj pamięć podręczną danych",
     resetCacheWarning: "Ostrzeżenie: to wyczyści zapisaną pogodę Open-Meteo oraz historię PV w pamięci dla KAŻDEJ karty Helios otwartej na tej stronie. Doprecyzowana prognoza utraci swoje 5 dni kalibracji, dopóki nie zostaną ponownie pobrane (kilka minut w zależności od Twojego serwera HA). Twoje dane wewnątrz Home Assistant nigdy nie są dotykane.",
-    resetCacheDone: "Pamięć podręczna wyczyszczona ✓"
+    resetCacheDone: "Pamięć podręczna wyczyszczona ✓",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const cs = {
@@ -2208,7 +2307,18 @@ const cs = {
     resetSectionHint: "Údržbové nástroje pro vymazání dat, která karta lokálně mezipaměť.",
     resetCacheButton: "Resetovat mezipaměť dat",
     resetCacheWarning: "Upozornění: toto vymaže mezipaměť počasí Open-Meteo a historii FV v paměti pro KAŽDOU kartu Helios otevřenou na této stránce. Upřesněná předpověď ztratí svých 5 dní kalibrace, dokud nebudou znovu načteny (několik minut v závislosti na vašem serveru HA). Vaše data uvnitř Home Assistant nejsou nikdy dotčena.",
-    resetCacheDone: "Mezipaměť vyčištěna ✓"
+    resetCacheDone: "Mezipaměť vyčištěna ✓",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const sv = {
@@ -2369,7 +2479,18 @@ const sv = {
     resetSectionHint: "Underhållsverktyg för att radera data som kortet har cachat lokalt.",
     resetCacheButton: "Återställ datacache",
     resetCacheWarning: "Varning: detta rensar den cachade Open-Meteo-vädret och PV-historiken i minnet för VARJE Helios-kort som är öppet på denna sida. Den justerade prognosen kommer att förlora sina 5 dagar av kalibrering tills de hämtas igen (några minuter beroende på din HA-server). Dina data inuti Home Assistant rörs aldrig.",
-    resetCacheDone: "Cache rensad ✓"
+    resetCacheDone: "Cache rensad ✓",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const LOCALES = { en, fr, de, es, it, nl, pt, no, pl, cs, sv };
@@ -39309,6 +39430,116 @@ function saveMap(map, storage = safeStorage()) {
   } catch (_2) {
   }
 }
+function resetMap(storage = safeStorage()) {
+  const fresh = emptyMap();
+  if (storage) {
+    try {
+      storage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+    } catch (_2) {
+    }
+  }
+  return fresh;
+}
+function mergeMaps(a2, b2, nowMs = Date.now()) {
+  const out = {
+    version: 1,
+    lastTrainedMs: Math.max(a2.lastTrainedMs || 0, b2.lastTrainedMs || 0),
+    cells: {}
+  };
+  const keys = /* @__PURE__ */ new Set();
+  for (const k2 of Object.keys(a2.cells)) keys.add(k2);
+  for (const k2 of Object.keys(b2.cells)) keys.add(k2);
+  for (const k2 of keys) {
+    const ca = a2.cells[k2];
+    const cb = b2.cells[k2];
+    if (ca && !cb) {
+      out.cells[k2] = { ...ca };
+      continue;
+    }
+    if (cb && !ca) {
+      out.cells[k2] = { ...cb };
+      continue;
+    }
+    const dDaysA = Math.max(0, (nowMs - ca.t) / DAY_MS);
+    const dDaysB = Math.max(0, (nowMs - cb.t) / DAY_MS);
+    const wA = ca.w * Math.pow(0.5, dDaysA / HALFLIFE_DAYS);
+    const wB = cb.w * Math.pow(0.5, dDaysB / HALFLIFE_DAYS);
+    const wSum = wA + wB;
+    if (wSum <= 0) {
+      out.cells[k2] = ca.t >= cb.t ? { ...ca } : { ...cb };
+      continue;
+    }
+    out.cells[k2] = {
+      ema: (ca.ema * wA + cb.ema * wB) / wSum,
+      w: wSum,
+      t: Math.max(ca.t, cb.t)
+    };
+  }
+  return out;
+}
+function exportMapJson(map) {
+  return JSON.stringify(map, null, 2);
+}
+function importMapJson(raw2) {
+  try {
+    const parsed = JSON.parse(raw2);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (parsed.version !== 1) return null;
+    if (!parsed.cells || typeof parsed.cells !== "object") return null;
+    const cells = {};
+    for (const key of Object.keys(parsed.cells)) {
+      const c2 = parsed.cells[key];
+      if (!c2 || typeof c2.ema !== "number" || typeof c2.w !== "number" || typeof c2.t !== "number") continue;
+      if (!isFinite(c2.ema) || !isFinite(c2.w) || !isFinite(c2.t)) continue;
+      cells[key] = { ema: c2.ema, w: c2.w, t: c2.t };
+    }
+    return {
+      version: 1,
+      lastTrainedMs: typeof parsed.lastTrainedMs === "number" ? parsed.lastTrainedMs : 0,
+      cells
+    };
+  } catch (_2) {
+    return null;
+  }
+}
+function decodeCellKey(key, cell) {
+  const parts = key.split("|");
+  if (parts.length !== 3) return null;
+  const az = parseInt(parts[0], 10);
+  const alt = parseInt(parts[1], 10);
+  const cloud = parseInt(parts[2], 10);
+  if (!isFinite(az) || !isFinite(alt) || !isFinite(cloud)) return null;
+  return {
+    azimuthDeg: az * AZIMUTH_BIN_DEG + AZIMUTH_BIN_DEG / 2,
+    altitudeDeg: alt * ALTITUDE_BIN_DEG + ALTITUDE_BIN_DEG / 2,
+    cloudBin: cloud,
+    cell
+  };
+}
+const CLOUD_BIN_LABELS = ["0-25%", "25-50%", "50-75%", "75-100%"];
+const CLOUD_BIN_COUNT_EXPORT = CLOUD_BIN_COUNT;
+function describeMap(map, nowMs) {
+  let confidentCells = 0;
+  let strongestUnder = null;
+  let strongestOver = null;
+  const keys = Object.keys(map.cells);
+  for (const key of keys) {
+    const cell = map.cells[key];
+    const dDays = Math.max(0, (nowMs - cell.t) / DAY_MS);
+    const aged = cell.w * Math.pow(0.5, dDays / HALFLIFE_DAYS);
+    if (aged >= MIN_EFFECTIVE_SAMPLES) confidentCells++;
+    if (aged < 1) continue;
+    if (cell.ema < 0.9 && (!strongestUnder || cell.ema < strongestUnder.ratio)) {
+      strongestUnder = { key, ratio: cell.ema, w: aged };
+    }
+    if (cell.ema > 1.1 && (!strongestOver || cell.ema > strongestOver.ratio)) {
+      strongestOver = { key, ratio: cell.ema, w: aged };
+    }
+  }
+  return { cells: keys.length, confidentCells, strongestUnder, strongestOver };
+}
+const HA_USER_DATA_KEY = "helios-shading-map";
+const PUSH_DEBOUNCE_MS = 3e4;
 const TRAINING_WINDOW_DAYS = 7;
 const HOUR_MS = 36e5;
 function trainShadingMap(host) {
@@ -39318,6 +39549,7 @@ function trainShadingMap(host) {
   const coords = getHomeCoords(host.config, host.hass);
   if (k2 === null || k2 <= 0 || !series || !hist || !coords) return 0;
   if (hist.times.length < 2 || series.times.length < 2) return 0;
+  void syncShadingMapFromHomeAssistant(host.hass);
   const map = loadMap();
   const now = Date.now();
   const windowStart = now - TRAINING_WINDOW_DAYS * 24 * HOUR_MS;
@@ -39362,6 +39594,8 @@ function trainShadingMap(host) {
   if (updated > 0) {
     map.lastTrainedMs = highestProcessedMs;
     saveMap(map);
+    invalidateShadingMapCache();
+    schedulePushToHomeAssistant(host.hass);
   }
   return updated;
 }
@@ -39374,6 +39608,10 @@ function currentShadingMap() {
   _cachedMap = loadMap();
   _cachedLoadedAt = now;
   return _cachedMap;
+}
+function invalidateShadingMapCache() {
+  _cachedMap = null;
+  _cachedLoadedAt = 0;
 }
 function isCumulativeEnergyUnit(unit) {
   const u2 = (unit || "").toLowerCase();
@@ -39425,6 +39663,64 @@ function actualWattsFromPowerHour(hist, pvUnit, startMs, endMs) {
   }
   if (!saw || span <= 0) return null;
   return area / span;
+}
+let _pulledFromHomeAssistant = false;
+let _pushTimer = null;
+async function syncShadingMapFromHomeAssistant(hass) {
+  if (_pulledFromHomeAssistant) return false;
+  _pulledFromHomeAssistant = true;
+  if (!hass || typeof hass.callWS !== "function") return false;
+  let remoteRaw = null;
+  try {
+    const reply = await hass.callWS({
+      type: "frontend/get_user_data",
+      key: HA_USER_DATA_KEY
+    });
+    const value = reply && typeof reply === "object" ? reply.value : null;
+    if (typeof value === "string") remoteRaw = value;
+    else if (value && typeof value === "object") remoteRaw = JSON.stringify(value);
+  } catch (_2) {
+    return false;
+  }
+  if (!remoteRaw) return false;
+  const remote = importMapJson(remoteRaw);
+  if (!remote) return false;
+  const local = loadMap();
+  const merged = mergeMaps(local, remote);
+  saveMap(merged);
+  invalidateShadingMapCache();
+  return true;
+}
+function schedulePushToHomeAssistant(hass, _map) {
+  if (!hass || typeof hass.callWS !== "function") return;
+  if (_pushTimer !== null) clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(() => {
+    _pushTimer = null;
+    const latest = loadMap();
+    const payload = exportMapJson(latest);
+    try {
+      hass.callWS({
+        type: "frontend/set_user_data",
+        key: HA_USER_DATA_KEY,
+        value: payload
+      });
+    } catch (_2) {
+    }
+  }, PUSH_DEBOUNCE_MS);
+}
+function exportCurrentShadingMap() {
+  return exportMapJson(loadMap());
+}
+function importShadingMapJson(raw2) {
+  const parsed = importMapJson(raw2);
+  if (!parsed) return false;
+  saveMap(parsed);
+  invalidateShadingMapCache();
+  return true;
+}
+function resetShadingMap() {
+  resetMap();
+  invalidateShadingMapCache();
 }
 function effectiveForecastRatio(map, time, lat, lon, cloud, calR, nowMs) {
   const sun = getSunPosition(time, lat, lon);
@@ -41578,7 +41874,247 @@ const editorStyles = i$3`
         outline: 2px solid #ef4444;
         outline-offset: 2px;
     }
+    /*  Shading-map debug section: stat strip + 4-up polar grid +
+        action row. Grid wraps from a 4-up row to a 2x2 / 1-up
+        stack via the auto-fit template, so the section reads
+        cleanly in both the side panel and a narrow mobile view.  */
+    .shading-stats
+    {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        font-size: 12px;
+        color: var(--secondary-text-color, #5f6368);
+        margin: 6px 0 10px;
+    }
+    .shading-grid
+    {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .shading-disc
+    {
+        background: rgba(0, 0, 0, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        padding: 6px 4px 4px;
+        text-align: center;
+    }
+    .shading-disc-title
+    {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--secondary-text-color, #5f6368);
+        margin-bottom: 2px;
+    }
+    .shading-disc-svg
+    {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+    .shading-actions
+    {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .shading-actions button
+    {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: inherit;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+    }
+    .shading-actions button:hover
+    {
+        background: rgba(255, 255, 255, 0.06);
+    }
+    .shading-actions .shading-reset
+    {
+        border-color: #ef4444;
+        color: #ef4444;
+    }
+    .shading-actions .shading-reset:hover
+    {
+        background: rgba(239, 68, 68, 0.08);
+    }
 `;
+const DISC_R = 110;
+const DISC_CENTRE = 120;
+const DISC_VIEWBOX = 240;
+const AZIMUTH_STEP = 10;
+const ALTITUDE_STEP = 5;
+function ratioToFill(ratio) {
+  const r2 = Math.max(0.3, Math.min(1.7, ratio));
+  if (r2 < 1) {
+    const t22 = (1 - r2) / 0.7;
+    const red2 = 220;
+    const green2 = Math.round(220 * (1 - t22));
+    const blue2 = Math.round(220 * (1 - t22));
+    return `rgb(${red2}, ${green2}, ${blue2})`;
+  }
+  const t2 = (r2 - 1) / 0.7;
+  const red = Math.round(220 * (1 - t2));
+  const green = 220;
+  const blue = Math.round(220 * (1 - t2));
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+function renderCloudDisc(cloudBin, cells, nowMs) {
+  const sectors = [];
+  for (const decoded of cells) {
+    if (!decoded) continue;
+    if (decoded.cloudBin !== cloudBin) continue;
+    const azCentre = decoded.azimuthDeg;
+    const altCentre = decoded.altitudeDeg;
+    const azStart = azCentre - AZIMUTH_STEP / 2;
+    const azEnd = azCentre + AZIMUTH_STEP / 2;
+    const altLow = altCentre - ALTITUDE_STEP / 2;
+    const altHigh = altCentre + ALTITUDE_STEP / 2;
+    const rOuter = DISC_R * (1 - altLow / 90);
+    const rInner = DISC_R * (1 - altHigh / 90);
+    if (rOuter <= 0 || rInner < 0 || rOuter <= rInner) continue;
+    const path = annularSectorPath(azStart, azEnd, rInner, rOuter);
+    const dDays = Math.max(0, (nowMs - decoded.cell.t) / 864e5);
+    const aged = decoded.cell.w * Math.pow(0.5, dDays / 60);
+    const opacity = Math.max(0.15, Math.min(1, aged / 5));
+    const fill = ratioToFill(decoded.cell.ema);
+    sectors.push(w`
+            <path d="${path}"
+                  fill="${fill}"
+                  fill-opacity="${opacity}"
+                  stroke="rgba(0,0,0,0.12)"
+                  stroke-width="0.4">
+                <title>az ${Math.round(azCentre)}° / alt ${Math.round(altCentre)}° / cloud ${CLOUD_BIN_LABELS[cloudBin]}, ratio ${decoded.cell.ema.toFixed(2)}, w ${aged.toFixed(1)}</title>
+            </path>
+        `);
+  }
+  return b`
+        <div class="shading-disc">
+            <div class="shading-disc-title">${CLOUD_BIN_LABELS[cloudBin]}</div>
+            <svg viewBox="0 0 ${DISC_VIEWBOX} ${DISC_VIEWBOX}" class="shading-disc-svg">
+                <circle cx="${DISC_CENTRE}" cy="${DISC_CENTRE}" r="${DISC_R}" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.15)" stroke-width="0.7" />
+                ${[15, 30, 45, 60, 75].map((alt) => w`
+                    <circle cx="${DISC_CENTRE}" cy="${DISC_CENTRE}" r="${DISC_R * (1 - alt / 90)}"
+                            fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.4" />
+                `)}
+                ${sectors.length ? sectors : w`
+                    <text x="${DISC_CENTRE}" y="${DISC_CENTRE + 4}" text-anchor="middle"
+                          fill="rgba(255,255,255,0.4)" font-size="10">no data yet</text>
+                `}
+                <text x="${DISC_CENTRE}" y="10"  text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="9">N</text>
+                <text x="${DISC_CENTRE}" y="${DISC_VIEWBOX - 2}" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="9">S</text>
+                <text x="6" y="${DISC_CENTRE + 3}" text-anchor="start" fill="rgba(255,255,255,0.55)" font-size="9">W</text>
+                <text x="${DISC_VIEWBOX - 6}" y="${DISC_CENTRE + 3}" text-anchor="end" fill="rgba(255,255,255,0.55)" font-size="9">E</text>
+            </svg>
+        </div>
+    `;
+}
+function annularSectorPath(azStart, azEnd, rInner, rOuter) {
+  const sweep = (azEnd - azStart + 360) % 360;
+  const largeArc = sweep > 180 ? 1 : 0;
+  const p1 = polarToCart(azStart, rOuter);
+  const p2 = polarToCart(azEnd, rOuter);
+  const p3 = polarToCart(azEnd, rInner);
+  const p4 = polarToCart(azStart, rInner);
+  if (rInner <= 0) {
+    return [
+      `M ${DISC_CENTRE} ${DISC_CENTRE}`,
+      `L ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`,
+      `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`,
+      `Z`
+    ].join(" ");
+  }
+  return [
+    `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`,
+    `L ${p3.x.toFixed(2)} ${p3.y.toFixed(2)}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 0 ${p4.x.toFixed(2)} ${p4.y.toFixed(2)}`,
+    `Z`
+  ].join(" ");
+}
+function polarToCart(azimuthDeg, radius) {
+  const rad = (azimuthDeg - 90) * Math.PI / 180;
+  return {
+    x: DISC_CENTRE + radius * Math.cos(rad),
+    y: DISC_CENTRE + radius * Math.sin(rad)
+  };
+}
+function renderShadingMapSection(opts) {
+  const t2 = pickTranslations(opts.hass?.language);
+  const map = loadMap();
+  const nowMs = Date.now();
+  const stats = describeMap(map, nowMs);
+  const decoded = Object.keys(map.cells).map((k2) => decodeCellKey(k2, map.cells[k2])).filter((d2) => d2 !== null);
+  const handleExport = () => {
+    const json = exportCurrentShadingMap();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a2 = document.createElement("a");
+    a2.href = url;
+    a2.download = `helios-shading-map-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a2);
+    a2.click();
+    document.body.removeChild(a2);
+    URL.revokeObjectURL(url);
+  };
+  const handleImport = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = String(reader.result || "");
+        const ok = importShadingMapJson(text);
+        if (!ok) {
+          window.alert(t2.editor.shadingImportError);
+          return;
+        }
+        opts.onAfterChange();
+      };
+      reader.readAsText(file);
+    });
+    input.click();
+  };
+  const handleReset = () => {
+    if (!window.confirm(t2.editor.shadingResetConfirm)) return;
+    resetShadingMap();
+    opts.onAfterChange();
+  };
+  return b`
+        <div class="hint">${t2.editor.shadingHint}</div>
+        <div class="shading-stats">
+            <div><strong>${stats.cells}</strong> ${t2.editor.shadingStatsCells}</div>
+            <div><strong>${stats.confidentCells}</strong> ${t2.editor.shadingStatsConfident}</div>
+            ${stats.strongestUnder ? b`
+                <div>${t2.editor.shadingStatsUnder} <strong>${(stats.strongestUnder.ratio * 100).toFixed(0)}%</strong></div>
+            ` : A}
+            ${stats.strongestOver ? b`
+                <div>${t2.editor.shadingStatsOver} <strong>${(stats.strongestOver.ratio * 100).toFixed(0)}%</strong></div>
+            ` : A}
+        </div>
+        <div class="shading-grid">
+            ${[0, 1, 2, 3].slice(0, CLOUD_BIN_COUNT_EXPORT).map((b2) => renderCloudDisc(b2, decoded, nowMs))}
+        </div>
+        <div class="shading-actions">
+            <button type="button" @click="${handleExport}">${t2.editor.shadingExport}</button>
+            <button type="button" @click="${handleImport}">${t2.editor.shadingImport}</button>
+            <button type="button" class="shading-reset" @click="${handleReset}">${t2.editor.shadingReset}</button>
+        </div>
+    `;
+}
 var __defProp$1 = Object.defineProperty;
 var __getOwnPropDesc$1 = Object.getOwnPropertyDescriptor;
 var __decorateClass$1 = (decorators, target, key, kind) => {
@@ -42589,6 +43125,11 @@ let HeliosCardEditor = class extends i {
                     `;
     })()}
 
+                </details>
+
+                <details class="advanced-section" ?open="${this._openSection === "shading"}" @toggle="${(e2) => this._onSectionToggle("shading", e2)}">
+                    <summary class="section-title section-title-collapse">${t2.editor.shadingSection}</summary>
+                    ${renderShadingMapSection({ hass: this.hass, onAfterChange: () => this.requestUpdate() })}
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "battery"}" @toggle="${(e2) => this._onSectionToggle("battery", e2)}">

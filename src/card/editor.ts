@@ -26,6 +26,7 @@ import
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
 import { cfgHex } from './format';
+import { renderShadingMapSection } from './shadingMapView';
 
 
 //Custom color picker.
@@ -1215,6 +1216,11 @@ export class HeliosCardEditor extends LitElement
                     `;
                 })()}
 
+                </details>
+
+                <details class="advanced-section" ?open="${this._openSection === 'shading'}" @toggle="${(e: Event) => this._onSectionToggle('shading', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.shadingSection}</summary>
+                    ${renderShadingMapSection({ hass: this.hass, onAfterChange: () => this.requestUpdate() })}
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'battery'}" @toggle="${(e: Event) => this._onSectionToggle('battery', e)}">

@@ -165,6 +165,17 @@ export const cs: Translations = {
         resetSectionHint:      'Údržbové nástroje pro vymazání dat, která karta lokálně mezipaměť.',
         resetCacheButton:      'Resetovat mezipaměť dat',
         resetCacheWarning:     'Upozornění: toto vymaže mezipaměť počasí Open-Meteo a historii FV v paměti pro KAŽDOU kartu Helios otevřenou na této stránce. Upřesněná předpověď ztratí svých 5 dní kalibrace, dokud nebudou znovu načteny (několik minut v závislosti na vašem serveru HA). Vaše data uvnitř Home Assistant nejsou nikdy dotčena.',
-        resetCacheDone:        'Mezipaměť vyčištěna ✓'
+        resetCacheDone:        'Mezipaměť vyčištěna ✓',
+        shadingSection:        'Adaptive shading map',
+        shadingHint:           'A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.',
+        shadingStatsCells:     'cells with data',
+        shadingStatsConfident: 'cells trusted by the forecast',
+        shadingStatsUnder:     'strongest under-production:',
+        shadingStatsOver:      'strongest over-production:',
+        shadingExport:         'Export map',
+        shadingImport:         'Import map',
+        shadingImportError:    'That file is not a valid Helios shading map.',
+        shadingReset:          'Reset map',
+        shadingResetConfirm:   'Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills.'
     }
 };

@@ -12,13 +12,31 @@
 import { getSunPosition } from '../engine/sun';
 import {
     applyObservation,
+    exportMapJson,
+    importMapJson,
     loadMap,
+    mergeMaps,
+    resetMap,
     saveMap,
     type ShadingMap,
 } from '../engine/shadingMap';
 import { computePvPowerWeighted, pvCalibK, pvNormalizeToWatts, type PvHistory } from './pv';
 import { getHomeCoords } from './init';
 import type { ChartHost } from './charts';
+
+
+//Home Assistant user_data key. Mirrors the local localStorage
+//entry but lives under the per-user namespace HA exposes via
+//the frontend WebSocket commands, so opening the card on a
+//different device pulls the same map the original device has
+//been training.
+const HA_USER_DATA_KEY = 'helios-shading-map';
+
+//Debounce window for the cross-device push: a chart redraw on
+//hover can trigger trainShadingMap several times per second, but
+//we don't want to spam frontend.set_user_data with the same
+//payload over and over. One push every 30 s is plenty.
+const PUSH_DEBOUNCE_MS = 30_000;
 
 
 //How far back to walk on each refresh. Matches the scalar
@@ -48,6 +66,11 @@ export function trainShadingMap(host: ChartHost): number
     const coords = getHomeCoords(host.config, host.hass);
     if (k === null || k <= 0 || !series || !hist || !coords) return 0;
     if (hist.times.length < 2 || series.times.length < 2)    return 0;
+    //Fire-and-forget pull from HA on the first call; the latch in
+    //syncShadingMapFromHomeAssistant() guarantees one pull per
+    //page load, and a merge always lands cleanly because we only
+    //ever pull before pushing.
+    void syncShadingMapFromHomeAssistant(host.hass);
 
     const map = loadMap();
     const now = Date.now();
@@ -115,6 +138,8 @@ export function trainShadingMap(host: ChartHost): number
     {
         map.lastTrainedMs = highestProcessedMs;
         saveMap(map);
+        invalidateShadingMapCache();
+        schedulePushToHomeAssistant(host.hass, map);
     }
     return updated;
 }
@@ -234,4 +259,100 @@ function actualWattsFromPowerHour(
     }
     if (!saw || span <= 0) return null;
     return area / span;
+}
+
+
+//-----------------------------------------------------------------
+//Home Assistant sync: pull the cloud map at card init and merge
+//it with the local one so a fresh device picks up everything the
+//user's other devices have already trained. Push happens
+//debounced after each trainShadingMap pass so the cloud copy
+//stays current without us spamming the WebSocket.
+
+//Per-page-load latch to avoid pulling on every render tick; the
+//first chart render pulls, subsequent ones reuse whatever is on
+//disk + in cache.
+let _pulledFromHomeAssistant = false;
+
+//Last-saved payload string + timer handle for the push debounce.
+//We snapshot the stringified map at the time the timer fires so
+//two pushes within the debounce window collapse to one network
+//call carrying the latest state.
+let _pushTimer: ReturnType<typeof setTimeout> | null = null;
+
+export async function syncShadingMapFromHomeAssistant(hass: any): Promise<boolean>
+{
+    if (_pulledFromHomeAssistant) return false;
+    _pulledFromHomeAssistant = true;
+    if (!hass || typeof hass.callWS !== 'function') return false;
+    let remoteRaw: string | null = null;
+    try
+    {
+        const reply = await hass.callWS({
+            type:  'frontend/get_user_data',
+            key:   HA_USER_DATA_KEY,
+        });
+        const value = reply && typeof reply === 'object' ? (reply as { value?: unknown }).value : null;
+        if (typeof value === 'string') remoteRaw = value;
+        else if (value && typeof value === 'object') remoteRaw = JSON.stringify(value);
+    }
+    catch (_) { return false; }
+    if (!remoteRaw) return false;
+    const remote = importMapJson(remoteRaw);
+    if (!remote) return false;
+    const local  = loadMap();
+    const merged = mergeMaps(local, remote);
+    saveMap(merged);
+    invalidateShadingMapCache();
+    return true;
+}
+
+function schedulePushToHomeAssistant(hass: any, _map: ShadingMap): void
+{
+    if (!hass || typeof hass.callWS !== 'function') return;
+    if (_pushTimer !== null) clearTimeout(_pushTimer);
+    _pushTimer = setTimeout(() =>
+    {
+        _pushTimer = null;
+        //Re-read so we push whatever is on disk at the moment the
+        //debounced timer fires, not the snapshot we had when the
+        //first call landed; subsequent trains in the window are
+        //already saved.
+        const latest = loadMap();
+        const payload = exportMapJson(latest);
+        try
+        {
+            hass.callWS({
+                type:  'frontend/set_user_data',
+                key:   HA_USER_DATA_KEY,
+                value: payload,
+            });
+        }
+        catch (_) { /* user_data WS unavailable, sync gracefully degrades to local-only */ }
+    }, PUSH_DEBOUNCE_MS);
+}
+
+
+//-----------------------------------------------------------------
+//Editor-facing helpers: export / import / reset wired to the
+//buttons in the shading-map section.
+
+export function exportCurrentShadingMap(): string
+{
+    return exportMapJson(loadMap());
+}
+
+export function importShadingMapJson(raw: string): boolean
+{
+    const parsed = importMapJson(raw);
+    if (!parsed) return false;
+    saveMap(parsed);
+    invalidateShadingMapCache();
+    return true;
+}
+
+export function resetShadingMap(): void
+{
+    resetMap();
+    invalidateShadingMapCache();
 }

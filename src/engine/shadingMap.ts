@@ -295,6 +295,134 @@ export function saveMap(map: ShadingMap, storage: MapStorage | null = safeStorag
     catch (_) { /* quota or disabled, give up silently */ }
 }
 
+export function resetMap(storage: MapStorage | null = safeStorage()): ShadingMap
+{
+    const fresh = emptyMap();
+    if (storage)
+    {
+        try { storage.setItem(STORAGE_KEY, JSON.stringify(fresh)); }
+        catch (_) { /* fine, in-memory caller still gets the reset */ }
+    }
+    return fresh;
+}
+
+
+//Merge two maps cell-by-cell into a new map. Used for the
+//Home Assistant cross-device sync: a device pulls the cloud copy
+//on init and merges it with whatever local-only training has
+//happened since the last push. Per-cell rule: combine the two
+//EMAs as a weight-weighted average of the time-decayed remote
+//and time-decayed local cells. lastTrainedMs takes the max so
+//neither side reprocesses observations the other already saw.
+export function mergeMaps(a: ShadingMap, b: ShadingMap, nowMs: number = Date.now()): ShadingMap
+{
+    const out: ShadingMap = {
+        version: 1,
+        lastTrainedMs: Math.max(a.lastTrainedMs || 0, b.lastTrainedMs || 0),
+        cells: {},
+    };
+    const keys = new Set<string>();
+    for (const k of Object.keys(a.cells)) keys.add(k);
+    for (const k of Object.keys(b.cells)) keys.add(k);
+    for (const k of keys)
+    {
+        const ca = a.cells[k];
+        const cb = b.cells[k];
+        if (ca && !cb) { out.cells[k] = { ...ca }; continue; }
+        if (cb && !ca) { out.cells[k] = { ...cb }; continue; }
+        //Both sides have this cell: weighted mean of the time-decayed
+        //weights so a stale-but-heavy cell can't drown out a fresh
+        //high-confidence cell. Anchor the merged cell at the later
+        //of the two timestamps so future observations decay from the
+        //correct reference point.
+        const dDaysA = Math.max(0, (nowMs - ca.t) / DAY_MS);
+        const dDaysB = Math.max(0, (nowMs - cb.t) / DAY_MS);
+        const wA = ca.w * Math.pow(0.5, dDaysA / HALFLIFE_DAYS);
+        const wB = cb.w * Math.pow(0.5, dDaysB / HALFLIFE_DAYS);
+        const wSum = wA + wB;
+        if (wSum <= 0) { out.cells[k] = ca.t >= cb.t ? { ...ca } : { ...cb }; continue; }
+        out.cells[k] = {
+            ema: (ca.ema * wA + cb.ema * wB) / wSum,
+            w:   wSum,
+            t:   Math.max(ca.t, cb.t),
+        };
+    }
+    return out;
+}
+
+
+//Plain-text export: pretty-printed JSON so a human can eyeball
+//the cells from a downloaded file. Round-trippable through
+//importMapJson.
+export function exportMapJson(map: ShadingMap): string
+{
+    return JSON.stringify(map, null, 2);
+}
+
+//Validate-and-load a JSON string into a ShadingMap. Returns null
+//when the payload is malformed (wrong version, missing fields,
+//bad cell shape). The caller is expected to fall back to its
+//current map rather than overwrite it with garbage.
+export function importMapJson(raw: string): ShadingMap | null
+{
+    try
+    {
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        if (parsed.version !== 1) return null;
+        if (!parsed.cells || typeof parsed.cells !== 'object') return null;
+        const cells: Record<string, ShadingCell> = {};
+        for (const key of Object.keys(parsed.cells))
+        {
+            const c = parsed.cells[key];
+            if (!c || typeof c.ema !== 'number' || typeof c.w !== 'number' || typeof c.t !== 'number') continue;
+            if (!isFinite(c.ema) || !isFinite(c.w) || !isFinite(c.t)) continue;
+            cells[key] = { ema: c.ema, w: c.w, t: c.t };
+        }
+        return {
+            version: 1,
+            lastTrainedMs: typeof parsed.lastTrainedMs === 'number' ? parsed.lastTrainedMs : 0,
+            cells,
+        };
+    }
+    catch (_) { return null; }
+}
+
+
+//Decoded back-conversion of a cellKey() string. Used by the
+//debug heatmap to project each populated cell back to its
+//(azimuth midpoint, altitude midpoint, cloud bin). Returns null
+//for invalid keys so a corrupt entry can't crash the render.
+export interface DecodedCell
+{
+    azimuthDeg:  number;
+    altitudeDeg: number;
+    cloudBin:    number;
+    cell:        ShadingCell;
+}
+
+export function decodeCellKey(key: string, cell: ShadingCell): DecodedCell | null
+{
+    const parts = key.split('|');
+    if (parts.length !== 3) return null;
+    const az    = parseInt(parts[0], 10);
+    const alt   = parseInt(parts[1], 10);
+    const cloud = parseInt(parts[2], 10);
+    if (!isFinite(az) || !isFinite(alt) || !isFinite(cloud)) return null;
+    return {
+        azimuthDeg:  az * AZIMUTH_BIN_DEG  + AZIMUTH_BIN_DEG  / 2,
+        altitudeDeg: alt * ALTITUDE_BIN_DEG + ALTITUDE_BIN_DEG / 2,
+        cloudBin:    cloud,
+        cell,
+    };
+}
+
+//Convenience for callers that want the labels for the cloud bins
+//in a UI selector. Mirrors CLOUD_BIN_EDGES.
+export const CLOUD_BIN_LABELS = ['0-25%', '25-50%', '50-75%', '75-100%'];
+export const CLOUD_BIN_COUNT_EXPORT = CLOUD_BIN_COUNT;
+export const HALFLIFE_DAYS_EXPORT = HALFLIFE_DAYS;
+
 
 //-----------------------------------------------------------------
 //Diagnostics: how many cells are populated, how many are
