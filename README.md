@@ -198,10 +198,11 @@ LiDAR coverage today:
 | Germany (Brandenburg + Berlin) | **LGB bDOM + DGM** | Brandenburg + Berlin (~6.1M people) | GeoTIFF float32 (WCS 2.0.1) | Two fetches (image-based DOM + DGM), subtracted client-side |
 | United States (Vermont) | **VCGI nDSM** | Vermont (~645K people) | Float32 GeoTIFF (ArcGIS exportImage) | Pre-normalised nDSM, single fetch, no DSM-DTM round-trip |
 
-A comprehensive registry of every public LiDAR/elevation API we've
-inspected (integrated, verified compatible but pending, or
-incompatible) lives in [LIDAR_PROVIDERS.html](./LIDAR_PROVIDERS.html),
-including example GetCoverage URLs ready to paste in a browser.
+An interactive world map of every region the card covers natively
+lives at [helios-lidar.org/coverage](https://helios-lidar.org/coverage),
+click any point to drop a demo Helios card on it and see the result
+instantly. Rectangles are colour-coded by the release that introduced
+each provider.
 
 Other national LiDAR programmes were probed and not yet integrated:
 
