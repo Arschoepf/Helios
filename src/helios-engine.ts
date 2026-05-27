@@ -3496,7 +3496,7 @@ export class HeliosEngine
     }): {
         homeScreen: { x: number; y: number };
         cellPolys:  Array<{
-            path: string; ratio: number; aged: number; cloudBin: number;
+            path: string; ratio: number; aged: number; cloudBin: number; altitudeDeg: number;
         }>;
         todayArc:   Array<{
             x: number; y: number; ratio: number; confidence: number;
@@ -3532,7 +3532,7 @@ export class HeliosEngine
             const altBin = Math.floor(c.altitudeDeg / 5);
             populated.set(`${azBin}|${altBin}`, { ratio: c.ratio, aged: c.aged });
         }
-        const cellPolys: Array<{ path: string; ratio: number; aged: number; cloudBin: number }> = [];
+        const cellPolys: Array<{ path: string; ratio: number; aged: number; cloudBin: number; altitudeDeg: number }> = [];
         for (let azBin = 0; azBin < AZ_BIN_COUNT; azBin++)
         {
             const azCentre = azBin * 10 + 5;
@@ -3555,6 +3555,10 @@ export class HeliosEngine
                     ratio:    hit ? hit.ratio : 1,
                     aged:     hit ? hit.aged  : 0,
                     cloudBin: opts.cloudBinForArc,
+                    //Forwarded so the card-side renderer can drive the enter/exit wipe off altitude rather than a screen-space clip-path. Altitude
+                    //is camera-independent so the zenith (highest cells) stays the last drawn / first erased regardless of how the user has
+                    //rotated the map underneath the dome.
+                    altitudeDeg: altCentre,
                 });
             }
         }

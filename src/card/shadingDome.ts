@@ -59,7 +59,7 @@ export interface ShadingDomeHost extends OverlaysHost
 export interface ShadingDomeScene
 {
     homeScreen: { x: number; y: number };
-    cellPolys:  Array<{ path: string; ratio: number; aged: number; cloudBin: number }>;
+    cellPolys:  Array<{ path: string; ratio: number; aged: number; cloudBin: number; altitudeDeg: number }>;
     todayArc:   Array<{ x: number; y: number; ratio: number; confidence: number; altitudeDeg: number; belowHorizon: boolean }>;
     sun:        { x: number; y: number; altitudeDeg: number } | null;
 }
@@ -236,27 +236,44 @@ function easeOutQuad(t: number): number
 }
 
 
-//Returns the inline `clip-path` value applied to the dome SVG. The visible portion of the SVG is always anchored to the top edge; the
-//bottom-inset percentage is what we animate. On enter, the inset shrinks from 100 % to 0 % so the dome is drawn top-down. On exit, the inset
-//grows from 0 % to 100 % so the bottom disappears first and the wipe travels upward, the "other direction" the user asked for. Steady-state
-//returns either "no clip" (mode on) or "fully clipped" (mode off); the latter never actually renders because shouldRenderShadingDome() short-
-//circuits in renderShadingDomeOverlay before we get here.
-export function shadingDomeClipPath(host: ShadingDomeHost): string
+//Soft edge of the altitude-driven wipe, in degrees. Cells whose altitude sits inside the (threshold - SOFT) .. threshold window get a fractional
+//opacity so the wipe edge feels like a smooth wash rather than a binary cut at the threshold altitude. 8° is roughly one and a half cell rows of
+//the 5° altitude grid, enough to read as a deliberate fade without smearing across half the dome.
+const DOME_WIPE_SOFT_DEG = 8;
+//Highest altitude the wipe needs to reach to fully reveal every cell + the sun marker; the engine clamps cells at altitude 89 and the sun can sit
+//up to ~85°, sweeping the threshold to 100 leaves a small margin so the final frame is unmistakably "everything visible".
+const DOME_WIPE_MAX_DEG  = 100;
+
+
+//Returns the wipe threshold altitude in degrees. The reveal is altitude-anchored so the zenith (highest cells) is always the last drawn on enter
+//and the first erased on exit, regardless of the user's camera rotation. On enter the threshold rises from 0 toward DOME_WIPE_MAX_DEG over 1 s,
+//each cell faded in once the threshold passes its altitude. On exit the threshold falls back toward 0; high-altitude cells lose visibility first,
+//the horizon ring is the last to disappear. Steady-state returns DOME_WIPE_MAX_DEG (everything visible) when the mode is on, or 0 when off.
+export function shadingDomeWipeThreshold(host: ShadingDomeHost): number
 {
     const now = performance.now();
     if (host._shadingDomeFadeInStartMs !== null)
     {
         const t = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeInStartMs) / DOME_FADE_IN_MS)));
-        const insetBottom = (1 - t) * 100;
-        return `inset(0% 0% ${insetBottom.toFixed(2)}% 0%)`;
+        return t * DOME_WIPE_MAX_DEG;
     }
     if (host._shadingDomeFadeOutStartMs !== null)
     {
         const t = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeOutStartMs) / DOME_FADE_OUT_MS)));
-        const insetBottom = t * 100;
-        return `inset(0% 0% ${insetBottom.toFixed(2)}% 0%)`;
+        return (1 - t) * DOME_WIPE_MAX_DEG;
     }
-    return host._shadingDomeMode ? 'inset(0% 0% 0% 0%)' : 'inset(0% 0% 100% 0%)';
+    return host._shadingDomeMode ? DOME_WIPE_MAX_DEG : 0;
+}
+
+
+//Per-cell opacity multiplier for the wipe. 0 means "below the threshold, hide this cell"; 1 means "well above the threshold, render at full
+//opacity"; values in between fall on the soft edge.
+function wipeAlphaForAltitude(cellAltitudeDeg: number, threshold: number): number
+{
+    const delta = threshold - cellAltitudeDeg;
+    if (delta <= 0) return 0;
+    if (delta >= DOME_WIPE_SOFT_DEG) return 1;
+    return delta / DOME_WIPE_SOFT_DEG;
 }
 
 
@@ -305,7 +322,10 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
     if (!shouldRenderShadingDome(host)) return nothing;
     const scene = host._shadingDomeScene;
     if (!scene) return nothing;
-    const clip = shadingDomeClipPath(host);
+    //Altitude-driven wipe threshold: each cell, ribbon segment and the sun marker get multiplied by an alpha derived from the cell's own altitude
+    //vs this threshold. While the threshold is high (steady-state mode-on), every alpha resolves to 1 and the render is identical to the pre-wipe
+    //version. While the threshold travels through the altitude range, the low-altitude cells light up first and the zenith last.
+    const wipe = shadingDomeWipeThreshold(host);
 
     //Two cell layers, drawn back-to-front:
     //  1. Wireframe of the full grid (every populated + empty
@@ -320,20 +340,24 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
     const coloredNodes:   TemplateResult[] = [];
     for (const c of scene.cellPolys)
     {
+        const wipeAlpha = wipeAlphaForAltitude(c.altitudeDeg, wipe);
+        if (wipeAlpha <= 0) continue;
         wireframeNodes.push(svg`
             <path d="${c.path}"
                   fill="none"
                   stroke="rgba(255,255,255,0.09)"
+                  stroke-opacity="${wipeAlpha}"
                   stroke-width="0.35" />
         `);
         if (c.aged > 0)
         {
-            const opacity = Math.max(0.18, Math.min(0.55, c.aged / 8));
+            const opacity = Math.max(0.18, Math.min(0.55, c.aged / 8)) * wipeAlpha;
             coloredNodes.push(svg`
                 <path d="${c.path}"
                       fill="${ratioToFill(c.ratio)}"
                       fill-opacity="${opacity}"
                       stroke="rgba(255,255,255,0.22)"
+                      stroke-opacity="${wipeAlpha}"
                       stroke-width="0.45" />
             `);
         }
@@ -351,7 +375,12 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
         //Use the destination sample's lookup as the segment colour;
         //transitions look natural with that convention.
         const colour = b.confidence > 0 ? ratioToFill(b.ratio) : '#f8e89c';
-        const opacity = 0.55 + 0.4 * Math.max(0, Math.min(1, b.confidence));
+        //Take the higher of the two endpoints' altitudes for the wipe gate so the segment only paints once its upper end has been reached by the
+        //threshold. Keeps the ribbon following the same horizon-up reveal as the cells underneath instead of leaking ahead of them at the peak.
+        const segAlt    = Math.max(a.altitudeDeg, b.altitudeDeg);
+        const wipeAlpha = wipeAlphaForAltitude(segAlt, wipe);
+        if (wipeAlpha <= 0) continue;
+        const opacity = (0.55 + 0.4 * Math.max(0, Math.min(1, b.confidence))) * wipeAlpha;
         ribbonNodes.push(svg`
             <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}"
                   x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"
@@ -360,15 +389,18 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
         `);
     }
 
-    const sunMarker = scene.sun ? svg`
-        <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
-                r="7" fill="#fde68a" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" />
-        <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
-                r="12" fill="none" stroke="rgba(253, 230, 138, 0.45)" stroke-width="1.5" />
+    const sunWipeAlpha = scene.sun ? wipeAlphaForAltitude(scene.sun.altitudeDeg, wipe) : 0;
+    const sunMarker = (scene.sun && sunWipeAlpha > 0) ? svg`
+        <g opacity="${sunWipeAlpha.toFixed(2)}">
+            <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
+                    r="7" fill="#fde68a" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" />
+            <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
+                    r="12" fill="none" stroke="rgba(253, 230, 138, 0.45)" stroke-width="1.5" />
+        </g>
     ` : nothing;
 
     return html`
-        <svg class="shading-dome-svg" style="clip-path:${clip}; -webkit-clip-path:${clip};">
+        <svg class="shading-dome-svg">
             <g class="shading-dome-cells-wire">${wireframeNodes}</g>
             <g class="shading-dome-cells-color">${coloredNodes}</g>
             <g class="shading-dome-ribbon">${ribbonNodes}</g>

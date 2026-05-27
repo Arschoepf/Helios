@@ -39126,7 +39126,11 @@ const _HeliosEngine = class _HeliosEngine {
           path,
           ratio: hit ? hit.ratio : 1,
           aged: hit ? hit.aged : 0,
-          cloudBin: opts.cloudBinForArc
+          cloudBin: opts.cloudBinForArc,
+          //Forwarded so the card-side renderer can drive the enter/exit wipe off altitude rather than a screen-space clip-path. Altitude
+          //is camera-independent so the zenith (highest cells) stays the last drawn / first erased regardless of how the user has
+          //rotated the map underneath the dome.
+          altitudeDeg: altCentre
         });
       }
     }
@@ -39924,19 +39928,25 @@ function shadingDomeFadeAlpha(host) {
 function easeOutQuad(t3) {
   return 1 - (1 - t3) * (1 - t3);
 }
-function shadingDomeClipPath(host) {
+const DOME_WIPE_SOFT_DEG = 8;
+const DOME_WIPE_MAX_DEG = 100;
+function shadingDomeWipeThreshold(host) {
   const now = performance.now();
   if (host._shadingDomeFadeInStartMs !== null) {
     const t3 = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeInStartMs) / DOME_FADE_IN_MS)));
-    const insetBottom = (1 - t3) * 100;
-    return `inset(0% 0% ${insetBottom.toFixed(2)}% 0%)`;
+    return t3 * DOME_WIPE_MAX_DEG;
   }
   if (host._shadingDomeFadeOutStartMs !== null) {
     const t3 = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeOutStartMs) / DOME_FADE_OUT_MS)));
-    const insetBottom = t3 * 100;
-    return `inset(0% 0% ${insetBottom.toFixed(2)}% 0%)`;
+    return (1 - t3) * DOME_WIPE_MAX_DEG;
   }
-  return host._shadingDomeMode ? "inset(0% 0% 0% 0%)" : "inset(0% 0% 100% 0%)";
+  return host._shadingDomeMode ? DOME_WIPE_MAX_DEG : 0;
+}
+function wipeAlphaForAltitude(cellAltitudeDeg, threshold) {
+  const delta = threshold - cellAltitudeDeg;
+  if (delta <= 0) return 0;
+  if (delta >= DOME_WIPE_SOFT_DEG) return 1;
+  return delta / DOME_WIPE_SOFT_DEG;
 }
 function shouldRenderShadingDome(host) {
   return host._shadingDomeMode || host._shadingDomeFadeInStartMs !== null || host._shadingDomeFadeOutStartMs !== null;
@@ -39960,23 +39970,27 @@ function renderShadingDomeOverlay(host) {
   if (!shouldRenderShadingDome(host)) return A;
   const scene = host._shadingDomeScene;
   if (!scene) return A;
-  const clip = shadingDomeClipPath(host);
+  const wipe = shadingDomeWipeThreshold(host);
   const wireframeNodes = [];
   const coloredNodes = [];
   for (const c2 of scene.cellPolys) {
+    const wipeAlpha = wipeAlphaForAltitude(c2.altitudeDeg, wipe);
+    if (wipeAlpha <= 0) continue;
     wireframeNodes.push(w`
             <path d="${c2.path}"
                   fill="none"
                   stroke="rgba(255,255,255,0.09)"
+                  stroke-opacity="${wipeAlpha}"
                   stroke-width="0.35" />
         `);
     if (c2.aged > 0) {
-      const opacity = Math.max(0.18, Math.min(0.55, c2.aged / 8));
+      const opacity = Math.max(0.18, Math.min(0.55, c2.aged / 8)) * wipeAlpha;
       coloredNodes.push(w`
                 <path d="${c2.path}"
                       fill="${ratioToFill$1(c2.ratio)}"
                       fill-opacity="${opacity}"
                       stroke="rgba(255,255,255,0.22)"
+                      stroke-opacity="${wipeAlpha}"
                       stroke-width="0.45" />
             `);
     }
@@ -39988,7 +40002,10 @@ function renderShadingDomeOverlay(host) {
     const b2 = arc[i3];
     if (a2.belowHorizon || b2.belowHorizon) continue;
     const colour = b2.confidence > 0 ? ratioToFill$1(b2.ratio) : "#f8e89c";
-    const opacity = 0.55 + 0.4 * Math.max(0, Math.min(1, b2.confidence));
+    const segAlt = Math.max(a2.altitudeDeg, b2.altitudeDeg);
+    const wipeAlpha = wipeAlphaForAltitude(segAlt, wipe);
+    if (wipeAlpha <= 0) continue;
+    const opacity = (0.55 + 0.4 * Math.max(0, Math.min(1, b2.confidence))) * wipeAlpha;
     ribbonNodes.push(w`
             <line x1="${a2.x.toFixed(1)}" y1="${a2.y.toFixed(1)}"
                   x2="${b2.x.toFixed(1)}" y2="${b2.y.toFixed(1)}"
@@ -39996,14 +40013,17 @@ function renderShadingDomeOverlay(host) {
                   stroke-width="3.5" stroke-linecap="round" />
         `);
   }
-  const sunMarker = scene.sun ? w`
-        <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
-                r="7" fill="#fde68a" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" />
-        <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
-                r="12" fill="none" stroke="rgba(253, 230, 138, 0.45)" stroke-width="1.5" />
+  const sunWipeAlpha = scene.sun ? wipeAlphaForAltitude(scene.sun.altitudeDeg, wipe) : 0;
+  const sunMarker = scene.sun && sunWipeAlpha > 0 ? w`
+        <g opacity="${sunWipeAlpha.toFixed(2)}">
+            <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
+                    r="7" fill="#fde68a" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" />
+            <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
+                    r="12" fill="none" stroke="rgba(253, 230, 138, 0.45)" stroke-width="1.5" />
+        </g>
     ` : A;
   return b`
-        <svg class="shading-dome-svg" style="clip-path:${clip}; -webkit-clip-path:${clip};">
+        <svg class="shading-dome-svg">
             <g class="shading-dome-cells-wire">${wireframeNodes}</g>
             <g class="shading-dome-cells-color">${coloredNodes}</g>
             <g class="shading-dome-ribbon">${ribbonNodes}</g>
@@ -44385,7 +44405,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.28"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.29"}`,
       labelStyle,
       versionStyle
     );
@@ -44409,7 +44429,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.28",
+        version: "1.7.0-alpha.29",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44417,7 +44437,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.28"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.29"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
