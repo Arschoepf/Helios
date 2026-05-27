@@ -727,6 +727,42 @@ export class HeliosEngine
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
 
+        //Masonry + a few other HA dashboard layouts mount the card
+        //container with zero dimensions and resize it on a later
+        //frame. MapLibre initialised on a 0 x 0 container creates
+        //its WebGL context fine but the tile fetcher computes a
+        //degenerate viewport polygon, decides nothing is visible,
+        //and never issues tile requests, leaving the user with a
+        //black basemap + working custom layers (sun arc, LiDAR
+        //shadows, building extrusions). Defer the map creation
+        //until the container has positive dimensions; the rest of
+        //the engine is the same.
+        if (container.clientWidth > 0 && container.clientHeight > 0)
+        {
+            this._initMapInstance(container, haCoords);
+        }
+        else
+        {
+            this._pendingInitObserver = new ResizeObserver(() =>
+            {
+                if (container.clientWidth > 0 && container.clientHeight > 0)
+                {
+                    this._pendingInitObserver?.disconnect();
+                    this._pendingInitObserver = undefined;
+                    this._initMapInstance(container, haCoords);
+                }
+            });
+            this._pendingInitObserver.observe(container);
+        }
+    }
+
+    //Holds a transient ResizeObserver while the engine waits for
+    //its container to grow past 0 x 0. Cleared once _initMapInstance
+    //fires, or when the engine is destroyed before that happens.
+    private _pendingInitObserver?: ResizeObserver;
+
+    private _initMapInstance(container: HTMLElement, haCoords: [number, number]): void
+    {
         //Pixel ratio caps. At pitch 55° + continuous auto-rotation,
         //each rendered pixel is sampled multiple times (extrusion,
         //basemap, shadow raster), so the desktop cap sits at 2 (not
@@ -4081,6 +4117,8 @@ export class HeliosEngine
         this._arcInputsCache         = undefined;
         this._lastShadowSig          = undefined;
         this._resizeObserver?.disconnect();
+        this._pendingInitObserver?.disconnect();
+        this._pendingInitObserver = undefined;
         if (this._autoRotateRaf !== undefined)
         {
             cancelAnimationFrame(this._autoRotateRaf);

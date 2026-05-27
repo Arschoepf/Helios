@@ -36965,6 +36965,89 @@ const _HeliosEngine = class _HeliosEngine {
     _liveEngines.add(this);
     this._fetchLat = this.homeLat;
     this._fetchLon = this.homeLon;
+    if (container.clientWidth > 0 && container.clientHeight > 0) {
+      this._initMapInstance(container, haCoords);
+    } else {
+      this._pendingInitObserver = new ResizeObserver(() => {
+        if (container.clientWidth > 0 && container.clientHeight > 0) {
+          this._pendingInitObserver?.disconnect();
+          this._pendingInitObserver = void 0;
+          this._initMapInstance(container, haCoords);
+        }
+      });
+      this._pendingInitObserver.observe(container);
+    }
+  }
+  //_weatherTimer holds either a setInterval id (regular refresh) or
+  //a setTimeout id (rate-limit back-off). The two ID spaces overlap
+  //in practice but not by spec, so we always clear both kinds.
+  _clearWeatherTimer() {
+    if (this._weatherTimer !== void 0) {
+      window.clearInterval(this._weatherTimer);
+      window.clearTimeout(this._weatherTimer);
+      this._weatherTimer = void 0;
+    }
+  }
+  setSolarRadiationSamples(samples) {
+    if (!samples || samples.length === 0) {
+      if (this._sensorIrradianceSamples === null) return;
+      this._sensorIrradianceSamples = null;
+      this._arcInputsCache = void 0;
+      this._renderForCurrentSelection();
+      return;
+    }
+    const cleaned = [];
+    for (const s2 of samples) {
+      const ms = s2.time.getTime();
+      if (!isFinite(ms)) continue;
+      if (!isFinite(s2.wm2) || s2.wm2 < 0) continue;
+      cleaned.push({ tMs: ms, wm2: s2.wm2 });
+    }
+    cleaned.sort((a2, b2) => a2.tMs - b2.tMs);
+    const next3 = cleaned.length > 0 ? cleaned : null;
+    if (this._sensorSamplesEqual(this._sensorIrradianceSamples, next3)) {
+      return;
+    }
+    this._sensorIrradianceSamples = next3;
+    this._arcInputsCache = void 0;
+    this._renderForCurrentSelection();
+  }
+  _sensorSamplesEqual(a2, b2) {
+    if (a2 === b2) return true;
+    if (a2 === null || b2 === null) return false;
+    if (a2.length !== b2.length) return false;
+    for (let i2 = 0; i2 < a2.length; i2++) {
+      if (a2[i2].tMs !== b2[i2].tMs) return false;
+      if (a2[i2].wm2 !== b2[i2].wm2) return false;
+    }
+    return true;
+  }
+  //Nearest-neighbour lookup over the pushed sensor history. Returns
+  //the W/m² reading whose timestamp is closest to `t` provided the
+  //gap is within the strict window; otherwise null so the caller
+  //falls back to the model. Linear scan is fine for ~hourly samples
+  //across a few-day window (a couple of hundred entries at most).
+  _sensorIrradianceAt(t2) {
+    const samples = this._sensorIrradianceSamples;
+    if (!samples || samples.length === 0) return null;
+    const tMs = t2.getTime();
+    let bestIdx = -1;
+    let bestDelta = Number.POSITIVE_INFINITY;
+    for (let i2 = 0; i2 < samples.length; i2++) {
+      const d2 = Math.abs(samples[i2].tMs - tMs);
+      if (d2 < bestDelta) {
+        bestDelta = d2;
+        bestIdx = i2;
+      } else if (d2 > bestDelta) {
+        break;
+      }
+    }
+    if (bestIdx < 0 || bestDelta > _HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS) {
+      return null;
+    }
+    return samples[bestIdx].wm2;
+  }
+  _initMapInstance(container, haCoords) {
     const pixelRatio = this._pixelRatio();
     const styleInfo = this._resolveMapStyle();
     this.map = new maplibregl.Map(
@@ -37123,75 +37206,6 @@ const _HeliosEngine = class _HeliosEngine {
     };
     this.map.on("error", this._mapErrorHandler);
     this._refreshWeather();
-  }
-  //_weatherTimer holds either a setInterval id (regular refresh) or
-  //a setTimeout id (rate-limit back-off). The two ID spaces overlap
-  //in practice but not by spec, so we always clear both kinds.
-  _clearWeatherTimer() {
-    if (this._weatherTimer !== void 0) {
-      window.clearInterval(this._weatherTimer);
-      window.clearTimeout(this._weatherTimer);
-      this._weatherTimer = void 0;
-    }
-  }
-  setSolarRadiationSamples(samples) {
-    if (!samples || samples.length === 0) {
-      if (this._sensorIrradianceSamples === null) return;
-      this._sensorIrradianceSamples = null;
-      this._arcInputsCache = void 0;
-      this._renderForCurrentSelection();
-      return;
-    }
-    const cleaned = [];
-    for (const s2 of samples) {
-      const ms = s2.time.getTime();
-      if (!isFinite(ms)) continue;
-      if (!isFinite(s2.wm2) || s2.wm2 < 0) continue;
-      cleaned.push({ tMs: ms, wm2: s2.wm2 });
-    }
-    cleaned.sort((a2, b2) => a2.tMs - b2.tMs);
-    const next3 = cleaned.length > 0 ? cleaned : null;
-    if (this._sensorSamplesEqual(this._sensorIrradianceSamples, next3)) {
-      return;
-    }
-    this._sensorIrradianceSamples = next3;
-    this._arcInputsCache = void 0;
-    this._renderForCurrentSelection();
-  }
-  _sensorSamplesEqual(a2, b2) {
-    if (a2 === b2) return true;
-    if (a2 === null || b2 === null) return false;
-    if (a2.length !== b2.length) return false;
-    for (let i2 = 0; i2 < a2.length; i2++) {
-      if (a2[i2].tMs !== b2[i2].tMs) return false;
-      if (a2[i2].wm2 !== b2[i2].wm2) return false;
-    }
-    return true;
-  }
-  //Nearest-neighbour lookup over the pushed sensor history. Returns
-  //the W/m² reading whose timestamp is closest to `t` provided the
-  //gap is within the strict window; otherwise null so the caller
-  //falls back to the model. Linear scan is fine for ~hourly samples
-  //across a few-day window (a couple of hundred entries at most).
-  _sensorIrradianceAt(t2) {
-    const samples = this._sensorIrradianceSamples;
-    if (!samples || samples.length === 0) return null;
-    const tMs = t2.getTime();
-    let bestIdx = -1;
-    let bestDelta = Number.POSITIVE_INFINITY;
-    for (let i2 = 0; i2 < samples.length; i2++) {
-      const d2 = Math.abs(samples[i2].tMs - tMs);
-      if (d2 < bestDelta) {
-        bestDelta = d2;
-        bestIdx = i2;
-      } else if (d2 > bestDelta) {
-        break;
-      }
-    }
-    if (bestIdx < 0 || bestDelta > _HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS) {
-      return null;
-    }
-    return samples[bestIdx].wm2;
   }
   //Resolves the active OpenFreeMap style URL from `map-style` +
   //`card-theme`. OpenFreeMap publishes a fixed set of MapLibre
@@ -39227,6 +39241,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._arcInputsCache = void 0;
     this._lastShadowSig = void 0;
     this._resizeObserver?.disconnect();
+    this._pendingInitObserver?.disconnect();
+    this._pendingInitObserver = void 0;
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
       this._autoRotateRaf = void 0;
@@ -44110,7 +44126,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.14"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.15"}`,
       labelStyle,
       versionStyle
     );
@@ -44134,7 +44150,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.14",
+        version: "1.7.0-alpha.15",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44142,7 +44158,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.14"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.15"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
