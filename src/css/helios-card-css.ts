@@ -1849,6 +1849,30 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
     }
+    /*  Country-flag variant of the LiDAR-View button. The SVG ships
+        inline (see card/flags.ts) so it renders identically across
+        OSes (Apple flag emoji look great but Windows + a few Linux
+        distros mangle several country codes). Square-clamped to the
+        same 22 px footprint MDI icons get, with a 1 px dark border
+        so light-coloured flags (Poland, Netherlands, Belgium yellow
+        band) keep enough contrast against the button's white plate.   */
+    .mode-bar-seg .mode-bar-flag
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  22px;
+        height: 22px;
+        border-radius: 3px;
+        overflow: hidden;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+    }
+    .mode-bar-seg .mode-bar-flag svg
+    {
+        width:  100%;
+        height: 100%;
+        display: block;
+    }
     .mode-bar-seg.is-disabled
     {
         opacity: 0.35;
