@@ -467,6 +467,21 @@ export class HeliosCard extends LitElement
     _lastHomeKey       = '';
     _lastConfigSig     = '';
     _initInflight      = false;
+    //Deferred engine cleanup. Some HA dashboard layouts (Masonry in
+    //particular) detach and re-attach the card element repeatedly
+    //during their reflow pass. Tearing down the engine on every
+    //disconnect and re-creating it on every reconnect would burn
+    //through the browser's WebGL context pool (~16 max) in seconds,
+    //which then cascades into context-lost events on the survivors.
+    //Instead, we delay the cleanup; if the card re-mounts within the
+    //window, we cancel the cleanup and reuse the live engine, the
+    //engine's own ResizeObserver picks up any container size delta.
+    private _pendingCleanupTimer?: number;
+    //Timestamp of the last engine spawn. onContextLost uses this to
+    //bail out when context losses arrive faster than ~2 s apart,
+    //which only happens when the browser is thrashing the WebGL pool,
+    //respawning at that cadence just feeds the fire.
+    _lastEngineSpawnAt = 0;
 
 
     //HA card lifecycle
@@ -614,6 +629,15 @@ export class HeliosCard extends LitElement
     {
         super.connectedCallback();
         _liveCards.add(this);
+        //Cancel any pending cleanup from a recent disconnect, the
+        //engine is still alive and we want to keep it that way.
+        //Without this, Masonry's mount/unmount churn would still
+        //tear down + re-create the engine on every reflow.
+        if (this._pendingCleanupTimer !== undefined)
+        {
+            window.clearTimeout(this._pendingCleanupTimer);
+            this._pendingCleanupTimer = undefined;
+        }
         tick(this);
         //30 s tick: the clock displays HH:MM only (seconds dropped),
         //the sun moves ~0.13° per refresh (visually smooth at that
@@ -652,8 +676,22 @@ export class HeliosCard extends LitElement
             cancelAnimationFrame(this._lidarFadeRaf);
             this._lidarFadeRaf = undefined;
         }
-        this._engine?.cleanup();
-        this._engine = undefined;
+        //Defer the engine teardown; if the card re-mounts within the
+        //window (Masonry reflow), connectedCallback cancels the timer
+        //and the engine survives untouched. When the card is really
+        //gone (view switch, card removed), the cleanup runs after the
+        //grace period, the brief extra GPU work is invisible since
+        //nothing is on screen anymore.
+        if (this._pendingCleanupTimer !== undefined)
+        {
+            window.clearTimeout(this._pendingCleanupTimer);
+        }
+        this._pendingCleanupTimer = window.setTimeout(() =>
+        {
+            this._pendingCleanupTimer = undefined;
+            this._engine?.cleanup();
+            this._engine = undefined;
+        }, 1500);
     }
 
     //IntersectionObserver, pause every CSS animation and every SVG

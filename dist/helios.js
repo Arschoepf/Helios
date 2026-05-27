@@ -39973,6 +39973,7 @@ function initEngineNow(host) {
         return;
       }
       host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
+      host._lastEngineSpawnAt = performance.now();
       wireEngineCallbacks(host);
       host._initInflight = false;
     };
@@ -40010,6 +40011,11 @@ function wireEngineCallbacks(host) {
     });
   };
   host._engine.onContextLost = () => {
+    const sinceSpawn = performance.now() - host._lastEngineSpawnAt;
+    if (sinceSpawn < 2e3) {
+      console.warn("[HELIOS] context-lost arrived too soon after spawn, skipping respawn to avoid cascade");
+      return;
+    }
     host._lastHomeKey = "";
     if (!host._initInflight) initEngine(host);
   };
@@ -44125,7 +44131,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.19"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.20"}`,
       labelStyle,
       versionStyle
     );
@@ -44149,7 +44155,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.19",
+        version: "1.7.0-alpha.20",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44157,7 +44163,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.19"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.20"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -44257,6 +44263,7 @@ let HeliosCard = class extends i {
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
+    this._lastEngineSpawnAt = 0;
     this._trackElement = null;
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => onTimelinePointerMove(this, e2);
@@ -44372,6 +44379,10 @@ let HeliosCard = class extends i {
   connectedCallback() {
     super.connectedCallback();
     _liveCards.add(this);
+    if (this._pendingCleanupTimer !== void 0) {
+      window.clearTimeout(this._pendingCleanupTimer);
+      this._pendingCleanupTimer = void 0;
+    }
     tick(this);
     this._timer = window.setInterval(() => tick(this), 3e4);
     initVisibilityObserver(this);
@@ -44395,8 +44406,14 @@ let HeliosCard = class extends i {
       cancelAnimationFrame(this._lidarFadeRaf);
       this._lidarFadeRaf = void 0;
     }
-    this._engine?.cleanup();
-    this._engine = void 0;
+    if (this._pendingCleanupTimer !== void 0) {
+      window.clearTimeout(this._pendingCleanupTimer);
+    }
+    this._pendingCleanupTimer = window.setTimeout(() => {
+      this._pendingCleanupTimer = void 0;
+      this._engine?.cleanup();
+      this._engine = void 0;
+    }, 1500);
   }
   //Engine init policy: re-init only when one of the *identity inputs*
   //changes (API key, home coordinates, map style). We resize the

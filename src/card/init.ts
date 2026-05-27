@@ -181,6 +181,13 @@ export interface InitHost extends OverlaysHost
     _lastHomeKey:        string;
     _initInflight:       boolean;
     _initDebounceTimer?: number;
+    //performance.now() of the most recent engine spawn. Used by the
+    //onContextLost recovery path to bail out when context losses
+    //arrive faster than the engine can stabilise, which only happens
+    //when the browser is thrashing its WebGL context pool. Re-spawning
+    //at that cadence cascades into more losses, the throttle breaks
+    //the loop and lets the existing engine settle.
+    _lastEngineSpawnAt:  number;
     _visibilityObserver?: IntersectionObserver;
     //Document-level visibilitychange listener. Stored on the host
     //so disconnectedCallback can removeEventListener cleanly when
@@ -310,6 +317,7 @@ export function initEngineNow(host: InitHost): void
                 return;
             }
             host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
+            host._lastEngineSpawnAt = performance.now();
             wireEngineCallbacks(host);
             host._initInflight = false;
         };
@@ -418,6 +426,19 @@ function wireEngineCallbacks(host: InitHost): void
     //path.
     host._engine.onContextLost = () =>
     {
+        //Throttle: if we spawned an engine in the last ~2 s and it's
+        //already losing its context, the browser's WebGL pool is
+        //thrashing. Respawning right now would just feed the cascade
+        //(new engine evicts another live context, that fires its own
+        //lost event, infinite loop). Bail out instead, the existing
+        //paused engine will be picked back up on the next genuine
+        //identity change or user-driven refresh.
+        const sinceSpawn = performance.now() - host._lastEngineSpawnAt;
+        if (sinceSpawn < 2000)
+        {
+            console.warn('[HELIOS] context-lost arrived too soon after spawn, skipping respawn to avoid cascade');
+            return;
+        }
         host._lastHomeKey = '';
         if (!host._initInflight) initEngine(host);
     };
