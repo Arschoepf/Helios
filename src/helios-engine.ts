@@ -753,10 +753,15 @@ export class HeliosEngine
 
     private _scheduleMapInit(container: HTMLElement, haCoords: [number, number]): void
     {
+        //offsetParent is null for elements inside a Lit-style
+        //shadow root in some browsers, which the engine container
+        //always is. Don't include it in the readiness check;
+        //relying on positive dimensions is enough. If the engine
+        //still ends up created in a hidden subtree, the load-time
+        //resize + the 5 s watchdog below recover the basemap.
         const ready = (): boolean =>
             container.clientWidth > 0
-            && container.clientHeight > 0
-            && container.offsetParent !== null;
+            && container.clientHeight > 0;
         const tryInit = (): boolean =>
         {
             if (!ready()) return false;

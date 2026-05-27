@@ -37037,7 +37037,7 @@ const _HeliosEngine = class _HeliosEngine {
     return samples[bestIdx].wm2;
   }
   _scheduleMapInit(container, haCoords) {
-    const ready = () => container.clientWidth > 0 && container.clientHeight > 0 && container.offsetParent !== null;
+    const ready = () => container.clientWidth > 0 && container.clientHeight > 0;
     const tryInit = () => {
       if (!ready()) return false;
       this._pendingInitObserver?.disconnect();
@@ -44154,7 +44154,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.17"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.18"}`,
       labelStyle,
       versionStyle
     );
@@ -44178,7 +44178,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.17",
+        version: "1.7.0-alpha.18",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44186,7 +44186,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.17"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.18"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
