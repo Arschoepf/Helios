@@ -36965,18 +36965,7 @@ const _HeliosEngine = class _HeliosEngine {
     _liveEngines.add(this);
     this._fetchLat = this.homeLat;
     this._fetchLon = this.homeLon;
-    if (container.clientWidth > 0 && container.clientHeight > 0) {
-      this._initMapInstance(container, haCoords);
-    } else {
-      this._pendingInitObserver = new ResizeObserver(() => {
-        if (container.clientWidth > 0 && container.clientHeight > 0) {
-          this._pendingInitObserver?.disconnect();
-          this._pendingInitObserver = void 0;
-          this._initMapInstance(container, haCoords);
-        }
-      });
-      this._pendingInitObserver.observe(container);
-    }
+    this._scheduleMapInit(container, haCoords);
   }
   //_weatherTimer holds either a setInterval id (regular refresh) or
   //a setTimeout id (rate-limit back-off). The two ID spaces overlap
@@ -37047,6 +37036,31 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return samples[bestIdx].wm2;
   }
+  _scheduleMapInit(container, haCoords) {
+    const ready = () => container.clientWidth > 0 && container.clientHeight > 0 && container.offsetParent !== null;
+    const tryInit = () => {
+      if (!ready()) return false;
+      this._pendingInitObserver?.disconnect();
+      this._pendingInitObserver = void 0;
+      this._pendingInitIntersect?.disconnect();
+      this._pendingInitIntersect = void 0;
+      this._initMapInstance(container, haCoords);
+      return true;
+    };
+    if (tryInit()) return;
+    this._pendingInitObserver = new ResizeObserver(() => {
+      tryInit();
+    });
+    this._pendingInitObserver.observe(container);
+    if (typeof IntersectionObserver !== "undefined") {
+      this._pendingInitIntersect = new IntersectionObserver((entries) => {
+        for (const e2 of entries) {
+          if (e2.isIntersecting && tryInit()) return;
+        }
+      }, { threshold: 0 });
+      this._pendingInitIntersect.observe(container);
+    }
+  }
   _initMapInstance(container, haCoords) {
     const pixelRatio = this._pixelRatio();
     const styleInfo = this._resolveMapStyle();
@@ -37116,7 +37130,19 @@ const _HeliosEngine = class _HeliosEngine {
     this.map.on("style.load", this._mapStyleLoadHandler);
     this._mapLoadHandler = () => {
       this.map?.resize();
+      requestAnimationFrame(() => this.map?.resize());
+      window.setTimeout(() => this.map?.resize(), 400);
       this._applyMapBounds();
+      window.setTimeout(() => {
+        if (!this.map) return;
+        if (this.map.areTilesLoaded()) return;
+        if (!this.map.isStyleLoaded()) return;
+        try {
+          const styleUrl = this._resolveMapStyle().url;
+          this.map.setStyle(styleUrl);
+        } catch (_2) {
+        }
+      }, 5e3);
       startAutoRotateLoop(this);
     };
     this.map.on("load", this._mapLoadHandler);
@@ -39243,6 +39269,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._resizeObserver?.disconnect();
     this._pendingInitObserver?.disconnect();
     this._pendingInitObserver = void 0;
+    this._pendingInitIntersect?.disconnect();
+    this._pendingInitIntersect = void 0;
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
       this._autoRotateRaf = void 0;
@@ -44126,7 +44154,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.16"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.17"}`,
       labelStyle,
       versionStyle
     );
@@ -44150,7 +44178,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.16",
+        version: "1.7.0-alpha.17",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44158,7 +44186,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.16"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.17"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

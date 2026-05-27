@@ -728,38 +728,70 @@ export class HeliosEngine
         this._fetchLon = this.homeLon;
 
         //Masonry + a few other HA dashboard layouts mount the card
-        //container with zero dimensions and resize it on a later
-        //frame. MapLibre initialised on a 0 x 0 container creates
-        //its WebGL context fine but the tile fetcher computes a
-        //degenerate viewport polygon, decides nothing is visible,
-        //and never issues tile requests, leaving the user with a
-        //black basemap + working custom layers (sun arc, LiDAR
-        //shadows, building extrusions). Defer the map creation
-        //until the container has positive dimensions; the rest of
-        //the engine is the same.
-        if (container.clientWidth > 0 && container.clientHeight > 0)
+        //container into a state where MapLibre's tile manager
+        //doesn't fetch any basemap tile, even though the WebGL
+        //context creates fine and custom layers paint correctly.
+        //Symptom: black basemap + working overlays (sun arc, LiDAR
+        //shadows, building extrusions).
+        //
+        //Three conditions can each cause the bug, and Masonry hits
+        //at least one of them depending on timing:
+        //  - container.clientWidth or clientHeight is 0 at init
+        //  - container has size but offsetParent is null (the
+        //    element sits inside a display:none ancestor)
+        //  - container has size + visible parent but the page
+        //    hasn't finished laying out yet, MapLibre computes its
+        //    viewport polygon against stale geometry
+        //
+        //Defer the map creation until ALL three conditions are
+        //satisfied. The combined ResizeObserver + IntersectionObserver
+        //covers every transition path; we re-check on each fire and
+        //also force a map.resize() after the load event lands, just
+        //in case the layout settled in the meantime.
+        this._scheduleMapInit(container, haCoords);
+    }
+
+    private _scheduleMapInit(container: HTMLElement, haCoords: [number, number]): void
+    {
+        const ready = (): boolean =>
+            container.clientWidth > 0
+            && container.clientHeight > 0
+            && container.offsetParent !== null;
+        const tryInit = (): boolean =>
         {
+            if (!ready()) return false;
+            this._pendingInitObserver?.disconnect();
+            this._pendingInitObserver = undefined;
+            this._pendingInitIntersect?.disconnect();
+            this._pendingInitIntersect = undefined;
             this._initMapInstance(container, haCoords);
-        }
-        else
+            return true;
+        };
+        if (tryInit()) return;
+        //Watch both size changes and visibility / mount changes.
+        //ResizeObserver covers the "container grew from 0 x 0"
+        //case; IntersectionObserver covers the "container was in
+        //a hidden tab / collapsed section that just opened" case.
+        this._pendingInitObserver = new ResizeObserver(() => { tryInit(); });
+        this._pendingInitObserver.observe(container);
+        if (typeof IntersectionObserver !== 'undefined')
         {
-            this._pendingInitObserver = new ResizeObserver(() =>
+            this._pendingInitIntersect = new IntersectionObserver((entries) =>
             {
-                if (container.clientWidth > 0 && container.clientHeight > 0)
+                for (const e of entries)
                 {
-                    this._pendingInitObserver?.disconnect();
-                    this._pendingInitObserver = undefined;
-                    this._initMapInstance(container, haCoords);
+                    if (e.isIntersecting && tryInit()) return;
                 }
-            });
-            this._pendingInitObserver.observe(container);
+            }, { threshold: 0 });
+            this._pendingInitIntersect.observe(container);
         }
     }
 
-    //Holds a transient ResizeObserver while the engine waits for
-    //its container to grow past 0 x 0. Cleared once _initMapInstance
-    //fires, or when the engine is destroyed before that happens.
-    private _pendingInitObserver?: ResizeObserver;
+    //Held while the engine waits for its container to become
+    //usable. Both cleared by tryInit() once _initMapInstance fires,
+    //or by cleanup() if the engine is destroyed before that.
+    private _pendingInitObserver?:  ResizeObserver;
+    private _pendingInitIntersect?: IntersectionObserver;
 
     private _initMapInstance(container: HTMLElement, haCoords: [number, number]): void
     {
@@ -877,6 +909,15 @@ export class HeliosEngine
         this._mapLoadHandler = () =>
         {
             this.map?.resize();
+            //Belt-and-suspenders against the Masonry layout: even
+            //though we delayed init until the container had real
+            //dimensions, the HA dashboard may still settle one or
+            //two frames AFTER load fires. Force another resize on
+            //the next animation frame and on a short timeout so any
+            //post-layout geometry change reaches MapLibre's tile
+            //manager and re-triggers tile fetches.
+            requestAnimationFrame(() => this.map?.resize());
+            window.setTimeout(() => this.map?.resize(), 400);
             //Clamp the camera to a bounding box scaled to the
             //display radius around the home. No pan + no zoom in
             //Helios so the camera never moves anyway, but the
@@ -885,6 +926,34 @@ export class HeliosEngine
             //which reduces speculative tile fetches at the edges
             //of the pitched viewport during rotation.
             this._applyMapBounds();
+            //Watchdog: 5 s after load, if MapLibre still has no
+            //tile loaded for any of its sources (most likely cause:
+            //the basemap source decided the viewport was empty at
+            //fetch-decision time, which can happen if the container
+            //was hidden/zero-sized at the wrong micro-instant), we
+            //destroy + re-create the style. setStyle(currentUrl)
+            //tears down custom layers, so the engine's setup logic
+            //needs to re-run; cleanest is to fire a 'style.load'
+            //event handler that re-registers them. Simpler for
+            //this v1: just call setStyle which forces a full
+            //re-fetch, the custom layers re-register inside the
+            //existing style.load handler the engine already wires.
+            window.setTimeout(() =>
+            {
+                if (!this.map) return;
+                if (this.map.areTilesLoaded()) return;
+                if (!this.map.isStyleLoaded())  return;
+                //No tile arrived in 5 s despite a fully-loaded
+                //style. Force a soft reload of the style URL, which
+                //makes MapLibre re-walk every source and re-issue
+                //tile fetches for the current viewport.
+                try
+                {
+                    const styleUrl = this._resolveMapStyle().url;
+                    this.map.setStyle(styleUrl);
+                }
+                catch (_) { /* ignore, no recovery possible */ }
+            }, 5000);
             startAutoRotateLoop(this);
         };
         this.map.on('load', this._mapLoadHandler);
@@ -4119,6 +4188,8 @@ export class HeliosEngine
         this._resizeObserver?.disconnect();
         this._pendingInitObserver?.disconnect();
         this._pendingInitObserver = undefined;
+        this._pendingInitIntersect?.disconnect();
+        this._pendingInitIntersect = undefined;
         if (this._autoRotateRaf !== undefined)
         {
             cancelAnimationFrame(this._autoRotateRaf);
