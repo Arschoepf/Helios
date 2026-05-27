@@ -5632,6 +5632,54 @@ function sampleDtmAt(raster, lon, lat) {
   if (!raster.terrain) return null;
   return bilinearSample(raster.terrain, raster, lon, lat);
 }
+function computeLidarCellExposure(raster, sunAltitudeDeg, sunAzimuthDeg, stepM = 2, maxDistM = 200) {
+  const N2 = raster.rasterSize * raster.rasterSize;
+  const out = new Uint8Array(N2);
+  if (sunAltitudeDeg <= 0) return out;
+  const altR = sunAltitudeDeg * D;
+  const azR = sunAzimuthDeg * D;
+  const dxM = Math.sin(azR);
+  const dyM = Math.cos(azR);
+  const tanAlt = Math.tan(altR);
+  const { rasterSize, minLat, maxLat, minLon, maxLon, heights, terrain } = raster;
+  const pxLon = (maxLon - minLon) / rasterSize;
+  const pxLat = (maxLat - minLat) / rasterSize;
+  const hasTerrain = !!terrain;
+  for (let j = 0; j < rasterSize; j++) {
+    const cLat = maxLat - (j + 0.5) * pxLat;
+    const mPerDegLon = M_PER_DEG_LAT$2 * Math.cos(cLat * D);
+    const dLatPerM = dyM / M_PER_DEG_LAT$2;
+    const dLonPerM = dxM / mPerDegLon;
+    for (let i3 = 0; i3 < rasterSize; i3++) {
+      const idx = j * rasterSize + i3;
+      const cellH = heights[idx];
+      if (!isFinite(cellH)) continue;
+      const cLon = minLon + (i3 + 0.5) * pxLon;
+      const cellDtm = hasTerrain ? terrain[idx] : 0;
+      let shadowed = false;
+      for (let d2 = stepM; d2 <= maxDistM; d2 += stepM) {
+        const lat = cLat + dLatPerM * d2;
+        const lon = cLon + dLonPerM * d2;
+        const sampleObstacle = sampleNdsmAt(raster, lon, lat);
+        if (sampleObstacle === null) continue;
+        let relGround = 0;
+        if (hasTerrain) {
+          const sampleDtm = sampleDtmAt(raster, lon, lat);
+          if (sampleDtm === null) continue;
+          relGround = sampleDtm - cellDtm;
+        }
+        const obstacleZ = relGround + sampleObstacle;
+        const rayZ = cellH + d2 * tanAlt;
+        if (obstacleZ > rayZ) {
+          shadowed = true;
+          break;
+        }
+      }
+      out[idx] = shadowed ? 0 : 255;
+    }
+  }
+  return out;
+}
 function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg, sunAzimuthDeg, stepM = 2, maxDistM = 200) {
   if (!raster) return false;
   if (sunAltitudeDeg <= 0) return false;
@@ -36434,13 +36482,15 @@ function resolveLidarSource(lat, lon, cfg) {
 }
 const VERT_SRC = `
 precision highp float;
-attribute vec3 a_pos;
+attribute vec3  a_pos;
+attribute float a_exposure;
 uniform mat4  u_matrix;
 uniform float u_mercPerMeter;
 uniform float u_fadeFullMeters;
 uniform float u_fadeOutMeters;
 uniform float u_pointSizePx;
 varying float v_alpha;
+varying float v_exposure;
 
 void main() {
     float dxM = a_pos.x / u_mercPerMeter;
@@ -36448,7 +36498,8 @@ void main() {
     float d2  = dxM * dxM + dyM * dyM;
     float fullR2 = u_fadeFullMeters * u_fadeFullMeters;
     float fadeR2 = u_fadeOutMeters * u_fadeOutMeters;
-    v_alpha = 1.0 - smoothstep(fullR2, fadeR2, d2);
+    v_alpha    = 1.0 - smoothstep(fullR2, fadeR2, d2);
+    v_exposure = a_exposure;
     gl_Position  = u_matrix * vec4(a_pos, 1.0);
     //Collapse the primitive once the alpha is essentially zero so
     //fully-faded points don't waste rasteriser time. The 0.001
@@ -36461,7 +36512,15 @@ const FRAG_SRC = `
 precision mediump float;
 uniform vec4  u_color;
 uniform float u_alphaFade;
+//Solar-exposure modulation. The vertex shader normalises a per-cell exposure byte to [0, 1]; this controls a brightness multiplier + a warm
+//tint applied to the base colour. 1 = sun-lit (full brightness, slight warm shift), 0 = in shadow (dimmed). The defaults are tuned so a
+//missing exposure buffer (attribute disabled, vertexAttrib1f(1.0)) produces visuals identical to the pre-exposure render: full lit, neutral
+//tint. When the engine starts feeding real exposure data the dimmed cells immediately read as shadow without changing the lit baseline.
+uniform float u_exposureLitBoost;
+uniform float u_exposureShadowFloor;
+uniform vec3  u_exposureWarmTint;
 varying float v_alpha;
+varying float v_exposure;
 
 void main() {
     //v_alpha is the home-distance fall-off, 1 inside the full radius
@@ -36470,7 +36529,10 @@ void main() {
     //invisible fragments (and for lines this clips the segment past
     //the boundary cleanly).
     if (v_alpha <= 0.0) discard;
-    gl_FragColor = vec4(u_color.rgb, u_color.a * u_alphaFade * v_alpha);
+    float lit  = mix(u_exposureShadowFloor, u_exposureLitBoost, v_exposure);
+    vec3  warm = mix(vec3(1.0), u_exposureWarmTint, v_exposure);
+    vec3  col  = u_color.rgb * lit * warm;
+    gl_FragColor = vec4(col, u_color.a * u_alphaFade * v_alpha);
 }
 `;
 class LidarViewLayer {
@@ -36478,10 +36540,12 @@ class LidarViewLayer {
     this.id = "helios-lidar-view";
     this.type = "custom";
     this.renderingMode = "2d";
+    this._hasExposure = false;
     this._vertexCount = 0;
     this._lineIdxCount = 0;
     this._indexType = 0;
     this._aPos = -1;
+    this._aExposure = -1;
     this._shiftedMatrix = new Float32Array(16);
     this._fadeFullMeters = 100;
     this._fadeOutMeters = 100;
@@ -36490,6 +36554,7 @@ class LidarViewLayer {
     this._alphaFade = 0;
     this._wireframeEnabled = false;
     this._wireframeColor = [1, 1, 1, 0.5];
+    this._cellToVert = null;
     this._raster = null;
     this._homeMerc = maplibregl.MercatorCoordinate.fromLngLat([opts.homeLon, opts.homeLat], 0);
     this._mercPerMeter = this._homeMerc.meterInMercatorCoordinateUnits();
@@ -36608,6 +36673,8 @@ class LidarViewLayer {
     }
     this._lineIdxCount = li;
     const lineUsed = li > 0 ? lineIdx.subarray(0, li) : new Uint32Array(0);
+    this._cellToVert = cellToVert;
+    this._hasExposure = false;
     if (this._gl && this._buffer) {
       const gl = this._gl;
       gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
@@ -36618,9 +36685,41 @@ class LidarViewLayer {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, lineUsed, gl.STATIC_DRAW);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
       }
+      if (this._exposureBuffer) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._exposureBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, n3, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      }
     } else {
       this._pendingVerts = used;
       this._pendingLineIdx = lineUsed;
+    }
+    this._map?.triggerRepaint();
+  }
+  //Accept a per-raster-cell exposure byte array (length = rasterSize²) coming from computeLidarCellExposure(). Maps it through the cached
+  //cellToVert into a per-vertex byte array, uploads to the GPU and flips _hasExposure so the next render reads from a_exposure instead of
+  //the constant fallback. Passing null clears the override.
+  setExposure(perCellExposure) {
+    if (!perCellExposure || !this._cellToVert || this._vertexCount === 0) {
+      this._hasExposure = false;
+      this._pendingExposure = void 0;
+      this._map?.triggerRepaint();
+      return;
+    }
+    const vertExposure = new Uint8Array(this._vertexCount);
+    const c2v = this._cellToVert;
+    const N2 = c2v.length;
+    for (let i3 = 0; i3 < N2; i3++) {
+      const v2 = c2v[i3];
+      if (v2 >= 0) vertExposure[v2] = perCellExposure[i3] ?? 255;
+    }
+    if (this._gl && this._exposureBuffer) {
+      this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this._exposureBuffer);
+      this._gl.bufferData(this._gl.ARRAY_BUFFER, vertExposure, this._gl.STATIC_DRAW);
+      this._gl.bindBuffer(this._gl.ARRAY_BUFFER, null);
+      this._hasExposure = true;
+    } else {
+      this._pendingExposure = vertExposure;
     }
     this._map?.triggerRepaint();
   }
@@ -36644,6 +36743,7 @@ class LidarViewLayer {
       }
       this._program = program;
       this._aPos = gl.getAttribLocation(program, "a_pos");
+      this._aExposure = gl.getAttribLocation(program, "a_exposure");
       this._uMatrix = gl.getUniformLocation(program, "u_matrix") ?? void 0;
       this._uMercPerMeter = gl.getUniformLocation(program, "u_mercPerMeter") ?? void 0;
       this._uFadeFull = gl.getUniformLocation(program, "u_fadeFullMeters") ?? void 0;
@@ -36651,12 +36751,23 @@ class LidarViewLayer {
       this._uPointSize = gl.getUniformLocation(program, "u_pointSizePx") ?? void 0;
       this._uColor = gl.getUniformLocation(program, "u_color") ?? void 0;
       this._uAlphaFade = gl.getUniformLocation(program, "u_alphaFade") ?? void 0;
+      this._uExposureLit = gl.getUniformLocation(program, "u_exposureLitBoost") ?? void 0;
+      this._uExposureShadow = gl.getUniformLocation(program, "u_exposureShadowFloor") ?? void 0;
+      this._uExposureWarmTint = gl.getUniformLocation(program, "u_exposureWarmTint") ?? void 0;
       this._buffer = gl.createBuffer() ?? void 0;
       if (this._pendingVerts && this._buffer) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
         gl.bufferData(gl.ARRAY_BUFFER, this._pendingVerts, gl.STATIC_DRAW);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
         this._pendingVerts = void 0;
+      }
+      this._exposureBuffer = gl.createBuffer() ?? void 0;
+      if (this._pendingExposure && this._exposureBuffer) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._exposureBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this._pendingExposure, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        this._hasExposure = this._pendingExposure.length === this._vertexCount;
+        this._pendingExposure = void 0;
       }
       const isWebGL2 = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
       const has32Idx = isWebGL2 || !!gl.getExtension("OES_element_index_uint");
@@ -36722,10 +36833,24 @@ class LidarViewLayer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
     gl.enableVertexAttribArray(this._aPos);
     gl.vertexAttribPointer(this._aPos, 3, gl.FLOAT, false, 0, 0);
+    if (this._aExposure >= 0) {
+      if (this._hasExposure && this._exposureBuffer) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._exposureBuffer);
+        gl.enableVertexAttribArray(this._aExposure);
+        gl.vertexAttribPointer(this._aExposure, 1, gl.UNSIGNED_BYTE, true, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
+      } else {
+        gl.disableVertexAttribArray(this._aExposure);
+        gl.vertexAttrib1f(this._aExposure, 1);
+      }
+    }
     if (this._uMatrix) gl.uniformMatrix4fv(this._uMatrix, false, this._shiftedMatrix);
     if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
     if (this._uFadeFull) gl.uniform1f(this._uFadeFull, this._fadeFullMeters);
     if (this._uFadeOut) gl.uniform1f(this._uFadeOut, this._fadeOutMeters);
+    if (this._uExposureLit) gl.uniform1f(this._uExposureLit, 1);
+    if (this._uExposureShadow) gl.uniform1f(this._uExposureShadow, 0.35);
+    if (this._uExposureWarmTint) gl.uniform3f(this._uExposureWarmTint, 1, 0.85, 0.6);
     const pixelRatio = this._map?.getPixelRatio?.() ?? (typeof window !== "undefined" && window.devicePixelRatio || 1);
     if (this._uPointSize) gl.uniform1f(this._uPointSize, this._pointSizePx * pixelRatio);
     if (this._uColor) gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
@@ -37151,6 +37276,8 @@ const _HeliosEngine = class _HeliosEngine {
     this._pvArrayMarkers = [];
     this._selectedTime = null;
     this._lastAtmosphereAlt = -999;
+    this._lastLidarExposureAlt = -999;
+    this._lastLidarExposureAz = -999;
     this._rateLimitStreak = 0;
     this._paused = false;
     this._sensorIrradianceSamples = null;
@@ -37910,7 +38037,69 @@ const _HeliosEngine = class _HeliosEngine {
   setLidarViewActive(on) {
     if (on === this._lidarViewActive) return;
     this._lidarViewActive = on;
-    if (on) this._ensureLidarFetched();
+    if (on) {
+      this._ensureLidarFetched();
+      this._lastLidarExposureAlt = -999;
+      this._lastLidarExposureAz = -999;
+      this._scheduleLidarExposureRecompute();
+    } else {
+      if (this._exposureIdleHandle !== void 0) {
+        this._cancelIdleCb(this._exposureIdleHandle);
+        this._exposureIdleHandle = void 0;
+      }
+      this._lidarViewLayer?.setExposure(null);
+    }
+  }
+  //Cross-browser requestIdleCallback / cancelIdleCallback. Safari only shipped them in 2024, fall back to setTimeout(0) where the API is
+  //missing so the compute still runs (it just doesn't get the deadline-friendly scheduling perk).
+  _requestIdleCb(cb) {
+    const w2 = window;
+    if (typeof w2.requestIdleCallback === "function") {
+      return w2.requestIdleCallback(cb, { timeout: 2e3 });
+    }
+    return window.setTimeout(cb, 0);
+  }
+  _cancelIdleCb(handle) {
+    const w2 = window;
+    if (typeof w2.cancelIdleCallback === "function") {
+      w2.cancelIdleCallback(handle);
+      return;
+    }
+    window.clearTimeout(handle);
+  }
+  //Schedule the LiDAR-View exposure compute via an idle callback so the 50-150 ms raymarch never lands on a user-interactive frame. No-op
+  //when LiDAR View is off, the raster isn't loaded yet, the layer instance isn't ready, or a compute is already queued. The actual sun-delta
+  //gate happens inside the deferred callback so a stale schedule can't fire a no-op compute when the sun hasn't actually moved.
+  _scheduleLidarExposureRecompute() {
+    if (!this._lidarViewActive) return;
+    if (!this._lidarRaster || !this._lidarViewLayer) return;
+    if (this._exposureIdleHandle !== void 0) return;
+    this._exposureIdleHandle = this._requestIdleCb(() => {
+      this._exposureIdleHandle = void 0;
+      if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer) return;
+      const sun = getSunPosition(this._selectedTime ?? /* @__PURE__ */ new Date(), this.homeLat, this.homeLon);
+      if (!sun) return;
+      const altDelta = Math.abs(sun.altitude - this._lastLidarExposureAlt);
+      const azDelta = Math.abs(sun.azimuth - this._lastLidarExposureAz);
+      if (altDelta < 0.5 && azDelta < 0.5) return;
+      const r2 = this._lidarRaster;
+      const exposure = computeLidarCellExposure(
+        {
+          heights: r2.heights,
+          terrain: r2.terrain,
+          rasterSize: r2.rasterSize,
+          minLat: r2.minLat,
+          maxLat: r2.maxLat,
+          minLon: r2.minLon,
+          maxLon: r2.maxLon
+        },
+        sun.altitude,
+        sun.azimuth
+      );
+      this._lidarViewLayer.setExposure(exposure);
+      this._lastLidarExposureAlt = sun.altitude;
+      this._lastLidarExposureAz = sun.azimuth;
+    });
   }
   //Wire (or rewire after a style reload) the WebGL custom layer that
   //paints the LiDAR View dot cloud on the map's own GL context. The
@@ -38445,6 +38634,7 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     this._lastAtmosphereAlt = altitude;
+    this._scheduleLidarExposureRecompute();
     if (this.map.getLayer("helios-night-shade")) {
       try {
         const ns = nightShadeForAltitude(altitude);
@@ -44405,7 +44595,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.29"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.30"}`,
       labelStyle,
       versionStyle
     );
@@ -44429,7 +44619,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.29",
+        version: "1.7.0-alpha.30",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44437,7 +44627,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.29"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.30"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

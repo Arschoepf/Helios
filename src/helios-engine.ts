@@ -7,6 +7,7 @@ import { projectExtrusionShadows } from './engine/shadows';
 import { resolveLidarSource } from './engine/lidar';
 import { RASTER_DEFAULTS } from './engine/lidar/pipeline';
 import { LidarViewLayer } from './engine/lidar-view-layer';
+import { computeLidarCellExposure } from './engine/pv-shading';
 import { startAutoRotateLoop } from './engine/auto-rotate';
 import { setDetailMode as _setDetailMode } from './engine/detail-mode';
 import
@@ -366,6 +367,15 @@ export class HeliosEngine
     //Skip atmosphere repaint when the sun moved less than 0.5° since
     //last call (≈ 2 min), setPaintProperty isn't free on mobile.
     private _lastAtmosphereAlt = -999;
+
+    //Last sun (altitude, azimuth) the LiDAR-View exposure compute ran against. The compute is expensive (50-150 ms per pass) so we gate it on
+    //the same 0.5° delta as the atmosphere refresh and additionally watch the azimuth, which moves faster than altitude near sunrise / sunset.
+    //Init to a sentinel that guarantees the first compute fires the moment LiDAR View turns on.
+    private _lastLidarExposureAlt: number = -999;
+    private _lastLidarExposureAz:  number = -999;
+    //Handle for the deferred exposure compute scheduled via requestIdleCallback (with a setTimeout fallback for environments where the API is
+    //missing, e.g. older Safari). Stored so we can cancel an in-flight schedule when the sun moves again before the previous one fired.
+    private _exposureIdleHandle:   number | undefined;
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
     private _rateLimitStreak = 0;
@@ -1692,7 +1702,89 @@ export class HeliosEngine
         //Going from off→on, kick the fetch path so the raster lands.
         //Going from on→off, no-op: the raster stays cached and the
         //next shadow refresh (if shadows come back on) reuses it.
-        if (on) this._ensureLidarFetched();
+        if (on)
+        {
+            this._ensureLidarFetched();
+            //Force the next exposure compute to fire on the first sun refresh after the toggle, no matter how stale the cached last-known
+            //sun is. The atmosphere loop runs on a 30 s tick so the user sees the lit / shadowed cells flip in within seconds of opening
+            //LiDAR View.
+            this._lastLidarExposureAlt = -999;
+            this._lastLidarExposureAz  = -999;
+            this._scheduleLidarExposureRecompute();
+        }
+        else
+        {
+            //Clear any pending compute and reset the layer's exposure override so a future re-enable starts from the constant-lit fallback
+            //rather than ghosting the old shadows for a frame.
+            if (this._exposureIdleHandle !== undefined)
+            {
+                this._cancelIdleCb(this._exposureIdleHandle);
+                this._exposureIdleHandle = undefined;
+            }
+            this._lidarViewLayer?.setExposure(null);
+        }
+    }
+
+
+    //Cross-browser requestIdleCallback / cancelIdleCallback. Safari only shipped them in 2024, fall back to setTimeout(0) where the API is
+    //missing so the compute still runs (it just doesn't get the deadline-friendly scheduling perk).
+    private _requestIdleCb(cb: () => void): number
+    {
+        const w = window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
+        if (typeof w.requestIdleCallback === 'function')
+        {
+            return w.requestIdleCallback(cb, { timeout: 2000 });
+        }
+        return window.setTimeout(cb, 0);
+    }
+    private _cancelIdleCb(handle: number): void
+    {
+        const w = window as unknown as { cancelIdleCallback?: (h: number) => void };
+        if (typeof w.cancelIdleCallback === 'function')
+        {
+            w.cancelIdleCallback(handle);
+            return;
+        }
+        window.clearTimeout(handle);
+    }
+
+
+    //Schedule the LiDAR-View exposure compute via an idle callback so the 50-150 ms raymarch never lands on a user-interactive frame. No-op
+    //when LiDAR View is off, the raster isn't loaded yet, the layer instance isn't ready, or a compute is already queued. The actual sun-delta
+    //gate happens inside the deferred callback so a stale schedule can't fire a no-op compute when the sun hasn't actually moved.
+    private _scheduleLidarExposureRecompute(): void
+    {
+        if (!this._lidarViewActive) return;
+        if (!this._lidarRaster || !this._lidarViewLayer) return;
+        if (this._exposureIdleHandle !== undefined) return;
+        this._exposureIdleHandle = this._requestIdleCb(() =>
+        {
+            this._exposureIdleHandle = undefined;
+            if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer) return;
+            const sun = getSunPosition(this._selectedTime ?? new Date(), this.homeLat, this.homeLon);
+            if (!sun) return;
+            const altDelta = Math.abs(sun.altitude - this._lastLidarExposureAlt);
+            const azDelta  = Math.abs(sun.azimuth  - this._lastLidarExposureAz);
+            if (altDelta < 0.5 && azDelta < 0.5) return;
+            const r = this._lidarRaster;
+            //NdsmRaster shape match: heights + rasterSize + bbox + optional terrain. The engine's _lidarRaster carries the same fields.
+            const exposure = computeLidarCellExposure(
+                {
+                    heights:    r.heights,
+                    terrain:    r.terrain,
+                    rasterSize: r.rasterSize,
+                    minLat:     r.minLat,
+                    maxLat:     r.maxLat,
+                    minLon:     r.minLon,
+                    maxLon:     r.maxLon,
+                },
+                sun.altitude,
+                sun.azimuth,
+            );
+            this._lidarViewLayer.setExposure(exposure);
+            this._lastLidarExposureAlt = sun.altitude;
+            this._lastLidarExposureAz  = sun.azimuth;
+        });
     }
 
     //Wire (or rewire after a style reload) the WebGL custom layer that
@@ -2405,6 +2497,10 @@ export class HeliosEngine
             return;
         }
         this._lastAtmosphereAlt = altitude;
+
+        //Sun moved past the atmosphere refresh threshold, recompute the LiDAR-View exposure so the lit / shadowed cell colouring keeps up
+        //with the sun. No-op when LiDAR View is off, the raster isn't loaded, or another compute is already queued.
+        this._scheduleLidarExposureRecompute();
 
         //Night-shade overlay, the primary day/night cue.
         //Opacity ramps from 0 (day) up to ~0.65 at deep night, with a tinted

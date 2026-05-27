@@ -43,13 +43,15 @@ import type {
 //stays rock-solid as the camera moves.
 const VERT_SRC = `
 precision highp float;
-attribute vec3 a_pos;
+attribute vec3  a_pos;
+attribute float a_exposure;
 uniform mat4  u_matrix;
 uniform float u_mercPerMeter;
 uniform float u_fadeFullMeters;
 uniform float u_fadeOutMeters;
 uniform float u_pointSizePx;
 varying float v_alpha;
+varying float v_exposure;
 
 void main() {
     float dxM = a_pos.x / u_mercPerMeter;
@@ -57,7 +59,8 @@ void main() {
     float d2  = dxM * dxM + dyM * dyM;
     float fullR2 = u_fadeFullMeters * u_fadeFullMeters;
     float fadeR2 = u_fadeOutMeters * u_fadeOutMeters;
-    v_alpha = 1.0 - smoothstep(fullR2, fadeR2, d2);
+    v_alpha    = 1.0 - smoothstep(fullR2, fadeR2, d2);
+    v_exposure = a_exposure;
     gl_Position  = u_matrix * vec4(a_pos, 1.0);
     //Collapse the primitive once the alpha is essentially zero so
     //fully-faded points don't waste rasteriser time. The 0.001
@@ -77,7 +80,15 @@ const FRAG_SRC = `
 precision mediump float;
 uniform vec4  u_color;
 uniform float u_alphaFade;
+//Solar-exposure modulation. The vertex shader normalises a per-cell exposure byte to [0, 1]; this controls a brightness multiplier + a warm
+//tint applied to the base colour. 1 = sun-lit (full brightness, slight warm shift), 0 = in shadow (dimmed). The defaults are tuned so a
+//missing exposure buffer (attribute disabled, vertexAttrib1f(1.0)) produces visuals identical to the pre-exposure render: full lit, neutral
+//tint. When the engine starts feeding real exposure data the dimmed cells immediately read as shadow without changing the lit baseline.
+uniform float u_exposureLitBoost;
+uniform float u_exposureShadowFloor;
+uniform vec3  u_exposureWarmTint;
 varying float v_alpha;
+varying float v_exposure;
 
 void main() {
     //v_alpha is the home-distance fall-off, 1 inside the full radius
@@ -86,7 +97,10 @@ void main() {
     //invisible fragments (and for lines this clips the segment past
     //the boundary cleanly).
     if (v_alpha <= 0.0) discard;
-    gl_FragColor = vec4(u_color.rgb, u_color.a * u_alphaFade * v_alpha);
+    float lit  = mix(u_exposureShadowFloor, u_exposureLitBoost, v_exposure);
+    vec3  warm = mix(vec3(1.0), u_exposureWarmTint, v_exposure);
+    vec3  col  = u_color.rgb * lit * warm;
+    gl_FragColor = vec4(col, u_color.a * u_alphaFade * v_alpha);
 }
 `;
 
@@ -124,6 +138,12 @@ export class LidarViewLayer implements CustomLayerInterface
     //drawElements(LINES) for the wireframe mesh.
     private _buffer?:      WebGLBuffer;
     private _indexBuffer?: WebGLBuffer;
+    //Parallel per-vertex byte buffer carrying the live solar exposure (0 = in shadow, 255 = lit). Sourced from computeLidarCellExposure() in
+    //the engine, refreshed via setExposure() whenever the sun moves enough to recompute. When the attribute is disabled (no compute has run
+    //yet, sun below horizon, etc.) the vertex shader reads a constant 1.0 via vertexAttrib1f, the fragment shader then renders at the
+    //pre-exposure baseline (full lit, neutral tint).
+    private _exposureBuffer?: WebGLBuffer;
+    private _hasExposure: boolean = false;
     private _vertexCount: number = 0;
     private _lineIdxCount: number = 0;
     //WebGL2 supports UNSIGNED_INT indices natively; on a WebGL1
@@ -132,14 +152,18 @@ export class LidarViewLayer implements CustomLayerInterface
     //million finite cells and 65536 is too small.
     private _indexType: number = 0;
 
-    private _aPos: number = -1;
-    private _uMatrix?:       WebGLUniformLocation;
-    private _uMercPerMeter?: WebGLUniformLocation;
-    private _uFadeFull?:     WebGLUniformLocation;
-    private _uFadeOut?:      WebGLUniformLocation;
-    private _uPointSize?:    WebGLUniformLocation;
-    private _uColor?:        WebGLUniformLocation;
-    private _uAlphaFade?:    WebGLUniformLocation;
+    private _aPos:      number = -1;
+    private _aExposure: number = -1;
+    private _uMatrix?:           WebGLUniformLocation;
+    private _uMercPerMeter?:     WebGLUniformLocation;
+    private _uFadeFull?:         WebGLUniformLocation;
+    private _uFadeOut?:          WebGLUniformLocation;
+    private _uPointSize?:        WebGLUniformLocation;
+    private _uColor?:            WebGLUniformLocation;
+    private _uAlphaFade?:        WebGLUniformLocation;
+    private _uExposureLit?:      WebGLUniformLocation;
+    private _uExposureShadow?:   WebGLUniformLocation;
+    private _uExposureWarmTint?: WebGLUniformLocation;
     //Reusable scratch for the per-frame matrix shift, allocated once to avoid garbage on every render call.
     private _shiftedMatrix:  Float32Array = new Float32Array(16);
 
@@ -167,8 +191,13 @@ export class LidarViewLayer implements CustomLayerInterface
     private _mercPerMeter: number;
 
     //Vertices + line indices cached when the engine sets data BEFORE the layer is added to the map. Uploaded to GL the moment onAdd runs.
-    private _pendingVerts?:   Float32Array;
-    private _pendingLineIdx?: Uint32Array;
+    private _pendingVerts?:    Float32Array;
+    private _pendingLineIdx?:  Uint32Array;
+    private _pendingExposure?: Uint8Array;
+    //Maps a raster-cell index (j * rasterSize + i) to its vertex index in the GPU buffer, or -1 when the cell was NaN at setData time. Cached so
+    //setExposure() can translate a per-raster-cell exposure array (engine concern) to the per-vertex order the GPU buffer expects, without
+    //asking the engine to know our internal packing.
+    private _cellToVert: Int32Array | null = null;
     //Raster reference kept around so setHome can rebuild the buffer against the new origin. Without this, switching homes would leave the cloud
     //anchored at the previous mercator centre.
     private _raster: LidarRaster | null = null;
@@ -337,6 +366,10 @@ export class LidarViewLayer implements CustomLayerInterface
         }
         this._lineIdxCount = li;
         const lineUsed = li > 0 ? lineIdx.subarray(0, li) : new Uint32Array(0);
+        //Cache the cellToVert mapping for the next setExposure() call. Reset _hasExposure since the previous exposure (sized to the old
+        //vertex count) is stale, the next compute pass will refit and re-upload.
+        this._cellToVert  = cellToVert;
+        this._hasExposure = false;
 
         if (this._gl && this._buffer)
         {
@@ -350,6 +383,15 @@ export class LidarViewLayer implements CustomLayerInterface
                 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, lineUsed, gl.STATIC_DRAW);
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
             }
+            //Shrink the exposure buffer to the new vertex count so a render that lands before the next compute doesn't read stale bytes from
+            //a longer buffer (the attribute is fall-back-constant via vertexAttrib1f when _hasExposure is false anyway, but keeping the buffer
+            //sized to vertexCount means we can flip _hasExposure on without a re-allocation roundtrip).
+            if (this._exposureBuffer)
+            {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this._exposureBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, n, gl.STATIC_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+            }
         }
         else
         {
@@ -357,6 +399,41 @@ export class LidarViewLayer implements CustomLayerInterface
             //moment we get a GL context.
             this._pendingVerts   = used;
             this._pendingLineIdx = lineUsed;
+        }
+        this._map?.triggerRepaint();
+    }
+
+
+    //Accept a per-raster-cell exposure byte array (length = rasterSize²) coming from computeLidarCellExposure(). Maps it through the cached
+    //cellToVert into a per-vertex byte array, uploads to the GPU and flips _hasExposure so the next render reads from a_exposure instead of
+    //the constant fallback. Passing null clears the override.
+    public setExposure(perCellExposure: Uint8Array | null): void
+    {
+        if (!perCellExposure || !this._cellToVert || this._vertexCount === 0)
+        {
+            this._hasExposure  = false;
+            this._pendingExposure = undefined;
+            this._map?.triggerRepaint();
+            return;
+        }
+        const vertExposure = new Uint8Array(this._vertexCount);
+        const c2v = this._cellToVert;
+        const N   = c2v.length;
+        for (let i = 0; i < N; i++)
+        {
+            const v = c2v[i];
+            if (v >= 0) vertExposure[v] = perCellExposure[i] ?? 255;
+        }
+        if (this._gl && this._exposureBuffer)
+        {
+            this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this._exposureBuffer);
+            this._gl.bufferData(this._gl.ARRAY_BUFFER, vertExposure, this._gl.STATIC_DRAW);
+            this._gl.bindBuffer(this._gl.ARRAY_BUFFER, null);
+            this._hasExposure = true;
+        }
+        else
+        {
+            this._pendingExposure = vertExposure;
         }
         this._map?.triggerRepaint();
     }
@@ -389,14 +466,18 @@ export class LidarViewLayer implements CustomLayerInterface
             }
             this._program = program;
 
-            this._aPos          = gl.getAttribLocation(program, 'a_pos');
-            this._uMatrix       = gl.getUniformLocation(program, 'u_matrix')        ?? undefined;
-            this._uMercPerMeter = gl.getUniformLocation(program, 'u_mercPerMeter')  ?? undefined;
-            this._uFadeFull     = gl.getUniformLocation(program, 'u_fadeFullMeters') ?? undefined;
-            this._uFadeOut      = gl.getUniformLocation(program, 'u_fadeOutMeters')  ?? undefined;
-            this._uPointSize    = gl.getUniformLocation(program, 'u_pointSizePx')   ?? undefined;
-            this._uColor        = gl.getUniformLocation(program, 'u_color')         ?? undefined;
-            this._uAlphaFade    = gl.getUniformLocation(program, 'u_alphaFade')     ?? undefined;
+            this._aPos              = gl.getAttribLocation(program, 'a_pos');
+            this._aExposure         = gl.getAttribLocation(program, 'a_exposure');
+            this._uMatrix           = gl.getUniformLocation(program, 'u_matrix')           ?? undefined;
+            this._uMercPerMeter     = gl.getUniformLocation(program, 'u_mercPerMeter')     ?? undefined;
+            this._uFadeFull         = gl.getUniformLocation(program, 'u_fadeFullMeters')   ?? undefined;
+            this._uFadeOut          = gl.getUniformLocation(program, 'u_fadeOutMeters')    ?? undefined;
+            this._uPointSize        = gl.getUniformLocation(program, 'u_pointSizePx')      ?? undefined;
+            this._uColor            = gl.getUniformLocation(program, 'u_color')            ?? undefined;
+            this._uAlphaFade        = gl.getUniformLocation(program, 'u_alphaFade')        ?? undefined;
+            this._uExposureLit      = gl.getUniformLocation(program, 'u_exposureLitBoost') ?? undefined;
+            this._uExposureShadow   = gl.getUniformLocation(program, 'u_exposureShadowFloor') ?? undefined;
+            this._uExposureWarmTint = gl.getUniformLocation(program, 'u_exposureWarmTint') ?? undefined;
 
             this._buffer = gl.createBuffer() ?? undefined;
             if (this._pendingVerts && this._buffer)
@@ -405,6 +486,16 @@ export class LidarViewLayer implements CustomLayerInterface
                 gl.bufferData(gl.ARRAY_BUFFER, this._pendingVerts, gl.STATIC_DRAW);
                 gl.bindBuffer(gl.ARRAY_BUFFER, null);
                 this._pendingVerts = undefined;
+            }
+
+            this._exposureBuffer = gl.createBuffer() ?? undefined;
+            if (this._pendingExposure && this._exposureBuffer)
+            {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this._exposureBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, this._pendingExposure, gl.STATIC_DRAW);
+                gl.bindBuffer(gl.ARRAY_BUFFER, null);
+                this._hasExposure  = this._pendingExposure.length === this._vertexCount;
+                this._pendingExposure = undefined;
             }
 
             //Index buffer for the wireframe overlay. WebGL2 has
@@ -480,10 +571,34 @@ export class LidarViewLayer implements CustomLayerInterface
         gl.enableVertexAttribArray(this._aPos);
         gl.vertexAttribPointer(this._aPos, 3, gl.FLOAT, false, 0, 0);
 
+        //a_exposure: byte attribute normalised to [0, 1], or a constant 1.0 fallback when no compute has run yet. Wrap the constant set in a
+        //disableVertexAttribArray so subsequent layers can't inherit our enabled state and read garbage out of an unrelated buffer.
+        if (this._aExposure >= 0)
+        {
+            if (this._hasExposure && this._exposureBuffer)
+            {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this._exposureBuffer);
+                gl.enableVertexAttribArray(this._aExposure);
+                gl.vertexAttribPointer(this._aExposure, 1, gl.UNSIGNED_BYTE, true, 0, 0);
+                gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
+            }
+            else
+            {
+                gl.disableVertexAttribArray(this._aExposure);
+                gl.vertexAttrib1f(this._aExposure, 1.0);
+            }
+        }
+
         if (this._uMatrix)       gl.uniformMatrix4fv(this._uMatrix, false, this._shiftedMatrix);
         if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
         if (this._uFadeFull)     gl.uniform1f(this._uFadeFull, this._fadeFullMeters);
         if (this._uFadeOut)      gl.uniform1f(this._uFadeOut,  this._fadeOutMeters);
+        //Exposure tone controls. Lit cells get a 1.0 multiplier (no change to the base colour) shaded toward a warm 1.0/0.85/0.6 tint; shadowed
+        //cells get dimmed to 35 % brightness with a neutral tint. Values picked so the "lit vs in shadow" contrast reads at a glance without the
+        //shadow cells fading below visibility under the home-distance fall-off.
+        if (this._uExposureLit)      gl.uniform1f(this._uExposureLit, 1.0);
+        if (this._uExposureShadow)   gl.uniform1f(this._uExposureShadow, 0.35);
+        if (this._uExposureWarmTint) gl.uniform3f(this._uExposureWarmTint, 1.0, 0.85, 0.6);
         //gl_PointSize is measured in framebuffer pixels. MapLibre
         //sizes its framebuffer at map.getPixelRatio() x CSS, which the
         //user can clamp via the `pixel-ratio` config (1x on mobile to
