@@ -29,8 +29,10 @@ import {
 import type { HeliosEngine } from '../helios-engine';
 
 
-const DOME_FADE_IN_MS  = 380;
-const DOME_FADE_OUT_MS = 280;
+//1 s for both directions: enter wipes the dome into view top-down, exit wipes it out bottom-up. Long enough that the reveal reads as a deliberate
+//polish flourish rather than a click latency, short enough that the user isn't left waiting before they can interact with the cloud-cover slider.
+const DOME_FADE_IN_MS  = 1000;
+const DOME_FADE_OUT_MS = 1000;
 
 
 export interface ShadingDomeHost extends OverlaysHost
@@ -208,10 +210,9 @@ export function shouldShowDomeChip(): boolean
 }
 
 
-//Compute the current fade alpha [0, 1] applied to the dome
-//wrapper. Used by the card template to drive a CSS opacity so
-//the fade is GPU-cheap (composite-only, no layout) regardless of
-//how many cells are painted.
+//Compute the current fade alpha [0, 1] applied to the cloud-cover slider that lives below the dome. The dome SVG itself uses the clip-path
+//helper just below for a top-to-bottom reveal; the slider keeps a plain opacity fade because animating a clip on a horizontal control would feel
+//odd. Both use the same DOME_FADE_*_MS time base so they finish together.
 export function shadingDomeFadeAlpha(host: ShadingDomeHost): number
 {
     const now = performance.now();
@@ -224,6 +225,48 @@ export function shadingDomeFadeAlpha(host: ShadingDomeHost): number
         return 1 - Math.max(0, Math.min(1, (now - host._shadingDomeFadeOutStartMs) / DOME_FADE_OUT_MS));
     }
     return host._shadingDomeMode ? 1 : 0;
+}
+
+
+//Quadratic ease-out so the reveal/hide settles smoothly into its end position rather than stopping cold. Without the ease the 1 s linear wipe
+//feels mechanical.
+function easeOutQuad(t: number): number
+{
+    return 1 - (1 - t) * (1 - t);
+}
+
+
+//Returns the inline `clip-path` value applied to the dome SVG. The visible portion of the SVG is always anchored to the top edge; the
+//bottom-inset percentage is what we animate. On enter, the inset shrinks from 100 % to 0 % so the dome is drawn top-down. On exit, the inset
+//grows from 0 % to 100 % so the bottom disappears first and the wipe travels upward, the "other direction" the user asked for. Steady-state
+//returns either "no clip" (mode on) or "fully clipped" (mode off); the latter never actually renders because shouldRenderShadingDome() short-
+//circuits in renderShadingDomeOverlay before we get here.
+export function shadingDomeClipPath(host: ShadingDomeHost): string
+{
+    const now = performance.now();
+    if (host._shadingDomeFadeInStartMs !== null)
+    {
+        const t = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeInStartMs) / DOME_FADE_IN_MS)));
+        const insetBottom = (1 - t) * 100;
+        return `inset(0% 0% ${insetBottom.toFixed(2)}% 0%)`;
+    }
+    if (host._shadingDomeFadeOutStartMs !== null)
+    {
+        const t = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeOutStartMs) / DOME_FADE_OUT_MS)));
+        const insetBottom = t * 100;
+        return `inset(0% 0% ${insetBottom.toFixed(2)}% 0%)`;
+    }
+    return host._shadingDomeMode ? 'inset(0% 0% 0% 0%)' : 'inset(0% 0% 100% 0%)';
+}
+
+
+//Should the dome SVG be in the DOM at all? Yes while the mode is on OR while a fade transition is running. Used by the renderer to bail out
+//between transitions when the dome is fully hidden, both to save a Lit pass and to make sure pointer-events don't sit on an invisible overlay.
+function shouldRenderShadingDome(host: ShadingDomeHost): boolean
+{
+    return host._shadingDomeMode
+        || host._shadingDomeFadeInStartMs !== null
+        || host._shadingDomeFadeOutStartMs !== null;
 }
 
 
@@ -259,10 +302,10 @@ function ratioToFill(ratio: number): string
 //Returns nothing when the scene isn't ready, so the card template can drop the result directly into its render.
 export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult | typeof nothing
 {
-    const alpha = shadingDomeFadeAlpha(host);
-    if (alpha <= 0) return nothing;
+    if (!shouldRenderShadingDome(host)) return nothing;
     const scene = host._shadingDomeScene;
     if (!scene) return nothing;
+    const clip = shadingDomeClipPath(host);
 
     //Two cell layers, drawn back-to-front:
     //  1. Wireframe of the full grid (every populated + empty
@@ -325,7 +368,7 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
     ` : nothing;
 
     return html`
-        <svg class="shading-dome-svg" style="opacity:${alpha.toFixed(2)}">
+        <svg class="shading-dome-svg" style="clip-path:${clip}; -webkit-clip-path:${clip};">
             <g class="shading-dome-cells-wire">${wireframeNodes}</g>
             <g class="shading-dome-cells-color">${coloredNodes}</g>
             <g class="shading-dome-ribbon">${ribbonNodes}</g>

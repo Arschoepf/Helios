@@ -39824,8 +39824,8 @@ function describeMap(map, nowMs) {
   }
   return { cells: keys.length, confidentCells, strongestUnder, strongestOver };
 }
-const DOME_FADE_IN_MS = 380;
-const DOME_FADE_OUT_MS = 280;
+const DOME_FADE_IN_MS = 1e3;
+const DOME_FADE_OUT_MS = 1e3;
 function toggleShadingDome(host) {
   if (!host._engine) return;
   if (!host._shadingDomeMode) {
@@ -39921,6 +39921,26 @@ function shadingDomeFadeAlpha(host) {
   }
   return host._shadingDomeMode ? 1 : 0;
 }
+function easeOutQuad(t3) {
+  return 1 - (1 - t3) * (1 - t3);
+}
+function shadingDomeClipPath(host) {
+  const now = performance.now();
+  if (host._shadingDomeFadeInStartMs !== null) {
+    const t3 = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeInStartMs) / DOME_FADE_IN_MS)));
+    const insetBottom = (1 - t3) * 100;
+    return `inset(0% 0% ${insetBottom.toFixed(2)}% 0%)`;
+  }
+  if (host._shadingDomeFadeOutStartMs !== null) {
+    const t3 = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeOutStartMs) / DOME_FADE_OUT_MS)));
+    const insetBottom = t3 * 100;
+    return `inset(0% 0% ${insetBottom.toFixed(2)}% 0%)`;
+  }
+  return host._shadingDomeMode ? "inset(0% 0% 0% 0%)" : "inset(0% 0% 100% 0%)";
+}
+function shouldRenderShadingDome(host) {
+  return host._shadingDomeMode || host._shadingDomeFadeInStartMs !== null || host._shadingDomeFadeOutStartMs !== null;
+}
 function ratioToFill$1(ratio) {
   const r2 = Math.max(0.3, Math.min(1.7, ratio));
   if (r2 < 1) {
@@ -39937,10 +39957,10 @@ function ratioToFill$1(ratio) {
   return `rgb(${red}, ${green}, ${blue})`;
 }
 function renderShadingDomeOverlay(host) {
-  const alpha = shadingDomeFadeAlpha(host);
-  if (alpha <= 0) return A;
+  if (!shouldRenderShadingDome(host)) return A;
   const scene = host._shadingDomeScene;
   if (!scene) return A;
+  const clip = shadingDomeClipPath(host);
   const wireframeNodes = [];
   const coloredNodes = [];
   for (const c2 of scene.cellPolys) {
@@ -39983,7 +40003,7 @@ function renderShadingDomeOverlay(host) {
                 r="12" fill="none" stroke="rgba(253, 230, 138, 0.45)" stroke-width="1.5" />
     ` : A;
   return b`
-        <svg class="shading-dome-svg" style="opacity:${alpha.toFixed(2)}">
+        <svg class="shading-dome-svg" style="clip-path:${clip}; -webkit-clip-path:${clip};">
             <g class="shading-dome-cells-wire">${wireframeNodes}</g>
             <g class="shading-dome-cells-color">${coloredNodes}</g>
             <g class="shading-dome-ribbon">${ribbonNodes}</g>
@@ -44366,7 +44386,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.26"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.27"}`,
       labelStyle,
       versionStyle
     );
@@ -44390,7 +44410,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.26",
+        version: "1.7.0-alpha.27",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44398,7 +44418,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.26"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.27"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
