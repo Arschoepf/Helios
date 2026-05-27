@@ -727,76 +727,19 @@ export class HeliosEngine
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
 
-        //Masonry + a few other HA dashboard layouts mount the card
-        //container into a state where MapLibre's tile manager
-        //doesn't fetch any basemap tile, even though the WebGL
-        //context creates fine and custom layers paint correctly.
-        //Symptom: black basemap + working overlays (sun arc, LiDAR
-        //shadows, building extrusions).
-        //
-        //Three conditions can each cause the bug, and Masonry hits
-        //at least one of them depending on timing:
-        //  - container.clientWidth or clientHeight is 0 at init
-        //  - container has size but offsetParent is null (the
-        //    element sits inside a display:none ancestor)
-        //  - container has size + visible parent but the page
-        //    hasn't finished laying out yet, MapLibre computes its
-        //    viewport polygon against stale geometry
-        //
-        //Defer the map creation until ALL three conditions are
-        //satisfied. The combined ResizeObserver + IntersectionObserver
-        //covers every transition path; we re-check on each fire and
-        //also force a map.resize() after the load event lands, just
-        //in case the layout settled in the meantime.
-        this._scheduleMapInit(container, haCoords);
+        //Create the map immediately, regardless of container
+        //dimensions at this exact tick. Several previous attempts
+        //to defer init until ResizeObserver / IntersectionObserver
+        //reported a "ready" container made things worse: in some
+        //HA dashboard layouts (notably Masonry), neither observer
+        //ever fires with conditions met against the container we
+        //received in the constructor, so _initMapInstance was
+        //never called and the map stayed null forever. The
+        //post-load triple-resize + the 5 s tile-fetch watchdog
+        //inside _initMapInstance now carry the safety net for any
+        //0 x 0-at-init edge case.
+        this._initMapInstance(container, haCoords);
     }
-
-    private _scheduleMapInit(container: HTMLElement, haCoords: [number, number]): void
-    {
-        //offsetParent is null for elements inside a Lit-style
-        //shadow root in some browsers, which the engine container
-        //always is. Don't include it in the readiness check;
-        //relying on positive dimensions is enough. If the engine
-        //still ends up created in a hidden subtree, the load-time
-        //resize + the 5 s watchdog below recover the basemap.
-        const ready = (): boolean =>
-            container.clientWidth > 0
-            && container.clientHeight > 0;
-        const tryInit = (): boolean =>
-        {
-            if (!ready()) return false;
-            this._pendingInitObserver?.disconnect();
-            this._pendingInitObserver = undefined;
-            this._pendingInitIntersect?.disconnect();
-            this._pendingInitIntersect = undefined;
-            this._initMapInstance(container, haCoords);
-            return true;
-        };
-        if (tryInit()) return;
-        //Watch both size changes and visibility / mount changes.
-        //ResizeObserver covers the "container grew from 0 x 0"
-        //case; IntersectionObserver covers the "container was in
-        //a hidden tab / collapsed section that just opened" case.
-        this._pendingInitObserver = new ResizeObserver(() => { tryInit(); });
-        this._pendingInitObserver.observe(container);
-        if (typeof IntersectionObserver !== 'undefined')
-        {
-            this._pendingInitIntersect = new IntersectionObserver((entries) =>
-            {
-                for (const e of entries)
-                {
-                    if (e.isIntersecting && tryInit()) return;
-                }
-            }, { threshold: 0 });
-            this._pendingInitIntersect.observe(container);
-        }
-    }
-
-    //Held while the engine waits for its container to become
-    //usable. Both cleared by tryInit() once _initMapInstance fires,
-    //or by cleanup() if the engine is destroyed before that.
-    private _pendingInitObserver?:  ResizeObserver;
-    private _pendingInitIntersect?: IntersectionObserver;
 
     private _initMapInstance(container: HTMLElement, haCoords: [number, number]): void
     {
@@ -4191,10 +4134,6 @@ export class HeliosEngine
         this._arcInputsCache         = undefined;
         this._lastShadowSig          = undefined;
         this._resizeObserver?.disconnect();
-        this._pendingInitObserver?.disconnect();
-        this._pendingInitObserver = undefined;
-        this._pendingInitIntersect?.disconnect();
-        this._pendingInitIntersect = undefined;
         if (this._autoRotateRaf !== undefined)
         {
             cancelAnimationFrame(this._autoRotateRaf);

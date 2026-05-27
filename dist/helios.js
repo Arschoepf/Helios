@@ -36965,7 +36965,7 @@ const _HeliosEngine = class _HeliosEngine {
     _liveEngines.add(this);
     this._fetchLat = this.homeLat;
     this._fetchLon = this.homeLon;
-    this._scheduleMapInit(container, haCoords);
+    this._initMapInstance(container, haCoords);
   }
   //_weatherTimer holds either a setInterval id (regular refresh) or
   //a setTimeout id (rate-limit back-off). The two ID spaces overlap
@@ -37035,31 +37035,6 @@ const _HeliosEngine = class _HeliosEngine {
       return null;
     }
     return samples[bestIdx].wm2;
-  }
-  _scheduleMapInit(container, haCoords) {
-    const ready = () => container.clientWidth > 0 && container.clientHeight > 0;
-    const tryInit = () => {
-      if (!ready()) return false;
-      this._pendingInitObserver?.disconnect();
-      this._pendingInitObserver = void 0;
-      this._pendingInitIntersect?.disconnect();
-      this._pendingInitIntersect = void 0;
-      this._initMapInstance(container, haCoords);
-      return true;
-    };
-    if (tryInit()) return;
-    this._pendingInitObserver = new ResizeObserver(() => {
-      tryInit();
-    });
-    this._pendingInitObserver.observe(container);
-    if (typeof IntersectionObserver !== "undefined") {
-      this._pendingInitIntersect = new IntersectionObserver((entries) => {
-        for (const e2 of entries) {
-          if (e2.isIntersecting && tryInit()) return;
-        }
-      }, { threshold: 0 });
-      this._pendingInitIntersect.observe(container);
-    }
   }
   _initMapInstance(container, haCoords) {
     const pixelRatio = this._pixelRatio();
@@ -39267,10 +39242,6 @@ const _HeliosEngine = class _HeliosEngine {
     this._arcInputsCache = void 0;
     this._lastShadowSig = void 0;
     this._resizeObserver?.disconnect();
-    this._pendingInitObserver?.disconnect();
-    this._pendingInitObserver = void 0;
-    this._pendingInitIntersect?.disconnect();
-    this._pendingInitIntersect = void 0;
     if (this._autoRotateRaf !== void 0) {
       cancelAnimationFrame(this._autoRotateRaf);
       this._autoRotateRaf = void 0;
@@ -44154,7 +44125,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.18"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.19"}`,
       labelStyle,
       versionStyle
     );
@@ -44178,7 +44149,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.18",
+        version: "1.7.0-alpha.19",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44186,7 +44157,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.18"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.19"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
