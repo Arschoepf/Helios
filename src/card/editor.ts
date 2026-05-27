@@ -251,6 +251,9 @@ export class HeliosCardEditor extends LitElement
     //`_arrayAdd` adds the new index to this set; `_arrayRemove`
     //shifts the indices above the removed one down by 1.
     @state()                        private _openArrayIndices: Set<number> = new Set([0]);
+    //Per-bank open/closed state for the multi-bank battery editor section. Mirrors `_openArrayIndices` (same first-pan-open default,
+    //same shift-on-remove semantics). Separate Set so opening a PV array doesn't accidentally toggle a battery bank with the same index.
+    @state()                        private _openBatteryIndices: Set<number> = new Set([0]);
 
     //Per-key debounce timers for slider inputs. Sliders fire @input
     //on every pixel of drag, so dispatching `config-changed` per
@@ -622,6 +625,166 @@ export class HeliosCardEditor extends LitElement
         if (el.open) next.add(i);
         else         next.delete(i);
         this._openArrayIndices = next;
+    }
+
+    //Battery-bank editor state machinery. Mirrors the PV-arrays helpers above (read/write to the `batteries:` array with legacy flat-key
+    //fallback, per-field updaters, add/remove). Kept separate so a bank edit never touches a PV row by index collision.
+    private _readBatteries(): {
+        name:        string | null;
+        socEntity:   string;
+        powerEntity: string;
+        powerInvert: boolean;
+        capacityKwh: number | null;
+    }[]
+    {
+        const toNum = (v: unknown): number | null =>
+        {
+            if (v === undefined || v === null || v === '') return null;
+            const n = typeof v === 'number' ? v : parseFloat(String(v));
+            return isFinite(n) ? n : null;
+        };
+        const toStr = (v: unknown): string | null =>
+        {
+            if (v === undefined || v === null) return null;
+            const s = String(v).trim();
+            return s === '' ? null : s;
+        };
+        const raw = this._cfg?.['batteries'];
+        if (Array.isArray(raw) && raw.length > 0)
+        {
+            const out = raw.map(entry =>
+            {
+                const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
+                return {
+                    name:        toStr(e['name']),
+                    socEntity:   String(e['soc-entity']   ?? '').trim(),
+                    powerEntity: String(e['power-entity'] ?? '').trim(),
+                    powerInvert: e['power-invert'] === true,
+                    capacityKwh: toNum(e['capacity-kwh']),
+                };
+            });
+            if (out.length > 0) return out;
+        }
+        //Legacy single-bank fallback: wrap the flat keys in a one-row list so the editor never shows an empty state and the user can edit
+        //their existing single-bank setup before opting into multi-bank.
+        const soc   = String(this._cfg?.['battery-soc-entity']   ?? '').trim();
+        const power = String(this._cfg?.['battery-power-entity'] ?? '').trim();
+        return [{
+            name:        null,
+            socEntity:   soc,
+            powerEntity: power,
+            powerInvert: this._cfg?.['battery-power-invert'] === true,
+            capacityKwh: null,
+        }];
+    }
+
+    //Persists a list of bank entries under `batteries:` and clears the legacy flat keys in the same event so configs converge to the new
+    //shape on first edit. Empty entity strings are dropped from the YAML so a half-filled new row produces a sparse but valid bank.
+    private _writeBatteries(list: {
+        name:        string | null;
+        socEntity:   string;
+        powerEntity: string;
+        powerInvert: boolean;
+        capacityKwh: number | null;
+    }[]): void
+    {
+        const batteries = list.map(e =>
+        {
+            const o: Record<string, number | string | boolean> = {};
+            if (e.name        !== null) o['name']         = e.name;
+            if (e.socEntity   !== '')   o['soc-entity']   = e.socEntity;
+            if (e.powerEntity !== '')   o['power-entity'] = e.powerEntity;
+            if (e.powerInvert)          o['power-invert'] = true;
+            if (e.capacityKwh !== null) o['capacity-kwh'] = e.capacityKwh;
+            return o;
+        });
+        const next = { ...this._cfg, 'batteries': batteries } as HeliosConfig;
+        if ('battery-soc-entity'   in (next as object)) delete (next as Record<string, unknown>)['battery-soc-entity'];
+        if ('battery-power-entity' in (next as object)) delete (next as Record<string, unknown>)['battery-power-entity'];
+        if ('battery-power-invert' in (next as object)) delete (next as Record<string, unknown>)['battery-power-invert'];
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next } }));
+        this._cfg = next;
+    }
+
+    private _bankEntity(i: number, key: 'socEntity' | 'powerEntity', value: string): void
+    {
+        const list = this._readBatteries();
+        if (i < 0 || i >= list.length) return;
+        list[i] = { ...list[i], [key]: (value ?? '').trim() };
+        this._writeBatteries(list);
+    }
+
+    private _bankName(i: number, e: Event): void
+    {
+        const list = this._readBatteries();
+        if (i < 0 || i >= list.length) return;
+        const raw = (e.target as HTMLInputElement).value.trim();
+        list[i] = { ...list[i], name: raw === '' ? null : raw };
+        this._writeBatteries(list);
+    }
+
+    private _bankCapacity(i: number, e: Event): void
+    {
+        const list = this._readBatteries();
+        if (i < 0 || i >= list.length) return;
+        const raw = (e.target as HTMLInputElement).value.trim();
+        if (raw === '')
+        {
+            list[i] = { ...list[i], capacityKwh: null };
+        }
+        else
+        {
+            const v = parseFloat(raw);
+            if (!isFinite(v) || v <= 0) return;
+            list[i] = { ...list[i], capacityKwh: v };
+        }
+        this._writeBatteries(list);
+    }
+
+    private _bankInvert(i: number, invert: boolean): void
+    {
+        const list = this._readBatteries();
+        if (i < 0 || i >= list.length) return;
+        list[i] = { ...list[i], powerInvert: invert };
+        this._writeBatteries(list);
+    }
+
+    //Hard cap on banks. Same rationale as PV_ARRAYS_MAX: anything past 6 starts getting unreadable in the chip aggregation explanation,
+    //and almost no residential install has more than 4 banks.
+    private static readonly BATTERIES_MAX = 6;
+
+    private _bankAdd(): void
+    {
+        const list = this._readBatteries();
+        if (list.length >= HeliosCardEditor.BATTERIES_MAX) return;
+        list.push({ name: null, socEntity: '', powerEntity: '', powerInvert: false, capacityKwh: null });
+        this._openBatteryIndices = new Set([...this._openBatteryIndices, list.length - 1]);
+        this._writeBatteries(list);
+    }
+
+    private _bankRemove(i: number): void
+    {
+        const list = this._readBatteries();
+        if (i < 0 || i >= list.length || list.length <= 1) return;
+        list.splice(i, 1);
+        const next = new Set<number>();
+        for (const idx of this._openBatteryIndices)
+        {
+            if (idx === i)        continue;
+            if (idx > i)          next.add(idx - 1);
+            else                  next.add(idx);
+        }
+        this._openBatteryIndices = next;
+        this._writeBatteries(list);
+    }
+
+    private _onBankToggle(i: number, e: Event): void
+    {
+        const el = e.currentTarget as HTMLDetailsElement;
+        const next = new Set(this._openBatteryIndices);
+        if (el.open) next.add(i);
+        else         next.delete(i);
+        this._openBatteryIndices = next;
     }
 
     //Format a numeric slider value for display alongside the input.
@@ -1217,87 +1380,143 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" ?open="${this._openSection === 'battery'}" @toggle="${(e: Event) => this._onSectionToggle('battery', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.batterySection}</summary>
-                <div class="hint">${t.editor.batteryHint}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.batterySocEntity}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass="${this.hass}"
-                            .value="${String(c['battery-soc-entity'] ?? '')}"
-                            .includeDomains="${['sensor', 'input_number']}"
-                            .entityFilter="${this._batterySocEntityFilter}"
-                            @value-changed="${(e: CustomEvent) => this._update('battery-soc-entity', e.detail.value ?? '')}"
-                        ></ha-entity-picker>
-                    ` : html`
+                    <div class="hint">${t.editor.batteryHint}</div>
+                    ${(() => {
+                        const banks = this._readBatteries();
+                        return html`
+                            ${banks.map((bank, i) => {
+                                const fallback = t.editor.batteryBankTitle.replace('{n}', String(i + 1));
+                                const title    = bank.name ?? fallback;
+                                const isOpen   = this._openBatteryIndices.has(i);
+                                return html`
+                                    <details class="pv-array-card" ?open="${isOpen}" @toggle="${(e: Event) => this._onBankToggle(i, e)}">
+                                        <summary class="pv-array-summary">
+                                            <span class="pv-array-chevron" aria-hidden="true"></span>
+                                            <span class="pv-array-title">${title}</span>
+                                            <button
+                                                type="button"
+                                                class="pv-array-remove"
+                                                aria-label="${t.editor.batteryBankRemove}: ${title}"
+                                                ?disabled="${banks.length <= 1}"
+                                                @click="${(e: Event) => { e.preventDefault(); e.stopPropagation(); this._bankRemove(i); }}"
+                                            >${t.editor.batteryBankRemove}</button>
+                                        </summary>
+                                        <div class="pv-array-body">
+                                            <label class="field">
+                                                <span class="label">${t.editor.batteryBankName}</span>
+                                                <input
+                                                    type="text"
+                                                    maxlength="40"
+                                                    placeholder="${fallback}"
+                                                    .value="${bank.name ?? ''}"
+                                                    @change="${(e: Event) => this._bankName(i, e)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t.editor.batteryBankNameHelp}</div>
+                                            <div class="field field-block">
+                                                <span class="label">${t.editor.batterySocEntity}</span>
+                                                ${this._pickerReady ? html`
+                                                    <ha-entity-picker
+                                                        allow-custom-entity
+                                                        .hass="${this.hass}"
+                                                        .value="${bank.socEntity}"
+                                                        .includeDomains="${['sensor', 'input_number']}"
+                                                        .entityFilter="${this._batterySocEntityFilter}"
+                                                        @value-changed="${(e: CustomEvent) => this._bankEntity(i, 'socEntity', e.detail.value ?? '')}"
+                                                    ></ha-entity-picker>
+                                                ` : html`
+                                                    <input
+                                                        type="text"
+                                                        .value="${bank.socEntity}"
+                                                        placeholder="sensor.battery_soc"
+                                                        @change="${(e: Event) => this._bankEntity(i, 'socEntity', (e.target as HTMLInputElement).value)}"
+                                                    />
+                                                `}
+                                            </div>
+                                            <div class="field-help">${t.editor.batterySocEntityHelp}</div>
+                                            <div class="field field-block">
+                                                <span class="label">${t.editor.batteryPowerEntity}</span>
+                                                ${this._pickerReady ? html`
+                                                    <ha-entity-picker
+                                                        allow-custom-entity
+                                                        .hass="${this.hass}"
+                                                        .value="${bank.powerEntity}"
+                                                        .includeDomains="${['sensor', 'input_number']}"
+                                                        .entityFilter="${this._batteryPowerEntityFilter}"
+                                                        @value-changed="${(e: CustomEvent) => this._bankEntity(i, 'powerEntity', e.detail.value ?? '')}"
+                                                    ></ha-entity-picker>
+                                                ` : html`
+                                                    <input
+                                                        type="text"
+                                                        .value="${bank.powerEntity}"
+                                                        placeholder="sensor.battery_power"
+                                                        @change="${(e: Event) => this._bankEntity(i, 'powerEntity', (e.target as HTMLInputElement).value)}"
+                                                    />
+                                                `}
+                                            </div>
+                                            <div class="field-help">${t.editor.batteryPowerEntityHelp}</div>
+                                            <div class="field">
+                                                <span class="label">${t.editor.batteryPowerInvert}</span>
+                                                <div class="segmented-toggle">
+                                                    <button
+                                                        type="button"
+                                                        class="seg-option ${(!bank.powerInvert) ? 'active' : ''}"
+                                                        @click="${() => this._bankInvert(i, false)}"
+                                                    >${t.editor.batteryPowerInvertStandard}</button>
+                                                    <button
+                                                        type="button"
+                                                        class="seg-option ${(bank.powerInvert) ? 'active' : ''}"
+                                                        @click="${() => this._bankInvert(i, true)}"
+                                                    >${t.editor.batteryPowerInvertInverted}</button>
+                                                </div>
+                                            </div>
+                                            <div class="field-help">${t.editor.batteryPowerInvertHelp}</div>
+                                            <label class="field">
+                                                <span class="label">${t.editor.batteryCapacityKwh}</span>
+                                                <input
+                                                    type="number"
+                                                    min="0.1"
+                                                    step="0.1"
+                                                    placeholder="10"
+                                                    .value="${bank.capacityKwh !== null ? String(bank.capacityKwh) : ''}"
+                                                    @change="${(e: Event) => this._bankCapacity(i, e)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t.editor.batteryCapacityKwhHelp}</div>
+                                        </div>
+                                    </details>
+                                `;
+                            })}
+                            ${banks.length < HeliosCardEditor.BATTERIES_MAX ? html`
+                                <button
+                                    type="button"
+                                    class="pv-array-add"
+                                    @click="${() => this._bankAdd()}"
+                                >+ ${t.editor.batteryBankAdd}</button>
+                            ` : nothing}
+                        `;
+                    })()}
+                    <div class="field" style="margin-top: 14px;">
+                        <span class="label">${t.editor.inverterCutoffSocPct}</span>
                         <input
-                            type="text"
-                            .value="${String(c['battery-soc-entity'] ?? '')}"
-                            placeholder="sensor.battery_soc"
-                            @change="${(e: Event) => this._str('battery-soc-entity', e)}"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            .value="${c['inverter-cutoff-soc-pct'] != null ? String(c['inverter-cutoff-soc-pct']) : ''}"
+                            placeholder="95"
+                            @change="${(e: Event) => this._numField('inverter-cutoff-soc-pct', e)}"
                         />
-                    `}
-                </div>
-                <div class="field-help">${t.editor.batterySocEntityHelp}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.batteryPowerEntity}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass="${this.hass}"
-                            .value="${String(c['battery-power-entity'] ?? '')}"
-                            .includeDomains="${['sensor', 'input_number']}"
-                            .entityFilter="${this._batteryPowerEntityFilter}"
-                            @value-changed="${(e: CustomEvent) => this._update('battery-power-entity', e.detail.value ?? '')}"
-                        ></ha-entity-picker>
-                    ` : html`
-                        <input
-                            type="text"
-                            .value="${String(c['battery-power-entity'] ?? '')}"
-                            placeholder="sensor.battery_power"
-                            @change="${(e: Event) => this._str('battery-power-entity', e)}"
-                        />
-                    `}
-                </div>
-                <div class="field-help">${t.editor.batteryPowerEntityHelp}</div>
-                <div class="field">
-                    <span class="label">${t.editor.batteryPowerInvert}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['battery-power-invert'] !== true) ? 'active' : ''}"
-                            @click="${() => this._update('battery-power-invert', false)}"
-                        >${t.editor.batteryPowerInvertStandard}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['battery-power-invert'] === true) ? 'active' : ''}"
-                            @click="${() => this._update('battery-power-invert', true)}"
-                        >${t.editor.batteryPowerInvertInverted}</button>
                     </div>
-                </div>
-                <div class="field-help">${t.editor.batteryPowerInvertHelp}</div>
-                <div class="field">
-                    <span class="label">${t.editor.inverterCutoffSocPct}</span>
-                    <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="1"
-                        .value="${c['inverter-cutoff-soc-pct'] != null ? String(c['inverter-cutoff-soc-pct']) : ''}"
-                        placeholder="95"
-                        @change="${(e: Event) => this._numField('inverter-cutoff-soc-pct', e)}"
-                    />
-                </div>
-                <div class="field-help">${t.editor.inverterCutoffSocPctHelp}</div>
-                <label class="field">
-                    <span class="label">${t.editor.batteryColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c['battery-color'], DEFAULT_BATTERY_COLOR_HEX)}"
-                        .ariaLabel="${t.editor.batteryColor}"
-                        @value-changed="${(e: CustomEvent) => this._color('battery-color', e)}"
-                    ></helios-color-picker>
-                </label>
-
+                    <div class="field-help">${t.editor.inverterCutoffSocPctHelp}</div>
+                    <label class="field">
+                        <span class="label">${t.editor.batteryColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c['battery-color'], DEFAULT_BATTERY_COLOR_HEX)}"
+                            .ariaLabel="${t.editor.batteryColor}"
+                            @value-changed="${(e: CustomEvent) => this._color('battery-color', e)}"
+                        ></helios-color-picker>
+                    </label>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'weather'}" @toggle="${(e: Event) => this._onSectionToggle('weather', e)}">

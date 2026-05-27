@@ -186,6 +186,17 @@ export interface Translations
         pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;
+        //Multi-bank battery editor. The section renders one collapsible card per bank (same widget as pv-arrays) so a user with house +
+        //garage banks (or a hybrid + standalone) gets a dedicated row each. The chip on the card stays single, aggregating the banks as
+        //a capacity-weighted SoC + summed signed power. `batteryBankTitle` carries the auto-numbered fallback used when the user hasn't
+        //typed a name; `{n}` is substituted with the 1-based row index.
+        batteryBankTitle:         string;
+        batteryBankAdd:           string;
+        batteryBankRemove:        string;
+        batteryBankName:          string;
+        batteryBankNameHelp:      string;
+        batteryCapacityKwh:       string;
+        batteryCapacityKwhHelp:   string;
         batterySocEntity:         string;
         batterySocEntityHelp:     string;
         batteryPowerEntity:       string;

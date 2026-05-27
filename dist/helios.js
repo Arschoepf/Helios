@@ -677,7 +677,14 @@ const en = {
     pvArrayCoordsPlaceholder: "optional",
     pvColor: "Production color",
     batterySection: "Home battery",
-    batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional. The chip on its side appears as soon as the entity is set.",
+    batteryHint: "Optional. Declare one row per physical battery bank (one entry suffices for a single hybrid inverter; add more for split house + garage setups, or a hybrid + standalone pair). The chip on the card stays single, aggregating the banks as a capacity-weighted SoC and a summed signed power. Each entity inside a bank is independently optional, the chip side appears as soon as the entity is set.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Add bank",
+    batteryBankRemove: "Remove",
+    batteryBankName: "Bank name (optional)",
+    batteryBankNameHelp: 'Optional friendly label shown in the row header. Leave blank to fall back to "Bank 1", "Bank 2", etc. Useful when you have several banks and want to recognise them at a glance.',
+    batteryCapacityKwh: "Capacity (kWh, optional)",
+    batteryCapacityKwhHelp: "Used to weight this bank in the aggregated SoC chip when banks have different sizes (e.g. a 10 kWh house bank + a 5 kWh garage bank: the house bank moves the chip twice as much as the garage one). Leave blank if all your banks are the same size, the weighting then collapses to a flat unweighted mean. Does not affect the summed power readout.",
     batterySocEntity: "State of charge entity",
     batterySocEntityHelp: 'Pick a battery State of Charge sensor (%, usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
     batteryPowerEntity: "Power entity",
@@ -844,7 +851,14 @@ const fr = {
     pvArrayCoordsPlaceholder: "optionnel",
     pvColor: "Couleur de production",
     batterySection: "Batterie domestique",
-    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles. La pastille correspondante s'affiche dès que l'entité est renseignée.",
+    batteryHint: "Optionnel. Déclare une ligne par banc de batterie physique (une seule entrée suffit pour un onduleur hybride unique ; ajoute-en plus pour une installation maison + garage séparée, ou pour une paire hybride + autonome). La pastille de la carte reste unique, agrégeant les bancs sous forme d'un SoC pondéré par la capacité et d'une puissance signée sommée. Chaque entité d'un banc est indépendamment optionnelle, le côté pastille apparaît dès que l'entité est renseignée.",
+    batteryBankTitle: "Banc {n}",
+    batteryBankAdd: "Ajouter un banc",
+    batteryBankRemove: "Supprimer",
+    batteryBankName: "Nom du banc (optionnel)",
+    batteryBankNameHelp: "Étiquette conviviale optionnelle affichée dans l'en-tête de la ligne. Laisse vide pour retomber sur « Banc 1 », « Banc 2 », etc. Pratique quand tu as plusieurs bancs et veux les reconnaître d'un coup d'œil.",
+    batteryCapacityKwh: "Capacité (kWh, optionnel)",
+    batteryCapacityKwhHelp: "Sert à pondérer ce banc dans la pastille SoC agrégée quand les bancs ont des tailles différentes (par ex. un banc maison de 10 kWh + un banc garage de 5 kWh : le banc maison déplace la pastille deux fois plus que celui du garage). Laisse vide si tous tes bancs ont la même taille, la pondération se réduit alors à une moyenne simple non pondérée. N'affecte pas la lecture de la puissance sommée.",
     batterySocEntity: "Entité d'état de charge",
     batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (%, typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
     batteryPowerEntity: "Entité de puissance",
@@ -1011,7 +1025,14 @@ const de = {
     pvArrayCoordsPlaceholder: "optional",
     pvColor: "Produktionsfarbe",
     batterySection: "Hausbatterie",
-    batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional. Der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
+    batteryHint: "Optional. Lege eine Zeile pro physischem Batterieblock an (ein Eintrag genügt für einen einzelnen Hybrid-Wechselrichter; füge weitere hinzu für getrennte Haus- + Garage-Aufbauten oder ein Hybrid- + Standalone-Paar). Der Chip auf der Karte bleibt einzeln und aggregiert die Blöcke als kapazitätsgewichteten SoC und summierte vorzeichenbehaftete Leistung. Jede Entität innerhalb eines Blocks ist unabhängig optional, die Chip-Seite erscheint, sobald die Entität gesetzt ist.",
+    batteryBankTitle: "Akku {n}",
+    batteryBankAdd: "Block hinzufügen",
+    batteryBankRemove: "Entfernen",
+    batteryBankName: "Blockname (optional)",
+    batteryBankNameHelp: 'Optionale freundliche Bezeichnung, die im Zeilenkopf angezeigt wird. Leer lassen, um auf „Akku 1", „Akku 2" usw. zurückzufallen. Praktisch, wenn du mehrere Blöcke hast und sie auf einen Blick erkennen willst.',
+    batteryCapacityKwh: "Kapazität (kWh, optional)",
+    batteryCapacityKwhHelp: "Wird verwendet, um diesen Block im aggregierten SoC-Chip zu gewichten, wenn die Blöcke unterschiedliche Größen haben (z. B. ein 10-kWh-Hausblock + ein 5-kWh-Garagenblock: der Hausblock bewegt den Chip doppelt so stark wie der Garagenblock). Leer lassen, wenn alle deine Blöcke gleich groß sind, die Gewichtung reduziert sich dann auf einen einfachen ungewichteten Mittelwert. Beeinflusst nicht die Anzeige der summierten Leistung.",
     batterySocEntity: "Ladezustand-Entität",
     batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (%, typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
     batteryPowerEntity: "Leistungs-Entität",
@@ -1178,7 +1199,14 @@ const es = {
     pvArrayCoordsPlaceholder: "opcional",
     pvColor: "Color de producción",
     batterySection: "Batería doméstica",
-    batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales. El chip correspondiente aparece en cuanto la entidad está definida.",
+    batteryHint: "Opcional. Declara una fila por cada banco físico de baterías (una sola entrada basta para un único inversor híbrido; añade más para instalaciones divididas casa + garaje, o para una pareja híbrido + autónomo). El chip de la tarjeta sigue siendo único, agregando los bancos como un SoC ponderado por capacidad y una potencia con signo sumada. Cada entidad dentro de un banco es independientemente opcional, el lado del chip aparece en cuanto la entidad está definida.",
+    batteryBankTitle: "Banco {n}",
+    batteryBankAdd: "Añadir banco",
+    batteryBankRemove: "Eliminar",
+    batteryBankName: "Nombre del banco (opcional)",
+    batteryBankNameHelp: "Etiqueta amigable opcional mostrada en la cabecera de la fila. Déjala vacía para volver a «Banco 1», «Banco 2», etc. Útil cuando tienes varios bancos y quieres reconocerlos de un vistazo.",
+    batteryCapacityKwh: "Capacidad (kWh, opcional)",
+    batteryCapacityKwhHelp: "Se usa para ponderar este banco en el chip SoC agregado cuando los bancos tienen tamaños diferentes (p. ej. un banco casa de 10 kWh + un banco garaje de 5 kWh: el banco de la casa mueve el chip el doble que el del garaje). Déjala vacía si todos tus bancos son del mismo tamaño, la ponderación se reduce entonces a una media simple no ponderada. No afecta a la lectura de la potencia sumada.",
     batterySocEntity: "Entidad de estado de carga",
     batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (%, típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
     batteryPowerEntity: "Entidad de potencia",
@@ -1345,7 +1373,14 @@ const it = {
     pvArrayCoordsPlaceholder: "opzionale",
     pvColor: "Colore di produzione",
     batterySection: "Batteria domestica",
-    batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali. La pastiglia corrispondente appare appena l'entità è impostata.",
+    batteryHint: "Opzionale. Dichiara una riga per ogni banco di batterie fisico (una sola voce basta per un singolo inverter ibrido; aggiungine altre per installazioni divise casa + garage, o per una coppia ibrido + autonomo). La pastiglia sulla carta resta unica, aggregando i banchi come SoC pesato per capacità e potenza con segno sommata. Ogni entità all'interno di un banco è indipendentemente opzionale, il lato della pastiglia appare appena l'entità è impostata.",
+    batteryBankTitle: "Banco {n}",
+    batteryBankAdd: "Aggiungi banco",
+    batteryBankRemove: "Rimuovi",
+    batteryBankName: "Nome del banco (opzionale)",
+    batteryBankNameHelp: "Etichetta amichevole opzionale mostrata nell'intestazione della riga. Lascia vuoto per tornare a «Banco 1», «Banco 2», ecc. Utile quando hai più banchi e vuoi riconoscerli a colpo d'occhio.",
+    batteryCapacityKwh: "Capacità (kWh, opzionale)",
+    batteryCapacityKwhHelp: "Usata per pesare questo banco nella pastiglia SoC aggregata quando i banchi hanno dimensioni diverse (es. un banco casa da 10 kWh + un banco garage da 5 kWh: il banco casa sposta la pastiglia il doppio rispetto a quello del garage). Lascia vuoto se tutti i tuoi banchi hanno la stessa dimensione, la ponderazione si riduce allora a una media semplice non pesata. Non influisce sulla lettura della potenza sommata.",
     batterySocEntity: "Entità stato di carica",
     batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (%, tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
     batteryPowerEntity: "Entità di potenza",
@@ -1512,7 +1547,14 @@ const nl = {
     pvArrayCoordsPlaceholder: "optioneel",
     pvColor: "Productiekleur",
     batterySection: "Thuisbatterij",
-    batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel. De bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
+    batteryHint: "Optioneel. Declareer één rij per fysieke batterijbank (één invoer volstaat voor een enkele hybride omvormer; voeg er meer toe voor gesplitste huis + garage-opstellingen, of voor een hybride + standalone-paar). De chip op de kaart blijft enkelvoudig en aggregeert de banken als een capaciteitsgewogen SoC en een gesommeerd ondertekend vermogen. Elke entiteit binnen een bank is onafhankelijk optioneel, de chipzijde verschijnt zodra de entiteit is ingesteld.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Bank toevoegen",
+    batteryBankRemove: "Verwijderen",
+    batteryBankName: "Banknaam (optioneel)",
+    batteryBankNameHelp: 'Optioneel vriendelijk label dat in de rij-koptekst wordt weergegeven. Laat leeg om terug te vallen op „Bank 1", „Bank 2", enz. Handig wanneer je meerdere banken hebt en ze in één oogopslag wilt herkennen.',
+    batteryCapacityKwh: "Capaciteit (kWh, optioneel)",
+    batteryCapacityKwhHelp: "Wordt gebruikt om deze bank te wegen in de geaggregeerde SoC-chip wanneer banken verschillende groottes hebben (bv. een huisbank van 10 kWh + een garagebank van 5 kWh: de huisbank verplaatst de chip twee keer zoveel als die van de garage). Laat leeg als al je banken even groot zijn, de weging valt dan terug op een vlak ongewogen gemiddelde. Heeft geen invloed op de gesommeerde vermogensaflezing.",
     batterySocEntity: "Laadtoestand-entiteit",
     batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (%, meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
     batteryPowerEntity: "Vermogen-entiteit",
@@ -1679,7 +1721,14 @@ const pt = {
     pvArrayCoordsPlaceholder: "opcional",
     pvColor: "Cor de produção",
     batterySection: "Bateria doméstica",
-    batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais. O chip correspondente aparece assim que a entidade é definida.",
+    batteryHint: "Opcional. Declara uma linha por cada banco físico de baterias (uma única entrada basta para um único inversor híbrido; adiciona mais para instalações divididas casa + garagem, ou para um par híbrido + autónomo). O chip do cartão mantém-se único, agregando os bancos como um SoC ponderado pela capacidade e uma potência com sinal somada. Cada entidade dentro de um banco é independentemente opcional, o lado do chip aparece assim que a entidade é definida.",
+    batteryBankTitle: "Banco {n}",
+    batteryBankAdd: "Adicionar banco",
+    batteryBankRemove: "Remover",
+    batteryBankName: "Nome do banco (opcional)",
+    batteryBankNameHelp: "Etiqueta amigável opcional mostrada no cabeçalho da linha. Deixa em branco para voltar a «Banco 1», «Banco 2», etc. Útil quando tens vários bancos e queres reconhecê-los num relance.",
+    batteryCapacityKwh: "Capacidade (kWh, opcional)",
+    batteryCapacityKwhHelp: "Usada para ponderar este banco no chip SoC agregado quando os bancos têm tamanhos diferentes (ex. um banco casa de 10 kWh + um banco garagem de 5 kWh: o banco da casa move o chip o dobro do que o da garagem). Deixa em branco se todos os teus bancos tiverem o mesmo tamanho, a ponderação reduz-se então a uma média simples não ponderada. Não afeta a leitura da potência somada.",
     batterySocEntity: "Entidade do estado de carga",
     batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (%, normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
     batteryPowerEntity: "Entidade de potência",
@@ -1846,7 +1895,14 @@ const no = {
     pvArrayCoordsPlaceholder: "valgfritt",
     pvColor: "Produksjonsfarge",
     batterySection: "Husbatteri",
-    batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie. Chipen på sin side vises så snart entiteten er satt.",
+    batteryHint: "Valgfri. Deklarer én rad per fysisk batteribank (én oppføring holder for én enkelt hybridvekselretter; legg til flere for delte hus + garasje-oppsett, eller for et hybrid + frittstående-par). Chipen på kortet forblir én og aggregerer bankene som en kapasitetsvektet SoC og en summert fortegnseffekt. Hver entitet inne i en bank er uavhengig valgfri, chip-siden vises så snart entiteten er satt.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Legg til bank",
+    batteryBankRemove: "Fjern",
+    batteryBankName: "Banknavn (valgfri)",
+    batteryBankNameHelp: "Valgfri vennlig etikett som vises i radens overskrift. La stå tomt for å falle tilbake til «Bank 1», «Bank 2», osv. Nyttig når du har flere banker og vil gjenkjenne dem på et blunk.",
+    batteryCapacityKwh: "Kapasitet (kWh, valgfri)",
+    batteryCapacityKwhHelp: "Brukes til å vekte denne banken i den aggregerte SoC-chipen når banker har ulik størrelse (f.eks. en husbank på 10 kWh + en garasjebank på 5 kWh: husbanken beveger chipen dobbelt så mye som garasjebanken). La stå tomt hvis alle bankene dine er like store, vektingen reduseres da til et flatt uvektet gjennomsnitt. Påvirker ikke avlesningen av summert effekt.",
     batterySocEntity: "Ladenivå-entitet",
     batterySocEntityHelp: 'Velg en sensor for batteriets ladenivå (%, vanligvis med device_class "battery"). Vises som chip til venstre for PV-chipen med live prosent.',
     batteryPowerEntity: "Effekt-entitet",
@@ -2013,7 +2069,14 @@ const pl = {
     pvArrayCoordsPlaceholder: "opcjonalnie",
     pvColor: "Kolor produkcji",
     batterySection: "Bateria domowa",
-    batteryHint: "Opcjonalne. Każda encja pojawia się jako własny chip flankujący chip PV, stan naładowania po LEWEJ, podpisana moc po PRAWEJ, połączone z PV statyczną kropkowaną linią. Każda encja jest niezależnie opcjonalna. Chip po jego stronie pojawia się, gdy tylko encja zostanie ustawiona.",
+    batteryHint: "Opcjonalne. Zadeklaruj jeden wiersz na każdy fizyczny bank baterii (jeden wpis wystarczy dla pojedynczego inwertera hybrydowego; dodaj więcej dla rozdzielonych instalacji dom + garaż lub dla pary hybryda + autonomiczny). Chip na karcie pozostaje pojedynczy i agreguje banki jako SoC ważony pojemnością oraz zsumowaną podpisaną moc. Każda encja wewnątrz banku jest niezależnie opcjonalna, strona chipa pojawia się, gdy tylko encja zostanie ustawiona.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Dodaj bank",
+    batteryBankRemove: "Usuń",
+    batteryBankName: "Nazwa banku (opcjonalne)",
+    batteryBankNameHelp: 'Opcjonalna przyjazna etykieta wyświetlana w nagłówku wiersza. Pozostaw puste, aby wrócić do „Bank 1", „Bank 2" itd. Przydatne, gdy masz kilka banków i chcesz je rozpoznać na pierwszy rzut oka.',
+    batteryCapacityKwh: "Pojemność (kWh, opcjonalne)",
+    batteryCapacityKwhHelp: "Używana do ważenia tego banku w zagregowanym chipie SoC, gdy banki mają różne rozmiary (np. bank domowy 10 kWh + bank garażowy 5 kWh: bank domowy przesuwa chip dwa razy bardziej niż bank garażowy). Pozostaw puste, jeśli wszystkie banki są tego samego rozmiaru, ważenie sprowadza się wtedy do prostej nieważonej średniej. Nie wpływa na odczyt zsumowanej mocy.",
     batterySocEntity: "Encja stanu naładowania",
     batterySocEntityHelp: 'Wybierz czujnik stanu naładowania baterii (%, zwykle z device_class „battery"). Renderuje się jako chip po lewej stronie chipa PV pokazujący bieżący procent.',
     batteryPowerEntity: "Encja mocy",
@@ -2180,7 +2243,14 @@ const cs = {
     pvArrayCoordsPlaceholder: "volitelné",
     pvColor: "Barva produkce",
     batterySection: "Domácí baterie",
-    batteryHint: "Volitelné. Každá entita se objevuje jako svůj vlastní chip lemující chip FV, stav nabití VLEVO, podepsaný výkon VPRAVO, spojený s FV statickou tečkovanou linkou. Každá entita je nezávisle volitelná. Chip na své straně se objeví, jakmile je entita nastavena.",
+    batteryHint: "Volitelné. Deklarujte jeden řádek na každý fyzický bank baterií (jeden záznam postačí pro samostatný hybridní střídač; přidejte další pro rozdělené instalace dům + garáž nebo pro dvojici hybrid + samostatný). Chip na kartě zůstává jediný a agreguje banky jako SoC vážený kapacitou a sečtený podepsaný výkon. Každá entita uvnitř banku je nezávisle volitelná, strana chipu se objeví, jakmile je entita nastavena.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Přidat bank",
+    batteryBankRemove: "Odebrat",
+    batteryBankName: "Název banku (volitelné)",
+    batteryBankNameHelp: 'Volitelný přátelský štítek zobrazený v záhlaví řádku. Ponechte prázdné pro návrat k „Bank 1", „Bank 2" atd. Užitečné, když máte několik banků a chcete je rozeznat na první pohled.',
+    batteryCapacityKwh: "Kapacita (kWh, volitelné)",
+    batteryCapacityKwhHelp: "Slouží k vážení tohoto banku v agregovaném SoC chipu, když mají banky různé velikosti (např. domácí bank 10 kWh + garážový bank 5 kWh: domácí bank pohne chipem dvakrát více než garážový). Ponechte prázdné, pokud jsou všechny vaše banky stejně velké, vážení se pak zredukuje na plochý nevážený průměr. Neovlivňuje hodnotu sečteného výkonu.",
     batterySocEntity: "Entita stavu nabití",
     batterySocEntityHelp: 'Vyberte senzor stavu nabití baterie (%, obvykle s device_class „battery"). Vykreslí se jako chip vlevo od chipu FV zobrazující živé procento.',
     batteryPowerEntity: "Entita výkonu",
@@ -2347,7 +2417,14 @@ const sv = {
     pvArrayCoordsPlaceholder: "valfritt",
     pvColor: "Produktionsfärg",
     batterySection: "Hembatteri",
-    batteryHint: "Valfritt. Varje entitet visas som sitt eget chip som flankerar PV-chipet, laddningstillstånd till VÄNSTER, signerad effekt till HÖGER, ansluten till PV med en statisk prickad fin linje. Varje entitet är oberoende valfri. Chipet på dess sida visas så snart entiteten är inställd.",
+    batteryHint: "Valfritt. Deklarera en rad per fysisk batteribank (en post räcker för en enda hybridväxelriktare; lägg till fler för delade hus + garage-installationer, eller för ett hybrid + fristående-par). Chipet på kortet förblir ett och aggregerar bankerna som en kapacitetsviktad SoC och en summerad signerad effekt. Varje entitet inuti en bank är oberoende valfri, chipsidan visas så snart entiteten är inställd.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Lägg till bank",
+    batteryBankRemove: "Ta bort",
+    batteryBankName: "Bankens namn (valfritt)",
+    batteryBankNameHelp: 'Valfri vänlig etikett som visas i radens rubrik. Lämna tomt för att falla tillbaka till "Bank 1", "Bank 2", osv. Praktiskt när du har flera banker och vill känna igen dem med en blick.',
+    batteryCapacityKwh: "Kapacitet (kWh, valfritt)",
+    batteryCapacityKwhHelp: "Används för att vikta denna bank i den aggregerade SoC-chipen när bankerna har olika storlekar (t.ex. en husbank på 10 kWh + en garagebank på 5 kWh: husbanken flyttar chipet dubbelt så mycket som garagebanken). Lämna tomt om alla dina banker har samma storlek, viktningen kollapsar då till ett platt oviktat medelvärde. Påverkar inte avläsningen av summerad effekt.",
     batterySocEntity: "Laddningstillståndsentitet",
     batterySocEntityHelp: 'Välj en batteriladdningssensor (%, vanligtvis med device_class "battery"). Renderar som ett chip till vänster om PV-chipet som visar det aktuella procenttalet.',
     batteryPowerEntity: "Effektentitet",
@@ -43492,6 +43569,7 @@ let HeliosCardEditor = class extends i {
     this._pickerReady = false;
     this._openSection = "location";
     this._openArrayIndices = /* @__PURE__ */ new Set([0]);
+    this._openBatteryIndices = /* @__PURE__ */ new Set([0]);
     this._sliderDebounce = /* @__PURE__ */ new Map();
     this._pvEntityFilter = (entity) => {
       if (!entity || !entity.attributes) return false;
@@ -43774,6 +43852,121 @@ let HeliosCardEditor = class extends i {
     if (el.open) next3.add(i2);
     else next3.delete(i2);
     this._openArrayIndices = next3;
+  }
+  //Battery-bank editor state machinery. Mirrors the PV-arrays helpers above (read/write to the `batteries:` array with legacy flat-key
+  //fallback, per-field updaters, add/remove). Kept separate so a bank edit never touches a PV row by index collision.
+  _readBatteries() {
+    const toNum2 = (v2) => {
+      if (v2 === void 0 || v2 === null || v2 === "") return null;
+      const n3 = typeof v2 === "number" ? v2 : parseFloat(String(v2));
+      return isFinite(n3) ? n3 : null;
+    };
+    const toStr = (v2) => {
+      if (v2 === void 0 || v2 === null) return null;
+      const s2 = String(v2).trim();
+      return s2 === "" ? null : s2;
+    };
+    const raw2 = this._cfg?.["batteries"];
+    if (Array.isArray(raw2) && raw2.length > 0) {
+      const out = raw2.map((entry) => {
+        const e2 = entry && typeof entry === "object" ? entry : {};
+        return {
+          name: toStr(e2["name"]),
+          socEntity: String(e2["soc-entity"] ?? "").trim(),
+          powerEntity: String(e2["power-entity"] ?? "").trim(),
+          powerInvert: e2["power-invert"] === true,
+          capacityKwh: toNum2(e2["capacity-kwh"])
+        };
+      });
+      if (out.length > 0) return out;
+    }
+    const soc = String(this._cfg?.["battery-soc-entity"] ?? "").trim();
+    const power = String(this._cfg?.["battery-power-entity"] ?? "").trim();
+    return [{
+      name: null,
+      socEntity: soc,
+      powerEntity: power,
+      powerInvert: this._cfg?.["battery-power-invert"] === true,
+      capacityKwh: null
+    }];
+  }
+  //Persists a list of bank entries under `batteries:` and clears the legacy flat keys in the same event so configs converge to the new
+  //shape on first edit. Empty entity strings are dropped from the YAML so a half-filled new row produces a sparse but valid bank.
+  _writeBatteries(list) {
+    const batteries = list.map((e2) => {
+      const o2 = {};
+      if (e2.name !== null) o2["name"] = e2.name;
+      if (e2.socEntity !== "") o2["soc-entity"] = e2.socEntity;
+      if (e2.powerEntity !== "") o2["power-entity"] = e2.powerEntity;
+      if (e2.powerInvert) o2["power-invert"] = true;
+      if (e2.capacityKwh !== null) o2["capacity-kwh"] = e2.capacityKwh;
+      return o2;
+    });
+    const next3 = { ...this._cfg, "batteries": batteries };
+    if ("battery-soc-entity" in next3) delete next3["battery-soc-entity"];
+    if ("battery-power-entity" in next3) delete next3["battery-power-entity"];
+    if ("battery-power-invert" in next3) delete next3["battery-power-invert"];
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next3 } }));
+    this._cfg = next3;
+  }
+  _bankEntity(i2, key, value) {
+    const list = this._readBatteries();
+    if (i2 < 0 || i2 >= list.length) return;
+    list[i2] = { ...list[i2], [key]: (value ?? "").trim() };
+    this._writeBatteries(list);
+  }
+  _bankName(i2, e2) {
+    const list = this._readBatteries();
+    if (i2 < 0 || i2 >= list.length) return;
+    const raw2 = e2.target.value.trim();
+    list[i2] = { ...list[i2], name: raw2 === "" ? null : raw2 };
+    this._writeBatteries(list);
+  }
+  _bankCapacity(i2, e2) {
+    const list = this._readBatteries();
+    if (i2 < 0 || i2 >= list.length) return;
+    const raw2 = e2.target.value.trim();
+    if (raw2 === "") {
+      list[i2] = { ...list[i2], capacityKwh: null };
+    } else {
+      const v2 = parseFloat(raw2);
+      if (!isFinite(v2) || v2 <= 0) return;
+      list[i2] = { ...list[i2], capacityKwh: v2 };
+    }
+    this._writeBatteries(list);
+  }
+  _bankInvert(i2, invert) {
+    const list = this._readBatteries();
+    if (i2 < 0 || i2 >= list.length) return;
+    list[i2] = { ...list[i2], powerInvert: invert };
+    this._writeBatteries(list);
+  }
+  _bankAdd() {
+    const list = this._readBatteries();
+    if (list.length >= HeliosCardEditor.BATTERIES_MAX) return;
+    list.push({ name: null, socEntity: "", powerEntity: "", powerInvert: false, capacityKwh: null });
+    this._openBatteryIndices = /* @__PURE__ */ new Set([...this._openBatteryIndices, list.length - 1]);
+    this._writeBatteries(list);
+  }
+  _bankRemove(i2) {
+    const list = this._readBatteries();
+    if (i2 < 0 || i2 >= list.length || list.length <= 1) return;
+    list.splice(i2, 1);
+    const next3 = /* @__PURE__ */ new Set();
+    for (const idx of this._openBatteryIndices) {
+      if (idx === i2) continue;
+      if (idx > i2) next3.add(idx - 1);
+      else next3.add(idx);
+    }
+    this._openBatteryIndices = next3;
+    this._writeBatteries(list);
+  }
+  _onBankToggle(i2, e2) {
+    const el = e2.currentTarget;
+    const next3 = new Set(this._openBatteryIndices);
+    if (el.open) next3.add(i2);
+    else next3.delete(i2);
+    this._openBatteryIndices = next3;
   }
   //Format a numeric slider value for display alongside the input.
   //Integers stay integer; fractional values get 2 decimals.
@@ -44297,87 +44490,147 @@ let HeliosCardEditor = class extends i {
 
                 <details class="advanced-section" ?open="${this._openSection === "battery"}" @toggle="${(e2) => this._onSectionToggle("battery", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.batterySection}</summary>
-                <div class="hint">${t2.editor.batteryHint}</div>
-                <div class="field field-block">
-                    <span class="label">${t2.editor.batterySocEntity}</span>
-                    ${this._pickerReady ? b`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass="${this.hass}"
-                            .value="${String(c2["battery-soc-entity"] ?? "")}"
-                            .includeDomains="${["sensor", "input_number"]}"
-                            .entityFilter="${this._batterySocEntityFilter}"
-                            @value-changed="${(e2) => this._update("battery-soc-entity", e2.detail.value ?? "")}"
-                        ></ha-entity-picker>
-                    ` : b`
+                    <div class="hint">${t2.editor.batteryHint}</div>
+                    ${(() => {
+      const banks = this._readBatteries();
+      return b`
+                            ${banks.map((bank, i2) => {
+        const fallback = t2.editor.batteryBankTitle.replace("{n}", String(i2 + 1));
+        const title = bank.name ?? fallback;
+        const isOpen = this._openBatteryIndices.has(i2);
+        return b`
+                                    <details class="pv-array-card" ?open="${isOpen}" @toggle="${(e2) => this._onBankToggle(i2, e2)}">
+                                        <summary class="pv-array-summary">
+                                            <span class="pv-array-chevron" aria-hidden="true"></span>
+                                            <span class="pv-array-title">${title}</span>
+                                            <button
+                                                type="button"
+                                                class="pv-array-remove"
+                                                aria-label="${t2.editor.batteryBankRemove}: ${title}"
+                                                ?disabled="${banks.length <= 1}"
+                                                @click="${(e2) => {
+          e2.preventDefault();
+          e2.stopPropagation();
+          this._bankRemove(i2);
+        }}"
+                                            >${t2.editor.batteryBankRemove}</button>
+                                        </summary>
+                                        <div class="pv-array-body">
+                                            <label class="field">
+                                                <span class="label">${t2.editor.batteryBankName}</span>
+                                                <input
+                                                    type="text"
+                                                    maxlength="40"
+                                                    placeholder="${fallback}"
+                                                    .value="${bank.name ?? ""}"
+                                                    @change="${(e2) => this._bankName(i2, e2)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t2.editor.batteryBankNameHelp}</div>
+                                            <div class="field field-block">
+                                                <span class="label">${t2.editor.batterySocEntity}</span>
+                                                ${this._pickerReady ? b`
+                                                    <ha-entity-picker
+                                                        allow-custom-entity
+                                                        .hass="${this.hass}"
+                                                        .value="${bank.socEntity}"
+                                                        .includeDomains="${["sensor", "input_number"]}"
+                                                        .entityFilter="${this._batterySocEntityFilter}"
+                                                        @value-changed="${(e2) => this._bankEntity(i2, "socEntity", e2.detail.value ?? "")}"
+                                                    ></ha-entity-picker>
+                                                ` : b`
+                                                    <input
+                                                        type="text"
+                                                        .value="${bank.socEntity}"
+                                                        placeholder="sensor.battery_soc"
+                                                        @change="${(e2) => this._bankEntity(i2, "socEntity", e2.target.value)}"
+                                                    />
+                                                `}
+                                            </div>
+                                            <div class="field-help">${t2.editor.batterySocEntityHelp}</div>
+                                            <div class="field field-block">
+                                                <span class="label">${t2.editor.batteryPowerEntity}</span>
+                                                ${this._pickerReady ? b`
+                                                    <ha-entity-picker
+                                                        allow-custom-entity
+                                                        .hass="${this.hass}"
+                                                        .value="${bank.powerEntity}"
+                                                        .includeDomains="${["sensor", "input_number"]}"
+                                                        .entityFilter="${this._batteryPowerEntityFilter}"
+                                                        @value-changed="${(e2) => this._bankEntity(i2, "powerEntity", e2.detail.value ?? "")}"
+                                                    ></ha-entity-picker>
+                                                ` : b`
+                                                    <input
+                                                        type="text"
+                                                        .value="${bank.powerEntity}"
+                                                        placeholder="sensor.battery_power"
+                                                        @change="${(e2) => this._bankEntity(i2, "powerEntity", e2.target.value)}"
+                                                    />
+                                                `}
+                                            </div>
+                                            <div class="field-help">${t2.editor.batteryPowerEntityHelp}</div>
+                                            <div class="field">
+                                                <span class="label">${t2.editor.batteryPowerInvert}</span>
+                                                <div class="segmented-toggle">
+                                                    <button
+                                                        type="button"
+                                                        class="seg-option ${!bank.powerInvert ? "active" : ""}"
+                                                        @click="${() => this._bankInvert(i2, false)}"
+                                                    >${t2.editor.batteryPowerInvertStandard}</button>
+                                                    <button
+                                                        type="button"
+                                                        class="seg-option ${bank.powerInvert ? "active" : ""}"
+                                                        @click="${() => this._bankInvert(i2, true)}"
+                                                    >${t2.editor.batteryPowerInvertInverted}</button>
+                                                </div>
+                                            </div>
+                                            <div class="field-help">${t2.editor.batteryPowerInvertHelp}</div>
+                                            <label class="field">
+                                                <span class="label">${t2.editor.batteryCapacityKwh}</span>
+                                                <input
+                                                    type="number"
+                                                    min="0.1"
+                                                    step="0.1"
+                                                    placeholder="10"
+                                                    .value="${bank.capacityKwh !== null ? String(bank.capacityKwh) : ""}"
+                                                    @change="${(e2) => this._bankCapacity(i2, e2)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t2.editor.batteryCapacityKwhHelp}</div>
+                                        </div>
+                                    </details>
+                                `;
+      })}
+                            ${banks.length < HeliosCardEditor.BATTERIES_MAX ? b`
+                                <button
+                                    type="button"
+                                    class="pv-array-add"
+                                    @click="${() => this._bankAdd()}"
+                                >+ ${t2.editor.batteryBankAdd}</button>
+                            ` : A}
+                        `;
+    })()}
+                    <div class="field" style="margin-top: 14px;">
+                        <span class="label">${t2.editor.inverterCutoffSocPct}</span>
                         <input
-                            type="text"
-                            .value="${String(c2["battery-soc-entity"] ?? "")}"
-                            placeholder="sensor.battery_soc"
-                            @change="${(e2) => this._str("battery-soc-entity", e2)}"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            .value="${c2["inverter-cutoff-soc-pct"] != null ? String(c2["inverter-cutoff-soc-pct"]) : ""}"
+                            placeholder="95"
+                            @change="${(e2) => this._numField("inverter-cutoff-soc-pct", e2)}"
                         />
-                    `}
-                </div>
-                <div class="field-help">${t2.editor.batterySocEntityHelp}</div>
-                <div class="field field-block">
-                    <span class="label">${t2.editor.batteryPowerEntity}</span>
-                    ${this._pickerReady ? b`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass="${this.hass}"
-                            .value="${String(c2["battery-power-entity"] ?? "")}"
-                            .includeDomains="${["sensor", "input_number"]}"
-                            .entityFilter="${this._batteryPowerEntityFilter}"
-                            @value-changed="${(e2) => this._update("battery-power-entity", e2.detail.value ?? "")}"
-                        ></ha-entity-picker>
-                    ` : b`
-                        <input
-                            type="text"
-                            .value="${String(c2["battery-power-entity"] ?? "")}"
-                            placeholder="sensor.battery_power"
-                            @change="${(e2) => this._str("battery-power-entity", e2)}"
-                        />
-                    `}
-                </div>
-                <div class="field-help">${t2.editor.batteryPowerEntityHelp}</div>
-                <div class="field">
-                    <span class="label">${t2.editor.batteryPowerInvert}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${c2["battery-power-invert"] !== true ? "active" : ""}"
-                            @click="${() => this._update("battery-power-invert", false)}"
-                        >${t2.editor.batteryPowerInvertStandard}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${c2["battery-power-invert"] === true ? "active" : ""}"
-                            @click="${() => this._update("battery-power-invert", true)}"
-                        >${t2.editor.batteryPowerInvertInverted}</button>
                     </div>
-                </div>
-                <div class="field-help">${t2.editor.batteryPowerInvertHelp}</div>
-                <div class="field">
-                    <span class="label">${t2.editor.inverterCutoffSocPct}</span>
-                    <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="1"
-                        .value="${c2["inverter-cutoff-soc-pct"] != null ? String(c2["inverter-cutoff-soc-pct"]) : ""}"
-                        placeholder="95"
-                        @change="${(e2) => this._numField("inverter-cutoff-soc-pct", e2)}"
-                    />
-                </div>
-                <div class="field-help">${t2.editor.inverterCutoffSocPctHelp}</div>
-                <label class="field">
-                    <span class="label">${t2.editor.batteryColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["battery-color"], DEFAULT_BATTERY_COLOR_HEX)}"
-                        .ariaLabel="${t2.editor.batteryColor}"
-                        @value-changed="${(e2) => this._color("battery-color", e2)}"
-                    ></helios-color-picker>
-                </label>
-
+                    <div class="field-help">${t2.editor.inverterCutoffSocPctHelp}</div>
+                    <label class="field">
+                        <span class="label">${t2.editor.batteryColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c2["battery-color"], DEFAULT_BATTERY_COLOR_HEX)}"
+                            .ariaLabel="${t2.editor.batteryColor}"
+                            @value-changed="${(e2) => this._color("battery-color", e2)}"
+                        ></helios-color-picker>
+                    </label>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "weather"}" @toggle="${(e2) => this._onSectionToggle("weather", e2)}">
@@ -44524,6 +44777,7 @@ let HeliosCardEditor = class extends i {
 };
 HeliosCardEditor.SLIDER_COMMIT_DELAY_MS = 250;
 HeliosCardEditor.PV_ARRAYS_MAX = 6;
+HeliosCardEditor.BATTERIES_MAX = 6;
 HeliosCardEditor.styles = editorStyles;
 __decorateClass$1([
   n2({ attribute: false })
@@ -44540,6 +44794,9 @@ __decorateClass$1([
 __decorateClass$1([
   r()
 ], HeliosCardEditor.prototype, "_openArrayIndices", 2);
+__decorateClass$1([
+  r()
+], HeliosCardEditor.prototype, "_openBatteryIndices", 2);
 __decorateClass$1([
   r()
 ], HeliosCardEditor.prototype, "_resetFeedback", 2);
@@ -44576,7 +44833,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.34"}`,
+      `%c☀ HELIOS%c v${"1.7.0-beta.0"}`,
       labelStyle,
       versionStyle
     );
@@ -44600,7 +44857,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.34",
+        version: "1.7.0-beta.0",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44608,7 +44865,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.34"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-beta.0"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
