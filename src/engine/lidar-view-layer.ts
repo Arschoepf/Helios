@@ -178,14 +178,14 @@ export class LidarViewLayer implements CustomLayerInterface
     private _fadeFullMeters: number = 100;
     private _fadeOutMeters:  number = 100;
     private _pointSizePx:  number = 1.5;
-    private _color:        [number, number, number, number] = [1, 1, 1, 0.5];
     private _alphaFade:    number = 0;
-    //Wireframe overlay: same vertices, line topology, independent
-    //colour + alpha. Off by default; when on, drawElements(LINES)
-    //runs alongside the points draw (the user can dial the point
-    //size to 0 to see lines only).
-    private _wireframeEnabled: boolean = false;
-    private _wireframeColor:   [number, number, number, number] = [1, 1, 1, 0.5];
+    //Single user-tunable opacity that drives the entire view. Points
+    //and the irradiance fill render at this value; the wireframe
+    //sits on a +0.15 bump (clamped) so the line topology stays
+    //readable above the soft fill. Colour is hard-locked to white
+    //so the irradiance heat-map carries the visual weight on its
+    //own and the LiDAR layer reads as one composite asset.
+    private _opacity: number = 0.6;
 
     //Home position in Mercator. Recomputed when setHome is called so
     //the radius filter stays anchored on the rendered home, and used
@@ -238,9 +238,14 @@ export class LidarViewLayer implements CustomLayerInterface
         this._map?.triggerRepaint();
     }
 
-    public setColor(rgba: [number, number, number, number]): void
+    //Single opacity knob, in [0..1]. Drives the points and the fill
+    //pass directly; the wireframe uses min(opacity + 0.15, 1) so the
+    //lines stay readable above the soft fill.
+    public setOpacity(opacity: number): void
     {
-        this._color = rgba;
+        const clamped = Math.max(0, Math.min(1, opacity));
+        if (clamped === this._opacity) return;
+        this._opacity = clamped;
         this._map?.triggerRepaint();
     }
 
@@ -250,19 +255,6 @@ export class LidarViewLayer implements CustomLayerInterface
         const clamped = Math.max(0, Math.min(1, a));
         if (clamped === this._alphaFade) return;
         this._alphaFade = clamped;
-        this._map?.triggerRepaint();
-    }
-
-    public setWireframeEnabled(on: boolean): void
-    {
-        if (on === this._wireframeEnabled) return;
-        this._wireframeEnabled = on;
-        this._map?.triggerRepaint();
-    }
-
-    public setWireframeColor(rgba: [number, number, number, number]): void
-    {
-        this._wireframeColor = rgba;
         this._map?.triggerRepaint();
     }
 
@@ -652,7 +644,10 @@ export class LidarViewLayer implements CustomLayerInterface
         const pixelRatio = this._map?.getPixelRatio?.()
                         ?? ((typeof window !== 'undefined' && window.devicePixelRatio) || 1);
         if (this._uPointSize)    gl.uniform1f(this._uPointSize, this._pointSizePx * pixelRatio);
-        if (this._uColor)        gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
+        //Wireframe sits +0.15 above the slider opacity so the lines stay readable above the soft fill; clamped to 1 at the top so the user can
+        //still push the slider all the way without overshooting.
+        const fillA = this._opacity;
+        const wireA = Math.min(1, this._opacity + 0.15);
         if (this._uAlphaFade)    gl.uniform1f(this._uAlphaFade, this._alphaFade);
 
         //Reset the GL state we depend on. MapLibre's other layers can
@@ -672,45 +667,33 @@ export class LidarViewLayer implements CustomLayerInterface
         //the vertex shader work.
         if (this._uColor && this._pointSizePx > 0)
         {
-            gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
+            gl.uniform4f(this._uColor, 1, 1, 1, fillA);
             gl.drawArrays(gl.POINTS, 0, this._vertexCount);
         }
 
-        //Irradiance fill pass. Triangulated cells, only renders when the wireframe is enabled AND fresh exposure data is loaded. Sits under
-        //the wireframe lines so the line topology stays visually crisp on top. Alpha is multiplied by 0.4 vs the wireframe so the fill reads
-        //as a soft heatmap layer rather than a solid carpet that swallows the line work above it.
-        if (this._wireframeEnabled
-         && this._hasExposure
+        //Irradiance fill pass. Triangulated cells, only renders when fresh exposure data is loaded. Sits under the wireframe lines so the line
+        //topology stays visually crisp on top.
+        if (this._hasExposure
          && this._triIndexBuffer
          && this._indexType !== 0
          && this._triIdxCount > 0
          && this._uColor)
         {
-            gl.uniform4f(this._uColor,
-                this._wireframeColor[0],
-                this._wireframeColor[1],
-                this._wireframeColor[2],
-                this._wireframeColor[3] * 0.4,
-            );
+            gl.uniform4f(this._uColor, 1, 1, 1, fillA);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._triIndexBuffer);
             gl.drawElements(gl.TRIANGLES, this._triIdxCount, this._indexType, 0);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
         }
 
-        //Wireframe pass. Same vertex buffer, line topology from the index buffer. The radius filter still applies via v_inside in the fragment
-        //shader: lines whose endpoints are both outside the radius go away, lines crossing the boundary fade to clipped at the edge.
-        if (this._wireframeEnabled
-         && this._indexBuffer
+        //Wireframe pass. Always drawn. Same vertex buffer, line topology from the index buffer. The radius filter still applies via v_inside
+        //in the fragment shader: lines whose endpoints are both outside the radius go away, lines crossing the boundary fade to clipped at
+        //the edge.
+        if (this._indexBuffer
          && this._indexType !== 0
          && this._lineIdxCount > 0
          && this._uColor)
         {
-            gl.uniform4f(this._uColor,
-                this._wireframeColor[0],
-                this._wireframeColor[1],
-                this._wireframeColor[2],
-                this._wireframeColor[3]
-            );
+            gl.uniform4f(this._uColor, 1, 1, 1, wireA);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._indexBuffer);
             gl.drawElements(gl.LINES, this._lineIdxCount, this._indexType, 0);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);

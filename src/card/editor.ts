@@ -15,18 +15,24 @@ import
     DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
-    DEFAULT_LIDAR_VIEW_POINT_OPACITY,
-    DEFAULT_LIDAR_VIEW_WIREFRAME,
-    DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY,
     DEFAULT_TIMELINE_ENABLED,
     DEFAULT_TIMELINE_WIDTH_PCT,
-    DEFAULT_TIMELINE_CONSUMPTION_ENABLED,
-    defaultLidarViewPointColor,
-    defaultLidarViewWireframeColor
+    DEFAULT_TIMELINE_CONSUMPTION_ENABLED
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
 import { cfgHex } from './format';
 import { renderShadingMapSection } from './shadingMapView';
+
+
+//LiDAR View visual knobs that existed before the in-card opacity slider replaced them. Left here as a const tuple so `_update` can strip
+//them silently on every config write: the runtime already ignores these keys, the silent strip just keeps the saved YAML tidy.
+const LIDAR_VIEW_LEGACY_KEYS = [
+    'lidar-view-point-color',
+    'lidar-view-point-opacity',
+    'lidar-view-wireframe',
+    'lidar-view-wireframe-color',
+    'lidar-view-wireframe-opacity'
+] as const;
 
 
 //Custom color picker.
@@ -331,9 +337,15 @@ export class HeliosCardEditor extends LitElement
 
     private _update(key: keyof HeliosConfig, value: unknown): void
     {
-        const next = { ...this._cfg, [key]: value };
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next } }));
-        this._cfg = next;
+        const next = { ...this._cfg, [key]: value } as Record<string, unknown>;
+        //Silently strip removed-since-1.7 LiDAR View visual knobs the moment the user makes any edit, so the config self-heals without needing
+        //a one-shot migration. The runtime ignores them too, this just keeps the YAML tidy.
+        for (const k of LIDAR_VIEW_LEGACY_KEYS)
+        {
+            if (k in next) delete next[k];
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
     }
 
     private _str(key: keyof HeliosConfig, e: Event): void
@@ -1319,58 +1331,6 @@ export class HeliosCardEditor extends LitElement
                                 @input="${(e: Event) => this._numSlider('lidar-view-point-size', e)}"
                             />
                             <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-size'] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX), 0.5)}</span>
-                        </div>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarViewPointColor}</span>
-                        <helios-color-picker
-                            .value="${String(c['lidar-view-point-color'] ?? defaultLidarViewPointColor(c['card-theme']))}"
-                            @value-changed="${(e: CustomEvent) => this._update('lidar-view-point-color', e.detail.value)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarViewPointOpacity}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="0" max="1" step="0.05"
-                                .value="${String(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY)}"
-                                @input="${(e: Event) => this._numSlider('lidar-view-point-opacity', e)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
-                        </div>
-                    </label>
-                    <div class="field">
-                        <span class="label">${t.editor.lidarViewWireframe}</span>
-                        <div class="segmented-toggle">
-                            <button
-                                type="button"
-                                class="seg-option ${((c['lidar-view-wireframe'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME) === true) ? 'active' : ''}"
-                                @click="${() => this._update('lidar-view-wireframe', true)}"
-                            >${t.editor.lidarViewWireframeOn}</button>
-                            <button
-                                type="button"
-                                class="seg-option ${((c['lidar-view-wireframe'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME) !== true) ? 'active' : ''}"
-                                @click="${() => this._update('lidar-view-wireframe', false)}"
-                            >${t.editor.lidarViewWireframeOff}</button>
-                        </div>
-                    </div>
-                    <div class="hint">${t.editor.lidarViewWireframeHint}</div>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarViewWireframeColor}</span>
-                        <helios-color-picker
-                            .value="${String(c['lidar-view-wireframe-color'] ?? defaultLidarViewWireframeColor(c['card-theme']))}"
-                            @value-changed="${(e: CustomEvent) => this._update('lidar-view-wireframe-color', e.detail.value)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarViewWireframeOpacity}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="0" max="1" step="0.05"
-                                .value="${String(c['lidar-view-wireframe-opacity'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY)}"
-                                @input="${(e: Event) => this._numSlider('lidar-view-wireframe-opacity', e)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c['lidar-view-wireframe-opacity'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY), 0.05)}</span>
                         </div>
                     </label>
                 </details>

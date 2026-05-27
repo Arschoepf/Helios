@@ -4,6 +4,7 @@
 //Same host-driven pattern as the timeline / overlays modules: the card owns the `@state` flag and the fade timestamps, the helpers here mutate them
 //through a structural LidarViewHost.
 
+import { html, nothing, type TemplateResult } from 'lit';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
 
@@ -26,6 +27,7 @@ export interface LidarViewHost extends OverlaysHost
     _lidarFadeInStartMs:         number | null;
     _lidarFadeOutStartMs:        number | null;
     _lidarFadeRaf?:              number;
+    _lidarViewOpacity:           number;
 }
 
 
@@ -130,4 +132,32 @@ export function startLidarFadeLoop(host: LidarViewHost): void
         }
     };
     host._lidarFadeRaf = requestAnimationFrame(tick);
+}
+
+
+//Bottom-of-card opacity slider, painted only while the LiDAR-View
+//mode is active. Mirrors the shading-dome cloud picker (same
+//capsule pill, same z-index, same vertical offset) so the two
+//modes use a consistent control well. Slider value is a percent
+//surface (0..100) for readability; the host bridges it back to
+//the [0..1] engine API.
+export function renderLidarViewOpacityPicker(
+    host:     LidarViewHost,
+    onChange: (opacity: number) => void,
+): TemplateResult | typeof nothing
+{
+    if (!host._lidarViewMode) return nothing;
+    const pct = Math.round(Math.max(0, Math.min(1, host._lidarViewOpacity)) * 100);
+    return html`
+        <div class="lidar-view-opacity-slider" aria-label="LiDAR view opacity">
+            <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--low"  icon="mdi:circle-outline"></ha-icon>
+            <input type="range" min="0" max="100" step="1"
+                   class="lidar-view-opacity-range"
+                   .value="${String(pct)}"
+                   aria-label="LiDAR view opacity percentage"
+                   @input="${(e: Event) => onChange(Number((e.target as HTMLInputElement).value) / 100)}" />
+            <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--high" icon="mdi:circle"></ha-icon>
+            <span class="lidar-view-opacity-value">${pct}%</span>
+        </div>
+    `;
 }

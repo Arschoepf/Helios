@@ -272,19 +272,14 @@ export interface Translations
         shadowOpacity:            string;
         shadowOpacityHint:        string;
         //LiDAR View overlay (subsection inside Shading).
-        //Lets the user toggle a Canvas overlay that paints every
-        //loaded LiDAR cell as a dot, plus tune its visual knobs.
+        //Lets the user tune the LiDAR view overlay (wireframe + fill
+        //coloured by live solar exposure). Only the point size remains
+        //tunable from the editor; the overall opacity is exposed
+        //in-card via a bottom slider so the user can dial the layer
+        //in/out while looking at the result.
         lidarViewSection:           string;
         lidarViewHint:              string;
         lidarViewPointSize:         string;
-        lidarViewPointColor:        string;
-        lidarViewPointOpacity:      string;
-        lidarViewWireframe:         string;
-        lidarViewWireframeOn:       string;
-        lidarViewWireframeOff:      string;
-        lidarViewWireframeHint:     string;
-        lidarViewWireframeColor:    string;
-        lidarViewWireframeOpacity:  string;
         //Collapsible advanced section that lets a power user point Helios at their own nDSM GeoTIFF for shadow data. Hidden by default behind a
         //<details>/<summary> toggle so the editor stays simple for the 99% of users who never need it.
         localLidarSection:        string;

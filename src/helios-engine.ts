@@ -36,11 +36,7 @@ import
     LIDAR_PRECISION_PITCH_MULT,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
-    DEFAULT_LIDAR_VIEW_POINT_OPACITY,
-    DEFAULT_LIDAR_VIEW_WIREFRAME,
-    DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY,
-    defaultLidarViewPointColor,
-    defaultLidarViewWireframeColor,
+    DEFAULT_LIDAR_VIEW_OPACITY,
     LIDAR_VIEW_FULL_OPACITY_RADIUS_M,
     LIDAR_VIEW_DISPLAY_RADIUS_M
 } from './helios-config';
@@ -1845,17 +1841,33 @@ export class HeliosEngine
         }
     }
 
-    //Read all LiDAR View visual knobs off the current config and push them to the layer. Called on init and whenever updateConfig sees a relevant key
-    //change.
+    //Runtime opacity for the LiDAR View overlay, [0..1]. Driven by the in-card bottom slider, not by config; resets to DEFAULT each engine
+    //instance. Only the point size is still config-controlled; colours are hard-locked to white in the layer.
+    private _lidarViewOpacity: number = DEFAULT_LIDAR_VIEW_OPACITY;
+
+    //Push the current LiDAR View tuning to the layer. Called on init,
+    //on updateConfig when point-size changes, and on setLidarViewOpacity
+    //when the slider moves.
     private _pushLidarViewConfig(): void
     {
         if (!this._lidarViewLayer) return;
         const [fullR, fadeR] = this._lidarViewFadeRange();
         this._lidarViewLayer.setFadeRange(fullR, fadeR);
         this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
-        this._lidarViewLayer.setColor(this._lidarViewColorRgba());
-        this._lidarViewLayer.setWireframeEnabled(this._lidarViewWireframeEnabled());
-        this._lidarViewLayer.setWireframeColor(this._lidarViewWireframeRgba());
+        this._lidarViewLayer.setOpacity(this._lidarViewOpacity);
+    }
+
+    public setLidarViewOpacity(opacity: number): void
+    {
+        const clamped = Math.max(0, Math.min(1, opacity));
+        if (clamped === this._lidarViewOpacity) return;
+        this._lidarViewOpacity = clamped;
+        this._pushLidarViewConfig();
+    }
+
+    public getLidarViewOpacity(): number
+    {
+        return this._lidarViewOpacity;
     }
 
     //Fade alpha multiplier in [0..1]. Driven by the card's enter/exit
@@ -1880,64 +1892,6 @@ export class HeliosEngine
         const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
         if (!isFinite(n) || n <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
         return Math.min(6, n);
-    }
-
-    private _lidarViewColorRgba(): [number, number, number, number]
-    {
-        const rawColor = this.cfg['lidar-view-point-color'];
-        const hex = typeof rawColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim())
-            ? rawColor.trim()
-            : defaultLidarViewPointColor(this.cfg['card-theme']);
-        const rawOpa = this.cfg['lidar-view-point-opacity'];
-        const opa = typeof rawOpa === 'number' ? rawOpa : parseFloat(String(rawOpa ?? ''));
-        const alpha = isFinite(opa)
-            ? Math.max(0, Math.min(1, opa))
-            : DEFAULT_LIDAR_VIEW_POINT_OPACITY;
-        const rgb = this._hexToRgb01(hex);
-        return [rgb[0], rgb[1], rgb[2], alpha];
-    }
-
-    private _lidarViewWireframeEnabled(): boolean
-    {
-        const raw = this.cfg['lidar-view-wireframe'];
-        if (typeof raw === 'boolean') return raw;
-        if (typeof raw === 'string')
-        {
-            const s = raw.trim().toLowerCase();
-            if (s === 'true'  || s === '1' || s === 'on'  || s === 'yes') return true;
-            if (s === 'false' || s === '0' || s === 'off' || s === 'no')  return false;
-        }
-        return DEFAULT_LIDAR_VIEW_WIREFRAME;
-    }
-
-    private _lidarViewWireframeRgba(): [number, number, number, number]
-    {
-        const rawColor = this.cfg['lidar-view-wireframe-color'];
-        const hex = typeof rawColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim())
-            ? rawColor.trim()
-            : defaultLidarViewWireframeColor(this.cfg['card-theme']);
-        const rawOpa = this.cfg['lidar-view-wireframe-opacity'];
-        const opa = typeof rawOpa === 'number' ? rawOpa : parseFloat(String(rawOpa ?? ''));
-        const alpha = isFinite(opa)
-            ? Math.max(0, Math.min(1, opa))
-            : DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY;
-        const rgb = this._hexToRgb01(hex);
-        return [rgb[0], rgb[1], rgb[2], alpha];
-    }
-
-    private _hexToRgb01(hex: string): [number, number, number]
-    {
-        let h = hex.replace('#', '');
-        if (h.length === 3) h = h.split('').map(c => c + c).join('');
-        if (h.length === 8) h = h.slice(0, 6);
-        const r = parseInt(h.slice(0, 2), 16) / 255;
-        const g = parseInt(h.slice(2, 4), 16) / 255;
-        const b = parseInt(h.slice(4, 6), 16) / 255;
-        return [
-            isFinite(r) ? r : 1,
-            isFinite(g) ? g : 1,
-            isFinite(b) ? b : 1
-        ];
     }
 
     //LiDAR View support, exposed to the card.

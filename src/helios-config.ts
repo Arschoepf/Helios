@@ -266,36 +266,14 @@ export interface HeliosConfig
     'solar-radiation-entity'?: unknown;
     //LiDAR View overlay. When the user clicks the LiDAR View button
     //in the top-right of the card, the regular map UI fades out and
-    //every raster cell currently loaded is projected to screen as a
-    //small dot. These keys tune the look; none of them affect cast-
-    //shadow rendering.
-    //  lidar-view-point-size   : pixels (1..6). Square side length per
-    //                            point on the canvas. Default 1.5.
-    //  lidar-view-point-color  : hex string. Default '#ffffff' (white
-    //                            on the muted basemap reads as a fine
-    //                            point cloud regardless of theme).
-    //  lidar-view-point-opacity: 0..1. Default 0.5. Combined with
-    //                            point-size to control the perceptual
-    //                            density of the cloud.
-    //  lidar-view-wireframe        : boolean. Default false. When true,
-    //                                a Tron-style mesh is overlaid: a
-    //                                line is drawn between each finite
-    //                                cell and its right + bottom
-    //                                neighbours, also finite. Sits on
-    //                                top of (or replaces, if point size
-    //                                is set to 0) the dot cloud.
-    //  lidar-view-wireframe-color  : hex string. Default same white as
-    //                                points so the two pass together
-    //                                read as one mesh.
-    //  lidar-view-wireframe-opacity: 0..1. Default 0.35. Lighter than
-    //                                the dots so the mesh reads as
-    //                                "scaffolding under the points".
-    'lidar-view-point-size'?:         unknown;
-    'lidar-view-point-color'?:        unknown;
-    'lidar-view-point-opacity'?:      unknown;
-    'lidar-view-wireframe'?:          unknown;
-    'lidar-view-wireframe-color'?:    unknown;
-    'lidar-view-wireframe-opacity'?:  unknown;
+    //the raster is painted as a wireframe + filled cells coloured
+    //by live solar exposure (the irradiance heat-map). Wireframe is
+    //always on, colours are fixed (white) and the overall opacity is
+    //controlled in-card via a bottom slider, not from config. Only
+    //the point size remains configurable.
+    //  lidar-view-point-size: pixels (1..6). Square side length per
+    //                         point on the canvas. Default 1.
+    'lidar-view-point-size'?: unknown;
 }
 
 
@@ -372,29 +350,12 @@ export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 
 //LiDAR View overlay defaults. The disc radius is taken from the
 //shared `building-radius` (the "Display radius" knob) so the View
-//and the rest of the card stay in sync; the three knobs left here
-//are pure paint, no recompute.
+//and the rest of the card stay in sync. Colours are fixed to white
+//inside the layer; overall opacity is runtime state driven by the
+//in-card bottom slider (DEFAULT_LIDAR_VIEW_OPACITY is the value the
+//slider lands on the first time the user opens the view).
 export const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX  = 1;
-export const DEFAULT_LIDAR_VIEW_POINT_OPACITY  = 0.3;
-export const DEFAULT_LIDAR_VIEW_WIREFRAME          = true;
-export const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY  = 0.25;
-//Theme-aware colour defaults. Points pick the high-contrast tone
-//(white on dark, black on light); the wireframe sits a notch back
-//(light grey on dark, dark grey on light) so the lines read as a
-//softer scaffolding underneath the dots without competing for
-//attention. Helpers are used both at runtime (engine push) and in
-//the editor (placeholders + color-picker initial value) so what the
-//user sees matches what gets rendered.
-export function defaultLidarViewPointColor(cardTheme: unknown): string
-{
-    const isDark = String(cardTheme ?? 'light').toLowerCase() === 'dark';
-    return isDark ? '#ffffff' : '#000000';
-}
-export function defaultLidarViewWireframeColor(cardTheme: unknown): string
-{
-    const isDark = String(cardTheme ?? 'light').toLowerCase() === 'dark';
-    return isDark ? '#d0d0d0' : '#404040';
-}
+export const DEFAULT_LIDAR_VIEW_OPACITY        = 0.6;
 //Distance from the home at which the LiDAR view is at full opacity.
 //Beyond this, alpha smoothstep-fades down to 0 at the display
 //radius below, so the cloud reads as anchored on the home and

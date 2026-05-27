@@ -2021,6 +2021,80 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
     }
 
+    /*  LiDAR View opacity slider. Painted at the bottom of the card
+        while the LiDAR view is active. Same capsule pill as the dome
+        cloud picker for visual consistency between the two modes;
+        ungated (continuous, no ticks) because opacity is a free
+        analog tune, not a binned pick.                              */
+    .lidar-view-opacity-slider
+    {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        pointer-events: auto;
+    }
+    .lidar-view-opacity-icon
+    {
+        --mdc-icon-size: 16px;
+        color: rgba(255, 255, 255, 0.85);
+        display: inline-flex;
+        align-items: center;
+    }
+    .lidar-view-opacity-icon--low  { opacity: 0.7; }
+    .lidar-view-opacity-icon--high { opacity: 1.0; }
+    .lidar-view-opacity-range
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 160px;
+        height: 4px;
+        background: linear-gradient(to right, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.9) 100%);
+        border-radius: 999px;
+        outline: none;
+        cursor: pointer;
+        margin: 0;
+    }
+    .lidar-view-opacity-range::-webkit-slider-thumb
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .lidar-view-opacity-range::-moz-range-thumb
+    {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .lidar-view-opacity-value
+    {
+        min-width: 36px;
+        text-align: right;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.85);
+        font-variant-numeric: tabular-nums;
+    }
+
 
     /*  Top corner overlays. Date/time + scrub-return cluster on the
         left; LiDAR-view toggle + "LiDAR" status chip on the right.

@@ -6,7 +6,8 @@ import
     type HeliosConfig,
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
-    DEFAULT_BATTERY_COLOR_HEX
+    DEFAULT_BATTERY_COLOR_HEX,
+    DEFAULT_LIDAR_VIEW_OPACITY
 } from './helios-config';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-css';
@@ -67,7 +68,7 @@ import
     timelineEnabled,
     timelineWidthPct
 } from './card/timeline';
-import { toggleLidarView } from './card/lidar-view';
+import { toggleLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
 import {
     renderShadingDomeOverlay,
     renderShadingDomeCloudPicker,
@@ -436,6 +437,13 @@ export class HeliosCard extends LitElement
     _lidarFadeInStartMs:  number | null = null;
     _lidarFadeOutStartMs: number | null = null;
     _lidarFadeRaf?:       number;
+    //Overall LiDAR View opacity, driven by the bottom slider painted
+    //while the view is active. Runtime state on purpose: no config
+    //key. Defaults to DEFAULT_LIDAR_VIEW_OPACITY each card lifetime
+    //so the user always lands on a sensible-looking opacity, then
+    //tweaks live. Pushed to the engine in the slider's @input
+    //handler, which forwards to the WebGL layer.
+    @state() _lidarViewOpacity = DEFAULT_LIDAR_VIEW_OPACITY;
 
     //Shading-dome overlay state. Mutually exclusive with the LiDAR
     //view (the click handlers below close one before opening the
@@ -2010,6 +2018,10 @@ export class HeliosCard extends LitElement
                     refreshShadingDomeScene(this);
                     this.requestUpdate();
                 }) : nothing}
+                ${renderLidarViewOpacityPicker(this, (opacity) => {
+                    this._lidarViewOpacity = opacity;
+                    this._engine?.setLidarViewOpacity(opacity);
+                })}
 
             </ha-card>
         `;
