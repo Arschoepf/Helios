@@ -4409,9 +4409,7 @@ const heliosCardStyles = i$4`
         inline (see card/flags.ts) so it renders identically across
         OSes (Apple flag emoji look great but Windows + a few Linux
         distros mangle several country codes). Square-clamped to the
-        same 22 px footprint MDI icons get, with a 1 px dark border
-        so light-coloured flags (Poland, Netherlands, Belgium yellow
-        band) keep enough contrast against the button's white plate.   */
+        same 22 px footprint MDI icons get.                            */
     .mode-bar-seg .mode-bar-flag
     {
         display: inline-flex;
@@ -4421,7 +4419,6 @@ const heliosCardStyles = i$4`
         height: 22px;
         border-radius: 3px;
         overflow: hidden;
-        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
     }
     .mode-bar-seg .mode-bar-flag svg
     {
@@ -32178,6 +32175,9 @@ function processHeightRaster(heights, geo, opts = {}, terrain) {
   if (heights.length < N2) {
     return emptyResult();
   }
+  if (opts.medianSmooth) {
+    heights = median3x3(heights, rasterSize);
+  }
   const pxLon = (maxLon - minLon) / rasterSize;
   const pxLat = (maxLat - minLat) / rasterSize;
   const halfLon = pxLon / 2;
@@ -32297,6 +32297,46 @@ function processHeightRaster(heights, geo, opts = {}, terrain) {
       maxLon
     }
   };
+}
+function median3x3(src, size) {
+  const out = new Float32Array(src.length);
+  const buf = new Array(9);
+  for (let j = 0; j < size; j++) {
+    for (let i3 = 0; i3 < size; i3++) {
+      const idx = j * size + i3;
+      const center = src[idx];
+      if (!isFinite(center)) {
+        out[idx] = center;
+        continue;
+      }
+      let n3 = 0;
+      for (let dj = -1; dj <= 1; dj++) {
+        const jj = j + dj;
+        if (jj < 0 || jj >= size) continue;
+        for (let di = -1; di <= 1; di++) {
+          const ii = i3 + di;
+          if (ii < 0 || ii >= size) continue;
+          const v2 = src[jj * size + ii];
+          if (isFinite(v2)) buf[n3++] = v2;
+        }
+      }
+      if (n3 === 0) {
+        out[idx] = NaN;
+        continue;
+      }
+      for (let k2 = 1; k2 < n3; k2++) {
+        const v2 = buf[k2];
+        let m2 = k2 - 1;
+        while (m2 >= 0 && buf[m2] > v2) {
+          buf[m2 + 1] = buf[m2];
+          m2--;
+        }
+        buf[m2 + 1] = v2;
+      }
+      out[idx] = buf[n3 - 1 >> 1];
+    }
+  }
+  return out;
 }
 function emptyResult() {
   return {
@@ -36461,6 +36501,15 @@ const badenWurttembergLgl = {
       homeLat: opts.homeLat,
       homeLon: opts.homeLon,
       cropRadiusMeters: opts.cropRadiusMeters
+    }, {
+      //DOM is published at 5 m and DGM at 1 m; the subtraction
+      //is dominated by the coarser DOM grid which puts a lot of
+      //2-5 m noise on building edges and low vegetation. Median
+      //pre-filter kills isolated spikes, threshold raised to 7 m
+      //skips tall scrub and 1-story garden sheds whose render
+      //would otherwise dominate the shadow output.
+      medianSmooth: true,
+      heightThreshM: 7
     });
   }
 };
@@ -36522,6 +36571,13 @@ const austriaTirolAls = {
       homeLat: opts.homeLat,
       homeLon: opts.homeLon,
       cropRadiusMeters: opts.cropRadiusMeters
+    }, {
+      //5 m native grid + DSM-DTM subtraction = noisy edges. Median
+      //pre-filter cleans single-cell artefacts; threshold lifted
+      //to 7 m skips tall scrub the Tirol forest serves as DSM-DTM
+      //residuals.
+      medianSmooth: true,
+      heightThreshM: 7
     });
   }
 };
@@ -36583,6 +36639,15 @@ const austriaSteiermarkAls = {
       homeLat: opts.homeLat,
       homeLon: opts.homeLon,
       cropRadiusMeters: opts.cropRadiusMeters
+    }, {
+      //1 m DSM minus 1 m DTM looks clean on paper but the
+      //Steiermark mosaic carries low residuals over forest and
+      //agricultural land that saturate the default 5 m threshold
+      //(>80 % of cells passing). Median pre-filter + 7 m threshold
+      //recovers building-tree separation without losing real
+      //roofs.
+      medianSmooth: true,
+      heightThreshM: 7
     });
   }
 };
@@ -36644,6 +36709,13 @@ const flandersDhmv2 = {
       homeLat: opts.homeLat,
       homeLon: opts.homeLon,
       cropRadiusMeters: opts.cropRadiusMeters
+    }, {
+      //DSM 1 m minus DEM 1 m: same noise profile as the Austrian
+      //and BW DSM-DTM pipelines. Median pre-filter + 7 m threshold
+      //matches the rest of the subtraction-based providers so the
+      //rendered shadows look consistent across borders.
+      medianSmooth: true,
+      heightThreshM: 7
     });
   }
 };
@@ -44766,7 +44838,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.23"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.24"}`,
       labelStyle,
       versionStyle
     );
@@ -44790,7 +44862,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.23",
+        version: "1.7.0-alpha.24",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44798,7 +44870,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.23"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.24"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

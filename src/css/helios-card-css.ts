@@ -1853,9 +1853,7 @@ export const heliosCardStyles = css`
         inline (see card/flags.ts) so it renders identically across
         OSes (Apple flag emoji look great but Windows + a few Linux
         distros mangle several country codes). Square-clamped to the
-        same 22 px footprint MDI icons get, with a 1 px dark border
-        so light-coloured flags (Poland, Netherlands, Belgium yellow
-        band) keep enough contrast against the button's white plate.   */
+        same 22 px footprint MDI icons get.                            */
     .mode-bar-seg .mode-bar-flag
     {
         display: inline-flex;
@@ -1865,7 +1863,6 @@ export const heliosCardStyles = css`
         height: 22px;
         border-radius: 3px;
         overflow: hidden;
-        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
     }
     .mode-bar-seg .mode-bar-flag svg
     {

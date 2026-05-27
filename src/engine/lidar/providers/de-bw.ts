@@ -115,6 +115,15 @@ export const badenWurttembergLgl: LidarSource =
             homeLat:          opts.homeLat,
             homeLon:          opts.homeLon,
             cropRadiusMeters: opts.cropRadiusMeters
+        }, {
+            //DOM is published at 5 m and DGM at 1 m; the subtraction
+            //is dominated by the coarser DOM grid which puts a lot of
+            //2-5 m noise on building edges and low vegetation. Median
+            //pre-filter kills isolated spikes, threshold raised to 7 m
+            //skips tall scrub and 1-story garden sheds whose render
+            //would otherwise dominate the shadow output.
+            medianSmooth:  true,
+            heightThreshM: 7,
         });
     }
 };

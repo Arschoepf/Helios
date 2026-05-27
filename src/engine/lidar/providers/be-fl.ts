@@ -110,6 +110,13 @@ export const flandersDhmv2: LidarSource =
             homeLat:          opts.homeLat,
             homeLon:          opts.homeLon,
             cropRadiusMeters: opts.cropRadiusMeters
+        }, {
+            //DSM 1 m minus DEM 1 m: same noise profile as the Austrian
+            //and BW DSM-DTM pipelines. Median pre-filter + 7 m threshold
+            //matches the rest of the subtraction-based providers so the
+            //rendered shadows look consistent across borders.
+            medianSmooth:  true,
+            heightThreshM: 7,
         });
     }
 };

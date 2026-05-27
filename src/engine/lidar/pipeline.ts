@@ -74,6 +74,18 @@ export interface PipelineOptions
     //IGN baseline (1 m). Most callers can leave this default.
     targetAreaM2?:  number;
     minComponentCells?: number;
+    //Opt-in 3x3 median pre-filter on the raster, BEFORE thresholding.
+    //Recommended for providers that publish DSM + DTM separately and
+    //let the client subtract per-pixel (AT-Tirol, AT-Steiermark,
+    //DE-BW, NL, UK), the per-pixel subtraction amplifies single-cell
+    //noise at building edges + vegetation, which would otherwise pass
+    //the height threshold and saturate the flood fill with junk
+    //components. The median pass keeps building roofs (multi-cell
+    //plateaux) while killing isolated spikes. nDSM providers that
+    //ship a pre-computed normalised height (FR, PL, CA, VT, NRW)
+    //typically don't need this, the source agency has already
+    //smoothed the raster server-side.
+    medianSmooth?: boolean;
 }
 
 //Run the shared consolidation pipeline on a height-above-ground
@@ -104,6 +116,11 @@ export function processHeightRaster(
     if (heights.length < N)
     {
         return emptyResult();
+    }
+
+    if (opts.medianSmooth)
+    {
+        heights = median3x3(heights, rasterSize);
     }
 
     const pxLon  = (maxLon - minLon) / rasterSize;
@@ -275,6 +292,66 @@ export function processHeightRaster(
             maxLon
         }
     };
+}
+
+//3x3 median filter in-place over a Float32 raster, edges handled by
+//reusing the cell's own value when the kernel falls off the grid.
+//NaN inputs are preserved (the median of [NaN, ...] is NaN by our
+//convention so a no-data cell stays no-data), which keeps the
+//upstream "no-data" semantics intact for nDSM cells the upstream
+//WCS marked as missing. Returns a fresh Float32Array, the input is
+//not mutated.
+//
+//Use case: DSM-DTM subtraction providers (AT-Tirol, AT-Steiermark,
+//DE-BW) where per-pixel subtraction amplifies single-cell noise at
+//building edges + vegetation. A median pass kills isolated spikes
+//while preserving multi-cell building plateaux.
+function median3x3(src: Float32Array, size: number): Float32Array
+{
+    const out = new Float32Array(src.length);
+    const buf = new Array<number>(9);
+    for (let j = 0; j < size; j++)
+    {
+        for (let i = 0; i < size; i++)
+        {
+            const idx = j * size + i;
+            const center = src[idx];
+            if (!isFinite(center))
+            {
+                out[idx] = center;
+                continue;
+            }
+            let n = 0;
+            for (let dj = -1; dj <= 1; dj++)
+            {
+                const jj = j + dj;
+                if (jj < 0 || jj >= size) continue;
+                for (let di = -1; di <= 1; di++)
+                {
+                    const ii = i + di;
+                    if (ii < 0 || ii >= size) continue;
+                    const v = src[jj * size + ii];
+                    if (isFinite(v)) buf[n++] = v;
+                }
+            }
+            if (n === 0) { out[idx] = NaN; continue; }
+            //In-place insertion sort, faster than Array.sort on a 9-
+            //element buffer.
+            for (let k = 1; k < n; k++)
+            {
+                const v = buf[k];
+                let m = k - 1;
+                while (m >= 0 && buf[m] > v)
+                {
+                    buf[m + 1] = buf[m];
+                    m--;
+                }
+                buf[m + 1] = v;
+            }
+            out[idx] = buf[(n - 1) >> 1];
+        }
+    }
+    return out;
 }
 
 export function emptyResult(): LidarShadowResult

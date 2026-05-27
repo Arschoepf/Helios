@@ -101,6 +101,13 @@ export const austriaTirolAls: LidarSource =
             homeLat:          opts.homeLat,
             homeLon:          opts.homeLon,
             cropRadiusMeters: opts.cropRadiusMeters
+        }, {
+            //5 m native grid + DSM-DTM subtraction = noisy edges. Median
+            //pre-filter cleans single-cell artefacts; threshold lifted
+            //to 7 m skips tall scrub the Tirol forest serves as DSM-DTM
+            //residuals.
+            medianSmooth:  true,
+            heightThreshM: 7,
         });
     }
 };

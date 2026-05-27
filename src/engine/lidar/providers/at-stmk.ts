@@ -104,6 +104,15 @@ export const austriaSteiermarkAls: LidarSource =
             homeLat:          opts.homeLat,
             homeLon:          opts.homeLon,
             cropRadiusMeters: opts.cropRadiusMeters
+        }, {
+            //1 m DSM minus 1 m DTM looks clean on paper but the
+            //Steiermark mosaic carries low residuals over forest and
+            //agricultural land that saturate the default 5 m threshold
+            //(>80 % of cells passing). Median pre-filter + 7 m threshold
+            //recovers building-tree separation without losing real
+            //roofs.
+            medianSmooth:  true,
+            heightThreshM: 7,
         });
     }
 };
