@@ -35407,6 +35407,40 @@ class GeoTIFF extends GeoTIFFBase {
 async function fromArrayBuffer(arrayBuffer, signal) {
   return GeoTIFF.fromSource(makeBufferSource(arrayBuffer), void 0, signal);
 }
+function extractMultipartTiff(buf, contentType) {
+  const bytes = new Uint8Array(buf);
+  let magic = -1;
+  for (let i2 = 0; i2 < bytes.length - 4; i2++) {
+    if (bytes[i2] === 73 && bytes[i2 + 1] === 73 && bytes[i2 + 2] === 42 && bytes[i2 + 3] === 0 || bytes[i2] === 77 && bytes[i2 + 1] === 77 && bytes[i2 + 2] === 0 && bytes[i2 + 3] === 42) {
+      magic = i2;
+      break;
+    }
+  }
+  if (magic < 0) return null;
+  const m2 = contentType.match(/boundary=("?)([^";]+)\1/);
+  let bodyEnd = bytes.length;
+  if (m2) {
+    const boundary = "--" + m2[2];
+    const boundaryBytes = new TextEncoder().encode(boundary);
+    for (let i2 = magic + 4; i2 <= bytes.length - boundaryBytes.length; i2++) {
+      let match = true;
+      for (let j = 0; j < boundaryBytes.length; j++) {
+        if (bytes[i2 + j] !== boundaryBytes[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        bodyEnd = i2;
+        break;
+      }
+    }
+  }
+  while (bodyEnd > magic && (bytes[bodyEnd - 1] === 13 || bytes[bodyEnd - 1] === 10)) {
+    bodyEnd--;
+  }
+  return buf.slice(magic, bodyEnd);
+}
 async function fetchFloat32GeoTiff(url, rasterSize, signal) {
   let resp;
   try {
@@ -35422,6 +35456,12 @@ async function fetchFloat32GeoTiff(url, rasterSize, signal) {
     return null;
   }
   if (buf.byteLength < 200) return null;
+  const contentType = resp.headers.get("content-type") ?? "";
+  if (contentType.includes("multipart/")) {
+    const tiffSlice = extractMultipartTiff(buf, contentType);
+    if (!tiffSlice) return null;
+    buf = tiffSlice;
+  }
   let tiff;
   try {
     tiff = await fromArrayBuffer(buf);
@@ -35558,7 +35598,7 @@ function maxRasters(a2, b2) {
   return out;
 }
 const DSM_URL = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-surface-model-last-return-dsm-1m-2022/wms";
-const DTM_URL$1 = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms";
+const DTM_URL$2 = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms";
 const DSM_LAYER = "Lidar_Composite_Elevation_LZ_DSM_1m";
 const DTM_LAYER = "Lidar_Composite_Elevation_DTM_1m";
 const UK_BBOX = { minLat: 49.7, maxLat: 56, minLon: -7.2, maxLon: 2.1 };
@@ -35601,7 +35641,7 @@ const englandLidarComposite = {
     };
     const [dsm, dtm] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(DSM_URL, DSM_LAYER), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DTM_URL$1, DTM_LAYER), rasterSize, opts.signal)
+      fetchFloat32GeoTiff(buildUrl(DTM_URL$2, DTM_LAYER), rasterSize, opts.signal)
     ]);
     if (!dsm || !dtm) return emptyResult();
     const heights = subtractRasters(dsm, dtm);
@@ -35617,7 +35657,7 @@ const englandLidarComposite = {
     });
   }
 };
-const WCS_URL$4 = "https://wcs-mds.idee.es/mds";
+const WCS_URL$6 = "https://wcs-mds.idee.es/mds";
 const COVERAGE_VEG = "mdsn_v025";
 const COVERAGE_BLD = "mdsn_e025";
 const ES_BBOX = { minLat: 35.8, maxLat: 44, minLon: -9.6, maxLon: 4.4 };
@@ -35653,7 +35693,7 @@ const spainPnoaLidar = {
         SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326",
         OUTPUTCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
       });
-      return `${WCS_URL$4}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
+      return `${WCS_URL$6}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
     };
     const [veg, bld] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(COVERAGE_VEG), rasterSize, opts.signal),
@@ -35673,7 +35713,7 @@ const spainPnoaLidar = {
     });
   }
 };
-const WCS_URL$3 = "https://service.pdok.nl/rws/ahn/wcs/v1_0";
+const WCS_URL$5 = "https://service.pdok.nl/rws/ahn/wcs/v1_0";
 const COVERAGE_DSM = "dsm_05m";
 const COVERAGE_DTM = "dtm_05m";
 const NL_BBOX = { minLat: 50.7, maxLat: 53.8, minLon: 3.1, maxLon: 7.3 };
@@ -35709,7 +35749,7 @@ const netherlandsAhn4 = {
         SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326",
         OUTPUTCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
       });
-      return `${WCS_URL$3}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
+      return `${WCS_URL$5}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
     };
     const [dsm, dtm] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(COVERAGE_DSM), rasterSize, opts.signal),
@@ -35729,8 +35769,8 @@ const netherlandsAhn4 = {
     });
   }
 };
-const DTM_URL = "https://hoydedata.no/arcgis/rest/services/DTM/ImageServer/exportImage";
-const DOM_URL$1 = "https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage";
+const DTM_URL$1 = "https://hoydedata.no/arcgis/rest/services/DTM/ImageServer/exportImage";
+const DOM_URL$3 = "https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage";
 const NO_BBOX = { minLat: 57.5, maxLat: 81, minLon: 4, maxLon: 33 };
 const norwayKartverketNhm = {
   id: "no-kartverket-nhm",
@@ -35768,8 +35808,8 @@ const norwayKartverketNhm = {
       return `${base}?${params.toString()}`;
     };
     const [dom, dtm] = await Promise.all([
-      fetchFloat32GeoTiff(buildUrl(DOM_URL$1), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DTM_URL), rasterSize, opts.signal)
+      fetchFloat32GeoTiff(buildUrl(DOM_URL$3), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DTM_URL$1), rasterSize, opts.signal)
     ]);
     if (!dom || !dtm) return emptyResult();
     const cleanseNoData = (a2) => {
@@ -35791,8 +35831,8 @@ const norwayKartverketNhm = {
     });
   }
 };
-const WCS_URL$2 = "https://www.wcs.nrw.de/geobasis/wcs_nw_ndom";
-const COVERAGE$2 = "nw_ndom";
+const WCS_URL$4 = "https://www.wcs.nrw.de/geobasis/wcs_nw_ndom";
+const COVERAGE$4 = "nw_ndom";
 const NRW_BBOX = { minLat: 50.3, maxLat: 52.55, minLon: 5.85, maxLon: 9.5 };
 const nrwLidarNdom = {
   id: "de-nrw-ndom",
@@ -35820,7 +35860,7 @@ const nrwLidarNdom = {
       SERVICE: "WCS",
       VERSION: "2.0.1",
       REQUEST: "GetCoverage",
-      COVERAGEID: COVERAGE$2,
+      COVERAGEID: COVERAGE$4,
       FORMAT: "image/tiff",
       SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
     });
@@ -35828,7 +35868,7 @@ const nrwLidarNdom = {
     params.append("SUBSET", `Lat(${bbox.minLat},${bbox.maxLat})`);
     params.append("SCALESIZE", `Long(${rasterSize}),Lat(${rasterSize})`);
     const heights = await fetchFloat32GeoTiff(
-      `${WCS_URL$2}?${params.toString()}`,
+      `${WCS_URL$4}?${params.toString()}`,
       rasterSize,
       opts.signal
     );
@@ -35845,8 +35885,8 @@ const nrwLidarNdom = {
     });
   }
 };
-const WCS_URL$1 = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMPT/GRID1/WCS/DigitalSurfaceModel";
-const COVERAGE$1 = "DSM_PL-EVRF2007-NH";
+const WCS_URL$3 = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMPT/GRID1/WCS/DigitalSurfaceModel";
+const COVERAGE$3 = "DSM_PL-EVRF2007-NH";
 const PL_BBOX = { minLat: 49, maxLat: 54.85, minLon: 14.1, maxLon: 24.2 };
 const polandGugikNmpt = {
   id: "pl-gugik-nmpt",
@@ -35874,7 +35914,7 @@ const polandGugikNmpt = {
       SERVICE: "WCS",
       VERSION: "2.0.1",
       REQUEST: "GetCoverage",
-      COVERAGEID: COVERAGE$1,
+      COVERAGEID: COVERAGE$3,
       FORMAT: "image/tiff",
       SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
     });
@@ -35882,7 +35922,7 @@ const polandGugikNmpt = {
     params.append("SUBSET", `Lat(${bbox.minLat},${bbox.maxLat})`);
     params.append("SCALESIZE", `Long(${rasterSize}),Lat(${rasterSize})`);
     const heights = await fetchFloat32GeoTiff(
-      `${WCS_URL$1}?${params.toString()}`,
+      `${WCS_URL$3}?${params.toString()}`,
       rasterSize,
       opts.signal
     );
@@ -35899,8 +35939,8 @@ const polandGugikNmpt = {
     });
   }
 };
-const WCS_URL = "https://datacube.services.geo.ca/ows/elevation";
-const COVERAGE = "dsm";
+const WCS_URL$2 = "https://datacube.services.geo.ca/ows/elevation";
+const COVERAGE$2 = "dsm";
 const CA_BBOX = { minLat: 41.5, maxLat: 84, minLon: -141.5, maxLon: -52 };
 const canadaHrdem = {
   id: "ca-nrcan-hrdem",
@@ -35933,7 +35973,7 @@ const canadaHrdem = {
       SERVICE: "WCS",
       VERSION: "1.1.1",
       REQUEST: "GetCoverage",
-      IDENTIFIER: COVERAGE,
+      IDENTIFIER: COVERAGE$2,
       FORMAT: "image/geotiff",
       BOUNDINGBOX: `${bbox.minLat},${bbox.minLon},${bbox.maxLat},${bbox.maxLon},urn:ogc:def:crs:EPSG::4326`,
       GRIDBASECRS: "urn:ogc:def:crs:EPSG::4326",
@@ -35943,7 +35983,7 @@ const canadaHrdem = {
       GRIDOFFSETS: `${-deltaLat},${deltaLon}`
     });
     const heights = await fetchFloat32GeoTiff(
-      `${WCS_URL}?${params.toString()}`,
+      `${WCS_URL$2}?${params.toString()}`,
       rasterSize,
       opts.signal
     );
@@ -35960,10 +36000,10 @@ const canadaHrdem = {
     });
   }
 };
-const DOM_URL = "https://isk.geobasis-bb.de/ows/bdom_wcs";
-const DGM_URL = "https://isk.geobasis-bb.de/ows/dgm_wcs";
-const DOM_COV = "bb_bdom";
-const DGM_COV = "bb_dgm";
+const DOM_URL$2 = "https://isk.geobasis-bb.de/ows/bdom_wcs";
+const DGM_URL$1 = "https://isk.geobasis-bb.de/ows/dgm_wcs";
+const DOM_COV$1 = "bb_bdom";
+const DGM_COV$1 = "bb_dgm";
 const BB_BE_BBOX = { minLat: 51.36, maxLat: 53.56, minLon: 11.27, maxLon: 14.77 };
 const brandenburgBerlinDom = {
   id: "de-bb-be-bdom",
@@ -36002,8 +36042,8 @@ const brandenburgBerlinDom = {
       return `${base}?${params.toString()}`;
     };
     const [dom, dgm] = await Promise.all([
-      fetchFloat32GeoTiff(buildUrl(DOM_URL, DOM_COV), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DGM_URL, DGM_COV), rasterSize, opts.signal)
+      fetchFloat32GeoTiff(buildUrl(DOM_URL$2, DOM_COV$1), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DGM_URL$1, DGM_COV$1), rasterSize, opts.signal)
     ]);
     if (!dom || !dgm) return emptyResult();
     const heights = subtractRasters(dom, dgm);
@@ -36059,6 +36099,467 @@ const vermontVcgiNdsm = {
       opts.signal
     );
     if (!heights) return emptyResult();
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
+const DEG = Math.PI / 180;
+const WGS84 = { a: 6378137, f: 1 / 298.257223563 };
+const BESSEL = { a: 6377397155e-3, f: 1 / 299.1528128 };
+const GRS80 = { a: 6378137, f: 1 / 298.257222101 };
+const HAYFORD = { a: 6378388, f: 1 / 297 };
+const SHIFT_BD72 = { tx: 106.869, ty: -52.297, tz: 103.724 };
+const SHIFT_MGI = { tx: -577.326, ty: -90.129, tz: -463.919 };
+function geoToEcef(latDeg, lonDeg, ell) {
+  const phi = latDeg * DEG;
+  const lam = lonDeg * DEG;
+  const e2 = 2 * ell.f - ell.f * ell.f;
+  const sinPhi = Math.sin(phi);
+  const cosPhi = Math.cos(phi);
+  const N2 = ell.a / Math.sqrt(1 - e2 * sinPhi * sinPhi);
+  return [
+    N2 * cosPhi * Math.cos(lam),
+    N2 * cosPhi * Math.sin(lam),
+    N2 * (1 - e2) * sinPhi
+  ];
+}
+function ecefToGeo(x2, y3, z2, ell) {
+  const e2 = 2 * ell.f - ell.f * ell.f;
+  const lon = Math.atan2(y3, x2);
+  const p2 = Math.sqrt(x2 * x2 + y3 * y3);
+  let phi = Math.atan2(z2, p2 * (1 - e2));
+  for (let i2 = 0; i2 < 4; i2++) {
+    const sinPhi = Math.sin(phi);
+    const N2 = ell.a / Math.sqrt(1 - e2 * sinPhi * sinPhi);
+    const h2 = p2 / Math.cos(phi) - N2;
+    phi = Math.atan2(z2, p2 * (1 - e2 * N2 / (N2 + h2)));
+  }
+  return [phi / DEG, lon / DEG];
+}
+function shiftDatum(latDeg, lonDeg, srcEll, dstEll, shift) {
+  const [x2, y3, z2] = geoToEcef(latDeg, lonDeg, srcEll);
+  return ecefToGeo(x2 + shift.tx, y3 + shift.ty, z2 + shift.tz, dstEll);
+}
+function tmForward(latDeg, lonDeg, params) {
+  const { lat0Deg, lon0Deg, k0, fe, fn, ell } = params;
+  const { a: a2, f: f2 } = ell;
+  const e2 = 2 * f2 - f2 * f2;
+  const phi = latDeg * DEG;
+  const phi0 = lat0Deg * DEG;
+  const dLam = (lonDeg - lon0Deg) * DEG;
+  const sinPhi = Math.sin(phi);
+  const cosPhi = Math.cos(phi);
+  const tanPhi = Math.tan(phi);
+  const T = tanPhi * tanPhi;
+  const C2 = e2 / (1 - e2) * cosPhi * cosPhi;
+  const A2 = dLam * cosPhi;
+  const N2 = a2 / Math.sqrt(1 - e2 * sinPhi * sinPhi);
+  const arc = (p2) => {
+    return a2 * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * p2 - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * p2) + (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * p2) - 35 * e2 * e2 * e2 / 3072 * Math.sin(6 * p2));
+  };
+  const M2 = arc(phi);
+  const M0 = arc(phi0);
+  const A22 = A2 * A2;
+  const A3 = A22 * A2;
+  const A4 = A22 * A22;
+  const A5 = A4 * A2;
+  const A6 = A3 * A3;
+  const x2 = fe + k0 * N2 * (A2 + (1 - T + C2) * A3 / 6 + (5 - 18 * T + T * T + 72 * C2 - 58 * e2) * A5 / 120);
+  const y3 = fn + k0 * (M2 - M0 + N2 * tanPhi * (A22 / 2 + (5 - T + 9 * C2 + 4 * C2 * C2) * A4 / 24 + (61 - 58 * T + T * T + 600 * C2 - 330 * e2) * A6 / 720));
+  return { x: x2, y: y3 };
+}
+function lccForward(latDeg, lonDeg, params) {
+  const { lat1Deg, lat2Deg, lat0Deg, lon0Deg, fe, fn, ell } = params;
+  const { a: a2, f: f2 } = ell;
+  const e2 = 2 * f2 - f2 * f2;
+  const e3 = Math.sqrt(e2);
+  const phi1 = lat1Deg * DEG;
+  const phi2 = lat2Deg * DEG;
+  const phi0 = lat0Deg * DEG;
+  const lam0 = lon0Deg * DEG;
+  const phi = latDeg * DEG;
+  const lam = lonDeg * DEG;
+  const m2 = (p2) => Math.cos(p2) / Math.sqrt(1 - e2 * Math.sin(p2) * Math.sin(p2));
+  const t2 = (p2) => {
+    const esinp = e3 * Math.sin(p2);
+    return Math.tan(Math.PI / 4 - p2 / 2) / Math.pow((1 - esinp) / (1 + esinp), e3 / 2);
+  };
+  const m1 = m2(phi1);
+  const m22 = m2(phi2);
+  const t0 = t2(phi0);
+  const t1 = t2(phi1);
+  const t22 = t2(phi2);
+  const tp = t2(phi);
+  const n3 = (Math.log(m1) - Math.log(m22)) / (Math.log(t1) - Math.log(t22));
+  const F = m1 / (n3 * Math.pow(t1, n3));
+  const r2 = a2 * F * Math.pow(tp, n3);
+  const r0 = a2 * F * Math.pow(t0, n3);
+  const theta = n3 * (lam - lam0);
+  const x2 = fe + r2 * Math.sin(theta);
+  const y3 = fn + r0 - r2 * Math.cos(theta);
+  return { x: x2, y: y3 };
+}
+const epsg_31370 = {
+  code: 31370,
+  urn: "http://www.opengis.net/def/crs/EPSG/0/31370",
+  project: (lat, lon) => {
+    const [latBd, lonBd] = shiftDatum(lat, lon, WGS84, HAYFORD, SHIFT_BD72);
+    return lccForward(
+      latBd,
+      lonBd,
+      {
+        lat1Deg: 49.8333339,
+        lat2Deg: 51.1666672333,
+        lat0Deg: 90,
+        lon0Deg: 4.367486666666666,
+        fe: 150000.013,
+        fn: 5400088438e-3,
+        ell: HAYFORD
+      }
+    );
+  }
+};
+function makeUtmEntry(zone, ell, code, urn) {
+  const cm = 6 * zone - 183;
+  return {
+    code,
+    urn,
+    project: (lat, lon) => tmForward(
+      lat,
+      lon,
+      {
+        lat0Deg: 0,
+        lon0Deg: cm,
+        k0: 0.9996,
+        fe: 5e5,
+        fn: 0,
+        ell
+      }
+    )
+  };
+}
+const epsg_25832 = makeUtmEntry(
+  32,
+  GRS80,
+  25832,
+  "http://www.opengis.net/def/crs/EPSG/0/25832"
+);
+const epsg_25833 = makeUtmEntry(
+  33,
+  GRS80,
+  25833,
+  "http://www.opengis.net/def/crs/EPSG/0/25833"
+);
+const epsg_32633 = makeUtmEntry(
+  33,
+  WGS84,
+  32633,
+  "http://www.opengis.net/def/crs/EPSG/0/32633"
+);
+const epsg_31254 = {
+  code: 31254,
+  urn: "http://www.opengis.net/def/crs/EPSG/0/31254",
+  project: (lat, lon) => {
+    const [latMgi, lonMgi] = shiftDatum(lat, lon, WGS84, BESSEL, SHIFT_MGI);
+    return tmForward(
+      latMgi,
+      lonMgi,
+      {
+        lat0Deg: 0,
+        lon0Deg: 10.333333333,
+        k0: 1,
+        fe: 0,
+        fn: -5e6,
+        ell: BESSEL
+      }
+    );
+  }
+};
+const epsg_31256 = {
+  code: 31256,
+  urn: "http://www.opengis.net/def/crs/EPSG/0/31256",
+  project: (lat, lon) => {
+    const [latMgi, lonMgi] = shiftDatum(lat, lon, WGS84, BESSEL, SHIFT_MGI);
+    return tmForward(
+      latMgi,
+      lonMgi,
+      {
+        lat0Deg: 0,
+        lon0Deg: 13.333333333,
+        k0: 1,
+        fe: 0,
+        fn: -5e6,
+        ell: BESSEL
+      }
+    );
+  }
+};
+const REGISTRY = /* @__PURE__ */ new Map();
+for (const e2 of [epsg_31370, epsg_25832, epsg_25833, epsg_32633, epsg_31254, epsg_31256]) {
+  REGISTRY.set(e2.code, e2);
+}
+function getEpsg(code) {
+  return REGISTRY.get(code);
+}
+function projectBbox(bbox, entry) {
+  const corners = [
+    entry.project(bbox.minLat, bbox.minLon),
+    entry.project(bbox.minLat, bbox.maxLon),
+    entry.project(bbox.maxLat, bbox.minLon),
+    entry.project(bbox.maxLat, bbox.maxLon)
+  ];
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  for (const c2 of corners) {
+    if (c2.x < minX) minX = c2.x;
+    if (c2.x > maxX) maxX = c2.x;
+    if (c2.y < minY) minY = c2.y;
+    if (c2.y > maxY) maxY = c2.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+const DOM_URL$1 = "https://owsproxy.lgl-bw.de/owsproxy/wcs/WCS_INSP_BW_Hoehe_Coverage_DOM5";
+const DGM_URL = "https://owsproxy.lgl-bw.de/owsproxy/wcs/WCS_INSP_BW_Hoehe_Coverage_DGM1";
+const COVERAGE$1 = "EL.ElevationGridCoverage";
+const BW_BBOX = { minLat: 47.5, maxLat: 49.85, minLon: 7.45, maxLon: 10.55 };
+const badenWurttembergLgl = {
+  id: "de-bw-lgl",
+  name: "LGL BW DOM5 + DGM1 (Baden-Württemberg)",
+  //LGL BW DOM is published on a 5 m grid. The DGM1 is 1 m but the
+  //subtracted output is bounded by the coarser DOM resolution, so
+  //we declare 5 m as the effective native pitch.
+  nativeCellPitchMeters: 5,
+  covers(lat, lon) {
+    return lat >= BW_BBOX.minLat && lat <= BW_BBOX.maxLat && lon >= BW_BBOX.minLon && lon <= BW_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < BW_BBOX.minLat || bbox.minLat > BW_BBOX.maxLat || bbox.maxLon < BW_BBOX.minLon || bbox.minLon > BW_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const epsg = getEpsg(25832);
+    if (!epsg) return emptyResult();
+    const proj = projectBbox(bbox, epsg);
+    const buildUrl = (base) => {
+      const params = new URLSearchParams({
+        SERVICE: "WCS",
+        VERSION: "2.0.1",
+        REQUEST: "GetCoverage",
+        COVERAGEID: COVERAGE$1,
+        FORMAT: "image/tiff",
+        SUBSETTINGCRS: epsg.urn
+      });
+      params.append("SUBSET", `E(${proj.minX.toFixed(2)},${proj.maxX.toFixed(2)})`);
+      params.append("SUBSET", `N(${proj.minY.toFixed(2)},${proj.maxY.toFixed(2)})`);
+      params.append("SCALESIZE", `X(${rasterSize}),Y(${rasterSize})`);
+      return `${base}?${params.toString()}`;
+    };
+    const [dom, dgm] = await Promise.all([
+      fetchFloat32GeoTiff(buildUrl(DOM_URL$1), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DGM_URL), rasterSize, opts.signal)
+    ]);
+    if (!dom || !dgm) return emptyResult();
+    const heights = subtractRasters(dom, dgm);
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
+const WCS_URL$1 = "https://gis.tirol.gv.at/arcgis/services/Service_Public/terrain/MapServer/WCSServer";
+const DOM_COV = "Oberflaechenmodell_5m_M28";
+const DGM_COV = "Gelaendemodell_5m_M28";
+const TIROL_BBOX = { minLat: 46.65, maxLat: 47.75, minLon: 10.05, maxLon: 12.95 };
+const austriaTirolAls = {
+  id: "at-tirol-als",
+  name: "Land Tirol ALS (Tyrol, Austria)",
+  //Tirol's WCS publishes the state-wide DGM / DOM at a 5 m grid.
+  nativeCellPitchMeters: 5,
+  covers(lat, lon) {
+    return lat >= TIROL_BBOX.minLat && lat <= TIROL_BBOX.maxLat && lon >= TIROL_BBOX.minLon && lon <= TIROL_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < TIROL_BBOX.minLat || bbox.minLat > TIROL_BBOX.maxLat || bbox.maxLon < TIROL_BBOX.minLon || bbox.minLon > TIROL_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const epsg = getEpsg(31254);
+    if (!epsg) return emptyResult();
+    const proj = projectBbox(bbox, epsg);
+    const buildUrl = (cov) => {
+      const params = new URLSearchParams({
+        SERVICE: "WCS",
+        VERSION: "2.0.1",
+        REQUEST: "GetCoverage",
+        COVERAGEID: cov,
+        FORMAT: "image/tiff",
+        SUBSETTINGCRS: epsg.urn
+      });
+      params.append("SUBSET", `x(${proj.minX.toFixed(2)},${proj.maxX.toFixed(2)})`);
+      params.append("SUBSET", `y(${proj.minY.toFixed(2)},${proj.maxY.toFixed(2)})`);
+      params.append("SCALESIZE", `x(${rasterSize}),y(${rasterSize})`);
+      return `${WCS_URL$1}?${params.toString()}`;
+    };
+    const [dom, dgm] = await Promise.all([
+      fetchFloat32GeoTiff(buildUrl(DOM_COV), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DGM_COV), rasterSize, opts.signal)
+    ]);
+    if (!dom || !dgm) return emptyResult();
+    const heights = subtractRasters(dom, dgm);
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
+const DOM_URL = "https://gis.stmk.gv.at/arcgis/services/OGD/ALSHoeheninformation_1m_UTM33N/MapServer/WCSServer";
+const DTM_URL = "https://gis.stmk.gv.at/arcgis/services/OGD/ALSGelaendeinformation_1m_UTM33N/MapServer/WCSServer";
+const COVERAGE = "Coverage4";
+const AT_STMK_BBOX = { minLat: 46.55, maxLat: 47.85, minLon: 13.5, maxLon: 16.2 };
+const austriaSteiermarkAls = {
+  id: "at-stmk-als",
+  name: "Land Steiermark ALS (Styria, Austria)",
+  //ALS Höhen-/Geländeinformation are published on a 1 m grid.
+  nativeCellPitchMeters: 1,
+  covers(lat, lon) {
+    return lat >= AT_STMK_BBOX.minLat && lat <= AT_STMK_BBOX.maxLat && lon >= AT_STMK_BBOX.minLon && lon <= AT_STMK_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < AT_STMK_BBOX.minLat || bbox.minLat > AT_STMK_BBOX.maxLat || bbox.maxLon < AT_STMK_BBOX.minLon || bbox.minLon > AT_STMK_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const epsg = getEpsg(32633);
+    if (!epsg) return emptyResult();
+    const proj = projectBbox(bbox, epsg);
+    const buildUrl = (base) => {
+      const params = new URLSearchParams({
+        SERVICE: "WCS",
+        VERSION: "2.0.1",
+        REQUEST: "GetCoverage",
+        COVERAGEID: COVERAGE,
+        FORMAT: "image/tiff",
+        SUBSETTINGCRS: epsg.urn
+      });
+      params.append("SUBSET", `x(${proj.minX.toFixed(2)},${proj.maxX.toFixed(2)})`);
+      params.append("SUBSET", `y(${proj.minY.toFixed(2)},${proj.maxY.toFixed(2)})`);
+      params.append("SCALESIZE", `x(${rasterSize}),y(${rasterSize})`);
+      return `${base}?${params.toString()}`;
+    };
+    const [dom, dtm] = await Promise.all([
+      fetchFloat32GeoTiff(buildUrl(DOM_URL), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DTM_URL), rasterSize, opts.signal)
+    ]);
+    if (!dom || !dtm) return emptyResult();
+    const heights = subtractRasters(dom, dtm);
+    return processHeightRaster(heights, {
+      rasterSize,
+      minLat: bbox.minLat,
+      maxLat: bbox.maxLat,
+      minLon: bbox.minLon,
+      maxLon: bbox.maxLon,
+      homeLat: opts.homeLat,
+      homeLon: opts.homeLon,
+      cropRadiusMeters: opts.cropRadiusMeters
+    });
+  }
+};
+const WCS_URL = "https://remotesensing.vlaanderen.be/services/openlidar/wcs";
+const DSM_COV = "openlidar__LiDAR_DHMV_II_DSM_1M";
+const DTM_COV = "openlidar__LiDAR_DHMV_II_DEM_1M";
+const FL_BBOX = { minLat: 50.65, maxLat: 51.55, minLon: 2.5, maxLon: 5.95 };
+const flandersDhmv2 = {
+  id: "be-fl-dhmv2",
+  name: "Digitaal Vlaanderen DHMVII (Flanders, Belgium)",
+  //DSM_1M and DEM_1M are published on a 1 m grid.
+  nativeCellPitchMeters: 1,
+  covers(lat, lon) {
+    return lat >= FL_BBOX.minLat && lat <= FL_BBOX.maxLat && lon >= FL_BBOX.minLon && lon <= FL_BBOX.maxLon;
+  },
+  async fetchShadowRegions(opts) {
+    const rasterSize = Math.min(
+      RASTER_DEFAULTS.maxRasterSize,
+      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
+    );
+    const bbox = homeBbox(
+      opts.homeLat,
+      opts.homeLon,
+      opts.radiusMeters,
+      RASTER_DEFAULTS.bboxPadFactor
+    );
+    if (bbox.maxLat < FL_BBOX.minLat || bbox.minLat > FL_BBOX.maxLat || bbox.maxLon < FL_BBOX.minLon || bbox.minLon > FL_BBOX.maxLon) {
+      return emptyResult();
+    }
+    const epsg = getEpsg(31370);
+    if (!epsg) return emptyResult();
+    const proj = projectBbox(bbox, epsg);
+    const buildUrl = (cov) => {
+      const params = new URLSearchParams({
+        SERVICE: "WCS",
+        VERSION: "2.0.1",
+        REQUEST: "GetCoverage",
+        COVERAGEID: cov,
+        FORMAT: "image/tiff",
+        SUBSETTINGCRS: epsg.urn
+      });
+      params.append("SUBSET", `X(${proj.minX.toFixed(2)},${proj.maxX.toFixed(2)})`);
+      params.append("SUBSET", `Y(${proj.minY.toFixed(2)},${proj.maxY.toFixed(2)})`);
+      params.append("SCALESIZE", `i(${rasterSize}),j(${rasterSize})`);
+      return `${WCS_URL}?${params.toString()}`;
+    };
+    const [dsm, dtm] = await Promise.all([
+      fetchFloat32GeoTiff(buildUrl(DSM_COV), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DTM_COV), rasterSize, opts.signal)
+    ]);
+    if (!dsm || !dtm) return emptyResult();
+    const heights = subtractRasters(dsm, dtm);
     return processHeightRaster(heights, {
       rasterSize,
       minLat: bbox.minLat,
@@ -36156,6 +36657,9 @@ function createLocalNdsmSource(cfg) {
   };
 }
 const LIDAR_SOURCES = [
+  flandersDhmv2,
+  austriaTirolAls,
+  austriaSteiermarkAls,
   franceLidarHd,
   nrwLidarNdom,
   polandGugikNmpt,
@@ -36165,7 +36669,8 @@ const LIDAR_SOURCES = [
   spainPnoaLidar,
   netherlandsAhn4,
   norwayKartverketNhm,
-  brandenburgBerlinDom
+  brandenburgBerlinDom,
+  badenWurttembergLgl
 ];
 function findLidarSource(lat, lon) {
   for (const src of LIDAR_SOURCES) {
@@ -44140,7 +44645,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.21"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.22"}`,
       labelStyle,
       versionStyle
     );
@@ -44164,7 +44669,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.21",
+        version: "1.7.0-alpha.22",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44172,7 +44677,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.21"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.22"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

@@ -117,25 +117,45 @@ import { polandGugikNmpt }             from './lidar/providers/pl';
 import { canadaHrdem }                 from './lidar/providers/ca';
 import { brandenburgBerlinDom }        from './lidar/providers/de-bb-be';
 import { vermontVcgiNdsm }             from './lidar/providers/us-vt';
-//Steiermark, Tirol and Baden-Württemberg WCS endpoints reject
-//EPSG:4326 axis-label subsetting and require a UTM / MGI Krüger
-//projection forward we don't yet bundle. Source files kept under
-//./lidar/providers/ for the next release; not registered here so
-//resolveLidarSource() doesn't dispatch to them and return empty.
+import { badenWurttembergLgl }         from './lidar/providers/de-bw';
+import { austriaTirolAls }             from './lidar/providers/at-tirol';
+import { austriaSteiermarkAls }        from './lidar/providers/at-stmk';
+import { flandersDhmv2 }               from './lidar/providers/be-fl';
 import {
     createLocalNdsmSource,
     type LocalNdsmConfig
 } from './lidar/local-ndsm';
 import type { HeliosConfig } from '../helios-config';
 
-//Registered providers, ordered by preference. The first provider
-//whose covers() probe accepts the home position wins. Bbox checks
-//are non-overlapping today (one country / region per provider) but
-//the ordering is conservative: single-fetch normalised-raster
-//providers come first (France BIL, NRW nDOM, Poland NMPT, Canada
-//HRDEM DSM, Vermont nDSM) because they skip the DSM-DTM
-//subtraction round-trip. DSM-DTM subtraction providers follow.
+//Registered providers, ordered by preference. findLidarSource()
+//returns the FIRST provider whose covers() probe accepts the home
+//position, with no fallback chain if the actual fetch turns up
+//no-data. Order is therefore load-bearing whenever two providers'
+//bounding boxes overlap.
+//
+//Overlap resolution rules used here:
+//  - Flanders bbox overlaps France's, Netherlands' and NRW's
+//    (Antwerp 51.22 is inside all four). Place flandersDhmv2
+//    BEFORE those national providers so a Flemish home gets the
+//    correct Flemish WCS, not the no-data response from IGN / AHN
+//    / nDOM.
+//  - Tirol bbox overlaps Baden-Württemberg's on the small
+//    German-Austrian Allgäu strip. Place austriaTirolAls BEFORE
+//    badenWurttembergLgl, the Austrian side is geographically more
+//    likely for points in that corner; German BW homes in the same
+//    sliver fall through to no-data, accepted limitation.
+//  - Baden-Württemberg's bbox also overlaps France's around Alsace.
+//    We keep badenWurttembergLgl AFTER franceLidarHd so the Alsace
+//    side stays on IGN; some German BW homes (Stuttgart) end up
+//    routed to FR which returns no-data, a known regression we
+//    accept in exchange for not breaking 2 M French Alsace users.
+//  - Steiermark, Brandenburg/Berlin, the other Länder and the
+//    non-EU providers have non-overlapping bboxes with the new
+//    additions, the historical ordering is preserved for them.
 export const LIDAR_SOURCES: LidarSource[] = [
+    flandersDhmv2,
+    austriaTirolAls,
+    austriaSteiermarkAls,
     franceLidarHd,
     nrwLidarNdom,
     polandGugikNmpt,
@@ -145,7 +165,8 @@ export const LIDAR_SOURCES: LidarSource[] = [
     spainPnoaLidar,
     netherlandsAhn4,
     norwayKartverketNhm,
-    brandenburgBerlinDom
+    brandenburgBerlinDom,
+    badenWurttembergLgl
 ];
 
 export function findLidarSource(lat: number, lon: number): LidarSource | null

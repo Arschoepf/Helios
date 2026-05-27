@@ -15,8 +15,10 @@
 //Both coverages publish through the INSPIRE elevation theme, so the
 //coverage identifier is the generic `EL.ElevationGridCoverage` on
 //each endpoint (the URL differentiates DOM from DGM, not the
-//CoverageId). Both return Float32 GeoTIFF and accept EPSG:4326
-//subsetting natively.
+//CoverageId). Both return Float32 GeoTIFF. The service rejects
+//EPSG:4326 axis-label subsetting and requires its native UTM 32N
+//(EPSG:25832) projection, so we project the bbox client-side via
+//proj.ts before sending the request.
 //
 //Resolution: BW publishes DOM at 5 m and DGM at 1 m. Helios's
 //pipeline resamples both onto the same SCALESIZE grid before
@@ -31,6 +33,7 @@ import type {
 } from '../../lidar';
 import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../pipeline';
 import { fetchFloat32GeoTiff, subtractRasters } from '../geotiff';
+import { getEpsg, projectBbox } from '../proj';
 
 const DOM_URL   = 'https://owsproxy.lgl-bw.de/owsproxy/wcs/WCS_INSP_BW_Hoehe_Coverage_DOM5';
 const DGM_URL   = 'https://owsproxy.lgl-bw.de/owsproxy/wcs/WCS_INSP_BW_Hoehe_Coverage_DGM1';
@@ -71,6 +74,14 @@ export const badenWurttembergLgl: LidarSource =
             return emptyResult();
         }
 
+        const epsg = getEpsg(25832);
+        if (!epsg) return emptyResult();
+        const proj = projectBbox(bbox, epsg);
+
+        //LGL BW's INSPIRE WCS advertises spatial axes "E N" (UTM
+        //easting / northing) and grid axes "X Y" (uppercase, the
+        //RectifiedGrid block's labels). Hardcoded here, no two
+        //national INSPIRE proxies agree on the conventions.
         const buildUrl = (base: string): string =>
         {
             const params = new URLSearchParams({
@@ -79,11 +90,11 @@ export const badenWurttembergLgl: LidarSource =
                 REQUEST:       'GetCoverage',
                 COVERAGEID:    COVERAGE,
                 FORMAT:        'image/tiff',
-                SUBSETTINGCRS: 'http://www.opengis.net/def/crs/EPSG/0/4326'
+                SUBSETTINGCRS: epsg.urn
             });
-            params.append('SUBSET',    `Long(${bbox.minLon},${bbox.maxLon})`);
-            params.append('SUBSET',    `Lat(${bbox.minLat},${bbox.maxLat})`);
-            params.append('SCALESIZE', `Long(${rasterSize}),Lat(${rasterSize})`);
+            params.append('SUBSET',    `E(${proj.minX.toFixed(2)},${proj.maxX.toFixed(2)})`);
+            params.append('SUBSET',    `N(${proj.minY.toFixed(2)},${proj.maxY.toFixed(2)})`);
+            params.append('SCALESIZE', `X(${rasterSize}),Y(${rasterSize})`);
             return `${base}?${params.toString()}`;
         };
 
