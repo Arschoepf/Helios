@@ -1,5 +1,4 @@
 import { LitElement, html, svg, PropertyValues, TemplateResult, nothing } from 'lit';
-import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
 import { customElement, property, state } from 'lit/decorators.js';
 import { HeliosEngine } from './helios-engine';
 import
@@ -69,7 +68,6 @@ import
     timelineWidthPct
 } from './card/timeline';
 import { toggleLidarView } from './card/lidar-view';
-import { flagSvgForProvider } from './card/flags';
 import {
     renderShadingDomeOverlay,
     renderShadingDomeCloudPicker,
@@ -1307,12 +1305,8 @@ export class HeliosCard extends LitElement
                 ${hasApiKey ? (() => {
                     const isLocal     = lidarSourceId === 'local-ndsm';
                     const hasProvider = lidarSourceId !== null;
-                    //Online providers fall back to the globe glyph only when their id is not in the country-flag registry yet, the normal path is a
-                    //country flag per matched provider so the user reads which data source feeds the shadows at a glance.
-                    const providerFlag = (!isLocal && hasProvider) ? flagSvgForProvider(lidarSourceId) : null;
                     const lidarIcon   = !hasProvider ? 'mdi:cloud-off-outline'
                                        : isLocal     ? 'mdi:harddisk'
-                                       : providerFlag ? null
                                                      : 'mdi:earth';
                     const lidarTitle  = !hasProvider ? 'No LiDAR coverage at this location'
                                        : isLocal     ? 'LiDAR view, local nDSM'
@@ -1345,16 +1339,14 @@ export class HeliosCard extends LitElement
                                 </button>
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${this._lidarViewMode ? 'is-on' : ''} ${!hasProvider ? 'is-disabled' : ''} ${providerFlag ? 'has-flag' : ''}"
+                                    class="mode-bar-seg ${this._lidarViewMode ? 'is-on' : ''} ${!hasProvider ? 'is-disabled' : ''}"
                                     role="radio"
                                     aria-checked="${this._lidarViewMode ? 'true' : 'false'}"
                                     ?disabled="${!hasProvider}"
                                     title="${lidarTitle}"
                                     @click="${onLidar}"
                                 >
-                                    ${providerFlag
-                                        ? html`<span class="mode-bar-flag" aria-hidden="true">${unsafeSVG(providerFlag)}</span>`
-                                        : html`<ha-icon icon="${lidarIcon}"></ha-icon>`}
+                                    <ha-icon icon="${lidarIcon}"></ha-icon>
                                 </button>
                                 <button
                                     type="button"

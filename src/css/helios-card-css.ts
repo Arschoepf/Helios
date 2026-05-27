@@ -1741,6 +1741,31 @@ export const heliosCardStyles = css`
         minus the LiDAR button itself), the home hitbox / glow, and
         the timeline. Easier to audit if any future overlay needs
         to be hidden in LiDAR View by looking at this single block. */
+    /*  Base transition kept on the unprefixed selectors so the fade
+        runs in BOTH directions. With the rule only declared inside
+        .lidar-view-active the elements faded out smoothly on entry
+        then snapped back on exit (selector no longer matches, no
+        transition property in scope). Declaring opacity transition
+        on the base elements lets the fade-in play when the active
+        class is removed.                                            */
+    .overlay-top-left,
+    .home-glow-svg,
+    .home-hitbox,
+    .home-silhouette-svg,
+    .time-bar,
+    .solar-svg,
+    .solar-pct-label,
+    .cloud-svg,
+    .cloud-leader-svg,
+    .cloud-pct-label,
+    .pv-home-anchor-svg,
+    .pv-home-leader-svg,
+    .pv-pct-label,
+    .battery-leader-svg,
+    .battery-pct-label
+    {
+        transition: opacity 0.35s ease;
+    }
     ha-card.lidar-view-active .overlay-top-left,
     ha-card.lidar-view-active .home-glow-svg,
     ha-card.lidar-view-active .home-hitbox,
@@ -1759,7 +1784,6 @@ export const heliosCardStyles = css`
     {
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.25s ease;
     }
     ha-card.lidar-view-active .overlay-top-right
     {
@@ -1790,7 +1814,6 @@ export const heliosCardStyles = css`
     {
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.25s ease;
     }
     /*  Top-right cluster (mode bar) stays visible while the
         dome is active so the user can always switch modes via
@@ -1848,27 +1871,6 @@ export const heliosCardStyles = css`
         color: inherit;
         display: inline-flex;
         align-items: center;
-    }
-    /*  Country-flag variant of the LiDAR-View button. The SVG ships
-        inline (see card/flags.ts) so it renders identically across
-        OSes (Apple flag emoji look great but Windows + a few Linux
-        distros mangle several country codes). Square-clamped to the
-        same 22 px footprint MDI icons get.                            */
-    .mode-bar-seg .mode-bar-flag
-    {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width:  22px;
-        height: 22px;
-        border-radius: 3px;
-        overflow: hidden;
-    }
-    .mode-bar-seg .mode-bar-flag svg
-    {
-        width:  100%;
-        height: 100%;
-        display: block;
     }
     .mode-bar-seg.is-disabled
     {

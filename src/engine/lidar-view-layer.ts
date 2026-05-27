@@ -138,6 +138,10 @@ export class LidarViewLayer implements CustomLayerInterface
     //drawElements(LINES) for the wireframe mesh.
     private _buffer?:      WebGLBuffer;
     private _indexBuffer?: WebGLBuffer;
+    //Triangle index buffer for the irradiance fill pass. Two triangles per cell whose four corners are all finite; rendered under the
+    //wireframe so the lines stay visually crisp on top of the soft fill. Empty until setData runs, never uploaded when the raster is null.
+    private _triIndexBuffer?: WebGLBuffer;
+    private _triIdxCount: number = 0;
     //Parallel per-vertex byte buffer carrying the live solar exposure (0 = in shadow, 255 = lit). Sourced from computeLidarCellExposure() in
     //the engine, refreshed via setExposure() whenever the sun moves enough to recompute. When the attribute is disabled (no compute has run
     //yet, sun below horizon, etc.) the vertex shader reads a constant 1.0 via vertexAttrib1f, the fragment shader then renders at the
@@ -193,6 +197,7 @@ export class LidarViewLayer implements CustomLayerInterface
     //Vertices + line indices cached when the engine sets data BEFORE the layer is added to the map. Uploaded to GL the moment onAdd runs.
     private _pendingVerts?:    Float32Array;
     private _pendingLineIdx?:  Uint32Array;
+    private _pendingTriIdx?:   Uint32Array;
     private _pendingExposure?: Uint8Array;
     //Maps a raster-cell index (j * rasterSize + i) to its vertex index in the GPU buffer, or -1 when the cell was NaN at setData time. Cached so
     //setExposure() can translate a per-raster-cell exposure array (engine concern) to the per-vertex order the GPU buffer expects, without
@@ -366,6 +371,29 @@ export class LidarViewLayer implements CustomLayerInterface
         }
         this._lineIdxCount = li;
         const lineUsed = li > 0 ? lineIdx.subarray(0, li) : new Uint32Array(0);
+
+        //Triangle fan for the irradiance fill pass: 2 triangles per cell whose four corners are all finite. Sized for the worst case (every
+        //cell finite) and trimmed to the used range before upload. The fill renders under the wireframe so the lines stay crisp on top of
+        //the soft per-cell shading.
+        const maxTris = Math.max(0, (rasterSize - 1) * (rasterSize - 1));
+        const triIdx  = new Uint32Array(maxTris * 6);
+        let ti = 0;
+        for (let j = 0; j < rasterSize - 1; j++)
+        {
+            for (let i = 0; i < rasterSize - 1; i++)
+            {
+                const v00 = cellToVert[j * rasterSize + i];
+                const v10 = cellToVert[j * rasterSize + i + 1];
+                const v01 = cellToVert[(j + 1) * rasterSize + i];
+                const v11 = cellToVert[(j + 1) * rasterSize + i + 1];
+                if (v00 < 0 || v10 < 0 || v01 < 0 || v11 < 0) continue;
+                triIdx[ti++] = v00; triIdx[ti++] = v10; triIdx[ti++] = v11;
+                triIdx[ti++] = v00; triIdx[ti++] = v11; triIdx[ti++] = v01;
+            }
+        }
+        this._triIdxCount = ti;
+        const triUsed = ti > 0 ? triIdx.subarray(0, ti) : new Uint32Array(0);
+
         //Cache the cellToVert mapping for the next setExposure() call. Reset _hasExposure since the previous exposure (sized to the old
         //vertex count) is stale, the next compute pass will refit and re-upload.
         this._cellToVert  = cellToVert;
@@ -381,6 +409,12 @@ export class LidarViewLayer implements CustomLayerInterface
             {
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._indexBuffer);
                 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, lineUsed, gl.STATIC_DRAW);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+            }
+            if (this._triIndexBuffer)
+            {
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._triIndexBuffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, triUsed, gl.STATIC_DRAW);
                 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
             }
             //Shrink the exposure buffer to the new vertex count so a render that lands before the next compute doesn't read stale bytes from
@@ -399,6 +433,7 @@ export class LidarViewLayer implements CustomLayerInterface
             //moment we get a GL context.
             this._pendingVerts   = used;
             this._pendingLineIdx = lineUsed;
+            this._pendingTriIdx  = triUsed;
         }
         this._map?.triggerRepaint();
     }
@@ -521,6 +556,14 @@ export class LidarViewLayer implements CustomLayerInterface
                     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
                     this._pendingLineIdx = undefined;
                 }
+                this._triIndexBuffer = gl.createBuffer() ?? undefined;
+                if (this._pendingTriIdx && this._triIndexBuffer)
+                {
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._triIndexBuffer);
+                    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this._pendingTriIdx, gl.STATIC_DRAW);
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+                    this._pendingTriIdx = undefined;
+                }
             }
         }
         catch (err)
@@ -633,6 +676,27 @@ export class LidarViewLayer implements CustomLayerInterface
             gl.drawArrays(gl.POINTS, 0, this._vertexCount);
         }
 
+        //Irradiance fill pass. Triangulated cells, only renders when the wireframe is enabled AND fresh exposure data is loaded. Sits under
+        //the wireframe lines so the line topology stays visually crisp on top. Alpha is multiplied by 0.4 vs the wireframe so the fill reads
+        //as a soft heatmap layer rather than a solid carpet that swallows the line work above it.
+        if (this._wireframeEnabled
+         && this._hasExposure
+         && this._triIndexBuffer
+         && this._indexType !== 0
+         && this._triIdxCount > 0
+         && this._uColor)
+        {
+            gl.uniform4f(this._uColor,
+                this._wireframeColor[0],
+                this._wireframeColor[1],
+                this._wireframeColor[2],
+                this._wireframeColor[3] * 0.4,
+            );
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._triIndexBuffer);
+            gl.drawElements(gl.TRIANGLES, this._triIdxCount, this._indexType, 0);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+        }
+
         //Wireframe pass. Same vertex buffer, line topology from the index buffer. The radius filter still applies via v_inside in the fragment
         //shader: lines whose endpoints are both outside the radius go away, lines crossing the boundary fade to clipped at the edge.
         if (this._wireframeEnabled
@@ -679,15 +743,19 @@ export class LidarViewLayer implements CustomLayerInterface
 
     public onRemove(_map: MapLibreMap, gl: WebGLRenderingContext | WebGL2RenderingContext): void
     {
-        if (this._buffer)      gl.deleteBuffer(this._buffer);
-        if (this._indexBuffer) gl.deleteBuffer(this._indexBuffer);
-        if (this._program)     gl.deleteProgram(this._program);
-        this._buffer      = undefined;
-        this._indexBuffer = undefined;
-        this._program     = undefined;
-        this._indexType   = 0;
-        this._gl          = undefined;
-        this._map         = undefined;
+        if (this._buffer)         gl.deleteBuffer(this._buffer);
+        if (this._indexBuffer)    gl.deleteBuffer(this._indexBuffer);
+        if (this._triIndexBuffer) gl.deleteBuffer(this._triIndexBuffer);
+        if (this._exposureBuffer) gl.deleteBuffer(this._exposureBuffer);
+        if (this._program)        gl.deleteProgram(this._program);
+        this._buffer         = undefined;
+        this._indexBuffer    = undefined;
+        this._triIndexBuffer = undefined;
+        this._exposureBuffer = undefined;
+        this._program        = undefined;
+        this._indexType      = 0;
+        this._gl             = undefined;
+        this._map            = undefined;
     }
 
     private _compileShader(gl: WebGLRenderingContext | WebGL2RenderingContext, type: number, src: string): WebGLShader
