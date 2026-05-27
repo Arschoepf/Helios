@@ -1264,6 +1264,19 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="field-help">${t.editor.batteryPowerInvertHelp}</div>
+                <div class="field">
+                    <span class="label">${t.editor.inverterCutoffSocPct}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        .value="${c['inverter-cutoff-soc-pct'] != null ? String(c['inverter-cutoff-soc-pct']) : ''}"
+                        placeholder="95"
+                        @change="${(e: Event) => this._numField('inverter-cutoff-soc-pct', e)}"
+                    />
+                </div>
+                <div class="field-help">${t.editor.inverterCutoffSocPctHelp}</div>
                 <label class="field">
                     <span class="label">${t.editor.batteryColor}</span>
                     <helios-color-picker

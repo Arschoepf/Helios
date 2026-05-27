@@ -326,6 +326,10 @@ export class HeliosCard extends LitElement
     //`window.heliosStats()` (raw entries returned, samples kept after
     //unit / unavailable filtering, window covered in hours).
     _pvHistoryDiagnostics: { rawEntries: number; samples: number; windowH: number } | null = null;
+    //Companion battery SoC series fetched alongside PV history when the user has configured both `battery-soc-entity` and the inverter-cutoff guard
+    //(`inverter-cutoff-soc-pct`). Null when either is missing; the shading trainer reads it to skip inverter-cutoff buckets without polluting the
+    //shading map. Not reactive: the trainer pulls it directly and we never need to re-render on a SoC sample change.
+    _batteryHistory: { times: Date[]; values: number[] } | null = null;
     //Idempotency flag for the one-time wipe of legacy PV calibration
     //buffers (see _wipeLegacyPvCalibStorage). Per-instance so we
     //attempt the cleanup at most once per card mount; the persisted

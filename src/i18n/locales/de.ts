@@ -100,6 +100,8 @@ export const de: Translations = {
         batteryPowerInvertStandard: 'Standard',
         batteryPowerInvertInverted: 'Invertiert',
         batteryPowerInvertHelp:     'Standardmäßig meldet die Batterie-Entität das Laden als positiv und das Entladen als negativ. Wähle Invertiert, wenn deine Entität es umgekehrt macht (einige GivEnergy- / GivTCP-Setups). Helios dreht den Wert dann einmal beim Einlesen um, damit Chip-Anzeige, Flusspfeil und tägliche Lade- / Entladesummen ihre Bedeutung behalten.',
+        inverterCutoffSocPct:       'Wechselrichter-Cutoff SoC (%)',
+        inverterCutoffSocPctHelp:   'Prozentwert, ab dem Ihr Hybrid-Wechselrichter die PV-Einspeisung kappt, sobald die Batterie ihre Obergrenze erreicht. Leer lassen, um zu deaktivieren. Wenn gesetzt, überspringt der Shading-Map-Trainer jedes Beobachtungsfenster, in dem der Batterie-SoC diesen Wert erreicht hat, damit die vom Wechselrichter blockierte Produktion die Shading-Karte nicht mit Phantom-Schatten an den entsprechenden Sonnenpositionen verschmutzt. Erfordert die oben konfigurierte Batterie-SoC-Entität.',
         batteryColor:       'Batteriefarbe',
         weatherSection:           'Wetter',
         weatherHint:              'Optional. Verbinde lokale Wetter-Entitäten, damit Helios direkt bei dir gemessene Werte verwendet, statt das Open-Meteo-Modell, das auf deine Gitterzelle interpoliert wird. Jede Entität ist unabhängig optional und wird nur verwendet, wenn sie einen frischen Wert liefert; fehlende oder veraltete Messwerte fallen transparent auf das Modell zurück.',

@@ -107,6 +107,8 @@ export const fr: Translations = {
         batteryPowerInvertStandard: 'Standard',
         batteryPowerInvertInverted: 'Inversé',
         batteryPowerInvertHelp:     'Par défaut (Standard) : ton capteur batterie rapporte déjà la charge en positif et la décharge en négatif. Passe sur Inversé si ton capteur fait l\'inverse (certaines installations GivEnergy / GivTCP), Helios inverse alors la valeur une fois à la lecture pour que la pastille, la flèche du leader et les totaux journaliers charge / décharge gardent leur sens.',
+        inverterCutoffSocPct:       'Seuil de coupure onduleur (%)',
+        inverterCutoffSocPctHelp:   'Pourcentage à partir duquel votre onduleur hybride bloque la production PV une fois que la batterie atteint son plafond. Laissez vide pour désactiver. Quand renseigné, l\'apprentissage de la carte d\'ombrage ignore chaque créneau d\'observation où le SoC batterie a atteint cette valeur, pour ne pas polluer la carte avec des ombres fantômes aux positions solaires concernées. Nécessite que l\'entité SoC batterie ci-dessus soit configurée.',
         batteryColor:       'Couleur batterie',
         weatherSection:           'Météo',
         weatherHint:              'Optionnel. Branche des entités météo locales pour qu\'Helios utilise des mesures prises chez toi plutôt que le modèle Open-Meteo interpolé à ta cellule de grille. Chaque entité est indépendamment optionnelle et n\'est utilisée que lorsqu\'elle remonte une valeur fraîche ; les échantillons manquants ou périmés retombent sur le modèle de manière transparente.',

@@ -102,6 +102,8 @@ export const sv: Translations = {
         batteryPowerInvertStandard: 'Standard',
         batteryPowerInvertInverted: 'Inverterat',
         batteryPowerInvertHelp:     'Standard: batterientiteten rapporterar redan laddning som positiv och urladdning som negativ. Välj Inverterat när din entitet gör tvärtom (vissa GivEnergy / GivTCP-uppsättningar), Helios vänder då värdet en gång vid intag så att chipets avläsning, ledarpilen och dagliga laddade / urladdade totaler behåller sin betydelse.',
+        inverterCutoffSocPct:       'Växelriktarens avstängnings-SoC (%)',
+        inverterCutoffSocPctHelp:   'Procenten där din hybridväxelriktare blockerar PV-produktionen när batteriet når sin inställda gräns. Lämna tomt för att inaktivera. När det är satt hoppar skuggkartans tränare över varje observationsfönster där batteriets SoC nådde detta värde, så att den växelriktar-blockerade produktionen inte förorenar skuggkartan med spökskuggor vid motsvarande solpositioner. Kräver att batteri-SoC-entiteten ovan är konfigurerad.',
         batteryColor:       'Batterifärg',
         weatherSection:           'Väder',
         weatherHint:              'Valfritt. Anslut lokala väderentiteter för att mata Helios med mätningar gjorda hemma hos dig istället för Open-Meteo-modellen interpolerad till din rutcell. Varje entitet är oberoende valfri och används endast när den bär ett färskt värde; saknade eller inaktuella prov faller tillbaka till modellen transparent.',

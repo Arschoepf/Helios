@@ -100,6 +100,8 @@ export const it: Translations = {
         batteryPowerInvertStandard: 'Standard',
         batteryPowerInvertInverted: 'Invertito',
         batteryPowerInvertHelp:     'Per impostazione predefinita (Standard) la tua entità batteria riporta la carica come positivo e la scarica come negativo. Scegli Invertito se la tua entità fa l\'opposto (alcuni setup GivEnergy / GivTCP), Helios invertirà il valore una volta in lettura così che la pastiglia, la freccia del flusso e i totali giornalieri di carica / scarica mantengano il loro significato.',
+        inverterCutoffSocPct:       'SoC di stacco inverter (%)',
+        inverterCutoffSocPctHelp:   'Percentuale alla quale il tuo inverter ibrido blocca la produzione PV quando la batteria raggiunge il suo limite impostato. Lascia vuoto per disattivare. Quando impostato, il trainer della mappa di ombreggiatura salta ogni intervallo di osservazione in cui il SoC della batteria ha raggiunto questo valore, in modo che la produzione bloccata dall\'inverter non inquini la mappa con ombre fantasma nelle posizioni solari corrispondenti. Richiede che l\'entità SoC batteria qui sopra sia configurata.',
         batteryColor:       'Colore batteria',
         weatherSection:           'Meteo',
         weatherHint:              'Opzionale. Collega entità meteo locali perché Helios usi misure prese a casa tua invece del modello Open-Meteo interpolato sulla tua cella di griglia. Ogni entità è indipendentemente opzionale e viene usata solo quando riporta un valore fresco; i campioni mancanti o stantii ricadono sul modello in modo trasparente.',

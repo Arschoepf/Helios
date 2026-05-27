@@ -60,6 +60,10 @@ export interface PvHost
     _pvFetchKey:            string;
     _pvFetching:            boolean;
     _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
+    //Parallel SoC history fetched alongside _pvHistory when `battery-soc-entity` AND `inverter-cutoff-soc-pct` are both configured. Used by the
+    //shading-map trainer to detect inverter-cutoff buckets (battery full + production blocked) and skip them so the map doesn't accumulate phantom
+    //shadow at the matching sun bin. Null when either config is missing, the trainer then falls back to the legacy "train every bucket" path.
+    _batteryHistory:        PvHistory | null;
 }
 
 
@@ -197,21 +201,124 @@ export function refreshPv(host: PvHost): void
     {
         return;
     }
-    host._pvFetchKey = fetchKey;
-    fetchPvHistory(host, entity, fetchStart, fetchEnd);
+    //Optional battery SoC companion fetch. We only ask HA for the SoC history when the user has explicitly armed the inverter-cutoff guard
+    //(both `battery-soc-entity` and `inverter-cutoff-soc-pct` configured); otherwise the trainer doesn't need it and a second entity in
+    //the WS payload would be a waste of HA recorder bandwidth. The fetch key includes the battery entity id so swapping it forces a
+    //re-fetch on the next refresh.
+    const batteryEntity = batterySocEntityForInhibit(host.config);
+    host._pvFetchKey = fetchKey + (batteryEntity ? '|bsoc:' + batteryEntity : '');
+    fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntity);
 }
 
 
-//Pull a historical series from HA's `history/history_during_period`
-//WebSocket command, coerce the heterogeneous payload into parallel
-//times[] / values[] arrays, and snapshot the fetch outcome for
-//`window.heliosStats()`. Fires off `host._pvFetching` for the
-//duration; the gate in refreshPv prevents overlapping calls.
+//Returns the `battery-soc-entity` id only when the inverter-cutoff guard is armed (cutoff percent set in config), null otherwise. Centralises
+//the gate so both the trainer and the fetch path agree on when SoC history is needed.
+export function batterySocEntityForInhibit(cfg: HeliosConfig | undefined): string | null
+{
+    if (!cfg) return null;
+    const cutoff = cfg['inverter-cutoff-soc-pct'];
+    const cutoffN = typeof cutoff === 'number' ? cutoff : typeof cutoff === 'string' ? parseFloat(cutoff) : NaN;
+    if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return null;
+    const e = cfg['battery-soc-entity'];
+    if (typeof e !== 'string' || e.trim().length === 0) return null;
+    return e.trim();
+}
+
+
+//Returns the inverter cutoff threshold (0-100) when the guard is armed, null otherwise. Mirrors batterySocEntityForInhibit so callers can
+//read both values without re-validating the config tree twice.
+export function inverterCutoffSocPct(cfg: HeliosConfig | undefined): number | null
+{
+    if (!cfg) return null;
+    const cutoff = cfg['inverter-cutoff-soc-pct'];
+    const cutoffN = typeof cutoff === 'number' ? cutoff : typeof cutoff === 'string' ? parseFloat(cutoff) : NaN;
+    if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return null;
+    return cutoffN;
+}
+
+
+//Coerce HA's heterogeneous history payload into parallel times[] / values[] arrays. Accepts both the minimal-response shape (`s` + `lu`) and the
+//full-response shape (`state` + `last_updated`/`last_changed`); rejects 'unavailable' / 'unknown' / '' entries; falls back to the previous
+//timestamp for compaction entries where HA omits `lu` on unchanged consecutive samples.
+function parseHistoryEntries(arr: any[]): PvHistory
+{
+    const times:  Date[]   = [];
+    const values: number[] = [];
+    let lastTsMs: number | null = null;
+    for (const item of arr)
+    {
+        const sRaw = item?.s ?? item?.state;
+        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') continue;
+        const v = parseFloat(String(sRaw));
+        if (!isFinite(v)) continue;
+
+        let ts: Date | null = null;
+        const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+        if (typeof tsRaw === 'number')
+        {
+            ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
+        }
+        else if (typeof tsRaw === 'string')
+        {
+            const asNum = Number(tsRaw);
+            if (Number.isFinite(asNum) && asNum > 1e9)
+            {
+                ts = new Date(asNum > 1e12 ? asNum : asNum * 1000);
+            }
+            else
+            {
+                ts = new Date(tsRaw);
+            }
+        }
+        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
+        {
+            ts = new Date(lastTsMs);
+        }
+        if (!ts || isNaN(ts.getTime())) continue;
+
+        lastTsMs = ts.getTime();
+        times.push(ts);
+        values.push(v);
+    }
+    return { times, values };
+}
+
+
+//Linearly interpolate a value at `ms` from a (times, values) series. Returns null when the series is empty or `ms` falls strictly outside the
+//bracketed range (no extrapolation, the trainer prefers a clean miss over a guessed-out SoC value). Used by the shading trainer to read battery SoC
+//at a bucket midpoint, but generic enough for any time-keyed series.
+export function valueAtMs(series: PvHistory | null, ms: number): number | null
+{
+    if (!series || series.times.length === 0) return null;
+    const t = series.times;
+    const v = series.values;
+    if (ms < t[0].getTime() || ms > t[t.length - 1].getTime()) return null;
+    //Binary search for the right-hand bracket; samples are inserted in order so the search is sound.
+    let lo = 0, hi = t.length - 1;
+    while (lo < hi - 1)
+    {
+        const mid = (lo + hi) >> 1;
+        if (t[mid].getTime() <= ms) lo = mid;
+        else                        hi = mid;
+    }
+    const t0 = t[lo].getTime();
+    const t1 = t[hi].getTime();
+    if (t1 === t0) return v[lo];
+    const f = (ms - t0) / (t1 - t0);
+    return v[lo] + (v[hi] - v[lo]) * f;
+}
+
+
+//Pull a historical series from HA's `history/history_during_period` WebSocket command, coerce the heterogeneous payload into parallel times[] /
+//values[] arrays, and snapshot the fetch outcome for `window.heliosStats()`. Fires off `host._pvFetching` for the duration; the gate in refreshPv
+//prevents overlapping calls. When `batterySocEntityId` is non-null we fold it into the same WS request and store the parsed result on
+//`host._batteryHistory`, the shading-map trainer reads that companion series to skip inverter-cutoff buckets.
 export async function fetchPvHistory(
     host: PvHost,
     entityId: string,
     start: Date,
-    end: Date
+    end: Date,
+    batterySocEntityId: string | null = null,
 ): Promise<void>
 {
     if (!host.hass?.callWS)
@@ -228,96 +335,37 @@ export async function fetchPvHistory(
         if (start >= fetchEnd)
         {
             host._pvHistory = { times: [], values: [] };
+            host._batteryHistory = null;
             return;
         }
 
+        const entityIds = batterySocEntityId
+            ? [entityId, batterySocEntityId]
+            : [entityId];
         const result: any = await host.hass.callWS({
             type:             'history/history_during_period',
             start_time:       start.toISOString(),
             end_time:         fetchEnd.toISOString(),
-            entity_ids:       [entityId],
+            entity_ids:       entityIds,
             minimal_response: true,
             no_attributes:    true
         });
 
         const arr: any[] = (result && result[entityId]) ?? [];
-        const times:  Date[]   = [];
-        const values: number[] = [];
-        let lastTsMs: number | null = null;
+        const parsed = parseHistoryEntries(arr);
+        const times = parsed.times;
+        const values = parsed.values;
 
-        for (const item of arr)
+        //Sibling parse for battery SoC when requested. Failure here is silent: the trainer's gate just falls back to "no inhibit skip" if
+        //_batteryHistory is null or empty, no need to fail the whole PV fetch over an optional companion entity.
+        if (batterySocEntityId)
         {
-            //HA's history payload uses several field layouts
-            //depending on the requested options, the recorder
-            //version and the entity. We accept anything that can
-            //be coerced to a finite number for the value and a
-            //valid Date for the timestamp, rather than gating on
-            //a specific JS type, because some integrations write
-            //the state as a number (not a string) and some HA
-            //versions omit `lu` on entries where the timestamp
-            //matches the previous one.
-            const sRaw = item?.s ?? item?.state;
-            if (sRaw === null
-                || sRaw === undefined
-                || sRaw === 'unavailable'
-                || sRaw === 'unknown'
-                || sRaw === '')
-            {
-                continue;
-            }
-            const v = parseFloat(String(sRaw));
-            if (!isFinite(v))
-            {
-                continue;
-            }
-
-            //Timestamp resolution order: epoch-seconds float
-            //(`lu` / `lc`, minimal_response default), then ISO
-            //strings (`last_updated` / `last_changed`, full
-            //response). When none is set we re-use the previous
-            //entry's timestamp, the common case for HA's
-            //"only-state-changed" compaction where unchanged
-            //timestamps are simply omitted.
-            let ts: Date | null = null;
-            const tsRaw =
-                item?.lu             ??
-                item?.lc             ??
-                item?.last_updated   ??
-                item?.last_changed   ??
-                null;
-            if (typeof tsRaw === 'number')
-            {
-                //epoch seconds (minimal_response) or epoch ms
-                //(some integrations). Distinguish by magnitude:
-                //a value above 10^12 is already in ms.
-                ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
-            }
-            else if (typeof tsRaw === 'string')
-            {
-                //Could be an ISO date string or a stringified
-                //epoch; try both.
-                const asNum = Number(tsRaw);
-                if (Number.isFinite(asNum) && asNum > 1e9)
-                {
-                    ts = new Date(asNum > 1e12 ? asNum : asNum * 1000);
-                }
-                else
-                {
-                    ts = new Date(tsRaw);
-                }
-            }
-            if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
-            {
-                ts = new Date(lastTsMs);
-            }
-            if (!ts || isNaN(ts.getTime()))
-            {
-                continue;
-            }
-
-            lastTsMs = ts.getTime();
-            times.push(ts);
-            values.push(v);
+            const bArr: any[] = (result && result[batterySocEntityId]) ?? [];
+            host._batteryHistory = parseHistoryEntries(bArr);
+        }
+        else
+        {
+            host._batteryHistory = null;
         }
 
         host._pvHistory = { times, values };

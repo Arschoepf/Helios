@@ -100,6 +100,8 @@ export const nl: Translations = {
         batteryPowerInvertStandard: 'Standaard',
         batteryPowerInvertInverted: 'Omgekeerd',
         batteryPowerInvertHelp:     'Standaard rapporteert je batterij-entiteit het laden als positief en het ontladen als negatief. Kies Omgekeerd als jouw entiteit het andersom doet (sommige GivEnergy- / GivTCP-installaties). Helios draait de waarde dan eenmalig om bij het inlezen, zodat de chip, de stroompijl en de dagelijkse laad- / ontlaadtotalen hun betekenis behouden.',
+        inverterCutoffSocPct:       'Omvormer cutoff SoC (%)',
+        inverterCutoffSocPctHelp:   'Percentage waarbij je hybride omvormer de PV-output blokkeert zodra de batterij zijn ingestelde plafond bereikt. Leeg laten om uit te schakelen. Wanneer ingesteld, slaat de schaduwkaart-trainer elk observatie-interval over waarin het batterij-SoC deze waarde bereikte, zodat de door de omvormer geblokkeerde productie de schaduwkaart niet vervuilt met spookschaduwen op die zonneposities. Vereist dat de batterij-SoC entiteit hierboven geconfigureerd is.',
         batteryColor:       'Batterijkleur',
         weatherSection:           'Weer',
         weatherHint:              'Optioneel. Koppel lokale weerentiteiten zodat Helios metingen bij jou thuis gebruikt in plaats van het Open-Meteo-model dat geïnterpoleerd wordt naar je rastercel. Elke entiteit is onafhankelijk optioneel en wordt alleen gebruikt wanneer ze een verse waarde levert; ontbrekende of verouderde monsters vallen transparant terug op het model.',

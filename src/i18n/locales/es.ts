@@ -100,6 +100,8 @@ export const es: Translations = {
         batteryPowerInvertStandard: 'Estándar',
         batteryPowerInvertInverted: 'Invertido',
         batteryPowerInvertHelp:     'Por defecto (Estándar) tu entidad de batería ya informa la carga como positivo y la descarga como negativo. Cambia a Invertido si tu entidad hace lo contrario (algunas instalaciones GivEnergy / GivTCP), Helios invertirá el valor una vez en la lectura para que la pastilla, la flecha del flujo y los totales diarios de carga / descarga conserven su significado.',
+        inverterCutoffSocPct:       'SoC de corte del inversor (%)',
+        inverterCutoffSocPctHelp:   'Porcentaje al que tu inversor híbrido bloquea la producción PV cuando la batería alcanza su techo configurado. Déjalo vacío para desactivar. Cuando se establece, el entrenador del mapa de sombreado omite cada intervalo de observación donde el SoC de la batería alcanzó este valor, para que la producción bloqueada por el inversor no contamine el mapa con sombras fantasma en esas posiciones solares. Requiere que la entidad de SoC de batería de arriba esté configurada.',
         batteryColor:       'Color batería',
         weatherSection:           'Meteorología',
         weatherHint:              'Opcional. Conecta entidades meteo locales para que Helios use mediciones tomadas en tu casa en lugar del modelo Open-Meteo interpolado a tu celda de la malla. Cada entidad es opcional de forma independiente y solo se usa cuando reporta un valor reciente; las muestras ausentes o caducadas vuelven al modelo de forma transparente.',

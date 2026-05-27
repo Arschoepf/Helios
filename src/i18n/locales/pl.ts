@@ -102,6 +102,8 @@ export const pl: Translations = {
         batteryPowerInvertStandard: 'Standardowy',
         batteryPowerInvertInverted: 'Odwrócony',
         batteryPowerInvertHelp:     'Domyślny (Standardowy): encja baterii już raportuje ładowanie jako pozytywne i rozładowanie jako negatywne. Wybierz Odwrócony, gdy Twoja encja robi odwrotnie (niektóre konfiguracje GivEnergy / GivTCP), Helios odwróci wartość raz przy odczycie, aby odczyt chipa, strzałka lidera i dzienne sumy naładowane / rozładowane zachowały swoje znaczenie.',
+        inverterCutoffSocPct:       'SoC odcięcia falownika (%)',
+        inverterCutoffSocPctHelp:   'Procent, przy którym Twój falownik hybrydowy blokuje produkcję PV, gdy bateria osiągnie ustawiony pułap. Pozostaw puste, aby wyłączyć. Po ustawieniu trener mapy zacienienia pomija każde okno obserwacji, w którym SoC baterii osiągnął tę wartość, aby produkcja zablokowana przez falownik nie zanieczyszczała mapy fantomowymi cieniami w odpowiadających pozycjach Słońca. Wymaga skonfigurowania encji SoC baterii powyżej.',
         batteryColor:       'Kolor baterii',
         weatherSection:           'Pogoda',
         weatherHint:              'Opcjonalne. Podłącz lokalne encje pogody, aby Helios używał pomiarów z Twojego domu zamiast modelu Open-Meteo interpolowanego do komórki siatki. Każda encja jest niezależnie opcjonalna i używana tylko wtedy, gdy niesie świeżą wartość; brakujące lub nieaktualne próbki przezroczyście wracają do modelu.',

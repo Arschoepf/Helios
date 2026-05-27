@@ -126,6 +126,13 @@ export interface HeliosConfig
     //Helios's internal "positive = charging" convention keeps
     //holding without a template sensor in front. Default false.
     'battery-power-invert'?:  unknown;
+    //Optional. Percent (0-100). Inverter cutoff SoC: the State-of-Charge at which the user's hybrid inverter stops feeding the battery and clamps PV
+    //output (almost no production from the panels even when the sun is up). When set AND `battery-soc-entity` is also configured, the shading map
+    //trainer skips every observation bucket where the battery SoC reached or exceeded this value. Without the skip, those zero-production buckets
+    //get interpreted as 100 % shading at the matching sun azimuth / altitude / cloud bin and pollute the shading map for the next ~60 days of half-
+    //life decay. Threshold varies per inverter model (some cut at 95, some at 98, some at 100); the user configures their own. Leave unset to keep
+    //the legacy behaviour where every bucket trains.
+    'inverter-cutoff-soc-pct'?: unknown;
     'battery-color'?:         unknown;
     'date-format'?:           unknown;
     //'12h' | '24h'. Default: '24h'. Picks between locale-

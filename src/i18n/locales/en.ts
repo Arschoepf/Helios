@@ -110,6 +110,8 @@ export const en: Translations = {
         batteryPowerInvertStandard: 'Standard',
         batteryPowerInvertInverted: 'Inverted',
         batteryPowerInvertHelp:     'Default (Standard): the battery entity already reports charging as positive and discharging as negative. Pick Inverted when your entity does the opposite (some GivEnergy / GivTCP setups), Helios will flip the value once at ingest so the chip readout, the leader arrow and the daily charged / discharged totals keep their meaning.',
+        inverterCutoffSocPct:       'Inverter cutoff SoC (%)',
+        inverterCutoffSocPctHelp:   'Percent at which your hybrid inverter clamps PV output once the battery hits its set ceiling. Leave empty to disable. When set, the shading-map trainer skips every observation bucket where the battery SoC reached this value so the inverter-blocked production does not pollute the shading map with phantom shadow at those sun positions. Requires the battery SoC entity above to be configured.',
         batteryColor:       'Battery color',
         weatherSection:           'Weather',
         weatherHint:              'Optional. Wire local weather entities to feed Helios with measurements taken at your home instead of the Open-Meteo model interpolated to your grid cell. Each entity is independently optional and only used when it carries a fresh value; missing or stale samples fall back to the model transparently.',

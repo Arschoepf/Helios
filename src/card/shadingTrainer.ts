@@ -16,7 +16,7 @@ import {
     saveMap,
     type ShadingMap,
 } from '../engine/shadingMap';
-import { computePvPowerWeighted, pvCalibK, pvNormalizeToWatts, type PvHistory } from './pv';
+import { computePvPowerWeighted, inverterCutoffSocPct, pvCalibK, pvNormalizeToWatts, valueAtMs, type PvHistory } from './pv';
 import { getHomeCoords } from './init';
 import type { ChartHost } from './charts';
 
@@ -77,7 +77,15 @@ export function trainShadingMap(host: ChartHost): number
     const pvUnit   = host._pvUnit;
     const sensorIsEnergy = isCumulativeEnergyUnit(pvUnit);
 
+    //Inverter-cutoff guard: when the user has configured both `battery-soc-entity` and `inverter-cutoff-soc-pct`, skip every bucket whose battery
+    //SoC at the midpoint reached or exceeded the cutoff. Those buckets see the inverter clamp PV output even when the sun is up, training them as
+    //"shadow" would otherwise carve a permanent phantom shadow at the matching sun azimuth/altitude/cloud bin. Threshold varies per inverter model
+    //(95 / 98 / 100), the user knows their own; we just consult the config and the freshly-fetched SoC history.
+    const cutoffPct = inverterCutoffSocPct(host.config);
+    const socSeries = (cutoffPct !== null) ? host._batteryHistory : null;
+
     let updated = 0;
+    let skippedInhibit = 0;
     let highestProcessedMs = map.lastTrainedMs || 0;
 
     //Walk every 30-min bucket between the hourly samples we already have. For each bucket we interpolate the cloud cover from the surrounding hourly
@@ -125,6 +133,21 @@ export function trainShadingMap(host: ChartHost): number
 
             const sun = getSunPosition(tMid, coords.lat, coords.lon);
             if (!sun || sun.altitude <= 0) continue;
+
+            //Inverter-cutoff inhibit. If the user's hybrid setup is configured to clamp PV when the battery hits a certain SoC, the bucket is
+            //tainted: actual production is artificially low even though the sun is shining, and feeding that to the shading model would teach it
+            //"strong shadow at this azimuth/altitude" forever. We drop the bucket entirely; the cell falls back to either the scalar calibration
+            //or its existing prior. The watermark still advances so we don't re-evaluate the same bucket on the next refresh.
+            if (cutoffPct !== null && socSeries !== null)
+            {
+                const soc = valueAtMs(socSeries, tMid.getTime());
+                if (soc !== null && soc >= cutoffPct)
+                {
+                    skippedInhibit++;
+                    if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
+                    continue;
+                }
+            }
 
             if (applyObservation(map, sun.azimuth, sun.altitude, cloud, actualW, predictedW, tMid.getTime()))
             {

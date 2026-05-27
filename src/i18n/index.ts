@@ -199,6 +199,11 @@ export interface Translations
         batteryPowerInvertStandard: string;
         batteryPowerInvertInverted: string;
         batteryPowerInvertHelp:     string;
+        //Inverter cutoff SoC: percent at which the user's hybrid inverter clamps PV output once the battery hits its set ceiling. When set,
+        //the shading-map trainer drops every observation bucket where the SoC reached this value so the inverter-blocked production doesn't
+        //train as phantom shadow. Leave the field empty to keep the legacy "train every bucket" behaviour.
+        inverterCutoffSocPct:       string;
+        inverterCutoffSocPctHelp:   string;
         batteryColor:             string;
         //Weather section. Hosts the optional solar-radiation entity
         //override: when wired to a physical W/m² sensor at the home

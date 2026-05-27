@@ -478,6 +478,9 @@ export interface ChartHost
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
     readonly _pvHistory:    PvHistory | null;
+    //Optional companion battery SoC series, populated by the same fetchPvHistory call when the inverter-cutoff guard is configured. Null when
+    //the guard is off; the shading trainer reads it to skip cutoff-tainted buckets.
+    readonly _batteryHistory: PvHistory | null;
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;

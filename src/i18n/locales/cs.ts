@@ -102,6 +102,8 @@ export const cs: Translations = {
         batteryPowerInvertStandard: 'Standardní',
         batteryPowerInvertInverted: 'Obrácené',
         batteryPowerInvertHelp:     'Výchozí (Standardní): entita baterie již hlásí nabíjení jako kladné a vybíjení jako záporné. Vyberte Obrácené, když vaše entita dělá opak (některé sestavy GivEnergy / GivTCP), Helios pak při příjmu obrátí hodnotu jednou, aby odečet chipu, šipka vedení a denní součty nabito / vybito zachovaly svůj význam.',
+        inverterCutoffSocPct:       'SoC odpojení střídače (%)',
+        inverterCutoffSocPctHelp:   'Procento, při kterém váš hybridní střídač blokuje výrobu PV, jakmile baterie dosáhne nastaveného stropu. Ponechte prázdné pro deaktivaci. Když je nastaveno, trénovač mapy stínování přeskočí každé pozorovací okno, ve kterém SoC baterie dosáhl této hodnoty, aby výroba blokovaná střídačem neznečišťovala mapu fantomovými stíny v odpovídajících pozicích Slunce. Vyžaduje, aby entita SoC baterie výše byla nakonfigurována.',
         batteryColor:       'Barva baterie',
         weatherSection:           'Počasí',
         weatherHint:              'Volitelné. Připojte místní entity počasí, aby Helios používal měření z vašeho domova místo modelu Open-Meteo interpolovaného na vaši buňku mřížky. Každá entita je nezávisle volitelná a používá se pouze tehdy, když nese čerstvou hodnotu; chybějící nebo neaktuální vzorky se průhledně vrací k modelu.',

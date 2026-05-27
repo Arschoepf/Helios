@@ -747,6 +747,8 @@ const en = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Inverted",
     batteryPowerInvertHelp: "Default (Standard): the battery entity already reports charging as positive and discharging as negative. Pick Inverted when your entity does the opposite (some GivEnergy / GivTCP setups), Helios will flip the value once at ingest so the chip readout, the leader arrow and the daily charged / discharged totals keep their meaning.",
+    inverterCutoffSocPct: "Inverter cutoff SoC (%)",
+    inverterCutoffSocPctHelp: "Percent at which your hybrid inverter clamps PV output once the battery hits its set ceiling. Leave empty to disable. When set, the shading-map trainer skips every observation bucket where the battery SoC reached this value so the inverter-blocked production does not pollute the shading map with phantom shadow at those sun positions. Requires the battery SoC entity above to be configured.",
     batteryColor: "Battery color",
     weatherSection: "Weather",
     weatherHint: "Optional. Wire local weather entities to feed Helios with measurements taken at your home instead of the Open-Meteo model interpolated to your grid cell. Each entity is independently optional and only used when it carries a fresh value; missing or stale samples fall back to the model transparently.",
@@ -920,6 +922,8 @@ const fr = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Inversé",
     batteryPowerInvertHelp: "Par défaut (Standard) : ton capteur batterie rapporte déjà la charge en positif et la décharge en négatif. Passe sur Inversé si ton capteur fait l'inverse (certaines installations GivEnergy / GivTCP), Helios inverse alors la valeur une fois à la lecture pour que la pastille, la flèche du leader et les totaux journaliers charge / décharge gardent leur sens.",
+    inverterCutoffSocPct: "Seuil de coupure onduleur (%)",
+    inverterCutoffSocPctHelp: "Pourcentage à partir duquel votre onduleur hybride bloque la production PV une fois que la batterie atteint son plafond. Laissez vide pour désactiver. Quand renseigné, l'apprentissage de la carte d'ombrage ignore chaque créneau d'observation où le SoC batterie a atteint cette valeur, pour ne pas polluer la carte avec des ombres fantômes aux positions solaires concernées. Nécessite que l'entité SoC batterie ci-dessus soit configurée.",
     batteryColor: "Couleur batterie",
     weatherSection: "Météo",
     weatherHint: "Optionnel. Branche des entités météo locales pour qu'Helios utilise des mesures prises chez toi plutôt que le modèle Open-Meteo interpolé à ta cellule de grille. Chaque entité est indépendamment optionnelle et n'est utilisée que lorsqu'elle remonte une valeur fraîche ; les échantillons manquants ou périmés retombent sur le modèle de manière transparente.",
@@ -1093,6 +1097,8 @@ const de = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertiert",
     batteryPowerInvertHelp: "Standardmäßig meldet die Batterie-Entität das Laden als positiv und das Entladen als negativ. Wähle Invertiert, wenn deine Entität es umgekehrt macht (einige GivEnergy- / GivTCP-Setups). Helios dreht den Wert dann einmal beim Einlesen um, damit Chip-Anzeige, Flusspfeil und tägliche Lade- / Entladesummen ihre Bedeutung behalten.",
+    inverterCutoffSocPct: "Wechselrichter-Cutoff SoC (%)",
+    inverterCutoffSocPctHelp: "Prozentwert, ab dem Ihr Hybrid-Wechselrichter die PV-Einspeisung kappt, sobald die Batterie ihre Obergrenze erreicht. Leer lassen, um zu deaktivieren. Wenn gesetzt, überspringt der Shading-Map-Trainer jedes Beobachtungsfenster, in dem der Batterie-SoC diesen Wert erreicht hat, damit die vom Wechselrichter blockierte Produktion die Shading-Karte nicht mit Phantom-Schatten an den entsprechenden Sonnenpositionen verschmutzt. Erfordert die oben konfigurierte Batterie-SoC-Entität.",
     batteryColor: "Batteriefarbe",
     weatherSection: "Wetter",
     weatherHint: "Optional. Verbinde lokale Wetter-Entitäten, damit Helios direkt bei dir gemessene Werte verwendet, statt das Open-Meteo-Modell, das auf deine Gitterzelle interpoliert wird. Jede Entität ist unabhängig optional und wird nur verwendet, wenn sie einen frischen Wert liefert; fehlende oder veraltete Messwerte fallen transparent auf das Modell zurück.",
@@ -1266,6 +1272,8 @@ const es = {
     batteryPowerInvertStandard: "Estándar",
     batteryPowerInvertInverted: "Invertido",
     batteryPowerInvertHelp: "Por defecto (Estándar) tu entidad de batería ya informa la carga como positivo y la descarga como negativo. Cambia a Invertido si tu entidad hace lo contrario (algunas instalaciones GivEnergy / GivTCP), Helios invertirá el valor una vez en la lectura para que la pastilla, la flecha del flujo y los totales diarios de carga / descarga conserven su significado.",
+    inverterCutoffSocPct: "SoC de corte del inversor (%)",
+    inverterCutoffSocPctHelp: "Porcentaje al que tu inversor híbrido bloquea la producción PV cuando la batería alcanza su techo configurado. Déjalo vacío para desactivar. Cuando se establece, el entrenador del mapa de sombreado omite cada intervalo de observación donde el SoC de la batería alcanzó este valor, para que la producción bloqueada por el inversor no contamine el mapa con sombras fantasma en esas posiciones solares. Requiere que la entidad de SoC de batería de arriba esté configurada.",
     batteryColor: "Color batería",
     weatherSection: "Meteorología",
     weatherHint: "Opcional. Conecta entidades meteo locales para que Helios use mediciones tomadas en tu casa en lugar del modelo Open-Meteo interpolado a tu celda de la malla. Cada entidad es opcional de forma independiente y solo se usa cuando reporta un valor reciente; las muestras ausentes o caducadas vuelven al modelo de forma transparente.",
@@ -1439,6 +1447,8 @@ const it = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertito",
     batteryPowerInvertHelp: "Per impostazione predefinita (Standard) la tua entità batteria riporta la carica come positivo e la scarica come negativo. Scegli Invertito se la tua entità fa l'opposto (alcuni setup GivEnergy / GivTCP), Helios invertirà il valore una volta in lettura così che la pastiglia, la freccia del flusso e i totali giornalieri di carica / scarica mantengano il loro significato.",
+    inverterCutoffSocPct: "SoC di stacco inverter (%)",
+    inverterCutoffSocPctHelp: "Percentuale alla quale il tuo inverter ibrido blocca la produzione PV quando la batteria raggiunge il suo limite impostato. Lascia vuoto per disattivare. Quando impostato, il trainer della mappa di ombreggiatura salta ogni intervallo di osservazione in cui il SoC della batteria ha raggiunto questo valore, in modo che la produzione bloccata dall'inverter non inquini la mappa con ombre fantasma nelle posizioni solari corrispondenti. Richiede che l'entità SoC batteria qui sopra sia configurata.",
     batteryColor: "Colore batteria",
     weatherSection: "Meteo",
     weatherHint: "Opzionale. Collega entità meteo locali perché Helios usi misure prese a casa tua invece del modello Open-Meteo interpolato sulla tua cella di griglia. Ogni entità è indipendentemente opzionale e viene usata solo quando riporta un valore fresco; i campioni mancanti o stantii ricadono sul modello in modo trasparente.",
@@ -1612,6 +1622,8 @@ const nl = {
     batteryPowerInvertStandard: "Standaard",
     batteryPowerInvertInverted: "Omgekeerd",
     batteryPowerInvertHelp: "Standaard rapporteert je batterij-entiteit het laden als positief en het ontladen als negatief. Kies Omgekeerd als jouw entiteit het andersom doet (sommige GivEnergy- / GivTCP-installaties). Helios draait de waarde dan eenmalig om bij het inlezen, zodat de chip, de stroompijl en de dagelijkse laad- / ontlaadtotalen hun betekenis behouden.",
+    inverterCutoffSocPct: "Omvormer cutoff SoC (%)",
+    inverterCutoffSocPctHelp: "Percentage waarbij je hybride omvormer de PV-output blokkeert zodra de batterij zijn ingestelde plafond bereikt. Leeg laten om uit te schakelen. Wanneer ingesteld, slaat de schaduwkaart-trainer elk observatie-interval over waarin het batterij-SoC deze waarde bereikte, zodat de door de omvormer geblokkeerde productie de schaduwkaart niet vervuilt met spookschaduwen op die zonneposities. Vereist dat de batterij-SoC entiteit hierboven geconfigureerd is.",
     batteryColor: "Batterijkleur",
     weatherSection: "Weer",
     weatherHint: "Optioneel. Koppel lokale weerentiteiten zodat Helios metingen bij jou thuis gebruikt in plaats van het Open-Meteo-model dat geïnterpoleerd wordt naar je rastercel. Elke entiteit is onafhankelijk optioneel en wordt alleen gebruikt wanneer ze een verse waarde levert; ontbrekende of verouderde monsters vallen transparant terug op het model.",
@@ -1785,6 +1797,8 @@ const pt = {
     batteryPowerInvertStandard: "Padrão",
     batteryPowerInvertInverted: "Invertido",
     batteryPowerInvertHelp: "Por predefinição (Padrão) a tua entidade de bateria reporta a carga como positivo e a descarga como negativo. Escolhe Invertido se a tua entidade faz o oposto (alguns setups GivEnergy / GivTCP), o Helios inverte então o valor uma vez na leitura para que a pastilha, a seta do fluxo e os totais diários de carga / descarga mantenham o sentido.",
+    inverterCutoffSocPct: "SoC de corte do inversor (%)",
+    inverterCutoffSocPctHelp: "Percentagem à qual o seu inversor híbrido bloqueia a produção PV quando a bateria atinge o seu tecto configurado. Deixe vazio para desactivar. Quando definido, o treinador do mapa de sombreamento ignora todos os intervalos de observação onde o SoC da bateria atingiu este valor, para que a produção bloqueada pelo inversor não polua o mapa com sombras fantasma nas posições solares correspondentes. Requer que a entidade de SoC da bateria acima esteja configurada.",
     batteryColor: "Cor da bateria",
     weatherSection: "Meteorologia",
     weatherHint: "Opcional. Liga entidades meteo locais para que o Helios use medições feitas em tua casa em vez do modelo Open-Meteo interpolado à tua célula da grelha. Cada entidade é opcional de forma independente e só é usada quando reporta um valor fresco; amostras em falta ou desactualizadas voltam ao modelo de forma transparente.",
@@ -1958,6 +1972,8 @@ const no = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertert",
     batteryPowerInvertHelp: "Som standard rapporterer batteri-enheten lading som positivt og utlading som negativt. Velg Invertert hvis enheten din gjør motsatt (noen GivEnergy- / GivTCP-oppsett). Helios snur da verdien én gang ved innlesing, slik at chipen, strømpilen og daglige lade- / utladesummer beholder betydningen sin.",
+    inverterCutoffSocPct: "Vekselretter avbrudd SoC (%)",
+    inverterCutoffSocPctHelp: "Prosenten der din hybridvekselretter blokkerer PV-produksjonen når batteriet når sin innstilte grense. La være tom for å deaktivere. Når satt, hopper skyggekart-treneren over hvert observasjonsvindu der batteriets SoC nådde denne verdien, slik at den vekselretter-blokkerte produksjonen ikke forurenser skyggekartet med spøkelses-skygger på de tilsvarende solposisjonene. Krever at batteri-SoC-enheten over er konfigurert.",
     batteryColor: "Batterifarge",
     weatherSection: "Vær",
     weatherHint: "Valgfritt. Koble til lokale værentiteter slik at Helios bruker målinger tatt hjemme hos deg i stedet for Open-Meteo-modellen som interpoleres til rutecellen din. Hver entitet er uavhengig valgfri og brukes bare når den rapporterer en fersk verdi; manglende eller utdaterte prøver faller transparent tilbake til modellen.",
@@ -2131,6 +2147,8 @@ const pl = {
     batteryPowerInvertStandard: "Standardowy",
     batteryPowerInvertInverted: "Odwrócony",
     batteryPowerInvertHelp: "Domyślny (Standardowy): encja baterii już raportuje ładowanie jako pozytywne i rozładowanie jako negatywne. Wybierz Odwrócony, gdy Twoja encja robi odwrotnie (niektóre konfiguracje GivEnergy / GivTCP), Helios odwróci wartość raz przy odczycie, aby odczyt chipa, strzałka lidera i dzienne sumy naładowane / rozładowane zachowały swoje znaczenie.",
+    inverterCutoffSocPct: "SoC odcięcia falownika (%)",
+    inverterCutoffSocPctHelp: "Procent, przy którym Twój falownik hybrydowy blokuje produkcję PV, gdy bateria osiągnie ustawiony pułap. Pozostaw puste, aby wyłączyć. Po ustawieniu trener mapy zacienienia pomija każde okno obserwacji, w którym SoC baterii osiągnął tę wartość, aby produkcja zablokowana przez falownik nie zanieczyszczała mapy fantomowymi cieniami w odpowiadających pozycjach Słońca. Wymaga skonfigurowania encji SoC baterii powyżej.",
     batteryColor: "Kolor baterii",
     weatherSection: "Pogoda",
     weatherHint: "Opcjonalne. Podłącz lokalne encje pogody, aby Helios używał pomiarów z Twojego domu zamiast modelu Open-Meteo interpolowanego do komórki siatki. Każda encja jest niezależnie opcjonalna i używana tylko wtedy, gdy niesie świeżą wartość; brakujące lub nieaktualne próbki przezroczyście wracają do modelu.",
@@ -2304,6 +2322,8 @@ const cs = {
     batteryPowerInvertStandard: "Standardní",
     batteryPowerInvertInverted: "Obrácené",
     batteryPowerInvertHelp: "Výchozí (Standardní): entita baterie již hlásí nabíjení jako kladné a vybíjení jako záporné. Vyberte Obrácené, když vaše entita dělá opak (některé sestavy GivEnergy / GivTCP), Helios pak při příjmu obrátí hodnotu jednou, aby odečet chipu, šipka vedení a denní součty nabito / vybito zachovaly svůj význam.",
+    inverterCutoffSocPct: "SoC odpojení střídače (%)",
+    inverterCutoffSocPctHelp: "Procento, při kterém váš hybridní střídač blokuje výrobu PV, jakmile baterie dosáhne nastaveného stropu. Ponechte prázdné pro deaktivaci. Když je nastaveno, trénovač mapy stínování přeskočí každé pozorovací okno, ve kterém SoC baterie dosáhl této hodnoty, aby výroba blokovaná střídačem neznečišťovala mapu fantomovými stíny v odpovídajících pozicích Slunce. Vyžaduje, aby entita SoC baterie výše byla nakonfigurována.",
     batteryColor: "Barva baterie",
     weatherSection: "Počasí",
     weatherHint: "Volitelné. Připojte místní entity počasí, aby Helios používal měření z vašeho domova místo modelu Open-Meteo interpolovaného na vaši buňku mřížky. Každá entita je nezávisle volitelná a používá se pouze tehdy, když nese čerstvou hodnotu; chybějící nebo neaktuální vzorky se průhledně vrací k modelu.",
@@ -2477,6 +2497,8 @@ const sv = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Inverterat",
     batteryPowerInvertHelp: "Standard: batterientiteten rapporterar redan laddning som positiv och urladdning som negativ. Välj Inverterat när din entitet gör tvärtom (vissa GivEnergy / GivTCP-uppsättningar), Helios vänder då värdet en gång vid intag så att chipets avläsning, ledarpilen och dagliga laddade / urladdade totaler behåller sin betydelse.",
+    inverterCutoffSocPct: "Växelriktarens avstängnings-SoC (%)",
+    inverterCutoffSocPctHelp: "Procenten där din hybridväxelriktare blockerar PV-produktionen när batteriet når sin inställda gräns. Lämna tomt för att inaktivera. När det är satt hoppar skuggkartans tränare över varje observationsfönster där batteriets SoC nådde detta värde, så att den växelriktar-blockerade produktionen inte förorenar skuggkartan med spökskuggor vid motsvarande solpositioner. Kräver att batteri-SoC-entiteten ovan är konfigurerad.",
     batteryColor: "Batterifärg",
     weatherSection: "Väder",
     weatherHint: "Valfritt. Anslut lokala väderentiteter för att mata Helios med mätningar gjorda hemma hos dig istället för Open-Meteo-modellen interpolerad till din rutcell. Varje entitet är oberoende valfri och används endast när den bär ett färskt värde; saknade eller inaktuella prov faller tillbaka till modellen transparent.",
@@ -5707,10 +5729,75 @@ function refreshPv(host) {
   if (fetchKey === host._pvFetchKey) {
     return;
   }
-  host._pvFetchKey = fetchKey;
-  fetchPvHistory(host, entity, fetchStart, fetchEnd);
+  const batteryEntity = batterySocEntityForInhibit(host.config);
+  host._pvFetchKey = fetchKey + (batteryEntity ? "|bsoc:" + batteryEntity : "");
+  fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntity);
 }
-async function fetchPvHistory(host, entityId, start, end) {
+function batterySocEntityForInhibit(cfg) {
+  if (!cfg) return null;
+  const cutoff = cfg["inverter-cutoff-soc-pct"];
+  const cutoffN = typeof cutoff === "number" ? cutoff : typeof cutoff === "string" ? parseFloat(cutoff) : NaN;
+  if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return null;
+  const e2 = cfg["battery-soc-entity"];
+  if (typeof e2 !== "string" || e2.trim().length === 0) return null;
+  return e2.trim();
+}
+function inverterCutoffSocPct(cfg) {
+  if (!cfg) return null;
+  const cutoff = cfg["inverter-cutoff-soc-pct"];
+  const cutoffN = typeof cutoff === "number" ? cutoff : typeof cutoff === "string" ? parseFloat(cutoff) : NaN;
+  if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return null;
+  return cutoffN;
+}
+function parseHistoryEntries(arr) {
+  const times = [];
+  const values2 = [];
+  let lastTsMs = null;
+  for (const item of arr) {
+    const sRaw = item?.s ?? item?.state;
+    if (sRaw === null || sRaw === void 0 || sRaw === "unavailable" || sRaw === "unknown" || sRaw === "") continue;
+    const v2 = parseFloat(String(sRaw));
+    if (!isFinite(v2)) continue;
+    let ts = null;
+    const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+    if (typeof tsRaw === "number") {
+      ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1e3);
+    } else if (typeof tsRaw === "string") {
+      const asNum = Number(tsRaw);
+      if (Number.isFinite(asNum) && asNum > 1e9) {
+        ts = new Date(asNum > 1e12 ? asNum : asNum * 1e3);
+      } else {
+        ts = new Date(tsRaw);
+      }
+    }
+    if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) {
+      ts = new Date(lastTsMs);
+    }
+    if (!ts || isNaN(ts.getTime())) continue;
+    lastTsMs = ts.getTime();
+    times.push(ts);
+    values2.push(v2);
+  }
+  return { times, values: values2 };
+}
+function valueAtMs(series, ms) {
+  if (!series || series.times.length === 0) return null;
+  const t3 = series.times;
+  const v2 = series.values;
+  if (ms < t3[0].getTime() || ms > t3[t3.length - 1].getTime()) return null;
+  let lo = 0, hi = t3.length - 1;
+  while (lo < hi - 1) {
+    const mid = lo + hi >> 1;
+    if (t3[mid].getTime() <= ms) lo = mid;
+    else hi = mid;
+  }
+  const t0 = t3[lo].getTime();
+  const t1 = t3[hi].getTime();
+  if (t1 === t0) return v2[lo];
+  const f2 = (ms - t0) / (t1 - t0);
+  return v2[lo] + (v2[hi] - v2[lo]) * f2;
+}
+async function fetchPvHistory(host, entityId, start, end, batterySocEntityId = null) {
   if (!host.hass?.callWS) {
     return;
   }
@@ -5720,50 +5807,27 @@ async function fetchPvHistory(host, entityId, start, end) {
     const fetchEnd = end > now ? now : end;
     if (start >= fetchEnd) {
       host._pvHistory = { times: [], values: [] };
+      host._batteryHistory = null;
       return;
     }
+    const entityIds = batterySocEntityId ? [entityId, batterySocEntityId] : [entityId];
     const result = await host.hass.callWS({
       type: "history/history_during_period",
       start_time: start.toISOString(),
       end_time: fetchEnd.toISOString(),
-      entity_ids: [entityId],
+      entity_ids: entityIds,
       minimal_response: true,
       no_attributes: true
     });
     const arr = (result && result[entityId]) ?? [];
-    const times = [];
-    const values2 = [];
-    let lastTsMs = null;
-    for (const item of arr) {
-      const sRaw = item?.s ?? item?.state;
-      if (sRaw === null || sRaw === void 0 || sRaw === "unavailable" || sRaw === "unknown" || sRaw === "") {
-        continue;
-      }
-      const v2 = parseFloat(String(sRaw));
-      if (!isFinite(v2)) {
-        continue;
-      }
-      let ts = null;
-      const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
-      if (typeof tsRaw === "number") {
-        ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1e3);
-      } else if (typeof tsRaw === "string") {
-        const asNum = Number(tsRaw);
-        if (Number.isFinite(asNum) && asNum > 1e9) {
-          ts = new Date(asNum > 1e12 ? asNum : asNum * 1e3);
-        } else {
-          ts = new Date(tsRaw);
-        }
-      }
-      if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) {
-        ts = new Date(lastTsMs);
-      }
-      if (!ts || isNaN(ts.getTime())) {
-        continue;
-      }
-      lastTsMs = ts.getTime();
-      times.push(ts);
-      values2.push(v2);
+    const parsed = parseHistoryEntries(arr);
+    const times = parsed.times;
+    const values2 = parsed.values;
+    if (batterySocEntityId) {
+      const bArr = (result && result[batterySocEntityId]) ?? [];
+      host._batteryHistory = parseHistoryEntries(bArr);
+    } else {
+      host._batteryHistory = null;
     }
     host._pvHistory = { times, values: values2 };
     host._pvHistoryDiagnostics = {
@@ -40344,6 +40408,8 @@ function trainShadingMap(host) {
   const raster = host._engine?.getLidarRaster() ?? null;
   const pvUnit = host._pvUnit;
   const sensorIsEnergy = isCumulativeEnergyUnit(pvUnit);
+  const cutoffPct = inverterCutoffSocPct(host.config);
+  const socSeries = cutoffPct !== null ? host._batteryHistory : null;
   let updated = 0;
   let highestProcessedMs = map.lastTrainedMs || 0;
   for (let i3 = 0; i3 < series.times.length - 1; i3++) {
@@ -40378,6 +40444,13 @@ function trainShadingMap(host) {
       if (actualW === null) continue;
       const sun = getSunPosition(tMid, coords.lat, coords.lon);
       if (!sun || sun.altitude <= 0) continue;
+      if (cutoffPct !== null && socSeries !== null) {
+        const soc = valueAtMs(socSeries, tMid.getTime());
+        if (soc !== null && soc >= cutoffPct) {
+          if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
+          continue;
+        }
+      }
       if (applyObservation(map, sun.azimuth, sun.altitude, cloud, actualW, predictedW, tMid.getTime())) {
         updated++;
       }
@@ -44020,6 +44093,19 @@ let HeliosCardEditor = class extends i$1 {
                     </div>
                 </div>
                 <div class="field-help">${t3.editor.batteryPowerInvertHelp}</div>
+                <div class="field">
+                    <span class="label">${t3.editor.inverterCutoffSocPct}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        .value="${c2["inverter-cutoff-soc-pct"] != null ? String(c2["inverter-cutoff-soc-pct"]) : ""}"
+                        placeholder="95"
+                        @change="${(e2) => this._numField("inverter-cutoff-soc-pct", e2)}"
+                    />
+                </div>
+                <div class="field-help">${t3.editor.inverterCutoffSocPctHelp}</div>
                 <label class="field">
                     <span class="label">${t3.editor.batteryColor}</span>
                     <helios-color-picker
@@ -44280,7 +44366,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.25"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.26"}`,
       labelStyle,
       versionStyle
     );
@@ -44304,7 +44390,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.25",
+        version: "1.7.0-alpha.26",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44312,7 +44398,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.25"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.26"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -44376,6 +44462,7 @@ let HeliosCard = class extends i$1 {
     this._pvFetchKey = "";
     this._pvFetching = false;
     this._pvHistoryDiagnostics = null;
+    this._batteryHistory = null;
     this._pvCalibWiped = false;
     this._pvSampleBuffer = [];
     this._batterySoc = null;

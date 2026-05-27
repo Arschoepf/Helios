@@ -109,6 +109,8 @@ export const no: Translations = {
         batteryPowerInvertStandard: 'Standard',
         batteryPowerInvertInverted: 'Invertert',
         batteryPowerInvertHelp:     'Som standard rapporterer batteri-enheten lading som positivt og utlading som negativt. Velg Invertert hvis enheten din gjør motsatt (noen GivEnergy- / GivTCP-oppsett). Helios snur da verdien én gang ved innlesing, slik at chipen, strømpilen og daglige lade- / utladesummer beholder betydningen sin.',
+        inverterCutoffSocPct:       'Vekselretter avbrudd SoC (%)',
+        inverterCutoffSocPctHelp:   'Prosenten der din hybridvekselretter blokkerer PV-produksjonen når batteriet når sin innstilte grense. La være tom for å deaktivere. Når satt, hopper skyggekart-treneren over hvert observasjonsvindu der batteriets SoC nådde denne verdien, slik at den vekselretter-blokkerte produksjonen ikke forurenser skyggekartet med spøkelses-skygger på de tilsvarende solposisjonene. Krever at batteri-SoC-enheten over er konfigurert.',
         batteryColor:       'Batterifarge',
         weatherSection:           'Vær',
         weatherHint:              'Valgfritt. Koble til lokale værentiteter slik at Helios bruker målinger tatt hjemme hos deg i stedet for Open-Meteo-modellen som interpoleres til rutecellen din. Hver entitet er uavhengig valgfri og brukes bare når den rapporterer en fersk verdi; manglende eller utdaterte prøver faller transparent tilbake til modellen.',
