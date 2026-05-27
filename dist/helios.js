@@ -2559,9 +2559,18 @@ const heliosCardStyles = i$3`
 
     #map-container
     {
-        width: 100%;
-        height: 100%;
-        position: relative;
+        /*  Absolute + inset:0 so the container fills its ha-card
+            parent via the containing-block dimensions (which respect
+            min-height) rather than via percentage height resolution.
+            Percentage heights only cascade when the parent has a
+            concrete pixel height, the Masonry dashboard layout sets
+            only a min-height floor on the card, so a height:100% here
+            would collapse to 0 and the MapLibre canvas would never
+            render. Sections and panel views pass a pixel height down,
+            so the old percentage path worked there, the absolute path
+            works under both.                                          */
+        position: absolute;
+        inset: 0;
     }
 
     /*  Force-hide the MapLibre attribution rail. attributionControl
@@ -44131,7 +44140,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.20"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.21"}`,
       labelStyle,
       versionStyle
     );
@@ -44155,7 +44164,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.20",
+        version: "1.7.0-alpha.21",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44163,7 +44172,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.20"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.21"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

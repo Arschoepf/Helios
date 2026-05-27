@@ -54,9 +54,18 @@ export const heliosCardStyles = css`
 
     #map-container
     {
-        width: 100%;
-        height: 100%;
-        position: relative;
+        /*  Absolute + inset:0 so the container fills its ha-card
+            parent via the containing-block dimensions (which respect
+            min-height) rather than via percentage height resolution.
+            Percentage heights only cascade when the parent has a
+            concrete pixel height, the Masonry dashboard layout sets
+            only a min-height floor on the card, so a height:100% here
+            would collapse to 0 and the MapLibre canvas would never
+            render. Sections and panel views pass a pixel height down,
+            so the old percentage path worked there, the absolute path
+            works under both.                                          */
+        position: absolute;
+        inset: 0;
     }
 
     /*  Force-hide the MapLibre attribution rail. attributionControl
