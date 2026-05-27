@@ -119,6 +119,33 @@ export interface HeliosConfig
     //                         flow arrow). Defaults to a vivid purple.
     'battery-soc-entity'?:    unknown;
     'battery-power-entity'?:  unknown;
+    //Optional. Multi-bank battery support. When present, takes
+    //precedence over the flat battery-soc-entity / battery-power-
+    //entity / battery-power-invert keys above (which become a
+    //single-bank legacy fallback). Each entry:
+    //  - name        : optional, free text, used in the editor row
+    //                  header. Defaults to "Battery N".
+    //  - soc-entity  : required, HA entity id, % (0-100, clamped).
+    //  - power-entity: required, HA entity id, W or kW. Signed.
+    //  - power-invert: optional bool, flips the sign at ingest
+    //                  (per-bank). Default false.
+    //  - capacity-kwh: optional weight used to aggregate the
+    //                  banks' SoC into the single chip painted on
+    //                  the card (capacity-weighted average). Default
+    //                  1, meaning equal weight: leave unset when all
+    //                  banks are the same size. Set it explicitly
+    //                  when bank sizes differ so the displayed SoC
+    //                  reflects the real stored-energy ratio rather
+    //                  than a flat unweighted mean.
+    //Aggregation rules:
+    //  - SoC chip = Σ(soc_i × capacity_i) / Σ(capacity_i)
+    //  - Power chip = Σ(power_i)  (each bank inverted per its own
+    //                              power-invert flag first)
+    //  - inverter-cutoff-soc-pct: skips the trainer bucket when
+    //    ALL banks are at or above the threshold (min SoC across
+    //    banks ≥ cutoff), so a half-full bank correctly trains
+    //    even while a sibling bank is full.
+    'batteries'?:             unknown;
     //Optional. When true, the live and historical battery power
     //readings are multiplied by -1 before being stored. Use this
     //when the upstream entity reports charging as negative and

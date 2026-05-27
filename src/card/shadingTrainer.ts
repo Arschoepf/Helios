@@ -77,12 +77,14 @@ export function trainShadingMap(host: ChartHost): number
     const pvUnit   = host._pvUnit;
     const sensorIsEnergy = isCumulativeEnergyUnit(pvUnit);
 
-    //Inverter-cutoff guard: when the user has configured both `battery-soc-entity` and `inverter-cutoff-soc-pct`, skip every bucket whose battery
-    //SoC at the midpoint reached or exceeded the cutoff. Those buckets see the inverter clamp PV output even when the sun is up, training them as
-    //"shadow" would otherwise carve a permanent phantom shadow at the matching sun azimuth/altitude/cloud bin. Threshold varies per inverter model
-    //(95 / 98 / 100), the user knows their own; we just consult the config and the freshly-fetched SoC history.
-    const cutoffPct = inverterCutoffSocPct(host.config);
-    const socSeries = (cutoffPct !== null) ? host._batteryHistory : null;
+    //Inverter-cutoff guard: when the user has configured a battery (one bank via flat keys, or N banks via `batteries:`) AND
+    //`inverter-cutoff-soc-pct`, skip every bucket where EVERY bank's SoC at the midpoint reached or exceeded the cutoff (min across
+    //banks ≥ cutoff). Those buckets see the inverter clamp PV output even when the sun is up, training them as "shadow" would otherwise
+    //carve a permanent phantom shadow at the matching sun azimuth/altitude/cloud bin. Threshold varies per inverter model (95 / 98 /
+    //100), the user knows their own; we just consult the config and the freshly-fetched per-bank SoC histories. A half-full sibling
+    //bank correctly trains the bucket while one full bank does not block it.
+    const cutoffPct  = inverterCutoffSocPct(host.config);
+    const socSeries  = (cutoffPct !== null) ? host._batteryHistories : [];
 
     let updated = 0;
     let skippedInhibit = 0;
@@ -138,10 +140,21 @@ export function trainShadingMap(host: ChartHost): number
             //tainted: actual production is artificially low even though the sun is shining, and feeding that to the shading model would teach it
             //"strong shadow at this azimuth/altitude" forever. We drop the bucket entirely; the cell falls back to either the scalar calibration
             //or its existing prior. The watermark still advances so we don't re-evaluate the same bucket on the next refresh.
-            if (cutoffPct !== null && socSeries !== null)
+            if (cutoffPct !== null && socSeries.length > 0)
             {
-                const soc = valueAtMs(socSeries, tMid.getTime());
-                if (soc !== null && soc >= cutoffPct)
+                //Min SoC across banks at the bucket midpoint. A bank with no sample at this instant (empty series) is skipped so a half-
+                //reporting setup degrades to "skip the bucket if every reporting bank is full" rather than poisoning the gate. We mark
+                //blocked only when every bank that DID report sits at or above the cutoff.
+                let minSoc:  number | null = null;
+                let anyBank: boolean = false;
+                for (const s of socSeries)
+                {
+                    const v = valueAtMs(s, tMid.getTime());
+                    if (v === null) continue;
+                    anyBank = true;
+                    if (minSoc === null || v < minSoc) minSoc = v;
+                }
+                if (anyBank && minSoc !== null && minSoc >= cutoffPct)
                 {
                     skippedInhibit++;
                     if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;

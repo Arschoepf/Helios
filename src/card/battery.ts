@@ -25,6 +25,68 @@ export interface BatteryToday
     dischargedKwh: number;
 }
 
+
+//Resolved battery-bank entry. The chip on the card aggregates N banks into a single capacity-weighted SoC + summed signed power, but the
+//trainer needs per-bank SoC history (the cutoff guard skips a bucket only when ALL banks are at or above the threshold, i.e. the min SoC
+//across banks is the right signal). parseBatteryBanks turns the user's YAML into this structural list and folds the legacy flat keys
+//(battery-soc-entity / battery-power-entity / battery-power-invert) into a single-bank list when `batteries:` is absent.
+export interface BatteryBank
+{
+    //Display name used in editor row headers ("Bank 1" / "House battery" / etc.). Always set after parse: a missing or blank value defaults
+    //to "Battery N" so the editor never shows a nameless row.
+    name:         string;
+    socEntity:    string;
+    powerEntity:  string;
+    powerInvert:  boolean;
+    //Weight applied when capacity-averaging SoC across banks. Default 1 (equal weight) when not specified, so the average becomes a flat
+    //unweighted mean when all banks are the same size; set explicitly when bank sizes differ so the displayed SoC reflects the real
+    //stored-energy ratio. Always > 0 after parse.
+    capacityKwh:  number;
+}
+
+
+//Read the user's battery config into a normalised bank list. The `batteries:` array takes precedence over the legacy flat keys; when
+//absent and at least one of the flat keys is set, the flat keys are wrapped in a single-bank list so the rest of the engine speaks one
+//shape regardless of how the config is authored. Returns an empty array when no battery is configured (the chip / trainer paths then
+//early-out without touching hass.states).
+export function parseBatteryBanks(config: HeliosConfig | undefined): BatteryBank[]
+{
+    if (!config) return [];
+    const raw = config['batteries'];
+    if (Array.isArray(raw) && raw.length > 0)
+    {
+        const banks: BatteryBank[] = [];
+        for (const e of raw)
+        {
+            if (!e || typeof e !== 'object') continue;
+            const obj = e as Record<string, unknown>;
+            const soc   = String(obj['soc-entity']   ?? '').trim();
+            const power = String(obj['power-entity'] ?? '').trim();
+            if (!soc && !power) continue;
+            const capRaw = obj['capacity-kwh'];
+            const cap = typeof capRaw === 'number' ? capRaw : parseFloat(String(capRaw ?? ''));
+            banks.push({
+                name:        String(obj['name'] ?? '').trim() || `Battery ${banks.length + 1}`,
+                socEntity:   soc,
+                powerEntity: power,
+                powerInvert: obj['power-invert'] === true,
+                capacityKwh: isFinite(cap) && cap > 0 ? cap : 1,
+            });
+        }
+        if (banks.length > 0) return banks;
+    }
+    const soc   = String(config['battery-soc-entity']   ?? '').trim();
+    const power = String(config['battery-power-entity'] ?? '').trim();
+    if (!soc && !power) return [];
+    return [{
+        name:        'Battery 1',
+        socEntity:   soc,
+        powerEntity: power,
+        powerInvert: config['battery-power-invert'] === true,
+        capacityKwh: 1,
+    }];
+}
+
 //Structural surface the host card exposes to this module. Mutable
 //fields are typed non-readonly so refresh / fetch helpers can
 //assign them; Lit's @state reactivity is preserved because each
@@ -56,97 +118,171 @@ export function batteryPowerInvert(config: HeliosConfig | undefined): boolean
 }
 
 
+//Linear interpolation of a sorted (times, values) series at an arbitrary instant. Returns null when the series is empty; clamps to the
+//endpoints outside the range so a bank that started reporting mid-day doesn't drag the aggregate to NaN for the earlier samples.
+function interpAt(s: BatteryHistory, ms: number): number | null
+{
+    const t = s.times;
+    const v = s.values;
+    const n = t.length;
+    if (n === 0) return null;
+    if (ms <= t[0].getTime()) return v[0];
+    if (ms >= t[n - 1].getTime()) return v[n - 1];
+    let lo = 0;
+    let hi = n - 1;
+    while (hi - lo > 1)
+    {
+        const mid = (lo + hi) >> 1;
+        if (t[mid].getTime() <= ms) lo = mid;
+        else                        hi = mid;
+    }
+    const t0 = t[lo].getTime();
+    const t1 = t[hi].getTime();
+    if (t1 === t0) return v[lo];
+    const f = (ms - t0) / (t1 - t0);
+    return v[lo] + (v[hi] - v[lo]) * f;
+}
+
+
+//Fold N per-bank series into one aggregated series. The output time grid is the union of all input timestamps (sorted, deduped); at each
+//instant we interpolate every bank's series and combine: capacity-weighted average for SoC, plain sum for power. Banks with empty series
+//are skipped at each instant so a partially-reporting bank doesn't poison the aggregate. Returns an empty series when every bank is empty.
+function aggregateBankHistory(
+    banks:   BatteryBank[],
+    series:  BatteryHistory[],
+    mode:    'soc' | 'power'
+): BatteryHistory
+{
+    const tset = new Set<number>();
+    for (const s of series)
+    {
+        for (const ts of s.times) tset.add(ts.getTime());
+    }
+    if (tset.size === 0) return { times: [], values: [] };
+    const tsorted = Array.from(tset).sort((a, b) => a - b);
+    const times:  Date[]   = new Array(tsorted.length);
+    const values: number[] = new Array(tsorted.length);
+    let n = 0;
+    for (const ms of tsorted)
+    {
+        if (mode === 'soc')
+        {
+            let num = 0;
+            let den = 0;
+            for (let i = 0; i < banks.length; i++)
+            {
+                const v = interpAt(series[i], ms);
+                if (v === null) continue;
+                num += v * banks[i].capacityKwh;
+                den += banks[i].capacityKwh;
+            }
+            if (den === 0) continue;
+            times[n]  = new Date(ms);
+            values[n] = num / den;
+            n++;
+        }
+        else
+        {
+            let sum:   number = 0;
+            let saw:   boolean = false;
+            for (let i = 0; i < banks.length; i++)
+            {
+                const v = interpAt(series[i], ms);
+                if (v === null) continue;
+                sum += v;
+                saw  = true;
+            }
+            if (!saw) continue;
+            times[n]  = new Date(ms);
+            values[n] = sum;
+            n++;
+        }
+    }
+    times.length  = n;
+    values.length = n;
+    return { times, values };
+}
+
+
 //Live + history refresh, called from the card on every lifecycle
-//cycle. Reads SoC and power from hass.states (one round per
-//configured entity), applies the user's invert preference once
-//at ingest, and dispatches a history fetch when the (entities,
-//range) tuple changes.
+//cycle. Reads SoC and power from hass.states for every configured
+//bank, aggregates into the chip's source-of-truth fields
+//(capacity-weighted SoC, summed signed power, first non-empty unit),
+//and dispatches a history fetch when the (entities, range) tuple
+//changes. The aggregated history fields are populated in
+//fetchBatteryHistory after the WS response lands.
 export function refreshBattery(host: BatteryHost): void
 {
-    if (!host.hass)
-    {
-        return;
-    }
-    const socEntity   = String(host.config?.['battery-soc-entity']   ?? '').trim();
-    const powerEntity = String(host.config?.['battery-power-entity'] ?? '').trim();
+    if (!host.hass) return;
 
-    //SoC, clamp to [0, 100] because some BMS entities momentarily report 100.5 % during the absorption phase or briefly drop negative around the
-    //calibration cycle, neither of which is meaningful to the user.
-    let nextSoc: number | null = null;
-    if (socEntity)
-    {
-        const so = host.hass.states?.[socEntity];
-        const v  = so ? parseFloat(so.state) : NaN;
-        if (isFinite(v))
-        {
-            nextSoc = Math.max(0, Math.min(100, v));
-        }
-    }
-    if (nextSoc !== host._batterySoc)
-    {
-        host._batterySoc = nextSoc;
-    }
+    const banks = parseBatteryBanks(host.config);
 
-    //Power, keep the sign (positive = charging, negative =
-    //discharging) verbatim from the entity unless the user has
-    //opted into `battery-power-invert`, in which case we flip
-    //the sign once at ingest so every downstream sign-aware site
-    //(chip readout, leader arrow direction, charged /
-    //discharged totals) reads the same convention regardless of
-    //how the underlying entity is wired. Unit is captured so the
-    //chip renderer can format kW vs W; we don't normalise here
-    //because the entity's own unit IS the source of truth (some
-    //BMS expose W, others kW).
-    let nextPower: number | null = null;
-    let nextUnit:  string        = '';
-    if (powerEntity)
+    //No banks configured at all: clear everything and bail. This
+    //keeps a stale graph from lingering when the user wipes the
+    //battery section in the editor.
+    if (banks.length === 0)
     {
-        const so = host.hass.states?.[powerEntity];
-        const v  = so ? parseFloat(so.state) : NaN;
-        if (isFinite(v))
-        {
-            nextPower = batteryPowerInvert(host.config) ? -v : v;
-            nextUnit  = so.attributes?.unit_of_measurement ?? '';
-        }
-    }
-    if (nextPower !== host._batteryPower)
-    {
-        host._batteryPower = nextPower;
-    }
-    if (nextUnit !== host._batteryPowerUnit)
-    {
-        host._batteryPowerUnit = nextUnit;
-    }
-
-    //Drop history series and reset the fetch key when the user clears all battery entity fields, so a stale graph doesn't linger after the config
-    //goes blank.
-    if (!socEntity && !powerEntity)
-    {
-        if (host._batterySocHistory !== null)   { host._batterySocHistory   = null; }
-        if (host._batteryPowerHistory !== null) { host._batteryPowerHistory = null; }
+        if (host._batterySoc           !== null) host._batterySoc          = null;
+        if (host._batteryPower         !== null) host._batteryPower        = null;
+        if (host._batteryPowerUnit     !== '')   host._batteryPowerUnit    = '';
+        if (host._batterySocHistory    !== null) host._batterySocHistory   = null;
+        if (host._batteryPowerHistory  !== null) host._batteryPowerHistory = null;
         host._batteryFetchKey = '';
         return;
     }
 
+    //Capacity-weighted SoC + summed signed power across all banks. Each bank's invert flag is applied to its own raw reading first so a
+    //mixed-vendor install (one BMS reporting charge as positive, another reporting it as negative) still produces a coherent total. SoC
+    //per bank is clamped to [0, 100] because some BMS entities briefly report 100.5 % during absorption or dip negative around calibra-
+    //tion, neither of which is meaningful to the user.
+    let socNum = 0;
+    let socDen = 0;
+    let powSum:  number | null = null;
+    let unitOut: string        = '';
+    for (const b of banks)
+    {
+        if (b.socEntity)
+        {
+            const so = host.hass.states?.[b.socEntity];
+            const v  = so ? parseFloat(so.state) : NaN;
+            if (isFinite(v))
+            {
+                const clamped = Math.max(0, Math.min(100, v));
+                socNum += clamped * b.capacityKwh;
+                socDen += b.capacityKwh;
+            }
+        }
+        if (b.powerEntity)
+        {
+            const so = host.hass.states?.[b.powerEntity];
+            const v  = so ? parseFloat(so.state) : NaN;
+            if (isFinite(v))
+            {
+                const signed = b.powerInvert ? -v : v;
+                powSum = (powSum ?? 0) + signed;
+                if (!unitOut) unitOut = so.attributes?.unit_of_measurement ?? '';
+            }
+        }
+    }
+    const nextSoc = socDen > 0 ? socNum / socDen : null;
+    if (nextSoc           !== host._batterySoc)        host._batterySoc       = nextSoc;
+    if (powSum            !== host._batteryPower)      host._batteryPower     = powSum;
+    if (unitOut           !== host._batteryPowerUnit)  host._batteryPowerUnit = unitOut;
+
     //History fetch, only when the (entities, range) tuple changed.
     //Without this guard we'd reissue the WS command on every Lit
     //cycle (e.g. every clock tick).
-    if (!host._timeRange || host._batteryFetching)
-    {
-        return;
-    }
+    if (!host._timeRange || host._batteryFetching) return;
     const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
-    //Invert flag is part of the fetch key so a mid-session
-    //toggle (user flips the editor switch) invalidates the
-    //cached history and triggers a refetch that reapplies the
-    //new sign convention at parse time.
-    const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}@inv=${batteryPowerInvert(host.config) ? 1 : 0}`;
-    if (fetchKey === host._batteryFetchKey)
-    {
-        return;
-    }
+    //Bank signature: entity ids + invert flags + capacity weights. Capacity weights enter the key so a mid-session edit of a kWh field
+    //invalidates the cached history and triggers a refetch that re-applies the new weighting at parse time.
+    const sig = banks.map(b =>
+        `${b.socEntity}|${b.powerEntity}|inv=${b.powerInvert ? 1 : 0}|cap=${b.capacityKwh}`
+    ).join('&');
+    const fetchKey = `${sig}@${rangeKey}`;
+    if (fetchKey === host._batteryFetchKey) return;
     host._batteryFetchKey = fetchKey;
-    fetchBatteryHistory(host, socEntity, powerEntity, host._timeRange.start, host._timeRange.end);
+    fetchBatteryHistory(host, banks, host._timeRange.start, host._timeRange.end);
 }
 
 
@@ -157,17 +293,13 @@ export function refreshBattery(host: BatteryHost): void
 //range, etc.) and that's fine, the chip will show only the side
 //that did return data.
 export async function fetchBatteryHistory(
-    host: BatteryHost,
-    socEntity: string,
-    powerEntity: string,
+    host:  BatteryHost,
+    banks: BatteryBank[],
     start: Date,
-    end: Date
+    end:   Date
 ): Promise<void>
 {
-    if (!host.hass?.callWS)
-    {
-        return;
-    }
+    if (!host.hass?.callWS || banks.length === 0) return;
     host._batteryFetching = true;
     try
     {
@@ -177,14 +309,20 @@ export async function fetchBatteryHistory(
         const fetchEnd = end > now ? now : end;
         if (start >= fetchEnd)
         {
-            if (socEntity)   { host._batterySocHistory   = { times: [], values: [] }; }
-            if (powerEntity) { host._batteryPowerHistory = { times: [], values: [] }; }
+            host._batterySocHistory   = { times: [], values: [] };
+            host._batteryPowerHistory = { times: [], values: [] };
             return;
         }
 
-        const ids: string[] = [];
-        if (socEntity)   { ids.push(socEntity);   }
-        if (powerEntity) { ids.push(powerEntity); }
+        //Single WS roundtrip carries every bank's SoC + power entity. HA dedupes server-side so duplicate ids in different banks (which
+        //would only happen if the user accidentally configured two banks against the same physical entity) don't multiply the cost.
+        const idsSet = new Set<string>();
+        for (const b of banks)
+        {
+            if (b.socEntity)   idsSet.add(b.socEntity);
+            if (b.powerEntity) idsSet.add(b.powerEntity);
+        }
+        const ids = Array.from(idsSet);
 
         const result: any = await host.hass.callWS({
             type:             'history/history_during_period',
@@ -213,10 +351,7 @@ export async function fetchBatteryHistory(
                     continue;
                 }
                 const v = parseFloat(stateStr);
-                if (!isFinite(v))
-                {
-                    continue;
-                }
+                if (!isFinite(v)) continue;
                 let ts: Date | null = null;
                 if (typeof item?.lu === 'number')
                 {
@@ -230,45 +365,47 @@ export async function fetchBatteryHistory(
                 {
                     ts = new Date(item.last_changed);
                 }
-                if (!ts || isNaN(ts.getTime()))
-                {
-                    continue;
-                }
+                if (!ts || isNaN(ts.getTime())) continue;
                 times.push(ts);
                 values.push(v);
             }
             return { times, values };
         };
 
-        if (socEntity)
+        //Per-bank parsed series, kept around for the aggregation. Bank index parallel to `banks`; either side may be empty when the bank
+        //didn't define that entity or HA returned no samples in range.
+        const bankSocSeries:   BatteryHistory[] = [];
+        const bankPowerSeries: BatteryHistory[] = [];
+        for (const b of banks)
         {
-            const series = parseSeries(result?.[socEntity] ?? []);
-            //Clamp SoC samples to [0, 100] in the history too, same out-of-range tolerance as the live read.
-            series.values = series.values.map(v => Math.max(0, Math.min(100, v)));
-            host._batterySocHistory = series;
-        }
-        else
-        {
-            host._batterySocHistory = null;
-        }
-        if (powerEntity)
-        {
-            const series = parseSeries(result?.[powerEntity] ?? []);
-            //Apply the user's invert preference once at parse
-            //time, identical to the live ingest path, so every
-            //chart / sum that consumes _batteryPowerHistory
-            //sees "positive = charging" regardless of the
-            //source entity's convention.
-            if (batteryPowerInvert(host.config))
+            let socS: BatteryHistory = { times: [], values: [] };
+            if (b.socEntity)
             {
-                series.values = series.values.map(v => -v);
+                socS = parseSeries(result?.[b.socEntity] ?? []);
+                //Clamp SoC samples to [0, 100] in the history too, same out-of-range tolerance as the live read.
+                socS.values = socS.values.map(v => Math.max(0, Math.min(100, v)));
             }
-            host._batteryPowerHistory = series;
+            let powS: BatteryHistory = { times: [], values: [] };
+            if (b.powerEntity)
+            {
+                powS = parseSeries(result?.[b.powerEntity] ?? []);
+                //Apply this bank's own invert preference once at parse time, identical to the live ingest path, so every chart / sum
+                //that consumes _batteryPowerHistory sees "positive = charging" regardless of how each bank's entity is wired.
+                if (b.powerInvert)
+                {
+                    powS.values = powS.values.map(v => -v);
+                }
+            }
+            bankSocSeries.push(socS);
+            bankPowerSeries.push(powS);
         }
-        else
-        {
-            host._batteryPowerHistory = null;
-        }
+
+        //Aggregate the per-bank series into the chip's source-of-truth fields. The aggregated time grid is the union of all per-bank
+        //timestamps, sorted; per-timestamp we interpolate each bank's series at that instant, then capacity-weight SoC and sum signed
+        //power across banks. This produces a continuous aggregated stream even when the BMS entities tick at different cadences (a
+        //common case in mixed-vendor setups).
+        host._batterySocHistory   = aggregateBankHistory(banks, bankSocSeries,   'soc');
+        host._batteryPowerHistory = aggregateBankHistory(banks, bankPowerSeries, 'power');
     }
     catch (e)
     {

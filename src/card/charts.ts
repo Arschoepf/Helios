@@ -478,9 +478,10 @@ export interface ChartHost
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
     readonly _pvHistory:    PvHistory | null;
-    //Optional companion battery SoC series, populated by the same fetchPvHistory call when the inverter-cutoff guard is configured. Null when
-    //the guard is off; the shading trainer reads it to skip cutoff-tainted buckets.
-    readonly _batteryHistory: PvHistory | null;
+    //Optional per-bank companion battery SoC histories, populated by the same fetchPvHistory call when the inverter-cutoff guard is armed.
+    //One entry per bank (parallel to parseBatteryBanks(config)); empty when the guard is off or no battery is configured. The shading
+    //trainer reads it to skip buckets where ALL banks reached the cutoff (min SoC across banks).
+    readonly _batteryHistories: PvHistory[];
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;

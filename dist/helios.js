@@ -5646,6 +5646,293 @@ function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg,
   }
   return false;
 }
+function parseBatteryBanks(config) {
+  if (!config) return [];
+  const raw2 = config["batteries"];
+  if (Array.isArray(raw2) && raw2.length > 0) {
+    const banks = [];
+    for (const e2 of raw2) {
+      if (!e2 || typeof e2 !== "object") continue;
+      const obj = e2;
+      const soc2 = String(obj["soc-entity"] ?? "").trim();
+      const power2 = String(obj["power-entity"] ?? "").trim();
+      if (!soc2 && !power2) continue;
+      const capRaw = obj["capacity-kwh"];
+      const cap = typeof capRaw === "number" ? capRaw : parseFloat(String(capRaw ?? ""));
+      banks.push({
+        name: String(obj["name"] ?? "").trim() || `Battery ${banks.length + 1}`,
+        socEntity: soc2,
+        powerEntity: power2,
+        powerInvert: obj["power-invert"] === true,
+        capacityKwh: isFinite(cap) && cap > 0 ? cap : 1
+      });
+    }
+    if (banks.length > 0) return banks;
+  }
+  const soc = String(config["battery-soc-entity"] ?? "").trim();
+  const power = String(config["battery-power-entity"] ?? "").trim();
+  if (!soc && !power) return [];
+  return [{
+    name: "Battery 1",
+    socEntity: soc,
+    powerEntity: power,
+    powerInvert: config["battery-power-invert"] === true,
+    capacityKwh: 1
+  }];
+}
+function interpAt$1(s2, ms) {
+  const t2 = s2.times;
+  const v2 = s2.values;
+  const n3 = t2.length;
+  if (n3 === 0) return null;
+  if (ms <= t2[0].getTime()) return v2[0];
+  if (ms >= t2[n3 - 1].getTime()) return v2[n3 - 1];
+  let lo = 0;
+  let hi = n3 - 1;
+  while (hi - lo > 1) {
+    const mid = lo + hi >> 1;
+    if (t2[mid].getTime() <= ms) lo = mid;
+    else hi = mid;
+  }
+  const t0 = t2[lo].getTime();
+  const t1 = t2[hi].getTime();
+  if (t1 === t0) return v2[lo];
+  const f2 = (ms - t0) / (t1 - t0);
+  return v2[lo] + (v2[hi] - v2[lo]) * f2;
+}
+function aggregateBankHistory(banks, series, mode) {
+  const tset = /* @__PURE__ */ new Set();
+  for (const s2 of series) {
+    for (const ts of s2.times) tset.add(ts.getTime());
+  }
+  if (tset.size === 0) return { times: [], values: [] };
+  const tsorted = Array.from(tset).sort((a2, b2) => a2 - b2);
+  const times = new Array(tsorted.length);
+  const values2 = new Array(tsorted.length);
+  let n3 = 0;
+  for (const ms of tsorted) {
+    if (mode === "soc") {
+      let num = 0;
+      let den = 0;
+      for (let i2 = 0; i2 < banks.length; i2++) {
+        const v2 = interpAt$1(series[i2], ms);
+        if (v2 === null) continue;
+        num += v2 * banks[i2].capacityKwh;
+        den += banks[i2].capacityKwh;
+      }
+      if (den === 0) continue;
+      times[n3] = new Date(ms);
+      values2[n3] = num / den;
+      n3++;
+    } else {
+      let sum2 = 0;
+      let saw = false;
+      for (let i2 = 0; i2 < banks.length; i2++) {
+        const v2 = interpAt$1(series[i2], ms);
+        if (v2 === null) continue;
+        sum2 += v2;
+        saw = true;
+      }
+      if (!saw) continue;
+      times[n3] = new Date(ms);
+      values2[n3] = sum2;
+      n3++;
+    }
+  }
+  times.length = n3;
+  values2.length = n3;
+  return { times, values: values2 };
+}
+function refreshBattery(host) {
+  if (!host.hass) return;
+  const banks = parseBatteryBanks(host.config);
+  if (banks.length === 0) {
+    if (host._batterySoc !== null) host._batterySoc = null;
+    if (host._batteryPower !== null) host._batteryPower = null;
+    if (host._batteryPowerUnit !== "") host._batteryPowerUnit = "";
+    if (host._batterySocHistory !== null) host._batterySocHistory = null;
+    if (host._batteryPowerHistory !== null) host._batteryPowerHistory = null;
+    host._batteryFetchKey = "";
+    return;
+  }
+  let socNum = 0;
+  let socDen = 0;
+  let powSum = null;
+  let unitOut = "";
+  for (const b2 of banks) {
+    if (b2.socEntity) {
+      const so = host.hass.states?.[b2.socEntity];
+      const v2 = so ? parseFloat(so.state) : NaN;
+      if (isFinite(v2)) {
+        const clamped = Math.max(0, Math.min(100, v2));
+        socNum += clamped * b2.capacityKwh;
+        socDen += b2.capacityKwh;
+      }
+    }
+    if (b2.powerEntity) {
+      const so = host.hass.states?.[b2.powerEntity];
+      const v2 = so ? parseFloat(so.state) : NaN;
+      if (isFinite(v2)) {
+        const signed = b2.powerInvert ? -v2 : v2;
+        powSum = (powSum ?? 0) + signed;
+        if (!unitOut) unitOut = so.attributes?.unit_of_measurement ?? "";
+      }
+    }
+  }
+  const nextSoc = socDen > 0 ? socNum / socDen : null;
+  if (nextSoc !== host._batterySoc) host._batterySoc = nextSoc;
+  if (powSum !== host._batteryPower) host._batteryPower = powSum;
+  if (unitOut !== host._batteryPowerUnit) host._batteryPowerUnit = unitOut;
+  if (!host._timeRange || host._batteryFetching) return;
+  const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
+  const sig = banks.map(
+    (b2) => `${b2.socEntity}|${b2.powerEntity}|inv=${b2.powerInvert ? 1 : 0}|cap=${b2.capacityKwh}`
+  ).join("&");
+  const fetchKey = `${sig}@${rangeKey}`;
+  if (fetchKey === host._batteryFetchKey) return;
+  host._batteryFetchKey = fetchKey;
+  fetchBatteryHistory(host, banks, host._timeRange.start, host._timeRange.end);
+}
+async function fetchBatteryHistory(host, banks, start, end) {
+  if (!host.hass?.callWS || banks.length === 0) return;
+  host._batteryFetching = true;
+  try {
+    const now = /* @__PURE__ */ new Date();
+    const fetchEnd = end > now ? now : end;
+    if (start >= fetchEnd) {
+      host._batterySocHistory = { times: [], values: [] };
+      host._batteryPowerHistory = { times: [], values: [] };
+      return;
+    }
+    const idsSet = /* @__PURE__ */ new Set();
+    for (const b2 of banks) {
+      if (b2.socEntity) idsSet.add(b2.socEntity);
+      if (b2.powerEntity) idsSet.add(b2.powerEntity);
+    }
+    const ids = Array.from(idsSet);
+    const result = await host.hass.callWS({
+      type: "history/history_during_period",
+      start_time: start.toISOString(),
+      end_time: fetchEnd.toISOString(),
+      entity_ids: ids,
+      minimal_response: true,
+      no_attributes: true
+    });
+    const parseSeries = (arr) => {
+      const times = [];
+      const values2 = [];
+      for (const item of arr ?? []) {
+        const stateStr = typeof item?.s === "string" ? item.s : typeof item?.state === "string" ? item.state : null;
+        if (stateStr === null || stateStr === "unavailable" || stateStr === "unknown" || stateStr === "") {
+          continue;
+        }
+        const v2 = parseFloat(stateStr);
+        if (!isFinite(v2)) continue;
+        let ts = null;
+        if (typeof item?.lu === "number") {
+          ts = new Date(item.lu * 1e3);
+        } else if (typeof item?.last_updated === "string") {
+          ts = new Date(item.last_updated);
+        } else if (typeof item?.last_changed === "string") {
+          ts = new Date(item.last_changed);
+        }
+        if (!ts || isNaN(ts.getTime())) continue;
+        times.push(ts);
+        values2.push(v2);
+      }
+      return { times, values: values2 };
+    };
+    const bankSocSeries = [];
+    const bankPowerSeries = [];
+    for (const b2 of banks) {
+      let socS = { times: [], values: [] };
+      if (b2.socEntity) {
+        socS = parseSeries(result?.[b2.socEntity] ?? []);
+        socS.values = socS.values.map((v2) => Math.max(0, Math.min(100, v2)));
+      }
+      let powS = { times: [], values: [] };
+      if (b2.powerEntity) {
+        powS = parseSeries(result?.[b2.powerEntity] ?? []);
+        if (b2.powerInvert) {
+          powS.values = powS.values.map((v2) => -v2);
+        }
+      }
+      bankSocSeries.push(socS);
+      bankPowerSeries.push(powS);
+    }
+    host._batterySocHistory = aggregateBankHistory(banks, bankSocSeries, "soc");
+    host._batteryPowerHistory = aggregateBankHistory(banks, bankPowerSeries, "power");
+  } catch (e2) {
+    console.warn("[HELIOS] battery history fetch failed:", e2);
+    host._batterySocHistory = { times: [], values: [] };
+    host._batteryPowerHistory = { times: [], values: [] };
+  } finally {
+    host._batteryFetching = false;
+  }
+}
+function batterySampleAtTime(hist, time) {
+  if (!hist || hist.times.length === 0) {
+    return null;
+  }
+  const tMs = time.getTime();
+  const firstMs = hist.times[0].getTime();
+  const lastMs = hist.times[hist.times.length - 1].getTime();
+  if (tMs < firstMs || tMs > lastMs + 6e4) {
+    return null;
+  }
+  let idx = hist.times.length - 1;
+  for (let i2 = 0; i2 < hist.times.length; i2++) {
+    if (hist.times[i2].getTime() > tMs) {
+      idx = i2 - 1;
+      break;
+    }
+  }
+  if (idx < 0) {
+    idx = 0;
+  }
+  return hist.values[idx];
+}
+function formatBatteryPower(hass, value, unit) {
+  const lu = (unit || "").trim().toLowerCase();
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  const abs = Math.abs(value);
+  if (lu === "w" && abs >= 1e3) {
+    return `${sign}${formatLocalisedNumber(hass, abs / 1e3, 2)} kW`;
+  }
+  if (lu === "w") {
+    return `${sign}${formatLocalisedNumber(hass, abs, 0, true)} W`;
+  }
+  if (lu === "kw") {
+    return `${sign}${formatLocalisedNumber(hass, abs, 2)} kW`;
+  }
+  return `${sign}${formatLocalisedNumber(hass, abs, 1)}${unit ? " " + unit : ""}`;
+}
+function computeBatteryToday(host) {
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const startMs = today0.getTime();
+  const endMs = Date.now();
+  let chargedKwh = 0;
+  let dischargedKwh = 0;
+  const hist = host._batteryPowerHistory;
+  if (hist && hist.times.length >= 2) {
+    for (let i2 = 1; i2 < hist.times.length; i2++) {
+      const tMs = hist.times[i2].getTime();
+      if (tMs < startMs || tMs > endMs) continue;
+      const dtH = (tMs - hist.times[i2 - 1].getTime()) / 36e5;
+      if (dtH <= 0 || dtH > 6) continue;
+      const wAvg = (pvNormalizeToWatts(hist.values[i2 - 1], host._batteryPowerUnit) + pvNormalizeToWatts(hist.values[i2], host._batteryPowerUnit)) / 2;
+      const kwh = wAvg * dtH / 1e3;
+      if (kwh > 0) chargedKwh += kwh;
+      else dischargedKwh += -kwh;
+    }
+  }
+  return {
+    socNow: host._batterySoc,
+    chargedKwh,
+    dischargedKwh
+  };
+}
 const DEFAULT_PANEL_HEIGHT_M = 5;
 const PV_CALIB_WIPE_FLAG_KEY = "helios-pv-calib:wiped-v1";
 function refreshPv(host) {
@@ -5714,18 +6001,17 @@ function refreshPv(host) {
   if (fetchKey === host._pvFetchKey) {
     return;
   }
-  const batteryEntity = batterySocEntityForInhibit(host.config);
-  host._pvFetchKey = fetchKey + (batteryEntity ? "|bsoc:" + batteryEntity : "");
-  fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntity);
+  const batteryEntities = batterySocEntitiesForInhibit(host.config);
+  host._pvFetchKey = fetchKey + (batteryEntities.length > 0 ? "|bsoc:" + batteryEntities.join(",") : "");
+  fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntities);
 }
-function batterySocEntityForInhibit(cfg) {
-  if (!cfg) return null;
+function batterySocEntitiesForInhibit(cfg) {
+  if (!cfg) return [];
   const cutoff = cfg["inverter-cutoff-soc-pct"];
   const cutoffN = typeof cutoff === "number" ? cutoff : typeof cutoff === "string" ? parseFloat(cutoff) : NaN;
-  if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return null;
-  const e2 = cfg["battery-soc-entity"];
-  if (typeof e2 !== "string" || e2.trim().length === 0) return null;
-  return e2.trim();
+  if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return [];
+  const banks = parseBatteryBanks(cfg);
+  return banks.map((b2) => b2.socEntity).filter((e2) => e2.length > 0);
 }
 function inverterCutoffSocPct(cfg) {
   if (!cfg) return null;
@@ -5782,7 +6068,7 @@ function valueAtMs(series, ms) {
   const f2 = (ms - t0) / (t1 - t0);
   return v2[lo] + (v2[hi] - v2[lo]) * f2;
 }
-async function fetchPvHistory(host, entityId, start, end, batterySocEntityId = null) {
+async function fetchPvHistory(host, entityId, start, end, batterySocEntityIds = []) {
   if (!host.hass?.callWS) {
     return;
   }
@@ -5792,10 +6078,10 @@ async function fetchPvHistory(host, entityId, start, end, batterySocEntityId = n
     const fetchEnd = end > now ? now : end;
     if (start >= fetchEnd) {
       host._pvHistory = { times: [], values: [] };
-      host._batteryHistory = null;
+      host._batteryHistories = [];
       return;
     }
-    const entityIds = batterySocEntityId ? [entityId, batterySocEntityId] : [entityId];
+    const entityIds = batterySocEntityIds.length > 0 ? [entityId, ...batterySocEntityIds] : [entityId];
     const result = await host.hass.callWS({
       type: "history/history_during_period",
       start_time: start.toISOString(),
@@ -5808,11 +6094,12 @@ async function fetchPvHistory(host, entityId, start, end, batterySocEntityId = n
     const parsed = parseHistoryEntries(arr);
     const times = parsed.times;
     const values2 = parsed.values;
-    if (batterySocEntityId) {
-      const bArr = (result && result[batterySocEntityId]) ?? [];
-      host._batteryHistory = parseHistoryEntries(bArr);
+    if (batterySocEntityIds.length > 0) {
+      host._batteryHistories = batterySocEntityIds.map(
+        (id) => parseHistoryEntries((result && result[id]) ?? [])
+      );
     } else {
-      host._batteryHistory = null;
+      host._batteryHistories = [];
     }
     host._pvHistory = { times, values: values2 };
     host._pvHistoryDiagnostics = {
@@ -6157,210 +6444,6 @@ function formatPvValue(hass, value, unit) {
   }
   const formatted = Math.abs(value) >= 100 ? formatLocalisedNumber(hass, value, 0, true) : formatLocalisedNumber(hass, value, 1);
   return u2 ? `${formatted} ${u2}` : formatted;
-}
-function batteryPowerInvert(config) {
-  return config?.["battery-power-invert"] === true;
-}
-function refreshBattery(host) {
-  if (!host.hass) {
-    return;
-  }
-  const socEntity = String(host.config?.["battery-soc-entity"] ?? "").trim();
-  const powerEntity = String(host.config?.["battery-power-entity"] ?? "").trim();
-  let nextSoc = null;
-  if (socEntity) {
-    const so = host.hass.states?.[socEntity];
-    const v2 = so ? parseFloat(so.state) : NaN;
-    if (isFinite(v2)) {
-      nextSoc = Math.max(0, Math.min(100, v2));
-    }
-  }
-  if (nextSoc !== host._batterySoc) {
-    host._batterySoc = nextSoc;
-  }
-  let nextPower = null;
-  let nextUnit = "";
-  if (powerEntity) {
-    const so = host.hass.states?.[powerEntity];
-    const v2 = so ? parseFloat(so.state) : NaN;
-    if (isFinite(v2)) {
-      nextPower = batteryPowerInvert(host.config) ? -v2 : v2;
-      nextUnit = so.attributes?.unit_of_measurement ?? "";
-    }
-  }
-  if (nextPower !== host._batteryPower) {
-    host._batteryPower = nextPower;
-  }
-  if (nextUnit !== host._batteryPowerUnit) {
-    host._batteryPowerUnit = nextUnit;
-  }
-  if (!socEntity && !powerEntity) {
-    if (host._batterySocHistory !== null) {
-      host._batterySocHistory = null;
-    }
-    if (host._batteryPowerHistory !== null) {
-      host._batteryPowerHistory = null;
-    }
-    host._batteryFetchKey = "";
-    return;
-  }
-  if (!host._timeRange || host._batteryFetching) {
-    return;
-  }
-  const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
-  const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}@inv=${batteryPowerInvert(host.config) ? 1 : 0}`;
-  if (fetchKey === host._batteryFetchKey) {
-    return;
-  }
-  host._batteryFetchKey = fetchKey;
-  fetchBatteryHistory(host, socEntity, powerEntity, host._timeRange.start, host._timeRange.end);
-}
-async function fetchBatteryHistory(host, socEntity, powerEntity, start, end) {
-  if (!host.hass?.callWS) {
-    return;
-  }
-  host._batteryFetching = true;
-  try {
-    const now = /* @__PURE__ */ new Date();
-    const fetchEnd = end > now ? now : end;
-    if (start >= fetchEnd) {
-      if (socEntity) {
-        host._batterySocHistory = { times: [], values: [] };
-      }
-      if (powerEntity) {
-        host._batteryPowerHistory = { times: [], values: [] };
-      }
-      return;
-    }
-    const ids = [];
-    if (socEntity) {
-      ids.push(socEntity);
-    }
-    if (powerEntity) {
-      ids.push(powerEntity);
-    }
-    const result = await host.hass.callWS({
-      type: "history/history_during_period",
-      start_time: start.toISOString(),
-      end_time: fetchEnd.toISOString(),
-      entity_ids: ids,
-      minimal_response: true,
-      no_attributes: true
-    });
-    const parseSeries = (arr) => {
-      const times = [];
-      const values2 = [];
-      for (const item of arr ?? []) {
-        const stateStr = typeof item?.s === "string" ? item.s : typeof item?.state === "string" ? item.state : null;
-        if (stateStr === null || stateStr === "unavailable" || stateStr === "unknown" || stateStr === "") {
-          continue;
-        }
-        const v2 = parseFloat(stateStr);
-        if (!isFinite(v2)) {
-          continue;
-        }
-        let ts = null;
-        if (typeof item?.lu === "number") {
-          ts = new Date(item.lu * 1e3);
-        } else if (typeof item?.last_updated === "string") {
-          ts = new Date(item.last_updated);
-        } else if (typeof item?.last_changed === "string") {
-          ts = new Date(item.last_changed);
-        }
-        if (!ts || isNaN(ts.getTime())) {
-          continue;
-        }
-        times.push(ts);
-        values2.push(v2);
-      }
-      return { times, values: values2 };
-    };
-    if (socEntity) {
-      const series = parseSeries(result?.[socEntity] ?? []);
-      series.values = series.values.map((v2) => Math.max(0, Math.min(100, v2)));
-      host._batterySocHistory = series;
-    } else {
-      host._batterySocHistory = null;
-    }
-    if (powerEntity) {
-      const series = parseSeries(result?.[powerEntity] ?? []);
-      if (batteryPowerInvert(host.config)) {
-        series.values = series.values.map((v2) => -v2);
-      }
-      host._batteryPowerHistory = series;
-    } else {
-      host._batteryPowerHistory = null;
-    }
-  } catch (e2) {
-    console.warn("[HELIOS] battery history fetch failed:", e2);
-    host._batterySocHistory = { times: [], values: [] };
-    host._batteryPowerHistory = { times: [], values: [] };
-  } finally {
-    host._batteryFetching = false;
-  }
-}
-function batterySampleAtTime(hist, time) {
-  if (!hist || hist.times.length === 0) {
-    return null;
-  }
-  const tMs = time.getTime();
-  const firstMs = hist.times[0].getTime();
-  const lastMs = hist.times[hist.times.length - 1].getTime();
-  if (tMs < firstMs || tMs > lastMs + 6e4) {
-    return null;
-  }
-  let idx = hist.times.length - 1;
-  for (let i2 = 0; i2 < hist.times.length; i2++) {
-    if (hist.times[i2].getTime() > tMs) {
-      idx = i2 - 1;
-      break;
-    }
-  }
-  if (idx < 0) {
-    idx = 0;
-  }
-  return hist.values[idx];
-}
-function formatBatteryPower(hass, value, unit) {
-  const lu = (unit || "").trim().toLowerCase();
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  const abs = Math.abs(value);
-  if (lu === "w" && abs >= 1e3) {
-    return `${sign}${formatLocalisedNumber(hass, abs / 1e3, 2)} kW`;
-  }
-  if (lu === "w") {
-    return `${sign}${formatLocalisedNumber(hass, abs, 0, true)} W`;
-  }
-  if (lu === "kw") {
-    return `${sign}${formatLocalisedNumber(hass, abs, 2)} kW`;
-  }
-  return `${sign}${formatLocalisedNumber(hass, abs, 1)}${unit ? " " + unit : ""}`;
-}
-function computeBatteryToday(host) {
-  const today0 = /* @__PURE__ */ new Date();
-  today0.setHours(0, 0, 0, 0);
-  const startMs = today0.getTime();
-  const endMs = Date.now();
-  let chargedKwh = 0;
-  let dischargedKwh = 0;
-  const hist = host._batteryPowerHistory;
-  if (hist && hist.times.length >= 2) {
-    for (let i2 = 1; i2 < hist.times.length; i2++) {
-      const tMs = hist.times[i2].getTime();
-      if (tMs < startMs || tMs > endMs) continue;
-      const dtH = (tMs - hist.times[i2 - 1].getTime()) / 36e5;
-      if (dtH <= 0 || dtH > 6) continue;
-      const wAvg = (pvNormalizeToWatts(hist.values[i2 - 1], host._batteryPowerUnit) + pvNormalizeToWatts(hist.values[i2], host._batteryPowerUnit)) / 2;
-      const kwh = wAvg * dtH / 1e3;
-      if (kwh > 0) chargedKwh += kwh;
-      else dischargedKwh += -kwh;
-    }
-  }
-  return {
-    socNow: host._batterySoc,
-    chargedKwh,
-    dischargedKwh
-  };
 }
 function refreshSolarRadiation(host) {
   const entity = String(host.config?.["solar-radiation-entity"] ?? "").trim();
@@ -40593,7 +40676,7 @@ function trainShadingMap(host) {
   const pvUnit = host._pvUnit;
   const sensorIsEnergy = isCumulativeEnergyUnit(pvUnit);
   const cutoffPct = inverterCutoffSocPct(host.config);
-  const socSeries = cutoffPct !== null ? host._batteryHistory : null;
+  const socSeries = cutoffPct !== null ? host._batteryHistories : [];
   let updated = 0;
   let highestProcessedMs = map.lastTrainedMs || 0;
   for (let i2 = 0; i2 < series.times.length - 1; i2++) {
@@ -40628,9 +40711,16 @@ function trainShadingMap(host) {
       if (actualW === null) continue;
       const sun = getSunPosition(tMid, coords.lat, coords.lon);
       if (!sun || sun.altitude <= 0) continue;
-      if (cutoffPct !== null && socSeries !== null) {
-        const soc = valueAtMs(socSeries, tMid.getTime());
-        if (soc !== null && soc >= cutoffPct) {
+      if (cutoffPct !== null && socSeries.length > 0) {
+        let minSoc = null;
+        let anyBank = false;
+        for (const s2 of socSeries) {
+          const v2 = valueAtMs(s2, tMid.getTime());
+          if (v2 === null) continue;
+          anyBank = true;
+          if (minSoc === null || v2 < minSoc) minSoc = v2;
+        }
+        if (anyBank && minSoc !== null && minSoc >= cutoffPct) {
           if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
           continue;
         }
@@ -44486,7 +44576,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.33"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.34"}`,
       labelStyle,
       versionStyle
     );
@@ -44510,7 +44600,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.33",
+        version: "1.7.0-alpha.34",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44518,7 +44608,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.33"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.34"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -44582,7 +44672,7 @@ let HeliosCard = class extends i {
     this._pvFetchKey = "";
     this._pvFetching = false;
     this._pvHistoryDiagnostics = null;
-    this._batteryHistory = null;
+    this._batteryHistories = [];
     this._pvCalibWiped = false;
     this._pvSampleBuffer = [];
     this._batterySoc = null;

@@ -11,6 +11,7 @@ import type { HeliosConfig } from '../helios-config';
 import { computePvPower, getSunPosition, type PanelOrientation } from '../engine/sun';
 import { isPanelShaded, type NdsmRaster } from '../engine/pv-shading';
 import { formatLocalisedNumber } from './format';
+import { parseBatteryBanks } from './battery';
 
 //Default panel height above ground in metres when the user didn't
 //set a per-array `height`. 5 m matches the eaves of a single-storey
@@ -60,10 +61,12 @@ export interface PvHost
     _pvFetchKey:            string;
     _pvFetching:            boolean;
     _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
-    //Parallel SoC history fetched alongside _pvHistory when `battery-soc-entity` AND `inverter-cutoff-soc-pct` are both configured. Used by the
-    //shading-map trainer to detect inverter-cutoff buckets (battery full + production blocked) and skip them so the map doesn't accumulate phantom
-    //shadow at the matching sun bin. Null when either config is missing, the trainer then falls back to the legacy "train every bucket" path.
-    _batteryHistory:        PvHistory | null;
+    //Parallel per-bank SoC histories fetched alongside _pvHistory when at least one battery bank is configured AND `inverter-cutoff-soc-pct`
+    //is set. One entry per bank (indices parallel to parseBatteryBanks(config)). The shading-map trainer scans them to detect inverter-
+    //cutoff buckets (every bank full + production blocked) and skip them so the map doesn't accumulate phantom shadow at the matching sun
+    //bin. Empty array when the guard is off or no battery is configured; the trainer then falls back to the legacy "train every bucket"
+    //path.
+    _batteryHistories:      PvHistory[];
 }
 
 
@@ -201,27 +204,27 @@ export function refreshPv(host: PvHost): void
     {
         return;
     }
-    //Optional battery SoC companion fetch. We only ask HA for the SoC history when the user has explicitly armed the inverter-cutoff guard
-    //(both `battery-soc-entity` and `inverter-cutoff-soc-pct` configured); otherwise the trainer doesn't need it and a second entity in
-    //the WS payload would be a waste of HA recorder bandwidth. The fetch key includes the battery entity id so swapping it forces a
-    //re-fetch on the next refresh.
-    const batteryEntity = batterySocEntityForInhibit(host.config);
-    host._pvFetchKey = fetchKey + (batteryEntity ? '|bsoc:' + batteryEntity : '');
-    fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntity);
+    //Optional per-bank battery SoC companion fetch. We only ask HA for the SoC histories when the user has explicitly armed the inverter-
+    //cutoff guard (cutoff percent configured AND at least one bank); otherwise the trainer doesn't need them and the extra entities in
+    //the WS payload would be a waste of HA recorder bandwidth. The fetch key includes the joined bank entity ids so swapping any bank
+    //forces a re-fetch on the next refresh.
+    const batteryEntities = batterySocEntitiesForInhibit(host.config);
+    host._pvFetchKey = fetchKey + (batteryEntities.length > 0 ? '|bsoc:' + batteryEntities.join(',') : '');
+    fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntities);
 }
 
 
-//Returns the `battery-soc-entity` id only when the inverter-cutoff guard is armed (cutoff percent set in config), null otherwise. Centralises
-//the gate so both the trainer and the fetch path agree on when SoC history is needed.
-export function batterySocEntityForInhibit(cfg: HeliosConfig | undefined): string | null
+//Returns the per-bank SoC entity ids only when the inverter-cutoff guard is armed (cutoff percent set AND at least one bank configured),
+//empty array otherwise. Centralises the gate so both the trainer and the fetch path agree on when the SoC histories are needed and on
+//which bank order. Indices stay parallel to parseBatteryBanks(config).
+export function batterySocEntitiesForInhibit(cfg: HeliosConfig | undefined): string[]
 {
-    if (!cfg) return null;
+    if (!cfg) return [];
     const cutoff = cfg['inverter-cutoff-soc-pct'];
     const cutoffN = typeof cutoff === 'number' ? cutoff : typeof cutoff === 'string' ? parseFloat(cutoff) : NaN;
-    if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return null;
-    const e = cfg['battery-soc-entity'];
-    if (typeof e !== 'string' || e.trim().length === 0) return null;
-    return e.trim();
+    if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return [];
+    const banks = parseBatteryBanks(cfg);
+    return banks.map(b => b.socEntity).filter(e => e.length > 0);
 }
 
 
@@ -311,14 +314,14 @@ export function valueAtMs(series: PvHistory | null, ms: number): number | null
 
 //Pull a historical series from HA's `history/history_during_period` WebSocket command, coerce the heterogeneous payload into parallel times[] /
 //values[] arrays, and snapshot the fetch outcome for `window.heliosStats()`. Fires off `host._pvFetching` for the duration; the gate in refreshPv
-//prevents overlapping calls. When `batterySocEntityId` is non-null we fold it into the same WS request and store the parsed result on
-//`host._batteryHistory`, the shading-map trainer reads that companion series to skip inverter-cutoff buckets.
+//prevents overlapping calls. When `batterySocEntityIds` is non-empty we fold them all into the same WS request and store the parsed
+//per-bank series on `host._batteryHistories`, the shading-map trainer scans them to skip buckets where every bank reached the cutoff.
 export async function fetchPvHistory(
     host: PvHost,
     entityId: string,
     start: Date,
     end: Date,
-    batterySocEntityId: string | null = null,
+    batterySocEntityIds: string[] = [],
 ): Promise<void>
 {
     if (!host.hass?.callWS)
@@ -335,12 +338,12 @@ export async function fetchPvHistory(
         if (start >= fetchEnd)
         {
             host._pvHistory = { times: [], values: [] };
-            host._batteryHistory = null;
+            host._batteryHistories = [];
             return;
         }
 
-        const entityIds = batterySocEntityId
-            ? [entityId, batterySocEntityId]
+        const entityIds = batterySocEntityIds.length > 0
+            ? [entityId, ...batterySocEntityIds]
             : [entityId];
         const result: any = await host.hass.callWS({
             type:             'history/history_during_period',
@@ -356,16 +359,17 @@ export async function fetchPvHistory(
         const times = parsed.times;
         const values = parsed.values;
 
-        //Sibling parse for battery SoC when requested. Failure here is silent: the trainer's gate just falls back to "no inhibit skip" if
-        //_batteryHistory is null or empty, no need to fail the whole PV fetch over an optional companion entity.
-        if (batterySocEntityId)
+        //Per-bank parse for battery SoC when requested. Failure for any one bank is silent: the trainer just sees an empty series for
+        //that bank and the min-SoC computation skips it, no need to fail the whole PV fetch over an optional companion entity.
+        if (batterySocEntityIds.length > 0)
         {
-            const bArr: any[] = (result && result[batterySocEntityId]) ?? [];
-            host._batteryHistory = parseHistoryEntries(bArr);
+            host._batteryHistories = batterySocEntityIds.map(id =>
+                parseHistoryEntries((result && result[id]) ?? [])
+            );
         }
         else
         {
-            host._batteryHistory = null;
+            host._batteryHistories = [];
         }
 
         host._pvHistory = { times, values };
