@@ -83,8 +83,7 @@ import
     initEngine,
     initVisibilityObserver
 } from './card/init';
-//Side-effect import: registers <helios-color-picker> and
-//<helios-card-editor> as custom elements.
+//Side-effect import: registers <helios-color-picker> and <helios-card-editor> as custom elements.
 import './card/editor';
 
 
@@ -103,8 +102,7 @@ declare global
     }
 }
 
-//Card name and description in the HA card picker, shown before any
-//hass instance is available, so we read the language from navigator.
+//Card name and description in the HA card picker, shown before any hass instance is available, so we read the language from navigator.
 const _bootI18n = pickTranslations(typeof navigator !== 'undefined' ? navigator.language : 'en');
 
 window.customCards = window.customCards || [];
@@ -292,19 +290,15 @@ export class HeliosCard extends LitElement
     private static readonly OUTLINE_NEAR = 5.0;
     private static readonly SEGMENT_FAR  = 1.0;
     private static readonly SEGMENT_NEAR = 4.0;
-    //Sun-disc radii in px. The inner irradiance fill needs ~9 px of
-    //diameter at apex to read as an annulus rather than a dot.
+    //Sun-disc radii in px. The inner irradiance fill needs ~9 px of diameter at apex to read as an annulus rather than a dot.
     private static readonly SUN_R_FAR    = 10.0;
     private static readonly SUN_R_NEAR   = 20.0;
     private static readonly SUN_RIM_WIDTH = 1.5;
-    //Faint tint inside the rim so the "empty sun" at sunrise/sunset
-    //still reads as a disc, not a coloured spot.
+    //Faint tint inside the rim so the "empty sun" at sunrise/sunset still reads as a disc, not a coloured spot.
     private static readonly SUN_FILL_OPACITY_BG = 0.20;
 
-    //Below-horizon segments are dots whose diameter IS the stroke
-    //width. Scaled down vs daytime so the night portion of the loop
-    //reads as a quieter trace, it indicates where the sun goes
-    //without competing with the lit half.
+    //Below-horizon segments are dots whose diameter IS the stroke width. Scaled down vs daytime so the night portion of the loop reads as a quieter
+    //trace, it indicates where the sun goes without competing with the lit half.
     private static readonly NIGHT_STROKE_FACTOR = 0.5;
 
     @property({ attribute: false }) public hass!: any;
@@ -318,9 +312,8 @@ export class HeliosCard extends LitElement
     //recomputed via engine.projectHomeLabelLayout() on every map
     //transform. null while the map is still loading.
     @state() _labelLayout: LabelLayout | null = null;
-    //Photovoltaic production state, populated when `pv-power-entity`
-    //is configured. Live value from hass.states + historical series
-    //from HA's history API for the dedicated chart.
+    //Photovoltaic production state, populated when `pv-power-entity` is configured. Live value from hass.states + historical series from HA's history
+    //API for the dedicated chart.
     @state() _pvCurrent: number | null = null;
     @state() _pvUnit:    string        = '';
     @state() _pvHistory: {
@@ -338,9 +331,8 @@ export class HeliosCard extends LitElement
     //attempt the cleanup at most once per card mount; the persisted
     //flag in localStorage protects across reloads.
     private _pvCalibWiped = false;
-    //Rolling buffer of state samples. For cumulative-energy sensors
-    //this gives a "last minute" instantaneous rate, fresher than the
-    //historical fetch which only refreshes per timeline range.
+    //Rolling buffer of state samples. For cumulative-energy sensors this gives a "last minute" instantaneous rate, fresher than the historical fetch
+    //which only refreshes per timeline range.
     _pvSampleBuffer: Array<{ t: number; v: number }> = [];
     //Home-battery state, populated when at least one of
     //`battery-soc-entity` / `battery-power-entity` is configured.
@@ -350,9 +342,8 @@ export class HeliosCard extends LitElement
     @state() _batterySoc:        number | null = null;
     @state() _batteryPower:      number | null = null;
     @state() _batteryPowerUnit:  string        = '';
-    //Historical series for the active timeline range. Both battery
-    //entities are fetched in a single `history/history_during_period`
-    //WebSocket call when both are set.
+    //Historical series for the active timeline range. Both battery entities are fetched in a single `history/history_during_period` WebSocket call
+    //when both are set.
     @state() _batterySocHistory: {
         times:  Date[];
         values: number[];
@@ -394,9 +385,8 @@ export class HeliosCard extends LitElement
     //even for concave footprints. Re-projected on every map
     //transform so rotation tracks.
     @state() _homeSilhouettes: HomeSilhouette[] = [];
-    //Hover state on the home hitbox. Drives a sun-coloured glow halo
-    //around the home silhouette so the user reads the focal building
-    //as interactive before clicking.
+    //Hover state on the home hitbox. Drives a sun-coloured glow halo around the home silhouette so the user reads the focal building as interactive
+    //before clicking.
     @state() _homeHover = false;
     //Hover state for the today-cumulative chart in the dashboard. ms
     //epoch of the cursor position on the X axis; null when the pointer
@@ -411,10 +401,8 @@ export class HeliosCard extends LitElement
         times:        Date[];
         irradiance:   number[];
         cloud:        number[];
-        //Hourly ambient temperature in °C + wind speed in m/s,
-        //NaN-padded where the model didn't return a value. Both
-        //arrays mirror the `times` length and feed the PV
-        //prediction's thermal-derating term.
+        //Hourly ambient temperature in °C + wind speed in m/s, NaN-padded where the model didn't return a value. Both arrays mirror the `times`
+        //length and feed the PV prediction's thermal-derating term.
         temperature:  number[];
         windSpeed:    number[];
     } | null = null;
@@ -422,10 +410,8 @@ export class HeliosCard extends LitElement
     @state() _timeRange:    { start: Date; end: Date } | null = null;
     @state() _selectedTime: Date | null = null;
     @state() _isLiveMode    = true;
-    //True while the engine is fetching the LiDAR shadow payload from
-    //the upstream provider and rasterising it for the image source.
-    //Drives the spinner chip pinned top-right of the map so the user
-    //knows the shadow layer they're about to see is still computing.
+    //True while the engine is fetching the LiDAR shadow payload from the upstream provider and rasterising it for the image source. Drives the
+    //spinner chip pinned top-right of the map so the user knows the shadow layer they're about to see is still computing.
     @state() _shadowBusy    = false;
     //True while the home is "focused": the existing overlay HUD is
     //hidden, the camera is eased to a closer / more pitched pose,
@@ -479,10 +465,8 @@ export class HeliosCard extends LitElement
     //window, we cancel the cleanup and reuse the live engine, the
     //engine's own ResizeObserver picks up any container size delta.
     private _pendingCleanupTimer?: number;
-    //Timestamp of the last engine spawn. onContextLost uses this to
-    //bail out when context losses arrive faster than ~2 s apart,
-    //which only happens when the browser is thrashing the WebGL pool,
-    //respawning at that cadence just feeds the fire.
+    //Timestamp of the last engine spawn. onContextLost uses this to bail out when context losses arrive faster than ~2 s apart, which only happens
+    //when the browser is thrashing the WebGL pool, respawning at that cadence just feeds the fire.
     _lastEngineSpawnAt = 0;
 
 
@@ -526,8 +510,7 @@ export class HeliosCard extends LitElement
         {
             for (const [k, v] of Object.entries(this.config))
             {
-                //Skip user-supplied home coordinates so the snapshot
-                //stays PII-free, matching the engine-side stripping.
+                //Skip user-supplied home coordinates so the snapshot stays PII-free, matching the engine-side stripping.
                 if (k === 'home-latitude' || k === 'home-longitude') continue;
                 cfg[k] = v;
             }
@@ -563,11 +546,8 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Wipe all card-side cached production / forecast data and
-    //trigger a fresh fetch from HA and Open-Meteo. Used by the
-    //editor's "reset data cache" button so users can recover from
-    //a stuck calibration or a stale weather payload without
-    //touching localStorage manually.
+    //Wipe all card-side cached production / forecast data and trigger a fresh fetch from HA and Open-Meteo. Used by the editor's "reset data cache"
+    //button so users can recover from a stuck calibration or a stale weather payload without touching localStorage manually.
     public resetDataCache(): void
     {
         //Drop in-memory PV state so the next refreshPv() refetches
@@ -576,8 +556,7 @@ export class HeliosCard extends LitElement
         this._pvSampleBuffer        = [];
         this._pvFetchKey            = '';
         this._pvHistoryDiagnostics  = null;
-        //Engine-side: clears localStorage weather cache, drops the
-        //in-memory hourly snapshot and triggers a refetch.
+        //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
         this.requestUpdate();
     }
@@ -631,10 +610,8 @@ export class HeliosCard extends LitElement
     {
         super.connectedCallback();
         _liveCards.add(this);
-        //Cancel any pending cleanup from a recent disconnect, the
-        //engine is still alive and we want to keep it that way.
-        //Without this, Masonry's mount/unmount churn would still
-        //tear down + re-create the engine on every reflow.
+        //Cancel any pending cleanup from a recent disconnect, the engine is still alive and we want to keep it that way. Without this, Masonry's
+        //mount/unmount churn would still tear down + re-create the engine on every reflow.
         if (this._pendingCleanupTimer !== undefined)
         {
             window.clearTimeout(this._pendingCleanupTimer);
@@ -664,9 +641,7 @@ export class HeliosCard extends LitElement
             document.removeEventListener('visibilitychange', this._onVisibilityChange);
             this._onVisibilityChange = undefined;
         }
-        //If the card dies before the debounce fires, drop the pending
-        //init so a short-lived instance never spawns an engine it won't
-        //use.
+        //If the card dies before the debounce fires, drop the pending init so a short-lived instance never spawns an engine it won't use.
         if (this._initDebounceTimer !== undefined)
         {
             window.clearTimeout(this._initDebounceTimer);
@@ -851,12 +826,9 @@ export class HeliosCard extends LitElement
         const layout         = this._labelLayout;
         const showLabel      = hasApiKey && layout !== null && this._cloudCover >= 0;
 
-        //Photovoltaic production chip, pinned above the home, tinted
-        //in the configured production colour and tied to the home
-        //with an animated leader line whose dashes flow from the
-        //house up to the chip. Only renders when the user has set
-        //the optional `pv-power-entity` config and the live state
-        //read produced a finite numeric value.
+        //Photovoltaic production chip, pinned above the home, tinted in the configured production colour and tied to the home with an animated leader
+        //line whose dashes flow from the house up to the chip. Only renders when the user has set the optional `pv-power-entity` config and the live
+        //state read produced a finite numeric value.
         const pvEntityId   = String(this.config?.['pv-power-entity'] ?? '').trim();
         const pvColor      = cfgHex(this.config?.['pv-color'], DEFAULT_PV_COLOR_HEX);
         //When the user scrubs the timeline into the past, the chip
@@ -987,8 +959,7 @@ export class HeliosCard extends LitElement
         const batteryScrubFuture = batteryScrubbing
             && this._selectedTime!.getTime() > Date.now() + 60_000;
 
-        //Active SoC / power values for this render, historical
-        //samples in scrub mode, live state otherwise.
+        //Active SoC / power values for this render, historical samples in scrub mode, live state otherwise.
         const activeBatterySoc: number | null = batteryScrubbing
             ? batterySampleAtTime(this._batterySocHistory, this._selectedTime!)
             : this._batterySoc;
@@ -1079,9 +1050,8 @@ export class HeliosCard extends LitElement
         const PV_HALF_WIDTH_PX     = 38;
         const BAT_CHIP_NUDGE_PX    = 32;
         const FILLET_R             = 6;
-        //PV chip sits BELOW the SoC / Power shelf, so each L-leader
-        //runs from PV's TOP edge upward to the shelf, then
-        //horizontally to the SoC / Power chip.
+        //PV chip sits BELOW the SoC / Power shelf, so each L-leader runs from PV's TOP edge upward to the shelf, then horizontally to the SoC / Power
+        //chip.
         const lPvEdgeY      = layout ? layout.pvLabel.y - PV_HALF_HEIGHT_PX           : 0;
         const lShelfY       = layout ? layout.batterySocLabel.y                       : 0;
         const lSocLegX      = layout ? layout.pvLabel.x - PV_LEG_OFFSET_PX            : 0;
@@ -1096,15 +1066,13 @@ export class HeliosCard extends LitElement
         {
             const dirH  = endX  > verticalX ? 1 : -1;
             const dirV  = shelfY > pvEdgeY  ? 1 : -1;
-            //Clamp the radius so the fillet never overshoots a short
-            //leg, the rounded corner has to fit inside both legs.
+            //Clamp the radius so the fillet never overshoots a short leg, the rounded corner has to fit inside both legs.
             const r     = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
             const preY  = shelfY - dirV * r;
             const postX = verticalX + dirH * r;
             return `M ${verticalX},${pvEdgeY} L ${verticalX},${preY} Q ${verticalX},${shelfY} ${postX},${shelfY} L ${endX},${shelfY}`;
         };
-        //Reversed L: end of horizontal leg → fillet → vertical leg →
-        //PV edge. Used for the discharging arrow only.
+        //Reversed L: end of horizontal leg → fillet → vertical leg → PV edge. Used for the discharging arrow only.
         const buildLPathReverse = (verticalX: number, pvEdgeY: number, shelfY: number, endX: number): string =>
         {
             const dirH  = endX  > verticalX ? 1 : -1;
@@ -1145,9 +1113,8 @@ export class HeliosCard extends LitElement
         const arcSegmentsBack  = arcSegments.filter(s =>  s.belowHorizon);
         const arcSegmentsFront = arcSegments.filter(s => !s.belowHorizon);
 
-        //The incidence ray only renders when the sun is actually
-        //above the horizon, drawing a ray from below the ground
-        //towards the home would be visually nonsensical.
+        //The incidence ray only renders when the sun is actually above the horizon, drawing a ray from below the ground towards the home would be
+        //visually nonsensical.
         const showRay = showSun && sunScene!.sun.altitude > 0;
 
         //Live irradiance for the on-map W/m² label that floats
@@ -1184,11 +1151,8 @@ export class HeliosCard extends LitElement
         //ray through the chip's top, which looked broken.
         let sunRayTargetX = sunScene?.home.x ?? 0;
         let sunRayTargetY = sunScene?.home.y ?? 0;
-        //Only snap the ray to the PV chip when the chip is actually
-        //rendered. Without this check, the ray pointed at a phantom
-        //pvLabel position whenever the user had no pv-power-entity
-        //configured, drawing toward an invisible anchor instead of
-        //landing on the home marker.
+        //Only snap the ray to the PV chip when the chip is actually rendered. Without this check, the ray pointed at a phantom pvLabel position
+        //whenever the user had no pv-power-entity configured, drawing toward an invisible anchor instead of landing on the home marker.
         if (layout && sunScene && pvEntityId)
         {
             const dx       = sunScene.sun.x - layout.pvLabel.x;
@@ -1339,11 +1303,8 @@ export class HeliosCard extends LitElement
                 ${hasApiKey ? (() => {
                     const isLocal     = lidarSourceId === 'local-ndsm';
                     const hasProvider = lidarSourceId !== null;
-                    //Online providers fall back to the globe glyph
-                    //only when their id is not in the country-flag
-                    //registry yet, the normal path is a country flag
-                    //per matched provider so the user reads which
-                    //data source feeds the shadows at a glance.
+                    //Online providers fall back to the globe glyph only when their id is not in the country-flag registry yet, the normal path is a
+                    //country flag per matched provider so the user reads which data source feeds the shadows at a glance.
                     const providerFlag = (!isLocal && hasProvider) ? flagSvgForProvider(lidarSourceId) : null;
                     const lidarIcon   = !hasProvider ? 'mdi:cloud-off-outline'
                                        : isLocal     ? 'mdi:harddisk'
@@ -1488,12 +1449,8 @@ export class HeliosCard extends LitElement
                                                 `${sil.top [i].x},${sil.top [i].y}`
                                             );
                                         }
-                                        //Tiny 1 px stroke pads the mask
-                                        //outward by half a pixel so SVG
-                                        //sub-pixel anti-aliasing on the
-                                        //silhouette edge can never leave
-                                        //a visible cloud sliver. Just
-                                        //breathing room, no visible halo.
+                                        //Tiny 1 px stroke pads the mask outward by half a pixel so SVG sub-pixel anti-aliasing on the silhouette edge
+                                        //can never leave a visible cloud sliver. Just breathing room, no visible halo.
                                         return svg`
                                             <polygon points="${basePts}" fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
                                             <polygon points="${topPts}"  fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
@@ -2063,16 +2020,11 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Per-card unique id used to namespace SVG <defs> ids so multiple
-    //Helios cards on the same dashboard don't clash on gradient /
-    //filter references.
+    //Per-card unique id used to namespace SVG <defs> ids so multiple Helios cards on the same dashboard don't clash on gradient / filter references.
     _instanceId = `h${Math.floor(Math.random() * 1e9).toString(36)}`;
 
-    //Hover handlers on the home hitbox. Toggle the sun-coloured
-    //glow halo around the home silhouette so the focal building
-    //reads as interactive before the user clicks. Cleared on exit
-    //so the glow doesn't get stuck on if the cursor leaves while
-    //the detail overlay is fading in.
+    //Hover handlers on the home hitbox. Toggle the sun-coloured glow halo around the home silhouette so the focal building reads as interactive
+    //before the user clicks. Cleared on exit so the glow doesn't get stuck on if the cursor leaves while the detail overlay is fading in.
     private _onHomeEnter = (): void =>
     {
         this._homeHover = true;

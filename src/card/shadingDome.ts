@@ -87,11 +87,8 @@ export function toggleShadingDome(host: ShadingDomeHost): void
 }
 
 
-//Drive the enter/exit fade by mutating the host's mode flag at
-//the appropriate moment. Visual fade itself is a CSS opacity
-//transition on the dome wrapper, this loop only handles the
-//discrete state flip + scheduling the per-frame requestUpdate so
-//Lit re-renders during the transition.
+//Drive the enter/exit fade by mutating the host's mode flag at the appropriate moment. Visual fade itself is a CSS opacity transition on the dome
+//wrapper, this loop only handles the discrete state flip + scheduling the per-frame requestUpdate so Lit re-renders during the transition.
 export function startShadingDomeFadeLoop(host: ShadingDomeHost): void
 {
     if (host._shadingDomeFadeRaf !== undefined) return;
@@ -145,9 +142,7 @@ export function refreshShadingDomeScene(host: ShadingDomeHost): void
     }
     const map = loadMap();
     const nowMs = Date.now();
-    //Decode every populated cell once + age its weight so the
-    //view layer paints opacity directly without re-deriving it
-    //per-frame.
+    //Decode every populated cell once + age its weight so the view layer paints opacity directly without re-deriving it per-frame.
     const decodedCells: Array<{ azimuthDeg: number; altitudeDeg: number; cloudBin: number; ratio: number; aged: number }> = [];
     for (const key of Object.keys(map.cells))
     {
@@ -232,8 +227,7 @@ export function shadingDomeFadeAlpha(host: ShadingDomeHost): number
 }
 
 
-//Same colour ramp as the editor heatmap so the dome reads
-//identically across the two surfaces.
+//Same colour ramp as the editor heatmap so the dome reads identically across the two surfaces.
 function ratioToFill(ratio: number): string
 {
     const r = Math.max(0.3, Math.min(1.7, ratio));
@@ -262,8 +256,7 @@ function ratioToFill(ratio: number): string
 //  2. today's sun-arc ribbon, colour-pulled per sample
 //  3. current-sun marker
 //
-//Returns nothing when the scene isn't ready, so the card
-//template can drop the result directly into its render.
+//Returns nothing when the scene isn't ready, so the card template can drop the result directly into its render.
 export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult | typeof nothing
 {
     const alpha = shadingDomeFadeAlpha(host);
@@ -303,9 +296,8 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
         }
     }
 
-    //Ribbon: paint as small connected line segments so the colour
-    //can shift per-sample. A single <polyline> would force one
-    //stroke colour across the whole arc.
+    //Ribbon: paint as small connected line segments so the colour can shift per-sample. A single <polyline> would force one stroke colour across the
+    //whole arc.
     const ribbonNodes: TemplateResult[] = [];
     const arc = scene.todayArc;
     for (let i = 1; i < arc.length; i++)

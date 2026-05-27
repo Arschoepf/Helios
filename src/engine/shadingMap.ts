@@ -13,9 +13,7 @@
 //a single new observation doesn't drag a whole cell on its own
 //and so sparse-but-adjacent observations cooperate.
 //
-//Engine module, pure-function: no DOM, no Home Assistant, no
-//rendering. Storage adapter is injected so the unit tests can use
-//an in-memory backend.
+//Engine module, pure-function: no DOM, no Home Assistant, no rendering. Storage adapter is injected so the unit tests can use an in-memory backend.
 
 const AZIMUTH_BIN_DEG  = 10;   //36 bins covering [0, 360)
 const ALTITUDE_BIN_DEG = 5;    //18 bins covering [0, 90)
@@ -62,25 +60,20 @@ const STORAGE_KEY = 'helios-shading-map:v2';
 
 export interface ShadingCell
 {
-    //Time-decayed weighted mean of the observed actual / predicted
-    //ratios that landed in this cell.
+    //Time-decayed weighted mean of the observed actual / predicted ratios that landed in this cell.
     ema: number;
     //Sum of decayed weights. Acts as an effective sample count
     //(in [0, +inf)) for confidence weighting.
     w:   number;
-    //Last time this cell was updated, used to decay `w` on the
-    //next update so seasons can be re-learned.
+    //Last time this cell was updated, used to decay `w` on the next update so seasons can be re-learned.
     t:   number;
 }
 
 export interface ShadingMap
 {
-    //Versioned shape so a future schema change can invalidate the
-    //stored payload without crashing the card on first load.
+    //Versioned shape so a future schema change can invalidate the stored payload without crashing the card on first load.
     version: 2;
-    //Watermark used by the trainer so it only feeds new
-    //observations into the map instead of re-counting the same
-    //hour every refresh.
+    //Watermark used by the trainer so it only feeds new observations into the map instead of re-counting the same hour every refresh.
     lastTrainedMs: number;
     //Sparse cell store keyed by `cellKey(az, alt, cloud)`.
     cells: Record<string, ShadingCell>;
@@ -140,11 +133,8 @@ export function applyObservation(
 ): boolean
 {
     if (!isFinite(actualW) || !isFinite(predictedW) || !isFinite(timestampMs)) return false;
-    //Predicted floor: a 20 W reading driven by a 5 W prediction is
-    //a 4x ratio that says nothing about systematic shading. Cut
-    //off at 80 W so we only feed cells that the model is
-    //confidently predicting non-trivial production for. Same idea
-    //as MIN_DAY_PREDICTED_KWH in the scalar calibration.
+    //Predicted floor: a 20 W reading driven by a 5 W prediction is a 4x ratio that says nothing about systematic shading. Cut off at 80 W so we only
+    //feed cells that the model is confidently predicting non-trivial production for. Same idea as MIN_DAY_PREDICTED_KWH in the scalar calibration.
     if (predictedW < 80 || actualW < 0) return false;
     const ratio = actualW / predictedW;
     if (!isFinite(ratio) || ratio <= 0) return false;
@@ -161,11 +151,8 @@ export function applyObservation(
         return true;
     }
 
-    //Time decay: cells age before they get re-weighted. An
-    //observation made 60 d after the cell's last update halves
-    //its prior weight so a single fresh observation has the same
-    //influence as the entire accumulated history of two months
-    //ago. This is what lets seasonal change land cleanly.
+    //Time decay: cells age before they get re-weighted. An observation made 60 d after the cell's last update halves its prior weight so a single
+    //fresh observation has the same influence as the entire accumulated history of two months ago. This is what lets seasonal change land cleanly.
     const dDays = Math.max(0, (timestampMs - cell.t) / DAY_MS);
     const retained = cell.w * Math.pow(0.5, dDays / HALFLIFE_DAYS);
     const newW = retained + 1;
@@ -222,8 +209,7 @@ export function lookupRatio(
                 const cell = map.cells[cellKey({ az, alt, cloud })];
                 if (!cell) continue;
 
-                //Age-decay the cell's effective weight on read so a
-                //stale six-month-old cell can't pose as fresh data.
+                //Age-decay the cell's effective weight on read so a stale six-month-old cell can't pose as fresh data.
                 const dDays = Math.max(0, (nowMs - cell.t) / DAY_MS);
                 const aged  = cell.w * Math.pow(0.5, dDays / HALFLIFE_DAYS);
                 if (aged <= 0) continue;
@@ -245,10 +231,8 @@ export function lookupRatio(
 }
 
 
-//Blend the map's per-cell ratio with the scalar fallback so a
-//cell that only just started accumulating data still contributes
-//something instead of jumping abruptly once it crosses the
-//confidence threshold.
+//Blend the map's per-cell ratio with the scalar fallback so a cell that only just started accumulating data still contributes something instead of
+//jumping abruptly once it crosses the confidence threshold.
 export function blendedRatio(lookup: LookupResult | null, fallback: number): number
 {
     if (!lookup) return fallback;
@@ -318,13 +302,9 @@ export function resetMap(storage: MapStorage | null = safeStorage()): ShadingMap
 }
 
 
-//Merge two maps cell-by-cell into a new map. Used for the
-//Home Assistant cross-device sync: a device pulls the cloud copy
-//on init and merges it with whatever local-only training has
-//happened since the last push. Per-cell rule: combine the two
-//EMAs as a weight-weighted average of the time-decayed remote
-//and time-decayed local cells. lastTrainedMs takes the max so
-//neither side reprocesses observations the other already saw.
+//Merge two maps cell-by-cell into a new map. Used for the Home Assistant cross-device sync: a device pulls the cloud copy on init and merges it with
+//whatever local-only training has happened since the last push. Per-cell rule: combine the two EMAs as a weight-weighted average of the time-decayed
+//remote and time-decayed local cells. lastTrainedMs takes the max so neither side reprocesses observations the other already saw.
 export function mergeMaps(a: ShadingMap, b: ShadingMap, nowMs: number = Date.now()): ShadingMap
 {
     const out: ShadingMap = {
@@ -341,11 +321,8 @@ export function mergeMaps(a: ShadingMap, b: ShadingMap, nowMs: number = Date.now
         const cb = b.cells[k];
         if (ca && !cb) { out.cells[k] = { ...ca }; continue; }
         if (cb && !ca) { out.cells[k] = { ...cb }; continue; }
-        //Both sides have this cell: weighted mean of the time-decayed
-        //weights so a stale-but-heavy cell can't drown out a fresh
-        //high-confidence cell. Anchor the merged cell at the later
-        //of the two timestamps so future observations decay from the
-        //correct reference point.
+        //Both sides have this cell: weighted mean of the time-decayed weights so a stale-but-heavy cell can't drown out a fresh high-confidence cell.
+        //Anchor the merged cell at the later of the two timestamps so future observations decay from the correct reference point.
         const dDaysA = Math.max(0, (nowMs - ca.t) / DAY_MS);
         const dDaysB = Math.max(0, (nowMs - cb.t) / DAY_MS);
         const wA = ca.w * Math.pow(0.5, dDaysA / HALFLIFE_DAYS);
@@ -362,9 +339,7 @@ export function mergeMaps(a: ShadingMap, b: ShadingMap, nowMs: number = Date.now
 }
 
 
-//Plain-text export: pretty-printed JSON so a human can eyeball
-//the cells from a downloaded file. Round-trippable through
-//importMapJson.
+//Plain-text export: pretty-printed JSON so a human can eyeball the cells from a downloaded file. Round-trippable through importMapJson.
 export function exportMapJson(map: ShadingMap): string
 {
     return JSON.stringify(map, null, 2);
@@ -428,8 +403,7 @@ export function decodeCellKey(key: string, cell: ShadingCell): DecodedCell | nul
     };
 }
 
-//Convenience for callers that want the labels for the cloud bins
-//in a UI selector. Mirrors CLOUD_BIN_EDGES.
+//Convenience for callers that want the labels for the cloud bins in a UI selector. Mirrors CLOUD_BIN_EDGES.
 export const CLOUD_BIN_LABELS = [
     '0-12.5%', '12.5-25%', '25-37.5%', '37.5-50%',
     '50-62.5%', '62.5-75%', '75-87.5%', '87.5-100%',

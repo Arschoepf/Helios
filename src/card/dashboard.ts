@@ -145,10 +145,8 @@ export function computeTodayHourly(host: DashboardHost): {
         let values: number[] = hist.values;
         if (isCumulativeEnergy && times.length >= 2)
         {
-            //Same quantization guard as the chart's
-            //differentiation: hold the anchor until 3 min have
-            //accumulated so dv / dtH doesn't blow up when the
-            //sensor only reports integer Wh.
+            //Same quantization guard as the chart's differentiation: hold the anchor until 3 min have accumulated so dv / dtH doesn't blow up when
+            //the sensor only reports integer Wh.
             const MIN_DTH = 0.05;
             const dT: Date[] = [];
             const dV: number[] = [];
@@ -394,9 +392,8 @@ export function computeTodayCumulative(host: DashboardHost): {
         }
     }
 
-    //Anchor the actual line at "now" so the curve ends precisely
-    //at the present moment, instead of stopping at the last
-    //sample which could be a minute or two stale.
+    //Anchor the actual line at "now" so the curve ends precisely at the present moment, instead of stopping at the last sample which could be a
+    //minute or two stale.
     if (pastEndMs < nowMs && nowMs < endMs)
     {
         actualSamples.push({ tMs: nowMs, kwh: actualKwh });
@@ -513,10 +510,8 @@ export function renderDashTodaySection(
     const pvConfigured = String(host.config?.['pv-power-entity'] ?? '').trim() !== '';
     const historyLoading = pvConfigured && host._pvHistory === null;
 
-    //"Not started yet" hint: produced is effectively zero but the
-    //forecast knows a peak is still ahead. Avoids the confusing
-    //"0,0 kWh / 12,1 kWh PRÉVU" reading by spelling out that the
-    //counter is idle, not broken.
+    //"Not started yet" hint: produced is effectively zero but the forecast knows a peak is still ahead. Avoids the confusing "0,0 kWh / 12,1 kWh
+    //PRÉVU" reading by spelling out that the counter is idle, not broken.
     const notStartedYet =
         !historyLoading
      && producedKwh < 0.05
@@ -692,10 +687,8 @@ export function renderDashTodayChart(
     const kwhTicks: number[] = [];
     for (let v = 0; v <= yMax + 1e-9; v += yStep) kwhTicks.push(v);
 
-    //Sunrise / sunset markers from the engine's projected sun
-    //scene. Only render the ones that fall inside today's window,
-    //the projection may carry "yesterday's sunset" or "tomorrow's
-    //sunrise" when the scrub time is near a midnight boundary.
+    //Sunrise / sunset markers from the engine's projected sun scene. Only render the ones that fall inside today's window, the projection may carry
+    //"yesterday's sunset" or "tomorrow's sunrise" when the scrub time is near a midnight boundary.
     const sunriseMs = host._sunScene?.sunrise?.time?.getTime() ?? null;
     const sunsetMs  = host._sunScene?.sunset?.time?.getTime()  ?? null;
     const showSunrise = sunriseMs !== null && sunriseMs >= startMs && sunriseMs < endMs;
@@ -736,8 +729,7 @@ export function renderDashTodayChart(
     //dashboard don't share a single rect (and one card's animation
     //don't bleed into the other's).
     const clipId  = `dash-today-chart-reveal-${host._instanceId}`;
-    //Unique pattern id for the night-zone hatch overlay. Same
-    //per-instance scope as the clip-path so siblings don't collide.
+    //Unique pattern id for the night-zone hatch overlay. Same per-instance scope as the clip-path so siblings don't collide.
     const hatchId = `dash-today-chart-night-${host._instanceId}`;
 
     //Night hatch: the regions before sunrise and after sunset get a
@@ -1012,10 +1004,8 @@ export function renderDashTomorrowSection(
         })
         : '';
 
-    //Tomorrow is a pure forecast so its big stat uses the same
-    //lighter PV shade as the today section's "prévu" value, so the
-    //user reads both at a glance as "predicted production" without
-    //having to re-parse the label.
+    //Tomorrow is a pure forecast so its big stat uses the same lighter PV shade as the today section's "prévu" value, so the user reads both at a
+    //glance as "predicted production" without having to re-parse the label.
     const predictedColor = lerpHexToward(pvColor, '#ffffff', 0.55);
 
     const tomorrowDate = new Date();
@@ -1087,10 +1077,8 @@ export function renderDashBatterySection(
     const data = computeBatteryToday(host);
     const soc  = data.socNow ?? 0;
 
-    //Vessel canvas: 200 × 240, drawn as a stylised vertical
-    //Compact vessel for the chip-card layout. The battery cap +
-    //cell are drawn relative to the SVG viewBox and scale with
-    //the card width via CSS.
+    //Vessel canvas: 200 × 240, drawn as a stylised vertical Compact vessel for the chip-card layout. The battery cap + cell are drawn relative to the
+    //SVG viewBox and scale with the card width via CSS.
     const W = 60;
     const H = 100;
     const capW = 18, capH = 6;
@@ -1120,11 +1108,8 @@ export function renderDashBatterySection(
                         </linearGradient>
                     </defs>
                     ${(() => {
-                        //Battery cap drawn as an open path: top + two
-                        //sides, no bottom edge. The shell rect just
-                        //below provides the shared horizontal line,
-                        //so we avoid the two strokes stacking and
-                        //showing as a double thickness at the join.
+                        //Battery cap drawn as an open path: top + two sides, no bottom edge. The shell rect just below provides the shared horizontal
+                        //line, so we avoid the two strokes stacking and showing as a double thickness at the join.
                         const capLx = (W - capW) / 2;
                         const capRx = (W + capW) / 2;
                         const capTy = cellY - capH;
@@ -1175,9 +1160,8 @@ export function renderDashBatterySection(
 //and let the CSS .detail-active class fade out the overlays.
 export function handleHomeClick(host: DashboardHost, e: Event): void
 {
-    //Stop propagation so the underlying map doesn't also process
-    //the click as a pan / drag start, and so nested overlay
-    //layers don't double-handle it.
+    //Stop propagation so the underlying map doesn't also process the click as a pan / drag start, and so nested overlay layers don't double-handle
+    //it.
     e.stopPropagation();
     if (host._detailMode) { return; }
     //Clear the hover flag immediately, the hitbox un-renders

@@ -23,9 +23,8 @@ import { fetchFloat32GeoTiff } from '../geotiff';
 
 const IMG_URL   = 'https://maps.vcgi.vermont.gov/arcgis/rest/services/EGC_services/IMG_VCGI_LIDARNDSM_WM_CACHE_v1/ImageServer/exportImage';
 
-//Bounding box of Vermont, padded into New Hampshire / Massachusetts
-/// New York / Québec borders. The service returns no-data outside
-//the state mosaic so over-fetching is free.
+//Bounding box of Vermont, padded into New Hampshire / Massachusetts / New York / Québec borders. The service returns no-data outside the state mosaic
+//so over-fetching is free.
 const VT_BBOX = { minLat: 42.65, maxLat: 45.10, minLon: -73.50, maxLon: -71.40 };
 
 export const vermontVcgiNdsm: LidarSource =

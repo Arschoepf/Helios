@@ -74,10 +74,8 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
             && !host._detailMode
             && sinceUser >= AUTO_ROTATE_INACTIVITY_MS)
         {
-            //Negative delta: bearing decreases, camera rotates
-            //counter-clockwise around the up axis as seen
-            //from above, map content drifts clockwise on
-            //screen, opposite of the sun's apparent motion.
+            //Negative delta: bearing decreases, camera rotates counter-clockwise around the up axis as seen from above, map content drifts clockwise
+            //on screen, opposite of the sun's apparent motion.
             const next = host.map.getBearing()
                 - AUTO_ROTATE_DEG_PER_SEC * dt;
             host.map.setBearing(next);

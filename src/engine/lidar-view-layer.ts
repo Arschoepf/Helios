@@ -140,8 +140,7 @@ export class LidarViewLayer implements CustomLayerInterface
     private _uPointSize?:    WebGLUniformLocation;
     private _uColor?:        WebGLUniformLocation;
     private _uAlphaFade?:    WebGLUniformLocation;
-    //Reusable scratch for the per-frame matrix shift, allocated once
-    //to avoid garbage on every render call.
+    //Reusable scratch for the per-frame matrix shift, allocated once to avoid garbage on every render call.
     private _shiftedMatrix:  Float32Array = new Float32Array(16);
 
     //Tunables, pushed by the engine on config / fade ticks. The fade
@@ -167,14 +166,11 @@ export class LidarViewLayer implements CustomLayerInterface
     private _homeMerc: maplibregl.MercatorCoordinate;
     private _mercPerMeter: number;
 
-    //Vertices + line indices cached when the engine sets data BEFORE
-    //the layer is added to the map. Uploaded to GL the moment onAdd
-    //runs.
+    //Vertices + line indices cached when the engine sets data BEFORE the layer is added to the map. Uploaded to GL the moment onAdd runs.
     private _pendingVerts?:   Float32Array;
     private _pendingLineIdx?: Uint32Array;
-    //Raster reference kept around so setHome can rebuild the buffer
-    //against the new origin. Without this, switching homes would
-    //leave the cloud anchored at the previous mercator centre.
+    //Raster reference kept around so setHome can rebuild the buffer against the new origin. Without this, switching homes would leave the cloud
+    //anchored at the previous mercator centre.
     private _raster: LidarRaster | null = null;
 
     constructor(opts: LidarViewLayerOpts)
@@ -187,8 +183,7 @@ export class LidarViewLayer implements CustomLayerInterface
     {
         this._homeMerc     = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0);
         this._mercPerMeter = this._homeMerc.meterInMercatorCoordinateUnits();
-        //Buffer encodes offsets from the previous home, refit it
-        //against the new origin so the cloud stays anchored.
+        //Buffer encodes offsets from the previous home, refit it against the new origin so the cloud stays anchored.
         if (this._raster) this.setData(this._raster);
         this._map?.triggerRepaint();
     }
@@ -275,9 +270,7 @@ export class LidarViewLayer implements CustomLayerInterface
         const homeY = this._homeMerc.y;
         const homeZ = this._homeMerc.z ?? 0;
 
-        //Worst-case all-cells-finite allocations. We slice the unused
-        //tail off before upload so the GPU buffers only carry real
-        //points + real edges.
+        //Worst-case all-cells-finite allocations. We slice the unused tail off before upload so the GPU buffers only carry real points + real edges.
         const verts = new Float32Array(rasterSize * rasterSize * 3);
         //cellToVert maps a (j*R + i) cell index to its index in the
         //vertex stream, or -1 when the cell was NaN. Needed so the
@@ -373,14 +366,10 @@ export class LidarViewLayer implements CustomLayerInterface
         this._map = map;
         this._gl  = gl;
 
-        //onAdd must leave GL in a clean state on every exit path. A
-        //partial shader compile / link that throws while a buffer is
-        //bound or an attribute is enabled pollutes the painter's
-        //assumptions and the basemap renders to garbage until the
-        //page is refreshed. Catch our own errors, free anything we
-        //allocated, and re-throw so the surrounding try / catch in
-        //_initLidarViewLayer reports it without breaking the rest of
-        //the map setup.
+        //onAdd must leave GL in a clean state on every exit path. A partial shader compile / link that throws while a buffer is bound or an attribute
+        //is enabled pollutes the painter's assumptions and the basemap renders to garbage until the page is refreshed. Catch our own errors, free
+        //anything we allocated, and re-throw so the surrounding try / catch in _initLidarViewLayer reports it without breaking the rest of the map
+        //setup.
         let vs: WebGLShader | null = null;
         let fs: WebGLShader | null = null;
         let program: WebGLProgram | null = null;
@@ -445,8 +434,7 @@ export class LidarViewLayer implements CustomLayerInterface
         }
         catch (err)
         {
-            //Tear down whatever managed to allocate before the throw,
-            //so MapLibre's next layer sees a clean GL state.
+            //Tear down whatever managed to allocate before the throw, so MapLibre's next layer sees a clean GL state.
             try { gl.bindBuffer(gl.ARRAY_BUFFER, null); } catch (_) {}
             try { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null); } catch (_) {}
             if (this._buffer)
@@ -474,8 +462,7 @@ export class LidarViewLayer implements CustomLayerInterface
     {
         if (!this._program || !this._buffer) return;
         if (this._vertexCount === 0) return;
-        //Skip the draw when fully transparent. Saves a pipeline setup
-        //per frame while the user has the LiDAR View toggled off.
+        //Skip the draw when fully transparent. Saves a pipeline setup per frame while the user has the LiDAR View toggled off.
         if (this._alphaFade <= 0) return;
 
         //MapLibre passes a projection matrix that maps Mercator [0..1]
@@ -531,11 +518,8 @@ export class LidarViewLayer implements CustomLayerInterface
             gl.drawArrays(gl.POINTS, 0, this._vertexCount);
         }
 
-        //Wireframe pass. Same vertex buffer, line topology from the
-        //index buffer. The radius filter still applies via v_inside
-        //in the fragment shader: lines whose endpoints are both
-        //outside the radius go away, lines crossing the boundary
-        //fade to clipped at the edge.
+        //Wireframe pass. Same vertex buffer, line topology from the index buffer. The radius filter still applies via v_inside in the fragment
+        //shader: lines whose endpoints are both outside the radius go away, lines crossing the boundary fade to clipped at the edge.
         if (this._wireframeEnabled
          && this._indexBuffer
          && this._indexType !== 0

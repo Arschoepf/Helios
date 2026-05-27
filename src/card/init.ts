@@ -235,8 +235,7 @@ export function initVisibilityObserver(host: InitHost): void
     host._visibilityObserver.observe(host as unknown as Element);
     if (typeof document !== 'undefined')
     {
-        //One global listener per card. Removed in the card's
-        //disconnectedCallback via _onVisibilityChange below.
+        //One global listener per card. Removed in the card's disconnectedCallback via _onVisibilityChange below.
         host._onVisibilityChange = applyState;
         document.addEventListener('visibilitychange', host._onVisibilityChange);
     }
@@ -307,10 +306,8 @@ export function initEngineNow(host: InitHost): void
 
         const spawnNewEngine = (): void =>
         {
-            //Container was checked above but the inter-frame gap
-            //below could land after a card disconnect. Re-check
-            //defensively so a torn-down card never spawns a new
-            //engine.
+            //Container was checked above but the inter-frame gap below could land after a card disconnect. Re-check defensively so a torn-down card
+            //never spawns a new engine.
             if (!host.config || !host.hass?.config)
             {
                 host._initInflight = false;
@@ -371,22 +368,15 @@ function wireEngineCallbacks(host: InitHost): void
     };
     host._engine.onWeatherUpdate = data =>
     {
-        //Per-layer cloud breakdown is now owned by the engine, it
-        //stashes low / mid / high alongside the effective
-        //coverage and projectCloudScene reads them back to size
-        //the three concentric bands. The card only needs the
-        //aggregate for the cloud chip label.
+        //Per-layer cloud breakdown is now owned by the engine, it stashes low / mid / high alongside the effective coverage and projectCloudScene
+        //reads them back to size the three concentric bands. The card only needs the aggregate for the cloud chip label.
         host._cloudCover         = data.cloudCover;
         host._timeRange          = data.timeRange;
         host._isLiveMode         = data.isLiveTime;
-        //Pull the hourly series the chart canvas plots. Same
-        //cadence as the gradients above, since both consume the
-        //engine's hourly data refresh.
+        //Pull the hourly series the chart canvas plots. Same cadence as the gradients above, since both consume the engine's hourly data refresh.
         host._chartSeries        = host._engine?.getTimelineSeries() ?? null;
-        //First weather update is also our cue to ask the engine
-        //for the initial label layout, by this point the map has
-        //loaded its style and the projection matrix is available.
-        //Subsequent transforms refresh via onMapTransform.
+        //First weather update is also our cue to ask the engine for the initial label layout, by this point the map has loaded its style and the
+        //projection matrix is available. Subsequent transforms refresh via onMapTransform.
         refreshOverlays(host);
     };
     //Cloud-disc hover is wired directly on the SVG element via
@@ -443,11 +433,8 @@ function wireEngineCallbacks(host: InitHost): void
         if (!host._initInflight) initEngine(host);
     };
 
-    //LiDAR shadow compute: the engine fires these around its WMS
-    //round-trip + raster paint pass. The card surfaces a small
-    //spinner chip top-right so the user has a clear "shadows are
-    //coming" signal during the few seconds the fetch takes on a
-    //cold start.
+    //LiDAR shadow compute: the engine fires these around its WMS round-trip + raster paint pass. The card surfaces a small spinner chip top-right so
+    //the user has a clear "shadows are coming" signal during the few seconds the fetch takes on a cold start.
     host._engine.onShadowComputeStart = () =>
     {
         host._shadowBusy = true;

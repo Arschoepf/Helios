@@ -47,8 +47,7 @@ export interface LocalNdsmConfig
     maxLon: number;
 }
 
-//Normalise the resampled nDSM band in place. Exported so the
-//behaviour is verifiable from a unit-level test:
+//Normalise the resampled nDSM band in place. Exported so the behaviour is verifiable from a unit-level test:
 //
 //  - source value == nodata sentinel        -> NaN
 //  - source value is NaN / +/-Infinity      -> NaN

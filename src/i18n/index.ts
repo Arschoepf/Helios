@@ -136,10 +136,8 @@ export interface Translations
         //observation only.
         pvPeakPower:              string;
         pvPeakPowerHelp:          string;
-        //Inverter clipping cap, in kW of AC output. Optional. When
-        //set, the forecast tops out at this value so an over-sized
-        //DC array hooked to a smaller inverter doesn't render a
-        //peak above what the hardware can actually deliver.
+        //Inverter clipping cap, in kW of AC output. Optional. When set, the forecast tops out at this value so an over-sized DC array hooked to a
+        //smaller inverter doesn't render a peak above what the hardware can actually deliver.
         pvInverterMaxKw:          string;
         pvInverterMaxKwHelp:      string;
         //Multi-array PV layout. Each array entry exposes its own
@@ -167,10 +165,8 @@ export interface Translations
         pvArrayAdd:               string;
         pvArrayRemove:            string;
         pvArrayNormHint:          string;
-        //Per-field helps under tilt / azimuth / share, with the
-        //share-specific explanation of the auto-normalisation
-        //contract spelled out so users know that 50/50 and 1/1 give
-        //the same forecast.
+        //Per-field helps under tilt / azimuth / share, with the share-specific explanation of the auto-normalisation contract spelled out so users
+        //know that 50/50 and 1/1 give the same forecast.
         pvArrayTiltHelp:          string;
         pvArrayAzimuthHelp:       string;
         pvArrayShareHelp:         string;
@@ -183,9 +179,8 @@ export interface Translations
         pvArrayLongitude:         string;
         pvArrayCoordsHelp:        string;
         pvArrayCoordsPlaceholder: string;
-        //Height of this group of panels above ground in metres.
-        //Used by the LiDAR-aware PV forecast to position the
-        //ray-march origin for the per-array shading check.
+        //Height of this group of panels above ground in metres. Used by the LiDAR-aware PV forecast to position the ray-march origin for the
+        //per-array shading check.
         pvArrayHeight:            string;
         pvArrayHeightHelp:        string;
         pvColor:                  string;
@@ -223,9 +218,7 @@ export interface Translations
         //and the cropped viewport.
         displayRadius:            string;
         displayRadiusHint:        string;
-        //Timeline sub-section, nested inside the UI section. Hosts
-        //the visibility toggle, the width slider and the per-day
-        //consumption-chip toggle.
+        //Timeline sub-section, nested inside the UI section. Hosts the visibility toggle, the width slider and the per-day consumption-chip toggle.
         timelineSection:          string;
         timelineEnabled:          string;
         timelineEnabledOn:        string;
@@ -237,10 +230,8 @@ export interface Translations
         timelineConsumptionOn:    string;
         timelineConsumptionOff:   string;
         timelineConsumptionHint:  string;
-        //Surrounding buildings options. Cluster radius grows the home
-        //group to include attached outbuildings, opacity controls the
-        //transparency of the neighbours and the colour is the base
-        //tint reused for every rendered building.
+        //Surrounding buildings options. Cluster radius grows the home group to include attached outbuildings, opacity controls the transparency of
+        //the neighbours and the colour is the base tint reused for every rendered building.
         buildingsSection:         string;
         buildingsHint:            string;
         buildingClusterRadius:    string;
@@ -265,9 +256,8 @@ export interface Translations
         shadowsEnabledOn:         string;
         shadowsEnabledOff:        string;
         shadowsEnabledHint:       string;
-        //LiDAR-driven shadow precision. Three named levels mapped to a
-        //raster size in helios-engine. Only meaningful when the home
-        //sits inside a LiDAR provider's coverage.
+        //LiDAR-driven shadow precision. Three named levels mapped to a raster size in helios-engine. Only meaningful when the home sits inside a
+        //LiDAR provider's coverage.
         lidarPrecision:          string;
         lidarPrecisionLow:       string;
         lidarPrecisionMedium:    string;
@@ -290,17 +280,12 @@ export interface Translations
         lidarViewWireframeHint:     string;
         lidarViewWireframeColor:    string;
         lidarViewWireframeOpacity:  string;
-        //Collapsible advanced section that lets a power user point
-        //Helios at their own nDSM GeoTIFF for shadow data. Hidden by
-        //default behind a <details>/<summary> toggle so the editor
-        //stays simple for the 99% of users who never need it.
+        //Collapsible advanced section that lets a power user point Helios at their own nDSM GeoTIFF for shadow data. Hidden by default behind a
+        //<details>/<summary> toggle so the editor stays simple for the 99% of users who never need it.
         localLidarSection:        string;
         localLidarHint:           string;
-        //Discoverability line shown right under localLidarHint that
-        //points users at the Python tooling in tools/lidar/ for
-        //preparing the nDSM raster offline. Keeps the editor short
-        //while still making the helpers findable for users who don't
-        //yet know how to roll their own raster.
+        //Discoverability line shown right under localLidarHint that points users at the Python tooling in tools/lidar/ for preparing the nDSM raster
+        //offline. Keeps the editor short while still making the helpers findable for users who don't yet know how to roll their own raster.
         localLidarToolsHint:      string;
         localLidarEnabled:        string;
         localLidarUrl:            string;

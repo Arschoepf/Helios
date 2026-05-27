@@ -15,8 +15,7 @@
 //metres-above-ground raster the pipeline needs. Same shape as the
 //UK / NL / NO / AT-Stmk providers.
 //
-//EPSG:4326 is supported natively by both endpoints, so we keep the
-//URL builder uniform with the OGC providers.
+//EPSG:4326 is supported natively by both endpoints, so we keep the URL builder uniform with the OGC providers.
 //
 //Coverage spans Brandenburg + Berlin in one WCS, so the same
 //provider serves both Lands. That's ~6.1 M people (Brandenburg
@@ -35,9 +34,8 @@ const DGM_URL   = 'https://isk.geobasis-bb.de/ows/dgm_wcs';
 const DOM_COV   = 'bb_bdom';
 const DGM_COV   = 'bb_dgm';
 
-//Bounding box of Brandenburg + Berlin, padded so homes at the
-//Saxony or Polish border still trigger a fetch. The WCS clips
-//silently outside the actual mosaic.
+//Bounding box of Brandenburg + Berlin, padded so homes at the Saxony or Polish border still trigger a fetch. The WCS clips silently outside the
+//actual mosaic.
 const BB_BE_BBOX = { minLat: 51.36, maxLat: 53.56, minLon: 11.27, maxLon: 14.77 };
 
 export const brandenburgBerlinDom: LidarSource =

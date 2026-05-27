@@ -178,9 +178,8 @@ export function processHeightRaster(
         }
     }
 
-    //Pass 2: size-capped 8-connected flood fill. Same logic as the
-    //legacy FR implementation, lifted here so every provider gets the
-    //same dappled-shadow look.
+    //Pass 2: size-capped 8-connected flood fill. Same logic as the legacy FR implementation, lifted here so every provider gets the same
+    //dappled-shadow look.
     const labels = new Int32Array(N);
     const stack: number[] = [];
     const components: Array<{ cells: number[]; heightSum: number }> = [];
@@ -275,12 +274,9 @@ export function processHeightRaster(
                 ? [Number(hMin.toFixed(1)), Number(hMax.toFixed(1))]
                 : null
         },
-        //Forward the raw raster + geo so the engine can keep it for
-        //the LiDAR View overlay. Same buffer reference, no copy: the
-        //pipeline never mutates `heights` after the validity pass
-        //above, and the engine treats the buffer as read-only. The
-        //terrain band, when provided, is forwarded with the same
-        //zero-copy contract.
+        //Forward the raw raster + geo so the engine can keep it for the LiDAR View overlay. Same buffer reference, no copy: the pipeline never
+        //mutates `heights` after the validity pass above, and the engine treats the buffer as read-only. The terrain band, when provided, is
+        //forwarded with the same zero-copy contract.
         raster:
         {
             heights:    heights,
@@ -335,8 +331,7 @@ function median3x3(src: Float32Array, size: number): Float32Array
                 }
             }
             if (n === 0) { out[idx] = NaN; continue; }
-            //In-place insertion sort, faster than Array.sort on a 9-
-            //element buffer.
+            //In-place insertion sort, faster than Array.sort on a 9- element buffer.
             for (let k = 1; k < n; k++)
             {
                 const v = buf[k];
@@ -371,9 +366,7 @@ export function emptyResult(): LidarShadowResult
     };
 }
 
-//Compute the lat/lon bbox around a home point, padded by
-//`padFactor` so trees on the edge of the radius still cast their
-//shadow inward.
+//Compute the lat/lon bbox around a home point, padded by `padFactor` so trees on the edge of the radius still cast their shadow inward.
 export function homeBbox(
     homeLat: number, homeLon: number, radiusMeters: number, padFactor: number
 ): { minLat: number; maxLat: number; minLon: number; maxLon: number }
@@ -390,8 +383,7 @@ export function homeBbox(
     };
 }
 
-//Great-circle distance in metres for the circular crop. Cheap enough
-//to call per-cell at our raster sizes.
+//Great-circle distance in metres for the circular crop. Cheap enough to call per-cell at our raster sizes.
 export function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number
 {
     const toRad = Math.PI / 180;

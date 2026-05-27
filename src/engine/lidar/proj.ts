@@ -130,10 +130,8 @@ function shiftDatum(
 
 //----------------------------------------------------------------- methods
 
-//Transverse Mercator forward, EPSG coordinate operation method 9807.
-//Returns [easting, northing] in metres. Accurate to <1 m within a few
-//hundred km of the central meridian, sub-cm within a UTM zone, which
-//covers everything we care about.
+//Transverse Mercator forward, EPSG coordinate operation method 9807. Returns [easting, northing] in metres. Accurate to <1 m within a few hundred km
+//of the central meridian, sub-cm within a UTM zone, which covers everything we care about.
 function tmForward(
     latDeg: number,
     lonDeg: number,
@@ -279,8 +277,7 @@ export interface EpsgEntry
     //EPSG URN suffix the WCS expects in SUBSETTINGCRS / OUTPUTCRS.
     //Always the full http://www.opengis.net/def/crs/EPSG/0/<code>.
     urn:  string;
-    //Forward projection function. Takes lat/lon in degrees, returns
-    //projected coords in metres.
+    //Forward projection function. Takes lat/lon in degrees, returns projected coords in metres.
     project(latDeg: number, lonDeg: number): { x: number; y: number };
 }
 

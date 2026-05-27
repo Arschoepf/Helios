@@ -47,11 +47,8 @@ export interface HeliosConfig
     //but live observation, peak-of-day highlight and chart axes keep
     //working off the actual PV entity.
     //
-    //Superseded by per-string `pv-arrays[].peak-kwp`: when any
-    //array entry carries a `peak-kwp`, the total install power is
-    //the sum of those values and `pv-peak-kwp` is ignored.
-    //Existing configs that only set `pv-peak-kwp` keep working
-    //unchanged through the legacy share-based weighting.
+    //Superseded by per-string `pv-arrays[].peak-kwp`: when any array entry carries a `peak-kwp`, the total install power is the sum of those values
+    //and `pv-peak-kwp` is ignored. Existing configs that only set `pv-peak-kwp` keep working unchanged through the legacy share-based weighting.
     'pv-peak-kwp'?:           unknown;
     //Inverter clipping cap in kW (kilowatts of AC). Optional; when
     //set, the forecast tops out at this value so an oversized DC
@@ -165,10 +162,8 @@ export interface HeliosConfig
     //Below 100, the time-bar stays centred horizontally and the
     //chart cards shrink proportionally.
     'timeline-width-pct'?:     unknown;
-    //Show the per-day cumulative kWh chip next to each day label on
-    //the timeline. Default: true. When false, only the date is
-    //rendered, which keeps the chart cleaner when the user is not
-    //tracking production volumes.
+    //Show the per-day cumulative kWh chip next to each day label on the timeline. Default: true. When false, only the date is rendered, which keeps
+    //the chart cleaner when the user is not tracking production volumes.
     'timeline-consumption-enabled'?: unknown;
     //Radius (m) around the home within which surrounding buildings are
     //rendered. Buildings outside are not drawn at all. Default 100 m.
@@ -319,9 +314,8 @@ export interface HeliosConfig
 //can distinguish them even at low alpha.
 export const DEFAULT_SUN_COLOR_HEX:   string = '#EF9F27';
 export const DEFAULT_CLOUD_COLOR_HEX: string = '#5A8DC4';
-//Vivid green that holds its own against the chart's white background
-//and reads as "solar production" without competing with the orange sun
-//or the blue cloud colours.
+//Vivid green that holds its own against the chart's white background and reads as "solar production" without competing with the orange sun or the
+//blue cloud colours.
 export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
 //Bright red, distinct from sun (orange), cloud (blue), PV
 //(green), and easy to associate visually with battery
@@ -331,16 +325,14 @@ export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
 export const DEFAULT_BATTERY_COLOR_HEX: string = '#FF5252';
 
 
-//Default values for the building config, exposed so the visual
-//editor can render the matching placeholder / slider defaults.
+//Default values for the building config, exposed so the visual editor can render the matching placeholder / slider defaults.
 export const DEFAULT_BUILDING_RADIUS_M         = 100;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
 
 
-//Shadow precision levels. Each level is a multiplier on the active
-//provider's native cell pitch:
+//Shadow precision levels. Each level is a multiplier on the active provider's native cell pitch:
 //
 //  'high'   1x native (one fetched cell per real source sample)
 //  'medium' 2x native (one fetched cell per 4 real samples)
@@ -362,15 +354,12 @@ export const LIDAR_PRECISION_PITCH_MULT: Record<LidarPrecisionLevel, number> = {
     medium: 2,
     high:   1
 };
-//Default opacity of the ground shadow layer when the user has not set
-//the `shadow-opacity` config option.
+//Default opacity of the ground shadow layer when the user has not set the `shadow-opacity` config option.
 export const DEFAULT_SHADOW_OPACITY = 0.32;
 
 
-//Default opt-in for the generic local-nDSM LiDAR provider. Exported
-//so the visual editor can render the matching toggle default. The
-//provider stays disabled until the user flips this AND supplies the
-//URL + bbox in the editor / YAML.
+//Default opt-in for the generic local-nDSM LiDAR provider. Exported so the visual editor can render the matching toggle default. The provider stays
+//disabled until the user flips this AND supplies the URL + bbox in the editor / YAML.
 export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 
 
@@ -407,17 +396,12 @@ export function defaultLidarViewWireframeColor(cardTheme: unknown): string
 //fetch (shadows, vegetation extent) and the LiDAR overlay shouldn't
 //inherit that bound, mixing the two knobs felt opaque in the editor.
 export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
-//Outer radius where the LiDAR view alpha hits zero. Fixed regardless
-//of the configured fetch radius. Past this distance the shader fades
-//cells to zero, so we never paint a million dots for cells the user
-//can barely see anyway, which keeps frame times stable on fullscreen
-//layouts.
+//Outer radius where the LiDAR view alpha hits zero. Fixed regardless of the configured fetch radius. Past this distance the shader fades cells to
+//zero, so we never paint a million dots for cells the user can barely see anyway, which keeps frame times stable on fullscreen layouts.
 export const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
 
 
-//Timeline defaults. Exposed so the editor placeholders + sliders
-//land on the same values the runtime falls back to when the config
-//key is absent.
+//Timeline defaults. Exposed so the editor placeholders + sliders land on the same values the runtime falls back to when the config key is absent.
 export const DEFAULT_TIMELINE_ENABLED              = true;
 export const DEFAULT_TIMELINE_WIDTH_PCT            = 100;
 export const DEFAULT_TIMELINE_CONSUMPTION_ENABLED  = true;

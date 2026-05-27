@@ -77,8 +77,7 @@ export class HeliosColorPicker extends LitElement
         this._hexDraft = this.value;
         if (this._open)
         {
-            //Defer one tick so the click that opened the popover
-            //doesn't immediately close it.
+            //Defer one tick so the click that opened the popover doesn't immediately close it.
             setTimeout(() => document.addEventListener('click', this._onDocClick, true), 0);
         }
         else
@@ -189,8 +188,7 @@ export class HeliosColorPicker extends LitElement
 //`https://` is rendered as plain text. Stops a malicious /
 //corrupted translation from sneaking in a `javascript:` URI.
 //
-//Used by editor hints that need a clickable link to
-//helios-lidar.org or other public docs.
+//Used by editor hints that need a clickable link to helios-lidar.org or other public docs.
 function renderMarkdownLinks(text: string): unknown[]
 {
     const parts: unknown[] = [];
@@ -211,8 +209,7 @@ function renderMarkdownLinks(text: string): unknown[]
         }
         else
         {
-            //Suspicious scheme, render as plain text so the user
-            //can see the URL but the browser doesn't follow it.
+            //Suspicious scheme, render as plain text so the user can see the URL but the browser doesn't follow it.
             parts.push(`${label} (${url})`);
         }
         cursor = match.index + match[0].length;
@@ -278,13 +275,9 @@ export class HeliosCardEditor extends LitElement
         this._ensureEntityPicker();
     }
 
-    //ha-entity-picker is part of HA's lazy-loaded card-editor bundle.
-    //In a fresh tab, or in HA versions that don't pre-load it for
-    //custom cards, the tag is unknown until something on the page
-    //pulls it in. We force the load by creating a transient
-    //"entities" card and asking for its config element, the side
-    //effect registers ha-entity-picker. While the load is pending we
-    //fall back to a plain text input so the field is never broken.
+    //ha-entity-picker is part of HA's lazy-loaded card-editor bundle. In a fresh tab, or in HA versions that don't pre-load it for custom cards, the
+    //tag is unknown until something on the page pulls it in. We force the load by creating a transient "entities" card and asking for its config
+    //element, the side effect registers ha-entity-picker. While the load is pending we fall back to a plain text input so the field is never broken.
     private async _ensureEntityPicker(): Promise<void>
     {
         if (this._pickerReady) return;
@@ -365,10 +358,8 @@ export class HeliosCardEditor extends LitElement
         this._update(key, v);
     }
 
-    //Slider commit. Updates local state synchronously so the slider
-    //thumb tracks the drag, but defers the cross-component
-    //`config-changed` event by SLIDER_COMMIT_DELAY_MS so the engine
-    //doesn't see a flood of intermediate values.
+    //Slider commit. Updates local state synchronously so the slider thumb tracks the drag, but defers the cross-component `config-changed` event by
+    //SLIDER_COMMIT_DELAY_MS so the engine doesn't see a flood of intermediate values.
     private _numSlider(key: keyof HeliosConfig, e: Event): void
     {
         const v = parseFloat((e.target as HTMLInputElement).value);
@@ -488,10 +479,8 @@ export class HeliosCardEditor extends LitElement
             return o;
         });
         const next = { ...this._cfg, 'pv-arrays': arrays } as HeliosConfig;
-        //Strip legacy keys when promoting to pv-arrays so a future
-        //read doesn't trip the "both shapes set" rule. Only deletes
-        //them when they're actually present, no need to dirty the
-        //config object otherwise.
+        //Strip legacy keys when promoting to pv-arrays so a future read doesn't trip the "both shapes set" rule. Only deletes them when they're
+        //actually present, no need to dirty the config object otherwise.
         if ('pv-tilt'    in (next as object)) delete (next as Record<string, unknown>)['pv-tilt'];
         if ('pv-azimuth' in (next as object)) delete (next as Record<string, unknown>)['pv-azimuth'];
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next } }));
@@ -519,10 +508,8 @@ export class HeliosCardEditor extends LitElement
         this._writePvArrays(list);
     }
 
-    //Updates the user-typed name for row `i`. Empty input clears the
-    //field to null, the summary then falls back to the auto-numbered
-    //"Row N" title. Stops the event so the parent <details>` toggle
-    //doesn't fire when the user types inside the input.
+    //Updates the user-typed name for row `i`. Empty input clears the field to null, the summary then falls back to the auto-numbered "Row N" title.
+    //Stops the event so the parent <details>` toggle doesn't fire when the user types inside the input.
     private _arrayName(i: number, e: Event): void
     {
         const list = this._readPvArrays();
@@ -548,10 +535,8 @@ export class HeliosCardEditor extends LitElement
         const list = this._readPvArrays();
         if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
         list.push({ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null });
-        //Open the newly added pan in the editor by default: the user
-        //just clicked to add it, so its body should be visible without
-        //requiring a second click on the chevron. Existing pans keep
-        //their current open/closed state untouched.
+        //Open the newly added pan in the editor by default: the user just clicked to add it, so its body should be visible without requiring a second
+        //click on the chevron. Existing pans keep their current open/closed state untouched.
         this._openArrayIndices = new Set([...this._openArrayIndices, list.length - 1]);
         this._writePvArrays(list);
     }
@@ -568,9 +553,8 @@ export class HeliosCardEditor extends LitElement
         const list = this._readPvArrays();
         if (i < 0 || i >= list.length || list.length <= 1) return;
         list.splice(i, 1);
-        //Shift the open-set so the higher indices map to their new
-        //positions after the splice. The removed index drops out, and
-        //every index above it slides down by one.
+        //Shift the open-set so the higher indices map to their new positions after the splice. The removed index drops out, and every index above it
+        //slides down by one.
         const next = new Set<number>();
         for (const idx of this._openArrayIndices)
         {
@@ -598,10 +582,8 @@ export class HeliosCardEditor extends LitElement
     //the editor falls back to "everything closed", a valid state
     //since the section content is the only mandatory surface.
     //
-    //Also scrolls the just-opened section into view so the user is
-    //never left looking at the bottom of the previous section after
-    //a click. Done on the next rAF tick so the layout reflects the
-    //newly-expanded body before we measure.
+    //Also scrolls the just-opened section into view so the user is never left looking at the bottom of the previous section after a click. Done on
+    //the next rAF tick so the layout reflects the newly-expanded body before we measure.
     private _onSectionToggle(sectionId: string, e: Event): void
     {
         const el = e.currentTarget as HTMLDetailsElement;
@@ -619,10 +601,8 @@ export class HeliosCardEditor extends LitElement
         }
     }
 
-    //Syncs the local open-set with the <details> element's runtime
-    //state on every native `toggle` event. Without this round-trip,
-    //Lit re-renders would snap the `open` attribute back to whatever
-    //_openArrayIndices says, fighting the user's click.
+    //Syncs the local open-set with the <details> element's runtime state on every native `toggle` event. Without this round-trip, Lit re-renders
+    //would snap the `open` attribute back to whatever _openArrayIndices says, fighting the user's click.
     private _onArrayToggle(i: number, e: Event): void
     {
         const el = e.currentTarget as HTMLDetailsElement;
@@ -1477,12 +1457,9 @@ export class HeliosCardEditor extends LitElement
     }
 
 
-    //Fires the window-level reset bus so every live HeliosCard on
-    //the page drops its cached Open-Meteo payload + in-memory PV
-    //history and triggers a fresh fetch. Also flashes a short
-    //"Cache vidé" confirmation on the button itself for 2 s so
-    //the user knows the click landed without us needing a toast
-    //system inside the editor.
+    //Fires the window-level reset bus so every live HeliosCard on the page drops its cached Open-Meteo payload + in-memory PV history and triggers a
+    //fresh fetch. Also flashes a short "Cache vidé" confirmation on the button itself for 2 s so the user knows the click landed without us needing a
+    //toast system inside the editor.
     private _resetFeedbackTimer?: number;
     @state() private _resetFeedback: string | null = null;
 

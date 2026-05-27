@@ -1,12 +1,8 @@
-//LiDAR View overlay: when the user clicks the View button, the
-//regular map UI fades out and every loaded LiDAR cell is projected
-//to screen as a small dot. This module handles the toggle gesture
-//and drives the alpha-fade rAF loop that smooths both the enter
-//and the exit transitions.
+//LiDAR View overlay: when the user clicks the View button, the regular map UI fades out and every loaded LiDAR cell is projected to screen as a small
+//dot. This module handles the toggle gesture and drives the alpha-fade rAF loop that smooths both the enter and the exit transitions.
 //
-//Same host-driven pattern as the timeline / overlays modules: the
-//card owns the `@state` flag and the fade timestamps, the helpers
-//here mutate them through a structural LidarViewHost.
+//Same host-driven pattern as the timeline / overlays modules: the card owns the `@state` flag and the fade timestamps, the helpers here mutate them
+//through a structural LidarViewHost.
 
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
@@ -42,10 +38,8 @@ export interface LidarViewHost extends OverlaysHost
 //so the regular HUD fades out via its own CSS transition under
 //the appearing cloud.
 //
-//Exit: two-phase. First the dot cloud fades back out in ~280 ms,
-//THEN .lidar-view-active drops so the regular HUD fades back in
-//via the existing CSS transition. We delay the class flip so the
-//HUD doesn't pop back through the still-visible cloud.
+//Exit: two-phase. First the dot cloud fades back out in ~280 ms, THEN .lidar-view-active drops so the regular HUD fades back in via the existing CSS
+//transition. We delay the class flip so the HUD doesn't pop back through the still-visible cloud.
 //
 //We deliberately do NOT clip-mask the dots to a perspective
 //polygon during the fade: that was the single most expensive
@@ -95,8 +89,7 @@ export function startLidarFadeLoop(host: LidarViewHost): void
         const inStart  = host._lidarFadeInStartMs;
         const outStart = host._lidarFadeOutStartMs;
 
-        //Exit fade complete, finalise the mode flip and clamp the
-        //layer alpha to 0 in one go.
+        //Exit fade complete, finalise the mode flip and clamp the layer alpha to 0 in one go.
         if (outStart !== null && now - outStart >= LIDAR_FADE_OUT_MS)
         {
             host._lidarFadeOutStartMs = null;
@@ -104,9 +97,7 @@ export function startLidarFadeLoop(host: LidarViewHost): void
             host._engine?.setLidarViewFadeAlpha(0);
             host._engine?.setLidarViewActive(false);
         }
-        //Enter fade complete, drop the marker so subsequent ticks
-        //stop ramping. The layer alpha sits at 1 until the user
-        //toggles back off.
+        //Enter fade complete, drop the marker so subsequent ticks stop ramping. The layer alpha sits at 1 until the user toggles back off.
         if (inStart !== null && now - inStart >= LIDAR_FADE_IN_MS)
         {
             host._lidarFadeInStartMs = null;

@@ -1,6 +1,5 @@
-//Photovoltaic data subsystem: live state polling, history fetch,
-//rolling-buffer sampling, instantaneous-rate derivation, calibration
-//helpers, and the chip / chart value formatter.
+//Photovoltaic data subsystem: live state polling, history fetch, rolling-buffer sampling, instantaneous-rate derivation, calibration helpers, and the
+//chip / chart value formatter.
 //
 //The functions in here operate against a "host" object (the card)
 //that owns the `@state` PV fields. Lit reactivity is preserved by
@@ -21,17 +20,15 @@ import { formatLocalisedNumber } from './format';
 const DEFAULT_PANEL_HEIGHT_M = 5;
 
 
-//Time + value pair stored in the rolling live-sample buffer used to
-//derive an instantaneous rate from a cumulative energy entity.
+//Time + value pair stored in the rolling live-sample buffer used to derive an instantaneous rate from a cumulative energy entity.
 export interface PvSample
 {
     t: number;
     v: number;
 }
 
-//Fetched historical series, parallel times[] / values[] arrays so a
-//binary or linear search can locate a sample by timestamp without
-//re-allocating wrapper objects.
+//Fetched historical series, parallel times[] / values[] arrays so a binary or linear search can locate a sample by timestamp without re-allocating
+//wrapper objects.
 export interface PvHistory
 {
     times:  Date[];
@@ -66,10 +63,8 @@ export interface PvHost
 }
 
 
-//Per-instance flag key used by wipeLegacyPvCalibStorage to mark the
-//one-time cleanup as done. Stored alongside the calibration entries
-//it sweeps so a stale read from another browser still triggers a
-//fresh cleanup on first load.
+//Per-instance flag key used by wipeLegacyPvCalibStorage to mark the one-time cleanup as done. Stored alongside the calibration entries it sweeps so a
+//stale read from another browser still triggers a fresh cleanup on first load.
 const PV_CALIB_WIPE_FLAG_KEY = 'helios-pv-calib:wiped-v1';
 
 
@@ -82,9 +77,8 @@ export function refreshPv(host: PvHost): void
 
     if (!entity || !host.hass)
     {
-        //Reset everything when the user clears the entity field
-        //so the chip and graph immediately disappear instead of
-        //sticking around with stale data.
+        //Reset everything when the user clears the entity field so the chip and graph immediately disappear instead of sticking around with stale
+        //data.
         if (host._pvCurrent !== null || host._pvHistory !== null)
         {
             host._pvCurrent = null;
@@ -111,11 +105,8 @@ export function refreshPv(host: PvHost): void
             host._pvUnit = unit;
         }
 
-        //Append the freshly-read state to the rolling buffer if
-        //the entity timestamp moved forward since last cycle.
-        //We trim entries older than 5 min so the buffer stays
-        //tiny even on entities that update many times per
-        //second.
+        //Append the freshly-read state to the rolling buffer if the entity timestamp moved forward since last cycle. We trim entries older than 5 min
+        //so the buffer stays tiny even on entities that update many times per second.
         if (next !== null)
         {
             const ts = stateObj.last_updated
@@ -163,8 +154,7 @@ export function refreshPv(host: PvHost): void
         {
             host._pvCurrent = null;
         }
-        //Drop the buffer when the entity disappears so we don't
-        //serve stale samples after the user clears the config.
+        //Drop the buffer when the entity disappears so we don't serve stale samples after the user clears the config.
         if (host._pvSampleBuffer.length > 0)
         {
             host._pvSampleBuffer = [];
@@ -231,10 +221,8 @@ export async function fetchPvHistory(
     host._pvFetching = true;
     try
     {
-        //History only exists up to "now", anything past that is
-        //the forecast half of the timeline and has no production
-        //data. Clamp the fetch end so we don't waste a roundtrip
-        //asking HA for empty future buckets.
+        //History only exists up to "now", anything past that is the forecast half of the timeline and has no production data. Clamp the fetch end so
+        //we don't waste a roundtrip asking HA for empty future buckets.
         const now = new Date();
         const fetchEnd = end > now ? now : end;
         if (start >= fetchEnd)
@@ -376,13 +364,11 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
     const lastMs  = hist.times[hist.times.length - 1].getTime();
     if (tMs < firstMs || tMs > lastMs + 60_000)
     {
-        //Outside the history window. Allow a 60 s grace at the
-        //tail so a "live" scrub to "now" still resolves.
+        //Outside the history window. Allow a 60 s grace at the tail so a "live" scrub to "now" still resolves.
         return null;
     }
 
-    //Classification, same logic as currentPvRate. Repeated
-    //inline so each helper is self-contained.
+    //Classification, same logic as currentPvRate. Repeated inline so each helper is self-contained.
     const entity   = String(host.config?.['pv-power-entity'] ?? '').trim();
     const stateObj = host.hass?.states?.[entity];
     const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
@@ -403,9 +389,7 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
     else if (lu === 'mwh') rateUnit = 'MW';
     else                   rateUnit = u ? `${u}/h` : '';
 
-    //Locate the index of the sample at or before `time`, linear
-    //scan is fine for the ~96 samples a typical 4-day window
-    //carries.
+    //Locate the index of the sample at or before `time`, linear scan is fine for the ~96 samples a typical 4-day window carries.
     let idx = hist.times.length - 1;
     for (let i = 0; i < hist.times.length; i++)
     {
@@ -422,9 +406,8 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 
     if (!isCumulative)
     {
-        //Power sensor: just return the historical value, floored at
-        //zero so a net-meter sensor that briefly dipped negative at
-        //dusk doesn't surface as "-2 W of production" on the chip.
+        //Power sensor: just return the historical value, floored at zero so a net-meter sensor that briefly dipped negative at dusk doesn't surface
+        //as "-2 W of production" on the chip.
         return { value: Math.max(0, hist.values[idx]), unit: u };
     }
 
@@ -626,9 +609,8 @@ export function currentPvRate(host: PvHost): PvRate | null
 }
 
 
-//Convert a PV rate into watts. Used to drive animation speeds on
-//a unit-agnostic scale, the leader-line dash flow saturates at a
-//fixed wattage no matter what unit the user's sensor is in.
+//Convert a PV rate into watts. Used to drive animation speeds on a unit-agnostic scale, the leader-line dash flow saturates at a fixed wattage no
+//matter what unit the user's sensor is in.
 export function pvNormalizeToWatts(value: number, unit: string): number
 {
     const lu = (unit || '').toLowerCase();
@@ -644,8 +626,7 @@ export function pvNormalizeToWatts(value: number, unit: string): number
 
 //Manual PV peak power.
 //
-//Total installed peak power for the forecast scaling. Two sources,
-//in priority order:
+//Total installed peak power for the forecast scaling. Two sources, in priority order:
 //
 //  1. Sum of per-string `pv-arrays[].peak-kwp` values. Preferred
 //     because each user enters the real nameplate for each string
@@ -770,14 +751,11 @@ export function pvArrays(
 ): {
     orientations: PanelOrientation[];
     shares:       number[];
-    //Per-array lat/lon override, null when the user left them
-    //blank for this entry. Callers fall back to the home coords
-    //when null so existing configs keep working unchanged.
+    //Per-array lat/lon override, null when the user left them blank for this entry. Callers fall back to the home coords when null so existing
+    //configs keep working unchanged.
     coords:       ({ lat: number; lon: number } | null)[];
-    //Per-array height above ground in metres. Used by the LiDAR
-    //raycast shading check: a panel high on a south-facing roof
-    //clears a low garden fence that a ground-mounted array of
-    //the same orientation would sit in the shadow of.
+    //Per-array height above ground in metres. Used by the LiDAR raycast shading check: a panel high on a south-facing roof clears a low garden fence
+    //that a ground-mounted array of the same orientation would sit in the shadow of.
     heightsM:     number[];
     //Total installed peak power of the configured arrays in kWp.
     //Derived from per-string `peak-kwp` values when any are set;
@@ -838,9 +816,7 @@ export function pvArrays(
             }
 
             const rawShare = e['share'];
-            //undefined / null share means "equal split with siblings",
-            //flag it with NaN and fill in after we know the count of
-            //share-less entries.
+            //undefined / null share means "equal split with siblings", flag it with NaN and fill in after we know the count of share-less entries.
             let share: number;
             if (rawShare === undefined || rawShare === null || rawShare === '')
             {
@@ -851,10 +827,8 @@ export function pvArrays(
                 const s = typeof rawShare === 'number' ? rawShare : parseFloat(String(rawShare));
                 if (!isFinite(s) || s <= 0)
                 {
-                    //A zero / negative share kills the entry only when no
-                    //per-string peak-kwp is provided. Otherwise the
-                    //peak-kwp carries the weight and the share is
-                    //ignored, so we still want to keep the entry.
+                    //A zero / negative share kills the entry only when no per-string peak-kwp is provided. Otherwise the peak-kwp carries the weight
+                    //and the share is ignored, so we still want to keep the entry.
                     if (!isFinite(peakKwp)) continue;
                     share = NaN;
                 }
@@ -955,9 +929,8 @@ export function pvArrays(
     //`pv-peak-kwp`.
     const totalKwp = kw.reduce((a, b) => isFinite(b) ? a + b : a, 0);
 
-    //Normalise to 1.0 so callers can multiply directly without an
-    //extra divide per sample. Empty list stays empty → horizontal
-    //fast path in the caller.
+    //Normalise to 1.0 so callers can multiply directly without an extra divide per sample. Empty list stays empty → horizontal fast path in the
+    //caller.
     const total = sh.reduce((a, b) => a + b, 0);
     if (total > 0)
     {
@@ -1089,8 +1062,7 @@ export function formatPvValue(hass: any, value: number, unit: string): string
     {
         return `${formatLocalisedNumber(hass, value, 1)} ${u}`;
     }
-    //Fallback for arbitrary units, keep one decimal of precision
-    //and let the entity's own unit string carry through.
+    //Fallback for arbitrary units, keep one decimal of precision and let the entity's own unit string carry through.
     const formatted = Math.abs(value) >= 100
         ? formatLocalisedNumber(hass, value, 0, true)
         : formatLocalisedNumber(hass, value, 1);

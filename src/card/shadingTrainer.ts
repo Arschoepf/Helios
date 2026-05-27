@@ -1,13 +1,9 @@
-//Shading-map trainer: replays the physics model over the user's
-//last few days of PV history and accumulates per-cell residuals
-//into the persistent shading map. Run from the same refresh path
-//that already computes the scalar calibration, so each chart
-//cycle moves the map forward without a separate scheduler.
+//Shading-map trainer: replays the physics model over the user's last few days of PV history and accumulates per-cell residuals into the persistent
+//shading map. Run from the same refresh path that already computes the scalar calibration, so each chart cycle moves the map forward without a
+//separate scheduler.
 //
-//Card-layer module: knows the host shape, the PvHistory parser,
-//the weather series. The engine half lives in
-//`src/engine/shadingMap.ts` and is pure-function so this trainer
-//can be tested against fixtures without touching the engine.
+//Card-layer module: knows the host shape, the PvHistory parser, the weather series. The engine half lives in `src/engine/shadingMap.ts` and is
+//pure-function so this trainer can be tested against fixtures without touching the engine.
 
 import { getSunPosition } from '../engine/sun';
 import {
@@ -25,17 +21,12 @@ import { getHomeCoords } from './init';
 import type { ChartHost } from './charts';
 
 
-//Home Assistant user_data key. Mirrors the local localStorage
-//entry but lives under the per-user namespace HA exposes via
-//the frontend WebSocket commands, so opening the card on a
-//different device pulls the same map the original device has
-//been training.
+//Home Assistant user_data key. Mirrors the local localStorage entry but lives under the per-user namespace HA exposes via the frontend WebSocket
+//commands, so opening the card on a different device pulls the same map the original device has been training.
 const HA_USER_DATA_KEY = 'helios-shading-map';
 
-//Debounce window for the cross-device push: a chart redraw on
-//hover can trigger trainShadingMap several times per second, but
-//we don't want to spam frontend.set_user_data with the same
-//payload over and over. One push every 30 s is plenty.
+//Debounce window for the cross-device push: a chart redraw on hover can trigger trainShadingMap several times per second, but we don't want to spam
+//frontend.set_user_data with the same payload over and over. One push every 30 s is plenty.
 const PUSH_DEBOUNCE_MS = 30_000;
 
 
@@ -59,10 +50,8 @@ const BUCKET_MS   = 30 * 60_000;
 const BUCKETS_PER_HOUR = 2;
 
 
-//Run one training pass + persist. Cheap to call repeatedly: only
-//touches buckets that ended after `map.lastTrainedMs` and skips
-//bucket centres in the future. Returns the number of cells
-//updated so the caller can log "n cells trained" if it cares.
+//Run one training pass + persist. Cheap to call repeatedly: only touches buckets that ended after `map.lastTrainedMs` and skips bucket centres in the
+//future. Returns the number of cells updated so the caller can log "n cells trained" if it cares.
 export function trainShadingMap(host: ChartHost): number
 {
     const k      = pvCalibK(host.config);
@@ -80,9 +69,8 @@ export function trainShadingMap(host: ChartHost): number
     const map = loadMap();
     const now = Date.now();
     const windowStart = now - TRAINING_WINDOW_DAYS * 24 * HOUR_MS;
-    //Skip buckets we've already processed. Subtract one bucket so
-    //a bucket that was partially in the future last time gets a
-    //second look once it fully landed in the past.
+    //Skip buckets we've already processed. Subtract one bucket so a bucket that was partially in the future last time gets a second look once it
+    //fully landed in the past.
     const watermark = Math.max(windowStart, (map.lastTrainedMs || 0) - BUCKET_MS);
 
     const raster   = host._engine?.getLidarRaster() ?? null;
@@ -92,13 +80,9 @@ export function trainShadingMap(host: ChartHost): number
     let updated = 0;
     let highestProcessedMs = map.lastTrainedMs || 0;
 
-    //Walk every 30-min bucket between the hourly samples we already
-    //have. For each bucket we interpolate the cloud cover from the
-    //surrounding hourly Open-Meteo samples, replay the model at
-    //the bucket midpoint, and compare against the actual production
-    //averaged over the bucket. This gives us 2x the observations
-    //per cell vs the legacy hourly-only loop without changing the
-    //per-cell data model.
+    //Walk every 30-min bucket between the hourly samples we already have. For each bucket we interpolate the cloud cover from the surrounding hourly
+    //Open-Meteo samples, replay the model at the bucket midpoint, and compare against the actual production averaged over the bucket. This gives us
+    //2x the observations per cell vs the legacy hourly-only loop without changing the per-cell data model.
     for (let i = 0; i < series.times.length - 1; i++)
     {
         const t0Ms = series.times[i].getTime();
@@ -276,8 +260,7 @@ function actualWattsFromPowerBucket(
         const wPrev = pvNormalizeToWatts(hist.values[i - 1], pvUnit);
         const wCurr = pvNormalizeToWatts(hist.values[i],     pvUnit);
         if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
-        //Linearly interpolate the segment endpoints to the bucket
-        //clip so partial overlaps are scaled correctly.
+        //Linearly interpolate the segment endpoints to the bucket clip so partial overlaps are scaled correctly.
         const f0 = (segStart - tPrev) / dt;
         const f1 = (segEnd   - tPrev) / dt;
         const wA = wPrev + (wCurr - wPrev) * f0;
@@ -303,10 +286,8 @@ function actualWattsFromPowerBucket(
 //disk + in cache.
 let _pulledFromHomeAssistant = false;
 
-//Last-saved payload string + timer handle for the push debounce.
-//We snapshot the stringified map at the time the timer fires so
-//two pushes within the debounce window collapse to one network
-//call carrying the latest state.
+//Last-saved payload string + timer handle for the push debounce. We snapshot the stringified map at the time the timer fires so two pushes within the
+//debounce window collapse to one network call carrying the latest state.
 let _pushTimer: ReturnType<typeof setTimeout> | null = null;
 
 export async function syncShadingMapFromHomeAssistant(hass: any): Promise<boolean>

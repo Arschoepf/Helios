@@ -9,10 +9,8 @@
 //    when a LiDAR provider covers the home, the same buffer the
 //    LiDAR View overlay paints.
 //
-//With those three we can ray-march from each panel along the
-//panel→sun direction, sample the nDSM along the ray, and decide
-//whether the sun line-of-sight is blocked by the local terrain,
-//a building, or a tree.
+//With those three we can ray-march from each panel along the panel→sun direction, sample the nDSM along the ray, and decide whether the sun
+//line-of-sight is blocked by the local terrain, a building, or a tree.
 //
 //When a panel is shaded the direct beam component of POA goes to
 //zero; the isotropic-sky diffuse and ground-reflected components

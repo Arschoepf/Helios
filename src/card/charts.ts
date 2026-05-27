@@ -1,6 +1,5 @@
-//Timeline chart rendering: the two SVG cards that sit under the
-//map, the timeline cursors that scrub across them, and the per-day
-//kWh aggregation used by the day chips.
+//Timeline chart rendering: the two SVG cards that sit under the map, the timeline cursors that scrub across them, and the per-day kWh aggregation
+//used by the day chips.
 //
 //Pure templates: each function takes a structural `ChartHost`
 //(the card) and returns a Lit `TemplateResult` or a derived
@@ -171,9 +170,8 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
             }
             else if (!sawAnySunrise)
             {
-                //Leading night: the window opens before the first
-                //sunset of our walk, so the morning chunk up to the
-                //first sunrise is still a night zone.
+                //Leading night: the window opens before the first sunset of our walk, so the morning chunk up to the first sunrise is still a night
+                //zone.
                 intervals.push({ startMs: -Infinity, endMs: c.ms });
             }
             sawAnySunrise = true;
@@ -338,12 +336,9 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
         }
     }
 
-    //Forecast for future hours. Reuses the per-array PV power
-    //model + thermal / shading hooks the chart already feeds, plus
-    //the 5-day rolling calibration ratio so the tooltip's forecast
-    //value matches the "refined" headline number on the dashboard,
-    //plus the optional inverter PMax clip so the reading never
-    //exceeds what the user's hardware can deliver.
+    //Forecast for future hours. Reuses the per-array PV power model + thermal / shading hooks the chart already feeds, plus the 5-day rolling
+    //calibration ratio so the tooltip's forecast value matches the "refined" headline number on the dashboard, plus the optional inverter PMax clip
+    //so the reading never exceeds what the user's hardware can deliver.
     const series = host._chartSeries;
     const k      = pvCalibK(host.config);
     const cal    = computeForecastCalibration(host);
@@ -426,9 +421,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
 
     const clampedPct = Math.max(8, Math.min(92, hoverPct));
 
-    //PV decimals: 1 for kW/MW under three digits, 0 otherwise. The
-    //user reads "1.2 kW" on residential gear but "1234 W" on the
-    //raw W entity, both compact.
+    //PV decimals: 1 for kW/MW under three digits, 0 otherwise. The user reads "1.2 kW" on residential gear but "1234 W" on the raw W entity, both
+    //compact.
     const pvDecimals = !hasPv ? 0
                      : pv.unit === 'W' ? 0
                      : (Math.abs(pv.value) < 100 ? 1 : 0);
@@ -462,8 +456,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
 }
 
 
-//Engine-resampled weather series. Same shape the engine snapshots
-//and pushes to the card on every refresh.
+//Engine-resampled weather series. Same shape the engine snapshots and pushes to the card on every refresh.
 export interface ChartSeries
 {
     times:        Date[];
@@ -476,11 +469,8 @@ export interface ChartSeries
     windSpeed:    number[];
 }
 
-//Structural surface the host card exposes to this module. The
-//`_chartHoverPct` field is intentionally writable: hover handlers
-//defined here mutate it on pointermove / pointerleave, exactly
-//like the dashboard's `_dashChartHoverTs`. All other fields stay
-//read-only.
+//Structural surface the host card exposes to this module. The `_chartHoverPct` field is intentionally writable: hover handlers defined here mutate it
+//on pointermove / pointerleave, exactly like the dashboard's `_dashChartHoverTs`. All other fields stay read-only.
 export interface ChartHost
 {
     readonly config:        HeliosConfig | undefined;
@@ -602,14 +592,12 @@ export function renderChart(host: ChartHost): TemplateResult
     const xOf = (t: Date): number =>
         ((t.getTime() - startMs) / rangeMs) * W;
 
-    //Irradiance Y: 0 W/m² sits on the bottom edge, 1000 W/m² sits
-    //at the top edge. Anything above clamps to the top.
+    //Irradiance Y: 0 W/m² sits on the bottom edge, 1000 W/m² sits at the top edge. Anything above clamps to the top.
     const yIrr = (w: number): number =>
         BASE - Math.max(0, Math.min(1, w / 1000)) * H;
 
-    //Cloud Y: 0 % sits on the bottom edge, 100 % sits at the top
-    //edge. Same orientation as irradiance now, so 'thicker cloud'
-    //reads as 'taller fill' which matches a user's intuition.
+    //Cloud Y: 0 % sits on the bottom edge, 100 % sits at the top edge. Same orientation as irradiance now, so 'thicker cloud' reads as 'taller fill'
+    //which matches a user's intuition.
     const yCloud = (pct: number): number =>
         BASE - Math.max(0, Math.min(1, pct / 100)) * H;
 
@@ -626,10 +614,8 @@ export function renderChart(host: ChartHost): TemplateResult
     const irrArea = `M ${x0},${BASE} L ${irrPoints.join(' L ')} L ${xN},${BASE} Z`;
     const cloudArea = `M ${x0},${BASE} L ${cloudPoints.join(' L ')} L ${xN},${BASE} Z`;
 
-    //Stroke-only paths layered on top of the filled areas to
-    //accentuate the curve outline. Same point sequence as the
-    //areas, minus the closing segment back to the midline so
-    //we don't draw a horizontal line across the baseline.
+    //Stroke-only paths layered on top of the filled areas to accentuate the curve outline. Same point sequence as the areas, minus the closing
+    //segment back to the midline so we don't draw a horizontal line across the baseline.
     const irrLine   = `M ${irrPoints.join(' L ')}`;
     const cloudLine = `M ${cloudPoints.join(' L ')}`;
 
@@ -795,8 +781,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
 
     const pvColor = cfgHex(host.config?.['pv-color'], DEFAULT_PV_COLOR_HEX);
 
-    //Day-boundary X positions, same computation as the main
-    //chart so the dotted separators line up across the two.
+    //Day-boundary X positions, same computation as the main chart so the dotted separators line up across the two.
     const endMsAbs = range.end.getTime();
     const dayXs: number[] = [];
     const dCursor = new Date(range.start);
@@ -833,15 +818,10 @@ export function renderPvChart(host: ChartHost): TemplateResult
 
     if (isCumulativeEnergy && rawTimes.length >= 2)
     {
-        //Quantization fix: cumulative-energy sensors typically
-        //report integer Wh, so two samples a few seconds apart
-        //look like "0 then 1 Wh delta over 10 s", which divides
-        //to a fake 360 W spike when the true rate is closer to
-        //100 W. Hold the previous anchor until at least MIN_DTH
-        //of clock time has accumulated so dv / dtH averages over
-        //a window where quantization is negligible. Skip samples
-        //before that, don't advance the anchor, so the next
-        //iteration compares against the same baseline.
+        //Quantization fix: cumulative-energy sensors typically report integer Wh, so two samples a few seconds apart look like "0 then 1 Wh delta
+        //over 10 s", which divides to a fake 360 W spike when the true rate is closer to 100 W. Hold the previous anchor until at least MIN_DTH of
+        //clock time has accumulated so dv / dtH averages over a window where quantization is negligible. Skip samples before that, don't advance the
+        //anchor, so the next iteration compares against the same baseline.
         const MIN_DTH = 0.05;   //3 minutes
         const dTimes:  Date[]   = [];
         const dValues: number[] = [];
@@ -855,8 +835,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
             }
             if (dtH > 6)
             {
-                //Sensor outage, abandon this anchor and start a
-                //fresh one at the current sample.
+                //Sensor outage, abandon this anchor and start a fresh one at the current sample.
                 prevIdx = i;
                 continue;
             }
@@ -1014,11 +993,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
         hoverX = (hoverPct / 100) * W;
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
         let hoverV: number = NaN;
-        //Only sample the observed curve when the hover instant
-        //sits inside the observed window. Otherwise interpAt
-        //would clamp to the last observed value and the dot would
-        //freeze on yesterday's late-afternoon reading when the
-        //user hovers at noon tomorrow.
+        //Only sample the observed curve when the hover instant sits inside the observed window. Otherwise interpAt would clamp to the last observed
+        //value and the dot would freeze on yesterday's late-afternoon reading when the user hovers at noon tomorrow.
         const lastObsMs = samples.length > 0
             ? samples[samples.length - 1].t.getTime()
             : -Infinity;
@@ -1040,9 +1016,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
         }
         if (isFinite(hoverV))
         {
-            //Floor at zero: a net-meter entity can briefly dip below
-            //zero around dawn / dusk and the dot should still ride
-            //the visible curve, not dive off the bottom of the card.
+            //Floor at zero: a net-meter entity can briefly dip below zero around dawn / dusk and the dot should still ride the visible curve, not
+            //dive off the bottom of the card.
             hoverY = yOf(Math.max(0, hoverV));
             showHover = true;
         }
@@ -1243,8 +1218,7 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
 }
 
 
-//Compute kWh-per-day totals over the active timeline range. The
-//helper integrates two sources:
+//Compute kWh-per-day totals over the active timeline range. The helper integrates two sources:
 //
 //  - Past + today-so-far: sum of the observed PV history (from
 //    `_pvHistory`), respecting the entity's unit (W/kW power
@@ -1254,9 +1228,8 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
 //    sky × cloud model, hour by hour, using the engine's
 //    weather series.
 //
-//Returns a Map keyed by each day's local-midnight ms, with
-//values in kWh. Days that fall outside the active range or
-//carry no usable data are omitted.
+//Returns a Map keyed by each day's local-midnight ms, with values in kWh. Days that fall outside the active range or carry no usable data are
+//omitted.
 export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
 {
     const out = new Map<number, number>();
@@ -1338,10 +1311,8 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
     const capW     = pvInverterMaxW(host.config);
     if (k !== null && k > 0 && series && coords)
     {
-        //Index hourly forecast samples by hour-floor ms so we
-        //can integrate them by 1-hour rectangles per day. The
-        //series timestamps are already at hour boundaries from
-        //the engine's resampling.
+        //Index hourly forecast samples by hour-floor ms so we can integrate them by 1-hour rectangles per day. The series timestamps are already at
+        //hour boundaries from the engine's resampling.
         const nowMs  = Date.now();
         const raster = host._engine?.getLidarRaster() ?? null;
         for (let i = 0; i < series.times.length; i++)

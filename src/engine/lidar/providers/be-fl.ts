@@ -19,9 +19,7 @@
 //no Float32 elevation endpoint is published. Wallonia coverage
 //remains a known gap as a result.
 //
-//License: open data, CC-BY-equivalent, no API key, no signup. The
-//attribution string lives in the README rather than in the shadow
-//tile metadata.
+//License: open data, CC-BY-equivalent, no API key, no signup. The attribution string lives in the README rather than in the shadow tile metadata.
 
 import type {
     LidarSource,
@@ -111,10 +109,8 @@ export const flandersDhmv2: LidarSource =
             homeLon:          opts.homeLon,
             cropRadiusMeters: opts.cropRadiusMeters
         }, {
-            //DSM 1 m minus DEM 1 m: same noise profile as the Austrian
-            //and BW DSM-DTM pipelines. Median pre-filter + 7 m threshold
-            //matches the rest of the subtraction-based providers so the
-            //rendered shadows look consistent across borders.
+            //DSM 1 m minus DEM 1 m: same noise profile as the Austrian and BW DSM-DTM pipelines. Median pre-filter + 7 m threshold matches the rest
+            //of the subtraction-based providers so the rendered shadows look consistent across borders.
             medianSmooth:  true,
             heightThreshM: 7,
         });

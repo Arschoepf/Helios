@@ -28,9 +28,8 @@ const WCS_URL   = 'https://gis.tirol.gv.at/arcgis/services/Service_Public/terrai
 const DOM_COV   = 'Oberflaechenmodell_5m_M28';
 const DGM_COV   = 'Gelaendemodell_5m_M28';
 
-//Bounding box of Tirol, padded into the Bavarian / Italian /
-//Swiss / Salzburg borders so border-area homes still trigger a
-//fetch. WCS clips silently outside the state's mosaic.
+//Bounding box of Tirol, padded into the Bavarian / Italian / Swiss / Salzburg borders so border-area homes still trigger a fetch. WCS clips silently
+//outside the state's mosaic.
 const TIROL_BBOX = { minLat: 46.65, maxLat: 47.75, minLon: 10.05, maxLon: 12.95 };
 
 export const austriaTirolAls: LidarSource =

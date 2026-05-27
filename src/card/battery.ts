@@ -1,11 +1,8 @@
-//Home-battery data subsystem: live SoC + power polling, history
-//fetch, scrub-time sampling, today's energy aggregation, chip
-//formatting, and the user invert preference.
+//Home-battery data subsystem: live SoC + power polling, history fetch, scrub-time sampling, today's energy aggregation, chip formatting, and the user
+//invert preference.
 //
-//Same host-driven pattern as card/pv.ts: the card owns the
-//`@state` battery fields, the functions in this module read /
-//write them through a structural BatteryHost interface so Lit's
-//reactivity keeps working transparently.
+//Same host-driven pattern as card/pv.ts: the card owns the `@state` battery fields, the functions in this module read / write them through a
+//structural BatteryHost interface so Lit's reactivity keeps working transparently.
 
 import type { HeliosConfig } from '../helios-config';
 import { formatLocalisedNumber } from './format';
@@ -20,8 +17,7 @@ export interface BatteryHistory
     values: number[];
 }
 
-//Result of computeBatteryToday: live SoC plus the cumulative
-//charged / discharged energy from midnight to "now", in kWh.
+//Result of computeBatteryToday: live SoC plus the cumulative charged / discharged energy from midnight to "now", in kWh.
 export interface BatteryToday
 {
     socNow:        number | null;
@@ -74,10 +70,8 @@ export function refreshBattery(host: BatteryHost): void
     const socEntity   = String(host.config?.['battery-soc-entity']   ?? '').trim();
     const powerEntity = String(host.config?.['battery-power-entity'] ?? '').trim();
 
-    //SoC, clamp to [0, 100] because some BMS entities momentarily
-    //report 100.5 % during the absorption phase or briefly drop
-    //negative around the calibration cycle, neither of which is
-    //meaningful to the user.
+    //SoC, clamp to [0, 100] because some BMS entities momentarily report 100.5 % during the absorption phase or briefly drop negative around the
+    //calibration cycle, neither of which is meaningful to the user.
     let nextSoc: number | null = null;
     if (socEntity)
     {
@@ -124,9 +118,8 @@ export function refreshBattery(host: BatteryHost): void
         host._batteryPowerUnit = nextUnit;
     }
 
-    //Drop history series and reset the fetch key when the user
-    //clears all battery entity fields, so a stale graph doesn't
-    //linger after the config goes blank.
+    //Drop history series and reset the fetch key when the user clears all battery entity fields, so a stale graph doesn't linger after the config
+    //goes blank.
     if (!socEntity && !powerEntity)
     {
         if (host._batterySocHistory !== null)   { host._batterySocHistory   = null; }
@@ -178,9 +171,8 @@ export async function fetchBatteryHistory(
     host._batteryFetching = true;
     try
     {
-        //History only exists up to "now", the future half of the
-        //timeline has no battery data. Clamp the fetch end so we
-        //don't waste a roundtrip on empty future buckets.
+        //History only exists up to "now", the future half of the timeline has no battery data. Clamp the fetch end so we don't waste a roundtrip on
+        //empty future buckets.
         const now = new Date();
         const fetchEnd = end > now ? now : end;
         if (start >= fetchEnd)
@@ -251,8 +243,7 @@ export async function fetchBatteryHistory(
         if (socEntity)
         {
             const series = parseSeries(result?.[socEntity] ?? []);
-            //Clamp SoC samples to [0, 100] in the history too, same
-            //out-of-range tolerance as the live read.
+            //Clamp SoC samples to [0, 100] in the history too, same out-of-range tolerance as the live read.
             series.values = series.values.map(v => Math.max(0, Math.min(100, v)));
             host._batterySocHistory = series;
         }
@@ -326,9 +317,8 @@ export function batterySampleAtTime(
 }
 
 
-//Format a signed battery power value for the chip. Mirrors
-//formatPvValue's W ↔ kW switching but always prefixes a sign so
-//the user can tell charging from discharging at a glance.
+//Format a signed battery power value for the chip. Mirrors formatPvValue's W ↔ kW switching but always prefixes a sign so the user can tell charging
+//from discharging at a glance.
 export function formatBatteryPower(hass: any, value: number, unit: string): string
 {
     const lu = (unit || '').trim().toLowerCase();
@@ -347,10 +337,8 @@ export function formatBatteryPower(hass: any, value: number, unit: string): stri
     {
         return `${sign}${formatLocalisedNumber(hass, abs, 2)} kW`;
     }
-    //Unknown unit, format the value with one decimal of
-    //precision and keep the configured entity's own unit
-    //string. Still locale-aware so the decimal mark matches
-    //the rest of the card.
+    //Unknown unit, format the value with one decimal of precision and keep the configured entity's own unit string. Still locale-aware so the decimal
+    //mark matches the rest of the card.
     return `${sign}${formatLocalisedNumber(hass, abs, 1)}${unit ? ' ' + unit : ''}`;
 }
 

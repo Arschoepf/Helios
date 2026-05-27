@@ -8,10 +8,8 @@
 //  dsm_05m , Digital Surface Model (all returns except water)
 //  dtm_05m , Digital Terrain Model (ground-classified points)
 //
-//Like the UK, Dutch data is published as separate DSM / DTM rasters
-//rather than a pre-computed normalised height. We fetch both in
-//parallel, subtract per pixel, and feed the resulting height-above-
-//ground array to the shared pipeline.
+//Like the UK, Dutch data is published as separate DSM / DTM rasters rather than a pre-computed normalised height. We fetch both in parallel, subtract
+//per pixel, and feed the resulting height-above- ground array to the shared pipeline.
 //
 //Coverage: mainland Netherlands. Caribbean Netherlands (BES islands)
 //are not on AHN; bbox-clip excludes them. Both EPSG:4326 and

@@ -40,18 +40,16 @@ const DGM_URL   = 'https://owsproxy.lgl-bw.de/owsproxy/wcs/WCS_INSP_BW_Hoehe_Cov
 //Both INSPIRE-themed coverages use the generic theme coverage id.
 const COVERAGE  = 'EL.ElevationGridCoverage';
 
-//Bounding box of Baden-Württemberg, padded into Rheinland-Pfalz +
-//Bavaria + Switzerland borders so coastal homes still trigger a
-//fetch. WCS returns no-data outside the state mosaic.
+//Bounding box of Baden-Württemberg, padded into Rheinland-Pfalz + Bavaria + Switzerland borders so coastal homes still trigger a fetch. WCS returns
+//no-data outside the state mosaic.
 const BW_BBOX = { minLat: 47.50, maxLat: 49.85, minLon: 7.45, maxLon: 10.55 };
 
 export const badenWurttembergLgl: LidarSource =
 {
     id:   'de-bw-lgl',
     name: 'LGL BW DOM5 + DGM1 (Baden-Württemberg)',
-    //LGL BW DOM is published on a 5 m grid. The DGM1 is 1 m but the
-    //subtracted output is bounded by the coarser DOM resolution, so
-    //we declare 5 m as the effective native pitch.
+    //LGL BW DOM is published on a 5 m grid. The DGM1 is 1 m but the subtracted output is bounded by the coarser DOM resolution, so we declare 5 m as
+    //the effective native pitch.
     nativeCellPitchMeters: 5.0,
 
     covers(lat: number, lon: number): boolean

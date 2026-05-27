@@ -19,19 +19,15 @@
 
 export interface LidarSource
 {
-    //Stable identifier, lowercased and country-prefixed. Goes into
-    //logs.
+    //Stable identifier, lowercased and country-prefixed. Goes into logs.
     id:    string;
     //Human-readable label, currently logs-only.
     name:  string;
 
-    //Native cell pitch in metres for the upstream raster as published
-    //by the data owner. The engine sizes the requested rasterSize off
-    //this value so the fetched grid matches real source samples
-    //instead of forcing the server to interpolate up: at "high"
-    //precision the engine asks one cell per native sample, "medium"
-    //one per 2, "low" one per 4. Lets the LiDAR view + shadows scale
-    //with the actual ground truth rather than a fixed pixel count.
+    //Native cell pitch in metres for the upstream raster as published by the data owner. The engine sizes the requested rasterSize off this value so
+    //the fetched grid matches real source samples instead of forcing the server to interpolate up: at "high" precision the engine asks one cell per
+    //native sample, "medium" one per 2, "low" one per 4. Lets the LiDAR view + shadows scale with the actual ground truth rather than a fixed pixel
+    //count.
     nativeCellPitchMeters: number;
 
     //Cheap synchronous coverage probe. Implementations should bail
@@ -53,9 +49,8 @@ export interface LidarShadowResult
     features:    GeoJSON.FeatureCollection;
     diagnostics:
     {
-        //Number of LiDAR cells that passed the height threshold and
-        //the circular crop. 0 when the home is outside coverage or
-        //the WMS round-trip failed.
+        //Number of LiDAR cells that passed the height threshold and the circular crop. 0 when the home is outside coverage or the WMS round-trip
+        //failed.
         cellsKept:   number;
         //Cells-per-clump cap actually used (derived from the chosen
         //precision). Surfaced so the user can confirm the size cap
@@ -93,16 +88,13 @@ export interface LidarShadowFetchOptions
 {
     homeLat:                  number;
     homeLon:                  number;
-    //Radius in metres around the home from which heights are sampled.
-    //The provider over-fetches slightly so trees on the edge still
-    //cast their shadow inward.
+    //Radius in metres around the home from which heights are sampled. The provider over-fetches slightly so trees on the edge still cast their shadow
+    //inward.
     radiusMeters:             number;
-    //Pixel count per side requested from the upstream raster. The
-    //engine picks this based on the user's `lidar-precision`.
+    //Pixel count per side requested from the upstream raster. The engine picks this based on the user's `lidar-precision`.
     rasterSize:               number;
-    //Optional circular crop. Cells beyond this distance from the
-    //home are dropped so the shadow zones stay inside the visible
-    //disc. When unset, the bbox is the only bound.
+    //Optional circular crop. Cells beyond this distance from the home are dropped so the shadow zones stay inside the visible disc. When unset, the
+    //bbox is the only bound.
     cropRadiusMeters?:        number;
     signal?:                  AbortSignal;
 }
@@ -117,45 +109,23 @@ import { polandGugikNmpt }             from './lidar/providers/pl';
 import { canadaHrdem }                 from './lidar/providers/ca';
 import { brandenburgBerlinDom }        from './lidar/providers/de-bb-be';
 import { vermontVcgiNdsm }             from './lidar/providers/us-vt';
-import { badenWurttembergLgl }         from './lidar/providers/de-bw';
-import { austriaTirolAls }             from './lidar/providers/at-tirol';
-import { austriaSteiermarkAls }        from './lidar/providers/at-stmk';
-import { flandersDhmv2 }               from './lidar/providers/be-fl';
+//Baden-Württemberg, Austria Tirol, Austria Steiermark and Belgium Flanders source files (de-bw, at-tirol, at-stmk, be-fl) all
+//live under ./lidar/providers/ and remain functional. They were registered briefly during the 1.7.0 alpha cycle and unregistered
+//again after the DSM-DTM subtraction quality was judged below the bar set by the existing nDSM providers (per-pixel subtraction
+//amplifies noise on building edges and over vegetation, which renders the cast shadows as blobs instead of recognisable footprints).
+//Re-enable by importing + appending to LIDAR_SOURCES when a cleaner data path is identified for those regions.
 import {
     createLocalNdsmSource,
     type LocalNdsmConfig
 } from './lidar/local-ndsm';
 import type { HeliosConfig } from '../helios-config';
 
-//Registered providers, ordered by preference. findLidarSource()
-//returns the FIRST provider whose covers() probe accepts the home
-//position, with no fallback chain if the actual fetch turns up
-//no-data. Order is therefore load-bearing whenever two providers'
-//bounding boxes overlap.
-//
-//Overlap resolution rules used here:
-//  - Flanders bbox overlaps France's, Netherlands' and NRW's
-//    (Antwerp 51.22 is inside all four). Place flandersDhmv2
-//    BEFORE those national providers so a Flemish home gets the
-//    correct Flemish WCS, not the no-data response from IGN / AHN
-//    / nDOM.
-//  - Tirol bbox overlaps Baden-Württemberg's on the small
-//    German-Austrian Allgäu strip. Place austriaTirolAls BEFORE
-//    badenWurttembergLgl, the Austrian side is geographically more
-//    likely for points in that corner; German BW homes in the same
-//    sliver fall through to no-data, accepted limitation.
-//  - Baden-Württemberg's bbox also overlaps France's around Alsace.
-//    We keep badenWurttembergLgl AFTER franceLidarHd so the Alsace
-//    side stays on IGN; some German BW homes (Stuttgart) end up
-//    routed to FR which returns no-data, a known regression we
-//    accept in exchange for not breaking 2 M French Alsace users.
-//  - Steiermark, Brandenburg/Berlin, the other Länder and the
-//    non-EU providers have non-overlapping bboxes with the new
-//    additions, the historical ordering is preserved for them.
+//Registered providers, ordered by preference. findLidarSource() returns the FIRST provider whose covers() probe accepts the home
+//position; there is no fallback chain when the actual fetch turns up no-data, so order is load-bearing whenever two providers'
+//bounding boxes overlap. Bbox checks today are non-overlapping (one country / region per provider, plus German Länder keyed by
+//state bboxes), single-fetch normalised-raster providers come first (France BIL, NRW nDOM, Poland NMPT, Canada HRDEM DSM,
+//Vermont nDSM) because they skip the DSM-DTM subtraction round-trip; DSM-DTM subtraction providers follow.
 export const LIDAR_SOURCES: LidarSource[] = [
-    flandersDhmv2,
-    austriaTirolAls,
-    austriaSteiermarkAls,
     franceLidarHd,
     nrwLidarNdom,
     polandGugikNmpt,
@@ -165,8 +135,7 @@ export const LIDAR_SOURCES: LidarSource[] = [
     spainPnoaLidar,
     netherlandsAhn4,
     norwayKartverketNhm,
-    brandenburgBerlinDom,
-    badenWurttembergLgl
+    brandenburgBerlinDom
 ];
 
 export function findLidarSource(lat: number, lon: number): LidarSource | null
@@ -221,10 +190,8 @@ function numFromCfg(v: unknown): number | null
     return null;
 }
 
-//One-shot warning latch. When the user enables the local provider
-//but leaves the config incomplete or invalid, log exactly once per
-//session so the silent fall-through is diagnosable without spamming
-//the console on every shadow refresh.
+//One-shot warning latch. When the user enables the local provider but leaves the config incomplete or invalid, log exactly once per session so the
+//silent fall-through is diagnosable without spamming the console on every shadow refresh.
 let _warnedInvalidLocalNdsm = false;
 
 //Config-aware provider resolver. Behaviour:

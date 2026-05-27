@@ -10,8 +10,7 @@ import type maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 
 
-//Offscreen raster resolution for the shadow mask, indexed by the
-//user's `lidar-precision` choice:
+//Offscreen raster resolution for the shadow mask, indexed by the user's `lidar-precision` choice:
 //
 //  - low / medium (default) , 1024×1024. ~2 m/px at the worst-case
 //    2 km bbox, PNG encode ~10 ms. Mobile-friendly, fits in 4 MB.
@@ -34,9 +33,7 @@ export function shadowRasterSizeFor(level: LidarPrecisionLevel): number
 }
 
 
-//Fully-transparent 1x1 PNG used as the initial image of the shadow
-//source so MapLibre has something valid to bind before the first
-//paint pass runs.
+//Fully-transparent 1x1 PNG used as the initial image of the shadow source so MapLibre has something valid to bind before the first paint pass runs.
 export const BLANK_SHADOW_DATA_URL =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=';
 
@@ -132,16 +129,12 @@ export function paintShadowRaster(
         }
     }
 
-    //Keep the bounds in sync in case the home position or the
-    //building radius changed since the source was created. Cheap
-    //and idempotent.
+    //Keep the bounds in sync in case the home position or the building radius changed since the source was created. Cheap and idempotent.
     try { src.setCoordinates(corners); }
     catch (_) {}
-    //MapLibre 5's ImageSource.updateImage only takes a URL, so we
-    //serialise the canvas as a PNG data URL on each paint. PNG
-    //encode of a mostly-transparent 1024 raster lands in the
-    //~10-20 ms range on commodity hardware, well under the sun
-    //movement cadence that triggers shadow refreshes.
+    //MapLibre 5's ImageSource.updateImage only takes a URL, so we serialise the canvas as a PNG data URL on each paint. PNG encode of a
+    //mostly-transparent 1024 raster lands in the ~10-20 ms range on commodity hardware, well under the sun movement cadence that triggers shadow
+    //refreshes.
     try
     {
         const dataUrl = canvas.toDataURL('image/png');

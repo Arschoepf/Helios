@@ -5,12 +5,10 @@
 //URL builder but means we go through the ESRI exportImage REST call
 //instead of GetCoverage). Two services are available nationwide:
 //
-//  /arcgis/rest/services/DTM/ImageServer , Float32 terrain heights
-//  /arcgis/rest/services/DOM/ImageServer , Float32 surface heights
+// /arcgis/rest/services/DTM/ImageServer , Float32 terrain heights /arcgis/rest/services/DOM/ImageServer , Float32 surface heights
 //
-//"DOM" is the Norwegian abbreviation for Digital Overflate Modell,
-//i.e. the same as DSM. We fetch both, subtract, and feed the
-//height-above-ground raster to the shared pipeline.
+//"DOM" is the Norwegian abbreviation for Digital Overflate Modell, i.e. the same as DSM. We fetch both, subtract, and feed the height-above-ground
+//raster to the shared pipeline.
 //
 //Spatial reference: the ImageServers are natively in EPSG:25833
 //(ETRS89 / UTM Zone 33N), but exportImage transparently reprojects
@@ -18,8 +16,7 @@
 //provider URL builder uniform with the OGC ones. exportImage's
 //`format=tiff` returns a Float32 GeoTIFF when the source is Float32.
 //
-//Coverage: mainland Norway + Svalbard. We bbox-clip on a generous
-//rectangle that covers both.
+//Coverage: mainland Norway + Svalbard. We bbox-clip on a generous rectangle that covers both.
 
 import type {
     LidarSource,
@@ -32,9 +29,8 @@ import { fetchFloat32GeoTiff, subtractRasters } from '../geotiff';
 const DTM_URL = 'https://hoydedata.no/arcgis/rest/services/DTM/ImageServer/exportImage';
 const DOM_URL = 'https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage';
 
-//Mainland Norway + Jan Mayen + Svalbard. Wide on purpose, the
-//exportImage call returns no-data outside actual coverage so the
-//pipeline drops anything that comes back empty.
+//Mainland Norway + Jan Mayen + Svalbard. Wide on purpose, the exportImage call returns no-data outside actual coverage so the pipeline drops anything
+//that comes back empty.
 const NO_BBOX = { minLat: 57.5, maxLat: 81.0, minLon: 4.0, maxLon: 33.0 };
 
 export const norwayKartverketNhm: LidarSource =
@@ -89,8 +85,7 @@ export const norwayKartverketNhm: LidarSource =
         ]);
         if (!dom || !dtm) return emptyResult();
 
-        //Replace the noData sentinel with NaN before subtracting so a
-        //missing ground sample doesn't pollute the surface delta.
+        //Replace the noData sentinel with NaN before subtracting so a missing ground sample doesn't pollute the surface delta.
         const cleanseNoData = (a: Float32Array): Float32Array =>
         {
             for (let i = 0; i < a.length; i++)

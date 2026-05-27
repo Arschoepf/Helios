@@ -7,10 +7,8 @@
 //a DSM (digital surface model) and a DTM (terrain model) coverage,
 //free open data, no API key, no signup.
 //
-//Same single-coverage shape as France / NRW / Poland: we pull the
-//"dsm" coverage which already contains absolute surface heights so
-//we skip the DSM-minus-DTM round-trip. The pipeline derives a
-//height threshold from the home's local terrain on the fly.
+//Same single-coverage shape as France / NRW / Poland: we pull the "dsm" coverage which already contains absolute surface heights so we skip the
+//DSM-minus-DTM round-trip. The pipeline derives a height threshold from the home's local terrain on the fly.
 //
 //Resolution: 1 m in southern populated areas (LiDAR-sourced), 2 m
 //further north, satellite-derived in the very far north. We size

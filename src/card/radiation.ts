@@ -7,9 +7,8 @@
 //keeps the live sample fresh on every refresh cycle, and pushes
 //the merged set into the engine via setSolarRadiationSamples().
 //
-//Same host-driven pattern as card/pv.ts and card/battery.ts: the
-//card owns the `_solarRadiation*` fields, the functions here read
-/// write them through a structural RadiationHost interface.
+//Same host-driven pattern as card/pv.ts and card/battery.ts: the card owns the `_solarRadiation*` fields, the functions here read / write them
+//through a structural RadiationHost interface.
 
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
@@ -48,8 +47,7 @@ export function refreshSolarRadiation(host: RadiationHost): void
 
     if (!entity || !host.hass)
     {
-        //Clear everything when the entity is removed so the engine
-        //drops back to its built-in irradiance sources.
+        //Clear everything when the entity is removed so the engine drops back to its built-in irradiance sources.
         if (host._solarRadiationHistory !== null)
         {
             host._solarRadiationHistory = null;

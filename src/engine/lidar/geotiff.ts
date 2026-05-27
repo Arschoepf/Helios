@@ -13,8 +13,7 @@
 import { fromArrayBuffer } from 'geotiff';
 
 
-//Extract the image/tiff binary part out of a WCS 2.0 multipart/related
-//response. Returns null when no TIFF magic is found in the buffer.
+//Extract the image/tiff binary part out of a WCS 2.0 multipart/related response. Returns null when no TIFF magic is found in the buffer.
 //
 //Strategy: scan the whole buffer for the TIFF magic bytes (II*\0 or
 //MM\0*). The TIFF body starts at the first match; the body ends just

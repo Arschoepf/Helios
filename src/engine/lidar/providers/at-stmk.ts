@@ -1,8 +1,7 @@
 //Land Steiermark ALS shadow source for Styria, Austria.
 //
-//Styria publishes its airborne-laser-scanning derived elevation data
-//through GIS Steiermark as a pair of ArcGIS-backed WCS services,
-//free open data, no API key, no signup:
+//Styria publishes its airborne-laser-scanning derived elevation data through GIS Steiermark as a pair of ArcGIS-backed WCS services, free open data,
+//no API key, no signup:
 //
 //  ALSHoeheninformation_1m_UTM33N  , DSM (Oberflächenmodell, the
 //                                     full surface with trees and
@@ -33,9 +32,8 @@ const DOM_URL   = 'https://gis.stmk.gv.at/arcgis/services/OGD/ALSHoeheninformati
 const DTM_URL   = 'https://gis.stmk.gv.at/arcgis/services/OGD/ALSGelaendeinformation_1m_UTM33N/MapServer/WCSServer';
 const COVERAGE  = 'Coverage4';
 
-//Bounding box of Styria, padded so homes on the Carinthian and
-//Burgenland borders still trigger a fetch. WCS returns no-data
-//outside the state's mosaic so over-fetching at the edges is free.
+//Bounding box of Styria, padded so homes on the Carinthian and Burgenland borders still trigger a fetch. WCS returns no-data outside the state's
+//mosaic so over-fetching at the edges is free.
 const AT_STMK_BBOX = { minLat: 46.55, maxLat: 47.85, minLon: 13.50, maxLon: 16.20 };
 
 export const austriaSteiermarkAls: LidarSource =
@@ -69,8 +67,7 @@ export const austriaSteiermarkAls: LidarSource =
         if (!epsg) return emptyResult();
         const proj = projectBbox(bbox, epsg);
 
-        //ArcGIS WCSServer advertises lowercase "x y" for both
-        //spatial and grid axes, regardless of the projection family.
+        //ArcGIS WCSServer advertises lowercase "x y" for both spatial and grid axes, regardless of the projection family.
         const buildUrl = (base: string): string =>
         {
             const params = new URLSearchParams({

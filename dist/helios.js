@@ -30518,11 +30518,9 @@ const HOURLY_VARS = [
   "cloud_cover_mid",
   "cloud_cover_high",
   "weather_code",
-  //Drive the PV thermal-derating model in pv-thermal.ts. Cell
-  //temperature climbs above STC under sun and is cooled by wind,
-  //so the engine pulls both alongside cloud + irradiance. Providers
-  //that don't return them leave the multiplier at 1, and the
-  //prediction falls back to the legacy "cool cell" assumption.
+  //Drive the PV thermal-derating model in pv-thermal.ts. Cell temperature climbs above STC under sun and is cooled by wind, so the engine pulls
+  //both alongside cloud + irradiance. Providers that don't return them leave the multiplier at 1, and the prediction falls back to the legacy "cool
+  //cell" assumption.
   "temperature_2m",
   "wind_speed_10m"
 ];
@@ -32281,12 +32279,9 @@ function processHeightRaster(heights, geo, opts = {}, terrain) {
       cellsPerClumpCap: maxCellsPerComponent,
       heightRangeM: keptCells > 0 ? [Number(hMin.toFixed(1)), Number(hMax.toFixed(1))] : null
     },
-    //Forward the raw raster + geo so the engine can keep it for
-    //the LiDAR View overlay. Same buffer reference, no copy: the
-    //pipeline never mutates `heights` after the validity pass
-    //above, and the engine treats the buffer as read-only. The
-    //terrain band, when provided, is forwarded with the same
-    //zero-copy contract.
+    //Forward the raw raster + geo so the engine can keep it for the LiDAR View overlay. Same buffer reference, no copy: the pipeline never
+    //mutates `heights` after the validity pass above, and the engine treats the buffer as read-only. The terrain band, when provided, is
+    //forwarded with the same zero-copy contract.
     raster: {
       heights,
       terrain,
@@ -35713,7 +35708,7 @@ function maxRasters(a2, b2) {
   return out;
 }
 const DSM_URL = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-surface-model-last-return-dsm-1m-2022/wms";
-const DTM_URL$2 = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms";
+const DTM_URL$1 = "https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wms";
 const DSM_LAYER = "Lidar_Composite_Elevation_LZ_DSM_1m";
 const DTM_LAYER = "Lidar_Composite_Elevation_DTM_1m";
 const UK_BBOX = { minLat: 49.7, maxLat: 56, minLon: -7.2, maxLon: 2.1 };
@@ -35756,7 +35751,7 @@ const englandLidarComposite = {
     };
     const [dsm, dtm] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(DSM_URL, DSM_LAYER), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DTM_URL$2, DTM_LAYER), rasterSize, opts.signal)
+      fetchFloat32GeoTiff(buildUrl(DTM_URL$1, DTM_LAYER), rasterSize, opts.signal)
     ]);
     if (!dsm || !dtm) return emptyResult();
     const heights = subtractRasters(dsm, dtm);
@@ -35772,7 +35767,7 @@ const englandLidarComposite = {
     });
   }
 };
-const WCS_URL$6 = "https://wcs-mds.idee.es/mds";
+const WCS_URL$4 = "https://wcs-mds.idee.es/mds";
 const COVERAGE_VEG = "mdsn_v025";
 const COVERAGE_BLD = "mdsn_e025";
 const ES_BBOX = { minLat: 35.8, maxLat: 44, minLon: -9.6, maxLon: 4.4 };
@@ -35808,7 +35803,7 @@ const spainPnoaLidar = {
         SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326",
         OUTPUTCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
       });
-      return `${WCS_URL$6}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
+      return `${WCS_URL$4}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
     };
     const [veg, bld] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(COVERAGE_VEG), rasterSize, opts.signal),
@@ -35828,7 +35823,7 @@ const spainPnoaLidar = {
     });
   }
 };
-const WCS_URL$5 = "https://service.pdok.nl/rws/ahn/wcs/v1_0";
+const WCS_URL$3 = "https://service.pdok.nl/rws/ahn/wcs/v1_0";
 const COVERAGE_DSM = "dsm_05m";
 const COVERAGE_DTM = "dtm_05m";
 const NL_BBOX = { minLat: 50.7, maxLat: 53.8, minLon: 3.1, maxLon: 7.3 };
@@ -35864,7 +35859,7 @@ const netherlandsAhn4 = {
         SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326",
         OUTPUTCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
       });
-      return `${WCS_URL$5}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
+      return `${WCS_URL$3}?${params.toString()}&SUBSET=Lat(${bbox.minLat},${bbox.maxLat})&SUBSET=Long(${bbox.minLon},${bbox.maxLon})&SCALESIZE=Lat(${rasterSize}),Long(${rasterSize})`;
     };
     const [dsm, dtm] = await Promise.all([
       fetchFloat32GeoTiff(buildUrl(COVERAGE_DSM), rasterSize, opts.signal),
@@ -35884,8 +35879,8 @@ const netherlandsAhn4 = {
     });
   }
 };
-const DTM_URL$1 = "https://hoydedata.no/arcgis/rest/services/DTM/ImageServer/exportImage";
-const DOM_URL$3 = "https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage";
+const DTM_URL = "https://hoydedata.no/arcgis/rest/services/DTM/ImageServer/exportImage";
+const DOM_URL$1 = "https://hoydedata.no/arcgis/rest/services/DOM/ImageServer/exportImage";
 const NO_BBOX = { minLat: 57.5, maxLat: 81, minLon: 4, maxLon: 33 };
 const norwayKartverketNhm = {
   id: "no-kartverket-nhm",
@@ -35923,8 +35918,8 @@ const norwayKartverketNhm = {
       return `${base}?${params.toString()}`;
     };
     const [dom, dtm] = await Promise.all([
-      fetchFloat32GeoTiff(buildUrl(DOM_URL$3), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DTM_URL$1), rasterSize, opts.signal)
+      fetchFloat32GeoTiff(buildUrl(DOM_URL$1), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DTM_URL), rasterSize, opts.signal)
     ]);
     if (!dom || !dtm) return emptyResult();
     const cleanseNoData = (a2) => {
@@ -35946,8 +35941,8 @@ const norwayKartverketNhm = {
     });
   }
 };
-const WCS_URL$4 = "https://www.wcs.nrw.de/geobasis/wcs_nw_ndom";
-const COVERAGE$4 = "nw_ndom";
+const WCS_URL$2 = "https://www.wcs.nrw.de/geobasis/wcs_nw_ndom";
+const COVERAGE$2 = "nw_ndom";
 const NRW_BBOX = { minLat: 50.3, maxLat: 52.55, minLon: 5.85, maxLon: 9.5 };
 const nrwLidarNdom = {
   id: "de-nrw-ndom",
@@ -35975,7 +35970,7 @@ const nrwLidarNdom = {
       SERVICE: "WCS",
       VERSION: "2.0.1",
       REQUEST: "GetCoverage",
-      COVERAGEID: COVERAGE$4,
+      COVERAGEID: COVERAGE$2,
       FORMAT: "image/tiff",
       SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
     });
@@ -35983,7 +35978,7 @@ const nrwLidarNdom = {
     params.append("SUBSET", `Lat(${bbox.minLat},${bbox.maxLat})`);
     params.append("SCALESIZE", `Long(${rasterSize}),Lat(${rasterSize})`);
     const heights = await fetchFloat32GeoTiff(
-      `${WCS_URL$4}?${params.toString()}`,
+      `${WCS_URL$2}?${params.toString()}`,
       rasterSize,
       opts.signal
     );
@@ -36000,8 +35995,8 @@ const nrwLidarNdom = {
     });
   }
 };
-const WCS_URL$3 = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMPT/GRID1/WCS/DigitalSurfaceModel";
-const COVERAGE$3 = "DSM_PL-EVRF2007-NH";
+const WCS_URL$1 = "https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMPT/GRID1/WCS/DigitalSurfaceModel";
+const COVERAGE$1 = "DSM_PL-EVRF2007-NH";
 const PL_BBOX = { minLat: 49, maxLat: 54.85, minLon: 14.1, maxLon: 24.2 };
 const polandGugikNmpt = {
   id: "pl-gugik-nmpt",
@@ -36029,7 +36024,7 @@ const polandGugikNmpt = {
       SERVICE: "WCS",
       VERSION: "2.0.1",
       REQUEST: "GetCoverage",
-      COVERAGEID: COVERAGE$3,
+      COVERAGEID: COVERAGE$1,
       FORMAT: "image/tiff",
       SUBSETTINGCRS: "http://www.opengis.net/def/crs/EPSG/0/4326"
     });
@@ -36037,7 +36032,7 @@ const polandGugikNmpt = {
     params.append("SUBSET", `Lat(${bbox.minLat},${bbox.maxLat})`);
     params.append("SCALESIZE", `Long(${rasterSize}),Lat(${rasterSize})`);
     const heights = await fetchFloat32GeoTiff(
-      `${WCS_URL$3}?${params.toString()}`,
+      `${WCS_URL$1}?${params.toString()}`,
       rasterSize,
       opts.signal
     );
@@ -36054,8 +36049,8 @@ const polandGugikNmpt = {
     });
   }
 };
-const WCS_URL$2 = "https://datacube.services.geo.ca/ows/elevation";
-const COVERAGE$2 = "dsm";
+const WCS_URL = "https://datacube.services.geo.ca/ows/elevation";
+const COVERAGE = "dsm";
 const CA_BBOX = { minLat: 41.5, maxLat: 84, minLon: -141.5, maxLon: -52 };
 const canadaHrdem = {
   id: "ca-nrcan-hrdem",
@@ -36088,7 +36083,7 @@ const canadaHrdem = {
       SERVICE: "WCS",
       VERSION: "1.1.1",
       REQUEST: "GetCoverage",
-      IDENTIFIER: COVERAGE$2,
+      IDENTIFIER: COVERAGE,
       FORMAT: "image/geotiff",
       BOUNDINGBOX: `${bbox.minLat},${bbox.minLon},${bbox.maxLat},${bbox.maxLon},urn:ogc:def:crs:EPSG::4326`,
       GRIDBASECRS: "urn:ogc:def:crs:EPSG::4326",
@@ -36098,7 +36093,7 @@ const canadaHrdem = {
       GRIDOFFSETS: `${-deltaLat},${deltaLon}`
     });
     const heights = await fetchFloat32GeoTiff(
-      `${WCS_URL$2}?${params.toString()}`,
+      `${WCS_URL}?${params.toString()}`,
       rasterSize,
       opts.signal
     );
@@ -36115,10 +36110,10 @@ const canadaHrdem = {
     });
   }
 };
-const DOM_URL$2 = "https://isk.geobasis-bb.de/ows/bdom_wcs";
-const DGM_URL$1 = "https://isk.geobasis-bb.de/ows/dgm_wcs";
-const DOM_COV$1 = "bb_bdom";
-const DGM_COV$1 = "bb_dgm";
+const DOM_URL = "https://isk.geobasis-bb.de/ows/bdom_wcs";
+const DGM_URL = "https://isk.geobasis-bb.de/ows/dgm_wcs";
+const DOM_COV = "bb_bdom";
+const DGM_COV = "bb_dgm";
 const BB_BE_BBOX = { minLat: 51.36, maxLat: 53.56, minLon: 11.27, maxLon: 14.77 };
 const brandenburgBerlinDom = {
   id: "de-bb-be-bdom",
@@ -36157,8 +36152,8 @@ const brandenburgBerlinDom = {
       return `${base}?${params.toString()}`;
     };
     const [dom, dgm] = await Promise.all([
-      fetchFloat32GeoTiff(buildUrl(DOM_URL$2, DOM_COV$1), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DGM_URL$1, DGM_COV$1), rasterSize, opts.signal)
+      fetchFloat32GeoTiff(buildUrl(DOM_URL, DOM_COV), rasterSize, opts.signal),
+      fetchFloat32GeoTiff(buildUrl(DGM_URL, DGM_COV), rasterSize, opts.signal)
     ]);
     if (!dom || !dgm) return emptyResult();
     const heights = subtractRasters(dom, dgm);
@@ -36223,499 +36218,6 @@ const vermontVcgiNdsm = {
       homeLat: opts.homeLat,
       homeLon: opts.homeLon,
       cropRadiusMeters: opts.cropRadiusMeters
-    });
-  }
-};
-const DEG = Math.PI / 180;
-const WGS84 = { a: 6378137, f: 1 / 298.257223563 };
-const BESSEL = { a: 6377397155e-3, f: 1 / 299.1528128 };
-const GRS80 = { a: 6378137, f: 1 / 298.257222101 };
-const HAYFORD = { a: 6378388, f: 1 / 297 };
-const SHIFT_BD72 = { tx: 106.869, ty: -52.297, tz: 103.724 };
-const SHIFT_MGI = { tx: -577.326, ty: -90.129, tz: -463.919 };
-function geoToEcef(latDeg, lonDeg, ell) {
-  const phi = latDeg * DEG;
-  const lam = lonDeg * DEG;
-  const e2 = 2 * ell.f - ell.f * ell.f;
-  const sinPhi = Math.sin(phi);
-  const cosPhi = Math.cos(phi);
-  const N2 = ell.a / Math.sqrt(1 - e2 * sinPhi * sinPhi);
-  return [
-    N2 * cosPhi * Math.cos(lam),
-    N2 * cosPhi * Math.sin(lam),
-    N2 * (1 - e2) * sinPhi
-  ];
-}
-function ecefToGeo(x2, y3, z2, ell) {
-  const e2 = 2 * ell.f - ell.f * ell.f;
-  const lon = Math.atan2(y3, x2);
-  const p2 = Math.sqrt(x2 * x2 + y3 * y3);
-  let phi = Math.atan2(z2, p2 * (1 - e2));
-  for (let i3 = 0; i3 < 4; i3++) {
-    const sinPhi = Math.sin(phi);
-    const N2 = ell.a / Math.sqrt(1 - e2 * sinPhi * sinPhi);
-    const h2 = p2 / Math.cos(phi) - N2;
-    phi = Math.atan2(z2, p2 * (1 - e2 * N2 / (N2 + h2)));
-  }
-  return [phi / DEG, lon / DEG];
-}
-function shiftDatum(latDeg, lonDeg, srcEll, dstEll, shift) {
-  const [x2, y3, z2] = geoToEcef(latDeg, lonDeg, srcEll);
-  return ecefToGeo(x2 + shift.tx, y3 + shift.ty, z2 + shift.tz, dstEll);
-}
-function tmForward(latDeg, lonDeg, params) {
-  const { lat0Deg, lon0Deg, k0, fe, fn, ell } = params;
-  const { a: a2, f: f2 } = ell;
-  const e2 = 2 * f2 - f2 * f2;
-  const phi = latDeg * DEG;
-  const phi0 = lat0Deg * DEG;
-  const dLam = (lonDeg - lon0Deg) * DEG;
-  const sinPhi = Math.sin(phi);
-  const cosPhi = Math.cos(phi);
-  const tanPhi = Math.tan(phi);
-  const T = tanPhi * tanPhi;
-  const C2 = e2 / (1 - e2) * cosPhi * cosPhi;
-  const A2 = dLam * cosPhi;
-  const N2 = a2 / Math.sqrt(1 - e2 * sinPhi * sinPhi);
-  const arc = (p2) => {
-    return a2 * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * p2 - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * p2) + (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * p2) - 35 * e2 * e2 * e2 / 3072 * Math.sin(6 * p2));
-  };
-  const M2 = arc(phi);
-  const M0 = arc(phi0);
-  const A22 = A2 * A2;
-  const A3 = A22 * A2;
-  const A4 = A22 * A22;
-  const A5 = A4 * A2;
-  const A6 = A3 * A3;
-  const x2 = fe + k0 * N2 * (A2 + (1 - T + C2) * A3 / 6 + (5 - 18 * T + T * T + 72 * C2 - 58 * e2) * A5 / 120);
-  const y3 = fn + k0 * (M2 - M0 + N2 * tanPhi * (A22 / 2 + (5 - T + 9 * C2 + 4 * C2 * C2) * A4 / 24 + (61 - 58 * T + T * T + 600 * C2 - 330 * e2) * A6 / 720));
-  return { x: x2, y: y3 };
-}
-function lccForward(latDeg, lonDeg, params) {
-  const { lat1Deg, lat2Deg, lat0Deg, lon0Deg, fe, fn, ell } = params;
-  const { a: a2, f: f2 } = ell;
-  const e2 = 2 * f2 - f2 * f2;
-  const e3 = Math.sqrt(e2);
-  const phi1 = lat1Deg * DEG;
-  const phi2 = lat2Deg * DEG;
-  const phi0 = lat0Deg * DEG;
-  const lam0 = lon0Deg * DEG;
-  const phi = latDeg * DEG;
-  const lam = lonDeg * DEG;
-  const m2 = (p2) => Math.cos(p2) / Math.sqrt(1 - e2 * Math.sin(p2) * Math.sin(p2));
-  const t3 = (p2) => {
-    const esinp = e3 * Math.sin(p2);
-    return Math.tan(Math.PI / 4 - p2 / 2) / Math.pow((1 - esinp) / (1 + esinp), e3 / 2);
-  };
-  const m1 = m2(phi1);
-  const m22 = m2(phi2);
-  const t0 = t3(phi0);
-  const t1 = t3(phi1);
-  const t22 = t3(phi2);
-  const tp = t3(phi);
-  const n3 = (Math.log(m1) - Math.log(m22)) / (Math.log(t1) - Math.log(t22));
-  const F = m1 / (n3 * Math.pow(t1, n3));
-  const r2 = a2 * F * Math.pow(tp, n3);
-  const r0 = a2 * F * Math.pow(t0, n3);
-  const theta = n3 * (lam - lam0);
-  const x2 = fe + r2 * Math.sin(theta);
-  const y3 = fn + r0 - r2 * Math.cos(theta);
-  return { x: x2, y: y3 };
-}
-const epsg_31370 = {
-  code: 31370,
-  urn: "http://www.opengis.net/def/crs/EPSG/0/31370",
-  project: (lat, lon) => {
-    const [latBd, lonBd] = shiftDatum(lat, lon, WGS84, HAYFORD, SHIFT_BD72);
-    return lccForward(
-      latBd,
-      lonBd,
-      {
-        lat1Deg: 49.8333339,
-        lat2Deg: 51.1666672333,
-        lat0Deg: 90,
-        lon0Deg: 4.367486666666666,
-        fe: 150000.013,
-        fn: 5400088438e-3,
-        ell: HAYFORD
-      }
-    );
-  }
-};
-function makeUtmEntry(zone, ell, code, urn) {
-  const cm = 6 * zone - 183;
-  return {
-    code,
-    urn,
-    project: (lat, lon) => tmForward(
-      lat,
-      lon,
-      {
-        lat0Deg: 0,
-        lon0Deg: cm,
-        k0: 0.9996,
-        fe: 5e5,
-        fn: 0,
-        ell
-      }
-    )
-  };
-}
-const epsg_25832 = makeUtmEntry(
-  32,
-  GRS80,
-  25832,
-  "http://www.opengis.net/def/crs/EPSG/0/25832"
-);
-const epsg_25833 = makeUtmEntry(
-  33,
-  GRS80,
-  25833,
-  "http://www.opengis.net/def/crs/EPSG/0/25833"
-);
-const epsg_32633 = makeUtmEntry(
-  33,
-  WGS84,
-  32633,
-  "http://www.opengis.net/def/crs/EPSG/0/32633"
-);
-const epsg_31254 = {
-  code: 31254,
-  urn: "http://www.opengis.net/def/crs/EPSG/0/31254",
-  project: (lat, lon) => {
-    const [latMgi, lonMgi] = shiftDatum(lat, lon, WGS84, BESSEL, SHIFT_MGI);
-    return tmForward(
-      latMgi,
-      lonMgi,
-      {
-        lat0Deg: 0,
-        lon0Deg: 10.333333333,
-        k0: 1,
-        fe: 0,
-        fn: -5e6,
-        ell: BESSEL
-      }
-    );
-  }
-};
-const epsg_31256 = {
-  code: 31256,
-  urn: "http://www.opengis.net/def/crs/EPSG/0/31256",
-  project: (lat, lon) => {
-    const [latMgi, lonMgi] = shiftDatum(lat, lon, WGS84, BESSEL, SHIFT_MGI);
-    return tmForward(
-      latMgi,
-      lonMgi,
-      {
-        lat0Deg: 0,
-        lon0Deg: 13.333333333,
-        k0: 1,
-        fe: 0,
-        fn: -5e6,
-        ell: BESSEL
-      }
-    );
-  }
-};
-const REGISTRY = /* @__PURE__ */ new Map();
-for (const e2 of [epsg_31370, epsg_25832, epsg_25833, epsg_32633, epsg_31254, epsg_31256]) {
-  REGISTRY.set(e2.code, e2);
-}
-function getEpsg(code) {
-  return REGISTRY.get(code);
-}
-function projectBbox(bbox, entry) {
-  const corners = [
-    entry.project(bbox.minLat, bbox.minLon),
-    entry.project(bbox.minLat, bbox.maxLon),
-    entry.project(bbox.maxLat, bbox.minLon),
-    entry.project(bbox.maxLat, bbox.maxLon)
-  ];
-  let minX = Infinity, maxX = -Infinity;
-  let minY = Infinity, maxY = -Infinity;
-  for (const c2 of corners) {
-    if (c2.x < minX) minX = c2.x;
-    if (c2.x > maxX) maxX = c2.x;
-    if (c2.y < minY) minY = c2.y;
-    if (c2.y > maxY) maxY = c2.y;
-  }
-  return { minX, minY, maxX, maxY };
-}
-const DOM_URL$1 = "https://owsproxy.lgl-bw.de/owsproxy/wcs/WCS_INSP_BW_Hoehe_Coverage_DOM5";
-const DGM_URL = "https://owsproxy.lgl-bw.de/owsproxy/wcs/WCS_INSP_BW_Hoehe_Coverage_DGM1";
-const COVERAGE$1 = "EL.ElevationGridCoverage";
-const BW_BBOX = { minLat: 47.5, maxLat: 49.85, minLon: 7.45, maxLon: 10.55 };
-const badenWurttembergLgl = {
-  id: "de-bw-lgl",
-  name: "LGL BW DOM5 + DGM1 (Baden-Württemberg)",
-  //LGL BW DOM is published on a 5 m grid. The DGM1 is 1 m but the
-  //subtracted output is bounded by the coarser DOM resolution, so
-  //we declare 5 m as the effective native pitch.
-  nativeCellPitchMeters: 5,
-  covers(lat, lon) {
-    return lat >= BW_BBOX.minLat && lat <= BW_BBOX.maxLat && lon >= BW_BBOX.minLon && lon <= BW_BBOX.maxLon;
-  },
-  async fetchShadowRegions(opts) {
-    const rasterSize = Math.min(
-      RASTER_DEFAULTS.maxRasterSize,
-      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
-    );
-    const bbox = homeBbox(
-      opts.homeLat,
-      opts.homeLon,
-      opts.radiusMeters,
-      RASTER_DEFAULTS.bboxPadFactor
-    );
-    if (bbox.maxLat < BW_BBOX.minLat || bbox.minLat > BW_BBOX.maxLat || bbox.maxLon < BW_BBOX.minLon || bbox.minLon > BW_BBOX.maxLon) {
-      return emptyResult();
-    }
-    const epsg = getEpsg(25832);
-    if (!epsg) return emptyResult();
-    const proj = projectBbox(bbox, epsg);
-    const buildUrl = (base) => {
-      const params = new URLSearchParams({
-        SERVICE: "WCS",
-        VERSION: "2.0.1",
-        REQUEST: "GetCoverage",
-        COVERAGEID: COVERAGE$1,
-        FORMAT: "image/tiff",
-        SUBSETTINGCRS: epsg.urn
-      });
-      params.append("SUBSET", `E(${proj.minX.toFixed(2)},${proj.maxX.toFixed(2)})`);
-      params.append("SUBSET", `N(${proj.minY.toFixed(2)},${proj.maxY.toFixed(2)})`);
-      params.append("SCALESIZE", `X(${rasterSize}),Y(${rasterSize})`);
-      return `${base}?${params.toString()}`;
-    };
-    const [dom, dgm] = await Promise.all([
-      fetchFloat32GeoTiff(buildUrl(DOM_URL$1), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DGM_URL), rasterSize, opts.signal)
-    ]);
-    if (!dom || !dgm) return emptyResult();
-    const heights = subtractRasters(dom, dgm);
-    return processHeightRaster(heights, {
-      rasterSize,
-      minLat: bbox.minLat,
-      maxLat: bbox.maxLat,
-      minLon: bbox.minLon,
-      maxLon: bbox.maxLon,
-      homeLat: opts.homeLat,
-      homeLon: opts.homeLon,
-      cropRadiusMeters: opts.cropRadiusMeters
-    }, {
-      //DOM is published at 5 m and DGM at 1 m; the subtraction
-      //is dominated by the coarser DOM grid which puts a lot of
-      //2-5 m noise on building edges and low vegetation. Median
-      //pre-filter kills isolated spikes, threshold raised to 7 m
-      //skips tall scrub and 1-story garden sheds whose render
-      //would otherwise dominate the shadow output.
-      medianSmooth: true,
-      heightThreshM: 7
-    });
-  }
-};
-const WCS_URL$1 = "https://gis.tirol.gv.at/arcgis/services/Service_Public/terrain/MapServer/WCSServer";
-const DOM_COV = "Oberflaechenmodell_5m_M28";
-const DGM_COV = "Gelaendemodell_5m_M28";
-const TIROL_BBOX = { minLat: 46.65, maxLat: 47.75, minLon: 10.05, maxLon: 12.95 };
-const austriaTirolAls = {
-  id: "at-tirol-als",
-  name: "Land Tirol ALS (Tyrol, Austria)",
-  //Tirol's WCS publishes the state-wide DGM / DOM at a 5 m grid.
-  nativeCellPitchMeters: 5,
-  covers(lat, lon) {
-    return lat >= TIROL_BBOX.minLat && lat <= TIROL_BBOX.maxLat && lon >= TIROL_BBOX.minLon && lon <= TIROL_BBOX.maxLon;
-  },
-  async fetchShadowRegions(opts) {
-    const rasterSize = Math.min(
-      RASTER_DEFAULTS.maxRasterSize,
-      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
-    );
-    const bbox = homeBbox(
-      opts.homeLat,
-      opts.homeLon,
-      opts.radiusMeters,
-      RASTER_DEFAULTS.bboxPadFactor
-    );
-    if (bbox.maxLat < TIROL_BBOX.minLat || bbox.minLat > TIROL_BBOX.maxLat || bbox.maxLon < TIROL_BBOX.minLon || bbox.minLon > TIROL_BBOX.maxLon) {
-      return emptyResult();
-    }
-    const epsg = getEpsg(31254);
-    if (!epsg) return emptyResult();
-    const proj = projectBbox(bbox, epsg);
-    const buildUrl = (cov) => {
-      const params = new URLSearchParams({
-        SERVICE: "WCS",
-        VERSION: "2.0.1",
-        REQUEST: "GetCoverage",
-        COVERAGEID: cov,
-        FORMAT: "image/tiff",
-        SUBSETTINGCRS: epsg.urn
-      });
-      params.append("SUBSET", `x(${proj.minX.toFixed(2)},${proj.maxX.toFixed(2)})`);
-      params.append("SUBSET", `y(${proj.minY.toFixed(2)},${proj.maxY.toFixed(2)})`);
-      params.append("SCALESIZE", `x(${rasterSize}),y(${rasterSize})`);
-      return `${WCS_URL$1}?${params.toString()}`;
-    };
-    const [dom, dgm] = await Promise.all([
-      fetchFloat32GeoTiff(buildUrl(DOM_COV), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DGM_COV), rasterSize, opts.signal)
-    ]);
-    if (!dom || !dgm) return emptyResult();
-    const heights = subtractRasters(dom, dgm);
-    return processHeightRaster(heights, {
-      rasterSize,
-      minLat: bbox.minLat,
-      maxLat: bbox.maxLat,
-      minLon: bbox.minLon,
-      maxLon: bbox.maxLon,
-      homeLat: opts.homeLat,
-      homeLon: opts.homeLon,
-      cropRadiusMeters: opts.cropRadiusMeters
-    }, {
-      //5 m native grid + DSM-DTM subtraction = noisy edges. Median
-      //pre-filter cleans single-cell artefacts; threshold lifted
-      //to 7 m skips tall scrub the Tirol forest serves as DSM-DTM
-      //residuals.
-      medianSmooth: true,
-      heightThreshM: 7
-    });
-  }
-};
-const DOM_URL = "https://gis.stmk.gv.at/arcgis/services/OGD/ALSHoeheninformation_1m_UTM33N/MapServer/WCSServer";
-const DTM_URL = "https://gis.stmk.gv.at/arcgis/services/OGD/ALSGelaendeinformation_1m_UTM33N/MapServer/WCSServer";
-const COVERAGE = "Coverage4";
-const AT_STMK_BBOX = { minLat: 46.55, maxLat: 47.85, minLon: 13.5, maxLon: 16.2 };
-const austriaSteiermarkAls = {
-  id: "at-stmk-als",
-  name: "Land Steiermark ALS (Styria, Austria)",
-  //ALS Höhen-/Geländeinformation are published on a 1 m grid.
-  nativeCellPitchMeters: 1,
-  covers(lat, lon) {
-    return lat >= AT_STMK_BBOX.minLat && lat <= AT_STMK_BBOX.maxLat && lon >= AT_STMK_BBOX.minLon && lon <= AT_STMK_BBOX.maxLon;
-  },
-  async fetchShadowRegions(opts) {
-    const rasterSize = Math.min(
-      RASTER_DEFAULTS.maxRasterSize,
-      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
-    );
-    const bbox = homeBbox(
-      opts.homeLat,
-      opts.homeLon,
-      opts.radiusMeters,
-      RASTER_DEFAULTS.bboxPadFactor
-    );
-    if (bbox.maxLat < AT_STMK_BBOX.minLat || bbox.minLat > AT_STMK_BBOX.maxLat || bbox.maxLon < AT_STMK_BBOX.minLon || bbox.minLon > AT_STMK_BBOX.maxLon) {
-      return emptyResult();
-    }
-    const epsg = getEpsg(32633);
-    if (!epsg) return emptyResult();
-    const proj = projectBbox(bbox, epsg);
-    const buildUrl = (base) => {
-      const params = new URLSearchParams({
-        SERVICE: "WCS",
-        VERSION: "2.0.1",
-        REQUEST: "GetCoverage",
-        COVERAGEID: COVERAGE,
-        FORMAT: "image/tiff",
-        SUBSETTINGCRS: epsg.urn
-      });
-      params.append("SUBSET", `x(${proj.minX.toFixed(2)},${proj.maxX.toFixed(2)})`);
-      params.append("SUBSET", `y(${proj.minY.toFixed(2)},${proj.maxY.toFixed(2)})`);
-      params.append("SCALESIZE", `x(${rasterSize}),y(${rasterSize})`);
-      return `${base}?${params.toString()}`;
-    };
-    const [dom, dtm] = await Promise.all([
-      fetchFloat32GeoTiff(buildUrl(DOM_URL), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DTM_URL), rasterSize, opts.signal)
-    ]);
-    if (!dom || !dtm) return emptyResult();
-    const heights = subtractRasters(dom, dtm);
-    return processHeightRaster(heights, {
-      rasterSize,
-      minLat: bbox.minLat,
-      maxLat: bbox.maxLat,
-      minLon: bbox.minLon,
-      maxLon: bbox.maxLon,
-      homeLat: opts.homeLat,
-      homeLon: opts.homeLon,
-      cropRadiusMeters: opts.cropRadiusMeters
-    }, {
-      //1 m DSM minus 1 m DTM looks clean on paper but the
-      //Steiermark mosaic carries low residuals over forest and
-      //agricultural land that saturate the default 5 m threshold
-      //(>80 % of cells passing). Median pre-filter + 7 m threshold
-      //recovers building-tree separation without losing real
-      //roofs.
-      medianSmooth: true,
-      heightThreshM: 7
-    });
-  }
-};
-const WCS_URL = "https://remotesensing.vlaanderen.be/services/openlidar/wcs";
-const DSM_COV = "openlidar__LiDAR_DHMV_II_DSM_1M";
-const DTM_COV = "openlidar__LiDAR_DHMV_II_DEM_1M";
-const FL_BBOX = { minLat: 50.65, maxLat: 51.55, minLon: 2.5, maxLon: 5.95 };
-const flandersDhmv2 = {
-  id: "be-fl-dhmv2",
-  name: "Digitaal Vlaanderen DHMVII (Flanders, Belgium)",
-  //DSM_1M and DEM_1M are published on a 1 m grid.
-  nativeCellPitchMeters: 1,
-  covers(lat, lon) {
-    return lat >= FL_BBOX.minLat && lat <= FL_BBOX.maxLat && lon >= FL_BBOX.minLon && lon <= FL_BBOX.maxLon;
-  },
-  async fetchShadowRegions(opts) {
-    const rasterSize = Math.min(
-      RASTER_DEFAULTS.maxRasterSize,
-      Math.max(RASTER_DEFAULTS.minRasterSize, Math.round(opts.rasterSize))
-    );
-    const bbox = homeBbox(
-      opts.homeLat,
-      opts.homeLon,
-      opts.radiusMeters,
-      RASTER_DEFAULTS.bboxPadFactor
-    );
-    if (bbox.maxLat < FL_BBOX.minLat || bbox.minLat > FL_BBOX.maxLat || bbox.maxLon < FL_BBOX.minLon || bbox.minLon > FL_BBOX.maxLon) {
-      return emptyResult();
-    }
-    const epsg = getEpsg(31370);
-    if (!epsg) return emptyResult();
-    const proj = projectBbox(bbox, epsg);
-    const buildUrl = (cov) => {
-      const params = new URLSearchParams({
-        SERVICE: "WCS",
-        VERSION: "2.0.1",
-        REQUEST: "GetCoverage",
-        COVERAGEID: cov,
-        FORMAT: "image/tiff",
-        SUBSETTINGCRS: epsg.urn
-      });
-      params.append("SUBSET", `X(${proj.minX.toFixed(2)},${proj.maxX.toFixed(2)})`);
-      params.append("SUBSET", `Y(${proj.minY.toFixed(2)},${proj.maxY.toFixed(2)})`);
-      params.append("SCALESIZE", `i(${rasterSize}),j(${rasterSize})`);
-      return `${WCS_URL}?${params.toString()}`;
-    };
-    const [dsm, dtm] = await Promise.all([
-      fetchFloat32GeoTiff(buildUrl(DSM_COV), rasterSize, opts.signal),
-      fetchFloat32GeoTiff(buildUrl(DTM_COV), rasterSize, opts.signal)
-    ]);
-    if (!dsm || !dtm) return emptyResult();
-    const heights = subtractRasters(dsm, dtm);
-    return processHeightRaster(heights, {
-      rasterSize,
-      minLat: bbox.minLat,
-      maxLat: bbox.maxLat,
-      minLon: bbox.minLon,
-      maxLon: bbox.maxLon,
-      homeLat: opts.homeLat,
-      homeLon: opts.homeLon,
-      cropRadiusMeters: opts.cropRadiusMeters
-    }, {
-      //DSM 1 m minus DEM 1 m: same noise profile as the Austrian
-      //and BW DSM-DTM pipelines. Median pre-filter + 7 m threshold
-      //matches the rest of the subtraction-based providers so the
-      //rendered shadows look consistent across borders.
-      medianSmooth: true,
-      heightThreshM: 7
     });
   }
 };
@@ -36804,9 +36306,6 @@ function createLocalNdsmSource(cfg) {
   };
 }
 const LIDAR_SOURCES = [
-  flandersDhmv2,
-  austriaTirolAls,
-  austriaSteiermarkAls,
   franceLidarHd,
   nrwLidarNdom,
   polandGugikNmpt,
@@ -36816,8 +36315,7 @@ const LIDAR_SOURCES = [
   spainPnoaLidar,
   netherlandsAhn4,
   norwayKartverketNhm,
-  brandenburgBerlinDom,
-  badenWurttembergLgl
+  brandenburgBerlinDom
 ];
 function findLidarSource(lat, lon) {
   for (const src of LIDAR_SOURCES) {
@@ -37708,12 +37206,9 @@ const _HeliosEngine = class _HeliosEngine {
         zoom: 18,
         pitch: 55,
         bearing: this.homeLat >= 0 ? 180 : 0,
-        //Zoom is locked to the resting pose. The 3D camera +
-        //LiDAR overlay are tuned for this single altitude, and
-        //letting the user wander off-zoom only opened the door
-        //to "why does my card look different from the docs"
-        //screenshots. detail-mode separately raises maxZoom
-        //for its dive animation and resets it on exit.
+        //Zoom is locked to the resting pose. The 3D camera + LiDAR overlay are tuned for this single altitude, and letting the user wander
+        //off-zoom only opened the door to "why does my card look different from the docs" screenshots. detail-mode separately raises maxZoom for
+        //its dive animation and resets it on exit.
         minZoom: 18,
         maxZoom: 18,
         dragPan: false,
@@ -37882,19 +37377,14 @@ const _HeliosEngine = class _HeliosEngine {
   //             card viewport, Fiord's #45516E reads as "evening"
   //             without losing the basemap content underneath.
   //
-  //We resolve to a single URL because OpenFreeMap has no separate
-  //light / dark pair per style, the dark style is its own thing
-  //and replaces both Liberty and Positron when the card chrome is
-  //dark. The user-side mapping is therefore:
+  //We resolve to a single URL because OpenFreeMap has no separate light / dark pair per style, the dark style is its own thing and replaces both
+  //Liberty and Positron when the card chrome is dark. The user-side mapping is therefore:
   //
-  //  map-style: streets  + card-theme: light → liberty
-  //  map-style: streets  + card-theme: dark  → fiord
-  //  map-style: minimal  + card-theme: light → positron
-  //  map-style: minimal  + card-theme: dark  → fiord
+  // map-style: streets  + card-theme: light → liberty map-style: streets  + card-theme: dark  → fiord map-style: minimal  + card-theme: light →
+  // positron map-style: minimal  + card-theme: dark  → fiord
   //
-  //All styles use the same vector tile source backing the buildings
-  //fetch in engine/buildings.ts, so a style change keeps the home
-  //and surroundings GeoJSON cache intact.
+  //All styles use the same vector tile source backing the buildings fetch in engine/buildings.ts, so a style change keeps the home and surroundings
+  //GeoJSON cache intact.
   _resolveMapStyle() {
     const raw2 = String(this.cfg["map-style"] ?? "streets").toLowerCase();
     const isDark = String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
@@ -37918,9 +37408,8 @@ const _HeliosEngine = class _HeliosEngine {
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
     return IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
   }
-  //Reads the user-configured shadow precision, normalises any
-  //off-spec value to the default and returns one of the canonical
-  //LidarPrecisionLevel members.
+  //Reads the user-configured shadow precision, normalises any off-spec value to the default and returns one of the canonical LidarPrecisionLevel
+  //members.
   _lidarPrecisionLevel() {
     const v2 = String(this.cfg["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION).toLowerCase();
     if (v2 === "low" || v2 === "medium" || v2 === "high") {
@@ -37959,8 +37448,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return best;
   }
-  //Resolve the weather variables at a given time as seen from the
-  //home location.
+  //Resolve the weather variables at a given time as seen from the home location.
   //
   //Single source: _homeHourlyData, populated by fetchHomePointData.
   //If null (initial state, fetch failed, or fetch in flight) we
@@ -38201,11 +37689,10 @@ const _HeliosEngine = class _HeliosEngine {
       this.map.removeSource("helios-cloud-rings");
     }
   }
-  //Update the disc + ring geometry to reflect the given cloud cover
-  //percentage. Called from _renderForCurrentSelection so it ticks
-  //both with live time progression and with manual scrubbing.
+  //Update the disc + ring geometry to reflect the given cloud cover percentage. Called from _renderForCurrentSelection so it ticks both with live
+  //time progression and with manual scrubbing.
   //
-  //  cloudPct ∈ [0, 100]   , coverage at the home location now
+  // cloudPct ∈ [0, 100]   , coverage at the home location now
   //
   //The ring (100 % reference) has fixed radius CLOUD_DISC_RADIUS_M.
   //The disc scales linearly: radius = CLOUD_DISC_RADIUS_M * pct/100.
@@ -38316,10 +37803,8 @@ const _HeliosEngine = class _HeliosEngine {
   //for concave footprints (L, U) where a convex hull would cut
   //a too-large hole and expose terrain at the inner corners.
   //
-  //Vertex elevation is queried per-vertex against the live
-  //terrain mesh, matching what MapLibre's fill-extrusion shader
-  //does internally so the silhouette tracks the rendered
-  //extrusion exactly.
+  //Vertex elevation is queried per-vertex against the live terrain mesh, matching what MapLibre's fill-extrusion shader does internally so the
+  //silhouette tracks the rendered extrusion exactly.
   //
   //Returns an empty array until the buildings GeoJSON has landed.
   projectHomeFootprints() {
@@ -38409,9 +37894,8 @@ const _HeliosEngine = class _HeliosEngine {
       console.warn("[HELIOS] LiDAR view layer init failed:", err);
     }
   }
-  //Read all LiDAR View visual knobs off the current config and push
-  //them to the layer. Called on init and whenever updateConfig sees a
-  //relevant key change.
+  //Read all LiDAR View visual knobs off the current config and push them to the layer. Called on init and whenever updateConfig sees a relevant key
+  //change.
   _pushLidarViewConfig() {
     if (!this._lidarViewLayer) return;
     const [fullR, fadeR] = this._lidarViewFadeRange();
@@ -38427,13 +37911,9 @@ const _HeliosEngine = class _HeliosEngine {
   setLidarViewFadeAlpha(alpha) {
     this._lidarViewLayer?.setAlphaFade(alpha);
   }
-  //Distance-based opacity fall-off bounds for the View. Both
-  //thresholds are fixed: full opacity inside
-  //LIDAR_VIEW_FULL_OPACITY_RADIUS_M, smooth fade out at
-  //LIDAR_VIEW_DISPLAY_RADIUS_M. Decoupled from building-radius on
-  //purpose, so the LiDAR overlay is always painted at a tight,
-  //consistent disc no matter how far the underlying raster
-  //actually extends.
+  //Distance-based opacity fall-off bounds for the View. Both thresholds are fixed: full opacity inside LIDAR_VIEW_FULL_OPACITY_RADIUS_M, smooth
+  //fade out at LIDAR_VIEW_DISPLAY_RADIUS_M. Decoupled from building-radius on purpose, so the LiDAR overlay is always painted at a tight,
+  //consistent disc no matter how far the underlying raster actually extends.
   _lidarViewFadeRange() {
     return [LIDAR_VIEW_FULL_OPACITY_RADIUS_M, LIDAR_VIEW_DISPLAY_RADIUS_M];
   }
@@ -38579,8 +38059,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return Math.min(100, v2);
   }
-  //Resolves the configured building base colour. Falls back to the
-  //neutral grey if missing or malformed.
+  //Resolves the configured building base colour. Falls back to the neutral grey if missing or malformed.
   _buildingColor() {
     const v2 = String(this.cfg["building-color"] ?? "").trim();
     return /^#[0-9a-fA-F]{6}$/.test(v2) ? v2 : DEFAULT_BUILDING_COLOR_HEX;
@@ -38794,9 +38273,7 @@ const _HeliosEngine = class _HeliosEngine {
       console.warn("[HELIOS] Buildings fetch failed:", err);
     });
   }
-  //Wire up the LiDAR shadow pipeline for the current home + precision
-  //setting. Idempotent: safe to call after any config / position
-  //change.
+  //Wire up the LiDAR shadow pipeline for the current home + precision setting. Idempotent: safe to call after any config / position change.
   //
   //  - Resolves the country provider that covers the home (France
   //    HD only for now, see engine/lidar.ts).
@@ -38878,10 +38355,8 @@ const _HeliosEngine = class _HeliosEngine {
     homeSrc?.setData(this._buildingsData?.home ?? empty);
     surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
   }
-  //Repaint hillshade direction, satellite raster, night-shade overlay,
-  //fog and building tints to match the current sun altitude. Phases
-  //blend continuously rather than at hard thresholds so dawn/dusk,
-  //golden hour, mid-day and night feel like a smooth progression.
+  //Repaint hillshade direction, satellite raster, night-shade overlay, fog and building tints to match the current sun altitude. Phases blend
+  //continuously rather than at hard thresholds so dawn/dusk, golden hour, mid-day and night feel like a smooth progression.
   //
   //Altitude bands (degrees above horizon):
   //  alt < -6   : deep night          (cold blue/black, low contrast)
@@ -38961,8 +38436,7 @@ const _HeliosEngine = class _HeliosEngine {
             sunAzimuthDeg: azimuth,
             sunAltitudeDeg: altitude,
             homeLat: this.homeLat,
-            //Clip shadows to the building visibility disc so
-            //they never extend past the rendered surroundings.
+            //Clip shadows to the building visibility disc so they never extend past the rendered surroundings.
             clipCenterLat: this.homeLat,
             clipCenterLon: this.homeLon,
             clipRadiusMeters: radius
@@ -39059,9 +38533,7 @@ const _HeliosEngine = class _HeliosEngine {
         center: [this.homeLon, this.homeLat],
         zoom: 18,
         pitch: 55,
-        //Same hemisphere-aware bearing as the initial setup
-        //above, recentering must restore the resting pose,
-        //not flip the orientation.
+        //Same hemisphere-aware bearing as the initial setup above, recentering must restore the resting pose, not flip the orientation.
         bearing: this.homeLat >= 0 ? 180 : 0,
         duration: dur
       }
@@ -39175,8 +38647,7 @@ const _HeliosEngine = class _HeliosEngine {
   isDetailMode() {
     return this._detailMode;
   }
-  //Compute the screen-space layout of the on-map readout chips and
-  //the leader lines that tie them to the home / on-ground ring.
+  //Compute the screen-space layout of the on-map readout chips and the leader lines that tie them to the home / on-ground ring.
   //
   //  cloudLabel, where the cloud-cover chip should be drawn (in
   //               CSS pixels, relative to the map canvas). Sits to
@@ -39210,8 +38681,7 @@ const _HeliosEngine = class _HeliosEngine {
   //               the PV / battery chip leader lines and as the
   //               centre of the cloud fill disc.
   //
-  //Returns null when the map isn't ready yet, the card treats
-  //null as "don't render the overlay this frame".
+  //Returns null when the map isn't ready yet, the card treats null as "don't render the overlay this frame".
   projectHomeLabelLayout() {
     if (!this.map) {
       return null;
@@ -39330,11 +38800,9 @@ const _HeliosEngine = class _HeliosEngine {
       depth: cw
     };
   }
-  //Build the screen-space layout of the solar arc, the sun's
-  //current position on the arc, and the incidence ray.
+  //Build the screen-space layout of the solar arc, the sun's current position on the arc, and the incidence ray.
   //
-  //Returns null until the map is ready. The card uses null as
-  //"don't render the overlay this frame".
+  //Returns null until the map is ready. The card uses null as "don't render the overlay this frame".
   //
   //Each arc point also carries the irradiance (W/m²) at that
   //instant, computed with the current cloud cover applied
@@ -39542,11 +39010,8 @@ const _HeliosEngine = class _HeliosEngine {
     const lat = this.homeLat + north / mPerDegLat;
     return this._projectScenePoint(lon, lat, up);
   }
-  //Layout the shading-dome overlay: every populated cell of the
-  //learned residual grid projected onto the celestial hemisphere
-  //above the home, plus today's solar arc carrying the
-  //per-sample residual ratio so the user can see "the sun walks
-  //through this red cell at 17h, that's the tree".
+  //Layout the shading-dome overlay: every populated cell of the learned residual grid projected onto the celestial hemisphere above the home, plus
+  //today's solar arc carrying the per-sample residual ratio so the user can see "the sun walks through this red cell at 17h, that's the tree".
   //
   //`cellPolys`  — one entry per cell, four corner pixels of the
   //               annular sector (az ± 5 deg × alt ± 2.5 deg)
@@ -39696,8 +39161,7 @@ const _HeliosEngine = class _HeliosEngine {
       windSpeed: home.windSpeed
     };
   }
-  //card is expected to call this whenever onWeatherUpdate fires
-  //and re-render the chart.
+  //card is expected to call this whenever onWeatherUpdate fires and re-render the chart.
   getTimelineSeries() {
     const home = this._homeHourlyData;
     if (!home || !home.times.length) {
@@ -39776,9 +39240,7 @@ const _HeliosEngine = class _HeliosEngine {
         rateLimitStreak: this._rateLimitStreak
       },
       timeline: {
-        //Range + selectedTime kept as ISO strings rather than
-        //Date instances so the snapshot round-trips through
-        //JSON.stringify cleanly.
+        //Range + selectedTime kept as ISO strings rather than Date instances so the snapshot round-trips through JSON.stringify cleanly.
         rangeStart: this._getTimeRange()?.start?.toISOString() ?? null,
         rangeEnd: this._getTimeRange()?.end?.toISOString() ?? null,
         selectedTime: this._selectedTime?.toISOString() ?? null
@@ -42694,8 +42156,6 @@ const SVG_DE = '<svg viewBox="0 0 3 2"><rect width="3" height="2" fill="#ffce00"
 const SVG_PL = '<svg viewBox="0 0 8 5"><rect width="8" height="5" fill="#dc143c"/><rect width="8" height="2.5" fill="#fff"/></svg>';
 const SVG_CA = '<svg viewBox="0 0 24 12"><path d="M0,0h6v12H0zM18,0h6v12h-6z" fill="#ff0000"/><rect x="6" width="12" height="12" fill="#fff"/><path d="M12,2.2 12.6,3.7 14.4,3.4 13.6,4.8 15.4,5.4 14,6.3 14.7,7.6 13.2,7.3 13.4,8.9 12,8 10.6,8.9 10.8,7.3 9.3,7.6 10,6.3 8.6,5.4 10.4,4.8 9.6,3.4 11.4,3.7Z" fill="#ff0000"/></svg>';
 const SVG_US = '<svg viewBox="0 0 30 16"><rect width="30" height="16" fill="#fff"/><g fill="#b22234"><rect width="30" height="1.23"/><rect y="2.46" width="30" height="1.23"/><rect y="4.92" width="30" height="1.23"/><rect y="7.38" width="30" height="1.23"/><rect y="9.85" width="30" height="1.23"/><rect y="12.31" width="30" height="1.23"/><rect y="14.77" width="30" height="1.23"/></g><rect width="12" height="8.61" fill="#3c3b6e"/></svg>';
-const SVG_AT = '<svg viewBox="0 0 3 2"><rect width="3" height="2" fill="#ed2939"/><rect y="0.667" width="3" height="0.667" fill="#fff"/></svg>';
-const SVG_BE = '<svg viewBox="0 0 15 13"><rect width="5" height="13" fill="#000"/><rect x="5" width="5" height="13" fill="#fae042"/><rect x="10" width="5" height="13" fill="#ed2939"/></svg>';
 const COUNTRY_FLAG_SVG = {
   fr: SVG_FR,
   uk: SVG_UK,
@@ -42705,9 +42165,7 @@ const COUNTRY_FLAG_SVG = {
   de: SVG_DE,
   pl: SVG_PL,
   ca: SVG_CA,
-  us: SVG_US,
-  at: SVG_AT,
-  be: SVG_BE
+  us: SVG_US
 };
 const PROVIDER_TO_COUNTRY = {
   "fr-ign-lidarhd": "fr",
@@ -42717,13 +42175,9 @@ const PROVIDER_TO_COUNTRY = {
   "no-kartverket-nhm": "no",
   "de-nrw-ndom": "de",
   "de-bb-be-dom": "de",
-  "de-bw-lgl": "de",
   "pl-gugik-nmpt": "pl",
   "ca-hrdem": "ca",
-  "us-vt-vcgi-ndsm": "us",
-  "at-tirol-als": "at",
-  "at-stmk-als": "at",
-  "be-fl-dhmv2": "be"
+  "us-vt-vcgi-ndsm": "us"
 };
 function flagSvgForProvider(sourceId) {
   if (!sourceId) return null;
@@ -43745,13 +43199,9 @@ let HeliosCardEditor = class extends i$1 {
     super.connectedCallback();
     this._ensureEntityPicker();
   }
-  //ha-entity-picker is part of HA's lazy-loaded card-editor bundle.
-  //In a fresh tab, or in HA versions that don't pre-load it for
-  //custom cards, the tag is unknown until something on the page
-  //pulls it in. We force the load by creating a transient
-  //"entities" card and asking for its config element, the side
-  //effect registers ha-entity-picker. While the load is pending we
-  //fall back to a plain text input so the field is never broken.
+  //ha-entity-picker is part of HA's lazy-loaded card-editor bundle. In a fresh tab, or in HA versions that don't pre-load it for custom cards, the
+  //tag is unknown until something on the page pulls it in. We force the load by creating a transient "entities" card and asking for its config
+  //element, the side effect registers ha-entity-picker. While the load is pending we fall back to a plain text input so the field is never broken.
   async _ensureEntityPicker() {
     if (this._pickerReady) return;
     if (typeof customElements !== "undefined" && customElements.get("ha-entity-picker")) {
@@ -43810,10 +43260,8 @@ let HeliosCardEditor = class extends i$1 {
     if (!isFinite(v2)) return;
     this._update(key, v2);
   }
-  //Slider commit. Updates local state synchronously so the slider
-  //thumb tracks the drag, but defers the cross-component
-  //`config-changed` event by SLIDER_COMMIT_DELAY_MS so the engine
-  //doesn't see a flood of intermediate values.
+  //Slider commit. Updates local state synchronously so the slider thumb tracks the drag, but defers the cross-component `config-changed` event by
+  //SLIDER_COMMIT_DELAY_MS so the engine doesn't see a flood of intermediate values.
   _numSlider(key, e2) {
     const v2 = parseFloat(e2.target.value);
     if (!isFinite(v2)) return;
@@ -43919,10 +43367,8 @@ let HeliosCardEditor = class extends i$1 {
     }
     this._writePvArrays(list);
   }
-  //Updates the user-typed name for row `i`. Empty input clears the
-  //field to null, the summary then falls back to the auto-numbered
-  //"Row N" title. Stops the event so the parent <details>` toggle
-  //doesn't fire when the user types inside the input.
+  //Updates the user-typed name for row `i`. Empty input clears the field to null, the summary then falls back to the auto-numbered "Row N" title.
+  //Stops the event so the parent <details>` toggle doesn't fire when the user types inside the input.
   _arrayName(i3, e2) {
     const list = this._readPvArrays();
     if (i3 < 0 || i3 >= list.length) return;
@@ -43971,10 +43417,8 @@ let HeliosCardEditor = class extends i$1 {
   //the editor falls back to "everything closed", a valid state
   //since the section content is the only mandatory surface.
   //
-  //Also scrolls the just-opened section into view so the user is
-  //never left looking at the bottom of the previous section after
-  //a click. Done on the next rAF tick so the layout reflects the
-  //newly-expanded body before we measure.
+  //Also scrolls the just-opened section into view so the user is never left looking at the bottom of the previous section after a click. Done on
+  //the next rAF tick so the layout reflects the newly-expanded body before we measure.
   _onSectionToggle(sectionId, e2) {
     const el = e2.currentTarget;
     if (el.open) {
@@ -43986,10 +43430,8 @@ let HeliosCardEditor = class extends i$1 {
       this._openSection = null;
     }
   }
-  //Syncs the local open-set with the <details> element's runtime
-  //state on every native `toggle` event. Without this round-trip,
-  //Lit re-renders would snap the `open` attribute back to whatever
-  //_openArrayIndices says, fighting the user's click.
+  //Syncs the local open-set with the <details> element's runtime state on every native `toggle` event. Without this round-trip, Lit re-renders
+  //would snap the `open` attribute back to whatever _openArrayIndices says, fighting the user's click.
   _onArrayToggle(i3, e2) {
     const el = e2.currentTarget;
     const next3 = new Set(this._openArrayIndices);
@@ -44838,7 +44280,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.24"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.25"}`,
       labelStyle,
       versionStyle
     );
@@ -44862,7 +44304,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.24",
+        version: "1.7.0-alpha.25",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44870,7 +44312,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.24"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.25"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -45037,11 +44479,8 @@ let HeliosCard = class extends i$1 {
     this._lastHomeKey = "";
     this.requestUpdate();
   }
-  //Wipe all card-side cached production / forecast data and
-  //trigger a fresh fetch from HA and Open-Meteo. Used by the
-  //editor's "reset data cache" button so users can recover from
-  //a stuck calibration or a stale weather payload without
-  //touching localStorage manually.
+  //Wipe all card-side cached production / forecast data and trigger a fresh fetch from HA and Open-Meteo. Used by the editor's "reset data cache"
+  //button so users can recover from a stuck calibration or a stale weather payload without touching localStorage manually.
   resetDataCache() {
     this._pvHistory = null;
     this._pvSampleBuffer = [];

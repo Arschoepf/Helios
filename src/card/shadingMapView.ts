@@ -37,10 +37,8 @@ import {
 import { pickTranslations } from '../i18n';
 
 
-//Outer disc radius in user units. Picked to match the visual
-//density of the other editor cards: small enough to fit a 4-up
-//grid on a desktop without horizontal scroll, large enough that
-//a single 10°-wide azimuth wedge isn't a hairline.
+//Outer disc radius in user units. Picked to match the visual density of the other editor cards: small enough to fit a 4-up grid on a desktop without
+//horizontal scroll, large enough that a single 10°-wide azimuth wedge isn't a hairline.
 const DISC_R         = 110;
 const DISC_CENTRE    = 120;
 const DISC_VIEWBOX   = 240;
@@ -56,8 +54,7 @@ function ratioToFill(ratio: number): string
     const r = Math.max(0.3, Math.min(1.7, ratio));
     if (r < 1)
     {
-        //Under-prediction: model says more than reality. The
-        //further from 1, the deeper red.
+        //Under-prediction: model says more than reality. The further from 1, the deeper red.
         const t = (1 - r) / 0.7;    //[0, 1]
         const red   = 220;
         const green = Math.round(220 * (1 - t));
@@ -88,9 +85,7 @@ function renderCloudDisc(cloudBin: number, cells: ReturnType<typeof decodeCellKe
         const azEnd      = azCentre + AZIMUTH_STEP / 2;
         const altLow     = altCentre - ALTITUDE_STEP / 2;
         const altHigh    = altCentre + ALTITUDE_STEP / 2;
-        //Radius: horizon at DISC_R, zenith at 0. Inverting altitude
-        //so the sun-path's longer low-altitude arcs are at the
-        //outside of the disc.
+        //Radius: horizon at DISC_R, zenith at 0. Inverting altitude so the sun-path's longer low-altitude arcs are at the outside of the disc.
         const rOuter = DISC_R * (1 - altLow  / 90);
         const rInner = DISC_R * (1 - altHigh / 90);
         if (rOuter <= 0 || rInner < 0 || rOuter <= rInner) continue;

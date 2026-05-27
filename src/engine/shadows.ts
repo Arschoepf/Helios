@@ -12,8 +12,7 @@ export interface ProjectShadowsOptions
 {
     //Compass azimuth, degrees clockwise from north (matches getSunPosition).
     sunAzimuthDeg:    number;
-    //Altitude above horizon in degrees. Below minAltitudeDeg the
-    //projector returns an empty FeatureCollection.
+    //Altitude above horizon in degrees. Below minAltitudeDeg the projector returns an empty FeatureCollection.
     sunAltitudeDeg:   number;
     //Reference latitude for the metres-to-degrees-of-longitude
     //conversion. cos(lat) is constant over a Helios card's bbox.
@@ -88,8 +87,7 @@ export function projectExtrusionShadows(
         const dLatDeg = shadowDy * lenM / M_PER_DEG_LAT;
         const dLonDeg = shadowDx * lenM / mPerDegLon;
 
-        //Defend against MultiPolygon for portability even though our
-        //pipelines only emit single-polygon Features.
+        //Defend against MultiPolygon for portability even though our pipelines only emit single-polygon Features.
         let polygons: number[][][][] | null = null;
         if      (geom.type === 'Polygon')      polygons = [geom.coordinates as number[][][]];
         else if (geom.type === 'MultiPolygon') polygons = geom.coordinates as number[][][][];
@@ -141,10 +139,8 @@ export function projectExtrusionShadows(
     return { type: 'FeatureCollection', features: out };
 }
 
-//Cached approximation of the clip disc. The 64-vertex ring and the
-//per-edge `dx`, `dy` deltas Sutherland-Hodgman consumes never depend
-//on the sun position, so we rebuild them only when the clip center
-//or radius actually changes.
+//Cached approximation of the clip disc. The 64-vertex ring and the per-edge `dx`, `dy` deltas Sutherland-Hodgman consumes never depend on the sun
+//position, so we rebuild them only when the clip center or radius actually changes.
 interface ClipBundle
 {
     ring: Array<[number, number]>;
@@ -269,8 +265,7 @@ function clipConvexPolygon(
     return output;
 }
 
-//Andrew's monotone chain. Returns vertices CCW, NOT closed. Exported
-//for the LiDAR pipeline which uses it to wrap each consolidated region.
+//Andrew's monotone chain. Returns vertices CCW, NOT closed. Exported for the LiDAR pipeline which uses it to wrap each consolidated region.
 export function convexHull(pts: Array<[number, number]>): Array<[number, number]>
 {
     if (pts.length < 3) return pts.slice();
