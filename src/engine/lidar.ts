@@ -110,10 +110,10 @@ import { canadaHrdem }                 from './lidar/providers/ca';
 import { brandenburgBerlinDom }        from './lidar/providers/de-bb-be';
 import { vermontVcgiNdsm }             from './lidar/providers/us-vt';
 //Baden-Württemberg, Austria Tirol, Austria Steiermark and Belgium Flanders source files (de-bw, at-tirol, at-stmk, be-fl) all
-//live under ./lidar/providers/ and remain functional. They were registered briefly during the 1.7.0 alpha cycle and unregistered
-//again after the DSM-DTM subtraction quality was judged below the bar set by the existing nDSM providers (per-pixel subtraction
-//amplifies noise on building edges and over vegetation, which renders the cast shadows as blobs instead of recognisable footprints).
-//Re-enable by importing + appending to LIDAR_SOURCES when a cleaner data path is identified for those regions.
+//live under ./lidar/providers/ and remain functional but are NOT currently registered: the DSM-DTM subtraction quality on those
+//feeds was judged below the bar set by the existing nDSM providers (per-pixel subtraction amplifies noise on building edges and
+//over vegetation, which renders the cast shadows as blobs instead of recognisable footprints). Re-enable by importing +
+//appending to LIDAR_SOURCES when a cleaner data path is identified for those regions.
 import {
     createLocalNdsmSource,
     type LocalNdsmConfig

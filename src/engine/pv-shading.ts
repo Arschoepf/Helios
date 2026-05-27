@@ -144,28 +144,14 @@ export function sampleDtmAt(
 //covers a city block plus a generous tree canopy without paying
 //for the long tail of low-altitude grazing rays that contribute
 //almost nothing to the direct beam anyway.
-//Per-cell solar exposure across the entire LiDAR raster. Returns a Uint8Array indexed by (j * rasterSize + i), each byte 0 (in shadow at the
-//current sun position) or 255 (lit). Wired into the LiDAR-View overlay so the wireframe + dot cloud paints a live, camera-rotation-independent
-//"who's currently in sunlight" map alongside the height visualisation. NaN cells (no-data) and below-horizon sun both produce 0.
+//Per-cell solar exposure across the entire LiDAR raster, chunked across rAF ticks. Output is a Uint8Array indexed by (j * rasterSize + i),
+//each byte 0 (in shadow at the current sun position) or 255 (lit). Wired into the LiDAR-View overlay so the wireframe + dot cloud paints
+//a live, camera-rotation-independent "who's currently in sunlight" map alongside the height visualisation. NaN cells (no-data) and below-
+//horizon sun both produce 0.
 //
-//Cost: one raymarch per cell against the raster, same recipe as isPanelShaded just lifted out so it runs over the whole grid in a tight loop.
-//A 128x128 raster (typical "medium" precision) finishes in 50-100 ms on a modern desktop, a 256x256 high-precision raster in ~150 ms; the engine
-//schedules this via requestIdleCallback when the sun moves enough so the hit doesn't land on a user-interactive frame.
-export function computeLidarCellExposure(
-    raster:         NdsmRaster,
-    sunAltitudeDeg: number,
-    sunAzimuthDeg:  number,
-    stepM:          number = 2,
-    maxDistM:       number = 200,
-): Uint8Array
-{
-    const out = new Uint8Array(raster.rasterSize * raster.rasterSize);
-    computeLidarCellExposureRows(raster, sunAltitudeDeg, sunAzimuthDeg, 0, raster.rasterSize, out, stepM, maxDistM);
-    return out;
-}
-
-
-//Row-bounded variant of computeLidarCellExposure, used by the engine to chunk the raymarch across multiple animation frames so the main
+//Cost: one raymarch per cell against the raster, same recipe as isPanelShaded just lifted out so it runs over the whole grid in a tight
+//loop. The engine drives this in 32-row chunks per requestAnimationFrame tick so the cumulative 200-1500 ms wall time at high precision
+//never lands on the main thread as a single freeze; the user sees the irradiance map fill in row-by-row instead.
 //thread stays responsive while the irradiance map refreshes. The caller owns the output buffer (allocated once when the compute starts)
 //and walks j-row ranges through this function on each chunk tick; intermediate chunks see partially-populated frames, the user sees the
 //irradiance map filling in row-by-row instead of a 200-1500 ms freeze when a full-raster compute lands on a busy main thread. Rows

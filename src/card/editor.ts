@@ -341,7 +341,7 @@ export class HeliosCardEditor extends LitElement
     private _update(key: keyof HeliosConfig, value: unknown): void
     {
         const next = { ...this._cfg, [key]: value } as Record<string, unknown>;
-        //Silently strip removed-since-1.7 LiDAR View visual knobs the moment the user makes any edit, so the config self-heals without needing
+        //Silently strip the LiDAR View visual knobs that were collapsed into the in-card opacity slider, the moment the user makes any edit, so the config self-heals without needing
         //a one-shot migration. The runtime ignores them too, this just keeps the YAML tidy.
         for (const k of LIDAR_VIEW_LEGACY_KEYS)
         {

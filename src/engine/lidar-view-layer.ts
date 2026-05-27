@@ -142,7 +142,7 @@ export class LidarViewLayer implements CustomLayerInterface
     //wireframe so the lines stay visually crisp on top of the soft fill. Empty until setData runs, never uploaded when the raster is null.
     private _triIndexBuffer?: WebGLBuffer;
     private _triIdxCount: number = 0;
-    //Parallel per-vertex byte buffer carrying the live solar exposure (0 = in shadow, 255 = lit). Sourced from computeLidarCellExposure() in
+    //Parallel per-vertex byte buffer carrying the live solar exposure (0 = in shadow, 255 = lit). Sourced from computeLidarCellExposureRows() in
     //the engine, refreshed via setExposure() whenever the sun moves enough to recompute. When the attribute is disabled (no compute has run
     //yet, sun below horizon, etc.) the vertex shader reads a constant 1.0 via vertexAttrib1f, the fragment shader then renders at the
     //pre-exposure baseline (full lit, neutral tint).
@@ -431,7 +431,7 @@ export class LidarViewLayer implements CustomLayerInterface
     }
 
 
-    //Accept a per-raster-cell exposure byte array (length = rasterSize²) coming from computeLidarCellExposure(). Maps it through the cached
+    //Accept a per-raster-cell exposure byte array (length = rasterSize²) coming from computeLidarCellExposureRows(). Maps it through the cached
     //cellToVert into a per-vertex byte array, uploads to the GPU and flips _hasExposure so the next render reads from a_exposure instead of
     //the constant fallback. Passing null clears the override.
     public setExposure(perCellExposure: Uint8Array | null): void

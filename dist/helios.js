@@ -4247,13 +4247,17 @@ const heliosCardStyles = i$3`
         minus the LiDAR button itself), the home hitbox / glow, and
         the timeline. Easier to audit if any future overlay needs
         to be hidden in LiDAR View by looking at this single block. */
-    /*  Base transition kept on the unprefixed selectors so the fade
-        runs in BOTH directions. With the rule only declared inside
-        .lidar-view-active the elements faded out smoothly on entry
-        then snapped back on exit (selector no longer matches, no
-        transition property in scope). Declaring opacity transition
-        on the base elements lets the fade-in play when the active
-        class is removed.                                            */
+    /*  Base transition + composite-layer hint kept on the unprefixed
+        selectors so the fade runs in BOTH directions across every
+        browser. Declaring the transition only inside .lidar-view-
+        active made entry smooth but the exit snap-back instantly
+        because the selector no longer matched and the transition
+        property left scope; declaring it here keeps it in scope at
+        all times. The will-change: opacity hint promotes each element
+        to its own composite layer so the GPU drives the alpha sweep
+        instead of asking the painter to redo layout per frame,
+        which used to drop frames on the chips that sit inside
+        transform-less wrappers (time-bar, solar-svg).               */
     .overlay-top-left,
     .home-glow-svg,
     .home-hitbox,
@@ -4271,6 +4275,7 @@ const heliosCardStyles = i$3`
     .battery-pct-label
     {
         transition: opacity 0.35s ease;
+        will-change: opacity;
     }
     ha-card.lidar-view-active .overlay-top-left,
     ha-card.lidar-view-active .home-glow-svg,
@@ -36814,7 +36819,7 @@ class LidarViewLayer {
     }
     this._map?.triggerRepaint();
   }
-  //Accept a per-raster-cell exposure byte array (length = rasterSize²) coming from computeLidarCellExposure(). Maps it through the cached
+  //Accept a per-raster-cell exposure byte array (length = rasterSize²) coming from computeLidarCellExposureRows(). Maps it through the cached
   //cellToVert into a per-vertex byte array, uploads to the GPU and flips _hasExposure so the next render reads from a_exposure instead of
   //the constant fallback. Passing null clears the override.
   setExposure(perCellExposure) {
@@ -38296,13 +38301,18 @@ const _HeliosEngine = class _HeliosEngine {
   }
   //Push the current LiDAR View tuning to the layer. Called on init,
   //on updateConfig when point-size changes, and on setLidarViewOpacity
-  //when the slider moves.
+  //when the slider moves. The slider value is halved before being
+  //handed to the layer (slider 100 % → layer 50 % alpha): the live
+  //irradiance fill at full alpha carpets the basemap and swallows
+  //the building topology underneath, so a 0.5 scale ceiling keeps
+  //the layer readable even when the user dials the slider all the
+  //way up.
   _pushLidarViewConfig() {
     if (!this._lidarViewLayer) return;
     const [fullR, fadeR] = this._lidarViewFadeRange();
     this._lidarViewLayer.setFadeRange(fullR, fadeR);
     this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
-    this._lidarViewLayer.setOpacity(this._lidarViewOpacity);
+    this._lidarViewLayer.setOpacity(this._lidarViewOpacity * 0.5);
   }
   setLidarViewOpacity(opacity) {
     const clamped = Math.max(0, Math.min(1, opacity));
@@ -40381,8 +40391,11 @@ const VISUAL_CONFIG_KEYS = [
   //the cloud disc, buildings and labels on the resulting
   //`style.load`.
   "map-style",
+  //Legacy flat keys kept on the watch list so editing a pre-multi-bank YAML still triggers a refresh; the multi-bank `batteries:`
+  //array entry below is what catches the post-migration shape (and any user editing via the new editor UI).
   "battery-soc-entity",
   "battery-power-entity",
+  "batteries",
   "battery-color",
   //solar-radiation-entity, when set, feeds the engine sensor
   //samples that override Open-Meteo for the live + past
@@ -41735,7 +41748,8 @@ function renderDashboard(host) {
   const cloudColor = cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
   const pvColor = cfgHex(host.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
   const batteryColor = cfgHex(host.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
-  const hasBattery = String(host.config?.["battery-soc-entity"] ?? "").trim() !== "" || String(host.config?.["battery-power-entity"] ?? "").trim() !== "";
+  const banks = parseBatteryBanks(host.config);
+  const hasBattery = banks.some((b2) => b2.socEntity !== "" || b2.powerEntity !== "");
   return b`
         <div class="detail-panel">
             <button
@@ -44833,7 +44847,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-beta.0"}`,
+      `%c☀ HELIOS%c v${"1.7.0-beta.1"}`,
       labelStyle,
       versionStyle
     );
@@ -44857,7 +44871,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-beta.0",
+        version: "1.7.0-beta.1",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44865,7 +44879,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-beta.0"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-beta.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -45216,16 +45230,17 @@ let HeliosCard = class extends i {
     const pvPeakRefW = pvCalibKVal !== null && pvCalibKVal > 0 ? pvCalibKVal * 100 : 5e3;
     const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
     const pvIdle = !(pvWattsNow > 0);
-    const batterySocEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
-    const batteryPowerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
+    const batteryBanks = parseBatteryBanks(this.config);
+    const hasAnyBankSoc = batteryBanks.some((b2) => b2.socEntity !== "");
+    const hasAnyBankPower = batteryBanks.some((b2) => b2.powerEntity !== "");
     const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
     const batteryScrubbing = !this._isLiveMode && this._selectedTime !== null;
     const batteryScrubFuture = batteryScrubbing && this._selectedTime.getTime() > Date.now() + 6e4;
     const activeBatterySoc = batteryScrubbing ? batterySampleAtTime(this._batterySocHistory, this._selectedTime) : this._batterySoc;
     const activeBatteryPower = batteryScrubbing ? batterySampleAtTime(this._batteryPowerHistory, this._selectedTime) : this._batteryPower;
     const activeBatteryUnit = this._batteryPowerUnit;
-    const showSocChip = hasApiKey && layout !== null && !batteryScrubFuture && batterySocEntity !== "" && activeBatterySoc !== null;
-    const showPowerChip = hasApiKey && layout !== null && !batteryScrubFuture && batteryPowerEntity !== "" && activeBatteryPower !== null;
+    const showSocChip = hasApiKey && layout !== null && !batteryScrubFuture && hasAnyBankSoc && activeBatterySoc !== null;
+    const showPowerChip = hasApiKey && layout !== null && !batteryScrubFuture && hasAnyBankPower && activeBatteryPower !== null;
     const batterySocText = showSocChip ? `${Math.round(activeBatterySoc)} %` : "";
     const batteryPowerText = showPowerChip ? formatBatteryPower(this.hass, activeBatteryPower, activeBatteryUnit) : "";
     const batteryCharging = showPowerChip && activeBatteryPower > 0;

@@ -1876,14 +1876,19 @@ export class HeliosEngine
 
     //Push the current LiDAR View tuning to the layer. Called on init,
     //on updateConfig when point-size changes, and on setLidarViewOpacity
-    //when the slider moves.
+    //when the slider moves. The slider value is halved before being
+    //handed to the layer (slider 100 % → layer 50 % alpha): the live
+    //irradiance fill at full alpha carpets the basemap and swallows
+    //the building topology underneath, so a 0.5 scale ceiling keeps
+    //the layer readable even when the user dials the slider all the
+    //way up.
     private _pushLidarViewConfig(): void
     {
         if (!this._lidarViewLayer) return;
         const [fullR, fadeR] = this._lidarViewFadeRange();
         this._lidarViewLayer.setFadeRange(fullR, fadeR);
         this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
-        this._lidarViewLayer.setOpacity(this._lidarViewOpacity);
+        this._lidarViewLayer.setOpacity(this._lidarViewOpacity * 0.5);
     }
 
     public setLidarViewOpacity(opacity: number): void

@@ -1741,13 +1741,17 @@ export const heliosCardStyles = css`
         minus the LiDAR button itself), the home hitbox / glow, and
         the timeline. Easier to audit if any future overlay needs
         to be hidden in LiDAR View by looking at this single block. */
-    /*  Base transition kept on the unprefixed selectors so the fade
-        runs in BOTH directions. With the rule only declared inside
-        .lidar-view-active the elements faded out smoothly on entry
-        then snapped back on exit (selector no longer matches, no
-        transition property in scope). Declaring opacity transition
-        on the base elements lets the fade-in play when the active
-        class is removed.                                            */
+    /*  Base transition + composite-layer hint kept on the unprefixed
+        selectors so the fade runs in BOTH directions across every
+        browser. Declaring the transition only inside .lidar-view-
+        active made entry smooth but the exit snap-back instantly
+        because the selector no longer matched and the transition
+        property left scope; declaring it here keeps it in scope at
+        all times. The will-change: opacity hint promotes each element
+        to its own composite layer so the GPU drives the alpha sweep
+        instead of asking the painter to redo layout per frame,
+        which used to drop frames on the chips that sit inside
+        transform-less wrappers (time-bar, solar-svg).               */
     .overlay-top-left,
     .home-glow-svg,
     .home-hitbox,
@@ -1765,6 +1769,7 @@ export const heliosCardStyles = css`
     .battery-pct-label
     {
         transition: opacity 0.35s ease;
+        will-change: opacity;
     }
     ha-card.lidar-view-active .overlay-top-left,
     ha-card.lidar-view-active .home-glow-svg,

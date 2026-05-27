@@ -31,8 +31,11 @@ export const VISUAL_CONFIG_KEYS = [
     //the cloud disc, buildings and labels on the resulting
     //`style.load`.
     'map-style',
+    //Legacy flat keys kept on the watch list so editing a pre-multi-bank YAML still triggers a refresh; the multi-bank `batteries:`
+    //array entry below is what catches the post-migration shape (and any user editing via the new editor UI).
     'battery-soc-entity',
     'battery-power-entity',
+    'batteries',
     'battery-color',
     //solar-radiation-entity, when set, feeds the engine sensor
     //samples that override Open-Meteo for the live + past

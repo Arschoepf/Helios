@@ -25,7 +25,7 @@ import
     pvNormalizeToWatts,
     computePvPowerWeighted
 } from './pv';
-import { computeBatteryToday, type BatteryHost } from './battery';
+import { computeBatteryToday, parseBatteryBanks, type BatteryHost } from './battery';
 import { type ChartHost } from './charts';
 import { computeForecastCalibration } from './calibration';
 import type { SunScene } from './overlays';
@@ -67,9 +67,10 @@ export function renderDashboard(host: DashboardHost): TemplateResult
     const pvColor      = cfgHex(host.config?.['pv-color'],      DEFAULT_PV_COLOR_HEX);
     const batteryColor = cfgHex(host.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
 
-    const hasBattery =
-        String(host.config?.['battery-soc-entity']   ?? '').trim() !== ''
-     || String(host.config?.['battery-power-entity'] ?? '').trim() !== '';
+    //Multi-bank aware presence check: any configured bank exposing SoC or power makes the battery card eligible. parseBatteryBanks
+    //transparently wraps the legacy flat keys into a one-row list, so single-bank configs still trigger here.
+    const banks = parseBatteryBanks(host.config);
+    const hasBattery = banks.some(b => b.socEntity !== '' || b.powerEntity !== '');
 
     return html`
         <div class="detail-panel">

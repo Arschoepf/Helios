@@ -28,7 +28,8 @@ import
 {
     refreshBattery,
     batterySampleAtTime,
-    formatBatteryPower
+    formatBatteryPower,
+    parseBatteryBanks
 } from './card/battery';
 import { refreshSolarRadiation } from './card/radiation';
 import { computeForecastCalibration } from './card/calibration';
@@ -963,8 +964,13 @@ export class HeliosCard extends LitElement
         //hass.states; past-scrub mode reads from the historical
         //series fetched via WS; future-scrub hides both chips
         //because no battery data exists past "now".
-        const batterySocEntity   = String(this.config?.['battery-soc-entity']   ?? '').trim();
-        const batteryPowerEntity = String(this.config?.['battery-power-entity'] ?? '').trim();
+        //Bank-aware gates. A chip is allowed to render when AT LEAST one configured bank exposes the corresponding entity (SoC for the
+        //SoC chip, power for the Power chip), so a multi-bank install with one bank reporting still gets the aggregated chip painted.
+        //Falls back transparently to legacy single-bank configs because parseBatteryBanks wraps the flat keys into a one-row list when
+        //the `batteries:` array is absent.
+        const batteryBanks       = parseBatteryBanks(this.config);
+        const hasAnyBankSoc      = batteryBanks.some(b => b.socEntity   !== '');
+        const hasAnyBankPower    = batteryBanks.some(b => b.powerEntity !== '');
         const batteryColor       = cfgHex(this.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
         const batteryScrubbing   = !this._isLiveMode && this._selectedTime !== null;
         const batteryScrubFuture = batteryScrubbing
@@ -984,11 +990,11 @@ export class HeliosCard extends LitElement
 
         const showSocChip = (hasApiKey && layout !== null)
             && !batteryScrubFuture
-            && batterySocEntity !== ''
+            && hasAnyBankSoc
             && activeBatterySoc !== null;
         const showPowerChip = (hasApiKey && layout !== null)
             && !batteryScrubFuture
-            && batteryPowerEntity !== ''
+            && hasAnyBankPower
             && activeBatteryPower !== null;
 
         const batterySocText = showSocChip
