@@ -237,8 +237,7 @@ export function refreshBattery(host: BatteryHost): void
     //tion, neither of which is meaningful to the user.
     let socNum = 0;
     let socDen = 0;
-    let powSum:  number | null = null;
-    let unitOut: string        = '';
+    let powSumW: number | null = null;
     for (const b of banks)
     {
         if (b.socEntity)
@@ -258,16 +257,22 @@ export function refreshBattery(host: BatteryHost): void
             const v  = so ? parseFloat(so.state) : NaN;
             if (isFinite(v))
             {
-                const signed = b.powerInvert ? -v : v;
-                powSum = (powSum ?? 0) + signed;
-                if (!unitOut) unitOut = so.attributes?.unit_of_measurement ?? '';
+                //Normalise to watts BEFORE summing so a mixed-vendor setup (one BMS in W, another in kW) produces a coherent aggregate
+                //rather than `1500 + 2.5 = 1502.5` of nonsense. The chip formatter auto-promotes back to kW above 1 000 W, so the user
+                //sees the right unit suffix regardless of how each bank reported.
+                const unit  = String(so.attributes?.unit_of_measurement ?? '');
+                const watts = pvNormalizeToWatts(v, unit);
+                const signed = b.powerInvert ? -watts : watts;
+                powSumW = (powSumW ?? 0) + signed;
             }
         }
     }
-    const nextSoc = socDen > 0 ? socNum / socDen : null;
-    if (nextSoc           !== host._batterySoc)        host._batterySoc       = nextSoc;
-    if (powSum            !== host._batteryPower)      host._batteryPower     = powSum;
-    if (unitOut           !== host._batteryPowerUnit)  host._batteryPowerUnit = unitOut;
+    const nextSoc  = socDen > 0 ? socNum / socDen : null;
+    //Aggregated unit is always W; banks may have reported in mixed units but pvNormalizeToWatts has folded them to a single scale.
+    const nextUnit = powSumW !== null ? 'W' : '';
+    if (nextSoc  !== host._batterySoc)       host._batterySoc       = nextSoc;
+    if (powSumW  !== host._batteryPower)     host._batteryPower     = powSumW;
+    if (nextUnit !== host._batteryPowerUnit) host._batteryPowerUnit = nextUnit;
 
     //History fetch, only when the (entities, range) tuple changed.
     //Without this guard we'd reissue the WS command on every Lit

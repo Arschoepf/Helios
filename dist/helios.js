@@ -4537,6 +4537,28 @@ const heliosCardStyles = i$3`
         cloud picker for visual consistency between the two modes;
         ungated (continuous, no ticks) because opacity is a free
         analog tune, not a binned pick.                              */
+    /*  Permanent depth-of-field veil. A backdrop-filter blur of
+        0.6 px (subliminal on its own) shaped by a radial mask centred
+        on the home's current screen position: fully transparent inside
+        ~32 % of the radius (no blur at the focal point), smooth ramp
+        to fully opaque (full blur) at ~96 %. The home stays crisp, the
+        edges read as out-of-focus, which gives the card a gentle DoF
+        without any per-frame JS work, the mask anchor follows the home
+        through CSS variables updated by the card render. Pointer
+        events off so the veil never intercepts clicks meant for the
+        chips or the map underneath.                                  */
+    .dof-blur-mask
+    {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 60;
+        backdrop-filter: blur(0.6px);
+        -webkit-backdrop-filter: blur(0.6px);
+        mask-image: radial-gradient(circle at var(--dof-x, 50%) var(--dof-y, 50%), transparent 32%, black 96%);
+        -webkit-mask-image: radial-gradient(circle at var(--dof-x, 50%) var(--dof-y, 50%), transparent 32%, black 96%);
+    }
+
     .lidar-view-opacity-slider
     {
         position: absolute;
@@ -5839,8 +5861,7 @@ function refreshBattery(host) {
   }
   let socNum = 0;
   let socDen = 0;
-  let powSum = null;
-  let unitOut = "";
+  let powSumW = null;
   for (const b2 of banks) {
     if (b2.socEntity) {
       const so = host.hass.states?.[b2.socEntity];
@@ -5855,16 +5876,18 @@ function refreshBattery(host) {
       const so = host.hass.states?.[b2.powerEntity];
       const v2 = so ? parseFloat(so.state) : NaN;
       if (isFinite(v2)) {
-        const signed = b2.powerInvert ? -v2 : v2;
-        powSum = (powSum ?? 0) + signed;
-        if (!unitOut) unitOut = so.attributes?.unit_of_measurement ?? "";
+        const unit = String(so.attributes?.unit_of_measurement ?? "");
+        const watts = pvNormalizeToWatts(v2, unit);
+        const signed = b2.powerInvert ? -watts : watts;
+        powSumW = (powSumW ?? 0) + signed;
       }
     }
   }
   const nextSoc = socDen > 0 ? socNum / socDen : null;
+  const nextUnit = powSumW !== null ? "W" : "";
   if (nextSoc !== host._batterySoc) host._batterySoc = nextSoc;
-  if (powSum !== host._batteryPower) host._batteryPower = powSum;
-  if (unitOut !== host._batteryPowerUnit) host._batteryPowerUnit = unitOut;
+  if (powSumW !== host._batteryPower) host._batteryPower = powSumW;
+  if (nextUnit !== host._batteryPowerUnit) host._batteryPowerUnit = nextUnit;
   if (!host._timeRange || host._batteryFetching) return;
   const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
   const sig = banks.map(
@@ -41742,6 +41765,14 @@ function computeDailyKwhTotals(host) {
   }
   return out;
 }
+const COUNT_UP_MS = 700;
+function dashCountUpPhase(host) {
+  const start = host._dashOpenedAtMs;
+  if (start === null) return 1;
+  const t2 = Math.max(0, Math.min(1, (performance.now() - start) / COUNT_UP_MS));
+  const inv = 1 - t2;
+  return 1 - inv * inv * inv;
+}
 function renderDashboard(host) {
   const t2 = pickTranslations(host.hass?.language);
   const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
@@ -42023,6 +42054,10 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
   const refinedForecastKwh = calibration !== null ? forecastKwh * calibration.ratio : null;
   const refinedDeltaPct = calibration !== null ? (calibration.ratio - 1) * 100 : null;
   const calibrationHint = calibration !== null ? t2.detail.forecastCalibrationHint.replace("{n}", String(calibration.daysUsed)) : "";
+  const phase = dashCountUpPhase(host);
+  const producedKwhDisplay = producedKwh * phase;
+  const forecastKwhDisplay = forecastKwh * phase;
+  const refinedForecastDisplay = refinedForecastKwh !== null ? refinedForecastKwh * phase : null;
   return b`
         <section class="dash-section dash-card dash-today">
             <header class="dash-card-header">
@@ -42036,7 +42071,7 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                         ${historyLoading ? b`
                             <span class="dash-stat-skeleton" aria-hidden="true"></span>
                         ` : b`
-                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, producedKwh, 1)}</span>
+                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, producedKwhDisplay, 1)}</span>
                             <span class="dash-stat-unit">kWh ${t2.detail.todayProduced}</span>
                             ${deltaPct !== null ? b`
                                 <span class="dash-stat-delta ${deltaPct >= 0 ? "dash-stat-delta-up" : "dash-stat-delta-down"}"
@@ -42051,15 +42086,15 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                     ${forecastKwh > 0.05 ? b`
                         <div class="dash-today-stat dash-today-stat-predicted ${refinedForecastKwh !== null ? "dash-today-stat-with-refined" : ""}" style="color:${predictedColor}">
                             <span class="dash-stat-main">
-                                <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)}</span>
+                                <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwhDisplay, 1)}</span>
                                 <span class="dash-stat-unit">kWh ${t2.detail.todayForecast}</span>
                             </span>
-                            ${refinedForecastKwh !== null && refinedDeltaPct !== null ? b`
+                            ${refinedForecastDisplay !== null && refinedDeltaPct !== null ? b`
                                 <span class="dash-stat-refined"
                                       data-tooltip="${calibrationHint}"
                                       aria-label="${calibrationHint}"
                                 >
-                                    → ${formatLocalisedNumber(host.hass, refinedForecastKwh, 1)} kWh ${t2.detail.forecastRefined}
+                                    → ${formatLocalisedNumber(host.hass, refinedForecastDisplay, 1)} kWh ${t2.detail.forecastRefined}
                                     <span class="dash-stat-refined-pct ${refinedDeltaPct >= 0 ? "dash-stat-refined-up" : "dash-stat-refined-down"}">
                                         (${refinedDeltaPct >= 0 ? "+" : ""}${formatLocalisedNumber(host.hass, refinedDeltaPct, 0, true)} %)
                                     </span>
@@ -42512,7 +42547,9 @@ function handleHomeClick(host, e2) {
   }
   host._homeHover = false;
   host._detailMode = true;
+  host._dashOpenedAtMs = performance.now();
   host._engine?.setDetailMode(true);
+  startDashCountUpLoop(host);
 }
 function handleExitDetail(host, e2) {
   e2.stopPropagation();
@@ -42520,7 +42557,28 @@ function handleExitDetail(host, e2) {
     return;
   }
   host._detailMode = false;
+  host._dashOpenedAtMs = null;
+  if (host._dashCountUpRaf !== void 0) {
+    cancelAnimationFrame(host._dashCountUpRaf);
+    host._dashCountUpRaf = void 0;
+  }
   host._engine?.setDetailMode(false);
+}
+function startDashCountUpLoop(host) {
+  if (host._dashCountUpRaf !== void 0) return;
+  const tick2 = () => {
+    if (!host._detailMode || host._dashOpenedAtMs === null) {
+      host._dashCountUpRaf = void 0;
+      return;
+    }
+    host.requestUpdate?.();
+    if (dashCountUpPhase(host) >= 1) {
+      host._dashCountUpRaf = void 0;
+      return;
+    }
+    host._dashCountUpRaf = requestAnimationFrame(tick2);
+  };
+  host._dashCountUpRaf = requestAnimationFrame(tick2);
 }
 function handleDashChartPointerMove(host, e2) {
   const svgEl = e2.currentTarget;
@@ -43731,8 +43789,8 @@ let HeliosCardEditor = class extends i {
       return s2 === "" ? null : s2;
     };
     const raw2 = this._cfg?.["pv-arrays"];
-    if (Array.isArray(raw2) && raw2.length > 0) {
-      const out = raw2.map((entry) => {
+    if (Array.isArray(raw2)) {
+      return raw2.map((entry) => {
         const e2 = entry && typeof entry === "object" ? entry : {};
         return {
           name: toStr(e2["name"]),
@@ -43745,14 +43803,13 @@ let HeliosCardEditor = class extends i {
           height: toNum2(e2["height"])
         };
       });
-      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
     }
     const legacyTilt = toNum2(this._cfg?.["pv-tilt"]);
     const legacyAz = toNum2(this._cfg?.["pv-azimuth"]);
     if (legacyTilt !== null || legacyAz !== null) {
       return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, peakKwp: null, latitude: null, longitude: null, height: null }];
     }
-    return [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
+    return [];
   }
   //Persists a list of array entries to the config under `pv-arrays`
   //and clears the legacy `pv-tilt` / `pv-azimuth` keys in the same
@@ -43761,21 +43818,25 @@ let HeliosCardEditor = class extends i {
   //(e.g. tilt set but azimuth blank) still produces a sparse but
   //valid YAML entry; the card-side reader applies sensible defaults.
   _writePvArrays(list) {
-    const arrays = list.map((e2) => {
-      const o2 = {};
-      if (e2.name !== null) o2["name"] = e2.name;
-      if (e2.tilt !== null) o2["tilt"] = e2.tilt;
-      if (e2.azimuth !== null) o2["azimuth"] = e2.azimuth;
-      if (e2.share !== null) o2["share"] = e2.share;
-      if (e2.peakKwp !== null) o2["peak-kwp"] = e2.peakKwp;
-      if (e2.latitude !== null) o2["latitude"] = e2.latitude;
-      if (e2.longitude !== null) o2["longitude"] = e2.longitude;
-      if (e2.height !== null) o2["height"] = e2.height;
-      return o2;
-    });
-    const next3 = { ...this._cfg, "pv-arrays": arrays };
-    if ("pv-tilt" in next3) delete next3["pv-tilt"];
-    if ("pv-azimuth" in next3) delete next3["pv-azimuth"];
+    const next3 = { ...this._cfg };
+    delete next3["pv-tilt"];
+    delete next3["pv-azimuth"];
+    if (list.length === 0) {
+      delete next3["pv-arrays"];
+    } else {
+      next3["pv-arrays"] = list.map((e2) => {
+        const o2 = {};
+        if (e2.name !== null) o2["name"] = e2.name;
+        if (e2.tilt !== null) o2["tilt"] = e2.tilt;
+        if (e2.azimuth !== null) o2["azimuth"] = e2.azimuth;
+        if (e2.share !== null) o2["share"] = e2.share;
+        if (e2.peakKwp !== null) o2["peak-kwp"] = e2.peakKwp;
+        if (e2.latitude !== null) o2["latitude"] = e2.latitude;
+        if (e2.longitude !== null) o2["longitude"] = e2.longitude;
+        if (e2.height !== null) o2["height"] = e2.height;
+        return o2;
+      });
+    }
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next3 } }));
     this._cfg = next3;
   }
@@ -43820,7 +43881,7 @@ let HeliosCardEditor = class extends i {
   //reads as "100%" without needing to write 100 into the YAML.
   _arrayRemove(i2) {
     const list = this._readPvArrays();
-    if (i2 < 0 || i2 >= list.length || list.length <= 1) return;
+    if (i2 < 0 || i2 >= list.length) return;
     list.splice(i2, 1);
     const next3 = /* @__PURE__ */ new Set();
     for (const idx of this._openArrayIndices) {
@@ -43881,8 +43942,8 @@ let HeliosCardEditor = class extends i {
       return s2 === "" ? null : s2;
     };
     const raw2 = this._cfg?.["batteries"];
-    if (Array.isArray(raw2) && raw2.length > 0) {
-      const out = raw2.map((entry) => {
+    if (Array.isArray(raw2)) {
+      return raw2.map((entry) => {
         const e2 = entry && typeof entry === "object" ? entry : {};
         return {
           name: toStr(e2["name"]),
@@ -43892,10 +43953,10 @@ let HeliosCardEditor = class extends i {
           capacityKwh: toNum2(e2["capacity-kwh"])
         };
       });
-      if (out.length > 0) return out;
     }
     const soc = String(this._cfg?.["battery-soc-entity"] ?? "").trim();
     const power = String(this._cfg?.["battery-power-entity"] ?? "").trim();
+    if (soc === "" && power === "") return [];
     return [{
       name: null,
       socEntity: soc,
@@ -43907,19 +43968,23 @@ let HeliosCardEditor = class extends i {
   //Persists a list of bank entries under `batteries:` and clears the legacy flat keys in the same event so configs converge to the new
   //shape on first edit. Empty entity strings are dropped from the YAML so a half-filled new row produces a sparse but valid bank.
   _writeBatteries(list) {
-    const batteries = list.map((e2) => {
-      const o2 = {};
-      if (e2.name !== null) o2["name"] = e2.name;
-      if (e2.socEntity !== "") o2["soc-entity"] = e2.socEntity;
-      if (e2.powerEntity !== "") o2["power-entity"] = e2.powerEntity;
-      if (e2.powerInvert) o2["power-invert"] = true;
-      if (e2.capacityKwh !== null) o2["capacity-kwh"] = e2.capacityKwh;
-      return o2;
-    });
-    const next3 = { ...this._cfg, "batteries": batteries };
-    if ("battery-soc-entity" in next3) delete next3["battery-soc-entity"];
-    if ("battery-power-entity" in next3) delete next3["battery-power-entity"];
-    if ("battery-power-invert" in next3) delete next3["battery-power-invert"];
+    const next3 = { ...this._cfg };
+    delete next3["battery-soc-entity"];
+    delete next3["battery-power-entity"];
+    delete next3["battery-power-invert"];
+    if (list.length === 0) {
+      delete next3["batteries"];
+    } else {
+      next3["batteries"] = list.map((e2) => {
+        const o2 = {};
+        if (e2.name !== null) o2["name"] = e2.name;
+        if (e2.socEntity !== "") o2["soc-entity"] = e2.socEntity;
+        if (e2.powerEntity !== "") o2["power-entity"] = e2.powerEntity;
+        if (e2.powerInvert) o2["power-invert"] = true;
+        if (e2.capacityKwh !== null) o2["capacity-kwh"] = e2.capacityKwh;
+        return o2;
+      });
+    }
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next3 } }));
     this._cfg = next3;
   }
@@ -43964,7 +44029,7 @@ let HeliosCardEditor = class extends i {
   }
   _bankRemove(i2) {
     const list = this._readBatteries();
-    if (i2 < 0 || i2 >= list.length || list.length <= 1) return;
+    if (i2 < 0 || i2 >= list.length) return;
     list.splice(i2, 1);
     const next3 = /* @__PURE__ */ new Set();
     for (const idx of this._openBatteryIndices) {
@@ -44381,7 +44446,6 @@ let HeliosCardEditor = class extends i {
                                                 type="button"
                                                 class="pv-array-remove"
                                                 aria-label="${t2.editor.pvArrayRemove}: ${title}"
-                                                ?disabled="${arrays.length <= 1}"
                                                 @click="${(e2) => {
           e2.preventDefault();
           e2.stopPropagation();
@@ -44521,7 +44585,6 @@ let HeliosCardEditor = class extends i {
                                                 type="button"
                                                 class="pv-array-remove"
                                                 aria-label="${t2.editor.batteryBankRemove}: ${title}"
-                                                ?disabled="${banks.length <= 1}"
                                                 @click="${(e2) => {
           e2.preventDefault();
           e2.stopPropagation();
@@ -44847,7 +44910,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-beta.1"}`,
+      `%c☀ HELIOS%c v${"1.7.0-beta.2"}`,
       labelStyle,
       versionStyle
     );
@@ -44871,7 +44934,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-beta.1",
+        version: "1.7.0-beta.2",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44879,7 +44942,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-beta.1"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-beta.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -44969,6 +45032,7 @@ let HeliosCard = class extends i {
     this._isLiveMode = true;
     this._shadowBusy = false;
     this._detailMode = false;
+    this._dashOpenedAtMs = null;
     this._lidarViewMode = false;
     this._lidarFadeInStartMs = null;
     this._lidarFadeOutStartMs = null;
@@ -46039,6 +46103,24 @@ let HeliosCard = class extends i {
       this._lidarViewOpacity = opacity;
       this._engine?.setLidarViewOpacity(opacity);
     })}
+
+                <!--  Depth-of-field veil. A single absolutely-positioned
+                      div pinned to the card's box with a 0.6 px backdrop
+                      blur and a radial mask centred on the home's
+                      current screen position (clamped to the card centre
+                      when no layout is available). The mask is fully
+                      transparent in a ~30 % inner disc so the home + its
+                      immediate surroundings stay crisp, then ramps to
+                      fully opaque (full blur) at the edges. Effect is
+                      barely perceptible by design, just enough to give a
+                      gentle vignette of softness on the periphery that
+                      mimics depth of field at distance. Pointer events
+                      off so nothing under it ever sees its surface.    -->
+                <div
+                    class="dof-blur-mask"
+                    style="--dof-x:${(layout?.home.x ?? 0).toFixed(1)}px; --dof-y:${(layout?.home.y ?? 0).toFixed(1)}px"
+                    aria-hidden="true"
+                ></div>
 
             </ha-card>
         `;

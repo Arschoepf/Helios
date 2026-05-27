@@ -435,9 +435,10 @@ export class HeliosCardEditor extends LitElement
         };
 
         const raw = this._cfg?.['pv-arrays'];
-        if (Array.isArray(raw) && raw.length > 0)
+        if (Array.isArray(raw))
         {
-            const out = raw.map(entry =>
+            //Honour an explicit empty `pv-arrays: []` as "no array configured" (post-delete state), don't silently fall back to legacy.
+            return raw.map(entry =>
             {
                 const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
                 return {
@@ -451,7 +452,6 @@ export class HeliosCardEditor extends LitElement
                     height:    toNum(e['height']),
                 };
             });
-            return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
         }
 
         const legacyTilt = toNum(this._cfg?.['pv-tilt']);
@@ -460,7 +460,7 @@ export class HeliosCardEditor extends LitElement
         {
             return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, peakKwp: null, latitude: null, longitude: null, height: null }];
         }
-        return [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
+        return [];
     }
 
     //Persists a list of array entries to the config under `pv-arrays`
@@ -480,25 +480,35 @@ export class HeliosCardEditor extends LitElement
         height:    number | null;
     }[]): void
     {
-        const arrays = list.map(e =>
+        const next = { ...this._cfg } as Record<string, unknown>;
+        //Strip the legacy single-orientation keys on every write so configs converge to the new shape regardless of what the user
+        //started from.
+        delete next['pv-tilt'];
+        delete next['pv-azimuth'];
+        if (list.length === 0)
         {
-            const o: Record<string, number | string> = {};
-            if (e.name      !== null) o['name']      = e.name;
-            if (e.tilt      !== null) o['tilt']      = e.tilt;
-            if (e.azimuth   !== null) o['azimuth']   = e.azimuth;
-            if (e.share     !== null) o['share']     = e.share;
-            if (e.peakKwp   !== null) o['peak-kwp']  = e.peakKwp;
-            if (e.latitude  !== null) o['latitude']  = e.latitude;
-            if (e.longitude !== null) o['longitude'] = e.longitude;
-            if (e.height    !== null) o['height']    = e.height;
-            return o;
-        });
-        const next = { ...this._cfg, 'pv-arrays': arrays } as HeliosConfig;
-        //Strip legacy keys when promoting to pv-arrays so a future read doesn't trip the "both shapes set" rule. Only deletes them when they're
-        //actually present, no need to dirty the config object otherwise.
-        if ('pv-tilt'    in (next as object)) delete (next as Record<string, unknown>)['pv-tilt'];
-        if ('pv-azimuth' in (next as object)) delete (next as Record<string, unknown>)['pv-azimuth'];
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next } }));
+            //User emptied the array list: drop the `pv-arrays:` key entirely. The card-side reader then falls back to its defaults
+            //(flat-plate horizontal forecast) and the PV chip / chart still render off the live entity, just without per-string
+            //orientation weighting.
+            delete next['pv-arrays'];
+        }
+        else
+        {
+            next['pv-arrays'] = list.map(e =>
+            {
+                const o: Record<string, number | string> = {};
+                if (e.name      !== null) o['name']      = e.name;
+                if (e.tilt      !== null) o['tilt']      = e.tilt;
+                if (e.azimuth   !== null) o['azimuth']   = e.azimuth;
+                if (e.share     !== null) o['share']     = e.share;
+                if (e.peakKwp   !== null) o['peak-kwp']  = e.peakKwp;
+                if (e.latitude  !== null) o['latitude']  = e.latitude;
+                if (e.longitude !== null) o['longitude'] = e.longitude;
+                if (e.height    !== null) o['height']    = e.height;
+                return o;
+            });
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next;
     }
 
@@ -566,7 +576,9 @@ export class HeliosCardEditor extends LitElement
     private _arrayRemove(i: number): void
     {
         const list = this._readPvArrays();
-        if (i < 0 || i >= list.length || list.length <= 1) return;
+        if (i < 0 || i >= list.length) return;
+        //Removing the last array is allowed and clears the whole pv-arrays section (see _writePvArrays empty-list branch). Lets the
+        //user wipe their orientation setup from the visual editor without dropping to YAML.
         list.splice(i, 1);
         //Shift the open-set so the higher indices map to their new positions after the splice. The removed index drops out, and every index above it
         //slides down by one.
@@ -650,9 +662,11 @@ export class HeliosCardEditor extends LitElement
             return s === '' ? null : s;
         };
         const raw = this._cfg?.['batteries'];
-        if (Array.isArray(raw) && raw.length > 0)
+        if (Array.isArray(raw))
         {
-            const out = raw.map(entry =>
+            //Empty `batteries: []` is the post-delete state and must be honoured as "no battery configured", not silently fallen-back to
+            //legacy keys (which the user may not even have set in the first place).
+            return raw.map(entry =>
             {
                 const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
                 return {
@@ -663,12 +677,13 @@ export class HeliosCardEditor extends LitElement
                     capacityKwh: toNum(e['capacity-kwh']),
                 };
             });
-            if (out.length > 0) return out;
         }
-        //Legacy single-bank fallback: wrap the flat keys in a one-row list so the editor never shows an empty state and the user can edit
-        //their existing single-bank setup before opting into multi-bank.
+        //Legacy single-bank fallback: wrap the flat keys in a one-row list when the user still has flat-key YAML AND has never opened
+        //the editor. The first edit migrates to `batteries:` and the legacy keys go away (see _writeBatteries). Returns an empty list
+        //when no flat key is set either, so the section shows just the "add bank" button and the user can start clean.
         const soc   = String(this._cfg?.['battery-soc-entity']   ?? '').trim();
         const power = String(this._cfg?.['battery-power-entity'] ?? '').trim();
+        if (soc === '' && power === '') return [];
         return [{
             name:        null,
             socEntity:   soc,
@@ -688,22 +703,33 @@ export class HeliosCardEditor extends LitElement
         capacityKwh: number | null;
     }[]): void
     {
-        const batteries = list.map(e =>
+        const next = { ...this._cfg } as Record<string, unknown>;
+        //Legacy flat keys are always stripped on any battery edit so configs converge to the new shape regardless of what the user
+        //started from.
+        delete next['battery-soc-entity'];
+        delete next['battery-power-entity'];
+        delete next['battery-power-invert'];
+        if (list.length === 0)
         {
-            const o: Record<string, number | string | boolean> = {};
-            if (e.name        !== null) o['name']         = e.name;
-            if (e.socEntity   !== '')   o['soc-entity']   = e.socEntity;
-            if (e.powerEntity !== '')   o['power-entity'] = e.powerEntity;
-            if (e.powerInvert)          o['power-invert'] = true;
-            if (e.capacityKwh !== null) o['capacity-kwh'] = e.capacityKwh;
-            return o;
-        });
-        const next = { ...this._cfg, 'batteries': batteries } as HeliosConfig;
-        if ('battery-soc-entity'   in (next as object)) delete (next as Record<string, unknown>)['battery-soc-entity'];
-        if ('battery-power-entity' in (next as object)) delete (next as Record<string, unknown>)['battery-power-entity'];
-        if ('battery-power-invert' in (next as object)) delete (next as Record<string, unknown>)['battery-power-invert'];
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next } }));
-        this._cfg = next;
+            //User emptied the bank list, drop the `batteries:` key entirely so the YAML reads as "no battery configured" and parse-
+            //BatteryBanks returns an empty list (chip + dashboard battery card hidden).
+            delete next['batteries'];
+        }
+        else
+        {
+            next['batteries'] = list.map(e =>
+            {
+                const o: Record<string, number | string | boolean> = {};
+                if (e.name        !== null) o['name']         = e.name;
+                if (e.socEntity   !== '')   o['soc-entity']   = e.socEntity;
+                if (e.powerEntity !== '')   o['power-entity'] = e.powerEntity;
+                if (e.powerInvert)          o['power-invert'] = true;
+                if (e.capacityKwh !== null) o['capacity-kwh'] = e.capacityKwh;
+                return o;
+            });
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
     }
 
     private _bankEntity(i: number, key: 'socEntity' | 'powerEntity', value: string): void
@@ -765,8 +791,10 @@ export class HeliosCardEditor extends LitElement
     private _bankRemove(i: number): void
     {
         const list = this._readBatteries();
-        if (i < 0 || i >= list.length || list.length <= 1) return;
+        if (i < 0 || i >= list.length) return;
         list.splice(i, 1);
+        //Removing the last bank is allowed and clears the whole battery section (see _writeBatteries empty-list branch). Lets the user
+        //wipe their setup from the visual editor without dropping to YAML.
         const next = new Set<number>();
         for (const idx of this._openBatteryIndices)
         {
@@ -1261,7 +1289,6 @@ export class HeliosCardEditor extends LitElement
                                                 type="button"
                                                 class="pv-array-remove"
                                                 aria-label="${t.editor.pvArrayRemove}: ${title}"
-                                                ?disabled="${arrays.length <= 1}"
                                                 @click="${(e: Event) => { e.preventDefault(); e.stopPropagation(); this._arrayRemove(i); }}"
                                             >${t.editor.pvArrayRemove}</button>
                                         </summary>
@@ -1397,7 +1424,6 @@ export class HeliosCardEditor extends LitElement
                                                 type="button"
                                                 class="pv-array-remove"
                                                 aria-label="${t.editor.batteryBankRemove}: ${title}"
-                                                ?disabled="${banks.length <= 1}"
                                                 @click="${(e: Event) => { e.preventDefault(); e.stopPropagation(); this._bankRemove(i); }}"
                                             >${t.editor.batteryBankRemove}</button>
                                         </summary>

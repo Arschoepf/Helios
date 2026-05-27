@@ -2031,6 +2031,28 @@ export const heliosCardStyles = css`
         cloud picker for visual consistency between the two modes;
         ungated (continuous, no ticks) because opacity is a free
         analog tune, not a binned pick.                              */
+    /*  Permanent depth-of-field veil. A backdrop-filter blur of
+        0.6 px (subliminal on its own) shaped by a radial mask centred
+        on the home's current screen position: fully transparent inside
+        ~32 % of the radius (no blur at the focal point), smooth ramp
+        to fully opaque (full blur) at ~96 %. The home stays crisp, the
+        edges read as out-of-focus, which gives the card a gentle DoF
+        without any per-frame JS work, the mask anchor follows the home
+        through CSS variables updated by the card render. Pointer
+        events off so the veil never intercepts clicks meant for the
+        chips or the map underneath.                                  */
+    .dof-blur-mask
+    {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 60;
+        backdrop-filter: blur(0.6px);
+        -webkit-backdrop-filter: blur(0.6px);
+        mask-image: radial-gradient(circle at var(--dof-x, 50%) var(--dof-y, 50%), transparent 32%, black 96%);
+        -webkit-mask-image: radial-gradient(circle at var(--dof-x, 50%) var(--dof-y, 50%), transparent 32%, black 96%);
+    }
+
     .lidar-view-opacity-slider
     {
         position: absolute;

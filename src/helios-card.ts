@@ -425,6 +425,15 @@ export class HeliosCard extends LitElement
     //(on → off). Engine.setDetailMode drives the camera lerp;
     //CSS class .detail-active on ha-card fades out every overlay.
     @state() _detailMode    = false;
+    //Count-up animation state for the dashboard headline kWh figures.
+    //Timestamp the panel last opened at; the dashboard helpers tick
+    //requestUpdate() until the phase saturates so the figures animate
+    //from 0 to their real value over 700 ms each time the user enters
+    //detail mode. Reset to null on exit so a re-open replays the
+    //animation. _dashCountUpRaf holds the rAF token of the in-flight
+    //tick loop, also set by the dashboard helpers.
+    _dashOpenedAtMs: number | null = null;
+    _dashCountUpRaf?: number;
     //True while the LiDAR View overlay is showing: the map UI fades
     //out, the engine's WebGL custom layer paints every loaded LiDAR
     //cell as a dot, and the same toggle button (top-right) brings the
@@ -2029,6 +2038,24 @@ export class HeliosCard extends LitElement
                     this._lidarViewOpacity = opacity;
                     this._engine?.setLidarViewOpacity(opacity);
                 })}
+
+                <!--  Depth-of-field veil. A single absolutely-positioned
+                      div pinned to the card's box with a 0.6 px backdrop
+                      blur and a radial mask centred on the home's
+                      current screen position (clamped to the card centre
+                      when no layout is available). The mask is fully
+                      transparent in a ~30 % inner disc so the home + its
+                      immediate surroundings stay crisp, then ramps to
+                      fully opaque (full blur) at the edges. Effect is
+                      barely perceptible by design, just enough to give a
+                      gentle vignette of softness on the periphery that
+                      mimics depth of field at distance. Pointer events
+                      off so nothing under it ever sees its surface.    -->
+                <div
+                    class="dof-blur-mask"
+                    style="--dof-x:${(layout?.home.x ?? 0).toFixed(1)}px; --dof-y:${(layout?.home.y ?? 0).toFixed(1)}px"
+                    aria-hidden="true"
+                ></div>
 
             </ha-card>
         `;

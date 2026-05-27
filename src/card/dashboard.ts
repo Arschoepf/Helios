@@ -46,6 +46,26 @@ export interface DashboardHost extends ChartHost, BatteryHost
     _detailMode:           boolean;
     _homeHover:            boolean;
     _dashChartHoverTs:     number | null;
+    //Timestamp the detail panel opened at. Drives the headline count-up animation on the produced-kWh + forecast-kWh figures so the
+    //numbers tick from 0 up to the real value over ~700 ms whenever the user enters detail mode. Reset to null on exit so a subsequent
+    //re-open replays the animation. Null while the panel is closed.
+    _dashOpenedAtMs:       number | null;
+    //Lit-side requestUpdate handle used during the count-up window; the dashboard handlers below set it via the host so a single rAF
+    //loop drives re-renders for the 700 ms window then self-clears.
+    _dashCountUpRaf?:      number;
+}
+
+
+//Cubic ease-out shape `1 - (1 - t)³`. Returns a 0..1 phase whose late frames slow down toward the target, which reads as the value
+//"settling" on its final figure rather than slamming into it.
+const COUNT_UP_MS = 700;
+export function dashCountUpPhase(host: DashboardHost): number
+{
+    const start = host._dashOpenedAtMs;
+    if (start === null) return 1;
+    const t = Math.max(0, Math.min(1, (performance.now() - start) / COUNT_UP_MS));
+    const inv = 1 - t;
+    return 1 - inv * inv * inv;
 }
 
 
@@ -541,6 +561,13 @@ export function renderDashTodaySection(
         ? t.detail.forecastCalibrationHint.replace('{n}', String(calibration.daysUsed))
         : '';
 
+    //Count-up phase applied only to the headline figures so the rest of the panel (delta %, peak time, etc.) stays anchored on the
+    //real values; sweeping the delta from 0 % up would read as confusing rather than animated.
+    const phase                  = dashCountUpPhase(host);
+    const producedKwhDisplay     = producedKwh * phase;
+    const forecastKwhDisplay     = forecastKwh * phase;
+    const refinedForecastDisplay = refinedForecastKwh !== null ? refinedForecastKwh * phase : null;
+
     return html`
         <section class="dash-section dash-card dash-today">
             <header class="dash-card-header">
@@ -554,7 +581,7 @@ export function renderDashTodaySection(
                         ${historyLoading ? html`
                             <span class="dash-stat-skeleton" aria-hidden="true"></span>
                         ` : html`
-                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, producedKwh, 1)}</span>
+                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, producedKwhDisplay, 1)}</span>
                             <span class="dash-stat-unit">kWh ${t.detail.todayProduced}</span>
                             ${deltaPct !== null ? html`
                                 <span class="dash-stat-delta ${deltaPct >= 0 ? 'dash-stat-delta-up' : 'dash-stat-delta-down'}"
@@ -569,15 +596,15 @@ export function renderDashTodaySection(
                     ${forecastKwh > 0.05 ? html`
                         <div class="dash-today-stat dash-today-stat-predicted ${refinedForecastKwh !== null ? 'dash-today-stat-with-refined' : ''}" style="color:${predictedColor}">
                             <span class="dash-stat-main">
-                                <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)}</span>
+                                <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwhDisplay, 1)}</span>
                                 <span class="dash-stat-unit">kWh ${t.detail.todayForecast}</span>
                             </span>
-                            ${refinedForecastKwh !== null && refinedDeltaPct !== null ? html`
+                            ${refinedForecastDisplay !== null && refinedDeltaPct !== null ? html`
                                 <span class="dash-stat-refined"
                                       data-tooltip="${calibrationHint}"
                                       aria-label="${calibrationHint}"
                                 >
-                                    → ${formatLocalisedNumber(host.hass, refinedForecastKwh, 1)} kWh ${t.detail.forecastRefined}
+                                    → ${formatLocalisedNumber(host.hass, refinedForecastDisplay, 1)} kWh ${t.detail.forecastRefined}
                                     <span class="dash-stat-refined-pct ${refinedDeltaPct >= 0 ? 'dash-stat-refined-up' : 'dash-stat-refined-down'}">
                                         (${refinedDeltaPct >= 0 ? '+' : ''}${formatLocalisedNumber(host.hass, refinedDeltaPct, 0, true)} %)
                                     </span>
@@ -1171,7 +1198,9 @@ export function handleHomeClick(host: DashboardHost, e: Event): void
     //exits detail mode and the hitbox re-appears.
     host._homeHover  = false;
     host._detailMode = true;
+    host._dashOpenedAtMs = performance.now();
     host._engine?.setDetailMode(true);
+    startDashCountUpLoop(host);
 }
 
 
@@ -1180,7 +1209,38 @@ export function handleExitDetail(host: DashboardHost, e: Event): void
     e.stopPropagation();
     if (!host._detailMode) { return; }
     host._detailMode = false;
+    host._dashOpenedAtMs = null;
+    if (host._dashCountUpRaf !== undefined)
+    {
+        cancelAnimationFrame(host._dashCountUpRaf);
+        host._dashCountUpRaf = undefined;
+    }
     host._engine?.setDetailMode(false);
+}
+
+
+//rAF loop that re-renders the dashboard for the COUNT_UP_MS window so the headline kWh figures animate from 0 to their final value.
+//Self-terminates once the phase saturates at 1 OR the panel closes. Called from handleHomeClick; safe to call again mid-window because
+//the rAF token guard short-circuits.
+function startDashCountUpLoop(host: DashboardHost): void
+{
+    if (host._dashCountUpRaf !== undefined) return;
+    const tick = (): void =>
+    {
+        if (!host._detailMode || host._dashOpenedAtMs === null)
+        {
+            host._dashCountUpRaf = undefined;
+            return;
+        }
+        (host as unknown as { requestUpdate?: () => void }).requestUpdate?.();
+        if (dashCountUpPhase(host) >= 1)
+        {
+            host._dashCountUpRaf = undefined;
+            return;
+        }
+        host._dashCountUpRaf = requestAnimationFrame(tick);
+    };
+    host._dashCountUpRaf = requestAnimationFrame(tick);
 }
 
 
