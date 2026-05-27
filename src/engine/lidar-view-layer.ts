@@ -387,9 +387,11 @@ export class LidarViewLayer implements CustomLayerInterface
         const triUsed = ti > 0 ? triIdx.subarray(0, ti) : new Uint32Array(0);
 
         //Cache the cellToVert mapping for the next setExposure() call. Reset _hasExposure since the previous exposure (sized to the old
-        //vertex count) is stale, the next compute pass will refit and re-upload.
-        this._cellToVert  = cellToVert;
-        this._hasExposure = false;
+        //vertex count) is stale, the next compute pass will refit and re-upload. Pending exposure is also cleared, a stash made before
+        //the swap is sized to the OLD vertex count and would mismatch the new buffer on onAdd.
+        this._cellToVert      = cellToVert;
+        this._hasExposure     = false;
+        this._pendingExposure = undefined;
 
         if (this._gl && this._buffer)
         {
@@ -443,9 +445,19 @@ export class LidarViewLayer implements CustomLayerInterface
             this._map?.triggerRepaint();
             return;
         }
-        const vertExposure = new Uint8Array(this._vertexCount);
+        //Size guard against a raster swap mid-sweep: when the engine's chunked exposure loop posts a buffer sized for the OLD raster
+        //after setData has rebuilt _cellToVert for the NEW raster, blindly mapping by index would paint nonsense (and on a smaller new
+        //raster, read off the end of the per-cell array, producing fake-lit halos via the `?? 255` fallback). Refuse the swap, the next
+        //schedule will produce a correctly-sized exposure for the new raster on the next sun delta.
         const c2v = this._cellToVert;
         const N   = c2v.length;
+        if (perCellExposure.length !== N)
+        {
+            this._hasExposure = false;
+            this._map?.triggerRepaint();
+            return;
+        }
+        const vertExposure = new Uint8Array(this._vertexCount);
         for (let i = 0; i < N; i++)
         {
             const v = c2v[i];

@@ -146,12 +146,17 @@ function actualKwhForDay(
 
     if (isCumulativeEnergy)
     {
-        //Cumulative energy: sum positive deltas where both samples fall inside the day. Counter resets drop the delta.
+        //Cumulative energy: sum positive deltas where BOTH samples fall inside the day. Gating on the previous sample too (not just the
+        //current) prevents the first sample of each day from crediting the entire delta-since-the-last-evening-sample to the new day,
+        //which on a sparse 1-sample-per-hour sensor could over-count up to an hour of the previous evening's production into today.
+        //Counter resets drop the delta.
         let kwh = 0;
         for (let i = 1; i < hist.times.length; i++)
         {
-            const tMs = hist.times[i].getTime();
+            const tMs     = hist.times[i].getTime();
+            const tPrevMs = hist.times[i - 1].getTime();
             if (tMs < startMs || tMs >= endMs) continue;
+            if (tPrevMs < startMs) continue;
             const dv = hist.values[i] - hist.values[i - 1];
             if (!isFinite(dv) || dv < 0) continue;
             kwh += dv * energyFactor;

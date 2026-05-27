@@ -211,9 +211,11 @@ export function computeLidarCellExposureRows(
                 let relGround = 0;
                 if (hasTerrain)
                 {
+                    //DTM-gap fallback: when the nDSM reads a valid obstacle but the DTM has a no-data hole at the same step, keep
+                    //relGround at 0 (flat-ground assumption) instead of skipping the step. Skipping made the ray see through real
+                    //obstacles near LiDAR coverage edges; flat-ground here is a small bias next to the false-negative shading.
                     const sampleDtm = sampleDtmAt(raster, lon, lat);
-                    if (sampleDtm === null) continue;
-                    relGround = sampleDtm - cellDtm;
+                    if (sampleDtm !== null) relGround = sampleDtm - cellDtm;
                 }
                 const obstacleZ = relGround + sampleObstacle;
                 const rayZ      = cellH + d * tanAlt;
@@ -270,8 +272,15 @@ export function isPanelShaded(
         if (panelDtm !== null)
         {
             const sampleDtm = sampleDtmAt(raster, lon, lat);
-            if (sampleDtm === null) continue;            //gap in DTM, skip
-            relGround = sampleDtm - panelDtm;
+            //DTM-gap fallback: when the nDSM has a valid obstacle reading at this step but the DTM has a no-data hole (water body,
+            //processing artifact, small gap near coverage edges), fall back to flat-ground (relGround = 0) rather than skipping the
+            //step entirely. Skipping made the ray "see through" the obstacle, which under-detected shading on panels sitting near
+            //LiDAR coverage edges. Flat-ground here at least keeps the nDSM in the line-of-sight comparison; the small terrain bias
+            //it introduces is acceptable next to the alternative (false-negative shading).
+            if (sampleDtm !== null)
+            {
+                relGround = sampleDtm - panelDtm;
+            }
         }
         const obstacleZ = relGround + obstacleAboveGround;
         const rayZ      = panelHeightM + d * tanAlt;

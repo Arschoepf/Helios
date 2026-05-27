@@ -320,6 +320,18 @@ export interface Translations
         resetCacheButton:         string;
         resetCacheWarning:        string;
         resetCacheDone:           string;
+        //About section pinned at the very bottom of the editor. Carries the running version string, a pointer at the companion site
+        //helios-lidar.org, the two source-code repositories (the card + the companion site) and a short appreciation line + Buy Me A
+        //Coffee link so a happy user has a frictionless path to support the work.
+        aboutSection:             string;
+        aboutVersionLabel:        string;
+        aboutSiteTitle:           string;
+        aboutSiteDescription:     string;
+        aboutCodeLabel:           string;
+        aboutRepoCard:            string;
+        aboutRepoLidar:           string;
+        aboutCoffeeMessage:       string;
+        aboutCoffeeLink:          string;
         //Shading-map debug section. The scalar self-calibration
         //multiplier captures static biases; the shading map sits
         //on top of it and learns per-(sun-position, cloud-cover)

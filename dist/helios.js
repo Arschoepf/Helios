@@ -752,6 +752,15 @@ const en = {
     resetCacheButton: "Reset data cache",
     resetCacheWarning: "Warning: this clears the cached Open-Meteo weather and the in-memory PV history for EVERY Helios card open on this page. The refined forecast will lose its 5 days of calibration until they're re-fetched (a few minutes depending on your HA server). Your data inside Home Assistant is never touched.",
     resetCacheDone: "Cache cleared ✓",
+    aboutSection: "About",
+    aboutVersionLabel: "Version",
+    aboutSiteTitle: "Companion site, helios-lidar.org",
+    aboutSiteDescription: "Free tool to turn raw open LiDAR data from any country (LAZ / LAS or DSM + DTM pairs) into the nDSM GeoTIFF Helios needs, plus the YAML snippet to paste into this editor. No QGIS, no GDAL, no install, no account.",
+    aboutCodeLabel: "Source code",
+    aboutRepoCard: "Helios (the card)",
+    aboutRepoLidar: "Helios-Lidar (the companion site)",
+    aboutCoffeeMessage: "Helios is built by one developer with a lot of energy and very little sleep. If it helps your daily routine, a star on GitHub or a coffee keeps the project alive.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Adaptive shading map",
     shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
     shadingStatsCells: "cells with data",
@@ -926,6 +935,15 @@ const fr = {
     resetCacheButton: "Réinitialiser le cache des données",
     resetCacheWarning: "Attention : ce bouton vide la météo Open-Meteo en cache local et l'historique PV en mémoire pour TOUTES les cartes Helios ouvertes. La prévision affinée perdra ses 5 derniers jours de calibration le temps qu'ils soient récupérés à nouveau (quelques minutes selon ton serveur HA). Tes données dans Home Assistant ne sont jamais touchées.",
     resetCacheDone: "Cache vidé ✓",
+    aboutSection: "À propos",
+    aboutVersionLabel: "Version",
+    aboutSiteTitle: "Site compagnon, helios-lidar.org",
+    aboutSiteDescription: "Outil gratuit pour transformer les données LiDAR ouvertes brutes de n'importe quel pays (LAZ / LAS ou paires DSM + DTM) en le GeoTIFF nDSM dont Helios a besoin, avec le bout de YAML à coller dans cet éditeur. Pas de QGIS, pas de GDAL, pas d'installation, pas de compte.",
+    aboutCodeLabel: "Code source",
+    aboutRepoCard: "Helios (la carte)",
+    aboutRepoLidar: "Helios-Lidar (le site compagnon)",
+    aboutCoffeeMessage: "Helios est développé par un seul dev avec beaucoup d'énergie et très peu de sommeil. Si ça t'aide au quotidien, une étoile sur GitHub ou un café garde le projet en vie.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Carte d'ombre adaptative",
     shadingHint: "Une couche d'apprentissage par-dessus la calibration 5 jours : chaque cellule de la grille polaire ci-dessous garde la moyenne du rapport réel/prévu observée quand le soleil était à cette position et que la couverture nuageuse était dans cette tranche. Permet à la prévision de plier au bon moment de la journée pour les ombres d'arbres, les toits voisins et tout obstacle invisible au LiDAR. Se construit à partir de vos propres données sur quelques semaines ; en attendant, la calibration scalaire prend le relais.",
     shadingStatsCells: "cellules avec données",
@@ -1100,6 +1118,15 @@ const de = {
     resetCacheButton: "Datencache zurücksetzen",
     resetCacheWarning: "Achtung: löscht das zwischengespeicherte Open-Meteo-Wetter und den PV-Verlauf im Speicher für ALLE auf dieser Seite geöffneten Helios-Karten. Die verfeinerte Prognose verliert ihre 5-Tage-Kalibrierung, bis sie erneut abgerufen wird (je nach HA-Server einige Minuten). Daten in Home Assistant bleiben unverändert.",
     resetCacheDone: "Cache geleert ✓",
+    aboutSection: "Über",
+    aboutVersionLabel: "Version",
+    aboutSiteTitle: "Begleitseite, helios-lidar.org",
+    aboutSiteDescription: "Kostenloses Tool, um rohe offene LiDAR-Daten aus jedem Land (LAZ / LAS oder DSM + DTM-Paare) in das nDSM-GeoTIFF zu verwandeln, das Helios braucht, samt YAML-Schnipsel zum Einfügen in diesen Editor. Kein QGIS, kein GDAL, keine Installation, kein Konto.",
+    aboutCodeLabel: "Quellcode",
+    aboutRepoCard: "Helios (die Karte)",
+    aboutRepoLidar: "Helios-Lidar (die Begleitseite)",
+    aboutCoffeeMessage: "Helios wird von einem einzigen Entwickler mit viel Energie und sehr wenig Schlaf gebaut. Wenn es deinen Alltag erleichtert, hält ein Stern auf GitHub oder ein Kaffee das Projekt am Leben.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Adaptive shading map",
     shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
     shadingStatsCells: "cells with data",
@@ -1274,6 +1301,15 @@ const es = {
     resetCacheButton: "Restablecer caché de datos",
     resetCacheWarning: "Atención: borra la meteorología de Open-Meteo en caché y el historial PV en memoria de TODAS las tarjetas Helios abiertas en esta página. La previsión ajustada perderá sus 5 días de calibración hasta que se vuelvan a obtener (unos minutos según tu servidor HA). Los datos en Home Assistant no se tocan nunca.",
     resetCacheDone: "Caché borrada ✓",
+    aboutSection: "Acerca de",
+    aboutVersionLabel: "Versión",
+    aboutSiteTitle: "Sitio compañero, helios-lidar.org",
+    aboutSiteDescription: "Herramienta gratuita para convertir datos LiDAR abiertos en bruto de cualquier país (LAZ / LAS o pares DSM + DTM) en el GeoTIFF nDSM que Helios necesita, junto con el fragmento YAML para pegar en este editor. Sin QGIS, sin GDAL, sin instalación, sin cuenta.",
+    aboutCodeLabel: "Código fuente",
+    aboutRepoCard: "Helios (la tarjeta)",
+    aboutRepoLidar: "Helios-Lidar (el sitio compañero)",
+    aboutCoffeeMessage: "Helios lo desarrolla un único desarrollador con mucha energía y muy poco sueño. Si te ayuda en tu día a día, una estrella en GitHub o un café mantienen vivo el proyecto.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Adaptive shading map",
     shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
     shadingStatsCells: "cells with data",
@@ -1448,6 +1484,15 @@ const it = {
     resetCacheButton: "Reset cache dati",
     resetCacheWarning: "Attenzione: cancella i dati meteo Open-Meteo in cache e lo storico PV in memoria per TUTTE le card Helios aperte in questa pagina. La previsione rifinita perderà i suoi 5 giorni di calibrazione finché non saranno scaricati di nuovo (qualche minuto a seconda del tuo server HA). I dati su Home Assistant non vengono mai toccati.",
     resetCacheDone: "Cache svuotata ✓",
+    aboutSection: "Informazioni",
+    aboutVersionLabel: "Versione",
+    aboutSiteTitle: "Sito compagno, helios-lidar.org",
+    aboutSiteDescription: "Strumento gratuito per trasformare i dati LiDAR aperti grezzi di qualsiasi paese (LAZ / LAS o coppie DSM + DTM) nel GeoTIFF nDSM di cui Helios ha bisogno, insieme allo snippet YAML da incollare in questo editor. Niente QGIS, niente GDAL, niente installazione, niente account.",
+    aboutCodeLabel: "Codice sorgente",
+    aboutRepoCard: "Helios (la card)",
+    aboutRepoLidar: "Helios-Lidar (il sito compagno)",
+    aboutCoffeeMessage: "Helios è sviluppato da un solo sviluppatore con tanta energia e pochissimo sonno. Se ti aiuta nella tua routine quotidiana, una stella su GitHub o un caffè tengono in vita il progetto.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Adaptive shading map",
     shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
     shadingStatsCells: "cells with data",
@@ -1622,6 +1667,15 @@ const nl = {
     resetCacheButton: "Datacache resetten",
     resetCacheWarning: "Let op: dit wist de gecachete Open-Meteo weergegevens en de PV-geschiedenis in het geheugen van ELKE Helios-kaart die op deze pagina open staat. De bijgestelde verwachting verliest haar 5 dagen kalibratie totdat die opnieuw zijn opgehaald (enkele minuten afhankelijk van je HA-server). Gegevens in Home Assistant worden nooit aangeraakt.",
     resetCacheDone: "Cache geleegd ✓",
+    aboutSection: "Over",
+    aboutVersionLabel: "Versie",
+    aboutSiteTitle: "Begeleidende site, helios-lidar.org",
+    aboutSiteDescription: "Gratis tool om ruwe open LiDAR-data uit elk land (LAZ / LAS of DSM + DTM-paren) om te zetten naar het nDSM GeoTIFF dat Helios nodig heeft, plus het YAML-fragment om in deze editor te plakken. Geen QGIS, geen GDAL, geen installatie, geen account.",
+    aboutCodeLabel: "Broncode",
+    aboutRepoCard: "Helios (de kaart)",
+    aboutRepoLidar: "Helios-Lidar (de begeleidende site)",
+    aboutCoffeeMessage: "Helios wordt gebouwd door één ontwikkelaar met veel energie en heel weinig slaap. Als het je dagelijkse routine helpt, houdt een ster op GitHub of een koffie het project levend.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Adaptive shading map",
     shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
     shadingStatsCells: "cells with data",
@@ -1796,6 +1850,15 @@ const pt = {
     resetCacheButton: "Repor cache de dados",
     resetCacheWarning: "Atenção: limpa a meteorologia Open-Meteo em cache e o histórico PV em memória de TODOS os cartões Helios abertos nesta página. A previsão ajustada perderá os seus 5 dias de calibração até serem novamente obtidos (alguns minutos consoante o teu servidor HA). Os dados no Home Assistant nunca são tocados.",
     resetCacheDone: "Cache limpa ✓",
+    aboutSection: "Sobre",
+    aboutVersionLabel: "Versão",
+    aboutSiteTitle: "Site complementar, helios-lidar.org",
+    aboutSiteDescription: "Ferramenta gratuita para transformar dados LiDAR abertos em bruto de qualquer país (LAZ / LAS ou pares DSM + DTM) no GeoTIFF nDSM de que o Helios precisa, juntamente com o trecho YAML para colar neste editor. Sem QGIS, sem GDAL, sem instalação, sem conta.",
+    aboutCodeLabel: "Código-fonte",
+    aboutRepoCard: "Helios (o cartão)",
+    aboutRepoLidar: "Helios-Lidar (o site complementar)",
+    aboutCoffeeMessage: "O Helios é feito por um único programador com muita energia e muito pouco sono. Se te ajuda no dia a dia, uma estrela no GitHub ou um café mantêm o projeto vivo.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Adaptive shading map",
     shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
     shadingStatsCells: "cells with data",
@@ -1970,6 +2033,15 @@ const no = {
     resetCacheButton: "Tilbakestill databuffer",
     resetCacheWarning: "Advarsel: dette tømmer den bufrede Open-Meteo-væren og PV-historikken i minnet for ALLE Helios-kort som er åpne på denne siden. Det justerte estimatet mister sin 5-dagers kalibrering inntil den hentes på nytt (noen minutter avhengig av HA-serveren din). Data i Home Assistant røres aldri.",
     resetCacheDone: "Buffer tømt ✓",
+    aboutSection: "Om",
+    aboutVersionLabel: "Versjon",
+    aboutSiteTitle: "Følgeside, helios-lidar.org",
+    aboutSiteDescription: "Gratis verktøy som gjør rå åpen LiDAR-data fra hvilket som helst land (LAZ / LAS eller DSM + DTM-par) om til nDSM GeoTIFF som Helios trenger, pluss YAML-snutten du limer inn i denne editoren. Ingen QGIS, ingen GDAL, ingen installasjon, ingen konto.",
+    aboutCodeLabel: "Kildekode",
+    aboutRepoCard: "Helios (kortet)",
+    aboutRepoLidar: "Helios-Lidar (følgesiden)",
+    aboutCoffeeMessage: "Helios bygges av én utvikler med mye energi og veldig lite søvn. Hvis det hjelper deg i hverdagen, holder en stjerne på GitHub eller en kaffe prosjektet i live.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Adaptive shading map",
     shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
     shadingStatsCells: "cells with data",
@@ -2144,6 +2216,15 @@ const pl = {
     resetCacheButton: "Resetuj pamięć podręczną danych",
     resetCacheWarning: "Ostrzeżenie: to wyczyści zapisaną pogodę Open-Meteo oraz historię PV w pamięci dla KAŻDEJ karty Helios otwartej na tej stronie. Doprecyzowana prognoza utraci swoje 5 dni kalibracji, dopóki nie zostaną ponownie pobrane (kilka minut w zależności od Twojego serwera HA). Twoje dane wewnątrz Home Assistant nigdy nie są dotykane.",
     resetCacheDone: "Pamięć podręczna wyczyszczona ✓",
+    aboutSection: "O projekcie",
+    aboutVersionLabel: "Wersja",
+    aboutSiteTitle: "Strona towarzysząca, helios-lidar.org",
+    aboutSiteDescription: "Bezpłatne narzędzie do zamiany surowych otwartych danych LiDAR z dowolnego kraju (LAZ / LAS lub pary DSM + DTM) na GeoTIFF nDSM, którego potrzebuje Helios, wraz z fragmentem YAML do wklejenia w tym edytorze. Bez QGIS, bez GDAL, bez instalacji, bez konta.",
+    aboutCodeLabel: "Kod źródłowy",
+    aboutRepoCard: "Helios (karta)",
+    aboutRepoLidar: "Helios-Lidar (strona towarzysząca)",
+    aboutCoffeeMessage: "Helios tworzy jeden programista z dużą dawką energii i bardzo małą ilością snu. Jeśli pomaga Państwu w codziennym użytkowaniu, gwiazdka na GitHubie lub kawa utrzymują projekt przy życiu.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Adaptive shading map",
     shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
     shadingStatsCells: "cells with data",
@@ -2318,6 +2399,15 @@ const cs = {
     resetCacheButton: "Resetovat mezipaměť dat",
     resetCacheWarning: "Upozornění: toto vymaže mezipaměť počasí Open-Meteo a historii FV v paměti pro KAŽDOU kartu Helios otevřenou na této stránce. Upřesněná předpověď ztratí svých 5 dní kalibrace, dokud nebudou znovu načteny (několik minut v závislosti na vašem serveru HA). Vaše data uvnitř Home Assistant nejsou nikdy dotčena.",
     resetCacheDone: "Mezipaměť vyčištěna ✓",
+    aboutSection: "O projektu",
+    aboutVersionLabel: "Verze",
+    aboutSiteTitle: "Doprovodný web, helios-lidar.org",
+    aboutSiteDescription: "Bezplatný nástroj, který převede surová otevřená LiDAR data z libovolné země (LAZ / LAS nebo dvojice DSM + DTM) na GeoTIFF nDSM, který Helios potřebuje, plus úryvek YAML k vložení do tohoto editoru. Bez QGIS, bez GDAL, bez instalace, bez účtu.",
+    aboutCodeLabel: "Zdrojový kód",
+    aboutRepoCard: "Helios (karta)",
+    aboutRepoLidar: "Helios-Lidar (doprovodný web)",
+    aboutCoffeeMessage: "Helios vyvíjí jediný vývojář s velkou energií a velmi malým spánkem. Pokud Vám pomáhá v každodenním provozu, hvězda na GitHubu nebo káva udrží projekt naživu.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Adaptive shading map",
     shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
     shadingStatsCells: "cells with data",
@@ -2492,6 +2582,15 @@ const sv = {
     resetCacheButton: "Återställ datacache",
     resetCacheWarning: "Varning: detta rensar den cachade Open-Meteo-vädret och PV-historiken i minnet för VARJE Helios-kort som är öppet på denna sida. Den justerade prognosen kommer att förlora sina 5 dagar av kalibrering tills de hämtas igen (några minuter beroende på din HA-server). Dina data inuti Home Assistant rörs aldrig.",
     resetCacheDone: "Cache rensad ✓",
+    aboutSection: "Om",
+    aboutVersionLabel: "Version",
+    aboutSiteTitle: "Följeslagarsajt, helios-lidar.org",
+    aboutSiteDescription: "Gratisverktyg som omvandlar rå öppen LiDAR-data från valfritt land (LAZ / LAS eller DSM + DTM-par) till det nDSM GeoTIFF som Helios behöver, plus YAML-snutten du klistrar in i den här editorn. Inget QGIS, ingen GDAL, ingen installation, inget konto.",
+    aboutCodeLabel: "Källkod",
+    aboutRepoCard: "Helios (kortet)",
+    aboutRepoLidar: "Helios-Lidar (följeslagarsajten)",
+    aboutCoffeeMessage: "Helios byggs av en enda utvecklare med mycket energi och väldigt lite sömn. Om det hjälper dig i vardagen håller en stjärna på GitHub eller en kaffe projektet vid liv.",
+    aboutCoffeeLink: "Buy me a coffee",
     shadingSection: "Adaptive shading map",
     shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
     shadingStatsCells: "cells with data",
@@ -4537,22 +4636,28 @@ const heliosCardStyles = i$3`
         cloud picker for visual consistency between the two modes;
         ungated (continuous, no ticks) because opacity is a free
         analog tune, not a binned pick.                              */
-    /*  Permanent depth-of-field veil. A backdrop-filter blur of
-        0.6 px (subliminal on its own) shaped by a radial mask centred
-        on the home's current screen position: fully transparent inside
-        ~32 % of the radius (no blur at the focal point), smooth ramp
-        to fully opaque (full blur) at ~96 %. The home stays crisp, the
-        edges read as out-of-focus, which gives the card a gentle DoF
-        without any per-frame JS work, the mask anchor follows the home
-        through CSS variables updated by the card render. Pointer
-        events off so the veil never intercepts clicks meant for the
-        chips or the map underneath.                                  */
+    /*  Permanent depth-of-field veil. Sits at z-index 1, between the
+        MapLibre canvas (auto / 0) and every chip / overlay (z-index
+        11+), so backdrop-filter only sweeps the BASEMAP behind it,
+        never the UI. Chips, timeline, sliders and the mode bar all
+        composite ABOVE the veil and stay crisp regardless of where
+        the user is looking.
+
+        The blur is 0.6 px (subliminal on its own) shaped by a radial
+        mask centred on the home's current screen position: fully
+        transparent inside ~32 % of the radius (no blur at the focal
+        point), smooth ramp to fully opaque (full blur) at ~96 %. The
+        home stays crisp, the edges read as out-of-focus, which gives
+        the basemap a gentle DoF without any per-frame JS work, the
+        mask anchor follows the home through CSS variables updated
+        by the card render. Pointer events off so the veil never
+        intercepts clicks meant for the map underneath.               */
     .dof-blur-mask
     {
         position: absolute;
         inset: 0;
         pointer-events: none;
-        z-index: 60;
+        z-index: 1;
         backdrop-filter: blur(0.6px);
         -webkit-backdrop-filter: blur(0.6px);
         mask-image: radial-gradient(circle at var(--dof-x, 50%) var(--dof-y, 50%), transparent 32%, black 96%);
@@ -5707,8 +5812,7 @@ function computeLidarCellExposureRows(raster, sunAltitudeDeg, sunAzimuthDeg, jSt
         let relGround = 0;
         if (hasTerrain) {
           const sampleDtm = sampleDtmAt(raster, lon, lat);
-          if (sampleDtm === null) continue;
-          relGround = sampleDtm - cellDtm;
+          if (sampleDtm !== null) relGround = sampleDtm - cellDtm;
         }
         const obstacleZ = relGround + sampleObstacle;
         const rayZ = cellH + d2 * tanAlt;
@@ -5741,8 +5845,9 @@ function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg,
     let relGround = 0;
     if (panelDtm !== null) {
       const sampleDtm = sampleDtmAt(raster, lon, lat);
-      if (sampleDtm === null) continue;
-      relGround = sampleDtm - panelDtm;
+      if (sampleDtm !== null) {
+        relGround = sampleDtm - panelDtm;
+      }
     }
     const obstacleZ = relGround + obstacleAboveGround;
     const rayZ = panelHeightM + d2 * tanAlt;
@@ -36815,6 +36920,7 @@ class LidarViewLayer {
     const triUsed = ti > 0 ? triIdx.subarray(0, ti) : new Uint32Array(0);
     this._cellToVert = cellToVert;
     this._hasExposure = false;
+    this._pendingExposure = void 0;
     if (this._gl && this._buffer) {
       const gl = this._gl;
       gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
@@ -36852,9 +36958,14 @@ class LidarViewLayer {
       this._map?.triggerRepaint();
       return;
     }
-    const vertExposure = new Uint8Array(this._vertexCount);
     const c2v = this._cellToVert;
     const N2 = c2v.length;
+    if (perCellExposure.length !== N2) {
+      this._hasExposure = false;
+      this._map?.triggerRepaint();
+      return;
+    }
+    const vertExposure = new Uint8Array(this._vertexCount);
     for (let i2 = 0; i2 < N2; i2++) {
       const v2 = c2v[i2];
       if (v2 >= 0) vertExposure[v2] = perCellExposure[i2] ?? 255;
@@ -37627,7 +37738,7 @@ const _HeliosEngine = class _HeliosEngine {
       startAutoRotateLoop(this);
     };
     this.map.on("load", this._mapLoadHandler);
-    this.map.on("styleimagemissing", (e2) => {
+    this._mapStyleImageMissingHandler = (e2) => {
       if (!this.map || !e2?.id || this.map.hasImage(e2.id)) return;
       try {
         this.map.addImage(e2.id, {
@@ -37638,7 +37749,8 @@ const _HeliosEngine = class _HeliosEngine {
         });
       } catch (_2) {
       }
-    });
+    };
+    this.map.on("styleimagemissing", this._mapStyleImageMissingHandler);
     this._mapMoveHandler = () => this.onMapTransform?.();
     this.map.on("move", this._mapMoveHandler);
     const canvas = this.map.getCanvas();
@@ -38254,11 +38366,25 @@ const _HeliosEngine = class _HeliosEngine {
         maxLon: r2.maxLon
       };
       const out = new Uint8Array(rasterRef.rasterSize * rasterRef.rasterSize);
+      const capturedRaster = r2;
       const CHUNK_ROWS = 32;
       let j = 0;
       const tick2 = () => {
         if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer) {
           this._exposureChunkRaf = void 0;
+          return;
+        }
+        if (this._lidarRaster !== capturedRaster) {
+          this._exposureChunkRaf = void 0;
+          this._scheduleLidarExposureRecompute();
+          return;
+        }
+        const currentSun = getSunPosition(this._selectedTime ?? /* @__PURE__ */ new Date(), this.homeLat, this.homeLon);
+        if (currentSun && (Math.abs(currentSun.altitude - sun.altitude) >= 0.5 || Math.abs(currentSun.azimuth - sun.azimuth) >= 0.5)) {
+          this._exposureChunkRaf = void 0;
+          this._lastLidarExposureAlt = -999;
+          this._lastLidarExposureAz = -999;
+          this._scheduleLidarExposureRecompute();
           return;
         }
         const jEnd = Math.min(rasterRef.rasterSize, j + CHUNK_ROWS);
@@ -39778,6 +39904,15 @@ const _HeliosEngine = class _HeliosEngine {
       cancelAnimationFrame(this._detailDiveRaf);
       this._detailDiveRaf = void 0;
     }
+    if (this._exposureIdleHandle !== void 0) {
+      this._cancelIdleCb(this._exposureIdleHandle);
+      this._exposureIdleHandle = void 0;
+    }
+    if (this._exposureChunkRaf !== void 0) {
+      cancelAnimationFrame(this._exposureChunkRaf);
+      this._exposureChunkRaf = void 0;
+    }
+    this._lidarViewActive = false;
     const canvas = this._mapCanvas;
     if (this._dragRotateHandlers) {
       const h2 = this._dragRotateHandlers;
@@ -39807,6 +39942,7 @@ const _HeliosEngine = class _HeliosEngine {
         if (this._mapLoadHandler) this.map.off("load", this._mapLoadHandler);
         if (this._mapMoveHandler) this.map.off("move", this._mapMoveHandler);
         if (this._mapErrorHandler) this.map.off("error", this._mapErrorHandler);
+        if (this._mapStyleImageMissingHandler) this.map.off("styleimagemissing", this._mapStyleImageMissingHandler);
       } catch (_2) {
       }
     }
@@ -39821,7 +39957,15 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-buildings-home",
         "helios-buildings-home-outline",
         "helios-buildings-home-outline-glow",
-        "helios-building-shadows"
+        "helios-building-shadows",
+        //LiDAR-View custom layer: MapLibre invokes the layer's
+        //onRemove() when we removeLayer it, which is what frees
+        //the 4 GPU buffers + the WebGLProgram. On the iOS
+        //Safari code path where `map.remove()` doesn't fan out
+        //to custom layers, this explicit removeLayer is the
+        //only thing preventing the buffers + program from
+        //leaking through every engine respawn.
+        "helios-lidar-view"
       ]) {
         try {
           if (this.map.getLayer(lid)) this.map.removeLayer(lid);
@@ -39858,6 +40002,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._mapLoadHandler = void 0;
     this._mapMoveHandler = void 0;
     this._mapErrorHandler = void 0;
+    this._mapStyleImageMissingHandler = void 0;
     this._webglLostHandler = void 0;
     this._webglRestoredHandler = void 0;
     this.onContextLost = void 0;
@@ -40654,7 +40799,9 @@ function actualKwhForDay(hist, pvUnit, startMs, endMs) {
     let kwh2 = 0;
     for (let i2 = 1; i2 < hist.times.length; i2++) {
       const tMs = hist.times[i2].getTime();
+      const tPrevMs = hist.times[i2 - 1].getTime();
       if (tMs < startMs || tMs >= endMs) continue;
+      if (tPrevMs < startMs) continue;
       const dv = hist.values[i2] - hist.values[i2 - 1];
       if (!isFinite(dv) || dv < 0) continue;
       kwh2 += dv * energyFactor;
@@ -40790,6 +40937,9 @@ function trainShadingMap(host) {
   const sensorIsEnergy = isCumulativeEnergyUnit(pvUnit);
   const cutoffPct = inverterCutoffSocPct(host.config);
   const socSeries = cutoffPct !== null ? host._batteryHistories : [];
+  if (cutoffPct !== null && socSeries.length === 0 && parseBatteryBanks(host.config).length > 0) {
+    console.warn("[HELIOS] inverter-cutoff-soc-pct is set but no battery bank exposes a soc-entity, the trainer cutoff guard is inactive. Add a soc-entity to at least one bank in the `batteries:` array.");
+  }
   let updated = 0;
   let highestProcessedMs = map.lastTrainedMs || 0;
   for (let i2 = 0; i2 < series.times.length - 1; i2++) {
@@ -43188,6 +43338,83 @@ const editorStyles = i$3`
         outline: 2px solid #ef4444;
         outline-offset: 2px;
     }
+
+    /*  About section pinned at the very bottom of the editor.
+        Compact rows for the version + links + appreciation line,
+        styled as a "credits panel" rather than another config
+        section so the user reads it as a soft footer.              */
+    .about-row
+    {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    }
+    .about-label
+    {
+        font-weight: 500;
+        color: var(--secondary-text-color, #71717a);
+        font-size: 13px;
+    }
+    .about-value
+    {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        font-size: 13px;
+        color: var(--primary-text-color, #18181b);
+    }
+    .about-block
+    {
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .about-link
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        color: var(--primary-color, #3b82f6);
+        font-size: 14px;
+        font-weight: 500;
+        padding: 6px 0;
+    }
+    .about-link:hover { text-decoration: underline; }
+    .about-link ha-icon
+    {
+        --mdc-icon-size: 18px;
+        color: inherit;
+    }
+    .about-paragraph
+    {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--secondary-text-color, #52525b);
+    }
+    .about-coffee
+    {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    }
+    .about-coffee-link
+    {
+        margin-top: 4px;
+        background: #ffdd00;
+        color: #000000;
+        padding: 8px 14px;
+        border-radius: 8px;
+        align-self: flex-start;
+        font-weight: 600;
+    }
+    .about-coffee-link:hover
+    {
+        background: #ffea4a;
+        text-decoration: none;
+    }
     /*  Shading-map debug section: stat strip + 4-up polar grid +
         action row. Grid wraps from a 4-up row to a 2x2 / 1-up
         stack via the auto-fit template, so the section reads
@@ -43674,6 +43901,10 @@ let HeliosCardEditor = class extends i {
     super.disconnectedCallback();
     for (const t2 of this._sliderDebounce.values()) window.clearTimeout(t2);
     this._sliderDebounce.clear();
+    if (this._resetFeedbackTimer !== void 0) {
+      window.clearTimeout(this._resetFeedbackTimer);
+      this._resetFeedbackTimer = void 0;
+    }
   }
   setConfig(config) {
     this._cfg = { ...config };
@@ -44834,6 +45065,39 @@ let HeliosCardEditor = class extends i {
                     >${this._resetFeedback ?? t2.editor.resetCacheButton}</button>
                 </details>
 
+                <details class="advanced-section about-section" ?open="${this._openSection === "about"}" @toggle="${(e2) => this._onSectionToggle("about", e2)}">
+                    <summary class="section-title section-title-collapse">${t2.editor.aboutSection}</summary>
+                    <div class="about-row">
+                        <span class="about-label">${t2.editor.aboutVersionLabel}</span>
+                        <span class="about-value">${"1.7.0-beta.3"}</span>
+                    </div>
+                    <div class="about-block">
+                        <a class="about-link" href="https://helios-lidar.org" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:satellite-variant"></ha-icon>
+                            <span>${t2.editor.aboutSiteTitle}</span>
+                        </a>
+                        <p class="about-paragraph">${t2.editor.aboutSiteDescription}</p>
+                    </div>
+                    <div class="about-block">
+                        <div class="about-label">${t2.editor.aboutCodeLabel}</div>
+                        <a class="about-link" href="https://github.com/ReikanYsora/Helios" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>${t2.editor.aboutRepoCard}</span>
+                        </a>
+                        <a class="about-link" href="https://github.com/ReikanYsora/Helios-Lidar" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>${t2.editor.aboutRepoLidar}</span>
+                        </a>
+                    </div>
+                    <div class="about-block about-coffee">
+                        <p class="about-paragraph">${t2.editor.aboutCoffeeMessage}</p>
+                        <a class="about-link about-coffee-link" href="https://www.buymeacoffee.com/reikanysora" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:coffee"></ha-icon>
+                            <span>${t2.editor.aboutCoffeeLink}</span>
+                        </a>
+                    </div>
+                </details>
+
             </div>
         `;
   }
@@ -44910,7 +45174,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-beta.2"}`,
+      `%c☀ HELIOS%c v${"1.7.0-beta.3"}`,
       labelStyle,
       versionStyle
     );
@@ -44934,7 +45198,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-beta.2",
+        version: "1.7.0-beta.3",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44942,7 +45206,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-beta.2"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-beta.3"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

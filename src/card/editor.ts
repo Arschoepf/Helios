@@ -271,6 +271,13 @@ export class HeliosCardEditor extends LitElement
         super.disconnectedCallback();
         for (const t of this._sliderDebounce.values()) window.clearTimeout(t);
         this._sliderDebounce.clear();
+        //"Cache vidé" confirmation timer survives a fast unmount if not cleared, fires on a dead element and triggers a Lit warning
+        //about touching @state after disconnect. Clear it here so the editor unmounts cleanly mid-feedback.
+        if (this._resetFeedbackTimer !== undefined)
+        {
+            window.clearTimeout(this._resetFeedbackTimer);
+            this._resetFeedbackTimer = undefined;
+        }
     }
 
     public setConfig(config: HeliosConfig): void
@@ -1667,6 +1674,39 @@ export class HeliosCardEditor extends LitElement
                         class="reset-btn"
                         @click="${() => this._onResetCacheClick()}"
                     >${this._resetFeedback ?? t.editor.resetCacheButton}</button>
+                </details>
+
+                <details class="advanced-section about-section" ?open="${this._openSection === 'about'}" @toggle="${(e: Event) => this._onSectionToggle('about', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.aboutSection}</summary>
+                    <div class="about-row">
+                        <span class="about-label">${t.editor.aboutVersionLabel}</span>
+                        <span class="about-value">${__HELIOS_VERSION__}</span>
+                    </div>
+                    <div class="about-block">
+                        <a class="about-link" href="https://helios-lidar.org" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:satellite-variant"></ha-icon>
+                            <span>${t.editor.aboutSiteTitle}</span>
+                        </a>
+                        <p class="about-paragraph">${t.editor.aboutSiteDescription}</p>
+                    </div>
+                    <div class="about-block">
+                        <div class="about-label">${t.editor.aboutCodeLabel}</div>
+                        <a class="about-link" href="https://github.com/ReikanYsora/Helios" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>${t.editor.aboutRepoCard}</span>
+                        </a>
+                        <a class="about-link" href="https://github.com/ReikanYsora/Helios-Lidar" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>${t.editor.aboutRepoLidar}</span>
+                        </a>
+                    </div>
+                    <div class="about-block about-coffee">
+                        <p class="about-paragraph">${t.editor.aboutCoffeeMessage}</p>
+                        <a class="about-link about-coffee-link" href="https://www.buymeacoffee.com/reikanysora" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:coffee"></ha-icon>
+                            <span>${t.editor.aboutCoffeeLink}</span>
+                        </a>
+                    </div>
                 </details>
 
             </div>

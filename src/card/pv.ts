@@ -661,17 +661,19 @@ export function currentPvRate(host: PvHost): PvRate | null
 }
 
 
-//Convert a PV rate into watts. Used to drive animation speeds on a unit-agnostic scale, the leader-line dash flow saturates at a fixed wattage no
+//Convert a POWER RATE into watts. Used to drive animation speeds on a unit-agnostic scale, the leader-line dash flow saturates at a fixed wattage no
 //matter what unit the user's sensor is in.
+//
+//Contract: the `value` argument MUST already be an instantaneous power rate (W / kW / MW). Cumulative-energy sensors (Wh / kWh / MWh)
+//are caller-side differentiated into a power rate FIRST via pvRateAtTime / currentPvRate before reaching this helper. Passing a raw
+//cumulative-energy reading here returns 0 (which pauses any animation that depends on it, instead of silently mis-scaling a kWh
+//figure as if it were already in watts), the explicit no-op is meant as a wiring trap for future callers.
 export function pvNormalizeToWatts(value: number, unit: string): number
 {
     const lu = (unit || '').toLowerCase();
     if (lu === 'kw') return value * 1000;
     if (lu === 'mw') return value * 1_000_000;
     if (lu === 'w')  return value;
-    //Other units (e.g. raw cumulative kWh that we couldn't
-    //differentiate), treat as 0 so the animation pauses
-    //instead of mis-scaling.
     return 0;
 }
 

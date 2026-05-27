@@ -552,6 +552,10 @@ export class HeliosEngine
     private _mapStyleLoadHandler?: () => void;
     private _mapLoadHandler?:      () => void;
     private _mapMoveHandler?:      () => void;
+    //Stored ref to the styleimagemissing handler so cleanup() can map.off() it. Anonymous lambda inlined in the original registration
+    //meant the closure (which pins `this`) survived past cleanup whenever MapLibre's own map.remove() didn't fan out to listener
+    //teardown, the iOS Safari path defensive-cleanup is wired around.
+    private _mapStyleImageMissingHandler?: (e: { id?: string }) => void;
     private _mapErrorHandler?:     (e: { error?: { message?: string } }) => void;
     private _webglLostHandler?:    (e: Event) => void;
     private _webglRestoredHandler?: () => void;
@@ -873,7 +877,7 @@ export class HeliosEngine
         //requested id so the layer falls through to its base color
         //without spamming the console. Cheap, idempotent because
         //hasImage() guards re-registration.
-        this.map.on('styleimagemissing', (e: { id?: string }) =>
+        this._mapStyleImageMissingHandler = (e: { id?: string }) =>
         {
             if (!this.map || !e?.id || this.map.hasImage(e.id)) return;
             try
@@ -885,7 +889,8 @@ export class HeliosEngine
                 });
             }
             catch (_) {}
-        });
+        };
+        this.map.on('styleimagemissing', this._mapStyleImageMissingHandler);
 
         //Map transform broadcaster, relays move events to the card so it can keep HTML overlays aligned with the underlying canvas. We listen on
         //`move` rather than `moveend` so the overlays track the camera frame-by-frame during programmatic animations rather than snapping at the end.
@@ -1784,6 +1789,10 @@ export class HeliosEngine
                 maxLon:     r.maxLon,
             };
             const out = new Uint8Array(rasterRef.rasterSize * rasterRef.rasterSize);
+            //Pin the raster reference identity captured by the idle callback. If a provider / precision swap fires mid-sweep,
+            //this._lidarRaster moves on while rasterRef stays pointing at the old data, so the tick can bail before posting an
+            //exposure sized to the dead raster (which would otherwise paint nonsense for one frame).
+            const capturedRaster = r;
             //32-row chunks land each rAF tick around 6-20 ms even at high precision (rasterSize ~512), so the browser still hits 60 fps
             //during the sweep. Lower chunk sizes would shave per-frame budget further at the cost of more total wall time (rAF overhead).
             const CHUNK_ROWS = 32;
@@ -1793,6 +1802,30 @@ export class HeliosEngine
                 if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer)
                 {
                     this._exposureChunkRaf = undefined;
+                    return;
+                }
+                if (this._lidarRaster !== capturedRaster)
+                {
+                    //Raster swapped under us; drop this in-flight sweep and let the next schedule pick up the new one.
+                    this._exposureChunkRaf = undefined;
+                    this._scheduleLidarExposureRecompute();
+                    return;
+                }
+                //Stale-sun bail: when the user scrubs the timeline aggressively while a sweep is in flight, the sun captured in this
+                //closure can drift far from the current time-cursor. Re-sample the sun on the latest selectedTime each tick and, if
+                //it diverged past the 0.5° gate, abort the chunk loop so the next schedule produces a fresh exposure aligned with
+                //the cursor instead of locking the view on a stale frame for the rest of the sweep.
+                const currentSun = getSunPosition(this._selectedTime ?? new Date(), this.homeLat, this.homeLon);
+                if (currentSun
+                 && (Math.abs(currentSun.altitude - sun.altitude) >= 0.5
+                  || Math.abs(currentSun.azimuth  - sun.azimuth)  >= 0.5))
+                {
+                    this._exposureChunkRaf = undefined;
+                    //Force a fresh recompute on the new sun, the gate would otherwise short-circuit because _lastLidarExposureAlt/Az
+                    //haven't been advanced yet (this aborted sweep never landed).
+                    this._lastLidarExposureAlt = -999;
+                    this._lastLidarExposureAz  = -999;
+                    this._scheduleLidarExposureRecompute();
                     return;
                 }
                 const jEnd = Math.min(rasterRef.rasterSize, j + CHUNK_ROWS);
@@ -4097,6 +4130,23 @@ export class HeliosEngine
             cancelAnimationFrame(this._detailDiveRaf);
             this._detailDiveRaf = undefined;
         }
+        //Cancel the LiDAR-View exposure pipeline. The idle callback can
+        //fire AFTER cleanup, and the chunked rAF loop captures `this`
+        //in its closure, so leaving either token live would pin the
+        //dead engine + its WebGL context for at least one extra frame
+        //per chunk, which adds up across rapid config edits when
+        //many engines respawn in quick succession.
+        if (this._exposureIdleHandle !== undefined)
+        {
+            this._cancelIdleCb(this._exposureIdleHandle);
+            this._exposureIdleHandle = undefined;
+        }
+        if (this._exposureChunkRaf !== undefined)
+        {
+            cancelAnimationFrame(this._exposureChunkRaf);
+            this._exposureChunkRaf = undefined;
+        }
+        this._lidarViewActive = false;
 
         //Tear-down strategy: explicit + defensive + force-lose.
         //
@@ -4163,10 +4213,11 @@ export class HeliosEngine
                     this.map.off('rotate', this._mapPinHandler);
                     this.map.off('move',   this._mapPinHandler);
                 }
-                if (this._mapStyleLoadHandler) this.map.off('style.load', this._mapStyleLoadHandler);
-                if (this._mapLoadHandler)      this.map.off('load',       this._mapLoadHandler);
-                if (this._mapMoveHandler)      this.map.off('move',       this._mapMoveHandler);
-                if (this._mapErrorHandler)     this.map.off('error',      this._mapErrorHandler);
+                if (this._mapStyleLoadHandler)         this.map.off('style.load',         this._mapStyleLoadHandler);
+                if (this._mapLoadHandler)              this.map.off('load',               this._mapLoadHandler);
+                if (this._mapMoveHandler)              this.map.off('move',               this._mapMoveHandler);
+                if (this._mapErrorHandler)             this.map.off('error',              this._mapErrorHandler);
+                if (this._mapStyleImageMissingHandler) this.map.off('styleimagemissing',  this._mapStyleImageMissingHandler);
             }
             catch (_) {}
         }
@@ -4187,7 +4238,15 @@ export class HeliosEngine
                 'helios-buildings-home',
                 'helios-buildings-home-outline',
                 'helios-buildings-home-outline-glow',
-                'helios-building-shadows'
+                'helios-building-shadows',
+                //LiDAR-View custom layer: MapLibre invokes the layer's
+                //onRemove() when we removeLayer it, which is what frees
+                //the 4 GPU buffers + the WebGLProgram. On the iOS
+                //Safari code path where `map.remove()` doesn't fan out
+                //to custom layers, this explicit removeLayer is the
+                //only thing preventing the buffers + program from
+                //leaking through every engine respawn.
+                'helios-lidar-view'
             ])
             {
                 try { if (this.map.getLayer(lid)) this.map.removeLayer(lid); }
@@ -4227,6 +4286,7 @@ export class HeliosEngine
         this._mapLoadHandler        = undefined;
         this._mapMoveHandler        = undefined;
         this._mapErrorHandler       = undefined;
+        this._mapStyleImageMissingHandler = undefined;
         this._webglLostHandler      = undefined;
         this._webglRestoredHandler  = undefined;
         this.onContextLost          = undefined;

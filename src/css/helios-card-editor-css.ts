@@ -543,6 +543,83 @@ export const editorStyles = css`
         outline: 2px solid #ef4444;
         outline-offset: 2px;
     }
+
+    /*  About section pinned at the very bottom of the editor.
+        Compact rows for the version + links + appreciation line,
+        styled as a "credits panel" rather than another config
+        section so the user reads it as a soft footer.              */
+    .about-row
+    {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    }
+    .about-label
+    {
+        font-weight: 500;
+        color: var(--secondary-text-color, #71717a);
+        font-size: 13px;
+    }
+    .about-value
+    {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        font-size: 13px;
+        color: var(--primary-text-color, #18181b);
+    }
+    .about-block
+    {
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .about-link
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        color: var(--primary-color, #3b82f6);
+        font-size: 14px;
+        font-weight: 500;
+        padding: 6px 0;
+    }
+    .about-link:hover { text-decoration: underline; }
+    .about-link ha-icon
+    {
+        --mdc-icon-size: 18px;
+        color: inherit;
+    }
+    .about-paragraph
+    {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--secondary-text-color, #52525b);
+    }
+    .about-coffee
+    {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    }
+    .about-coffee-link
+    {
+        margin-top: 4px;
+        background: #ffdd00;
+        color: #000000;
+        padding: 8px 14px;
+        border-radius: 8px;
+        align-self: flex-start;
+        font-weight: 600;
+    }
+    .about-coffee-link:hover
+    {
+        background: #ffea4a;
+        text-decoration: none;
+    }
     /*  Shading-map debug section: stat strip + 4-up polar grid +
         action row. Grid wraps from a 4-up row to a 2x2 / 1-up
         stack via the auto-fit template, so the section reads
