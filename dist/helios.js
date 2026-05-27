@@ -41961,14 +41961,14 @@ function handleDashChartPointerMove(host, e2) {
   if (!svgEl) return;
   const rect = svgEl.getBoundingClientRect();
   if (rect.width <= 0) return;
-  const W = 240, PAD_X = 4;
+  const W = 240, PAD_L = 22, PAD_R = 4;
   const fracPx = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
   const xLogical = fracPx * W;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const startMs = today0.getTime();
   const endMs = startMs + 24 * 36e5;
-  const tFrac = (xLogical - PAD_X) / (W - 2 * PAD_X);
+  const tFrac = (xLogical - PAD_L) / (W - PAD_L - PAD_R);
   host._dashChartHoverTs = startMs + Math.max(0, Math.min(1, tFrac)) * (endMs - startMs);
 }
 function handleDashChartPointerLeave(host) {
@@ -44126,7 +44126,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.15"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.16"}`,
       labelStyle,
       versionStyle
     );
@@ -44150,7 +44150,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.15",
+        version: "1.7.0-alpha.16",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44158,7 +44158,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.15"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.16"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

@@ -1202,20 +1202,28 @@ export function handleExitDetail(host: DashboardHost, e: Event): void
 //Hover handlers on the today chart sparkline. Update the hover
 //timestamp on move; clear it on leave so the tooltip + cursor
 //disappear cleanly when the pointer exits the SVG.
+//
+//Padding constants must mirror the asymmetric layout used by the
+//chart renderer (PAD_L = 22 leaves room for the Y-axis labels,
+//PAD_R = 4 is just visual breathing room on the right). Using a
+//symmetric PAD_X here would offset the time mapping by ~18 px on
+//the left edge, the cursor would land in the middle of the
+//morning hours when the mouse is on midnight. Reported as bug
+//#20 by JJAsond.
 export function handleDashChartPointerMove(host: DashboardHost, e: PointerEvent): void
 {
     const svgEl = e.currentTarget as SVGSVGElement | null;
     if (!svgEl) return;
     const rect = svgEl.getBoundingClientRect();
     if (rect.width <= 0) return;
-    const W = 240, PAD_X = 4;
+    const W = 240, PAD_L = 22, PAD_R = 4;
     const fracPx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const xLogical = fracPx * W;
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
     const startMs = today0.getTime();
     const endMs   = startMs + 24 * 3_600_000;
-    const tFrac = (xLogical - PAD_X) / (W - 2 * PAD_X);
+    const tFrac = (xLogical - PAD_L) / (W - PAD_L - PAD_R);
     host._dashChartHoverTs = startMs
         + Math.max(0, Math.min(1, tFrac)) * (endMs - startMs);
 }
