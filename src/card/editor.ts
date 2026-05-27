@@ -1285,7 +1285,6 @@ export class HeliosCardEditor extends LitElement
                         @value-changed="${(e: CustomEvent) => this._color('battery-color', e)}"
                     ></helios-color-picker>
                 </label>
-                <div class="hint">${t.editor.batteryHint}</div>
 
                 </details>
 
