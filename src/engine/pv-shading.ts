@@ -159,9 +159,31 @@ export function computeLidarCellExposure(
     maxDistM:       number = 200,
 ): Uint8Array
 {
-    const N = raster.rasterSize * raster.rasterSize;
-    const out = new Uint8Array(N);
-    if (sunAltitudeDeg <= 0) return out;
+    const out = new Uint8Array(raster.rasterSize * raster.rasterSize);
+    computeLidarCellExposureRows(raster, sunAltitudeDeg, sunAzimuthDeg, 0, raster.rasterSize, out, stepM, maxDistM);
+    return out;
+}
+
+
+//Row-bounded variant of computeLidarCellExposure, used by the engine to chunk the raymarch across multiple animation frames so the main
+//thread stays responsive while the irradiance map refreshes. The caller owns the output buffer (allocated once when the compute starts)
+//and walks j-row ranges through this function on each chunk tick; intermediate chunks see partially-populated frames, the user sees the
+//irradiance map filling in row-by-row instead of a 200-1500 ms freeze when a full-raster compute lands on a busy main thread. Rows
+//outside [jStart, jEnd) are left untouched so a single allocation survives the full multi-chunk sweep. Below-horizon sun and an empty
+//range are both fast no-ops.
+export function computeLidarCellExposureRows(
+    raster:         NdsmRaster,
+    sunAltitudeDeg: number,
+    sunAzimuthDeg:  number,
+    jStart:         number,
+    jEnd:           number,
+    out:            Uint8Array,
+    stepM:          number = 2,
+    maxDistM:       number = 200,
+): void
+{
+    if (sunAltitudeDeg <= 0) return;
+    if (jStart >= jEnd) return;
 
     const altR  = sunAltitudeDeg * D;
     const azR   = sunAzimuthDeg  * D;
@@ -174,7 +196,10 @@ export function computeLidarCellExposure(
     const pxLat = (maxLat - minLat) / rasterSize;
     const hasTerrain = !!terrain;
 
-    for (let j = 0; j < rasterSize; j++)
+    const j0 = Math.max(0, jStart);
+    const j1 = Math.min(rasterSize, jEnd);
+
+    for (let j = j0; j < j1; j++)
     {
         const cLat = maxLat - (j + 0.5) * pxLat;
         //metres-per-degree-longitude varies with latitude. The ray runs at most maxDistM (200 m by default), so a per-row constant is good
@@ -187,7 +212,7 @@ export function computeLidarCellExposure(
         {
             const idx   = j * rasterSize + i;
             const cellH = heights[idx];
-            if (!isFinite(cellH)) continue;
+            if (!isFinite(cellH)) { out[idx] = 0; continue; }
             const cLon    = minLon + (i + 0.5) * pxLon;
             const cellDtm = hasTerrain ? terrain![idx] : 0;
             let shadowed  = false;
@@ -211,7 +236,6 @@ export function computeLidarCellExposure(
             out[idx] = shadowed ? 0 : 255;
         }
     }
-    return out;
 }
 
 

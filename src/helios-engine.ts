@@ -7,7 +7,7 @@ import { projectExtrusionShadows } from './engine/shadows';
 import { resolveLidarSource } from './engine/lidar';
 import { RASTER_DEFAULTS } from './engine/lidar/pipeline';
 import { LidarViewLayer } from './engine/lidar-view-layer';
-import { computeLidarCellExposure } from './engine/pv-shading';
+import { computeLidarCellExposureRows } from './engine/pv-shading';
 import { startAutoRotateLoop } from './engine/auto-rotate';
 import { setDetailMode as _setDetailMode } from './engine/detail-mode';
 import
@@ -1717,6 +1717,11 @@ export class HeliosEngine
                 this._cancelIdleCb(this._exposureIdleHandle);
                 this._exposureIdleHandle = undefined;
             }
+            if (this._exposureChunkRaf !== undefined)
+            {
+                cancelAnimationFrame(this._exposureChunkRaf);
+                this._exposureChunkRaf = undefined;
+            }
             this._lidarViewLayer?.setExposure(null);
         }
     }
@@ -1745,14 +1750,19 @@ export class HeliosEngine
     }
 
 
-    //Schedule the LiDAR-View exposure compute via an idle callback so the 50-150 ms raymarch never lands on a user-interactive frame. No-op
-    //when LiDAR View is off, the raster isn't loaded yet, the layer instance isn't ready, or a compute is already queued. The actual sun-delta
-    //gate happens inside the deferred callback so a stale schedule can't fire a no-op compute when the sun hasn't actually moved.
+    //Schedule the LiDAR-View exposure compute. Kick-off via idle callback so the chunk loop never lands on a user-interactive frame; the
+    //chunks themselves run inside requestAnimationFrame so each frame yields back to the browser between row-bands. Total wall time is the
+    //same as the single-shot compute but the main thread stays responsive (chip fade-out plays smoothly, scrub keeps tracking the pointer).
+    //No-op when LiDAR View is off, the raster isn't loaded yet, the layer instance isn't ready, or a compute is already in flight (either
+    //queued in idle or mid-chunk via the rAF token).
+    private _exposureChunkRaf: number | undefined;
+
     private _scheduleLidarExposureRecompute(): void
     {
         if (!this._lidarViewActive) return;
         if (!this._lidarRaster || !this._lidarViewLayer) return;
         if (this._exposureIdleHandle !== undefined) return;
+        if (this._exposureChunkRaf  !== undefined) return;
         this._exposureIdleHandle = this._requestIdleCb(() =>
         {
             this._exposureIdleHandle = undefined;
@@ -1764,22 +1774,41 @@ export class HeliosEngine
             if (altDelta < 0.5 && azDelta < 0.5) return;
             const r = this._lidarRaster;
             //NdsmRaster shape match: heights + rasterSize + bbox + optional terrain. The engine's _lidarRaster carries the same fields.
-            const exposure = computeLidarCellExposure(
+            const rasterRef = {
+                heights:    r.heights,
+                terrain:    r.terrain,
+                rasterSize: r.rasterSize,
+                minLat:     r.minLat,
+                maxLat:     r.maxLat,
+                minLon:     r.minLon,
+                maxLon:     r.maxLon,
+            };
+            const out = new Uint8Array(rasterRef.rasterSize * rasterRef.rasterSize);
+            //32-row chunks land each rAF tick around 6-20 ms even at high precision (rasterSize ~512), so the browser still hits 60 fps
+            //during the sweep. Lower chunk sizes would shave per-frame budget further at the cost of more total wall time (rAF overhead).
+            const CHUNK_ROWS = 32;
+            let j = 0;
+            const tick = (): void =>
+            {
+                if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer)
                 {
-                    heights:    r.heights,
-                    terrain:    r.terrain,
-                    rasterSize: r.rasterSize,
-                    minLat:     r.minLat,
-                    maxLat:     r.maxLat,
-                    minLon:     r.minLon,
-                    maxLon:     r.maxLon,
-                },
-                sun.altitude,
-                sun.azimuth,
-            );
-            this._lidarViewLayer.setExposure(exposure);
-            this._lastLidarExposureAlt = sun.altitude;
-            this._lastLidarExposureAz  = sun.azimuth;
+                    this._exposureChunkRaf = undefined;
+                    return;
+                }
+                const jEnd = Math.min(rasterRef.rasterSize, j + CHUNK_ROWS);
+                computeLidarCellExposureRows(rasterRef, sun.altitude, sun.azimuth, j, jEnd, out);
+                j = jEnd;
+                if (j < rasterRef.rasterSize)
+                {
+                    this._exposureChunkRaf = requestAnimationFrame(tick);
+                    return;
+                }
+                this._exposureChunkRaf = undefined;
+                this._lidarViewLayer.setExposure(out);
+                this._lastLidarExposureAlt = sun.altitude;
+                this._lastLidarExposureAz  = sun.azimuth;
+            };
+            this._exposureChunkRaf = requestAnimationFrame(tick);
         });
     }
 

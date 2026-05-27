@@ -585,7 +585,7 @@ const LIDAR_PRECISION_PITCH_MULT = {
 };
 const DEFAULT_SHADOW_OPACITY = 0.32;
 const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1;
-const DEFAULT_LIDAR_VIEW_OPACITY = 0.6;
+const DEFAULT_LIDAR_VIEW_OPACITY = 0.25;
 const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
 const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
 const DEFAULT_TIMELINE_ENABLED = true;
@@ -4469,6 +4469,13 @@ const heliosCardStyles = i$3`
         background: rgba(0, 0, 0, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.35s ease;
+    }
+    .lidar-view-opacity-slider.is-active
+    {
+        opacity: 1;
         pointer-events: auto;
     }
     .lidar-view-opacity-icon
@@ -5559,10 +5566,9 @@ function sampleDtmAt(raster, lon, lat) {
   if (!raster.terrain) return null;
   return bilinearSample(raster.terrain, raster, lon, lat);
 }
-function computeLidarCellExposure(raster, sunAltitudeDeg, sunAzimuthDeg, stepM = 2, maxDistM = 200) {
-  const N2 = raster.rasterSize * raster.rasterSize;
-  const out = new Uint8Array(N2);
-  if (sunAltitudeDeg <= 0) return out;
+function computeLidarCellExposureRows(raster, sunAltitudeDeg, sunAzimuthDeg, jStart, jEnd, out, stepM = 2, maxDistM = 200) {
+  if (sunAltitudeDeg <= 0) return;
+  if (jStart >= jEnd) return;
   const altR = sunAltitudeDeg * D;
   const azR = sunAzimuthDeg * D;
   const dxM = Math.sin(azR);
@@ -5572,7 +5578,9 @@ function computeLidarCellExposure(raster, sunAltitudeDeg, sunAzimuthDeg, stepM =
   const pxLon = (maxLon - minLon) / rasterSize;
   const pxLat = (maxLat - minLat) / rasterSize;
   const hasTerrain = !!terrain;
-  for (let j = 0; j < rasterSize; j++) {
+  const j0 = Math.max(0, jStart);
+  const j1 = Math.min(rasterSize, jEnd);
+  for (let j = j0; j < j1; j++) {
     const cLat = maxLat - (j + 0.5) * pxLat;
     const mPerDegLon = M_PER_DEG_LAT$2 * Math.cos(cLat * D);
     const dLatPerM = dyM / M_PER_DEG_LAT$2;
@@ -5580,7 +5588,10 @@ function computeLidarCellExposure(raster, sunAltitudeDeg, sunAzimuthDeg, stepM =
     for (let i2 = 0; i2 < rasterSize; i2++) {
       const idx = j * rasterSize + i2;
       const cellH = heights[idx];
-      if (!isFinite(cellH)) continue;
+      if (!isFinite(cellH)) {
+        out[idx] = 0;
+        continue;
+      }
       const cLon = minLon + (i2 + 0.5) * pxLon;
       const cellDtm = hasTerrain ? terrain[idx] : 0;
       let shadowed = false;
@@ -5605,7 +5616,6 @@ function computeLidarCellExposure(raster, sunAltitudeDeg, sunAzimuthDeg, stepM =
       out[idx] = shadowed ? 0 : 255;
     }
   }
-  return out;
 }
 function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg, sunAzimuthDeg, stepM = 2, maxDistM = 200) {
   if (!raster) return false;
@@ -38008,6 +38018,10 @@ const _HeliosEngine = class _HeliosEngine {
         this._cancelIdleCb(this._exposureIdleHandle);
         this._exposureIdleHandle = void 0;
       }
+      if (this._exposureChunkRaf !== void 0) {
+        cancelAnimationFrame(this._exposureChunkRaf);
+        this._exposureChunkRaf = void 0;
+      }
       this._lidarViewLayer?.setExposure(null);
     }
   }
@@ -38028,13 +38042,11 @@ const _HeliosEngine = class _HeliosEngine {
     }
     window.clearTimeout(handle);
   }
-  //Schedule the LiDAR-View exposure compute via an idle callback so the 50-150 ms raymarch never lands on a user-interactive frame. No-op
-  //when LiDAR View is off, the raster isn't loaded yet, the layer instance isn't ready, or a compute is already queued. The actual sun-delta
-  //gate happens inside the deferred callback so a stale schedule can't fire a no-op compute when the sun hasn't actually moved.
   _scheduleLidarExposureRecompute() {
     if (!this._lidarViewActive) return;
     if (!this._lidarRaster || !this._lidarViewLayer) return;
     if (this._exposureIdleHandle !== void 0) return;
+    if (this._exposureChunkRaf !== void 0) return;
     this._exposureIdleHandle = this._requestIdleCb(() => {
       this._exposureIdleHandle = void 0;
       if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer) return;
@@ -38044,22 +38056,36 @@ const _HeliosEngine = class _HeliosEngine {
       const azDelta = Math.abs(sun.azimuth - this._lastLidarExposureAz);
       if (altDelta < 0.5 && azDelta < 0.5) return;
       const r2 = this._lidarRaster;
-      const exposure = computeLidarCellExposure(
-        {
-          heights: r2.heights,
-          terrain: r2.terrain,
-          rasterSize: r2.rasterSize,
-          minLat: r2.minLat,
-          maxLat: r2.maxLat,
-          minLon: r2.minLon,
-          maxLon: r2.maxLon
-        },
-        sun.altitude,
-        sun.azimuth
-      );
-      this._lidarViewLayer.setExposure(exposure);
-      this._lastLidarExposureAlt = sun.altitude;
-      this._lastLidarExposureAz = sun.azimuth;
+      const rasterRef = {
+        heights: r2.heights,
+        terrain: r2.terrain,
+        rasterSize: r2.rasterSize,
+        minLat: r2.minLat,
+        maxLat: r2.maxLat,
+        minLon: r2.minLon,
+        maxLon: r2.maxLon
+      };
+      const out = new Uint8Array(rasterRef.rasterSize * rasterRef.rasterSize);
+      const CHUNK_ROWS = 32;
+      let j = 0;
+      const tick2 = () => {
+        if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer) {
+          this._exposureChunkRaf = void 0;
+          return;
+        }
+        const jEnd = Math.min(rasterRef.rasterSize, j + CHUNK_ROWS);
+        computeLidarCellExposureRows(rasterRef, sun.altitude, sun.azimuth, j, jEnd, out);
+        j = jEnd;
+        if (j < rasterRef.rasterSize) {
+          this._exposureChunkRaf = requestAnimationFrame(tick2);
+          return;
+        }
+        this._exposureChunkRaf = void 0;
+        this._lidarViewLayer.setExposure(out);
+        this._lastLidarExposureAlt = sun.altitude;
+        this._lastLidarExposureAz = sun.azimuth;
+      };
+      this._exposureChunkRaf = requestAnimationFrame(tick2);
     });
   }
   //Wire (or rewire after a style reload) the WebGL custom layer that
@@ -42379,15 +42405,16 @@ function startLidarFadeLoop(host) {
   host._lidarFadeRaf = requestAnimationFrame(tick2);
 }
 function renderLidarViewOpacityPicker(host, onChange) {
-  if (!host._lidarViewMode) return A;
   const pct = Math.round(Math.max(0, Math.min(1, host._lidarViewOpacity)) * 100);
+  const activeCls = host._lidarViewMode ? " is-active" : "";
   return b`
-        <div class="lidar-view-opacity-slider" aria-label="LiDAR view opacity">
+        <div class="lidar-view-opacity-slider${activeCls}" aria-label="LiDAR view opacity" ?aria-hidden="${!host._lidarViewMode}">
             <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--low"  icon="mdi:circle-outline"></ha-icon>
             <input type="range" min="0" max="100" step="1"
                    class="lidar-view-opacity-range"
                    .value="${String(pct)}"
                    aria-label="LiDAR view opacity percentage"
+                   tabindex="${host._lidarViewMode ? 0 : -1}"
                    @input="${(e2) => onChange(Number(e2.target.value) / 100)}" />
             <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--high" icon="mdi:circle"></ha-icon>
             <span class="lidar-view-opacity-value">${pct}%</span>
@@ -44459,7 +44486,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-alpha.32"}`,
+      `%c☀ HELIOS%c v${"1.7.0-alpha.33"}`,
       labelStyle,
       versionStyle
     );
@@ -44483,7 +44510,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-alpha.32",
+        version: "1.7.0-alpha.33",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -44491,7 +44518,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-alpha.32"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-alpha.33"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );

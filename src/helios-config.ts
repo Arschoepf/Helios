@@ -355,7 +355,7 @@ export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 //in-card bottom slider (DEFAULT_LIDAR_VIEW_OPACITY is the value the
 //slider lands on the first time the user opens the view).
 export const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX  = 1;
-export const DEFAULT_LIDAR_VIEW_OPACITY        = 0.6;
+export const DEFAULT_LIDAR_VIEW_OPACITY        = 0.25;
 //Distance from the home at which the LiDAR view is at full opacity.
 //Beyond this, alpha smoothstep-fades down to 0 at the display
 //radius below, so the cloud reads as anchored on the home and

@@ -2040,6 +2040,13 @@ export const heliosCardStyles = css`
         background: rgba(0, 0, 0, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.35s ease;
+    }
+    .lidar-view-opacity-slider.is-active
+    {
+        opacity: 1;
         pointer-events: auto;
     }
     .lidar-view-opacity-icon
