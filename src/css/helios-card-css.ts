@@ -45,7 +45,7 @@ export const heliosCardStyles = css`
             its surroundings. Layouts that DO pass an explicit height
             (masonry via getCardSize, sections view via getGridOptions)
             override this freely.                                       */
-        min-height: 600px;
+        min-height: 480px;
         /*  New stacking context so absolute children with z-index
             stay scoped to the card instead of escaping above HA's
             dashboard chrome on scroll. */
