@@ -12,6 +12,7 @@
 import type { HeliosConfig } from '../helios-config';
 import { HeliosEngine } from '../helios-engine';
 import { refreshOverlays, setAnimationsPaused, type OverlaysHost } from './overlays';
+import { refreshShadingDomeScene, type ShadingDomeHost } from './shadingDome';
 import type { ChartSeries } from './charts';
 
 
@@ -30,8 +31,11 @@ export const VISUAL_CONFIG_KEYS = [
     //the cloud disc, buildings and labels on the resulting
     //`style.load`.
     'map-style',
+    //Legacy flat keys kept on the watch list so editing a pre-multi-bank YAML still triggers a refresh; the multi-bank `batteries:`
+    //array entry below is what catches the post-migration shape (and any user editing via the new editor UI).
     'battery-soc-entity',
     'battery-power-entity',
+    'batteries',
     'battery-color',
     //solar-radiation-entity, when set, feeds the engine sensor
     //samples that override Open-Meteo for the live + past
@@ -180,33 +184,64 @@ export interface InitHost extends OverlaysHost
     _lastHomeKey:        string;
     _initInflight:       boolean;
     _initDebounceTimer?: number;
+    //performance.now() of the most recent engine spawn. Used by the
+    //onContextLost recovery path to bail out when context losses
+    //arrive faster than the engine can stabilise, which only happens
+    //when the browser is thrashing its WebGL context pool. Re-spawning
+    //at that cadence cascades into more losses, the throttle breaks
+    //the loop and lets the existing engine settle.
+    _lastEngineSpawnAt:  number;
     _visibilityObserver?: IntersectionObserver;
+    //Document-level visibilitychange listener. Stored on the host
+    //so disconnectedCallback can removeEventListener cleanly when
+    //the card unmounts (each card has its own listener instance).
+    _onVisibilityChange?: () => void;
 
     requestUpdate(): void;
 }
 
 
 //IntersectionObserver hook: pause every CSS animation and every SVG
-//SMIL animation when the card scrolls out of the viewport. The
-//rotation loop (a requestAnimationFrame in the engine) is left
-//running because (a) the browser auto-throttles rAF on hidden
-//tabs and (b) the card looks alive when the user scrolls back.
-//Only the SVG overlay animations are paused, they're the ones
-//that run continuously regardless of map state.
+//SMIL animation when the card scrolls out of the viewport, AND pause
+//the engine's 60 s shadow-refresh timer + the dome re-projection on
+//map moves. The rotation loop (a requestAnimationFrame in the engine)
+//is left running because the browser auto-throttles rAF on hidden
+//tabs and the card looks alive when the user scrolls back. The
+//Page Visibility API is layered on top so a Helios card sitting in
+//a hidden HA tab also goes quiet, not just one scrolled out of
+//view of a focused tab.
 export function initVisibilityObserver(host: InitHost): void
 {
     if (host._visibilityObserver || typeof IntersectionObserver === 'undefined')
     {
         return;
     }
+    //Combined paused state: invisible if the card is off-screen
+    //(IntersectionObserver) OR the whole tab is hidden (Page
+    //Visibility API). Either condition kills the heavy work.
+    let intersecting = true;
+    const applyState = () =>
+    {
+        const tabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+        const paused    = !intersecting || tabHidden;
+        setAnimationsPaused(host, paused);
+        host._engine?.setPaused(paused);
+    };
     host._visibilityObserver = new IntersectionObserver(entries =>
     {
         for (const entry of entries)
         {
-            setAnimationsPaused(host, !entry.isIntersecting);
+            intersecting = entry.isIntersecting;
         }
+        applyState();
     }, { threshold: 0 });
     host._visibilityObserver.observe(host as unknown as Element);
+    if (typeof document !== 'undefined')
+    {
+        //One global listener per card. Removed in the card's disconnectedCallback via _onVisibilityChange below.
+        host._onVisibilityChange = applyState;
+        document.addEventListener('visibilitychange', host._onVisibilityChange);
+    }
 }
 
 
@@ -274,16 +309,15 @@ export function initEngineNow(host: InitHost): void
 
         const spawnNewEngine = (): void =>
         {
-            //Container was checked above but the inter-frame gap
-            //below could land after a card disconnect. Re-check
-            //defensively so a torn-down card never spawns a new
-            //engine.
+            //Container was checked above but the inter-frame gap below could land after a card disconnect. Re-check defensively so a torn-down card
+            //never spawns a new engine.
             if (!host.config || !host.hass?.config)
             {
                 host._initInflight = false;
                 return;
             }
             host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
+            host._lastEngineSpawnAt = performance.now();
             wireEngineCallbacks(host);
             host._initInflight = false;
         };
@@ -337,30 +371,44 @@ function wireEngineCallbacks(host: InitHost): void
     };
     host._engine.onWeatherUpdate = data =>
     {
-        //Per-layer cloud breakdown is now owned by the engine, it
-        //stashes low / mid / high alongside the effective
-        //coverage and projectCloudScene reads them back to size
-        //the three concentric bands. The card only needs the
-        //aggregate for the cloud chip label.
+        //Per-layer cloud breakdown is now owned by the engine, it stashes low / mid / high alongside the effective coverage and projectCloudScene
+        //reads them back to size the three concentric bands. The card only needs the aggregate for the cloud chip label.
         host._cloudCover         = data.cloudCover;
         host._timeRange          = data.timeRange;
         host._isLiveMode         = data.isLiveTime;
-        //Pull the hourly series the chart canvas plots. Same
-        //cadence as the gradients above, since both consume the
-        //engine's hourly data refresh.
+        //Pull the hourly series the chart canvas plots. Same cadence as the gradients above, since both consume the engine's hourly data refresh.
         host._chartSeries        = host._engine?.getTimelineSeries() ?? null;
-        //First weather update is also our cue to ask the engine
-        //for the initial label layout, by this point the map has
-        //loaded its style and the projection matrix is available.
-        //Subsequent transforms refresh via onMapTransform.
+        //First weather update is also our cue to ask the engine for the initial label layout, by this point the map has loaded its style and the
+        //projection matrix is available. Subsequent transforms refresh via onMapTransform.
         refreshOverlays(host);
     };
     //Cloud-disc hover is wired directly on the SVG element via
     //@mousemove / @mouseleave (see the render path's solar-svg),
     //so the engine doesn't surface a hover callback for it.
+    //rAF-coalesced overlay refresh. MapLibre fires move events
+    //in bursts of 5-10 per frame during an inertial pan; without
+    //coalescing, refreshOverlays + the dome re-projection both
+    //ran several times per frame (sun arc reprojects 96 samples,
+    //home silhouettes reproject all extrusion footprints, dome
+    //reprojects 648 cells * 4 corners + 96 ribbon samples). With
+    //the rAF gate, at most one full overlay pass per frame, no
+    //matter how many move events MapLibre fires.
+    let overlayRaf: number | null = null;
     host._engine.onMapTransform = () =>
     {
-        refreshOverlays(host);
+        //If the card is paused (off-screen or in a hidden tab) the
+        //browser still fires move events for tile-load completions,
+        //but the user can't see anything, so skip the per-frame
+        //work entirely. Comes back on the next render once the
+        //IntersectionObserver re-enables the engine.
+        if (host._engine?.isPaused()) return;
+        if (overlayRaf !== null) return;
+        overlayRaf = requestAnimationFrame(() =>
+        {
+            overlayRaf = null;
+            refreshOverlays(host);
+            refreshShadingDomeScene(host as unknown as ShadingDomeHost);
+        });
     };
     //WebGL context loss recovery, iOS Safari recycles contexts
     //under memory pressure. The engine emits this hook from its
@@ -371,15 +419,25 @@ function wireEngineCallbacks(host: InitHost): void
     //path.
     host._engine.onContextLost = () =>
     {
+        //Throttle: if we spawned an engine in the last ~2 s and it's
+        //already losing its context, the browser's WebGL pool is
+        //thrashing. Respawning right now would just feed the cascade
+        //(new engine evicts another live context, that fires its own
+        //lost event, infinite loop). Bail out instead, the existing
+        //paused engine will be picked back up on the next genuine
+        //identity change or user-driven refresh.
+        const sinceSpawn = performance.now() - host._lastEngineSpawnAt;
+        if (sinceSpawn < 2000)
+        {
+            console.warn('[HELIOS] context-lost arrived too soon after spawn, skipping respawn to avoid cascade');
+            return;
+        }
         host._lastHomeKey = '';
         if (!host._initInflight) initEngine(host);
     };
 
-    //LiDAR shadow compute: the engine fires these around its WMS
-    //round-trip + raster paint pass. The card surfaces a small
-    //spinner chip top-right so the user has a clear "shadows are
-    //coming" signal during the few seconds the fetch takes on a
-    //cold start.
+    //LiDAR shadow compute: the engine fires these around its WMS round-trip + raster paint pass. The card surfaces a small spinner chip top-right so
+    //the user has a clear "shadows are coming" signal during the few seconds the fetch takes on a cold start.
     host._engine.onShadowComputeStart = () =>
     {
         host._shadowBusy = true;

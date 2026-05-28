@@ -101,9 +101,8 @@ export interface PanelOrientation
                           //from north (180 = south, 90 = east, etc.)
 }
 
-//Optional context that refines the PV estimate. Every field is
-//opt-in: caller passes only what it knows. Empty context preserves
-//the original Haurwitz / Liu-Jordan output exactly.
+//Optional context that refines the PV estimate. Every field is opt-in: caller passes only what it knows. Empty context preserves the original
+//Haurwitz / Liu-Jordan output exactly.
 //
 //  airTempC + windMs , feed the Sandia-style cell temperature model
 //    (see pv-thermal.ts). When airTempC is finite the result is
@@ -152,18 +151,14 @@ export function computePvPower(
     //irradiance, no transposition needed.
     if (!panel || panel.tiltDeg <= 0)
     {
-        //A flat panel has no "beam blocked while diffuse still
-        //arrives" geometry: a shaded horizontal panel sees only the
-        //small ground reflection from neighbouring lit ground. We
-        //approximate the shaded horizontal POA as 25 % of GHI, the
-        //typical clear-sky diffuse fraction.
+        //A flat panel has no "beam blocked while diffuse still arrives" geometry: a shaded horizontal panel sees only the small ground reflection
+        //from neighbouring lit ground. We approximate the shaded horizontal POA as 25 % of GHI, the typical clear-sky diffuse fraction.
         poaEff = ctx?.shading ? ghiEff * 0.25 : ghiEff;
     }
     else
     {
-        //Tilted panel: project the direct beam onto the panel normal,
-        //add the isotropic-sky diffuse component, plus a small ground-
-        //reflected term scaled by the panel's exposure to the ground.
+        //Tilted panel: project the direct beam onto the panel normal, add the isotropic-sky diffuse component, plus a small ground- reflected term
+        //scaled by the panel's exposure to the ground.
         const beta = panel.tiltDeg * D;
         const dAz  = (sun.azimuth - panel.azimuthDeg) * D;
         const altR = alt * D;
@@ -199,10 +194,8 @@ export function computePvPower(
         poaEff = directPoa + diffusePoa + groundPoa;
     }
 
-    //Thermal derating: warmer cells produce less. Only applied when
-    //the caller passes a finite air temperature, otherwise the
-    //multiplier stays at 1 and the legacy callers see the original
-    //output bit-for-bit.
+    //Thermal derating: warmer cells produce less. Only applied when the caller passes a finite air temperature, otherwise the multiplier stays at 1
+    //and the legacy callers see the original output bit-for-bit.
     let pStc = Math.max(0, poaEff / 1000);    //0..1+ of STC
 
     if (ctx && isFinite(ctx.airTempC ?? NaN))
@@ -215,12 +208,9 @@ export function computePvPower(
 }
 
 
-//Same physics as computePvPower but returns the effective ground-
-//horizontal irradiance in W/m² rather than the clamped 0–100 % PV
-//figure. Used by the solar-arc visualisation: the per-vertex W/m²
-//reading drives the on-map W/m² label and the line-flow speed.
-//Returns 0 below the horizon, callers can use the zero as a
-//"night" sentinel without an extra altitude check.
+//Same physics as computePvPower but returns the effective ground- horizontal irradiance in W/m² rather than the clamped 0–100 % PV figure. Used by
+//the solar-arc visualisation: the per-vertex W/m² reading drives the on-map W/m² label and the line-flow speed. Returns 0 below the horizon, callers
+//can use the zero as a "night" sentinel without an extra altitude check.
 export function computeIrradianceWm2(date: Date, lat: number, lon: number, cloudCoverPct: number): number
 {
     const sun = getSunPosition(date, lat, lon);

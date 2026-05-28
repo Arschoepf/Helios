@@ -1,13 +1,8 @@
-//Timeline subsystem: the periodic clock tick that advances the
-//live cursor and re-projects the screen-space overlays, the
-//pointer handlers that scrub the timeline into the past, plus
-//the three small config readers that drive the timeline's
-//visibility, width, and per-day consumption chip.
+//Timeline subsystem: the periodic clock tick that advances the live cursor and re-projects the screen-space overlays, the pointer handlers that scrub
+//the timeline into the past, plus the three small config readers that drive the timeline's visibility, width, and per-day consumption chip.
 //
-//Same host-driven pattern as the data modules: the card owns
-//the `@state` timeline fields, the functions here read / write
-//them through a structural TimelineHost interface and Lit's
-//reactivity falls out naturally on every assignment.
+//Same host-driven pattern as the data modules: the card owns the `@state` timeline fields, the functions here read / write them through a structural
+//TimelineHost interface and Lit's reactivity falls out naturally on every assignment.
 
 import type { HeliosConfig } from '../helios-config';
 import
@@ -69,11 +64,9 @@ export function tick(host: TimelineHost): void
 }
 
 
-//Start scrubbing on pointer-down. Captures the pointer so subsequent
-//moves and the eventual up land on the same track element regardless
-//of where the user drags. Swallowed during the engine's post-exit
-//cooldown so the click that dismissed the dashboard panel can't bleed
-//into an immediate scrub on the timeline behind it.
+//Start scrubbing on pointer-down. Captures the pointer so subsequent moves and the eventual up land on the same track element regardless of where the
+//user drags. Swallowed during the engine's post-exit cooldown so the click that dismissed the dashboard panel can't bleed into an immediate scrub on
+//the timeline behind it.
 export function onTimelinePointerDown(host: TimelineHost, e: PointerEvent): void
 {
     if (!host._timeRange)
@@ -125,9 +118,8 @@ export function onTimelinePointerUp(host: TimelineHost, e: PointerEvent): void
     }
     host._trackElement   = null;
     host._trackPointerId = null;
-    //Drop the hover once the gesture ends so the tooltip + dots
-    //disappear cleanly on touch release. Desktop hover keeps using
-    //the chart-card pointer handlers above this layer.
+    //Drop the hover once the gesture ends so the tooltip + dots disappear cleanly on touch release. Desktop hover keeps using the chart-card pointer
+    //handlers above this layer.
     host._chartHoverPct  = null;
 }
 
@@ -165,9 +157,8 @@ export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
 }
 
 
-//Drop scrubbed mode and snap the card back to live. The engine's
-//selected-time hook is cleared so the next render pulls the present
-//moment instead of the cached scrub instant.
+//Drop scrubbed mode and snap the card back to live. The engine's selected-time hook is cleared so the next render pulls the present moment instead of
+//the cached scrub instant.
 export function resetToLive(host: TimelineHost): void
 {
     host._selectedTime = null;
@@ -176,8 +167,7 @@ export function resetToLive(host: TimelineHost): void
 }
 
 
-//Read the timeline visibility toggle. Default true so a fresh
-//card config keeps showing the chart.
+//Read the timeline visibility toggle. Default true so a fresh card config keeps showing the chart.
 export function timelineEnabled(config: HeliosConfig | undefined): boolean
 {
     const raw = config?.['timeline-enabled'];
@@ -192,9 +182,7 @@ export function timelineEnabled(config: HeliosConfig | undefined): boolean
 }
 
 
-//Read the timeline width as a percentage [50..100]. Clamped so
-//a hand-edited YAML can't shrink the bar into uselessness or
-//overflow the card edge.
+//Read the timeline width as a percentage [50..100]. Clamped so a hand-edited YAML can't shrink the bar into uselessness or overflow the card edge.
 export function timelineWidthPct(config: HeliosConfig | undefined): number
 {
     const raw = config?.['timeline-width-pct'];
@@ -204,8 +192,7 @@ export function timelineWidthPct(config: HeliosConfig | undefined): number
 }
 
 
-//Read the per-day consumption chip toggle. Default true so the
-//existing kWh readouts stay visible on legacy configs.
+//Read the per-day consumption chip toggle. Default true so the existing kWh readouts stay visible on legacy configs.
 export function timelineConsumptionEnabled(config: HeliosConfig | undefined): boolean
 {
     const raw = config?.['timeline-consumption-enabled'];

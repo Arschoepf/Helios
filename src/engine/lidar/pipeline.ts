@@ -35,9 +35,9 @@ import type { LidarShadowResult } from '../lidar';
 //                               tree rows that zigzag) much closer to
 //                               their real outline once the per-clump
 //                               convex hull is taken in pass 3.
-//                               (Bumped down from 80 m² in v1.6.3 after
-//                               field reports that the cast shadow blob
-//                               looked too "smudged".)
+//                               (Tuned down from a wider initial cap
+//                               after field reports that the cast
+//                               shadow blob looked too "smudged".)
 //  MIN_COMPONENT_CELLS        , floor on cells per component before we
 //                               bother emitting a polygon. Drops single-
 //                               cell noise that would render as speckled
@@ -74,6 +74,18 @@ export interface PipelineOptions
     //IGN baseline (1 m). Most callers can leave this default.
     targetAreaM2?:  number;
     minComponentCells?: number;
+    //Opt-in 3x3 median pre-filter on the raster, BEFORE thresholding.
+    //Recommended for providers that publish DSM + DTM separately and
+    //let the client subtract per-pixel (AT-Tirol, AT-Steiermark,
+    //DE-BW, NL, UK), the per-pixel subtraction amplifies single-cell
+    //noise at building edges + vegetation, which would otherwise pass
+    //the height threshold and saturate the flood fill with junk
+    //components. The median pass keeps building roofs (multi-cell
+    //plateaux) while killing isolated spikes. nDSM providers that
+    //ship a pre-computed normalised height (FR, PL, CA, VT, NRW)
+    //typically don't need this, the source agency has already
+    //smoothed the raster server-side.
+    medianSmooth?: boolean;
 }
 
 //Run the shared consolidation pipeline on a height-above-ground
@@ -82,7 +94,7 @@ export interface PipelineOptions
 //
 //Optional `terrain` parallel buffer (same shape, same indexing as
 //`heights`) carries the DTM band when the source COG ships one
-//(v1.6.3+ helios-lidar.org pipeline). It is forwarded verbatim
+//(the helios-lidar.org 2-band pipeline). It is forwarded verbatim
 //onto the result's `raster.terrain` field so the shading ray-march
 //can lift its comparison into absolute Z. Pure pass-through: the
 //shadow consolidation logic itself stays nDSM-only.
@@ -106,6 +118,11 @@ export function processHeightRaster(
         return emptyResult();
     }
 
+    if (opts.medianSmooth)
+    {
+        heights = median3x3(heights, rasterSize);
+    }
+
     const pxLon  = (maxLon - minLon) / rasterSize;
     const pxLat  = (maxLat - minLat) / rasterSize;
     const halfLon = pxLon / 2;
@@ -117,10 +134,9 @@ export function processHeightRaster(
     //consistent across providers regardless of their native pixel
     //pitch. Clamped so very low precision still produces multi-cell
     //components and very high precision doesn't blow the cap loose.
-    //Upper bound 80 cells (was 400 pre-v1.6.3) caps the worst-case
-    //convex-hull extension to a single building wing or tree group;
-    //the shadow polygon then reads as a recognisable shape rather
-    //than a smudged blob.
+    //Upper bound 80 cells caps the worst-case convex-hull extension
+    //to a single building wing or tree group; the shadow polygon
+    //then reads as a recognisable shape rather than a smudged blob.
     const maxCellsPerComponent = Math.max(4, Math.min(80,
         Math.round(targetArea / Math.max(0.01, cellAreaM2))));
 
@@ -162,9 +178,8 @@ export function processHeightRaster(
         }
     }
 
-    //Pass 2: size-capped 8-connected flood fill. Same logic as the
-    //legacy FR implementation, lifted here so every provider gets the
-    //same dappled-shadow look.
+    //Pass 2: size-capped 8-connected flood fill. Same logic as the legacy FR implementation, lifted here so every provider gets the same
+    //dappled-shadow look.
     const labels = new Int32Array(N);
     const stack: number[] = [];
     const components: Array<{ cells: number[]; heightSum: number }> = [];
@@ -259,12 +274,9 @@ export function processHeightRaster(
                 ? [Number(hMin.toFixed(1)), Number(hMax.toFixed(1))]
                 : null
         },
-        //Forward the raw raster + geo so the engine can keep it for
-        //the LiDAR View overlay. Same buffer reference, no copy: the
-        //pipeline never mutates `heights` after the validity pass
-        //above, and the engine treats the buffer as read-only. The
-        //terrain band, when provided, is forwarded with the same
-        //zero-copy contract.
+        //Forward the raw raster + geo so the engine can keep it for the LiDAR View overlay. Same buffer reference, no copy: the pipeline never
+        //mutates `heights` after the validity pass above, and the engine treats the buffer as read-only. The terrain band, when provided, is
+        //forwarded with the same zero-copy contract.
         raster:
         {
             heights:    heights,
@@ -276,6 +288,65 @@ export function processHeightRaster(
             maxLon
         }
     };
+}
+
+//3x3 median filter in-place over a Float32 raster, edges handled by
+//reusing the cell's own value when the kernel falls off the grid.
+//NaN inputs are preserved (the median of [NaN, ...] is NaN by our
+//convention so a no-data cell stays no-data), which keeps the
+//upstream "no-data" semantics intact for nDSM cells the upstream
+//WCS marked as missing. Returns a fresh Float32Array, the input is
+//not mutated.
+//
+//Use case: DSM-DTM subtraction providers (AT-Tirol, AT-Steiermark,
+//DE-BW) where per-pixel subtraction amplifies single-cell noise at
+//building edges + vegetation. A median pass kills isolated spikes
+//while preserving multi-cell building plateaux.
+function median3x3(src: Float32Array, size: number): Float32Array
+{
+    const out = new Float32Array(src.length);
+    const buf = new Array<number>(9);
+    for (let j = 0; j < size; j++)
+    {
+        for (let i = 0; i < size; i++)
+        {
+            const idx = j * size + i;
+            const center = src[idx];
+            if (!isFinite(center))
+            {
+                out[idx] = center;
+                continue;
+            }
+            let n = 0;
+            for (let dj = -1; dj <= 1; dj++)
+            {
+                const jj = j + dj;
+                if (jj < 0 || jj >= size) continue;
+                for (let di = -1; di <= 1; di++)
+                {
+                    const ii = i + di;
+                    if (ii < 0 || ii >= size) continue;
+                    const v = src[jj * size + ii];
+                    if (isFinite(v)) buf[n++] = v;
+                }
+            }
+            if (n === 0) { out[idx] = NaN; continue; }
+            //In-place insertion sort, faster than Array.sort on a 9- element buffer.
+            for (let k = 1; k < n; k++)
+            {
+                const v = buf[k];
+                let m = k - 1;
+                while (m >= 0 && buf[m] > v)
+                {
+                    buf[m + 1] = buf[m];
+                    m--;
+                }
+                buf[m + 1] = v;
+            }
+            out[idx] = buf[(n - 1) >> 1];
+        }
+    }
+    return out;
 }
 
 export function emptyResult(): LidarShadowResult
@@ -295,9 +366,7 @@ export function emptyResult(): LidarShadowResult
     };
 }
 
-//Compute the lat/lon bbox around a home point, padded by
-//`padFactor` so trees on the edge of the radius still cast their
-//shadow inward.
+//Compute the lat/lon bbox around a home point, padded by `padFactor` so trees on the edge of the radius still cast their shadow inward.
 export function homeBbox(
     homeLat: number, homeLon: number, radiusMeters: number, padFactor: number
 ): { minLat: number; maxLat: number; minLon: number; maxLon: number }
@@ -314,8 +383,7 @@ export function homeBbox(
     };
 }
 
-//Great-circle distance in metres for the circular crop. Cheap enough
-//to call per-cell at our raster sizes.
+//Great-circle distance in metres for the circular crop. Cheap enough to call per-cell at our raster sizes.
 export function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number
 {
     const toRad = Math.PI / 180;

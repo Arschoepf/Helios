@@ -47,11 +47,8 @@ export interface HeliosConfig
     //but live observation, peak-of-day highlight and chart axes keep
     //working off the actual PV entity.
     //
-    //Superseded by per-string `pv-arrays[].peak-kwp` from v1.6.3:
-    //when any array entry carries a `peak-kwp`, the total install
-    //power is the sum of those values and `pv-peak-kwp` is ignored.
-    //Existing configs that only set `pv-peak-kwp` keep working
-    //unchanged through the legacy share-based weighting.
+    //Superseded by per-string `pv-arrays[].peak-kwp`: when any array entry carries a `peak-kwp`, the total install power is the sum of those values
+    //and `pv-peak-kwp` is ignored. Existing configs that only set `pv-peak-kwp` keep working unchanged through the legacy share-based weighting.
     'pv-peak-kwp'?:           unknown;
     //Inverter clipping cap in kW (kilowatts of AC). Optional; when
     //set, the forecast tops out at this value so an oversized DC
@@ -85,10 +82,10 @@ export interface HeliosConfig
     //  azimuth  : 0–360° clockwise from north (180 = south). Wrapped
     //             into range, defaults to 180 when missing.
     //  peak-kwp : installed peak power of THIS string in kWp.
-    //             Preferred over `share` from v1.6.3: each user
-    //             enters the real nameplate for each string, the
-    //             total kWp is just the sum, and the weighting is
-    //             derived automatically. When any entry carries a
+    //             Preferred over `share`: each user enters the real
+    //             nameplate for each string, the total kWp is just
+    //             the sum, and the weighting is derived
+    //             automatically. When any entry carries a
     //             peak-kwp, the top-level `pv-peak-kwp` is ignored.
     //  share    : legacy relative weight, in [0, 1] or any positive
     //             scale. Auto-normalised so the shares used at
@@ -122,6 +119,33 @@ export interface HeliosConfig
     //                         flow arrow). Defaults to a vivid purple.
     'battery-soc-entity'?:    unknown;
     'battery-power-entity'?:  unknown;
+    //Optional. Multi-bank battery support. When present, takes
+    //precedence over the flat battery-soc-entity / battery-power-
+    //entity / battery-power-invert keys above (which become a
+    //single-bank legacy fallback). Each entry:
+    //  - name        : optional, free text, used in the editor row
+    //                  header. Defaults to "Battery N".
+    //  - soc-entity  : required, HA entity id, % (0-100, clamped).
+    //  - power-entity: required, HA entity id, W or kW. Signed.
+    //  - power-invert: optional bool, flips the sign at ingest
+    //                  (per-bank). Default false.
+    //  - capacity-kwh: optional weight used to aggregate the
+    //                  banks' SoC into the single chip painted on
+    //                  the card (capacity-weighted average). Default
+    //                  1, meaning equal weight: leave unset when all
+    //                  banks are the same size. Set it explicitly
+    //                  when bank sizes differ so the displayed SoC
+    //                  reflects the real stored-energy ratio rather
+    //                  than a flat unweighted mean.
+    //Aggregation rules:
+    //  - SoC chip = Σ(soc_i × capacity_i) / Σ(capacity_i)
+    //  - Power chip = Σ(power_i)  (each bank inverted per its own
+    //                              power-invert flag first)
+    //  - inverter-cutoff-soc-pct: skips the trainer bucket when
+    //    ALL banks are at or above the threshold (min SoC across
+    //    banks ≥ cutoff), so a half-full bank correctly trains
+    //    even while a sibling bank is full.
+    'batteries'?:             unknown;
     //Optional. When true, the live and historical battery power
     //readings are multiplied by -1 before being stored. Use this
     //when the upstream entity reports charging as negative and
@@ -129,6 +153,13 @@ export interface HeliosConfig
     //Helios's internal "positive = charging" convention keeps
     //holding without a template sensor in front. Default false.
     'battery-power-invert'?:  unknown;
+    //Optional. Percent (0-100). Inverter cutoff SoC: the State-of-Charge at which the user's hybrid inverter stops feeding the battery and clamps PV
+    //output (almost no production from the panels even when the sun is up). When set AND `battery-soc-entity` is also configured, the shading map
+    //trainer skips every observation bucket where the battery SoC reached or exceeded this value. Without the skip, those zero-production buckets
+    //get interpreted as 100 % shading at the matching sun azimuth / altitude / cloud bin and pollute the shading map for the next ~60 days of half-
+    //life decay. Threshold varies per inverter model (some cut at 95, some at 98, some at 100); the user configures their own. Leave unset to keep
+    //the legacy behaviour where every bucket trains.
+    'inverter-cutoff-soc-pct'?: unknown;
     'battery-color'?:         unknown;
     'date-format'?:           unknown;
     //'12h' | '24h'. Default: '24h'. Picks between locale-
@@ -165,10 +196,8 @@ export interface HeliosConfig
     //Below 100, the time-bar stays centred horizontally and the
     //chart cards shrink proportionally.
     'timeline-width-pct'?:     unknown;
-    //Show the per-day cumulative kWh chip next to each day label on
-    //the timeline. Default: true. When false, only the date is
-    //rendered, which keeps the chart cleaner when the user is not
-    //tracking production volumes.
+    //Show the per-day cumulative kWh chip next to each day label on the timeline. Default: true. When false, only the date is rendered, which keeps
+    //the chart cleaner when the user is not tracking production volumes.
     'timeline-consumption-enabled'?: unknown;
     //Radius (m) around the home within which surrounding buildings are
     //rendered. Buildings outside are not drawn at all. Default 100 m.
@@ -264,36 +293,14 @@ export interface HeliosConfig
     'solar-radiation-entity'?: unknown;
     //LiDAR View overlay. When the user clicks the LiDAR View button
     //in the top-right of the card, the regular map UI fades out and
-    //every raster cell currently loaded is projected to screen as a
-    //small dot. These keys tune the look; none of them affect cast-
-    //shadow rendering.
-    //  lidar-view-point-size   : pixels (1..6). Square side length per
-    //                            point on the canvas. Default 1.5.
-    //  lidar-view-point-color  : hex string. Default '#ffffff' (white
-    //                            on the muted basemap reads as a fine
-    //                            point cloud regardless of theme).
-    //  lidar-view-point-opacity: 0..1. Default 0.5. Combined with
-    //                            point-size to control the perceptual
-    //                            density of the cloud.
-    //  lidar-view-wireframe        : boolean. Default false. When true,
-    //                                a Tron-style mesh is overlaid: a
-    //                                line is drawn between each finite
-    //                                cell and its right + bottom
-    //                                neighbours, also finite. Sits on
-    //                                top of (or replaces, if point size
-    //                                is set to 0) the dot cloud.
-    //  lidar-view-wireframe-color  : hex string. Default same white as
-    //                                points so the two pass together
-    //                                read as one mesh.
-    //  lidar-view-wireframe-opacity: 0..1. Default 0.35. Lighter than
-    //                                the dots so the mesh reads as
-    //                                "scaffolding under the points".
-    'lidar-view-point-size'?:         unknown;
-    'lidar-view-point-color'?:        unknown;
-    'lidar-view-point-opacity'?:      unknown;
-    'lidar-view-wireframe'?:          unknown;
-    'lidar-view-wireframe-color'?:    unknown;
-    'lidar-view-wireframe-opacity'?:  unknown;
+    //the raster is painted as a wireframe + filled cells coloured
+    //by live solar exposure (the irradiance heat-map). Wireframe is
+    //always on, colours are fixed (white) and the overall opacity is
+    //controlled in-card via a bottom slider, not from config. Only
+    //the point size remains configurable.
+    //  lidar-view-point-size: pixels (1..6). Square side length per
+    //                         point on the canvas. Default 1.
+    'lidar-view-point-size'?: unknown;
 }
 
 
@@ -319,9 +326,8 @@ export interface HeliosConfig
 //can distinguish them even at low alpha.
 export const DEFAULT_SUN_COLOR_HEX:   string = '#EF9F27';
 export const DEFAULT_CLOUD_COLOR_HEX: string = '#5A8DC4';
-//Vivid green that holds its own against the chart's white background
-//and reads as "solar production" without competing with the orange sun
-//or the blue cloud colours.
+//Vivid green that holds its own against the chart's white background and reads as "solar production" without competing with the orange sun or the
+//blue cloud colours.
 export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
 //Bright red, distinct from sun (orange), cloud (blue), PV
 //(green), and easy to associate visually with battery
@@ -331,16 +337,14 @@ export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
 export const DEFAULT_BATTERY_COLOR_HEX: string = '#FF5252';
 
 
-//Default values for the building config, exposed so the visual
-//editor can render the matching placeholder / slider defaults.
+//Default values for the building config, exposed so the visual editor can render the matching placeholder / slider defaults.
 export const DEFAULT_BUILDING_RADIUS_M         = 100;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
 
 
-//Shadow precision levels. Each level is a multiplier on the active
-//provider's native cell pitch:
+//Shadow precision levels. Each level is a multiplier on the active provider's native cell pitch:
 //
 //  'high'   1x native (one fetched cell per real source sample)
 //  'medium' 2x native (one fetched cell per 4 real samples)
@@ -362,43 +366,23 @@ export const LIDAR_PRECISION_PITCH_MULT: Record<LidarPrecisionLevel, number> = {
     medium: 2,
     high:   1
 };
-//Default opacity of the ground shadow layer when the user has not set
-//the `shadow-opacity` config option.
+//Default opacity of the ground shadow layer when the user has not set the `shadow-opacity` config option.
 export const DEFAULT_SHADOW_OPACITY = 0.32;
 
 
-//Default opt-in for the generic local-nDSM LiDAR provider. Exported
-//so the visual editor can render the matching toggle default. The
-//provider stays disabled until the user flips this AND supplies the
-//URL + bbox in the editor / YAML.
+//Default opt-in for the generic local-nDSM LiDAR provider. Exported so the visual editor can render the matching toggle default. The provider stays
+//disabled until the user flips this AND supplies the URL + bbox in the editor / YAML.
 export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 
 
 //LiDAR View overlay defaults. The disc radius is taken from the
 //shared `building-radius` (the "Display radius" knob) so the View
-//and the rest of the card stay in sync; the three knobs left here
-//are pure paint, no recompute.
+//and the rest of the card stay in sync. Colours are fixed to white
+//inside the layer; overall opacity is runtime state driven by the
+//in-card bottom slider (DEFAULT_LIDAR_VIEW_OPACITY is the value the
+//slider lands on the first time the user opens the view).
 export const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX  = 1;
-export const DEFAULT_LIDAR_VIEW_POINT_OPACITY  = 0.3;
-export const DEFAULT_LIDAR_VIEW_WIREFRAME          = true;
-export const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY  = 0.25;
-//Theme-aware colour defaults. Points pick the high-contrast tone
-//(white on dark, black on light); the wireframe sits a notch back
-//(light grey on dark, dark grey on light) so the lines read as a
-//softer scaffolding underneath the dots without competing for
-//attention. Helpers are used both at runtime (engine push) and in
-//the editor (placeholders + color-picker initial value) so what the
-//user sees matches what gets rendered.
-export function defaultLidarViewPointColor(cardTheme: unknown): string
-{
-    const isDark = String(cardTheme ?? 'light').toLowerCase() === 'dark';
-    return isDark ? '#ffffff' : '#000000';
-}
-export function defaultLidarViewWireframeColor(cardTheme: unknown): string
-{
-    const isDark = String(cardTheme ?? 'light').toLowerCase() === 'dark';
-    return isDark ? '#d0d0d0' : '#404040';
-}
+export const DEFAULT_LIDAR_VIEW_OPACITY        = 0.25;
 //Distance from the home at which the LiDAR view is at full opacity.
 //Beyond this, alpha smoothstep-fades down to 0 at the display
 //radius below, so the cloud reads as anchored on the home and
@@ -407,17 +391,12 @@ export function defaultLidarViewWireframeColor(cardTheme: unknown): string
 //fetch (shadows, vegetation extent) and the LiDAR overlay shouldn't
 //inherit that bound, mixing the two knobs felt opaque in the editor.
 export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
-//Outer radius where the LiDAR view alpha hits zero. Fixed regardless
-//of the configured fetch radius. Past this distance the shader fades
-//cells to zero, so we never paint a million dots for cells the user
-//can barely see anyway, which keeps frame times stable on fullscreen
-//layouts.
+//Outer radius where the LiDAR view alpha hits zero. Fixed regardless of the configured fetch radius. Past this distance the shader fades cells to
+//zero, so we never paint a million dots for cells the user can barely see anyway, which keeps frame times stable on fullscreen layouts.
 export const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
 
 
-//Timeline defaults. Exposed so the editor placeholders + sliders
-//land on the same values the runtime falls back to when the config
-//key is absent.
+//Timeline defaults. Exposed so the editor placeholders + sliders land on the same values the runtime falls back to when the config key is absent.
 export const DEFAULT_TIMELINE_ENABLED              = true;
 export const DEFAULT_TIMELINE_WIDTH_PCT            = 100;
 export const DEFAULT_TIMELINE_CONSUMPTION_ENABLED  = true;

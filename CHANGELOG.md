@@ -5,6 +5,166 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.7.0
+
+Headline release on top of v1.6.4. Thirty-five alpha iterations + three
+betas, condensed below. The deliberate scope choice for this cycle was
+"refine the prediction rather than add more providers", so the LiDAR
+provider count is unchanged (10) and the energy went into the live
+irradiance overlay, the adaptive shading map, multi-battery support and
+the polish pass on the dashboard + layer transitions. Users in
+uncovered regions can prepare their own raster via
+[helios-lidar.org](https://helios-lidar.org).
+
+### Live LiDAR irradiance overlay
+
+The LiDAR-View overlay now paints every loaded raster cell as a
+wireframe + filled triangles, shaded in real time by a per-cell
+raymarch from each cell toward the sun against the loaded nDSM.
+Lit cells glow warm (warm-tinted at the irradiance peak), shadowed
+cells dim out. The compute runs in 32-row chunks per
+requestAnimationFrame tick so the main thread stays responsive while
+the irradiance map fills in row-by-row, no freeze even on
+high-precision rasters. Toggled from the three-segment top-right
+mode bar (Layer / LiDAR / Dome); a bottom-of-card slider tunes the
+overlay opacity live. The five previous per-element visual config
+keys (`lidar-view-point-color` / `-point-opacity` /
+`-wireframe` / `-wireframe-color` / `-wireframe-opacity`) collapsed
+into that single slider; the legacy keys are silently stripped on
+first edit. Only `lidar-view-point-size` remains tunable from the
+editor.
+
+### Adaptive shading map
+
+A second learning layer sits on top of the 5-day calibration: each
+cell of a polar grid (sun azimuth × sun altitude × cloud-cover bin)
+holds the average actual / predicted ratio observed at that
+combination. The forecast then bends at the right time of day for
+tree shadows, neighbouring roofs and other obstacles the LiDAR
+didn't capture. Visualisable from the editor as a hemispheric "dome"
+overlay (Shadows segment of the mode bar), with stats and per-bin
+import / export / reset. Builds up from the user's own data over a
+few weeks; until then the scalar calibration carries the load.
+
+### Multi-battery banks
+
+New `batteries:` config array declares any number of physical
+battery banks side-by-side (house + garage + standalone hybrid,
+mixed-vendor BMS, etc.). The chip on the card stays single,
+aggregating the banks as a capacity-weighted SoC + summed signed
+power. Each bank carries its own `power-invert` flag (per-vendor
+sign convention) and an optional `capacity-kwh` weight. Editor UI
+mirrors the multi-array PV pattern (add / remove rows, individual
+collapsible cards). Legacy flat `battery-soc-entity` /
+`battery-power-entity` / `battery-power-invert` keys keep working:
+they are wrapped as a single-bank list under the hood and stripped
+on the first edit via the new editor UI. Mixed-vendor power
+readings (one bank in W, another in kW) are normalised to watts
+before being summed so the aggregate is coherent.
+
+### Inverter cutoff guard
+
+New `inverter-cutoff-soc-pct` config gates the shading-map trainer:
+when the user's hybrid inverter clamps PV output once the battery
+reaches its set ceiling, every observation bucket where every bank
+reached the cutoff is skipped, so the inverter-blocked production
+doesn't train as phantom shadow at the matching sun position.
+Per-bucket min-SoC across banks is the gate signal, so a half-full
+sibling bank correctly trains the bucket while one full bank does
+not block it. Logs a console warning when the cutoff is armed but
+no bank exposes a SoC entity (silent-guard misconfig).
+
+### Dashboard counter-up
+
+Headline kWh figures on the dashboard (produced, forecast, refined)
+now tick up from 0 to their real value with a 700 ms cubic ease-out
+the moment the user opens detail mode. Delta % and peak time stay
+anchored on the real values so they don't sweep through nonsense
+intermediate numbers.
+
+### Depth-of-field veil
+
+Permanent across modes, ultra-subtle (0.6 px backdrop blur) shaped
+by a radial mask centred on the home's current screen position.
+Fully transparent inside the inner disc (no blur at the focal
+point), full blur at the edges. Sits between the basemap and the
+chips so the UI stays crisp regardless. Subliminal on its own,
+gives the card a gentle peripheral out-of-focus feel that mimics
+DoF at distance.
+
+### About section in the editor
+
+New collapsible section pinned at the very bottom of the visual
+editor, carries: the running version (inlined at build time from
+package.json), a pointer at the companion site
+[helios-lidar.org](https://helios-lidar.org), the two source-code
+repos (Helios + Helios-Lidar) with GitHub icons, and a short
+appreciation paragraph + Buy Me A Coffee link styled in the BMC
+yellow. Translated into all 11 locales.
+
+### Memory hygiene + correctness pass
+
+A round of audits before the final tag closed:
+
+* Four memory leaks identified across the engine lifecycle, the
+  chunked exposure loop pinning the dead engine after rapid config
+  edits, the LiDAR-View custom layer leaking its 4 GPU buffers +
+  shader program on iOS Safari, the editor's reset-feedback timer
+  firing on dead elements, and the styleimagemissing handler
+  surviving past cleanup as an anonymous lambda. All four closed,
+  so the "must refresh after several edits" symptom is gone.
+* DTM no-data gap in `pv-shading.ts` now falls back to flat-ground
+  at the offending step instead of skipping the obstacle entirely,
+  fixed in both `isPanelShaded` and `computeLidarCellExposureRows`,
+  was under-detecting shading on panels near LiDAR coverage edges.
+* LiDAR exposure raster-swap race fixed (size guard in setExposure
+  + raster-identity check in the chunked tick + stale-sun
+  re-check), no more one-frame ghosting on precision change or
+  view locked 30 s behind the cursor during a rapid timeline scrub.
+* Calibration day-boundary no longer over-counts ~1 h of the
+  previous evening into the new day on sparse cumulative-energy
+  sensors (both samples of a delta pair must fall inside the day).
+* Multi-bank power aggregation normalises to watts before summing
+  (mixed-vendor W + kW installs were producing nonsense before).
+
+### Editor polish
+
+* Battery banks AND PV arrays are now fully wipeable from the
+  visual editor: removing the last row drops the `batteries:` or
+  `pv-arrays:` key entirely, so the chip / forecast cleanly falls
+  back to "not configured". Empty arrays are honoured on re-read so
+  the section shows just an "+ Add" button.
+* Chip fade-in / fade-out across mode toggles got a
+  `will-change: opacity` hint, the CSS rules were already correct
+  in both directions but the browser dropped frames on chips
+  inside transform-less wrappers (time-bar, solar-svg) under load,
+  producing intermittent "sometimes works, sometimes doesn't"
+  behaviour. Now bulletproof, GPU-composited.
+
+### Locales
+
+Three new locales added: Czech, Polish, Swedish. Total: 11
+(cs, de, en, es, fr, it, nl, no, pl, pt, sv). Every new key
+introduced this cycle (multi-battery editor + About section +
+LiDAR-View hint rewrite) was translated natively into all 11.
+
+### Repo split
+
+The Python preparation toolchain (raw LAZ / LAS → 2-band COG that
+the companion site uses server-side) moved out of this repo into
+its own [Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar)
+repository. Card-side and pipeline-side concerns are now in two
+separate repos kept loosely coupled by the documented COG output
+format. The local `tools/` and `data/` directories have been
+removed from this tree accordingly.
+
+### License
+
+Switched from MIT to GPL-3.0-or-later. LICENSE file ships the
+canonical GPL-3.0 text prepended with the project's copyright
+notice; README badge + footer + package.json `license` field
+all updated.
+
 ## v1.6.4
 
 Point release on top of v1.6.3 with one behavioural change.

@@ -54,9 +54,18 @@ export const heliosCardStyles = css`
 
     #map-container
     {
-        width: 100%;
-        height: 100%;
-        position: relative;
+        /*  Absolute + inset:0 so the container fills its ha-card
+            parent via the containing-block dimensions (which respect
+            min-height) rather than via percentage height resolution.
+            Percentage heights only cascade when the parent has a
+            concrete pixel height, the Masonry dashboard layout sets
+            only a min-height floor on the card, so a height:100% here
+            would collapse to 0 and the MapLibre canvas would never
+            render. Sections and panel views pass a pixel height down,
+            so the old percentage path worked there, the absolute path
+            works under both.                                          */
+        position: absolute;
+        inset: 0;
     }
 
     /*  Force-hide the MapLibre attribution rail. attributionControl
@@ -1114,11 +1123,11 @@ export const heliosCardStyles = css`
 
     /*  Stroke-only outline on top of the filled area so peaks read
         cleanly even where the gradient fades towards the midline.
-        Stroke width 0.7 px (down from the v1.6.2 default 1.4 px)
-        so the curve reads as a hairline trace; on high-variation
-        days the previous 1.0 px ribbon stacked over itself on
-        every wobble and turned the dense regions into a smudged
-        band. At 0.7 px the curve stays a line at any zoom.        */
+        Stroke width 0.7 px so the curve reads as a hairline
+        trace; a wider stroke (the earlier 1.4 px default) stacked
+        over itself on every wobble on high-variation days and
+        turned the dense regions into a smudged band. At 0.7 px
+        the curve stays a line at any zoom.                       */
     .hc-chart-line
     {
         fill: none;
@@ -1732,6 +1741,36 @@ export const heliosCardStyles = css`
         minus the LiDAR button itself), the home hitbox / glow, and
         the timeline. Easier to audit if any future overlay needs
         to be hidden in LiDAR View by looking at this single block. */
+    /*  Base transition + composite-layer hint kept on the unprefixed
+        selectors so the fade runs in BOTH directions across every
+        browser. Declaring the transition only inside .lidar-view-
+        active made entry smooth but the exit snap-back instantly
+        because the selector no longer matched and the transition
+        property left scope; declaring it here keeps it in scope at
+        all times. The will-change: opacity hint promotes each element
+        to its own composite layer so the GPU drives the alpha sweep
+        instead of asking the painter to redo layout per frame,
+        which used to drop frames on the chips that sit inside
+        transform-less wrappers (time-bar, solar-svg).               */
+    .overlay-top-left,
+    .home-glow-svg,
+    .home-hitbox,
+    .home-silhouette-svg,
+    .time-bar,
+    .solar-svg,
+    .solar-pct-label,
+    .cloud-svg,
+    .cloud-leader-svg,
+    .cloud-pct-label,
+    .pv-home-anchor-svg,
+    .pv-home-leader-svg,
+    .pv-pct-label,
+    .battery-leader-svg,
+    .battery-pct-label
+    {
+        transition: opacity 0.35s ease;
+        will-change: opacity;
+    }
     ha-card.lidar-view-active .overlay-top-left,
     ha-card.lidar-view-active .home-glow-svg,
     ha-card.lidar-view-active .home-hitbox,
@@ -1750,12 +1789,323 @@ export const heliosCardStyles = css`
     {
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.25s ease;
     }
     ha-card.lidar-view-active .overlay-top-right
     {
         opacity: 1;
         pointer-events: auto;
+    }
+
+    /*  Shading-dome view: mirrors the LiDAR fade-out list so the
+        rest of the HUD steps aside when the dome takes over the
+        canvas, then the dome SVG itself overlays the map without
+        intercepting pointer events. Top-right chip cluster stays
+        live so the user can toggle the dome back off.            */
+    ha-card.shading-dome-active .overlay-top-left,
+    ha-card.shading-dome-active .home-glow-svg,
+    ha-card.shading-dome-active .home-hitbox,
+    ha-card.shading-dome-active .home-silhouette-svg,
+    ha-card.shading-dome-active .time-bar,
+    ha-card.shading-dome-active .solar-svg,
+    ha-card.shading-dome-active .solar-pct-label,
+    ha-card.shading-dome-active .cloud-svg,
+    ha-card.shading-dome-active .cloud-leader-svg,
+    ha-card.shading-dome-active .cloud-pct-label,
+    ha-card.shading-dome-active .pv-home-anchor-svg,
+    ha-card.shading-dome-active .pv-home-leader-svg,
+    ha-card.shading-dome-active .pv-pct-label,
+    ha-card.shading-dome-active .battery-leader-svg,
+    ha-card.shading-dome-active .battery-pct-label
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
+    /*  Top-right cluster (mode bar) stays visible while the
+        dome is active so the user can always switch modes via
+        the same widget that took them in.                       */
+    ha-card.shading-dome-active .overlay-top-right
+    {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    /*  Three-segment mode bar (Layer UI / LiDAR / Ombres). Sits
+        in the top-right rail in place of the old LiDAR chip pair.
+        Stacked VERTICALLY with iOS-friendly 40 px touch targets
+        so the trio is comfortable on a phone in landscape. Each
+        segment is icon-only with a title tooltip; the active
+        segment takes the same scrub-blue plate the clock chip
+        uses while scrubbing so the user has one consistent
+        visual language for "you are in a non-default mode".
+        Segments are glued together via shared borders and
+        matching corner radii.                                    */
+    .mode-bar
+    {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: stretch;
+        pointer-events: auto;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        border-radius: 6px;
+    }
+    .mode-bar-seg
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  40px;
+        height: 40px;
+        box-sizing: border-box;
+        padding: 0;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-bottom: 0;
+        cursor: pointer;
+        position: relative;
+        z-index: 50;
+        opacity: 1;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .mode-bar-seg:first-child { border-radius: 6px 6px 0 0; }
+    .mode-bar-seg:last-child  { border-radius: 0 0 6px 6px; border-bottom: 1px solid #000000; }
+    .mode-bar-seg:hover       { background: #f2f2f2; }
+    .mode-bar-seg:active      { background: #e6e6e6; }
+    .mode-bar-seg ha-icon
+    {
+        --mdc-icon-size: 22px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+    .mode-bar-seg.is-disabled
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .mode-bar-seg.is-disabled:hover,
+    .mode-bar-seg.is-disabled:active { background: #ffffff; }
+    .mode-bar-seg.is-on
+    {
+        background: rgba(31, 111, 235, 0.95);
+        color: #ffffff;
+        border-color: rgba(20, 78, 168, 0.95);
+    }
+    .mode-bar-seg.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .mode-bar-seg.is-on:active { background: rgba(20, 78, 168, 0.95); }
+    /*  Vertical seam between an active segment and the next one
+        down: paint a 1 px overlay on the top of the lower
+        segment so the seam reads as part of the active plate
+        instead of the inactive segment's border below it.       */
+    .mode-bar-seg.is-on + .mode-bar-seg::before
+    {
+        content: '';
+        position: absolute;
+        left: -1px;
+        right: -1px;
+        top: -1px;
+        height: 1px;
+        background: rgba(20, 78, 168, 0.95);
+        pointer-events: none;
+    }
+    /*  Dome SVG: full-card overlay, sits below the click chrome so
+        it never blocks pointer events. Fade alpha comes from inline
+        style driven by the dome fade RAF.                          */
+    .shading-dome-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 7;
+    }
+    /*  Cloud-bin picker: small segmented control hugging the top
+        edge under the dome chip cluster. Pills mirror the dome's
+        accent so it reads as part of the same widget.             */
+    /*  Continuous cloud-cover slider, bottom-left corner of the
+        card while the dome is on. Sun glyph on the LEFT, heavy-
+        cloud glyph on the RIGHT, the slider in between reads as
+        the cloud-cover knob driving the dome's view. The percent
+        value chip on the far RIGHT is the immediate readout of
+        the slider position; lets the user know they're at 35 %
+        rather than guessing from the handle's position.          */
+    .shading-dome-cloud-slider
+    {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        pointer-events: auto;
+    }
+    /*  Tick wrapper: the slider sits in a relative container so
+        the tick spans can be absolutely positioned over the
+        track without disturbing the slider's native thumb
+        hit-area. --thumb-r feeds the calc() positions on each
+        tick so they land on the actual thumb centre at every
+        snap point, not on the wrap's geometric percentage. The
+        native thumb's centre travels between (thumb-r) and
+        (track-width - thumb-r), so we use the same offset for
+        the tick positions.                                       */
+    .shading-dome-cloud-track-wrap
+    {
+        --thumb-r: 7px;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 14px;
+    }
+    .shading-dome-cloud-tick
+    {
+        position: absolute;
+        top: 50%;
+        width: 2px;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.55);
+        border-radius: 1px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+    }
+    .shading-dome-cloud-icon
+    {
+        --mdc-icon-size: 18px;
+        color: rgba(255, 255, 255, 0.85);
+        display: inline-flex;
+        align-items: center;
+    }
+    .shading-dome-cloud-icon--sun   { color: #fde68a; }
+    .shading-dome-cloud-icon--cloud { color: #cbd5e1; }
+    .shading-dome-cloud-range
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 160px;
+        height: 4px;
+        background: linear-gradient(to right, #fde68a 0%, #cbd5e1 100%);
+        border-radius: 999px;
+        outline: none;
+        cursor: pointer;
+        margin: 0;
+    }
+    .shading-dome-cloud-range::-webkit-slider-thumb
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .shading-dome-cloud-range::-moz-range-thumb
+    {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .shading-dome-cloud-value
+    {
+        min-width: 36px;
+        text-align: right;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.85);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*  LiDAR View opacity slider. Painted at the bottom of the card
+        while the LiDAR view is active. Same capsule pill as the dome
+        cloud picker for visual consistency between the two modes;
+        ungated (continuous, no ticks) because opacity is a free
+        analog tune, not a binned pick.                              */
+
+    .lidar-view-opacity-slider
+    {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.35s ease;
+    }
+    .lidar-view-opacity-slider.is-active
+    {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .lidar-view-opacity-icon
+    {
+        --mdc-icon-size: 16px;
+        color: rgba(255, 255, 255, 0.85);
+        display: inline-flex;
+        align-items: center;
+    }
+    .lidar-view-opacity-icon--low  { opacity: 0.7; }
+    .lidar-view-opacity-icon--high { opacity: 1.0; }
+    .lidar-view-opacity-range
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 160px;
+        height: 4px;
+        background: linear-gradient(to right, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.9) 100%);
+        border-radius: 999px;
+        outline: none;
+        cursor: pointer;
+        margin: 0;
+    }
+    .lidar-view-opacity-range::-webkit-slider-thumb
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .lidar-view-opacity-range::-moz-range-thumb
+    {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .lidar-view-opacity-value
+    {
+        min-width: 36px;
+        text-align: right;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.85);
+        font-variant-numeric: tabular-nums;
     }
 
 
@@ -1890,8 +2240,8 @@ export const heliosCardStyles = css`
         right: 8px;
         z-index: 60;
         display: flex;
-        flex-direction: row-reverse;
-        align-items: center;
+        flex-direction: column;
+        align-items: flex-end;
         pointer-events: none;
     }
 
@@ -2310,8 +2660,8 @@ export const heliosCardStyles = css`
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
     /*  Sunrise / sunset markers used to live here as ha-icon
-        glyphs anchored to the arc's horizon crossings. Removed in
-        v1.6.3 ; the arc shape itself reads as "sunrise / sunset".  */
+        glyphs anchored to the arc's horizon crossings. Removed:
+        the arc shape itself reads as "sunrise / sunset".          */
 
 
     /*  Below-horizon segments, round dots at fixed spacing so the
@@ -2465,7 +2815,8 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .solar-pct-label,
     ha-card.theme-dark .map-btn:not(.map-btn-on),
     ha-card.theme-dark .lidar-view-chip:not(.is-on),
-    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on)
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on),
+    ha-card.theme-dark .mode-bar-seg:not(.is-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -2505,9 +2856,26 @@ export const heliosCardStyles = css`
     ha-card.theme-dark .cloud-pct-label ha-icon,
     ha-card.theme-dark .solar-pct-label ha-icon,
     ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
-    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon,
+    ha-card.theme-dark .mode-bar-seg:not(.is-on) ha-icon
     {
         color: #e6e6e6;
+    }
+    ha-card.theme-dark .mode-bar-seg:not(.is-on):not(.is-disabled):hover
+    {
+        background: #292a2b;
+    }
+    ha-card.theme-dark .mode-bar-seg:not(.is-on):not(.is-disabled):active
+    {
+        background: #353637;
+    }
+    ha-card.theme-dark .mode-bar-seg
+    {
+        border-color: rgba(255, 255, 255, 0.20);
+    }
+    ha-card.theme-dark .mode-bar-seg:last-child
+    {
+        border-bottom-color: rgba(255, 255, 255, 0.20);
     }
 
     ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }

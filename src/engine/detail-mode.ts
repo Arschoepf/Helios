@@ -6,10 +6,8 @@
 //orientation) but reset to the hemisphere-aware default on exit,
 //mirroring recenter().
 //
-//Auto-rotate is gated on _detailMode in the tick loop, so the
-//camera doesn't orbit while the dashboard is open. The flag is
-//the source of truth, the card just calls setDetailMode in
-//response to the user's home click.
+//Auto-rotate is gated on _detailMode in the tick loop, so the camera doesn't orbit while the dashboard is open. The flag is the source of truth, the
+//card just calls setDetailMode in response to the user's home click.
 //
 //Resting pose (zoom 18, pitch 55) is locked via map.minZoom /
 //map.maxZoom so the user can't accidentally pinch-zoom out of
@@ -38,10 +36,8 @@ const POST_EXIT_COOLDOWN_MS       = 600;
 const DETAIL_MODE_BEARING_SWEEP   = 0;
 
 
-//Structural surface the engine exposes to this module. Reads the
-//map / coordinate state, mutates the detail-mode flags + the
-//detail dive rAF handle, plus bumps the auto-rotate inactivity
-//timer so the orbit loop stays quiet during the dive transition.
+//Structural surface the engine exposes to this module. Reads the map / coordinate state, mutates the detail-mode flags + the detail dive rAF handle,
+//plus bumps the auto-rotate inactivity timer so the orbit loop stays quiet during the dive transition.
 export interface DetailModeHost
 {
     readonly map?:     MapLibreMap;
@@ -55,9 +51,8 @@ export interface DetailModeHost
 }
 
 
-//Flip detail-mode on or off and run the eased camera transition.
-//No-op when the requested state matches the current one, so a
-//double-click doesn't restart the dive.
+//Flip detail-mode on or off and run the eased camera transition. No-op when the requested state matches the current one, so a double-click doesn't
+//restart the dive.
 export function setDetailMode(host: DetailModeHost, on: boolean): void
 {
     if (!host.map || host._detailMode === on)
@@ -145,10 +140,8 @@ export function diveCamera(
     const startPitch   = host.map.getPitch();
     const startBearing = host.map.getBearing();
 
-    //Smoothstep, the same C¹-continuous "ease in / out" curve
-    //easeTo uses by default but applied across the entire
-    //animation rather than per-phase, so there is no velocity
-    //discontinuity halfway through.
+    //Smoothstep, the same C¹-continuous "ease in / out" curve easeTo uses by default but applied across the entire animation rather than per-phase,
+    //so there is no velocity discontinuity halfway through.
     const easeSmoothstep = (t: number): number => t * t * (3 - 2 * t);
 
     const tick = (now: number): void =>
@@ -165,13 +158,9 @@ export function diveCamera(
         const u = Math.min(1, (now - startTime) / duration);
         const e = easeSmoothstep(u);
 
-        //jumpTo bypasses easeTo's animation pipeline entirely so
-        //our per-frame interpolation stays the sole source of
-        //camera state. Bearing is set to startBearing + sweep×e
-        //unwrapped, MapLibre wraps it internally on assignment
-        //but the visual rotation between successive frames is
-        //the small per-tick delta, so the camera reads as one
-        //continuous 270° spin.
+        //jumpTo bypasses easeTo's animation pipeline entirely so our per-frame interpolation stays the sole source of camera state. Bearing is set to
+        //startBearing + sweep×e unwrapped, MapLibre wraps it internally on assignment but the visual rotation between successive frames is the small
+        //per-tick delta, so the camera reads as one continuous 270° spin.
         host.map.jumpTo({
             center:  [host.homeLon, host.homeLat],
             zoom:    startZoom    + (targetZoom    - startZoom)    * e,

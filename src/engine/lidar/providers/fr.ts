@@ -23,8 +23,7 @@ import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
 const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
 
-//Bounding box of metropolitan France + Corsica, padded by ~0.3 deg
-//so home points right on the coast still trigger a fetch.
+//Bounding box of metropolitan France + Corsica, padded by ~0.3 deg so home points right on the coast still trigger a fetch.
 const FR_BBOX = { minLat: 41.0, maxLat: 51.5, minLon: -5.5, maxLon: 9.8 };
 
 export const franceLidarHd: LidarSource =

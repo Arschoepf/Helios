@@ -4,10 +4,8 @@
 //Terenu) is published by GUGiK (Główny Urząd Geodezji i Kartografii)
 //through a public WCS 2.0.1 endpoint, free open data, no API key.
 //
-//Same single-coverage shape as France and NRW: the upstream
-//`DSM_PL-EVRF2007-NH` coverage already contains absolute surface
-//heights, so we let the shared pipeline run a height threshold off
-//the home's local terrain rather than subtracting a separate DTM.
+//Same single-coverage shape as France and NRW: the upstream `DSM_PL-EVRF2007-NH` coverage already contains absolute surface heights, so we let the
+//shared pipeline run a height threshold off the home's local terrain rather than subtracting a separate DTM.
 //
 //The service supports EPSG:4326 natively (alongside EPSG:2180 and
 //EPSG:3857), so we can keep the lat/lon SUBSET pattern identical to
@@ -31,10 +29,8 @@ const WCS_URL    = 'https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMPT/GRID1/W
 //as out-of-data.
 const COVERAGE   = 'DSM_PL-EVRF2007-NH';
 
-//Bounding box of Poland, padded slightly so the eastern Belarusian
-//or southern Slovakian border points still trigger a fetch. The
-//WCS silently clips outside national territory, so over-fetching at
-//the border is free.
+//Bounding box of Poland, padded slightly so the eastern Belarusian or southern Slovakian border points still trigger a fetch. The WCS silently clips
+//outside national territory, so over-fetching at the border is free.
 const PL_BBOX = { minLat: 49.00, maxLat: 54.85, minLon: 14.10, maxLon: 24.20 };
 
 export const polandGugikNmpt: LidarSource =

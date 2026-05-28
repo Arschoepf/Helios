@@ -1,8 +1,7 @@
 //Land Steiermark ALS shadow source for Styria, Austria.
 //
-//Styria publishes its airborne-laser-scanning derived elevation data
-//through GIS Steiermark as a pair of ArcGIS-backed WCS services,
-//free open data, no API key, no signup:
+//Styria publishes its airborne-laser-scanning derived elevation data through GIS Steiermark as a pair of ArcGIS-backed WCS services, free open data,
+//no API key, no signup:
 //
 //  ALSHoeheninformation_1m_UTM33N  , DSM (Oberflächenmodell, the
 //                                     full surface with trees and
@@ -16,9 +15,9 @@
 //service and subtract to derive metres-above-ground, the same
 //DSM-DTM pattern used for the UK / NL / NO providers.
 //
-//Native CRS is EPSG:32633 (WGS84 / UTM Zone 33N) but the service
-//also accepts EPSG:4326 subsetting, so we keep the URL builder
-//uniform with the OGC providers.
+//Native CRS is EPSG:32633 (WGS84 / UTM Zone 33N). The service
+//rejects EPSG:4326 axis-label subsetting so we project the bbox
+//client-side via proj.ts before sending the request.
 
 import type {
     LidarSource,
@@ -27,14 +26,14 @@ import type {
 } from '../../lidar';
 import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../pipeline';
 import { fetchFloat32GeoTiff, subtractRasters } from '../geotiff';
+import { getEpsg, projectBbox } from '../proj';
 
 const DOM_URL   = 'https://gis.stmk.gv.at/arcgis/services/OGD/ALSHoeheninformation_1m_UTM33N/MapServer/WCSServer';
 const DTM_URL   = 'https://gis.stmk.gv.at/arcgis/services/OGD/ALSGelaendeinformation_1m_UTM33N/MapServer/WCSServer';
 const COVERAGE  = 'Coverage4';
 
-//Bounding box of Styria, padded so homes on the Carinthian and
-//Burgenland borders still trigger a fetch. WCS returns no-data
-//outside the state's mosaic so over-fetching at the edges is free.
+//Bounding box of Styria, padded so homes on the Carinthian and Burgenland borders still trigger a fetch. WCS returns no-data outside the state's
+//mosaic so over-fetching at the edges is free.
 const AT_STMK_BBOX = { minLat: 46.55, maxLat: 47.85, minLon: 13.50, maxLon: 16.20 };
 
 export const austriaSteiermarkAls: LidarSource =
@@ -64,6 +63,11 @@ export const austriaSteiermarkAls: LidarSource =
             return emptyResult();
         }
 
+        const epsg = getEpsg(32633);
+        if (!epsg) return emptyResult();
+        const proj = projectBbox(bbox, epsg);
+
+        //ArcGIS WCSServer advertises lowercase "x y" for both spatial and grid axes, regardless of the projection family.
         const buildUrl = (base: string): string =>
         {
             const params = new URLSearchParams({
@@ -72,11 +76,11 @@ export const austriaSteiermarkAls: LidarSource =
                 REQUEST:       'GetCoverage',
                 COVERAGEID:    COVERAGE,
                 FORMAT:        'image/tiff',
-                SUBSETTINGCRS: 'http://www.opengis.net/def/crs/EPSG/0/4326'
+                SUBSETTINGCRS: epsg.urn
             });
-            params.append('SUBSET',    `Lat(${bbox.minLat},${bbox.maxLat})`);
-            params.append('SUBSET',    `Long(${bbox.minLon},${bbox.maxLon})`);
-            params.append('SCALESIZE', `Lat(${rasterSize}),Long(${rasterSize})`);
+            params.append('SUBSET',    `x(${proj.minX.toFixed(2)},${proj.maxX.toFixed(2)})`);
+            params.append('SUBSET',    `y(${proj.minY.toFixed(2)},${proj.maxY.toFixed(2)})`);
+            params.append('SCALESIZE', `x(${rasterSize}),y(${rasterSize})`);
             return `${base}?${params.toString()}`;
         };
 
@@ -97,6 +101,15 @@ export const austriaSteiermarkAls: LidarSource =
             homeLat:          opts.homeLat,
             homeLon:          opts.homeLon,
             cropRadiusMeters: opts.cropRadiusMeters
+        }, {
+            //1 m DSM minus 1 m DTM looks clean on paper but the
+            //Steiermark mosaic carries low residuals over forest and
+            //agricultural land that saturate the default 5 m threshold
+            //(>80 % of cells passing). Median pre-filter + 7 m threshold
+            //recovers building-tree separation without losing real
+            //roofs.
+            medianSmooth:  true,
+            heightThreshM: 7,
         });
     }
 };

@@ -47,8 +47,7 @@ export interface LocalNdsmConfig
     maxLon: number;
 }
 
-//Normalise the resampled nDSM band in place. Exported so the
-//behaviour is verifiable from a unit-level test:
+//Normalise the resampled nDSM band in place. Exported so the behaviour is verifiable from a unit-level test:
 //
 //  - source value == nodata sentinel        -> NaN
 //  - source value is NaN / +/-Infinity      -> NaN
@@ -147,9 +146,9 @@ export function createLocalNdsmSource(cfg: LocalNdsmConfig): LidarSource
             if (!band || band.length < rasterSize * rasterSize) return emptyResult();
 
             normaliseLocalNdsmRaster(band, noData);
-            //Same nodata sentinel for both bands in v1.6.3+; the
-            //single noData value reads from band 1's GDAL_NODATA
-            //tag, which the pipeline writes identically on band 2.
+            //Same nodata sentinel for both bands; the single noData
+            //value reads from band 1's GDAL_NODATA tag, which the
+            //pipeline writes identically on band 2.
             if (terrain && terrain.length >= rasterSize * rasterSize)
             {
                 normaliseLocalDtmRaster(terrain, noData);

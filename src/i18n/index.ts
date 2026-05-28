@@ -24,6 +24,11 @@ export interface Translations
     //icon). Stays short, ~10 chars max, to balance the clock chip
     //width on the opposite corner.
     lidarViewChipLabel: string;
+    //Label on the shading-dome chip in the top-centre cluster.
+    //Same short noun-phrase convention as lidarViewChipLabel; the
+    //chip toggles the dome overlay where the learned PV residuals
+    //are painted on the celestial hemisphere above the home.
+    shadingDomeChipLabel: string;
 
     //Detail dashboard, opened by clicking the home. The camera eases
     //in (zoom + pitch) and a full-card overlay takes over while the
@@ -131,10 +136,8 @@ export interface Translations
         //observation only.
         pvPeakPower:              string;
         pvPeakPowerHelp:          string;
-        //Inverter clipping cap, in kW of AC output. Optional. When
-        //set, the forecast tops out at this value so an over-sized
-        //DC array hooked to a smaller inverter doesn't render a
-        //peak above what the hardware can actually deliver.
+        //Inverter clipping cap, in kW of AC output. Optional. When set, the forecast tops out at this value so an over-sized DC array hooked to a
+        //smaller inverter doesn't render a peak above what the hardware can actually deliver.
         pvInverterMaxKw:          string;
         pvInverterMaxKwHelp:      string;
         //Multi-array PV layout. Each array entry exposes its own
@@ -155,17 +158,15 @@ export interface Translations
         pvArrayTilt:              string;
         pvArrayAzimuth:           string;
         pvArrayShare:             string;
-        //Per-string peak power in kWp. Preferred over `share` from
-        //v1.6.3; the total install power is the sum across rows.
+        //Per-string peak power in kWp. Preferred over `share`; the
+        //total install power is the sum across rows.
         pvArrayPeakKwp:           string;
         pvArrayPeakKwpHelp:       string;
         pvArrayAdd:               string;
         pvArrayRemove:            string;
         pvArrayNormHint:          string;
-        //Per-field helps under tilt / azimuth / share, with the
-        //share-specific explanation of the auto-normalisation
-        //contract spelled out so users know that 50/50 and 1/1 give
-        //the same forecast.
+        //Per-field helps under tilt / azimuth / share, with the share-specific explanation of the auto-normalisation contract spelled out so users
+        //know that 50/50 and 1/1 give the same forecast.
         pvArrayTiltHelp:          string;
         pvArrayAzimuthHelp:       string;
         pvArrayShareHelp:         string;
@@ -178,14 +179,24 @@ export interface Translations
         pvArrayLongitude:         string;
         pvArrayCoordsHelp:        string;
         pvArrayCoordsPlaceholder: string;
-        //Height of this group of panels above ground in metres.
-        //Used by the LiDAR-aware PV forecast to position the
-        //ray-march origin for the per-array shading check.
+        //Height of this group of panels above ground in metres. Used by the LiDAR-aware PV forecast to position the ray-march origin for the
+        //per-array shading check.
         pvArrayHeight:            string;
         pvArrayHeightHelp:        string;
         pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;
+        //Multi-bank battery editor. The section renders one collapsible card per bank (same widget as pv-arrays) so a user with house +
+        //garage banks (or a hybrid + standalone) gets a dedicated row each. The chip on the card stays single, aggregating the banks as
+        //a capacity-weighted SoC + summed signed power. `batteryBankTitle` carries the auto-numbered fallback used when the user hasn't
+        //typed a name; `{n}` is substituted with the 1-based row index.
+        batteryBankTitle:         string;
+        batteryBankAdd:           string;
+        batteryBankRemove:        string;
+        batteryBankName:          string;
+        batteryBankNameHelp:      string;
+        batteryCapacityKwh:       string;
+        batteryCapacityKwhHelp:   string;
         batterySocEntity:         string;
         batterySocEntityHelp:     string;
         batteryPowerEntity:       string;
@@ -199,6 +210,11 @@ export interface Translations
         batteryPowerInvertStandard: string;
         batteryPowerInvertInverted: string;
         batteryPowerInvertHelp:     string;
+        //Inverter cutoff SoC: percent at which the user's hybrid inverter clamps PV output once the battery hits its set ceiling. When set,
+        //the shading-map trainer drops every observation bucket where the SoC reached this value so the inverter-blocked production doesn't
+        //train as phantom shadow. Leave the field empty to keep the legacy "train every bucket" behaviour.
+        inverterCutoffSocPct:       string;
+        inverterCutoffSocPctHelp:   string;
         batteryColor:             string;
         //Weather section. Hosts the optional solar-radiation entity
         //override: when wired to a physical W/m² sensor at the home
@@ -218,9 +234,7 @@ export interface Translations
         //and the cropped viewport.
         displayRadius:            string;
         displayRadiusHint:        string;
-        //Timeline sub-section, nested inside the UI section. Hosts
-        //the visibility toggle, the width slider and the per-day
-        //consumption-chip toggle.
+        //Timeline sub-section, nested inside the UI section. Hosts the visibility toggle, the width slider and the per-day consumption-chip toggle.
         timelineSection:          string;
         timelineEnabled:          string;
         timelineEnabledOn:        string;
@@ -232,10 +246,8 @@ export interface Translations
         timelineConsumptionOn:    string;
         timelineConsumptionOff:   string;
         timelineConsumptionHint:  string;
-        //Surrounding buildings options. Cluster radius grows the home
-        //group to include attached outbuildings, opacity controls the
-        //transparency of the neighbours and the colour is the base
-        //tint reused for every rendered building.
+        //Surrounding buildings options. Cluster radius grows the home group to include attached outbuildings, opacity controls the transparency of
+        //the neighbours and the colour is the base tint reused for every rendered building.
         buildingsSection:         string;
         buildingsHint:            string;
         buildingClusterRadius:    string;
@@ -260,9 +272,8 @@ export interface Translations
         shadowsEnabledOn:         string;
         shadowsEnabledOff:        string;
         shadowsEnabledHint:       string;
-        //LiDAR-driven shadow precision. Three named levels mapped to a
-        //raster size in helios-engine. Only meaningful when the home
-        //sits inside a LiDAR provider's coverage.
+        //LiDAR-driven shadow precision. Three named levels mapped to a raster size in helios-engine. Only meaningful when the home sits inside a
+        //LiDAR provider's coverage.
         lidarPrecision:          string;
         lidarPrecisionLow:       string;
         lidarPrecisionMedium:    string;
@@ -272,30 +283,20 @@ export interface Translations
         shadowOpacity:            string;
         shadowOpacityHint:        string;
         //LiDAR View overlay (subsection inside Shading).
-        //Lets the user toggle a Canvas overlay that paints every
-        //loaded LiDAR cell as a dot, plus tune its visual knobs.
+        //Lets the user tune the LiDAR view overlay (wireframe + fill
+        //coloured by live solar exposure). Only the point size remains
+        //tunable from the editor; the overall opacity is exposed
+        //in-card via a bottom slider so the user can dial the layer
+        //in/out while looking at the result.
         lidarViewSection:           string;
         lidarViewHint:              string;
         lidarViewPointSize:         string;
-        lidarViewPointColor:        string;
-        lidarViewPointOpacity:      string;
-        lidarViewWireframe:         string;
-        lidarViewWireframeOn:       string;
-        lidarViewWireframeOff:      string;
-        lidarViewWireframeHint:     string;
-        lidarViewWireframeColor:    string;
-        lidarViewWireframeOpacity:  string;
-        //Collapsible advanced section that lets a power user point
-        //Helios at their own nDSM GeoTIFF for shadow data. Hidden by
-        //default behind a <details>/<summary> toggle so the editor
-        //stays simple for the 99% of users who never need it.
+        //Collapsible advanced section that lets a power user point Helios at their own nDSM GeoTIFF for shadow data. Hidden by default behind a
+        //<details>/<summary> toggle so the editor stays simple for the 99% of users who never need it.
         localLidarSection:        string;
         localLidarHint:           string;
-        //Discoverability line shown right under localLidarHint that
-        //points users at the Python tooling in tools/lidar/ for
-        //preparing the nDSM raster offline. Keeps the editor short
-        //while still making the helpers findable for users who don't
-        //yet know how to roll their own raster.
+        //Discoverability line shown right under localLidarHint that points users at the Python tooling in tools/lidar/ for preparing the nDSM raster
+        //offline. Keeps the editor short while still making the helpers findable for users who don't yet know how to roll their own raster.
         localLidarToolsHint:      string;
         localLidarEnabled:        string;
         localLidarUrl:            string;
@@ -319,6 +320,36 @@ export interface Translations
         resetCacheButton:         string;
         resetCacheWarning:        string;
         resetCacheDone:           string;
+        //About section pinned at the very bottom of the editor. Carries the running version string, a pointer at the companion site
+        //helios-lidar.org, the two source-code repositories (the card + the companion site) and a short appreciation line + Buy Me A
+        //Coffee link so a happy user has a frictionless path to support the work.
+        aboutSection:             string;
+        aboutVersionLabel:        string;
+        aboutSiteTitle:           string;
+        aboutSiteDescription:     string;
+        aboutCodeLabel:           string;
+        aboutRepoCard:            string;
+        aboutRepoLidar:           string;
+        aboutCoffeeMessage:       string;
+        aboutCoffeeLink:          string;
+        //Shading-map debug section. The scalar self-calibration
+        //multiplier captures static biases; the shading map sits
+        //on top of it and learns per-(sun-position, cloud-cover)
+        //residuals so structured shadows (a tree, a neighbouring
+        //roof) bend the forecast at the right times of day under
+        //the right weather. This section shows what the map has
+        //learned and offers export / import / reset.
+        shadingSection:           string;
+        shadingHint:              string;
+        shadingStatsCells:        string;
+        shadingStatsConfident:    string;
+        shadingStatsUnder:        string;
+        shadingStatsOver:         string;
+        shadingExport:            string;
+        shadingImport:            string;
+        shadingImportError:       string;
+        shadingReset:             string;
+        shadingResetConfirm:      string;
     };
 }
 
@@ -330,8 +361,11 @@ import { it } from './locales/it';
 import { nl } from './locales/nl';
 import { pt } from './locales/pt';
 import { no } from './locales/no';
+import { pl } from './locales/pl';
+import { cs } from './locales/cs';
+import { sv } from './locales/sv';
 
-const LOCALES: Record<string, Translations> = { en, fr, de, es, it, nl, pt, no };
+const LOCALES: Record<string, Translations> = { en, fr, de, es, it, nl, pt, no, pl, cs, sv };
 
 const FALLBACK: Translations = en;
 

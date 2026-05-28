@@ -19,19 +19,15 @@
 
 export interface LidarSource
 {
-    //Stable identifier, lowercased and country-prefixed. Goes into
-    //logs.
+    //Stable identifier, lowercased and country-prefixed. Goes into logs.
     id:    string;
     //Human-readable label, currently logs-only.
     name:  string;
 
-    //Native cell pitch in metres for the upstream raster as published
-    //by the data owner. The engine sizes the requested rasterSize off
-    //this value so the fetched grid matches real source samples
-    //instead of forcing the server to interpolate up: at "high"
-    //precision the engine asks one cell per native sample, "medium"
-    //one per 2, "low" one per 4. Lets the LiDAR view + shadows scale
-    //with the actual ground truth rather than a fixed pixel count.
+    //Native cell pitch in metres for the upstream raster as published by the data owner. The engine sizes the requested rasterSize off this value so
+    //the fetched grid matches real source samples instead of forcing the server to interpolate up: at "high" precision the engine asks one cell per
+    //native sample, "medium" one per 2, "low" one per 4. Lets the LiDAR view + shadows scale with the actual ground truth rather than a fixed pixel
+    //count.
     nativeCellPitchMeters: number;
 
     //Cheap synchronous coverage probe. Implementations should bail
@@ -53,9 +49,8 @@ export interface LidarShadowResult
     features:    GeoJSON.FeatureCollection;
     diagnostics:
     {
-        //Number of LiDAR cells that passed the height threshold and
-        //the circular crop. 0 when the home is outside coverage or
-        //the WMS round-trip failed.
+        //Number of LiDAR cells that passed the height threshold and the circular crop. 0 when the home is outside coverage or the WMS round-trip
+        //failed.
         cellsKept:   number;
         //Cells-per-clump cap actually used (derived from the chosen
         //precision). Surfaced so the user can confirm the size cap
@@ -74,8 +69,8 @@ export interface LidarShadowResult
         heights:    Float32Array;
         //Optional DTM band (ground elevation in the source vertical
         //datum, NaN where no-data). Populated by the local-nDSM
-        //provider when it reads a v1.6.3+ 2-band COG; absent on
-        //single-band COGs (legacy locals) and on every public
+        //provider when it reads a 2-band COG; absent on legacy
+        //single-band COGs and on every public
         //provider (their WCS layers only expose the nDSM). The
         //shading ray-march in pv-shading.ts falls back to flat-
         //ground geometry whenever the field is undefined, so the
@@ -93,16 +88,13 @@ export interface LidarShadowFetchOptions
 {
     homeLat:                  number;
     homeLon:                  number;
-    //Radius in metres around the home from which heights are sampled.
-    //The provider over-fetches slightly so trees on the edge still
-    //cast their shadow inward.
+    //Radius in metres around the home from which heights are sampled. The provider over-fetches slightly so trees on the edge still cast their shadow
+    //inward.
     radiusMeters:             number;
-    //Pixel count per side requested from the upstream raster. The
-    //engine picks this based on the user's `lidar-precision`.
+    //Pixel count per side requested from the upstream raster. The engine picks this based on the user's `lidar-precision`.
     rasterSize:               number;
-    //Optional circular crop. Cells beyond this distance from the
-    //home are dropped so the shadow zones stay inside the visible
-    //disc. When unset, the bbox is the only bound.
+    //Optional circular crop. Cells beyond this distance from the home are dropped so the shadow zones stay inside the visible disc. When unset, the
+    //bbox is the only bound.
     cropRadiusMeters?:        number;
     signal?:                  AbortSignal;
 }
@@ -117,24 +109,22 @@ import { polandGugikNmpt }             from './lidar/providers/pl';
 import { canadaHrdem }                 from './lidar/providers/ca';
 import { brandenburgBerlinDom }        from './lidar/providers/de-bb-be';
 import { vermontVcgiNdsm }             from './lidar/providers/us-vt';
-//Steiermark, Tirol and Baden-Württemberg WCS endpoints reject
-//EPSG:4326 axis-label subsetting and require a UTM / MGI Krüger
-//projection forward we don't yet bundle. Source files kept under
-//./lidar/providers/ for the next release; not registered here so
-//resolveLidarSource() doesn't dispatch to them and return empty.
+//Baden-Württemberg, Austria Tirol, Austria Steiermark and Belgium Flanders source files (de-bw, at-tirol, at-stmk, be-fl) all
+//live under ./lidar/providers/ and remain functional but are NOT currently registered: the DSM-DTM subtraction quality on those
+//feeds was judged below the bar set by the existing nDSM providers (per-pixel subtraction amplifies noise on building edges and
+//over vegetation, which renders the cast shadows as blobs instead of recognisable footprints). Re-enable by importing +
+//appending to LIDAR_SOURCES when a cleaner data path is identified for those regions.
 import {
     createLocalNdsmSource,
     type LocalNdsmConfig
 } from './lidar/local-ndsm';
 import type { HeliosConfig } from '../helios-config';
 
-//Registered providers, ordered by preference. The first provider
-//whose covers() probe accepts the home position wins. Bbox checks
-//are non-overlapping today (one country / region per provider) but
-//the ordering is conservative: single-fetch normalised-raster
-//providers come first (France BIL, NRW nDOM, Poland NMPT, Canada
-//HRDEM DSM, Vermont nDSM) because they skip the DSM-DTM
-//subtraction round-trip. DSM-DTM subtraction providers follow.
+//Registered providers, ordered by preference. findLidarSource() returns the FIRST provider whose covers() probe accepts the home
+//position; there is no fallback chain when the actual fetch turns up no-data, so order is load-bearing whenever two providers'
+//bounding boxes overlap. Bbox checks today are non-overlapping (one country / region per provider, plus German Länder keyed by
+//state bboxes), single-fetch normalised-raster providers come first (France BIL, NRW nDOM, Poland NMPT, Canada HRDEM DSM,
+//Vermont nDSM) because they skip the DSM-DTM subtraction round-trip; DSM-DTM subtraction providers follow.
 export const LIDAR_SOURCES: LidarSource[] = [
     franceLidarHd,
     nrwLidarNdom,
@@ -200,10 +190,8 @@ function numFromCfg(v: unknown): number | null
     return null;
 }
 
-//One-shot warning latch. When the user enables the local provider
-//but leaves the config incomplete or invalid, log exactly once per
-//session so the silent fall-through is diagnosable without spamming
-//the console on every shadow refresh.
+//One-shot warning latch. When the user enables the local provider but leaves the config incomplete or invalid, log exactly once per session so the
+//silent fall-through is diagnosable without spamming the console on every shadow refresh.
 let _warnedInvalidLocalNdsm = false;
 
 //Config-aware provider resolver. Behaviour:

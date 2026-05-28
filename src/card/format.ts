@@ -1,7 +1,5 @@
-//Small formatting and validation helpers shared between the card
-//render path and the visual editor. Kept dependency-free so any
-//card-side module can pull them in without dragging Lit or engine
-//symbols along.
+//Small formatting and validation helpers shared between the card render path and the visual editor. Kept dependency-free so any card-side module can
+//pull them in without dragging Lit or engine symbols along.
 
 
 //Format a number with the user's locale (decimal mark, grouping).
@@ -72,8 +70,7 @@ export function lerpHexToward(a: string, b: string, t: number): string
 }
 
 
-//Validate a config value as a #rrggbb hex string. Falls back to the
-//provided default for null, undefined, or malformed input.
+//Validate a config value as a #rrggbb hex string. Falls back to the provided default for null, undefined, or malformed input.
 export function cfgHex(v: unknown, fallback: string): string
 {
     if (v == null)
@@ -89,9 +86,8 @@ export function cfgHex(v: unknown, fallback: string): string
 }
 
 
-//Locale-independent date formatter. Tokens: yyyy, yy, mm, dd ,
-//anything else is preserved verbatim. Falls back to "mm-dd" when
-//the format is empty, undefined, or contains unsafe characters.
+//Locale-independent date formatter. Tokens: yyyy, yy, mm, dd , anything else is preserved verbatim. Falls back to "mm-dd" when the format is empty,
+//undefined, or contains unsafe characters.
 const VALID_DATE_FORMAT_RE = /^[\-\/\. _:0-9A-Za-z]+$/;
 const DATE_TOKEN_RE        = /yyyy|yy|mm|dd/g;
 

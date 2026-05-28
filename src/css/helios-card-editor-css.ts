@@ -543,4 +543,172 @@ export const editorStyles = css`
         outline: 2px solid #ef4444;
         outline-offset: 2px;
     }
+
+    /*  About section pinned at the very bottom of the editor.
+        Compact rows for the version + links + appreciation line,
+        styled as a "credits panel" rather than another config
+        section so the user reads it as a soft footer.              */
+    .about-row
+    {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0 14px;
+    }
+    .about-label
+    {
+        font-weight: 500;
+        color: var(--secondary-text-color, #71717a);
+        font-size: 13px;
+    }
+    .about-value
+    {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        font-size: 13px;
+        color: var(--primary-text-color, #18181b);
+    }
+    .about-block
+    {
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .about-link
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        color: var(--primary-color, #3b82f6);
+        font-size: 14px;
+        font-weight: 500;
+        padding: 6px 0;
+    }
+    .about-link:hover { text-decoration: underline; }
+    .about-link ha-icon
+    {
+        --mdc-icon-size: 18px;
+        color: inherit;
+    }
+    .about-paragraph
+    {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--secondary-text-color, #52525b);
+    }
+    .about-coffee
+    {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    }
+    /*  BMC button styled to match the reset-btn shape (transparent fill,
+        1px border, compact padding, right-aligned via margin-left: auto)
+        but in BMC yellow so the brand colour still reads even though the
+        fill is gone. Same hover bloom pattern as reset-btn for visual
+        consistency across the editor's outline buttons.                */
+    .about-coffee-link
+    {
+        margin-top: 8px;
+        background: transparent;
+        border: 1px solid #ffcc00;
+        color: #ffcc00;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        align-self: flex-end;
+        margin-left: auto;
+        width: fit-content;
+    }
+    .about-coffee-link:hover
+    {
+        background: rgba(255, 204, 0, 0.08);
+        text-decoration: none;
+    }
+    .about-coffee-link:focus-visible
+    {
+        outline: 2px solid #ffcc00;
+        outline-offset: 2px;
+    }
+    /*  Shading-map debug section: stat strip + 4-up polar grid +
+        action row. Grid wraps from a 4-up row to a 2x2 / 1-up
+        stack via the auto-fit template, so the section reads
+        cleanly in both the side panel and a narrow mobile view.  */
+    .shading-stats
+    {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        font-size: 12px;
+        color: var(--secondary-text-color, #5f6368);
+        margin: 6px 0 10px;
+    }
+    .shading-grid
+    {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .shading-disc
+    {
+        background: rgba(0, 0, 0, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        padding: 6px 4px 4px;
+        text-align: center;
+    }
+    .shading-disc-title
+    {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--secondary-text-color, #5f6368);
+        margin-bottom: 2px;
+    }
+    .shading-disc-svg
+    {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+    .shading-actions
+    {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .shading-actions button
+    {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: inherit;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+    }
+    .shading-actions button:hover
+    {
+        background: rgba(255, 255, 255, 0.06);
+    }
+    .shading-actions .shading-reset
+    {
+        border-color: #ef4444;
+        color: #ef4444;
+    }
+    .shading-actions .shading-reset:hover
+    {
+        background: rgba(239, 68, 68, 0.08);
+    }
 `;

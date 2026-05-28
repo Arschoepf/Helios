@@ -1,16 +1,10 @@
-//Forecast calibration: derive a multiplier that nudges the raw
-//Open-Meteo + clear-sky model toward the user's actual production
-//history. The model alone can drift systematically: cloud-cover
-//over-/under-prediction by Open-Meteo, panel soiling, install
-//orientation that the configured azimuth doesn't perfectly capture,
-//inverter losses, etc. By comparing the past N days of "what the
-//model would have predicted" against "what the user actually
-//produced", we get a single ratio that captures all those static
-//biases at once.
+//Forecast calibration: derive a multiplier that nudges the raw Open-Meteo + clear-sky model toward the user's actual production history. The model
+//alone can drift systematically: cloud-cover over-/under-prediction by Open-Meteo, panel soiling, install orientation that the configured azimuth
+//doesn't perfectly capture, inverter losses, etc. By comparing the past N days of "what the model would have predicted" against "what the user
+//actually produced", we get a single ratio that captures all those static biases at once.
 //
-//Pure-function module: takes the host's already-fetched PV history
-//and weather series, returns null when there's not enough data
-//to compute a meaningful ratio.
+//Pure-function module: takes the host's already-fetched PV history and weather series, returns null when there's not enough data to compute a
+//meaningful ratio.
 
 import type { HeliosConfig } from '../helios-config';
 import { pvCalibK, pvNormalizeToWatts, computePvPowerWeighted, type PvHistory } from './pv';
@@ -51,9 +45,7 @@ const RATIO_MAX = 1.5;
 const MIN_DAY_PREDICTED_KWH = 2;
 
 
-//Returns the calibration ratio plus the count of days that fed
-//into it, or null when fewer than 2 past days have enough data
-//to be averaged.
+//Returns the calibration ratio plus the count of days that fed into it, or null when fewer than 2 past days have enough data to be averaged.
 export function computeForecastCalibration(host: ChartHost): ForecastCalibration | null
 {
     const k      = pvCalibK(host.config);
@@ -62,11 +54,8 @@ export function computeForecastCalibration(host: ChartHost): ForecastCalibration
     const coords = getHomeCoords(host.config, host.hass);
     if (k === null || k <= 0 || !series || !hist || !coords) return null;
 
-    //Walk back day by day starting at yesterday. For each day,
-    //compute the model's "would-have-predicted" kWh from the
-    //hourly weather samples and the user's actual produced kWh
-    //from the PV history. Keep going up to WINDOW_DAYS or until
-    //we run out of weather samples.
+    //Walk back day by day starting at yesterday. For each day, compute the model's "would-have-predicted" kWh from the hourly weather samples and the
+    //user's actual produced kWh from the PV history. Keep going up to WINDOW_DAYS or until we run out of weather samples.
     const HOUR_MS = 3_600_000;
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
@@ -157,13 +146,17 @@ function actualKwhForDay(
 
     if (isCumulativeEnergy)
     {
-        //Cumulative energy: sum positive deltas where both samples
-        //fall inside the day. Counter resets drop the delta.
+        //Cumulative energy: sum positive deltas where BOTH samples fall inside the day. Gating on the previous sample too (not just the
+        //current) prevents the first sample of each day from crediting the entire delta-since-the-last-evening-sample to the new day,
+        //which on a sparse 1-sample-per-hour sensor could over-count up to an hour of the previous evening's production into today.
+        //Counter resets drop the delta.
         let kwh = 0;
         for (let i = 1; i < hist.times.length; i++)
         {
-            const tMs = hist.times[i].getTime();
+            const tMs     = hist.times[i].getTime();
+            const tPrevMs = hist.times[i - 1].getTime();
             if (tMs < startMs || tMs >= endMs) continue;
+            if (tPrevMs < startMs) continue;
             const dv = hist.values[i] - hist.values[i - 1];
             if (!isFinite(dv) || dv < 0) continue;
             kwh += dv * energyFactor;
@@ -171,8 +164,7 @@ function actualKwhForDay(
         return kwh;
     }
 
-    //Power sensor: trapezoidal integration over consecutive pairs
-    //that bracket the day's window.
+    //Power sensor: trapezoidal integration over consecutive pairs that bracket the day's window.
     let kwh = 0;
     for (let i = 1; i < hist.times.length; i++)
     {

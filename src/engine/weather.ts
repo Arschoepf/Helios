@@ -1,13 +1,9 @@
-//Open-Meteo weather data layer, multi-model fetch, in-browser
-//cache, and pure-function helpers around the weather signal.
+//Open-Meteo weather data layer, multi-model fetch, in-browser cache, and pure-function helpers around the weather signal.
 //
-//No DOM, no map, no engine state. Everything that talks to the
-//forecast API lives here so the engine can stay focused on
-//rendering.
+//No DOM, no map, no engine state. Everything that talks to the forecast API lives here so the engine can stay focused on rendering.
 
-//Hourly forecast at the home location. Numeric arrays are aligned
-//on `times`. `shortwave` uses -1 as a "no data" sentinel, 0 is a
-//legitimate night value, so we can't conflate them.
+//Hourly forecast at the home location. Numeric arrays are aligned on `times`. `shortwave` uses -1 as a "no data" sentinel, 0 is a legitimate night
+//value, so we can't conflate them.
 export interface SampleHourly
 {
     lat:         number;
@@ -19,9 +15,8 @@ export interface SampleHourly
     cloudHigh:   number[];
     weatherCode: number[];
     shortwave:   number[];
-    //2-metre air temperature in °C, hourly. Used by the PV thermal
-    //derating model to estimate cell temperature alongside the
-    //irradiance term. NaN-padded when a hour is missing.
+    //2-metre air temperature in °C, hourly. Used by the PV thermal derating model to estimate cell temperature alongside the irradiance term.
+    //NaN-padded when a hour is missing.
     temperature: number[];
     //10-metre wind speed in m/s, hourly. Same cadence as
     //temperature; feeds the convective cooling term in the cell
@@ -30,18 +25,22 @@ export interface SampleHourly
 }
 
 
-//Forecast window: 7 days back + 2 days forward (today included on
+//Forecast window: 30 days back + 2 days forward (today included on
 //the forecast side). The timeline itself only renders the last 2
 //past days (its slider stays tight and scrubbable), but the wider
-//past_days payload is needed by the forecast calibration: it
-//re-runs the model on past weather and compares to observed PV
-//history to derive a multiplier for upcoming predictions.
-const PAST_DAYS     = 7;
+//past_days payload is needed by both the forecast calibration
+//(re-runs the model on past weather to derive a multiplier) and
+//the shading-map trainer (replays the model + PV history to
+//populate per-(sun-position, cloud-cover) cells). 30 days lets
+//the trainer pre-fill the dome on first load, no behavioural
+//cost for the calibration which uses its own internal 5-day
+//inner window.
+const PAST_DAYS     = 30;
 //Open-Meteo counts today inside `forecast_days`, so FORECAST_DAYS=3
-//yields today + 2 future days. Combined with PAST_DAYS=2, the
-//timeline spans 5 days total, 2 past, today, 2 forecast, which is
-//the practical window: beyond +2 days the cloud-cover forecast loses
-//predictive value.
+//yields today + 2 future days. Combined with PAST_DAYS=30, the
+//cached series spans 33 days total, but the timeline only plots
+//the most recent 2 past + today + 2 forecast since beyond +2 days
+//the cloud-cover forecast loses predictive value.
 const FORECAST_DAYS = 3;
 
 //Exponential back-off on consecutive HTTP 429 (rate-limited)
@@ -140,8 +139,7 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
     {
         return ['bom_access_global', GLOBAL];
     }
-    //Anywhere else: ECMWF + GFS in parallel. Two independent global
-    //models give a meaningfully better median than a single one.
+    //Anywhere else: ECMWF + GFS in parallel. Two independent global models give a meaningfully better median than a single one.
     return [GLOBAL, 'gfs_seamless'];
 }
 
@@ -209,11 +207,9 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
         if (!raw) return null;
         const obj = JSON.parse(raw);
         if (Date.now() - obj.storedAt > CACHE_TTL_MS) return null;
-        //Even within the TTL, reject the cache if we crossed a local
-        //midnight since it was written. Open-Meteo anchors past_days /
-        //forecast_days to "today" in the location's timezone, so the
-        //forecast window slides at midnight and stale cache from
-        //yesterday would otherwise pin the timeline to the old day.
+        //Even within the TTL, reject the cache if we crossed a local midnight since it was written. Open-Meteo anchors past_days / forecast_days to
+        //"today" in the location's timezone, so the forecast window slides at midnight and stale cache from yesterday would otherwise pin the
+        //timeline to the old day.
         if (new Date(obj.storedAt).toDateString() !== new Date().toDateString())
         {
             return null;
@@ -269,8 +265,7 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
     }
     catch
     {
-        //Storage quota / permission errors are silently ignored ,
-        //the user just gets a fresh fetch next time.
+        //Storage quota / permission errors are silently ignored , the user just gets a fresh fetch next time.
     }
 }
 
@@ -289,11 +284,9 @@ const HOURLY_VARS = [
     'cloud_cover_mid',
     'cloud_cover_high',
     'weather_code',
-    //Drive the PV thermal-derating model in pv-thermal.ts. Cell
-    //temperature climbs above STC under sun and is cooled by wind,
-    //so the engine pulls both alongside cloud + irradiance. Providers
-    //that don't return them leave the multiplier at 1, and the
-    //prediction falls back to the legacy "cool cell" assumption.
+    //Drive the PV thermal-derating model in pv-thermal.ts. Cell temperature climbs above STC under sun and is cooled by wind, so the engine pulls
+    //both alongside cloud + irradiance. Providers that don't return them leave the multiplier at 1, and the prediction falls back to the legacy "cool
+    //cell" assumption.
     'temperature_2m',
     'wind_speed_10m',
 ];
@@ -436,9 +429,8 @@ export async function fetchHomePointData(
     }
     catch
     {
-        //AbortError on cancellation, network errors, JSON parse errors ,
-        //all swallowed silently. The caller treats null as "no data
-        //available" and renders the timeline ramps as empty.
+        //AbortError on cancellation, network errors, JSON parse errors , all swallowed silently. The caller treats null as "no data available" and
+        //renders the timeline ramps as empty.
         return null;
     }
 }

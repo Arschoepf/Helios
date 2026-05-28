@@ -7,6 +7,7 @@ import { projectExtrusionShadows } from './engine/shadows';
 import { resolveLidarSource } from './engine/lidar';
 import { RASTER_DEFAULTS } from './engine/lidar/pipeline';
 import { LidarViewLayer } from './engine/lidar-view-layer';
+import { computeLidarCellExposureRows } from './engine/pv-shading';
 import { startAutoRotateLoop } from './engine/auto-rotate';
 import { setDetailMode as _setDetailMode } from './engine/detail-mode';
 import
@@ -35,11 +36,7 @@ import
     LIDAR_PRECISION_PITCH_MULT,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
-    DEFAULT_LIDAR_VIEW_POINT_OPACITY,
-    DEFAULT_LIDAR_VIEW_WIREFRAME,
-    DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY,
-    defaultLidarViewPointColor,
-    defaultLidarViewWireframeColor,
+    DEFAULT_LIDAR_VIEW_OPACITY,
     LIDAR_VIEW_FULL_OPACITY_RADIUS_M,
     LIDAR_VIEW_DISPLAY_RADIUS_M
 } from './helios-config';
@@ -94,22 +91,14 @@ function bumpStat(key: keyof HeliosStats): void
 }
 
 
-//Module-level cap on the number of HeliosEngine instances alive at
-//the same time.
+//Module-level cap on the number of HeliosEngine instances alive at the same time.
 //
-//Home Assistant's dashboard editor creates a fresh preview card on
-//every config edit and does not reliably fire `disconnectedCallback`
-//on the previous preview, orphaned engines accumulate, each still
-//holding a WebGL context. Safari mobile caps active contexts at ~8
-//and starts recycling once the cap is hit, which causes FPS drift
-//and the iOS black-screen lockup.
+//Home Assistant's dashboard editor creates a fresh preview card on every config edit and does not reliably fire `disconnectedCallback` on the
+//previous preview, orphaned engines accumulate, each still holding a WebGL context. Safari mobile caps active contexts at ~8 and starts recycling
+//once the cap is hit, which causes FPS drift and the iOS black-screen lockup.
 //
-//We track every live engine in a module-level Set and force-clean
-//the oldest one whenever a new engine is about to push the count
-//over the limit. The user's
-//currently-visible card is always the most recent engine, so the
-//victim of force-cleanup is always an orphan preview the user
-//can't see.
+//We track every live engine in a module-level Set and force-clean the oldest one whenever a new engine is about to push the count over the limit. The
+//user's currently-visible card is always the most recent engine, so the victim of force-cleanup is always an orphan preview the user can't see.
 const MAX_LIVE_ENGINES = 2;
 const _liveEngines = new Set<HeliosEngine>();
 
@@ -160,8 +149,7 @@ export interface WeatherData
 
 type RGB = [number, number, number];
 
-//Mobile detection, used to scale grid density and pixel ratio so older
-//phones keep usable framerates. Computed once at module load.
+//Mobile detection, used to scale grid density and pixel ratio so older phones keep usable framerates. Computed once at module load.
 const IS_MOBILE = (() =>
 {
     if (typeof navigator === 'undefined')
@@ -224,20 +212,16 @@ function geoDistM(lat1: number, lon1: number, lat2: number, lon2: number): numbe
 
 //Build a closed-ring polygon approximating a geographic circle.
 //
-//MapLibre has no native "geographic circle" geometry, its `circle`
-//layer type renders pixel-sized markers, not metre-sized discs. So
-//for any "x metres around the home" overlay we generate a polygon
-//of N segments around the centre. 64 segments are visually
-//indistinguishable from a true circle at our zoom range and add
-//no measurable cost.
+//MapLibre has no native "geographic circle" geometry, its `circle` layer type renders pixel-sized markers, not metre-sized discs. So for any "x
+//metres around the home" overlay we generate a polygon of N segments around the centre. 64 segments are visually indistinguishable from a true circle
+//at our zoom range and add no measurable cost.
 //
 //Formulae use the equirectangular metres-per-degree approximation,
 //valid within the few-hundred-metres scale we work at:
 //  - 1° latitude  ≈ 111 320 m anywhere on Earth
 //  - 1° longitude ≈ 111 320 × cos(lat) m
 //
-//Returns a coordinate ring with the first point repeated at the end
-//so the polygon closes, required by GeoJSON's Polygon spec.
+//Returns a coordinate ring with the first point repeated at the end so the polygon closes, required by GeoJSON's Polygon spec.
 function buildCirclePolygon(
     centerLon:     number,
     centerLat:     number,
@@ -297,9 +281,8 @@ const CLOUD_CIRCLE_SEGMENTS     = 128;
 const PV_CHIP_OFFSET_PX         = 115;
 
 
-//Solar-arc parameters. The arc traces the sun's full 24h
-//trajectory across the local sky, projected onto the screen via
-//the same camera matrices MapLibre uses for its own 3D content.
+//Solar-arc parameters. The arc traces the sun's full 24h trajectory across the local sky, projected onto the screen via the same camera matrices
+//MapLibre uses for its own 3D content.
 //
 //Radius is in real-world metres, i.e. the radius of the imaginary
 //hemisphere on which we paint the sun's path, centred on the home.
@@ -372,9 +355,8 @@ export class HeliosEngine
     //Single source of truth for hourly forecast data. Populated by
     //fetchHomePointData(); null until the first successful fetch.
     private _homeHourlyData: SampleHourly | null = null;
-    //Markers placed at each pv-array entry whose lat/lon is set and
-    //differs from the home position. Tracked per-array index so a
-    //config change rebuilds the set without leaking stale markers.
+    //Markers placed at each pv-array entry whose lat/lon is set and differs from the home position. Tracked per-array index so a config change
+    //rebuilds the set without leaking stale markers.
     private _pvArrayMarkers: maplibregl.Marker[] = [];
     private _selectedTime:  Date | null       = null;
 
@@ -382,8 +364,16 @@ export class HeliosEngine
     //last call (≈ 2 min), setPaintProperty isn't free on mobile.
     private _lastAtmosphereAlt = -999;
 
-    //Consecutive HTTP 429 count, drives exponential back-off. Resets
-    //on any successful fetch.
+    //Last sun (altitude, azimuth) the LiDAR-View exposure compute ran against. The compute is expensive (50-150 ms per pass) so we gate it on
+    //the same 0.5° delta as the atmosphere refresh and additionally watch the azimuth, which moves faster than altitude near sunrise / sunset.
+    //Init to a sentinel that guarantees the first compute fires the moment LiDAR View turns on.
+    private _lastLidarExposureAlt: number = -999;
+    private _lastLidarExposureAz:  number = -999;
+    //Handle for the deferred exposure compute scheduled via requestIdleCallback (with a setTimeout fallback for environments where the API is
+    //missing, e.g. older Safari). Stored so we can cancel an in-flight schedule when the sun moves again before the previous one fired.
+    private _exposureIdleHandle:   number | undefined;
+
+    //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
     private _rateLimitStreak = 0;
 
     private _fetchAbortController?: AbortController;
@@ -391,6 +381,10 @@ export class HeliosEngine
     private _weatherTimer?:         number;
     private _skyTimer?:             number;
     private _resizeObserver?:       ResizeObserver;
+    //When true, the 60 s shadow-refresh timer skips its work and the card-level onMapTransform handler short-circuits the dome re-projection. Toggled
+    //by the card based on the IntersectionObserver: a Helios card scrolled out of viewport or sitting in a hidden HA tab pays nothing for the engine
+    //until it comes back.
+    private _paused = false;
 
     //_weatherTimer holds either a setInterval id (regular refresh) or
     //a setTimeout id (rate-limit back-off). The two ID spaces overlap
@@ -416,10 +410,8 @@ export class HeliosEngine
     //grows past linear-scan territory. Null means "no entity configured
     //or no usable samples yet", the model irradiance is used unchanged.
     //
-    //Each sample is in W/m². The engine treats them as ground-truth
-    //point readings of global shortwave irradiance at the home, in
-    //the same units as Open-Meteo's shortwave_radiation_instant, so
-    //they slot into the existing irradiance pipeline without rescaling.
+    //Each sample is in W/m². The engine treats them as ground-truth point readings of global shortwave irradiance at the home, in the same units as
+    //Open-Meteo's shortwave_radiation_instant, so they slot into the existing irradiance pipeline without rescaling.
     //
     //Lookup is nearest-neighbour with a strict time window (±30 min by
     //default): outside the window we fall through to the model rather
@@ -506,8 +498,7 @@ export class HeliosEngine
                 bestDelta = d;
                 bestIdx   = i;
             }
-            //Samples are sorted, once delta starts growing again we
-            //can short-circuit, the rest is monotonically worse.
+            //Samples are sorted, once delta starts growing again we can short-circuit, the rest is monotonically worse.
             else if (d > bestDelta)
             {
                 break;
@@ -561,6 +552,10 @@ export class HeliosEngine
     private _mapStyleLoadHandler?: () => void;
     private _mapLoadHandler?:      () => void;
     private _mapMoveHandler?:      () => void;
+    //Stored ref to the styleimagemissing handler so cleanup() can map.off() it. Anonymous lambda inlined in the original registration
+    //meant the closure (which pins `this`) survived past cleanup whenever MapLibre's own map.remove() didn't fan out to listener
+    //teardown, the iOS Safari path defensive-cleanup is wired around.
+    private _mapStyleImageMissingHandler?: (e: { id?: string }) => void;
     private _mapErrorHandler?:     (e: { error?: { message?: string } }) => void;
     private _webglLostHandler?:    (e: Event) => void;
     private _webglRestoredHandler?: () => void;
@@ -603,12 +598,10 @@ export class HeliosEngine
     private _lidarShadowDiagnostics:
         { cellsKept: number; cellsPerClumpCap: number; heightRangeM: [number, number] | null }
         | null = null;
-    //Fetch-key for the cached LiDAR shadow features. Lets us skip a
-    //refetch when the user nudges the camera but home/radius/precision
-    //haven't changed.
+    //Fetch-key for the cached LiDAR shadow features. Lets us skip a refetch when the user nudges the camera but home/radius/precision haven't
+    //changed.
     private _lidarShadowKey: string = '';
-    //In-flight LiDAR shadow fetch, aborted when home/radius/precision
-    //changes so a slow IGN response can't overwrite a fresher request.
+    //In-flight LiDAR shadow fetch, aborted when home/radius/precision changes so a slow IGN response can't overwrite a fresher request.
     private _lidarShadowAbort?: AbortController;
     //Raw height raster + geo kept around for the LiDAR View overlay
     //(projects every cell, threshold-bypassed, to screen).
@@ -651,13 +644,10 @@ export class HeliosEngine
     //the costly bit at lidar-precision: high, is coalesced).
     private _selectedTimeShadowTimer: number | null = null;
 
-    //Cache of the 96 per-day sun arc samples. Sun position + clear-sky
-    //irradiance depend only on the calendar day and the cloud cover,
-    //not on the live map matrix, so we recompute the heavy trig only
-    //when those inputs change. On every transform / rotation tick the
-    //cached lon/lat/altitudeM tuples are re-projected through the
-    //current map matrix and that's it. Invalidated when day rolls or
-    //the live cloud cover shifts by more than a whole percent.
+    //Cache of the 96 per-day sun arc samples. Sun position + clear-sky irradiance depend only on the calendar day and the cloud cover, not on the
+    //live map matrix, so we recompute the heavy trig only when those inputs change. On every transform / rotation tick the cached lon/lat/altitudeM
+    //tuples are re-projected through the current map matrix and that's it. Invalidated when day rolls or the live cloud cover shifts by more than a
+    //whole percent.
     private _arcInputsCache?: {
         dayStartMs: number;
         cloudPctInt: number;
@@ -700,10 +690,8 @@ export class HeliosEngine
 
         bumpStat('enginesCreated');
 
-        //Evict the oldest live engine if we're at the cap. Set
-        //iteration follows insertion order so the first value is the
-        //longest-lived, typically an orphaned editor-preview engine
-        //the user can no longer see.
+        //Evict the oldest live engine if we're at the cap. Set iteration follows insertion order so the first value is the longest-lived, typically
+        //an orphaned editor-preview engine the user can no longer see.
         while (_liveEngines.size >= MAX_LIVE_ENGINES)
         {
             const oldest = _liveEngines.values().next().value;
@@ -720,6 +708,22 @@ export class HeliosEngine
         this._fetchLat = this.homeLat;
         this._fetchLon = this.homeLon;
 
+        //Create the map immediately, regardless of container
+        //dimensions at this exact tick. Several previous attempts
+        //to defer init until ResizeObserver / IntersectionObserver
+        //reported a "ready" container made things worse: in some
+        //HA dashboard layouts (notably Masonry), neither observer
+        //ever fires with conditions met against the container we
+        //received in the constructor, so _initMapInstance was
+        //never called and the map stayed null forever. The
+        //post-load triple-resize + the 5 s tile-fetch watchdog
+        //inside _initMapInstance now carry the safety net for any
+        //0 x 0-at-init edge case.
+        this._initMapInstance(container, haCoords);
+    }
+
+    private _initMapInstance(container: HTMLElement, haCoords: [number, number]): void
+    {
         //Pixel ratio caps. At pitch 55° + continuous auto-rotation,
         //each rendered pixel is sampled multiple times (extrusion,
         //basemap, shadow raster), so the desktop cap sits at 2 (not
@@ -745,12 +749,9 @@ export class HeliosEngine
             zoom:            18,
             pitch:           55,
             bearing:         this.homeLat >= 0 ? 180 : 0,
-            //Zoom is locked to the resting pose. The 3D camera +
-            //LiDAR overlay are tuned for this single altitude, and
-            //letting the user wander off-zoom only opened the door
-            //to "why does my card look different from the docs"
-            //screenshots. detail-mode separately raises maxZoom
-            //for its dive animation and resets it on exit.
+            //Zoom is locked to the resting pose. The 3D camera + LiDAR overlay are tuned for this single altitude, and letting the user wander
+            //off-zoom only opened the door to "why does my card look different from the docs" screenshots. detail-mode separately raises maxZoom for
+            //its dive animation and resets it on exit.
             minZoom:         18,
             maxZoom:         18,
             dragPan:         false,
@@ -776,8 +777,7 @@ export class HeliosEngine
             attributionControl: { compact: true }
         });
 
-        //ResizeObserver fires aggressively on iOS during orientation
-        //changes. We coalesce bursts into a single resize at the end.
+        //ResizeObserver fires aggressively on iOS during orientation changes. We coalesce bursts into a single resize at the end.
         this._resizeObserver = new ResizeObserver(() =>
         {
             window.clearTimeout(this._resizeDebounceTimer);
@@ -800,13 +800,9 @@ export class HeliosEngine
         try { (window as unknown as { __heliosMap?: MapLibreMap }).__heliosMap = this.map; }
         catch (_) {}
 
-        //Lock the pinch-rotate pivot to the canvas centre. By default,
-        //TwoFingersTouchZoomRotateHandler rotates around the centroid
-        //of the two fingers, visually, the home orbits around the
-        //pinch point during the gesture, very obvious on small cards.
-        //`around: 'center'` forces the pivot to be the screen centre,
-        //which is exactly where the home projects, so the home stays
-        //pinned no matter where the fingers land.
+        //Lock the pinch-rotate pivot to the canvas centre. By default, TwoFingersTouchZoomRotateHandler rotates around the centroid of the two
+        //fingers, visually, the home orbits around the pinch point during the gesture, very obvious on small cards. `around: 'center'` forces the
+        //pivot to be the screen centre, which is exactly where the home projects, so the home stays pinned no matter where the fingers land.
         this.map.touchZoomRotate.enable({ around: 'center' });
 
         //Hard pin the map centre on every user-driven transform: the
@@ -834,6 +830,41 @@ export class HeliosEngine
         this._mapLoadHandler = () =>
         {
             this.map?.resize();
+            //Belt-and-suspenders against the Masonry layout: even though we delayed init until the container had real dimensions, the HA dashboard
+            //may still settle one or two frames AFTER load fires. Force another resize on the next animation frame and on a short timeout so any
+            //post-layout geometry change reaches MapLibre's tile manager and re-triggers tile fetches.
+            requestAnimationFrame(() => this.map?.resize());
+            window.setTimeout(() => this.map?.resize(), 400);
+            //Clamp the camera to a bounding box scaled to the display radius around the home. No pan + no zoom in Helios so the camera never moves
+            //anyway, but the bounds tell MapLibre's internal tile management not to consider areas outside the disc as "reachable", which reduces
+            //speculative tile fetches at the edges of the pitched viewport during rotation.
+            this._applyMapBounds();
+            //Watchdog: 5 s after load, if MapLibre still has no
+            //tile loaded for any of its sources (most likely cause:
+            //the basemap source decided the viewport was empty at
+            //fetch-decision time, which can happen if the container
+            //was hidden/zero-sized at the wrong micro-instant), we
+            //destroy + re-create the style. setStyle(currentUrl)
+            //tears down custom layers, so the engine's setup logic
+            //needs to re-run; cleanest is to fire a 'style.load'
+            //event handler that re-registers them. Simpler for
+            //this v1: just call setStyle which forces a full
+            //re-fetch, the custom layers re-register inside the
+            //existing style.load handler the engine already wires.
+            window.setTimeout(() =>
+            {
+                if (!this.map) return;
+                if (this.map.areTilesLoaded()) return;
+                if (!this.map.isStyleLoaded())  return;
+                //No tile arrived in 5 s despite a fully-loaded style. Force a soft reload of the style URL, which makes MapLibre re-walk every source
+                //and re-issue tile fetches for the current viewport.
+                try
+                {
+                    const styleUrl = this._resolveMapStyle().url;
+                    this.map.setStyle(styleUrl);
+                }
+                catch (_) { /* ignore, no recovery possible */ }
+            }, 5000);
             startAutoRotateLoop(this);
         };
         this.map.on('load', this._mapLoadHandler);
@@ -846,7 +877,7 @@ export class HeliosEngine
         //requested id so the layer falls through to its base color
         //without spamming the console. Cheap, idempotent because
         //hasImage() guards re-registration.
-        this.map.on('styleimagemissing', (e: { id?: string }) =>
+        this._mapStyleImageMissingHandler = (e: { id?: string }) =>
         {
             if (!this.map || !e?.id || this.map.hasImage(e.id)) return;
             try
@@ -858,13 +889,11 @@ export class HeliosEngine
                 });
             }
             catch (_) {}
-        });
+        };
+        this.map.on('styleimagemissing', this._mapStyleImageMissingHandler);
 
-        //Map transform broadcaster, relays move events to the card so
-        //it can keep HTML overlays aligned with the underlying canvas.
-        //We listen on `move` rather than `moveend` so the overlays
-        //track the camera frame-by-frame during programmatic
-        //animations rather than snapping at the end.
+        //Map transform broadcaster, relays move events to the card so it can keep HTML overlays aligned with the underlying canvas. We listen on
+        //`move` rather than `moveend` so the overlays track the camera frame-by-frame during programmatic animations rather than snapping at the end.
         this._mapMoveHandler = () => this.onMapTransform?.();
         this.map.on('move', this._mapMoveHandler);
 
@@ -914,9 +943,8 @@ export class HeliosEngine
             //Single-pointer rotation; ignore additional touches so the
             //two-finger pinch-rotate gesture stays with MapLibre.
             if (activeId !== null) return;
-            //Swallow gestures during the post-exit cooldown so the
-            //click that dismissed the dashboard panel can't bleed
-            //into a fresh drag-rotate on the canvas behind.
+            //Swallow gestures during the post-exit cooldown so the click that dismissed the dashboard panel can't bleed into a fresh drag-rotate on
+            //the canvas behind.
             if (this.isUserGestureSuppressed()) return;
             dragRotating = true;
             activeId     = e.pointerId;
@@ -1019,19 +1047,14 @@ export class HeliosEngine
     //             card viewport, Fiord's #45516E reads as "evening"
     //             without losing the basemap content underneath.
     //
-    //We resolve to a single URL because OpenFreeMap has no separate
-    //light / dark pair per style, the dark style is its own thing
-    //and replaces both Liberty and Positron when the card chrome is
-    //dark. The user-side mapping is therefore:
+    //We resolve to a single URL because OpenFreeMap has no separate light / dark pair per style, the dark style is its own thing and replaces both
+    //Liberty and Positron when the card chrome is dark. The user-side mapping is therefore:
     //
-    //  map-style: streets  + card-theme: light → liberty
-    //  map-style: streets  + card-theme: dark  → fiord
-    //  map-style: minimal  + card-theme: light → positron
-    //  map-style: minimal  + card-theme: dark  → fiord
+    // map-style: streets  + card-theme: light → liberty map-style: streets  + card-theme: dark  → fiord map-style: minimal  + card-theme: light →
+    // positron map-style: minimal  + card-theme: dark  → fiord
     //
-    //All styles use the same vector tile source backing the buildings
-    //fetch in engine/buildings.ts, so a style change keeps the home
-    //and surroundings GeoJSON cache intact.
+    //All styles use the same vector tile source backing the buildings fetch in engine/buildings.ts, so a style change keeps the home and surroundings
+    //GeoJSON cache intact.
     private _resolveMapStyle(): { url: string; styleName: string }
     {
         const raw    = String(this.cfg['map-style'] ?? 'streets').toLowerCase();
@@ -1064,9 +1087,8 @@ export class HeliosEngine
             : Math.min(Math.max(dpr, 1.5), 2);
     }
 
-    //Reads the user-configured shadow precision, normalises any
-    //off-spec value to the default and returns one of the canonical
-    //LidarPrecisionLevel members.
+    //Reads the user-configured shadow precision, normalises any off-spec value to the default and returns one of the canonical LidarPrecisionLevel
+    //members.
     private _lidarPrecisionLevel(): LidarPrecisionLevel
     {
         const v = String(this.cfg['lidar-precision'] ?? DEFAULT_LIDAR_PRECISION).toLowerCase();
@@ -1123,8 +1145,7 @@ export class HeliosEngine
         return best;
     }
 
-    //Resolve the weather variables at a given time as seen from the
-    //home location.
+    //Resolve the weather variables at a given time as seen from the home location.
     //
     //Single source: _homeHourlyData, populated by fetchHomePointData.
     //If null (initial state, fetch failed, or fetch in flight) we
@@ -1139,9 +1160,8 @@ export class HeliosEngine
         cloudMid:       number;
         cloudHigh:      number;
         shortwave:      number;
-        //2-metre air temperature in °C. NaN means the model didn't
-        //return one at this hour, callers fall back to "no thermal
-        //derating" rather than guessing.
+        //2-metre air temperature in °C. NaN means the model didn't return one at this hour, callers fall back to "no thermal derating" rather than
+        //guessing.
         temperatureC:   number;
         //10-metre wind speed in m/s. NaN means missing; same
         //fallback semantics as temperature.
@@ -1359,7 +1379,15 @@ export class HeliosEngine
         //Sky/atmosphere refresh, every 60s. _refreshShadowsAndAtmosphere
         //internally short-circuits when the sun has not moved enough to
         //cause a visible change, so the cost on mobile is negligible.
-        this._skyTimer = window.setInterval(() => this._refreshShadowsAndAtmosphere(), 60_000);
+        //Outer skip when paused (card invisible) so we don't even
+        //enter the signature check + cache lookup until it's visible
+        //again; saves the heaviest path (PNG re-encode on signature
+        //miss) entirely while scrolled away.
+        this._skyTimer = window.setInterval(() =>
+        {
+            if (this._paused) return;
+            this._refreshShadowsAndAtmosphere();
+        }, 60_000);
 
         if (this._homeHourlyData)
         {
@@ -1459,9 +1487,7 @@ export class HeliosEngine
         //shares the same ground-elevation reference and the rendered
         //shape stays a true circle regardless of terrain.
         //
-        //Sweep any leftover map sources / layers that might still be
-        //in the style after a hot-reload, so the SVG-only pipeline
-        //runs clean.
+        //Sweep any leftover map sources / layers that might still be in the style after a hot-reload, so the SVG-only pipeline runs clean.
         for (const lid of ['helios-cloud-disc', 'helios-cloud-disc-ring', 'helios-cloud-ring'])
         {
             if (this.map.getLayer(lid)) this.map.removeLayer(lid);
@@ -1472,11 +1498,10 @@ export class HeliosEngine
         }
     }
 
-    //Update the disc + ring geometry to reflect the given cloud cover
-    //percentage. Called from _renderForCurrentSelection so it ticks
-    //both with live time progression and with manual scrubbing.
+    //Update the disc + ring geometry to reflect the given cloud cover percentage. Called from _renderForCurrentSelection so it ticks both with live
+    //time progression and with manual scrubbing.
     //
-    //  cloudPct ∈ [0, 100]   , coverage at the home location now
+    // cloudPct ∈ [0, 100]   , coverage at the home location now
     //
     //The ring (100 % reference) has fixed radius CLOUD_DISC_RADIUS_M.
     //The disc scales linearly: radius = CLOUD_DISC_RADIUS_M * pct/100.
@@ -1558,8 +1583,7 @@ export class HeliosEngine
         const rHigh = R;
         const ringR = CLOUD_DISC_RADIUS_M;
 
-        //Geographic circle vertices, not closed: the card emits SVG
-        //polygons which carry implicit closure.
+        //Geographic circle vertices, not closed: the card emits SVG polygons which carry implicit closure.
         const lowGeo  = buildCirclePolygon(this.homeLon, this.homeLat,
                                            rLow,  CLOUD_CIRCLE_SEGMENTS);
         const midGeo  = buildCirclePolygon(this.homeLon, this.homeLat,
@@ -1569,10 +1593,8 @@ export class HeliosEngine
         const ringGeo = buildCirclePolygon(this.homeLon, this.homeLat,
                                            ringR, CLOUD_CIRCLE_SEGMENTS);
 
-        //anchorAtHome: every vertex uses the home's queryTerrainElevation
-        //rather than its own. That keeps the projected polygon a true
-        //circle even when the terrain bends between the home and the
-        //disc's edge.
+        //anchorAtHome: every vertex uses the home's queryTerrainElevation rather than its own. That keeps the projected polygon a true circle even
+        //when the terrain bends between the home and the disc's edge.
         const projectGeo = (geo: Array<[number, number]>): Array<{ x: number; y: number }> =>
         {
             const out: Array<{ x: number; y: number }> = [];
@@ -1613,10 +1635,8 @@ export class HeliosEngine
     //for concave footprints (L, U) where a convex hull would cut
     //a too-large hole and expose terrain at the inner corners.
     //
-    //Vertex elevation is queried per-vertex against the live
-    //terrain mesh, matching what MapLibre's fill-extrusion shader
-    //does internally so the silhouette tracks the rendered
-    //extrusion exactly.
+    //Vertex elevation is queried per-vertex against the live terrain mesh, matching what MapLibre's fill-extrusion shader does internally so the
+    //silhouette tracks the rendered extrusion exactly.
     //
     //Returns an empty array until the buildings GeoJSON has landed.
     public projectHomeFootprints(): Array<{
@@ -1658,9 +1678,7 @@ export class HeliosEngine
                     const lon = p[0], lat = p[1];
                     const pBase = this._projectScenePoint(lon, lat, baseH);
                     const pTop  = this._projectScenePoint(lon, lat, topH);
-                    //Drop the whole vertex pair if either point is
-                    //behind the camera, otherwise the side-wall quad
-                    //would shear through the screen.
+                    //Drop the whole vertex pair if either point is behind the camera, otherwise the side-wall quad would shear through the screen.
                     if (!pBase || !pTop) continue;
                     baseRing.push({ x: pBase.x, y: pBase.y });
                     topRing .push({ x: pTop.x,  y: pTop.y  });
@@ -1674,11 +1692,9 @@ export class HeliosEngine
         return out;
     }
 
-    //LiDAR View active flag. Pushed in by the card when the user
-    //toggles the View overlay on, so the LiDAR raster fetch path runs
-    //even when cast shadows are disabled in the config. Without this,
-    //a user with shadows off would click the button and see an empty
-    //canvas because the raster never gets fetched.
+    //LiDAR View active flag. Pushed in by the card when the user toggles the View overlay on, so the LiDAR raster fetch path runs even when cast
+    //shadows are disabled in the config. Without this, a user with shadows off would click the button and see an empty canvas because the raster
+    //never gets fetched.
     private _lidarViewActive: boolean = false;
     public setLidarViewActive(on: boolean): void
     {
@@ -1687,7 +1703,148 @@ export class HeliosEngine
         //Going from off→on, kick the fetch path so the raster lands.
         //Going from on→off, no-op: the raster stays cached and the
         //next shadow refresh (if shadows come back on) reuses it.
-        if (on) this._ensureLidarFetched();
+        if (on)
+        {
+            this._ensureLidarFetched();
+            //Force the next exposure compute to fire on the first sun refresh after the toggle, no matter how stale the cached last-known
+            //sun is. The atmosphere loop runs on a 30 s tick so the user sees the lit / shadowed cells flip in within seconds of opening
+            //LiDAR View.
+            this._lastLidarExposureAlt = -999;
+            this._lastLidarExposureAz  = -999;
+            this._scheduleLidarExposureRecompute();
+        }
+        else
+        {
+            //Clear any pending compute and reset the layer's exposure override so a future re-enable starts from the constant-lit fallback
+            //rather than ghosting the old shadows for a frame.
+            if (this._exposureIdleHandle !== undefined)
+            {
+                this._cancelIdleCb(this._exposureIdleHandle);
+                this._exposureIdleHandle = undefined;
+            }
+            if (this._exposureChunkRaf !== undefined)
+            {
+                cancelAnimationFrame(this._exposureChunkRaf);
+                this._exposureChunkRaf = undefined;
+            }
+            this._lidarViewLayer?.setExposure(null);
+        }
+    }
+
+
+    //Cross-browser requestIdleCallback / cancelIdleCallback. Safari only shipped them in 2024, fall back to setTimeout(0) where the API is
+    //missing so the compute still runs (it just doesn't get the deadline-friendly scheduling perk).
+    private _requestIdleCb(cb: () => void): number
+    {
+        const w = window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
+        if (typeof w.requestIdleCallback === 'function')
+        {
+            return w.requestIdleCallback(cb, { timeout: 2000 });
+        }
+        return window.setTimeout(cb, 0);
+    }
+    private _cancelIdleCb(handle: number): void
+    {
+        const w = window as unknown as { cancelIdleCallback?: (h: number) => void };
+        if (typeof w.cancelIdleCallback === 'function')
+        {
+            w.cancelIdleCallback(handle);
+            return;
+        }
+        window.clearTimeout(handle);
+    }
+
+
+    //Schedule the LiDAR-View exposure compute. Kick-off via idle callback so the chunk loop never lands on a user-interactive frame; the
+    //chunks themselves run inside requestAnimationFrame so each frame yields back to the browser between row-bands. Total wall time is the
+    //same as the single-shot compute but the main thread stays responsive (chip fade-out plays smoothly, scrub keeps tracking the pointer).
+    //No-op when LiDAR View is off, the raster isn't loaded yet, the layer instance isn't ready, or a compute is already in flight (either
+    //queued in idle or mid-chunk via the rAF token).
+    private _exposureChunkRaf: number | undefined;
+
+    private _scheduleLidarExposureRecompute(): void
+    {
+        if (!this._lidarViewActive) return;
+        if (!this._lidarRaster || !this._lidarViewLayer) return;
+        if (this._exposureIdleHandle !== undefined) return;
+        if (this._exposureChunkRaf  !== undefined) return;
+        this._exposureIdleHandle = this._requestIdleCb(() =>
+        {
+            this._exposureIdleHandle = undefined;
+            if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer) return;
+            const sun = getSunPosition(this._selectedTime ?? new Date(), this.homeLat, this.homeLon);
+            if (!sun) return;
+            const altDelta = Math.abs(sun.altitude - this._lastLidarExposureAlt);
+            const azDelta  = Math.abs(sun.azimuth  - this._lastLidarExposureAz);
+            if (altDelta < 0.5 && azDelta < 0.5) return;
+            const r = this._lidarRaster;
+            //NdsmRaster shape match: heights + rasterSize + bbox + optional terrain. The engine's _lidarRaster carries the same fields.
+            const rasterRef = {
+                heights:    r.heights,
+                terrain:    r.terrain,
+                rasterSize: r.rasterSize,
+                minLat:     r.minLat,
+                maxLat:     r.maxLat,
+                minLon:     r.minLon,
+                maxLon:     r.maxLon,
+            };
+            const out = new Uint8Array(rasterRef.rasterSize * rasterRef.rasterSize);
+            //Pin the raster reference identity captured by the idle callback. If a provider / precision swap fires mid-sweep,
+            //this._lidarRaster moves on while rasterRef stays pointing at the old data, so the tick can bail before posting an
+            //exposure sized to the dead raster (which would otherwise paint nonsense for one frame).
+            const capturedRaster = r;
+            //8-row chunks fit comfortably under 16 ms even at high precision (rasterSize ~512: 8 × 512 × ~100 raymarch steps × ~12
+            //ops per step ≈ 5 M ops per chunk, 4-8 ms on a hot core), so the browser keeps hitting 60 fps during the sweep. 32-row
+            //chunks were overruning the frame budget at high precision and produced the visible 3-4 fps stutter on activation. rAF
+            //overhead per tick is negligible (~0.1 ms), so the 4x extra ticks cost nothing relative to the gain.
+            const CHUNK_ROWS = 8;
+            let j = 0;
+            const tick = (): void =>
+            {
+                if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer)
+                {
+                    this._exposureChunkRaf = undefined;
+                    return;
+                }
+                if (this._lidarRaster !== capturedRaster)
+                {
+                    //Raster swapped under us; drop this in-flight sweep and let the next schedule pick up the new one.
+                    this._exposureChunkRaf = undefined;
+                    this._scheduleLidarExposureRecompute();
+                    return;
+                }
+                //Stale-sun bail: when the user scrubs the timeline aggressively while a sweep is in flight, the sun captured in this
+                //closure can drift far from the current time-cursor. Re-sample the sun on the latest selectedTime each tick and, if
+                //it diverged past the 0.5° gate, abort the chunk loop so the next schedule produces a fresh exposure aligned with
+                //the cursor instead of locking the view on a stale frame for the rest of the sweep.
+                const currentSun = getSunPosition(this._selectedTime ?? new Date(), this.homeLat, this.homeLon);
+                if (currentSun
+                 && (Math.abs(currentSun.altitude - sun.altitude) >= 0.5
+                  || Math.abs(currentSun.azimuth  - sun.azimuth)  >= 0.5))
+                {
+                    this._exposureChunkRaf = undefined;
+                    //Force a fresh recompute on the new sun, the gate would otherwise short-circuit because _lastLidarExposureAlt/Az
+                    //haven't been advanced yet (this aborted sweep never landed).
+                    this._lastLidarExposureAlt = -999;
+                    this._lastLidarExposureAz  = -999;
+                    this._scheduleLidarExposureRecompute();
+                    return;
+                }
+                const jEnd = Math.min(rasterRef.rasterSize, j + CHUNK_ROWS);
+                computeLidarCellExposureRows(rasterRef, sun.altitude, sun.azimuth, j, jEnd, out);
+                j = jEnd;
+                if (j < rasterRef.rasterSize)
+                {
+                    this._exposureChunkRaf = requestAnimationFrame(tick);
+                    return;
+                }
+                this._exposureChunkRaf = undefined;
+                this._lidarViewLayer.setExposure(out);
+                this._lastLidarExposureAlt = sun.altitude;
+                this._lastLidarExposureAz  = sun.azimuth;
+            };
+            this._exposureChunkRaf = requestAnimationFrame(tick);
+        });
     }
 
     //Wire (or rewire after a style reload) the WebGL custom layer that
@@ -1722,6 +1879,7 @@ export class HeliosEngine
             }
             this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
             this._pushLidarViewConfig();
+            this._pushLidarViewFadeRange();
 
             const layer  = this._lidarViewLayer;
             const raster = this._lidarRaster;
@@ -1748,18 +1906,46 @@ export class HeliosEngine
         }
     }
 
-    //Read all LiDAR View visual knobs off the current config and push
-    //them to the layer. Called on init and whenever updateConfig sees a
-    //relevant key change.
+    //Runtime opacity for the LiDAR View overlay, [0..1]. Driven by the in-card bottom slider, not by config; resets to DEFAULT each engine
+    //instance. Only the point size is still config-controlled; colours are hard-locked to white in the layer.
+    private _lidarViewOpacity: number = DEFAULT_LIDAR_VIEW_OPACITY;
+
+    //Push the current LiDAR View tuning to the layer. Called on init,
+    //on updateConfig when point-size changes, and on setLidarViewOpacity
+    //when the slider moves. The slider value is halved before being
+    //handed to the layer (slider 100 % → layer 50 % alpha): the live
+    //irradiance fill at full alpha carpets the basemap and swallows
+    //the building topology underneath, so a 0.5 scale ceiling keeps
+    //the layer readable even when the user dials the slider all the
+    //way up.
     private _pushLidarViewConfig(): void
+    {
+        if (!this._lidarViewLayer) return;
+        this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
+        this._lidarViewLayer.setOpacity(this._lidarViewOpacity * 0.5);
+    }
+
+    //Fade range is fixed (LIDAR_VIEW_FULL_OPACITY_RADIUS_M / LIDAR_VIEW_DISPLAY_RADIUS_M, both compile-time constants), no reason to
+    //push it on every slider tick. Called once from _initLidarViewLayer and that's it.
+    private _pushLidarViewFadeRange(): void
     {
         if (!this._lidarViewLayer) return;
         const [fullR, fadeR] = this._lidarViewFadeRange();
         this._lidarViewLayer.setFadeRange(fullR, fadeR);
-        this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
-        this._lidarViewLayer.setColor(this._lidarViewColorRgba());
-        this._lidarViewLayer.setWireframeEnabled(this._lidarViewWireframeEnabled());
-        this._lidarViewLayer.setWireframeColor(this._lidarViewWireframeRgba());
+    }
+
+    public setLidarViewOpacity(opacity: number): void
+    {
+        const clamped = Math.max(0, Math.min(1, opacity));
+        if (clamped === this._lidarViewOpacity) return;
+        this._lidarViewOpacity = clamped;
+        //Direct push to skip even the _pushLidarViewConfig overhead, no other tunable changes during a slider drag.
+        this._lidarViewLayer?.setOpacity(clamped * 0.5);
+    }
+
+    public getLidarViewOpacity(): number
+    {
+        return this._lidarViewOpacity;
     }
 
     //Fade alpha multiplier in [0..1]. Driven by the card's enter/exit
@@ -1770,13 +1956,9 @@ export class HeliosEngine
         this._lidarViewLayer?.setAlphaFade(alpha);
     }
 
-    //Distance-based opacity fall-off bounds for the View. Both
-    //thresholds are fixed: full opacity inside
-    //LIDAR_VIEW_FULL_OPACITY_RADIUS_M, smooth fade out at
-    //LIDAR_VIEW_DISPLAY_RADIUS_M. Decoupled from building-radius on
-    //purpose, so the LiDAR overlay is always painted at a tight,
-    //consistent disc no matter how far the underlying raster
-    //actually extends.
+    //Distance-based opacity fall-off bounds for the View. Both thresholds are fixed: full opacity inside LIDAR_VIEW_FULL_OPACITY_RADIUS_M, smooth
+    //fade out at LIDAR_VIEW_DISPLAY_RADIUS_M. Decoupled from building-radius on purpose, so the LiDAR overlay is always painted at a tight,
+    //consistent disc no matter how far the underlying raster actually extends.
     private _lidarViewFadeRange(): [fullMeters: number, fadeMeters: number]
     {
         return [LIDAR_VIEW_FULL_OPACITY_RADIUS_M, LIDAR_VIEW_DISPLAY_RADIUS_M];
@@ -1788,64 +1970,6 @@ export class HeliosEngine
         const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
         if (!isFinite(n) || n <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
         return Math.min(6, n);
-    }
-
-    private _lidarViewColorRgba(): [number, number, number, number]
-    {
-        const rawColor = this.cfg['lidar-view-point-color'];
-        const hex = typeof rawColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim())
-            ? rawColor.trim()
-            : defaultLidarViewPointColor(this.cfg['card-theme']);
-        const rawOpa = this.cfg['lidar-view-point-opacity'];
-        const opa = typeof rawOpa === 'number' ? rawOpa : parseFloat(String(rawOpa ?? ''));
-        const alpha = isFinite(opa)
-            ? Math.max(0, Math.min(1, opa))
-            : DEFAULT_LIDAR_VIEW_POINT_OPACITY;
-        const rgb = this._hexToRgb01(hex);
-        return [rgb[0], rgb[1], rgb[2], alpha];
-    }
-
-    private _lidarViewWireframeEnabled(): boolean
-    {
-        const raw = this.cfg['lidar-view-wireframe'];
-        if (typeof raw === 'boolean') return raw;
-        if (typeof raw === 'string')
-        {
-            const s = raw.trim().toLowerCase();
-            if (s === 'true'  || s === '1' || s === 'on'  || s === 'yes') return true;
-            if (s === 'false' || s === '0' || s === 'off' || s === 'no')  return false;
-        }
-        return DEFAULT_LIDAR_VIEW_WIREFRAME;
-    }
-
-    private _lidarViewWireframeRgba(): [number, number, number, number]
-    {
-        const rawColor = this.cfg['lidar-view-wireframe-color'];
-        const hex = typeof rawColor === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim())
-            ? rawColor.trim()
-            : defaultLidarViewWireframeColor(this.cfg['card-theme']);
-        const rawOpa = this.cfg['lidar-view-wireframe-opacity'];
-        const opa = typeof rawOpa === 'number' ? rawOpa : parseFloat(String(rawOpa ?? ''));
-        const alpha = isFinite(opa)
-            ? Math.max(0, Math.min(1, opa))
-            : DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY;
-        const rgb = this._hexToRgb01(hex);
-        return [rgb[0], rgb[1], rgb[2], alpha];
-    }
-
-    private _hexToRgb01(hex: string): [number, number, number]
-    {
-        let h = hex.replace('#', '');
-        if (h.length === 3) h = h.split('').map(c => c + c).join('');
-        if (h.length === 8) h = h.slice(0, 6);
-        const r = parseInt(h.slice(0, 2), 16) / 255;
-        const g = parseInt(h.slice(2, 4), 16) / 255;
-        const b = parseInt(h.slice(4, 6), 16) / 255;
-        return [
-            isFinite(r) ? r : 1,
-            isFinite(g) ? g : 1,
-            isFinite(b) ? b : 1
-        ];
     }
 
     //LiDAR View support, exposed to the card.
@@ -1912,6 +2036,34 @@ export class HeliosEngine
         return Math.min(500, Math.max(20, v));
     }
 
+    //Clamp MapLibre's camera bounds to a tight bbox around the home,
+    //sized at 2x the display radius (small margin for the pitched
+    //viewport corners). With pan + zoom disabled the camera never
+    //moves anyway, but the bounds tell MapLibre the area outside
+    //the disc is unreachable, which dampens speculative tile fetches
+    //at the horizon of the pitched view during rotation. Re-called
+    //after a config edit (building-radius change) re-runs the engine
+    //init path so the bounds always match the live display radius.
+    private _applyMapBounds(): void
+    {
+        if (!this.map) return;
+        const radiusM   = this._buildingRadiusMeters();
+        const halfBbox  = radiusM * 2;   //2 x radius keeps the pitched horizon inside
+        const D         = Math.PI / 180;
+        const mPerDegLat = 111_320;
+        const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
+        const dLat = halfBbox / mPerDegLat;
+        const dLon = halfBbox / mPerDegLon;
+        try
+        {
+            this.map.setMaxBounds([
+                [this.homeLon - dLon, this.homeLat - dLat],
+                [this.homeLon + dLon, this.homeLat + dLat],
+            ]);
+        }
+        catch (_) { /* style not ready yet, retried via _mapLoadHandler */ }
+    }
+
     //Resolves the configured surroundings opacity (0..1). Falls back
     //to DEFAULT_BUILDING_OPACITY for missing or invalid input.
     private _buildingOpacity(): number
@@ -1939,8 +2091,7 @@ export class HeliosEngine
         return Math.min(100, v);
     }
 
-    //Resolves the configured building base colour. Falls back to the
-    //neutral grey if missing or malformed.
+    //Resolves the configured building base colour. Falls back to the neutral grey if missing or malformed.
     private _buildingColor(): string
     {
         const v = String(this.cfg['building-color'] ?? '').trim();
@@ -1981,8 +2132,7 @@ export class HeliosEngine
             if (this.map.getLayer(lid)) this.map.removeLayer(lid);
         }
 
-        //Suppress every native building layer the active style ships
-        //so they don't Z-fight against helios-buildings-* extrusions.
+        //Suppress every native building layer the active style ships so they don't Z-fight against helios-buildings-* extrusions.
         //
         //MapLibre 5 styles can be assembled from style "imports". For
         //imported layers, `setLayoutProperty('visibility','none')` is
@@ -2017,9 +2167,7 @@ export class HeliosEngine
             }
         }
 
-        //Strategy A, toggle the MapTiler v4 schema flags off, on
-        //every import. Each flag is best-effort: the wrong key just
-        //throws and is ignored.
+        //Strategy A, toggle the MapTiler v4 schema flags off, on every import. Each flag is best-effort: the wrong key just throws and is ignored.
         const buildingConfigKeys = [
             '3dBuildings',    'buildings3d',     'show3dBuildings',
             'show3DBuildings','building3D',      '2dBuildings',
@@ -2050,19 +2198,15 @@ export class HeliosEngine
         {
             for (const cand of idCandidates(layerId))
             {
-                //Skip candidates that don't correspond to a real layer
-                //in the merged style. Calling set* on a missing layer
-                //makes MapLibre fire an "error" event the engine then
-                //echoes, gating at the source removes both the noise
-                //and the wasted dispatch.
+                //Skip candidates that don't correspond to a real layer in the merged style. Calling set* on a missing layer makes MapLibre fire an
+                //"error" event the engine then echoes, gating at the source removes both the noise and the wasted dispatch.
                 if (!this.map.getLayer(cand)) continue;
 
                 try { this.map.removeLayer(cand); }
                 catch (_) {}
 
-                //If removeLayer worked, the layer is gone, done. The
-                //paint / layout fallbacks below are for the rare case
-                //of imported layers where removeLayer is a silent no-op.
+                //If removeLayer worked, the layer is gone, done. The paint / layout fallbacks below are for the rare case of imported layers where
+                //removeLayer is a silent no-op.
                 if (!this.map.getLayer(cand)) continue;
 
                 try { this.map.setLayoutProperty(cand, 'visibility', 'none'); }
@@ -2117,11 +2261,8 @@ export class HeliosEngine
         //hide the under-building part of their own shadow; the
         //visible shadow is the spillover on the ground.
         //
-        //Per-pixel rendering avoids the alpha-compositing saturation
-        //we'd get from many overlapping fill polygons in a dense
-        //forest. The image source bounds match the building visibility
-        //bbox so the raster is exactly the same disc as the rendered
-        //surroundings.
+        //Per-pixel rendering avoids the alpha-compositing saturation we'd get from many overlapping fill polygons in a dense forest. The image source
+        //bounds match the building visibility bbox so the raster is exactly the same disc as the rendered surroundings.
         const shadowBounds: ShadowBoundsCorners = shadowBoundsCornersLL(this.homeLat, this.homeLon, this._buildingRadiusMeters());
         if (!this.map.getSource('helios-building-shadows-src'))
         {
@@ -2188,14 +2329,13 @@ export class HeliosEngine
         //lower opacity for cell-shaded depth, but the surrounding
         //lines piled up visually on dense streets and competed with
         //the LiDAR shadows for attention, so the surroundings stay
-        //unstroked from v1.6.3 onwards.
+        //unstroked.
         //Kick off the MapTiler buildings fetch in the background.
         //The shadow source is wired and will populate as soon as the
         //buildings GeoJSON lands.
         this._ensureBuildingsFetched();
 
-        //Wire the LiDAR shadow pipeline. No-op when shadows are off
-        //or the home is outside any provider's coverage.
+        //Wire the LiDAR shadow pipeline. No-op when shadows are off or the home is outside any provider's coverage.
         this._ensureLidarFetched();
     }
 
@@ -2217,9 +2357,8 @@ export class HeliosEngine
             return;
         }
 
-        //Abort any in-flight request so a rapid radius change
-        //doesn't leave a slow tile from the previous fetch racing
-        //the new one to populate the sources.
+        //Abort any in-flight request so a rapid radius change doesn't leave a slow tile from the previous fetch racing the new one to populate the
+        //sources.
         this._buildingsAbort?.abort();
         const ac = new AbortController();
         this._buildingsAbort   = ac;
@@ -2239,9 +2378,8 @@ export class HeliosEngine
             if (ac.signal.aborted || !this.map) return;
             this._buildingsData = result;
             this._pushRenderableSources();
-            //Buildings just arrived, the shadow source is still empty,
-            //bypass the "sun hardly moved" guard so the next call paints
-            //a full atmosphere pass and populates the shadow polygons.
+            //Buildings just arrived, the shadow source is still empty, bypass the "sun hardly moved" guard so the next call paints a full atmosphere
+            //pass and populates the shadow polygons.
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
         })
@@ -2252,9 +2390,7 @@ export class HeliosEngine
         });
     }
 
-    //Wire up the LiDAR shadow pipeline for the current home + precision
-    //setting. Idempotent: safe to call after any config / position
-    //change.
+    //Wire up the LiDAR shadow pipeline for the current home + precision setting. Idempotent: safe to call after any config / position change.
     //
     //  - Resolves the country provider that covers the home (France
     //    HD only for now, see engine/lidar.ts).
@@ -2270,11 +2406,9 @@ export class HeliosEngine
         if (!this.map) return;
 
         const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
-        //Bail when nothing wants the data: no provider covers the
-        //home, OR the user has shadows off AND no LiDAR View open.
-        //The View toggle lets the raster fetch happen even when cast
-        //shadows are off, so the View overlay can show data without
-        //requiring the user to re-enable shadows just to inspect.
+        //Bail when nothing wants the data: no provider covers the home, OR the user has shadows off AND no LiDAR View open. The View toggle lets the
+        //raster fetch happen even when cast shadows are off, so the View overlay can show data without requiring the user to re-enable shadows just
+        //to inspect.
         if (!provider || (!this._shadowsEnabled() && !this._lidarViewActive))
         {
             this._lidarShadowFeatures    = null;
@@ -2289,12 +2423,9 @@ export class HeliosEngine
 
         const level      = this._lidarPrecisionLevel();
         const radius     = this._buildingRadiusMeters();
-        //rasterSize derives from the provider's native cell pitch, the
-        //precision multiplier and the requested radius, so each fetched
-        //cell maps to a real upstream sample rather than a server-side
-        //interpolation. Clamped to the pipeline's own [min, max] so a
-        //tiny radius can't ask for fewer cells than the flood fill
-        //needs and a huge radius can't blow the WMS payload.
+        //rasterSize derives from the provider's native cell pitch, the precision multiplier and the requested radius, so each fetched cell maps to a
+        //real upstream sample rather than a server-side interpolation. Clamped to the pipeline's own [min, max] so a tiny radius can't ask for fewer
+        //cells than the flood fill needs and a huge radius can't blow the WMS payload.
         const effectivePitch = provider.nativeCellPitchMeters * LIDAR_PRECISION_PITCH_MULT[level];
         const rawCells       = Math.round((2 * radius) / Math.max(0.01, effectivePitch));
         const rasterSize     = Math.min(
@@ -2332,9 +2463,8 @@ export class HeliosEngine
             //with alphaFade=0 and the buffer is ready when the user
             //eventually clicks the toggle.
             this._lidarViewLayer?.setData(this._lidarRaster);
-            //New shadow source available, force a full atmosphere /
-            //shadow refresh on the next call rather than waiting for
-            //the sun to move past the 0.5 deg threshold.
+            //New shadow source available, force a full atmosphere / shadow refresh on the next call rather than waiting for the sun to move past the
+            //0.5 deg threshold.
             this._lastAtmosphereAlt = -999;
             this._refreshShadowsAndAtmosphere();
         })
@@ -2368,10 +2498,8 @@ export class HeliosEngine
     }
 
 
-    //Repaint hillshade direction, satellite raster, night-shade overlay,
-    //fog and building tints to match the current sun altitude. Phases
-    //blend continuously rather than at hard thresholds so dawn/dusk,
-    //golden hour, mid-day and night feel like a smooth progression.
+    //Repaint hillshade direction, satellite raster, night-shade overlay, fog and building tints to match the current sun altitude. Phases blend
+    //continuously rather than at hard thresholds so dawn/dusk, golden hour, mid-day and night feel like a smooth progression.
     //
     //Altitude bands (degrees above horizon):
     //  alt < -6   : deep night          (cold blue/black, low contrast)
@@ -2402,6 +2530,10 @@ export class HeliosEngine
         }
         this._lastAtmosphereAlt = altitude;
 
+        //Sun moved past the atmosphere refresh threshold, recompute the LiDAR-View exposure so the lit / shadowed cell colouring keeps up
+        //with the sun. No-op when LiDAR View is off, the raster isn't loaded, or another compute is already queued.
+        this._scheduleLidarExposureRecompute();
+
         //Night-shade overlay, the primary day/night cue.
         //Opacity ramps from 0 (day) up to ~0.65 at deep night, with a tinted
         //warm pass through the sunrise/sunset window so the satellite stays
@@ -2417,10 +2549,8 @@ export class HeliosEngine
             catch (_) {}
         }
 
-        //Buildings, modulate their colour by sun altitude so they
-        //participate in the time-of-day mood. We blend the configured
-        //daylight reference towards a cool dark ink at night and
-        //towards a warm tint around sunrise/sunset.
+        //Buildings, modulate their colour by sun altitude so they participate in the time-of-day mood. We blend the configured daylight reference
+        //towards a cool dark ink at night and towards a warm tint around sunrise/sunset.
         try
         {
             const buildingHex = buildingColorForAltitude(this._buildingColor(), altitude);
@@ -2442,10 +2572,8 @@ export class HeliosEngine
         //ground orientation so rotating the camera does not rotate
         //the lighting, which is what we want when scrubbing time.
         //
-        //At and below the horizon we clamp the polar angle just shy
-        //of 90 deg, the building tints above already convey night, a
-        //below-horizon polar would invert the face shading and look
-        //wrong on the few buildings that remain visible at twilight.
+        //At and below the horizon we clamp the polar angle just shy of 90 deg, the building tints above already convey night, a below-horizon polar
+        //would invert the face shading and look wrong on the few buildings that remain visible at twilight.
         try
         {
             this.map.setLight(
@@ -2470,12 +2598,14 @@ export class HeliosEngine
             //Signature of every input the shadow raster depends on.
             //Same signature = same image; the project + canvas paint +
             //PNG encode round-trip can be skipped entirely. Altitude
-            //and azimuth are rounded to 0.01 deg, ~36 seconds of sun
-            //motion, well below the visual threshold for a shadow shift.
+            //and azimuth are rounded to 0.1 deg, ~6 minutes of sun
+            //motion, well below the visual threshold for a shadow
+            //shift but coarse enough that a timeline scrub no longer
+            //triggers a 20 ms PNG encode every half-second.
             const lidarRef = this._lidarShadowFeatures;
             const sig =
                 `${shadowsOn ? '1' : '0'}` +
-                `|${altitude.toFixed(2)}|${azimuth.toFixed(2)}` +
+                `|${altitude.toFixed(1)}|${azimuth.toFixed(1)}` +
                 `|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}` +
                 `|${radius}` +
                 `|L${lidarRef ? lidarRef.features.length : -1}` +
@@ -2509,8 +2639,7 @@ export class HeliosEngine
                     sunAzimuthDeg:    azimuth,
                     sunAltitudeDeg:   altitude,
                     homeLat:          this.homeLat,
-                    //Clip shadows to the building visibility disc so
-                    //they never extend past the rendered surroundings.
+                    //Clip shadows to the building visibility disc so they never extend past the rendered surroundings.
                     clipCenterLat:    this.homeLat,
                     clipCenterLon:    this.homeLon,
                     clipRadiusMeters: radius
@@ -2564,9 +2693,8 @@ export class HeliosEngine
 
         try
         {
-            //Single home-point fetch with elevation. The home point is
-            //the only weather source, surrounding context is rendered
-            //from the same hourly series.
+            //Single home-point fetch with elevation. The home point is the only weather source, surrounding context is rendered from the same hourly
+            //series.
             const precision = this._resolvedPrecision();
             this._homeHourlyData = await fetchHomePointData(
                 fLat, fLon, this.homeElevation, precision, signal
@@ -2652,18 +2780,15 @@ export class HeliosEngine
             center:   [this.homeLon, this.homeLat],
             zoom:     18,
             pitch:    55,
-            //Same hemisphere-aware bearing as the initial setup
-            //above, recentering must restore the resting pose,
-            //not flip the orientation.
+            //Same hemisphere-aware bearing as the initial setup above, recentering must restore the resting pose, not flip the orientation.
             bearing:  this.homeLat >= 0 ? 180 : 0,
             duration: dur
         });
     }
 
     _detailMode          = false;
-    //In-flight detail-mode dive tween. Cancelled on every fresh
-    //setDetailMode call so a rapid click-exit-click can't stack
-    //two animations driving the same camera.
+    //In-flight detail-mode dive tween. Cancelled on every fresh setDetailMode call so a rapid click-exit-click can't stack two animations driving the
+    //same camera.
     _detailDiveRaf?: number;
     //Wall-clock timestamp until which fresh user gestures are
     //ignored. Bumped on detail-mode exit; the card reads it via
@@ -2730,8 +2855,7 @@ export class HeliosEngine
             }
         }
 
-        //Marker element: a three-piece "lollipop" anchored at the
-        //array's ground position.
+        //Marker element: a three-piece "lollipop" anchored at the array's ground position.
         //
         //  +---------+
         //  | [panel] |  ← solar-panel SVG icon, lifted from the
@@ -2774,17 +2898,14 @@ export class HeliosEngine
               +   `<line x1="9.6" y1="7" x2="9.0" y2="18"  stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>`
               +   `<line x1="14.4" y1="7" x2="15.0" y2="18" stroke="#ffffff" stroke-width="0.7" opacity="0.85"/>`
               + `</svg>`
-                //Dotted leader: a 1-px wide column made of stacked
-                //dots, painted in the PV colour at lower alpha so
-                //it reads as a connection without dominating.
+                //Dotted leader: a 1-px wide column made of stacked dots, painted in the PV colour at lower alpha so it reads as a connection without
+                //dominating.
               + `<div class="pv-array-marker-leader" style="`
               +   `width:1px;height:${LEADER_PX}px;`
               +   `background:repeating-linear-gradient(to bottom, `
               +     `${color} 0px, ${color} 1.5px, transparent 1.5px, transparent 4px);`
               +   `opacity:0.65;"></div>`
-                //Ground sphere: small circle, same colour as the
-                //icon, with a white halo so it stays legible on
-                //busy basemaps.
+                //Ground sphere: small circle, same colour as the icon, with a white halo so it stays legible on busy basemaps.
               + `<div class="pv-array-marker-sphere" style="`
               +   `width:${SPHERE_PX}px;height:${SPHERE_PX}px;`
               +   `border-radius:50%;`
@@ -2804,10 +2925,8 @@ export class HeliosEngine
             this._pvArrayMarkers = [];
             for (const p of positions)
             {
-                //anchor: 'bottom' pins the marker's bottom edge to
-                //the configured lat/lon. The marker's bottom edge
-                //hosts the ground sphere, so the sphere sits at
-                //the literal coordinate and the icon hovers above.
+                //anchor: 'bottom' pins the marker's bottom edge to the configured lat/lon. The marker's bottom edge hosts the ground sphere, so the
+                //sphere sits at the literal coordinate and the icon hovers above.
                 const marker = new maplibregl.Marker({
                     element: buildMarkerEl(pvHex),
                     anchor:  'bottom',
@@ -2842,6 +2961,26 @@ export class HeliosEngine
         }
     }
 
+    //Card-side gate based on the IntersectionObserver: when the
+    //card is off-screen (scrolled out of view, hidden in a
+    //collapsed conditional, sitting in a non-focused tab) the
+    //card calls setPaused(true) and we stop the periodic shadow
+    //refresh + skip the dome re-projection. Resume on visibility.
+    //One immediate refresh on un-pause so the sun position the
+    //user sees matches now, not "where the sun was when the card
+    //scrolled out 10 minutes ago".
+    public setPaused(paused: boolean): void
+    {
+        if (this._paused === paused) return;
+        this._paused = paused;
+        if (!paused) this._refreshShadowsAndAtmosphere();
+    }
+
+    public isPaused(): boolean
+    {
+        return this._paused;
+    }
+
     //True while the post-exit cooldown is active. The card consults
     //this to gate timeline scrubs; the engine consults it internally
     //for the canvas drag-rotate. Both surfaces read the same clock so
@@ -2856,8 +2995,7 @@ export class HeliosEngine
         return this._detailMode;
     }
 
-    //Compute the screen-space layout of the on-map readout chips and
-    //the leader lines that tie them to the home / on-ground ring.
+    //Compute the screen-space layout of the on-map readout chips and the leader lines that tie them to the home / on-ground ring.
     //
     //  cloudLabel, where the cloud-cover chip should be drawn (in
     //               CSS pixels, relative to the map canvas). Sits to
@@ -2891,8 +3029,7 @@ export class HeliosEngine
     //               the PV / battery chip leader lines and as the
     //               centre of the cloud fill disc.
     //
-    //Returns null when the map isn't ready yet, the card treats
-    //null as "don't render the overlay this frame".
+    //Returns null when the map isn't ready yet, the card treats null as "don't render the overlay this frame".
     public projectHomeLabelLayout(): {
         cloudLabel:        { x: number; y: number };
         pvLabel:           { x: number; y: number };
@@ -3119,11 +3256,9 @@ export class HeliosEngine
         };
     }
 
-    //Build the screen-space layout of the solar arc, the sun's
-    //current position on the arc, and the incidence ray.
+    //Build the screen-space layout of the solar arc, the sun's current position on the arc, and the incidence ray.
     //
-    //Returns null until the map is ready. The card uses null as
-    //"don't render the overlay this frame".
+    //Returns null until the map is ready. The card uses null as "don't render the overlay this frame".
     //
     //Each arc point also carries the irradiance (W/m²) at that
     //instant, computed with the current cloud cover applied
@@ -3160,8 +3295,7 @@ export class HeliosEngine
             return null;
         }
 
-        //Ground-level home projection, the SVG anchor for the
-        //incidence ray and a reference for any future ground shadow.
+        //Ground-level home projection, the SVG anchor for the incidence ray and a reference for any future ground shadow.
         const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
         if (!homeScreen)
         {
@@ -3249,9 +3383,8 @@ export class HeliosEngine
             this._arcInputsCache = cache;
         }
 
-        //Per-frame work: re-project the cached samples through the
-        //current map matrix, recording depth so we can normalise to
-        //a nearness factor below.
+        //Per-frame work: re-project the cached samples through the current map matrix, recording depth so we can normalise to a nearness factor
+        //below.
         type RawArcPoint = {
             x: number; y: number; irradiance: number; depth: number;
             belowHorizon: boolean;
@@ -3441,6 +3574,166 @@ export class HeliosEngine
         };
     }
 
+    //Project an arbitrary (azimuth, altitude) angular position above
+    //the home onto the same sphere the sun arc uses, then forward
+    //to screen pixels. Used by the shading-dome overlay to paint
+    //every populated cell of the learned residual grid on the
+    //celestial hemisphere the same way the sun is.
+    private _projectSpherePoint(
+        azimuthDeg: number, altitudeDeg: number
+    ): { x: number; y: number; depth: number } | null
+    {
+        const D = Math.PI / 180;
+        const a = altitudeDeg * D;
+        const z = azimuthDeg  * D;
+        const east  = SUN_ARC_RADIUS_M * Math.cos(a) * Math.sin(z);
+        const north = SUN_ARC_RADIUS_M * Math.cos(a) * Math.cos(z);
+        const up    = SUN_ARC_RADIUS_M * Math.sin(a);
+        const mPerDegLat = 111_320;
+        const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
+        const lon = this.homeLon + east  / mPerDegLon;
+        const lat = this.homeLat + north / mPerDegLat;
+        return this._projectScenePoint(lon, lat, up);
+    }
+
+
+    //Layout the shading-dome overlay: every populated cell of the learned residual grid projected onto the celestial hemisphere above the home, plus
+    //today's solar arc carrying the per-sample residual ratio so the user can see "the sun walks through this red cell at 17h, that's the tree".
+    //
+    //`cellPolys`  — one entry per cell, four corner pixels of the
+    //               annular sector (az ± 5 deg × alt ± 2.5 deg)
+    //               projected onto the sphere; cells with any
+    //               corner behind the camera are dropped.
+    //`todayArc`   — sun-position samples for today, each with the
+    //               shading-map ratio looked up at its (az, alt,
+    //               liveCloud) coordinates and the kernel-smoothed
+    //               confidence.
+    //`homeScreen` — ground anchor reused by the SVG for centred
+    //               labels.
+    //
+    //`now` lets the caller pin the dome to a different day if it
+    //ever needs to (timeline scrubbing, debug). Defaults to wall
+    //clock so the bright arc is always today.
+    public projectShadingDome(opts: {
+        cellLookup: (azimuthDeg: number, altitudeDeg: number, cloudPct: number) =>
+            { ratio: number; confidence: number } | null;
+        decodedCells: Array<{ azimuthDeg: number; altitudeDeg: number; cloudBin: number; ratio: number; aged: number }>;
+        cloudBinForArc: number;   //0..7, which cloud-cover bin to sample for today's arc
+        liveCloudPct:   number;   //real-time cloud cover, used to pick the dome cells visualised
+        now:            Date;
+    }): {
+        homeScreen: { x: number; y: number };
+        cellPolys:  Array<{
+            path: string; ratio: number; aged: number; cloudBin: number; altitudeDeg: number;
+        }>;
+        todayArc:   Array<{
+            x: number; y: number; ratio: number; confidence: number;
+            altitudeDeg: number; belowHorizon: boolean;
+        }>;
+        sun:        { x: number; y: number; altitudeDeg: number } | null;
+    } | null
+    {
+        if (!this.map) return null;
+        const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+        if (!homeScreen) return null;
+
+        //--- Background dome: one annular-sector polygon per CELL
+        //of the full (azimuth, altitude) grid, regardless of
+        //whether the shading map has data for it. Cells with
+        //observed data carry their ratio + aged weight so the
+        //render layer paints them coloured; empty cells come
+        //through with aged = 0 and ratio = 1 so the render layer
+        //can stroke just the outline. This way the full lattice
+        //of the dome is visible (you see the structure even on
+        //day 1) and populated zones light up as the model learns.
+        const HALF_AZ  = 5;   //matches AZIMUTH_BIN_DEG  / 2 in shadingMap.ts
+        const HALF_ALT = 2.5; //matches ALTITUDE_BIN_DEG / 2
+        const AZ_BIN_COUNT  = 36;
+        const ALT_BIN_COUNT = 18;
+        //Index populated cells by (az, alt) for the chosen cloud
+        //bin so the grid loop can look them up in O(1) per cell.
+        const populated: Map<string, { ratio: number; aged: number }> = new Map();
+        for (const c of opts.decodedCells)
+        {
+            if (c.cloudBin !== opts.cloudBinForArc) continue;
+            const azBin  = Math.floor(c.azimuthDeg  / 10);
+            const altBin = Math.floor(c.altitudeDeg / 5);
+            populated.set(`${azBin}|${altBin}`, { ratio: c.ratio, aged: c.aged });
+        }
+        const cellPolys: Array<{ path: string; ratio: number; aged: number; cloudBin: number; altitudeDeg: number }> = [];
+        for (let azBin = 0; azBin < AZ_BIN_COUNT; azBin++)
+        {
+            const azCentre = azBin * 10 + 5;
+            for (let altBin = 0; altBin < ALT_BIN_COUNT; altBin++)
+            {
+                const altCentre = altBin * 5 + 2.5;
+                const az0 = azCentre  - HALF_AZ;
+                const az1 = azCentre  + HALF_AZ;
+                const al0 = Math.max(0.5, altCentre - HALF_ALT);
+                const al1 = Math.min(89,  altCentre + HALF_ALT);
+                const p1 = this._projectSpherePoint(az0, al0);
+                const p2 = this._projectSpherePoint(az1, al0);
+                const p3 = this._projectSpherePoint(az1, al1);
+                const p4 = this._projectSpherePoint(az0, al1);
+                if (!p1 || !p2 || !p3 || !p4) continue;
+                const path = `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} L ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z`;
+                const hit = populated.get(`${azBin}|${altBin}`);
+                cellPolys.push({
+                    path,
+                    ratio:    hit ? hit.ratio : 1,
+                    aged:     hit ? hit.aged  : 0,
+                    cloudBin: opts.cloudBinForArc,
+                    //Forwarded so the card-side renderer can drive the enter/exit wipe off altitude rather than a screen-space clip-path. Altitude
+                    //is camera-independent so the zenith (highest cells) stays the last drawn / first erased regardless of how the user has
+                    //rotated the map underneath the dome.
+                    altitudeDeg: altCentre,
+                });
+            }
+        }
+
+        //--- Foreground ribbon: today's sun arc, one polyline sample
+        //per 15 min. Each sample carries the residual ratio from the
+        //shading-map lookup at its (azimuth, altitude, liveCloud) so
+        //the ribbon literally bends red where the model over-
+        //predicts at this time of year, regardless of the season.
+        const todayArc: Array<{ x: number; y: number; ratio: number; confidence: number; altitudeDeg: number; belowHorizon: boolean }> = [];
+        const dayStart = new Date(opts.now);
+        dayStart.setHours(0, 0, 0, 0);
+        const N = SUN_ARC_SAMPLES;
+        const stepMs = (24 * 60 * 60 * 1000) / N;
+        for (let i = 0; i < N; i++)
+        {
+            const t = new Date(dayStart.getTime() + i * stepMs);
+            const sun = getSunPosition(t, this.homeLat, this.homeLon);
+            const belowHorizon = sun.altitude <= 0;
+            const proj = belowHorizon
+                ? null
+                : this._projectSpherePoint(sun.azimuth, sun.altitude);
+            if (!proj) continue;
+            const lookup = opts.cellLookup(sun.azimuth, sun.altitude, opts.liveCloudPct);
+            todayArc.push({
+                x:           proj.x,
+                y:           proj.y,
+                ratio:       lookup ? lookup.ratio : 1,
+                confidence:  lookup ? lookup.confidence : 0,
+                altitudeDeg: sun.altitude,
+                belowHorizon,
+            });
+        }
+
+        //--- Sun marker: present-position pin so the user can see
+        //"where the sun is right now" inside the dome view.
+        let sunScreen: { x: number; y: number; altitudeDeg: number } | null = null;
+        const sunNow = getSunPosition(opts.now, this.homeLat, this.homeLon);
+        if (sunNow.altitude > 0)
+        {
+            const p = this._projectSpherePoint(sunNow.azimuth, sunNow.altitude);
+            if (p) sunScreen = { x: p.x, y: p.y, altitudeDeg: sunNow.altitude };
+        }
+
+        return { homeScreen, cellPolys, todayArc, sun: sunScreen };
+    }
+
     public setSelectedTime(time: Date | null): void
     {
         this._selectedTime = time;
@@ -3448,10 +3741,8 @@ export class HeliosEngine
         if (time === null)
         {
             this._clearWeatherTimer();
-            //Same 10-min cadence as the post-fetch interval above ,
-            //returning to live mode resumes the standard refresh
-            //rhythm rather than re-anchoring on the original
-            //hourly pace.
+            //Same 10-min cadence as the post-fetch interval above , returning to live mode resumes the standard refresh rhythm rather than
+            //re-anchoring on the original hourly pace.
             this._weatherTimer = window.setInterval(
                 () => this._refreshWeather(this._fetchLat, this._fetchLon),
                 600_000
@@ -3464,8 +3755,7 @@ export class HeliosEngine
 
         if (this._mapReady && this._homeHourlyData)
         {
-            //Force atmosphere refresh: the user just scrubbed time, so the
-            //"have we moved enough" guard would otherwise short-circuit.
+            //Force atmosphere refresh: the user just scrubbed time, so the "have we moved enough" guard would otherwise short-circuit.
             this._lastAtmosphereAlt = -999;
             this._renderForCurrentSelection();
             //Coalesce rapid scrub moves into a single shadow paint
@@ -3508,7 +3798,7 @@ export class HeliosEngine
     //last fetch failed.
     //
     //The optional `terrain` field carries the DTM band when the
-    //source COG ships one (v1.6.3+ helios-lidar.org output); it
+    //source COG ships one (helios-lidar.org 2-band output); it
     //lets the shading ray-march lift its comparison into absolute
     //Z so sloped ground between the panel and a far obstacle is
     //taken into account. Absent on every public provider and on
@@ -3549,18 +3839,14 @@ export class HeliosEngine
     }
 
 
-    //card is expected to call this whenever onWeatherUpdate fires
-    //and re-render the chart.
+    //card is expected to call this whenever onWeatherUpdate fires and re-render the chart.
     public getTimelineSeries(): {
         times:        Date[];
         irradiance:   number[];
         cloud:        number[];
-        //Per-hour ambient temperature in °C and 10-metre wind speed
-        //in m/s, NaN-padded where the model didn't supply a value.
-        //Surfaced so the predictor in card/pv.ts can apply the
-        //thermal-derating factor without each caller having to
-        //re-derive the alignment between the weather hour and the
-        //timeline cursor.
+        //Per-hour ambient temperature in °C and 10-metre wind speed in m/s, NaN-padded where the model didn't supply a value. Surfaced so the
+        //predictor in card/pv.ts can apply the thermal-derating factor without each caller having to re-derive the alignment between the weather hour
+        //and the timeline cursor.
         temperature:  number[];
         windSpeed:    number[];
     } | null
@@ -3665,9 +3951,7 @@ export class HeliosEngine
             },
             timeline:
             {
-                //Range + selectedTime kept as ISO strings rather than
-                //Date instances so the snapshot round-trips through
-                //JSON.stringify cleanly.
+                //Range + selectedTime kept as ISO strings rather than Date instances so the snapshot round-trips through JSON.stringify cleanly.
                 rangeStart:       this._getTimeRange()?.start?.toISOString() ?? null,
                 rangeEnd:         this._getTimeRange()?.end?.toISOString()   ?? null,
                 selectedTime:     this._selectedTime?.toISOString() ?? null
@@ -3725,9 +4009,8 @@ export class HeliosEngine
 
         this._applyLabelVisibility();
 
-        //Building updates. Radius or cluster-radius changes invalidate
-        //the cached GeoJSON and trigger a refetch via _addBuildings.
-        //Opacity / colour changes are cheap paint-property updates.
+        //Building updates. Radius or cluster-radius changes invalidate the cached GeoJSON and trigger a refetch via _addBuildings. Opacity / colour
+        //changes are cheap paint-property updates.
         const nextRadius  = this._buildingRadiusMeters();
         const nextCluster = this._buildingClusterRadiusMeters();
         const nextOpacity = this._buildingOpacity();
@@ -3820,8 +4103,7 @@ export class HeliosEngine
             this._renderForCurrentSelection();
         }
 
-        //Per-array PV markers: small spheres at panel positions
-        //when the user has set lat/lon different from home.
+        //Per-array PV markers: small spheres at panel positions when the user has set lat/lon different from home.
         this._refreshPvArrayMarkers();
     }
 
@@ -3859,6 +4141,23 @@ export class HeliosEngine
             cancelAnimationFrame(this._detailDiveRaf);
             this._detailDiveRaf = undefined;
         }
+        //Cancel the LiDAR-View exposure pipeline. The idle callback can
+        //fire AFTER cleanup, and the chunked rAF loop captures `this`
+        //in its closure, so leaving either token live would pin the
+        //dead engine + its WebGL context for at least one extra frame
+        //per chunk, which adds up across rapid config edits when
+        //many engines respawn in quick succession.
+        if (this._exposureIdleHandle !== undefined)
+        {
+            this._cancelIdleCb(this._exposureIdleHandle);
+            this._exposureIdleHandle = undefined;
+        }
+        if (this._exposureChunkRaf !== undefined)
+        {
+            cancelAnimationFrame(this._exposureChunkRaf);
+            this._exposureChunkRaf = undefined;
+        }
+        this._lidarViewActive = false;
 
         //Tear-down strategy: explicit + defensive + force-lose.
         //
@@ -3925,10 +4224,11 @@ export class HeliosEngine
                     this.map.off('rotate', this._mapPinHandler);
                     this.map.off('move',   this._mapPinHandler);
                 }
-                if (this._mapStyleLoadHandler) this.map.off('style.load', this._mapStyleLoadHandler);
-                if (this._mapLoadHandler)      this.map.off('load',       this._mapLoadHandler);
-                if (this._mapMoveHandler)      this.map.off('move',       this._mapMoveHandler);
-                if (this._mapErrorHandler)     this.map.off('error',      this._mapErrorHandler);
+                if (this._mapStyleLoadHandler)         this.map.off('style.load',         this._mapStyleLoadHandler);
+                if (this._mapLoadHandler)              this.map.off('load',               this._mapLoadHandler);
+                if (this._mapMoveHandler)              this.map.off('move',               this._mapMoveHandler);
+                if (this._mapErrorHandler)             this.map.off('error',              this._mapErrorHandler);
+                if (this._mapStyleImageMissingHandler) this.map.off('styleimagemissing',  this._mapStyleImageMissingHandler);
             }
             catch (_) {}
         }
@@ -3949,7 +4249,15 @@ export class HeliosEngine
                 'helios-buildings-home',
                 'helios-buildings-home-outline',
                 'helios-buildings-home-outline-glow',
-                'helios-building-shadows'
+                'helios-building-shadows',
+                //LiDAR-View custom layer: MapLibre invokes the layer's
+                //onRemove() when we removeLayer it, which is what frees
+                //the 4 GPU buffers + the WebGLProgram. On the iOS
+                //Safari code path where `map.remove()` doesn't fan out
+                //to custom layers, this explicit removeLayer is the
+                //only thing preventing the buffers + program from
+                //leaking through every engine respawn.
+                'helios-lidar-view'
             ])
             {
                 try { if (this.map.getLayer(lid)) this.map.removeLayer(lid); }
@@ -3989,6 +4297,7 @@ export class HeliosEngine
         this._mapLoadHandler        = undefined;
         this._mapMoveHandler        = undefined;
         this._mapErrorHandler       = undefined;
+        this._mapStyleImageMissingHandler = undefined;
         this._webglLostHandler      = undefined;
         this._webglRestoredHandler  = undefined;
         this.onContextLost          = undefined;

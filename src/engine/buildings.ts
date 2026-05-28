@@ -25,10 +25,8 @@
 //Style reloads (theme switches) reuse the cached GeoJSON without
 //re-hitting OpenFreeMap.
 //
-//OpenFreeMap exposes the OpenMapTiles schema, which carries the
-//`building` source-layer with `render_height` and
-//`render_min_height` properties. The parsing pipeline only needs
-//those two attributes plus the polygon geometry.
+//OpenFreeMap exposes the OpenMapTiles schema, which carries the `building` source-layer with `render_height` and `render_min_height` properties. The
+//parsing pipeline only needs those two attributes plus the polygon geometry.
 
 import { VectorTile } from '@mapbox/vector-tile';
 import Pbf from 'pbf';
@@ -62,9 +60,8 @@ export interface FetchBuildingsOptions
 
 const EARTH_RADIUS_M    = 6_371_008.8;
 const HOME_FALLBACK_M   = 30;   //If no polygon contains the home point, pick
-                                //the nearest one within this radius. Covers the
-                                //common case where HA's home latitude lands in
-                                //a garden a few metres off the actual building.
+                                //the nearest one within this radius. Covers the common case where HA's home latitude lands in a garden a few metres
+                                //off the actual building.
 
 //----------------------------------------------------------------- coords
 
@@ -88,9 +85,8 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
     return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a));
 }
 
-//Convert a degree delta in latitude / longitude to metres at a given
-//latitude. Used to expand the home point into a bbox before mapping
-//it to tile indices.
+//Convert a degree delta in latitude / longitude to metres at a given latitude. Used to expand the home point into a bbox before mapping it to tile
+//indices.
 function metersToDegLat(m: number): number
 {
     return m / 111_320;
@@ -214,11 +210,9 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
     const r          = Math.max(1, opts.radiusMeters);
     const cluster    = Math.max(0, opts.clusterRadiusMeters ?? 0);
 
-    //Bounding box around the home in degrees, derived from the
-    //radius. We over-estimate by a few percent so a building whose
-    //centroid is *just* outside the bbox but whose actual nearest
-    //corner is inside the radius still gets fetched. The wasted
-    //features are filtered out at the haversine step below.
+    //Bounding box around the home in degrees, derived from the radius. We over-estimate by a few percent so a building whose centroid is *just*
+    //outside the bbox but whose actual nearest corner is inside the radius still gets fetched. The wasted features are filtered out at the haversine
+    //step below.
     const padFactor  = 1.15;
     const dLat       = metersToDegLat(r * padFactor);
     const dLon       = metersToDegLon(r * padFactor, opts.homeLat);
@@ -365,10 +359,8 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
     //  - surroundings: within `r` metres but outside the cluster
     //  - discarded: outside `r`
     //
-    //If no feature contains the home point and no feature is within
-    //the cluster radius, fall back to the closest building within
-    //HOME_FALLBACK_M, covers HA coordinates that land on a garden
-    //or driveway a few metres off the actual house footprint.
+    //If no feature contains the home point and no feature is within the cluster radius, fall back to the closest building within HOME_FALLBACK_M,
+    //covers HA coordinates that land on a garden or driveway a few metres off the actual house footprint.
     const homeCluster: GeoJSON.Feature[] = [];
     const surroundings: GeoJSON.Feature[] = [];
     let homeFallback: { feature: GeoJSON.Feature; distance: number } | null = null;

@@ -1,13 +1,10 @@
-//LiDAR View overlay: when the user clicks the View button, the
-//regular map UI fades out and every loaded LiDAR cell is projected
-//to screen as a small dot. This module handles the toggle gesture
-//and drives the alpha-fade rAF loop that smooths both the enter
-//and the exit transitions.
+//LiDAR View overlay: when the user clicks the View button, the regular map UI fades out and every loaded LiDAR cell is projected to screen as a small
+//dot. This module handles the toggle gesture and drives the alpha-fade rAF loop that smooths both the enter and the exit transitions.
 //
-//Same host-driven pattern as the timeline / overlays modules: the
-//card owns the `@state` flag and the fade timestamps, the helpers
-//here mutate them through a structural LidarViewHost.
+//Same host-driven pattern as the timeline / overlays modules: the card owns the `@state` flag and the fade timestamps, the helpers here mutate them
+//through a structural LidarViewHost.
 
+import { html, nothing, type TemplateResult } from 'lit';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
 
@@ -30,6 +27,7 @@ export interface LidarViewHost extends OverlaysHost
     _lidarFadeInStartMs:         number | null;
     _lidarFadeOutStartMs:        number | null;
     _lidarFadeRaf?:              number;
+    _lidarViewOpacity:           number;
 }
 
 
@@ -42,10 +40,8 @@ export interface LidarViewHost extends OverlaysHost
 //so the regular HUD fades out via its own CSS transition under
 //the appearing cloud.
 //
-//Exit: two-phase. First the dot cloud fades back out in ~280 ms,
-//THEN .lidar-view-active drops so the regular HUD fades back in
-//via the existing CSS transition. We delay the class flip so the
-//HUD doesn't pop back through the still-visible cloud.
+//Exit: two-phase. First the dot cloud fades back out in ~280 ms, THEN .lidar-view-active drops so the regular HUD fades back in via the existing CSS
+//transition. We delay the class flip so the HUD doesn't pop back through the still-visible cloud.
 //
 //We deliberately do NOT clip-mask the dots to a perspective
 //polygon during the fade: that was the single most expensive
@@ -95,8 +91,7 @@ export function startLidarFadeLoop(host: LidarViewHost): void
         const inStart  = host._lidarFadeInStartMs;
         const outStart = host._lidarFadeOutStartMs;
 
-        //Exit fade complete, finalise the mode flip and clamp the
-        //layer alpha to 0 in one go.
+        //Exit fade complete, finalise the mode flip and clamp the layer alpha to 0 in one go.
         if (outStart !== null && now - outStart >= LIDAR_FADE_OUT_MS)
         {
             host._lidarFadeOutStartMs = null;
@@ -104,9 +99,7 @@ export function startLidarFadeLoop(host: LidarViewHost): void
             host._engine?.setLidarViewFadeAlpha(0);
             host._engine?.setLidarViewActive(false);
         }
-        //Enter fade complete, drop the marker so subsequent ticks
-        //stop ramping. The layer alpha sits at 1 until the user
-        //toggles back off.
+        //Enter fade complete, drop the marker so subsequent ticks stop ramping. The layer alpha sits at 1 until the user toggles back off.
         if (inStart !== null && now - inStart >= LIDAR_FADE_IN_MS)
         {
             host._lidarFadeInStartMs = null;
@@ -139,4 +132,35 @@ export function startLidarFadeLoop(host: LidarViewHost): void
         }
     };
     host._lidarFadeRaf = requestAnimationFrame(tick);
+}
+
+
+//Bottom-of-card opacity slider, painted only while the LiDAR-View
+//mode is active. Mirrors the shading-dome cloud picker (same
+//capsule pill, same z-index, same vertical offset) so the two
+//modes use a consistent control well. Slider value is a percent
+//surface (0..100) for readability; the host bridges it back to
+//the [0..1] engine API.
+export function renderLidarViewOpacityPicker(
+    host:     LidarViewHost,
+    onChange: (opacity: number) => void,
+): TemplateResult | typeof nothing
+{
+    const pct        = Math.round(Math.max(0, Math.min(1, host._lidarViewOpacity)) * 100);
+    //Always render the pill so its opacity transition runs in both directions (fade-in on mode enter, fade-out on mode exit). When the
+    //mode is off, the .is-active class drops, CSS animates opacity back to 0 and pointer-events go inert.
+    const activeCls  = host._lidarViewMode ? ' is-active' : '';
+    return html`
+        <div class="lidar-view-opacity-slider${activeCls}" aria-label="LiDAR view opacity" ?aria-hidden="${!host._lidarViewMode}">
+            <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--low"  icon="mdi:circle-outline"></ha-icon>
+            <input type="range" min="0" max="100" step="1"
+                   class="lidar-view-opacity-range"
+                   .value="${String(pct)}"
+                   aria-label="LiDAR view opacity percentage"
+                   tabindex="${host._lidarViewMode ? 0 : -1}"
+                   @input="${(e: Event) => onChange(Number((e.target as HTMLInputElement).value) / 100)}" />
+            <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--high" icon="mdi:circle"></ha-icon>
+            <span class="lidar-view-opacity-value">${pct}%</span>
+        </div>
+    `;
 }

@@ -57,9 +57,7 @@ export function nightShadeForAltitude(
     }
     if (altitudeDeg < 6)
     {
-        //Sunrise/sunset, warm amber wash, light opacity so the
-        //satellite imagery still reads but the time-of-day cue
-        //is unambiguous.
+        //Sunrise/sunset, warm amber wash, light opacity so the satellite imagery still reads but the time-of-day cue is unambiguous.
         const u = altitudeDeg / 6;
         return { color: '#3a1408', opacity: lerp(0.30, 0.10, u) };
     }
@@ -74,11 +72,8 @@ export function nightShadeForAltitude(
 }
 
 
-//Building extrusion colour modulated by sun altitude. Blends the
-//configured daylight reference towards a cool dark ink at night
-//and towards a warm tint around sunrise/sunset, so the buildings
-//participate in the time-of-day mood without losing the user's
-//chosen base hue.
+//Building extrusion colour modulated by sun altitude. Blends the configured daylight reference towards a cool dark ink at night and towards a warm
+//tint around sunrise/sunset, so the buildings participate in the time-of-day mood without losing the user's chosen base hue.
 export function buildingColorForAltitude(
     baseHex:     string,
     altitudeDeg: number

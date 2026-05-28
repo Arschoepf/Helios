@@ -50,10 +50,8 @@ export interface CloudScene
     cloudHigh:  number;
 }
 
-//Per-polygon silhouette of one home building in screen space: the
-//projected base ring and the projected top ring. Painted into the
-//cloud-disc SVG mask so the union covers the exact extruded prism
-//even for concave footprints.
+//Per-polygon silhouette of one home building in screen space: the projected base ring and the projected top ring. Painted into the cloud-disc SVG
+//mask so the union covers the exact extruded prism even for concave footprints.
 export interface HomeSilhouette
 {
     base: Array<{ x: number; y: number }>;
@@ -132,6 +130,11 @@ export function refreshOverlays(host: OverlaysHost): void
     //no canvas redraw. The card just drives the fade-in/out alpha
     //via _startLidarFadeLoop; MapLibre re-issues the layer's draw
     //call on every transform automatically.
+
+    //Shading-dome scene re-projection is wired separately from the
+    //card's onMapTransform handler so this module stays free of a
+    //circular dependency on shadingDome (which imports
+    //refreshOverlays in turn).
 }
 
 
@@ -164,10 +167,8 @@ export function setAnimationsPaused(host: OverlaysHost, paused: boolean): void
 }
 
 
-//Map an arc-sample sequence into stroke-ready segments. The
-//caller paints each segment as one <line> with a stroke width
-//scaled by `nearness` and a colour pulled from the configured
-//sun colour.
+//Map an arc-sample sequence into stroke-ready segments. The caller paints each segment as one <line> with a stroke width scaled by `nearness` and a
+//colour pulled from the configured sun colour.
 export function buildArcSegments(
     arc:      ReadonlyArray<SunArcSample>,
     sunColor: string
@@ -194,13 +195,9 @@ export function buildArcSegments(
 //  rate <= 0           → 30 s        (paused, night / no production)
 //  rate  = saturation  → minDuration (fastest, full power)
 //
-//Ease-out cubic ramp: half-saturation already feels meaningfully
-//faster than the night baseline, which gives the user the
-//feeling of raw power pushing through the line. The minDuration
-//is exposed so callers can tune the saturated-end pace per
-//channel, the sun ray spans the full map and benefits from a
-//slightly slower flow than the PV leader, which is short and
-//local.
+//Ease-out cubic ramp: half-saturation already feels meaningfully faster than the night baseline, which gives the user the feeling of raw power
+//pushing through the line. The minDuration is exposed so callers can tune the saturated-end pace per channel, the sun ray spans the full map and
+//benefits from a slightly slower flow than the PV leader, which is short and local.
 export function flowDuration(
     rate:        number,
     saturation:  number,

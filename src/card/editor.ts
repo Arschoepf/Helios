@@ -15,17 +15,24 @@ import
     DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
-    DEFAULT_LIDAR_VIEW_POINT_OPACITY,
-    DEFAULT_LIDAR_VIEW_WIREFRAME,
-    DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY,
     DEFAULT_TIMELINE_ENABLED,
     DEFAULT_TIMELINE_WIDTH_PCT,
-    DEFAULT_TIMELINE_CONSUMPTION_ENABLED,
-    defaultLidarViewPointColor,
-    defaultLidarViewWireframeColor
+    DEFAULT_TIMELINE_CONSUMPTION_ENABLED
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
 import { cfgHex } from './format';
+import { renderShadingMapSection } from './shadingMapView';
+
+
+//LiDAR View visual knobs that existed before the in-card opacity slider replaced them. Left here as a const tuple so `_update` can strip
+//them silently on every config write: the runtime already ignores these keys, the silent strip just keeps the saved YAML tidy.
+const LIDAR_VIEW_LEGACY_KEYS = [
+    'lidar-view-point-color',
+    'lidar-view-point-opacity',
+    'lidar-view-wireframe',
+    'lidar-view-wireframe-color',
+    'lidar-view-wireframe-opacity'
+] as const;
 
 
 //Custom color picker.
@@ -76,8 +83,7 @@ export class HeliosColorPicker extends LitElement
         this._hexDraft = this.value;
         if (this._open)
         {
-            //Defer one tick so the click that opened the popover
-            //doesn't immediately close it.
+            //Defer one tick so the click that opened the popover doesn't immediately close it.
             setTimeout(() => document.addEventListener('click', this._onDocClick, true), 0);
         }
         else
@@ -188,8 +194,7 @@ export class HeliosColorPicker extends LitElement
 //`https://` is rendered as plain text. Stops a malicious /
 //corrupted translation from sneaking in a `javascript:` URI.
 //
-//Used by editor hints that need a clickable link to
-//helios-lidar.org or other public docs.
+//Used by editor hints that need a clickable link to helios-lidar.org or other public docs.
 function renderMarkdownLinks(text: string): unknown[]
 {
     const parts: unknown[] = [];
@@ -210,8 +215,7 @@ function renderMarkdownLinks(text: string): unknown[]
         }
         else
         {
-            //Suspicious scheme, render as plain text so the user
-            //can see the URL but the browser doesn't follow it.
+            //Suspicious scheme, render as plain text so the user can see the URL but the browser doesn't follow it.
             parts.push(`${label} (${url})`);
         }
         cursor = match.index + match[0].length;
@@ -247,6 +251,9 @@ export class HeliosCardEditor extends LitElement
     //`_arrayAdd` adds the new index to this set; `_arrayRemove`
     //shifts the indices above the removed one down by 1.
     @state()                        private _openArrayIndices: Set<number> = new Set([0]);
+    //Per-bank open/closed state for the multi-bank battery editor section. Mirrors `_openArrayIndices` (same first-pan-open default,
+    //same shift-on-remove semantics). Separate Set so opening a PV array doesn't accidentally toggle a battery bank with the same index.
+    @state()                        private _openBatteryIndices: Set<number> = new Set([0]);
 
     //Per-key debounce timers for slider inputs. Sliders fire @input
     //on every pixel of drag, so dispatching `config-changed` per
@@ -264,6 +271,13 @@ export class HeliosCardEditor extends LitElement
         super.disconnectedCallback();
         for (const t of this._sliderDebounce.values()) window.clearTimeout(t);
         this._sliderDebounce.clear();
+        //"Cache vidé" confirmation timer survives a fast unmount if not cleared, fires on a dead element and triggers a Lit warning
+        //about touching @state after disconnect. Clear it here so the editor unmounts cleanly mid-feedback.
+        if (this._resetFeedbackTimer !== undefined)
+        {
+            window.clearTimeout(this._resetFeedbackTimer);
+            this._resetFeedbackTimer = undefined;
+        }
     }
 
     public setConfig(config: HeliosConfig): void
@@ -277,13 +291,9 @@ export class HeliosCardEditor extends LitElement
         this._ensureEntityPicker();
     }
 
-    //ha-entity-picker is part of HA's lazy-loaded card-editor bundle.
-    //In a fresh tab, or in HA versions that don't pre-load it for
-    //custom cards, the tag is unknown until something on the page
-    //pulls it in. We force the load by creating a transient
-    //"entities" card and asking for its config element, the side
-    //effect registers ha-entity-picker. While the load is pending we
-    //fall back to a plain text input so the field is never broken.
+    //ha-entity-picker is part of HA's lazy-loaded card-editor bundle. In a fresh tab, or in HA versions that don't pre-load it for custom cards, the
+    //tag is unknown until something on the page pulls it in. We force the load by creating a transient "entities" card and asking for its config
+    //element, the side effect registers ha-entity-picker. While the load is pending we fall back to a plain text input so the field is never broken.
     private async _ensureEntityPicker(): Promise<void>
     {
         if (this._pickerReady) return;
@@ -337,9 +347,15 @@ export class HeliosCardEditor extends LitElement
 
     private _update(key: keyof HeliosConfig, value: unknown): void
     {
-        const next = { ...this._cfg, [key]: value };
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next } }));
-        this._cfg = next;
+        const next = { ...this._cfg, [key]: value } as Record<string, unknown>;
+        //Silently strip the LiDAR View visual knobs that were collapsed into the in-card opacity slider, the moment the user makes any edit, so the config self-heals without needing
+        //a one-shot migration. The runtime ignores them too, this just keeps the YAML tidy.
+        for (const k of LIDAR_VIEW_LEGACY_KEYS)
+        {
+            if (k in next) delete next[k];
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
     }
 
     private _str(key: keyof HeliosConfig, e: Event): void
@@ -364,10 +380,8 @@ export class HeliosCardEditor extends LitElement
         this._update(key, v);
     }
 
-    //Slider commit. Updates local state synchronously so the slider
-    //thumb tracks the drag, but defers the cross-component
-    //`config-changed` event by SLIDER_COMMIT_DELAY_MS so the engine
-    //doesn't see a flood of intermediate values.
+    //Slider commit. Updates local state synchronously so the slider thumb tracks the drag, but defers the cross-component `config-changed` event by
+    //SLIDER_COMMIT_DELAY_MS so the engine doesn't see a flood of intermediate values.
     private _numSlider(key: keyof HeliosConfig, e: Event): void
     {
         const v = parseFloat((e.target as HTMLInputElement).value);
@@ -428,9 +442,10 @@ export class HeliosCardEditor extends LitElement
         };
 
         const raw = this._cfg?.['pv-arrays'];
-        if (Array.isArray(raw) && raw.length > 0)
+        if (Array.isArray(raw))
         {
-            const out = raw.map(entry =>
+            //Honour an explicit empty `pv-arrays: []` as "no array configured" (post-delete state), don't silently fall back to legacy.
+            return raw.map(entry =>
             {
                 const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
                 return {
@@ -444,7 +459,6 @@ export class HeliosCardEditor extends LitElement
                     height:    toNum(e['height']),
                 };
             });
-            return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
         }
 
         const legacyTilt = toNum(this._cfg?.['pv-tilt']);
@@ -453,7 +467,7 @@ export class HeliosCardEditor extends LitElement
         {
             return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, peakKwp: null, latitude: null, longitude: null, height: null }];
         }
-        return [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
+        return [];
     }
 
     //Persists a list of array entries to the config under `pv-arrays`
@@ -473,27 +487,35 @@ export class HeliosCardEditor extends LitElement
         height:    number | null;
     }[]): void
     {
-        const arrays = list.map(e =>
+        const next = { ...this._cfg } as Record<string, unknown>;
+        //Strip the legacy single-orientation keys on every write so configs converge to the new shape regardless of what the user
+        //started from.
+        delete next['pv-tilt'];
+        delete next['pv-azimuth'];
+        if (list.length === 0)
         {
-            const o: Record<string, number | string> = {};
-            if (e.name      !== null) o['name']      = e.name;
-            if (e.tilt      !== null) o['tilt']      = e.tilt;
-            if (e.azimuth   !== null) o['azimuth']   = e.azimuth;
-            if (e.share     !== null) o['share']     = e.share;
-            if (e.peakKwp   !== null) o['peak-kwp']  = e.peakKwp;
-            if (e.latitude  !== null) o['latitude']  = e.latitude;
-            if (e.longitude !== null) o['longitude'] = e.longitude;
-            if (e.height    !== null) o['height']    = e.height;
-            return o;
-        });
-        const next = { ...this._cfg, 'pv-arrays': arrays } as HeliosConfig;
-        //Strip legacy keys when promoting to pv-arrays so a future
-        //read doesn't trip the "both shapes set" rule. Only deletes
-        //them when they're actually present, no need to dirty the
-        //config object otherwise.
-        if ('pv-tilt'    in (next as object)) delete (next as Record<string, unknown>)['pv-tilt'];
-        if ('pv-azimuth' in (next as object)) delete (next as Record<string, unknown>)['pv-azimuth'];
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next } }));
+            //User emptied the array list: drop the `pv-arrays:` key entirely. The card-side reader then falls back to its defaults
+            //(flat-plate horizontal forecast) and the PV chip / chart still render off the live entity, just without per-string
+            //orientation weighting.
+            delete next['pv-arrays'];
+        }
+        else
+        {
+            next['pv-arrays'] = list.map(e =>
+            {
+                const o: Record<string, number | string> = {};
+                if (e.name      !== null) o['name']      = e.name;
+                if (e.tilt      !== null) o['tilt']      = e.tilt;
+                if (e.azimuth   !== null) o['azimuth']   = e.azimuth;
+                if (e.share     !== null) o['share']     = e.share;
+                if (e.peakKwp   !== null) o['peak-kwp']  = e.peakKwp;
+                if (e.latitude  !== null) o['latitude']  = e.latitude;
+                if (e.longitude !== null) o['longitude'] = e.longitude;
+                if (e.height    !== null) o['height']    = e.height;
+                return o;
+            });
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next;
     }
 
@@ -518,10 +540,8 @@ export class HeliosCardEditor extends LitElement
         this._writePvArrays(list);
     }
 
-    //Updates the user-typed name for row `i`. Empty input clears the
-    //field to null, the summary then falls back to the auto-numbered
-    //"Row N" title. Stops the event so the parent <details>` toggle
-    //doesn't fire when the user types inside the input.
+    //Updates the user-typed name for row `i`. Empty input clears the field to null, the summary then falls back to the auto-numbered "Row N" title.
+    //Stops the event so the parent <details>` toggle doesn't fire when the user types inside the input.
     private _arrayName(i: number, e: Event): void
     {
         const list = this._readPvArrays();
@@ -547,10 +567,8 @@ export class HeliosCardEditor extends LitElement
         const list = this._readPvArrays();
         if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
         list.push({ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null });
-        //Open the newly added pan in the editor by default: the user
-        //just clicked to add it, so its body should be visible without
-        //requiring a second click on the chevron. Existing pans keep
-        //their current open/closed state untouched.
+        //Open the newly added pan in the editor by default: the user just clicked to add it, so its body should be visible without requiring a second
+        //click on the chevron. Existing pans keep their current open/closed state untouched.
         this._openArrayIndices = new Set([...this._openArrayIndices, list.length - 1]);
         this._writePvArrays(list);
     }
@@ -565,11 +583,12 @@ export class HeliosCardEditor extends LitElement
     private _arrayRemove(i: number): void
     {
         const list = this._readPvArrays();
-        if (i < 0 || i >= list.length || list.length <= 1) return;
+        if (i < 0 || i >= list.length) return;
+        //Removing the last array is allowed and clears the whole pv-arrays section (see _writePvArrays empty-list branch). Lets the
+        //user wipe their orientation setup from the visual editor without dropping to YAML.
         list.splice(i, 1);
-        //Shift the open-set so the higher indices map to their new
-        //positions after the splice. The removed index drops out, and
-        //every index above it slides down by one.
+        //Shift the open-set so the higher indices map to their new positions after the splice. The removed index drops out, and every index above it
+        //slides down by one.
         const next = new Set<number>();
         for (const idx of this._openArrayIndices)
         {
@@ -597,10 +616,8 @@ export class HeliosCardEditor extends LitElement
     //the editor falls back to "everything closed", a valid state
     //since the section content is the only mandatory surface.
     //
-    //Also scrolls the just-opened section into view so the user is
-    //never left looking at the bottom of the previous section after
-    //a click. Done on the next rAF tick so the layout reflects the
-    //newly-expanded body before we measure.
+    //Also scrolls the just-opened section into view so the user is never left looking at the bottom of the previous section after a click. Done on
+    //the next rAF tick so the layout reflects the newly-expanded body before we measure.
     private _onSectionToggle(sectionId: string, e: Event): void
     {
         const el = e.currentTarget as HTMLDetailsElement;
@@ -618,10 +635,8 @@ export class HeliosCardEditor extends LitElement
         }
     }
 
-    //Syncs the local open-set with the <details> element's runtime
-    //state on every native `toggle` event. Without this round-trip,
-    //Lit re-renders would snap the `open` attribute back to whatever
-    //_openArrayIndices says, fighting the user's click.
+    //Syncs the local open-set with the <details> element's runtime state on every native `toggle` event. Without this round-trip, Lit re-renders
+    //would snap the `open` attribute back to whatever _openArrayIndices says, fighting the user's click.
     private _onArrayToggle(i: number, e: Event): void
     {
         const el = e.currentTarget as HTMLDetailsElement;
@@ -629,6 +644,182 @@ export class HeliosCardEditor extends LitElement
         if (el.open) next.add(i);
         else         next.delete(i);
         this._openArrayIndices = next;
+    }
+
+    //Battery-bank editor state machinery. Mirrors the PV-arrays helpers above (read/write to the `batteries:` array with legacy flat-key
+    //fallback, per-field updaters, add/remove). Kept separate so a bank edit never touches a PV row by index collision.
+    private _readBatteries(): {
+        name:        string | null;
+        socEntity:   string;
+        powerEntity: string;
+        powerInvert: boolean;
+        capacityKwh: number | null;
+    }[]
+    {
+        const toNum = (v: unknown): number | null =>
+        {
+            if (v === undefined || v === null || v === '') return null;
+            const n = typeof v === 'number' ? v : parseFloat(String(v));
+            return isFinite(n) ? n : null;
+        };
+        const toStr = (v: unknown): string | null =>
+        {
+            if (v === undefined || v === null) return null;
+            const s = String(v).trim();
+            return s === '' ? null : s;
+        };
+        const raw = this._cfg?.['batteries'];
+        if (Array.isArray(raw))
+        {
+            //Empty `batteries: []` is the post-delete state and must be honoured as "no battery configured", not silently fallen-back to
+            //legacy keys (which the user may not even have set in the first place).
+            return raw.map(entry =>
+            {
+                const e = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
+                return {
+                    name:        toStr(e['name']),
+                    socEntity:   String(e['soc-entity']   ?? '').trim(),
+                    powerEntity: String(e['power-entity'] ?? '').trim(),
+                    powerInvert: e['power-invert'] === true,
+                    capacityKwh: toNum(e['capacity-kwh']),
+                };
+            });
+        }
+        //Legacy single-bank fallback: wrap the flat keys in a one-row list when the user still has flat-key YAML AND has never opened
+        //the editor. The first edit migrates to `batteries:` and the legacy keys go away (see _writeBatteries). Returns an empty list
+        //when no flat key is set either, so the section shows just the "add bank" button and the user can start clean.
+        const soc   = String(this._cfg?.['battery-soc-entity']   ?? '').trim();
+        const power = String(this._cfg?.['battery-power-entity'] ?? '').trim();
+        if (soc === '' && power === '') return [];
+        return [{
+            name:        null,
+            socEntity:   soc,
+            powerEntity: power,
+            powerInvert: this._cfg?.['battery-power-invert'] === true,
+            capacityKwh: null,
+        }];
+    }
+
+    //Persists a list of bank entries under `batteries:` and clears the legacy flat keys in the same event so configs converge to the new
+    //shape on first edit. Empty entity strings are dropped from the YAML so a half-filled new row produces a sparse but valid bank.
+    private _writeBatteries(list: {
+        name:        string | null;
+        socEntity:   string;
+        powerEntity: string;
+        powerInvert: boolean;
+        capacityKwh: number | null;
+    }[]): void
+    {
+        const next = { ...this._cfg } as Record<string, unknown>;
+        //Legacy flat keys are always stripped on any battery edit so configs converge to the new shape regardless of what the user
+        //started from.
+        delete next['battery-soc-entity'];
+        delete next['battery-power-entity'];
+        delete next['battery-power-invert'];
+        if (list.length === 0)
+        {
+            //User emptied the bank list, drop the `batteries:` key entirely so the YAML reads as "no battery configured" and parse-
+            //BatteryBanks returns an empty list (chip + dashboard battery card hidden).
+            delete next['batteries'];
+        }
+        else
+        {
+            next['batteries'] = list.map(e =>
+            {
+                const o: Record<string, number | string | boolean> = {};
+                if (e.name        !== null) o['name']         = e.name;
+                if (e.socEntity   !== '')   o['soc-entity']   = e.socEntity;
+                if (e.powerEntity !== '')   o['power-entity'] = e.powerEntity;
+                if (e.powerInvert)          o['power-invert'] = true;
+                if (e.capacityKwh !== null) o['capacity-kwh'] = e.capacityKwh;
+                return o;
+            });
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+        this._cfg = next as HeliosConfig;
+    }
+
+    private _bankEntity(i: number, key: 'socEntity' | 'powerEntity', value: string): void
+    {
+        const list = this._readBatteries();
+        if (i < 0 || i >= list.length) return;
+        list[i] = { ...list[i], [key]: (value ?? '').trim() };
+        this._writeBatteries(list);
+    }
+
+    private _bankName(i: number, e: Event): void
+    {
+        const list = this._readBatteries();
+        if (i < 0 || i >= list.length) return;
+        const raw = (e.target as HTMLInputElement).value.trim();
+        list[i] = { ...list[i], name: raw === '' ? null : raw };
+        this._writeBatteries(list);
+    }
+
+    private _bankCapacity(i: number, e: Event): void
+    {
+        const list = this._readBatteries();
+        if (i < 0 || i >= list.length) return;
+        const raw = (e.target as HTMLInputElement).value.trim();
+        if (raw === '')
+        {
+            list[i] = { ...list[i], capacityKwh: null };
+        }
+        else
+        {
+            const v = parseFloat(raw);
+            if (!isFinite(v) || v <= 0) return;
+            list[i] = { ...list[i], capacityKwh: v };
+        }
+        this._writeBatteries(list);
+    }
+
+    private _bankInvert(i: number, invert: boolean): void
+    {
+        const list = this._readBatteries();
+        if (i < 0 || i >= list.length) return;
+        list[i] = { ...list[i], powerInvert: invert };
+        this._writeBatteries(list);
+    }
+
+    //Hard cap on banks. Same rationale as PV_ARRAYS_MAX: anything past 6 starts getting unreadable in the chip aggregation explanation,
+    //and almost no residential install has more than 4 banks.
+    private static readonly BATTERIES_MAX = 6;
+
+    private _bankAdd(): void
+    {
+        const list = this._readBatteries();
+        if (list.length >= HeliosCardEditor.BATTERIES_MAX) return;
+        list.push({ name: null, socEntity: '', powerEntity: '', powerInvert: false, capacityKwh: null });
+        this._openBatteryIndices = new Set([...this._openBatteryIndices, list.length - 1]);
+        this._writeBatteries(list);
+    }
+
+    private _bankRemove(i: number): void
+    {
+        const list = this._readBatteries();
+        if (i < 0 || i >= list.length) return;
+        list.splice(i, 1);
+        //Removing the last bank is allowed and clears the whole battery section (see _writeBatteries empty-list branch). Lets the user
+        //wipe their setup from the visual editor without dropping to YAML.
+        const next = new Set<number>();
+        for (const idx of this._openBatteryIndices)
+        {
+            if (idx === i)        continue;
+            if (idx > i)          next.add(idx - 1);
+            else                  next.add(idx);
+        }
+        this._openBatteryIndices = next;
+        this._writeBatteries(list);
+    }
+
+    private _onBankToggle(i: number, e: Event): void
+    {
+        const el = e.currentTarget as HTMLDetailsElement;
+        const next = new Set(this._openBatteryIndices);
+        if (el.open) next.add(i);
+        else         next.delete(i);
+        this._openBatteryIndices = next;
     }
 
     //Format a numeric slider value for display alongside the input.
@@ -1105,7 +1296,6 @@ export class HeliosCardEditor extends LitElement
                                                 type="button"
                                                 class="pv-array-remove"
                                                 aria-label="${t.editor.pvArrayRemove}: ${title}"
-                                                ?disabled="${arrays.length <= 1}"
                                                 @click="${(e: Event) => { e.preventDefault(); e.stopPropagation(); this._arrayRemove(i); }}"
                                             >${t.editor.pvArrayRemove}</button>
                                         </summary>
@@ -1217,77 +1407,149 @@ export class HeliosCardEditor extends LitElement
 
                 </details>
 
+                <details class="advanced-section" ?open="${this._openSection === 'shading'}" @toggle="${(e: Event) => this._onSectionToggle('shading', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.shadingSection}</summary>
+                    ${renderShadingMapSection({ hass: this.hass, onAfterChange: () => this.requestUpdate() })}
+                </details>
+
                 <details class="advanced-section" ?open="${this._openSection === 'battery'}" @toggle="${(e: Event) => this._onSectionToggle('battery', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.batterySection}</summary>
-                <div class="hint">${t.editor.batteryHint}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.batterySocEntity}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass="${this.hass}"
-                            .value="${String(c['battery-soc-entity'] ?? '')}"
-                            .includeDomains="${['sensor', 'input_number']}"
-                            .entityFilter="${this._batterySocEntityFilter}"
-                            @value-changed="${(e: CustomEvent) => this._update('battery-soc-entity', e.detail.value ?? '')}"
-                        ></ha-entity-picker>
-                    ` : html`
+                    <div class="hint">${t.editor.batteryHint}</div>
+                    ${(() => {
+                        const banks = this._readBatteries();
+                        return html`
+                            ${banks.map((bank, i) => {
+                                const fallback = t.editor.batteryBankTitle.replace('{n}', String(i + 1));
+                                const title    = bank.name ?? fallback;
+                                const isOpen   = this._openBatteryIndices.has(i);
+                                return html`
+                                    <details class="pv-array-card" ?open="${isOpen}" @toggle="${(e: Event) => this._onBankToggle(i, e)}">
+                                        <summary class="pv-array-summary">
+                                            <span class="pv-array-chevron" aria-hidden="true"></span>
+                                            <span class="pv-array-title">${title}</span>
+                                            <button
+                                                type="button"
+                                                class="pv-array-remove"
+                                                aria-label="${t.editor.batteryBankRemove}: ${title}"
+                                                @click="${(e: Event) => { e.preventDefault(); e.stopPropagation(); this._bankRemove(i); }}"
+                                            >${t.editor.batteryBankRemove}</button>
+                                        </summary>
+                                        <div class="pv-array-body">
+                                            <label class="field">
+                                                <span class="label">${t.editor.batteryBankName}</span>
+                                                <input
+                                                    type="text"
+                                                    maxlength="40"
+                                                    placeholder="${fallback}"
+                                                    .value="${bank.name ?? ''}"
+                                                    @change="${(e: Event) => this._bankName(i, e)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t.editor.batteryBankNameHelp}</div>
+                                            <div class="field field-block">
+                                                <span class="label">${t.editor.batterySocEntity}</span>
+                                                ${this._pickerReady ? html`
+                                                    <ha-entity-picker
+                                                        allow-custom-entity
+                                                        .hass="${this.hass}"
+                                                        .value="${bank.socEntity}"
+                                                        .includeDomains="${['sensor', 'input_number']}"
+                                                        .entityFilter="${this._batterySocEntityFilter}"
+                                                        @value-changed="${(e: CustomEvent) => this._bankEntity(i, 'socEntity', e.detail.value ?? '')}"
+                                                    ></ha-entity-picker>
+                                                ` : html`
+                                                    <input
+                                                        type="text"
+                                                        .value="${bank.socEntity}"
+                                                        placeholder="sensor.battery_soc"
+                                                        @change="${(e: Event) => this._bankEntity(i, 'socEntity', (e.target as HTMLInputElement).value)}"
+                                                    />
+                                                `}
+                                            </div>
+                                            <div class="field-help">${t.editor.batterySocEntityHelp}</div>
+                                            <div class="field field-block">
+                                                <span class="label">${t.editor.batteryPowerEntity}</span>
+                                                ${this._pickerReady ? html`
+                                                    <ha-entity-picker
+                                                        allow-custom-entity
+                                                        .hass="${this.hass}"
+                                                        .value="${bank.powerEntity}"
+                                                        .includeDomains="${['sensor', 'input_number']}"
+                                                        .entityFilter="${this._batteryPowerEntityFilter}"
+                                                        @value-changed="${(e: CustomEvent) => this._bankEntity(i, 'powerEntity', e.detail.value ?? '')}"
+                                                    ></ha-entity-picker>
+                                                ` : html`
+                                                    <input
+                                                        type="text"
+                                                        .value="${bank.powerEntity}"
+                                                        placeholder="sensor.battery_power"
+                                                        @change="${(e: Event) => this._bankEntity(i, 'powerEntity', (e.target as HTMLInputElement).value)}"
+                                                    />
+                                                `}
+                                            </div>
+                                            <div class="field-help">${t.editor.batteryPowerEntityHelp}</div>
+                                            <div class="field">
+                                                <span class="label">${t.editor.batteryPowerInvert}</span>
+                                                <div class="segmented-toggle">
+                                                    <button
+                                                        type="button"
+                                                        class="seg-option ${(!bank.powerInvert) ? 'active' : ''}"
+                                                        @click="${() => this._bankInvert(i, false)}"
+                                                    >${t.editor.batteryPowerInvertStandard}</button>
+                                                    <button
+                                                        type="button"
+                                                        class="seg-option ${(bank.powerInvert) ? 'active' : ''}"
+                                                        @click="${() => this._bankInvert(i, true)}"
+                                                    >${t.editor.batteryPowerInvertInverted}</button>
+                                                </div>
+                                            </div>
+                                            <div class="field-help">${t.editor.batteryPowerInvertHelp}</div>
+                                            <label class="field">
+                                                <span class="label">${t.editor.batteryCapacityKwh}</span>
+                                                <input
+                                                    type="number"
+                                                    min="0.1"
+                                                    step="0.1"
+                                                    placeholder="10"
+                                                    .value="${bank.capacityKwh !== null ? String(bank.capacityKwh) : ''}"
+                                                    @change="${(e: Event) => this._bankCapacity(i, e)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t.editor.batteryCapacityKwhHelp}</div>
+                                        </div>
+                                    </details>
+                                `;
+                            })}
+                            ${banks.length < HeliosCardEditor.BATTERIES_MAX ? html`
+                                <button
+                                    type="button"
+                                    class="pv-array-add"
+                                    @click="${() => this._bankAdd()}"
+                                >+ ${t.editor.batteryBankAdd}</button>
+                            ` : nothing}
+                        `;
+                    })()}
+                    <div class="field" style="margin-top: 14px;">
+                        <span class="label">${t.editor.inverterCutoffSocPct}</span>
                         <input
-                            type="text"
-                            .value="${String(c['battery-soc-entity'] ?? '')}"
-                            placeholder="sensor.battery_soc"
-                            @change="${(e: Event) => this._str('battery-soc-entity', e)}"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            .value="${c['inverter-cutoff-soc-pct'] != null ? String(c['inverter-cutoff-soc-pct']) : ''}"
+                            placeholder="95"
+                            @change="${(e: Event) => this._numField('inverter-cutoff-soc-pct', e)}"
                         />
-                    `}
-                </div>
-                <div class="field-help">${t.editor.batterySocEntityHelp}</div>
-                <div class="field field-block">
-                    <span class="label">${t.editor.batteryPowerEntity}</span>
-                    ${this._pickerReady ? html`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass="${this.hass}"
-                            .value="${String(c['battery-power-entity'] ?? '')}"
-                            .includeDomains="${['sensor', 'input_number']}"
-                            .entityFilter="${this._batteryPowerEntityFilter}"
-                            @value-changed="${(e: CustomEvent) => this._update('battery-power-entity', e.detail.value ?? '')}"
-                        ></ha-entity-picker>
-                    ` : html`
-                        <input
-                            type="text"
-                            .value="${String(c['battery-power-entity'] ?? '')}"
-                            placeholder="sensor.battery_power"
-                            @change="${(e: Event) => this._str('battery-power-entity', e)}"
-                        />
-                    `}
-                </div>
-                <div class="field-help">${t.editor.batteryPowerEntityHelp}</div>
-                <div class="field">
-                    <span class="label">${t.editor.batteryPowerInvert}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(c['battery-power-invert'] !== true) ? 'active' : ''}"
-                            @click="${() => this._update('battery-power-invert', false)}"
-                        >${t.editor.batteryPowerInvertStandard}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(c['battery-power-invert'] === true) ? 'active' : ''}"
-                            @click="${() => this._update('battery-power-invert', true)}"
-                        >${t.editor.batteryPowerInvertInverted}</button>
                     </div>
-                </div>
-                <div class="field-help">${t.editor.batteryPowerInvertHelp}</div>
-                <label class="field">
-                    <span class="label">${t.editor.batteryColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c['battery-color'], DEFAULT_BATTERY_COLOR_HEX)}"
-                        .ariaLabel="${t.editor.batteryColor}"
-                        @value-changed="${(e: CustomEvent) => this._color('battery-color', e)}"
-                    ></helios-color-picker>
-                </label>
-                <div class="hint">${t.editor.batteryHint}</div>
-
+                    <div class="field-help">${t.editor.inverterCutoffSocPctHelp}</div>
+                    <label class="field">
+                        <span class="label">${t.editor.batteryColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c['battery-color'], DEFAULT_BATTERY_COLOR_HEX)}"
+                            .ariaLabel="${t.editor.batteryColor}"
+                            @value-changed="${(e: CustomEvent) => this._color('battery-color', e)}"
+                        ></helios-color-picker>
+                    </label>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'weather'}" @toggle="${(e: Event) => this._onSectionToggle('weather', e)}">
@@ -1321,58 +1583,6 @@ export class HeliosCardEditor extends LitElement
                                 @input="${(e: Event) => this._numSlider('lidar-view-point-size', e)}"
                             />
                             <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-size'] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX), 0.5)}</span>
-                        </div>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarViewPointColor}</span>
-                        <helios-color-picker
-                            .value="${String(c['lidar-view-point-color'] ?? defaultLidarViewPointColor(c['card-theme']))}"
-                            @value-changed="${(e: CustomEvent) => this._update('lidar-view-point-color', e.detail.value)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarViewPointOpacity}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="0" max="1" step="0.05"
-                                .value="${String(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY)}"
-                                @input="${(e: Event) => this._numSlider('lidar-view-point-opacity', e)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-opacity'] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
-                        </div>
-                    </label>
-                    <div class="field">
-                        <span class="label">${t.editor.lidarViewWireframe}</span>
-                        <div class="segmented-toggle">
-                            <button
-                                type="button"
-                                class="seg-option ${((c['lidar-view-wireframe'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME) === true) ? 'active' : ''}"
-                                @click="${() => this._update('lidar-view-wireframe', true)}"
-                            >${t.editor.lidarViewWireframeOn}</button>
-                            <button
-                                type="button"
-                                class="seg-option ${((c['lidar-view-wireframe'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME) !== true) ? 'active' : ''}"
-                                @click="${() => this._update('lidar-view-wireframe', false)}"
-                            >${t.editor.lidarViewWireframeOff}</button>
-                        </div>
-                    </div>
-                    <div class="hint">${t.editor.lidarViewWireframeHint}</div>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarViewWireframeColor}</span>
-                        <helios-color-picker
-                            .value="${String(c['lidar-view-wireframe-color'] ?? defaultLidarViewWireframeColor(c['card-theme']))}"
-                            @value-changed="${(e: CustomEvent) => this._update('lidar-view-wireframe-color', e.detail.value)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarViewWireframeOpacity}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="0" max="1" step="0.05"
-                                .value="${String(c['lidar-view-wireframe-opacity'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY)}"
-                                @input="${(e: Event) => this._numSlider('lidar-view-wireframe-opacity', e)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c['lidar-view-wireframe-opacity'] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY), 0.05)}</span>
                         </div>
                     </label>
                 </details>
@@ -1466,17 +1676,47 @@ export class HeliosCardEditor extends LitElement
                     >${this._resetFeedback ?? t.editor.resetCacheButton}</button>
                 </details>
 
+                <details class="advanced-section about-section" ?open="${this._openSection === 'about'}" @toggle="${(e: Event) => this._onSectionToggle('about', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.aboutSection}</summary>
+                    <div class="about-row">
+                        <span class="about-label">${t.editor.aboutVersionLabel}</span>
+                        <span class="about-value">${__HELIOS_VERSION__}</span>
+                    </div>
+                    <div class="about-block">
+                        <a class="about-link" href="https://helios-lidar.org" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:satellite-variant"></ha-icon>
+                            <span>${t.editor.aboutSiteTitle}</span>
+                        </a>
+                        <p class="about-paragraph">${t.editor.aboutSiteDescription}</p>
+                    </div>
+                    <div class="about-block">
+                        <div class="about-label">${t.editor.aboutCodeLabel}</div>
+                        <a class="about-link" href="https://github.com/ReikanYsora/Helios" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>${t.editor.aboutRepoCard}</span>
+                        </a>
+                        <a class="about-link" href="https://github.com/ReikanYsora/Helios-Lidar" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>${t.editor.aboutRepoLidar}</span>
+                        </a>
+                    </div>
+                    <div class="about-block about-coffee">
+                        <p class="about-paragraph">${t.editor.aboutCoffeeMessage}</p>
+                        <a class="about-link about-coffee-link" href="https://www.buymeacoffee.com/reikanysora" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:coffee"></ha-icon>
+                            <span>${t.editor.aboutCoffeeLink}</span>
+                        </a>
+                    </div>
+                </details>
+
             </div>
         `;
     }
 
 
-    //Fires the window-level reset bus so every live HeliosCard on
-    //the page drops its cached Open-Meteo payload + in-memory PV
-    //history and triggers a fresh fetch. Also flashes a short
-    //"Cache vidé" confirmation on the button itself for 2 s so
-    //the user knows the click landed without us needing a toast
-    //system inside the editor.
+    //Fires the window-level reset bus so every live HeliosCard on the page drops its cached Open-Meteo payload + in-memory PV history and triggers a
+    //fresh fetch. Also flashes a short "Cache vidé" confirmation on the button itself for 2 s so the user knows the click landed without us needing a
+    //toast system inside the editor.
     private _resetFeedbackTimer?: number;
     @state() private _resetFeedback: string | null = null;
 

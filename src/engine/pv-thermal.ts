@@ -32,10 +32,8 @@
 //     would have shut down long before that, the cap is a sanity
 //     guard rather than a physical model).
 //
-//Both functions are pure. Callers pass in the live air temp and
-//wind from the same weather fetch the rest of the engine consumes
-//and reuse the result alongside the existing cloud-attenuated
-//irradiance.
+//Both functions are pure. Callers pass in the live air temp and wind from the same weather fetch the rest of the engine consumes and reuse the result
+//alongside the existing cloud-attenuated irradiance.
 
 //Nominal Operating Cell Temperature, in °C. Modern monocrystalline
 //modules typically spec 43-45 °C; we sit at the middle of that

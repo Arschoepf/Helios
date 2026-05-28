@@ -585,17 +585,7 @@ const LIDAR_PRECISION_PITCH_MULT = {
 };
 const DEFAULT_SHADOW_OPACITY = 0.32;
 const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX = 1;
-const DEFAULT_LIDAR_VIEW_POINT_OPACITY = 0.3;
-const DEFAULT_LIDAR_VIEW_WIREFRAME = true;
-const DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY = 0.25;
-function defaultLidarViewPointColor(cardTheme) {
-  const isDark = String(cardTheme ?? "light").toLowerCase() === "dark";
-  return isDark ? "#ffffff" : "#000000";
-}
-function defaultLidarViewWireframeColor(cardTheme) {
-  const isDark = String(cardTheme ?? "light").toLowerCase() === "dark";
-  return isDark ? "#d0d0d0" : "#404040";
-}
+const DEFAULT_LIDAR_VIEW_OPACITY = 0.25;
 const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
 const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
 const DEFAULT_TIMELINE_ENABLED = true;
@@ -605,6 +595,7 @@ const en = {
   cardName: "HELIOS",
   cardDescription: "☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home",
   lidarViewChipLabel: "LiDAR view",
+  shadingDomeChipLabel: "Shadows",
   detail: {
     exitHint: "Tap anywhere to exit",
     todayLabel: "Today",
@@ -686,7 +677,14 @@ const en = {
     pvArrayCoordsPlaceholder: "optional",
     pvColor: "Production color",
     batterySection: "Home battery",
-    batteryHint: "Optional. Each entity surfaces as its own chip flanking the PV chip, State of Charge on the LEFT, signed Power on the RIGHT, connected to PV with a static dotted hairline. Either entity is independently optional. The chip on its side appears as soon as the entity is set.",
+    batteryHint: "Optional. Declare one row per physical battery bank (one entry suffices for a single hybrid inverter; add more for split house + garage setups, or a hybrid + standalone pair). The chip on the card stays single, aggregating the banks as a capacity-weighted SoC and a summed signed power. Each entity inside a bank is independently optional, the chip side appears as soon as the entity is set.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Add bank",
+    batteryBankRemove: "Remove",
+    batteryBankName: "Bank name (optional)",
+    batteryBankNameHelp: 'Optional friendly label shown in the row header. Leave blank to fall back to "Bank 1", "Bank 2", etc. Useful when you have several banks and want to recognise them at a glance.',
+    batteryCapacityKwh: "Capacity (kWh, optional)",
+    batteryCapacityKwhHelp: "Used to weight this bank in the aggregated SoC chip when banks have different sizes (e.g. a 10 kWh house bank + a 5 kWh garage bank: the house bank moves the chip twice as much as the garage one). Leave blank if all your banks are the same size, the weighting then collapses to a flat unweighted mean. Does not affect the summed power readout.",
     batterySocEntity: "State of charge entity",
     batterySocEntityHelp: 'Pick a battery State of Charge sensor (%, usually with device_class "battery"). Renders as a chip on the left of the PV chip showing the live percentage.',
     batteryPowerEntity: "Power entity",
@@ -695,6 +693,8 @@ const en = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Inverted",
     batteryPowerInvertHelp: "Default (Standard): the battery entity already reports charging as positive and discharging as negative. Pick Inverted when your entity does the opposite (some GivEnergy / GivTCP setups), Helios will flip the value once at ingest so the chip readout, the leader arrow and the daily charged / discharged totals keep their meaning.",
+    inverterCutoffSocPct: "Inverter cutoff SoC (%)",
+    inverterCutoffSocPctHelp: "Percent at which your hybrid inverter clamps PV output once the battery hits its set ceiling. Leave empty to disable. When set, the shading-map trainer skips every observation bucket where the battery SoC reached this value so the inverter-blocked production does not pollute the shading map with phantom shadow at those sun positions. Requires the battery SoC entity above to be configured.",
     batteryColor: "Battery color",
     weatherSection: "Weather",
     weatherHint: "Optional. Wire local weather entities to feed Helios with measurements taken at your home instead of the Open-Meteo model interpolated to your grid cell. Each entity is independently optional and only used when it carries a fresh value; missing or stale samples fall back to the model transparently.",
@@ -736,19 +736,11 @@ const en = {
     shadowOpacity: "Shadow opacity",
     shadowOpacityHint: "Opacity of the cast ground shadows.",
     lidarViewSection: "LiDAR View",
-    lidarViewHint: "Click the LiDAR button in the top-right of the card to switch into a point-cloud view of your surroundings: every loaded LiDAR cell (ground, vegetation and buildings) is painted over the basemap. The button stays disabled when no provider covers the home. The view reuses the data already fetched at the current precision, no extra calls are made.",
+    lidarViewHint: "Click the LiDAR button in the top-right of the card to switch into the LiDAR overlay: every loaded cell is drawn as a wireframe and shaded in real time by its current solar exposure, so lit surfaces glow warm and shaded ones dim out. Use the slider at the bottom of the card to dial the overall opacity in or out. The button stays disabled when no provider covers the home. The view reuses the data already fetched at the current precision, no extra calls are made.",
     lidarViewPointSize: "Point size (px)",
-    lidarViewPointColor: "Point color",
-    lidarViewPointOpacity: "Point opacity",
-    lidarViewWireframe: "Wireframe overlay",
-    lidarViewWireframeOn: "On",
-    lidarViewWireframeOff: "Off",
-    lidarViewWireframeHint: "Connects each finite LiDAR cell to its right and bottom neighbours with line segments, producing a mesh on top of the dot cloud. Dial the point size to 0 if you only want the lines. Heavy rasters at high precision are still drawn in a single GPU draw call, but the line count grows with the cell count, so older devices may slow down on big radii.",
-    lidarViewWireframeColor: "Wireframe color",
-    lidarViewWireframeOpacity: "Wireframe opacity",
     localLidarSection: "Advanced — Local LiDAR (BYO)",
     localLidarHint: "Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.",
-    localLidarToolsHint: "Need to prepare a raster from scratch? The easy path is the companion site [helios-lidar.org](https://helios-lidar.org): drop in your raw LAZ / LAS file or a DSM + DTM raster pair, and it returns the 2-band COG Helios reads (band 1 = nDSM, band 2 = DTM) plus the ready-to-paste YAML for the keys below. Free, no install, no account. If you would rather run everything locally, the Helios repo also ships Python helpers under `tools/lidar/` for the same conversion.",
+    localLidarToolsHint: "Need to prepare a raster from scratch? Drop your raw LAZ / LAS file or a DSM + DTM raster pair into the companion site [helios-lidar.org](https://helios-lidar.org), it returns the 2-band COG Helios reads (band 1 = nDSM, band 2 = DTM) plus the ready-to-paste YAML for the keys below. Free, no install, no account. Prefer to run everything locally? The full Python toolchain lives in the [Helios-Lidar repository](https://github.com/ReikanYsora/Helios-Lidar).",
     localLidarEnabled: "Use local data",
     localLidarUrl: "GeoTIFF URL",
     localLidarMinLat: "Min latitude",
@@ -759,13 +751,34 @@ const en = {
     resetSectionHint: "Maintenance tools to wipe data the card has cached locally.",
     resetCacheButton: "Reset data cache",
     resetCacheWarning: "Warning: this clears the cached Open-Meteo weather and the in-memory PV history for EVERY Helios card open on this page. The refined forecast will lose its 5 days of calibration until they're re-fetched (a few minutes depending on your HA server). Your data inside Home Assistant is never touched.",
-    resetCacheDone: "Cache cleared ✓"
+    resetCacheDone: "Cache cleared ✓",
+    aboutSection: "About",
+    aboutVersionLabel: "Version",
+    aboutSiteTitle: "Companion site, helios-lidar.org",
+    aboutSiteDescription: "Free tool to turn raw open LiDAR data from any country (LAZ / LAS or DSM + DTM pairs) into the nDSM GeoTIFF Helios needs, plus the YAML snippet to paste into this editor. No QGIS, no GDAL, no install, no account.",
+    aboutCodeLabel: "Source code",
+    aboutRepoCard: "Helios (the card)",
+    aboutRepoLidar: "Helios-Lidar (the companion site)",
+    aboutCoffeeMessage: "Helios is built by one developer with a lot of energy and very little sleep. If it helps your daily routine, a star on GitHub or a coffee keeps the project alive.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const fr = {
   cardName: "HELIOS",
   cardDescription: "☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel",
   lidarViewChipLabel: "Vue LiDAR",
+  shadingDomeChipLabel: "Ombres",
   detail: {
     exitHint: "Cliquez n'importe où pour quitter",
     todayLabel: "Aujourd'hui",
@@ -847,7 +860,14 @@ const fr = {
     pvArrayCoordsPlaceholder: "optionnel",
     pvColor: "Couleur de production",
     batterySection: "Batterie domestique",
-    batteryHint: "Optionnel. Chaque entité apparaît sous forme de pastille de part et d'autre de la pastille PV, état de charge à GAUCHE, puissance signée à DROITE, reliée à PV par un trait pointillé statique. Les deux entités sont indépendamment optionnelles. La pastille correspondante s'affiche dès que l'entité est renseignée.",
+    batteryHint: "Optionnel. Déclare une ligne par banc de batterie physique (une seule entrée suffit pour un onduleur hybride unique ; ajoute-en plus pour une installation maison + garage séparée, ou pour une paire hybride + autonome). La pastille de la carte reste unique, agrégeant les bancs sous forme d'un SoC pondéré par la capacité et d'une puissance signée sommée. Chaque entité d'un banc est indépendamment optionnelle, le côté pastille apparaît dès que l'entité est renseignée.",
+    batteryBankTitle: "Banc {n}",
+    batteryBankAdd: "Ajouter un banc",
+    batteryBankRemove: "Supprimer",
+    batteryBankName: "Nom du banc (optionnel)",
+    batteryBankNameHelp: "Étiquette conviviale optionnelle affichée dans l'en-tête de la ligne. Laisse vide pour retomber sur « Banc 1 », « Banc 2 », etc. Pratique quand tu as plusieurs bancs et veux les reconnaître d'un coup d'œil.",
+    batteryCapacityKwh: "Capacité (kWh, optionnel)",
+    batteryCapacityKwhHelp: "Sert à pondérer ce banc dans la pastille SoC agrégée quand les bancs ont des tailles différentes (par ex. un banc maison de 10 kWh + un banc garage de 5 kWh : le banc maison déplace la pastille deux fois plus que celui du garage). Laisse vide si tous tes bancs ont la même taille, la pondération se réduit alors à une moyenne simple non pondérée. N'affecte pas la lecture de la puissance sommée.",
     batterySocEntity: "Entité d'état de charge",
     batterySocEntityHelp: `Choisis un capteur d'état de charge de batterie (%, typiquement avec device_class "battery"). Rendue sous forme de pastille à gauche de la pastille PV affichant le pourcentage en direct.`,
     batteryPowerEntity: "Entité de puissance",
@@ -856,6 +876,8 @@ const fr = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Inversé",
     batteryPowerInvertHelp: "Par défaut (Standard) : ton capteur batterie rapporte déjà la charge en positif et la décharge en négatif. Passe sur Inversé si ton capteur fait l'inverse (certaines installations GivEnergy / GivTCP), Helios inverse alors la valeur une fois à la lecture pour que la pastille, la flèche du leader et les totaux journaliers charge / décharge gardent leur sens.",
+    inverterCutoffSocPct: "Seuil de coupure onduleur (%)",
+    inverterCutoffSocPctHelp: "Pourcentage à partir duquel votre onduleur hybride bloque la production PV une fois que la batterie atteint son plafond. Laissez vide pour désactiver. Quand renseigné, l'apprentissage de la carte d'ombrage ignore chaque créneau d'observation où le SoC batterie a atteint cette valeur, pour ne pas polluer la carte avec des ombres fantômes aux positions solaires concernées. Nécessite que l'entité SoC batterie ci-dessus soit configurée.",
     batteryColor: "Couleur batterie",
     weatherSection: "Météo",
     weatherHint: "Optionnel. Branche des entités météo locales pour qu'Helios utilise des mesures prises chez toi plutôt que le modèle Open-Meteo interpolé à ta cellule de grille. Chaque entité est indépendamment optionnelle et n'est utilisée que lorsqu'elle remonte une valeur fraîche ; les échantillons manquants ou périmés retombent sur le modèle de manière transparente.",
@@ -897,19 +919,11 @@ const fr = {
     shadowOpacity: "Opacité des ombres",
     shadowOpacityHint: "Opacité des ombres projetées au sol.",
     lidarViewSection: "Vue LiDAR",
-    lidarViewHint: "Clique sur le bouton LiDAR en haut à droite de la carte pour basculer dans une vue en nuage de points de tes environs : chaque cellule LiDAR chargée (sol, végétation et bâtiments) est peinte par-dessus la carte de fond. Le bouton reste désactivé quand aucun provider ne couvre la maison. La vue réutilise les données déjà récupérées à la précision actuelle, aucun appel supplémentaire n'est fait.",
+    lidarViewHint: "Clique sur le bouton LiDAR en haut à droite de la carte pour basculer dans la surcouche LiDAR : chaque cellule chargée est dessinée en fil de fer et ombrée en temps réel selon son exposition solaire actuelle, les surfaces éclairées rayonnent en tons chauds et les ombragées s'estompent. Utilise le curseur en bas de la carte pour doser l'opacité globale. Le bouton reste désactivé quand aucun provider ne couvre la maison. La vue réutilise les données déjà récupérées à la précision actuelle, aucun appel supplémentaire n'est fait.",
     lidarViewPointSize: "Taille des points (px)",
-    lidarViewPointColor: "Couleur des points",
-    lidarViewPointOpacity: "Opacité des points",
-    lidarViewWireframe: "Fil de fer",
-    lidarViewWireframeOn: "Activé",
-    lidarViewWireframeOff: "Désactivé",
-    lidarViewWireframeHint: "Relie chaque cellule LiDAR finie à ses voisines droite et bas avec des segments, ce qui donne un maillage par-dessus le nuage de points. Met la taille des points à 0 si tu ne veux que les lignes. Les rasters lourds en haute précision tiennent toujours dans un seul draw call GPU, mais le nombre de lignes grandit avec le nombre de cellules, donc les vieux appareils peuvent ralentir sur les grands rayons.",
-    lidarViewWireframeColor: "Couleur du fil de fer",
-    lidarViewWireframeOpacity: "Opacité du fil de fer",
     localLidarSection: "Avancé — LiDAR local (BYO)",
     localLidarHint: "Optionnel. Pointe Helios sur ton propre nDSM GeoTIFF (Digital Surface Model moins le sol, hauteur au-dessus du sol en mètres) hébergé sur Home Assistant. Permet d'avoir des ombres dans une région encore non couverte par les fournisseurs LiDAR publics. À l'intérieur de la zone définie, cette source remplace tout fournisseur national.",
-    localLidarToolsHint: "Tu pars de zéro ? Le plus simple est le site compagnon [helios-lidar.org](https://helios-lidar.org) : dépose ton fichier LAZ / LAS brut ou un couple DSM + DTM, et il te renvoie le COG 2 bandes que Helios consomme (bande 1 = nDSM, bande 2 = DTM) avec le bloc YAML prêt à coller pour les clés ci-dessous. Gratuit, sans installation, sans compte. Si tu préfères tout faire en local, le dépôt Helios contient aussi des helpers Python sous `tools/lidar/` qui réalisent la même conversion.",
+    localLidarToolsHint: "Tu dois préparer un raster depuis zéro ? Dépose ton fichier LAZ / LAS brut ou un couple de rasters DSM + DTM sur le site compagnon [helios-lidar.org](https://helios-lidar.org), il te renvoie le COG 2 bandes que Helios consomme (bande 1 = nDSM, bande 2 = DTM) avec le bloc YAML prêt à coller pour les clés ci-dessous. Gratuit, sans installation, sans compte. Tu préfères tout faire en local ? La chaîne d'outils Python complète vit dans le [dépôt Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar).",
     localLidarEnabled: "Utiliser les données locales",
     localLidarUrl: "URL du GeoTIFF",
     localLidarMinLat: "Latitude min",
@@ -920,13 +934,34 @@ const fr = {
     resetSectionHint: "Outils de maintenance pour purger les données mises en cache par la carte.",
     resetCacheButton: "Réinitialiser le cache des données",
     resetCacheWarning: "Attention : ce bouton vide la météo Open-Meteo en cache local et l'historique PV en mémoire pour TOUTES les cartes Helios ouvertes. La prévision affinée perdra ses 5 derniers jours de calibration le temps qu'ils soient récupérés à nouveau (quelques minutes selon ton serveur HA). Tes données dans Home Assistant ne sont jamais touchées.",
-    resetCacheDone: "Cache vidé ✓"
+    resetCacheDone: "Cache vidé ✓",
+    aboutSection: "À propos",
+    aboutVersionLabel: "Version",
+    aboutSiteTitle: "Site compagnon, helios-lidar.org",
+    aboutSiteDescription: "Outil gratuit pour transformer les données LiDAR ouvertes brutes de n'importe quel pays (LAZ / LAS ou paires DSM + DTM) en le GeoTIFF nDSM dont Helios a besoin, avec le bout de YAML à coller dans cet éditeur. Pas de QGIS, pas de GDAL, pas d'installation, pas de compte.",
+    aboutCodeLabel: "Code source",
+    aboutRepoCard: "Helios (la carte)",
+    aboutRepoLidar: "Helios-Lidar (le site compagnon)",
+    aboutCoffeeMessage: "Helios est développé par un seul dev avec beaucoup d'énergie et très peu de sommeil. Si ça t'aide au quotidien, une étoile sur GitHub ou un café garde le projet en vie.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Carte d'ombre adaptative",
+    shadingHint: "Une couche d'apprentissage par-dessus la calibration 5 jours : chaque cellule de la grille polaire ci-dessous garde la moyenne du rapport réel/prévu observée quand le soleil était à cette position et que la couverture nuageuse était dans cette tranche. Permet à la prévision de plier au bon moment de la journée pour les ombres d'arbres, les toits voisins et tout obstacle invisible au LiDAR. Se construit à partir de vos propres données sur quelques semaines ; en attendant, la calibration scalaire prend le relais.",
+    shadingStatsCells: "cellules avec données",
+    shadingStatsConfident: "cellules utilisées par la prévision",
+    shadingStatsUnder: "sous-production la plus forte :",
+    shadingStatsOver: "sur-production la plus forte :",
+    shadingExport: "Exporter la carte",
+    shadingImport: "Importer une carte",
+    shadingImportError: "Ce fichier n'est pas une carte d'ombre Helios valide.",
+    shadingReset: "Réinitialiser la carte",
+    shadingResetConfirm: "Effacer toutes les cellules apprises par la carte d'ombre ? La prévision repartira sur la calibration scalaire pendant quelques semaines, le temps que la carte se reconstruise."
   }
 };
 const de = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sonne, Wolken, PV-Erzeugung, Batterie und LiDAR-Schatten am Haus, in 3D-Echtzeit",
   lidarViewChipLabel: "LiDAR-Ansicht",
+  shadingDomeChipLabel: "Schatten",
   detail: {
     exitHint: "Tippe irgendwo, um zu schließen",
     todayLabel: "Heute",
@@ -1008,7 +1043,14 @@ const de = {
     pvArrayCoordsPlaceholder: "optional",
     pvColor: "Produktionsfarbe",
     batterySection: "Hausbatterie",
-    batteryHint: "Optional. Jede Entität erscheint als eigener Chip beidseits des PV-Chips, Ladezustand LINKS, vorzeichenbehaftete Leistung RECHTS, über eine statische punktierte Linie mit PV verbunden. Beide Entitäten sind unabhängig optional. Der jeweilige Chip wird angezeigt, sobald die Entität gesetzt ist.",
+    batteryHint: "Optional. Lege eine Zeile pro physischem Batterieblock an (ein Eintrag genügt für einen einzelnen Hybrid-Wechselrichter; füge weitere hinzu für getrennte Haus- + Garage-Aufbauten oder ein Hybrid- + Standalone-Paar). Der Chip auf der Karte bleibt einzeln und aggregiert die Blöcke als kapazitätsgewichteten SoC und summierte vorzeichenbehaftete Leistung. Jede Entität innerhalb eines Blocks ist unabhängig optional, die Chip-Seite erscheint, sobald die Entität gesetzt ist.",
+    batteryBankTitle: "Akku {n}",
+    batteryBankAdd: "Block hinzufügen",
+    batteryBankRemove: "Entfernen",
+    batteryBankName: "Blockname (optional)",
+    batteryBankNameHelp: 'Optionale freundliche Bezeichnung, die im Zeilenkopf angezeigt wird. Leer lassen, um auf „Akku 1", „Akku 2" usw. zurückzufallen. Praktisch, wenn du mehrere Blöcke hast und sie auf einen Blick erkennen willst.',
+    batteryCapacityKwh: "Kapazität (kWh, optional)",
+    batteryCapacityKwhHelp: "Wird verwendet, um diesen Block im aggregierten SoC-Chip zu gewichten, wenn die Blöcke unterschiedliche Größen haben (z. B. ein 10-kWh-Hausblock + ein 5-kWh-Garagenblock: der Hausblock bewegt den Chip doppelt so stark wie der Garagenblock). Leer lassen, wenn alle deine Blöcke gleich groß sind, die Gewichtung reduziert sich dann auf einen einfachen ungewichteten Mittelwert. Beeinflusst nicht die Anzeige der summierten Leistung.",
     batterySocEntity: "Ladezustand-Entität",
     batterySocEntityHelp: 'Wähle einen Batterie-Ladezustand-Sensor (%, typisch mit device_class "battery"). Erscheint als Chip links vom PV-Chip mit dem Live-Prozentwert.',
     batteryPowerEntity: "Leistungs-Entität",
@@ -1017,6 +1059,8 @@ const de = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertiert",
     batteryPowerInvertHelp: "Standardmäßig meldet die Batterie-Entität das Laden als positiv und das Entladen als negativ. Wähle Invertiert, wenn deine Entität es umgekehrt macht (einige GivEnergy- / GivTCP-Setups). Helios dreht den Wert dann einmal beim Einlesen um, damit Chip-Anzeige, Flusspfeil und tägliche Lade- / Entladesummen ihre Bedeutung behalten.",
+    inverterCutoffSocPct: "Wechselrichter-Cutoff SoC (%)",
+    inverterCutoffSocPctHelp: "Prozentwert, ab dem Ihr Hybrid-Wechselrichter die PV-Einspeisung kappt, sobald die Batterie ihre Obergrenze erreicht. Leer lassen, um zu deaktivieren. Wenn gesetzt, überspringt der Shading-Map-Trainer jedes Beobachtungsfenster, in dem der Batterie-SoC diesen Wert erreicht hat, damit die vom Wechselrichter blockierte Produktion die Shading-Karte nicht mit Phantom-Schatten an den entsprechenden Sonnenpositionen verschmutzt. Erfordert die oben konfigurierte Batterie-SoC-Entität.",
     batteryColor: "Batteriefarbe",
     weatherSection: "Wetter",
     weatherHint: "Optional. Verbinde lokale Wetter-Entitäten, damit Helios direkt bei dir gemessene Werte verwendet, statt das Open-Meteo-Modell, das auf deine Gitterzelle interpoliert wird. Jede Entität ist unabhängig optional und wird nur verwendet, wenn sie einen frischen Wert liefert; fehlende oder veraltete Messwerte fallen transparent auf das Modell zurück.",
@@ -1058,19 +1102,11 @@ const de = {
     shadowOpacity: "Schatten-Deckkraft",
     shadowOpacityHint: "Deckkraft der am Boden geworfenen Schatten.",
     lidarViewSection: "LiDAR-Ansicht",
-    lidarViewHint: "Klicke oben rechts auf die Karte auf die Schaltfläche LiDAR, um in eine Punktwolken-Ansicht deiner Umgebung zu wechseln: Jede geladene LiDAR-Zelle (Boden, Vegetation und Gebäude) wird über der Basiskarte gemalt. Die Schaltfläche bleibt deaktiviert, wenn kein Anbieter das Zuhause abdeckt. Die Ansicht verwendet die bereits in der aktuellen Präzision abgerufenen Daten wieder, es werden keine zusätzlichen Aufrufe gemacht.",
+    lidarViewHint: "Klicke oben rechts auf die Karte auf die Schaltfläche LiDAR, um in das LiDAR-Overlay zu wechseln: Jede geladene Zelle wird als Drahtgitter gezeichnet und in Echtzeit nach ihrer aktuellen Sonneneinstrahlung schattiert, beleuchtete Flächen leuchten warm und beschattete verblassen. Mit dem Schieberegler am unteren Kartenrand regelst du die gesamte Deckkraft. Die Schaltfläche bleibt deaktiviert, wenn kein Anbieter das Zuhause abdeckt. Die Ansicht verwendet die bereits in der aktuellen Präzision abgerufenen Daten wieder, es werden keine zusätzlichen Aufrufe gemacht.",
     lidarViewPointSize: "Punktgröße (px)",
-    lidarViewPointColor: "Punktfarbe",
-    lidarViewPointOpacity: "Punktdeckkraft",
-    lidarViewWireframe: "Drahtgitter",
-    lidarViewWireframeOn: "An",
-    lidarViewWireframeOff: "Aus",
-    lidarViewWireframeHint: "Verbindet jede gültige LiDAR-Zelle mit ihren rechten und unteren Nachbarn durch Linien, das ergibt ein Drahtgitter über der Punktwolke. Setze die Punktgröße auf 0, wenn du nur die Linien sehen willst. Auch schwere Raster bei hoher Präzision laufen in einem einzigen GPU-Draw, aber die Linienzahl wächst mit der Zellzahl, ältere Geräte können bei großen Radien einbrechen.",
-    lidarViewWireframeColor: "Drahtgitter-Farbe",
-    lidarViewWireframeOpacity: "Drahtgitter-Deckkraft",
     localLidarSection: "Erweitert — Lokales LiDAR (BYO)",
     localLidarHint: "Optional. Verweise Helios auf deine eigene nDSM-GeoTIFF (Digitales Oberflächenmodell minus Bodenhöhe, Höhe über Grund in Metern), gehostet in Home Assistant. So lassen sich Schatten in Regionen darstellen, die noch nicht von den öffentlichen LiDAR-Anbietern abgedeckt werden. Innerhalb des definierten Bereichs ersetzt diese Quelle jeden nationalen Anbieter.",
-    localLidarToolsHint: "Du musst dein eigenes Raster aufbereiten? Am einfachsten geht das über die Begleitseite [helios-lidar.org](https://helios-lidar.org): lade deine rohe LAZ / LAS-Datei oder ein DSM + DTM-Paar hoch, und du erhältst das 2-Band-COG zurück, das Helios liest (Band 1 = nDSM, Band 2 = DTM) zusammen mit dem fertigen YAML-Block für die Schlüssel unten. Kostenlos, ohne Installation, ohne Konto. Wenn du lieber alles lokal erledigst, enthält das Helios-Repository auch Python-Helfer unter `tools/lidar/` für dieselbe Konvertierung.",
+    localLidarToolsHint: "Du musst ein Raster von Grund auf aufbereiten? Lade deine rohe LAZ / LAS-Datei oder ein DSM + DTM-Rasterpaar auf die Begleitseite [helios-lidar.org](https://helios-lidar.org), sie liefert das 2-Band-COG zurück, das Helios liest (Band 1 = nDSM, Band 2 = DTM), zusammen mit dem fertig einfügbaren YAML für die Schlüssel unten. Kostenlos, ohne Installation, ohne Konto. Du möchtest lieber alles lokal ausführen? Die vollständige Python-Toolchain liegt im [Helios-Lidar-Repository](https://github.com/ReikanYsora/Helios-Lidar).",
     localLidarEnabled: "Lokale Daten verwenden",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min. Breitengrad",
@@ -1081,13 +1117,34 @@ const de = {
     resetSectionHint: "Wartungswerkzeuge, um die lokal gespeicherten Daten der Karte zu löschen.",
     resetCacheButton: "Datencache zurücksetzen",
     resetCacheWarning: "Achtung: löscht das zwischengespeicherte Open-Meteo-Wetter und den PV-Verlauf im Speicher für ALLE auf dieser Seite geöffneten Helios-Karten. Die verfeinerte Prognose verliert ihre 5-Tage-Kalibrierung, bis sie erneut abgerufen wird (je nach HA-Server einige Minuten). Daten in Home Assistant bleiben unverändert.",
-    resetCacheDone: "Cache geleert ✓"
+    resetCacheDone: "Cache geleert ✓",
+    aboutSection: "Über",
+    aboutVersionLabel: "Version",
+    aboutSiteTitle: "Begleitseite, helios-lidar.org",
+    aboutSiteDescription: "Kostenloses Tool, um rohe offene LiDAR-Daten aus jedem Land (LAZ / LAS oder DSM + DTM-Paare) in das nDSM-GeoTIFF zu verwandeln, das Helios braucht, samt YAML-Schnipsel zum Einfügen in diesen Editor. Kein QGIS, kein GDAL, keine Installation, kein Konto.",
+    aboutCodeLabel: "Quellcode",
+    aboutRepoCard: "Helios (die Karte)",
+    aboutRepoLidar: "Helios-Lidar (die Begleitseite)",
+    aboutCoffeeMessage: "Helios wird von einem einzigen Entwickler mit viel Energie und sehr wenig Schlaf gebaut. Wenn es deinen Alltag erleichtert, hält ein Stern auf GitHub oder ein Kaffee das Projekt am Leben.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const es = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, nubes, producción FV, batería y sombras LiDAR sobre tu casa, en 3D y tiempo real",
   lidarViewChipLabel: "Vista LiDAR",
+  shadingDomeChipLabel: "Sombras",
   detail: {
     exitHint: "Toca en cualquier lugar para salir",
     todayLabel: "Hoy",
@@ -1169,7 +1226,14 @@ const es = {
     pvArrayCoordsPlaceholder: "opcional",
     pvColor: "Color de producción",
     batterySection: "Batería doméstica",
-    batteryHint: "Opcional. Cada entidad aparece como su propio chip a ambos lados del chip PV, estado de carga a la IZQUIERDA, potencia con signo a la DERECHA, conectado al chip PV mediante una línea punteada estática. Ambas entidades son independientemente opcionales. El chip correspondiente aparece en cuanto la entidad está definida.",
+    batteryHint: "Opcional. Declara una fila por cada banco físico de baterías (una sola entrada basta para un único inversor híbrido; añade más para instalaciones divididas casa + garaje, o para una pareja híbrido + autónomo). El chip de la tarjeta sigue siendo único, agregando los bancos como un SoC ponderado por capacidad y una potencia con signo sumada. Cada entidad dentro de un banco es independientemente opcional, el lado del chip aparece en cuanto la entidad está definida.",
+    batteryBankTitle: "Banco {n}",
+    batteryBankAdd: "Añadir banco",
+    batteryBankRemove: "Eliminar",
+    batteryBankName: "Nombre del banco (opcional)",
+    batteryBankNameHelp: "Etiqueta amigable opcional mostrada en la cabecera de la fila. Déjala vacía para volver a «Banco 1», «Banco 2», etc. Útil cuando tienes varios bancos y quieres reconocerlos de un vistazo.",
+    batteryCapacityKwh: "Capacidad (kWh, opcional)",
+    batteryCapacityKwhHelp: "Se usa para ponderar este banco en el chip SoC agregado cuando los bancos tienen tamaños diferentes (p. ej. un banco casa de 10 kWh + un banco garaje de 5 kWh: el banco de la casa mueve el chip el doble que el del garaje). Déjala vacía si todos tus bancos son del mismo tamaño, la ponderación se reduce entonces a una media simple no ponderada. No afecta a la lectura de la potencia sumada.",
     batterySocEntity: "Entidad de estado de carga",
     batterySocEntityHelp: 'Elige un sensor de estado de carga de la batería (%, típicamente con device_class "battery"). Aparece como chip a la izquierda del chip PV con el porcentaje en vivo.',
     batteryPowerEntity: "Entidad de potencia",
@@ -1178,6 +1242,8 @@ const es = {
     batteryPowerInvertStandard: "Estándar",
     batteryPowerInvertInverted: "Invertido",
     batteryPowerInvertHelp: "Por defecto (Estándar) tu entidad de batería ya informa la carga como positivo y la descarga como negativo. Cambia a Invertido si tu entidad hace lo contrario (algunas instalaciones GivEnergy / GivTCP), Helios invertirá el valor una vez en la lectura para que la pastilla, la flecha del flujo y los totales diarios de carga / descarga conserven su significado.",
+    inverterCutoffSocPct: "SoC de corte del inversor (%)",
+    inverterCutoffSocPctHelp: "Porcentaje al que tu inversor híbrido bloquea la producción PV cuando la batería alcanza su techo configurado. Déjalo vacío para desactivar. Cuando se establece, el entrenador del mapa de sombreado omite cada intervalo de observación donde el SoC de la batería alcanzó este valor, para que la producción bloqueada por el inversor no contamine el mapa con sombras fantasma en esas posiciones solares. Requiere que la entidad de SoC de batería de arriba esté configurada.",
     batteryColor: "Color batería",
     weatherSection: "Meteorología",
     weatherHint: "Opcional. Conecta entidades meteo locales para que Helios use mediciones tomadas en tu casa en lugar del modelo Open-Meteo interpolado a tu celda de la malla. Cada entidad es opcional de forma independiente y solo se usa cuando reporta un valor reciente; las muestras ausentes o caducadas vuelven al modelo de forma transparente.",
@@ -1219,19 +1285,11 @@ const es = {
     shadowOpacity: "Opacidad de las sombras",
     shadowOpacityHint: "Opacidad de las sombras proyectadas en el suelo.",
     lidarViewSection: "Vista LiDAR",
-    lidarViewHint: "Haz clic en el botón LiDAR arriba a la derecha de la tarjeta para cambiar a una vista en nube de puntos de tu entorno: cada celda LiDAR cargada (suelo, vegetación y edificios) se pinta sobre el mapa de fondo. El botón queda deshabilitado cuando ningún proveedor cubre la casa. La vista reutiliza los datos ya recuperados con la precisión actual, no se hacen llamadas adicionales.",
+    lidarViewHint: "Haz clic en el botón LiDAR arriba a la derecha de la tarjeta para cambiar a la superposición LiDAR: cada celda cargada se dibuja como malla de alambre y se sombrea en tiempo real según su exposición solar actual, las superficies iluminadas brillan cálidas y las sombreadas se atenúan. Usa el deslizador en la parte inferior de la tarjeta para regular la opacidad global. El botón queda deshabilitado cuando ningún proveedor cubre la casa. La vista reutiliza los datos ya recuperados con la precisión actual, no se hacen llamadas adicionales.",
     lidarViewPointSize: "Tamaño de puntos (px)",
-    lidarViewPointColor: "Color de puntos",
-    lidarViewPointOpacity: "Opacidad de puntos",
-    lidarViewWireframe: "Malla de alambre",
-    lidarViewWireframeOn: "Activado",
-    lidarViewWireframeOff: "Desactivado",
-    lidarViewWireframeHint: "Conecta cada celda LiDAR finita con sus vecinas a la derecha y abajo mediante segmentos, dando una malla sobre la nube de puntos. Pon el tamaño de los puntos a 0 si solo quieres las líneas. Los rasters densos en precisión alta siguen pintándose en una sola llamada GPU, pero el número de líneas crece con el número de celdas, los dispositivos antiguos pueden ralentizarse en radios grandes.",
-    lidarViewWireframeColor: "Color de la malla",
-    lidarViewWireframeOpacity: "Opacidad de la malla",
     localLidarSection: "Avanzado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Apunta Helios a tu propio nDSM GeoTIFF (Modelo Digital de Superficie menos el suelo, altura sobre el terreno en metros) alojado en Home Assistant. Permite tener sombras en regiones aún no cubiertas por los proveedores LiDAR públicos. Dentro del área definida, esta fuente reemplaza cualquier proveedor nacional.",
-    localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? Lo más fácil es el sitio compañero [helios-lidar.org](https://helios-lidar.org): sube tu archivo LAZ / LAS sin procesar o un par DSM + DTM y te devuelve el COG de 2 bandas que Helios consume (banda 1 = nDSM, banda 2 = DTM) junto con el bloque YAML listo para pegar en las claves de abajo. Gratis, sin instalación, sin cuenta. Si prefieres hacerlo todo en local, el repositorio Helios también incluye ayudantes Python en `tools/lidar/` que realizan la misma conversión.",
+    localLidarToolsHint: "¿Necesitas preparar un ráster desde cero? Suelta tu archivo LAZ / LAS sin procesar o un par de rásteres DSM + DTM en el sitio complementario [helios-lidar.org](https://helios-lidar.org), te devuelve el COG de 2 bandas que Helios consume (banda 1 = nDSM, banda 2 = DTM) junto con el YAML listo para pegar en las claves de abajo. Gratis, sin instalación, sin cuenta. ¿Prefieres ejecutarlo todo en local? La cadena de herramientas completa de Python vive en el [repositorio Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar).",
     localLidarEnabled: "Usar datos locales",
     localLidarUrl: "URL del GeoTIFF",
     localLidarMinLat: "Latitud mín.",
@@ -1242,13 +1300,34 @@ const es = {
     resetSectionHint: "Herramientas de mantenimiento para borrar los datos almacenados localmente por la tarjeta.",
     resetCacheButton: "Restablecer caché de datos",
     resetCacheWarning: "Atención: borra la meteorología de Open-Meteo en caché y el historial PV en memoria de TODAS las tarjetas Helios abiertas en esta página. La previsión ajustada perderá sus 5 días de calibración hasta que se vuelvan a obtener (unos minutos según tu servidor HA). Los datos en Home Assistant no se tocan nunca.",
-    resetCacheDone: "Caché borrada ✓"
+    resetCacheDone: "Caché borrada ✓",
+    aboutSection: "Acerca de",
+    aboutVersionLabel: "Versión",
+    aboutSiteTitle: "Sitio compañero, helios-lidar.org",
+    aboutSiteDescription: "Herramienta gratuita para convertir datos LiDAR abiertos en bruto de cualquier país (LAZ / LAS o pares DSM + DTM) en el GeoTIFF nDSM que Helios necesita, junto con el fragmento YAML para pegar en este editor. Sin QGIS, sin GDAL, sin instalación, sin cuenta.",
+    aboutCodeLabel: "Código fuente",
+    aboutRepoCard: "Helios (la tarjeta)",
+    aboutRepoLidar: "Helios-Lidar (el sitio compañero)",
+    aboutCoffeeMessage: "Helios lo desarrolla un único desarrollador con mucha energía y muy poco sueño. Si te ayuda en tu día a día, una estrella en GitHub o un café mantienen vivo el proyecto.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const it = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sole, nuvole, produzione FV, batteria e ombre LiDAR sulla tua casa, in 3D e tempo reale",
   lidarViewChipLabel: "Vista LiDAR",
+  shadingDomeChipLabel: "Ombre",
   detail: {
     exitHint: "Tocca un punto qualsiasi per uscire",
     todayLabel: "Oggi",
@@ -1330,7 +1409,14 @@ const it = {
     pvArrayCoordsPlaceholder: "opzionale",
     pvColor: "Colore di produzione",
     batterySection: "Batteria domestica",
-    batteryHint: "Opzionale. Ogni entità appare come la propria pastiglia ai lati della pastiglia PV, stato di carica a SINISTRA, potenza con segno a DESTRA, collegata a PV con una linea punteggiata statica. Le due entità sono indipendentemente opzionali. La pastiglia corrispondente appare appena l'entità è impostata.",
+    batteryHint: "Opzionale. Dichiara una riga per ogni banco di batterie fisico (una sola voce basta per un singolo inverter ibrido; aggiungine altre per installazioni divise casa + garage, o per una coppia ibrido + autonomo). La pastiglia sulla carta resta unica, aggregando i banchi come SoC pesato per capacità e potenza con segno sommata. Ogni entità all'interno di un banco è indipendentemente opzionale, il lato della pastiglia appare appena l'entità è impostata.",
+    batteryBankTitle: "Banco {n}",
+    batteryBankAdd: "Aggiungi banco",
+    batteryBankRemove: "Rimuovi",
+    batteryBankName: "Nome del banco (opzionale)",
+    batteryBankNameHelp: "Etichetta amichevole opzionale mostrata nell'intestazione della riga. Lascia vuoto per tornare a «Banco 1», «Banco 2», ecc. Utile quando hai più banchi e vuoi riconoscerli a colpo d'occhio.",
+    batteryCapacityKwh: "Capacità (kWh, opzionale)",
+    batteryCapacityKwhHelp: "Usata per pesare questo banco nella pastiglia SoC aggregata quando i banchi hanno dimensioni diverse (es. un banco casa da 10 kWh + un banco garage da 5 kWh: il banco casa sposta la pastiglia il doppio rispetto a quello del garage). Lascia vuoto se tutti i tuoi banchi hanno la stessa dimensione, la ponderazione si riduce allora a una media semplice non pesata. Non influisce sulla lettura della potenza sommata.",
     batterySocEntity: "Entità stato di carica",
     batterySocEntityHelp: 'Scegli un sensore di stato di carica della batteria (%, tipicamente con device_class "battery"). Appare come pastiglia a sinistra della pastiglia PV con la percentuale in tempo reale.',
     batteryPowerEntity: "Entità di potenza",
@@ -1339,6 +1425,8 @@ const it = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertito",
     batteryPowerInvertHelp: "Per impostazione predefinita (Standard) la tua entità batteria riporta la carica come positivo e la scarica come negativo. Scegli Invertito se la tua entità fa l'opposto (alcuni setup GivEnergy / GivTCP), Helios invertirà il valore una volta in lettura così che la pastiglia, la freccia del flusso e i totali giornalieri di carica / scarica mantengano il loro significato.",
+    inverterCutoffSocPct: "SoC di stacco inverter (%)",
+    inverterCutoffSocPctHelp: "Percentuale alla quale il tuo inverter ibrido blocca la produzione PV quando la batteria raggiunge il suo limite impostato. Lascia vuoto per disattivare. Quando impostato, il trainer della mappa di ombreggiatura salta ogni intervallo di osservazione in cui il SoC della batteria ha raggiunto questo valore, in modo che la produzione bloccata dall'inverter non inquini la mappa con ombre fantasma nelle posizioni solari corrispondenti. Richiede che l'entità SoC batteria qui sopra sia configurata.",
     batteryColor: "Colore batteria",
     weatherSection: "Meteo",
     weatherHint: "Opzionale. Collega entità meteo locali perché Helios usi misure prese a casa tua invece del modello Open-Meteo interpolato sulla tua cella di griglia. Ogni entità è indipendentemente opzionale e viene usata solo quando riporta un valore fresco; i campioni mancanti o stantii ricadono sul modello in modo trasparente.",
@@ -1380,19 +1468,11 @@ const it = {
     shadowOpacity: "Opacità delle ombre",
     shadowOpacityHint: "Opacità delle ombre proiettate a terra.",
     lidarViewSection: "Vista LiDAR",
-    lidarViewHint: "Clicca sul pulsante LiDAR in alto a destra della scheda per passare a una vista a nuvola di punti dei tuoi dintorni: ogni cella LiDAR caricata (suolo, vegetazione ed edifici) viene dipinta sopra la mappa di base. Il pulsante resta disabilitato quando nessun provider copre la casa. La vista riutilizza i dati già recuperati alla precisione attuale, nessuna chiamata aggiuntiva viene fatta.",
+    lidarViewHint: "Clicca sul pulsante LiDAR in alto a destra della scheda per passare alla sovrapposizione LiDAR: ogni cella caricata viene disegnata come wireframe e ombreggiata in tempo reale in base alla sua esposizione solare attuale, le superfici illuminate brillano calde e quelle in ombra si attenuano. Usa il cursore in basso nella scheda per regolare l'opacità complessiva. Il pulsante resta disabilitato quando nessun provider copre la casa. La vista riutilizza i dati già recuperati alla precisione attuale, nessuna chiamata aggiuntiva viene fatta.",
     lidarViewPointSize: "Dimensione punti (px)",
-    lidarViewPointColor: "Colore punti",
-    lidarViewPointOpacity: "Opacità punti",
-    lidarViewWireframe: "Reticolo",
-    lidarViewWireframeOn: "Attivo",
-    lidarViewWireframeOff: "Disattivo",
-    lidarViewWireframeHint: "Collega ogni cella LiDAR finita ai vicini a destra e in basso con segmenti, generando un reticolo sopra la nuvola di punti. Imposta la dimensione dei punti a 0 se vuoi solo le linee. I raster pesanti in alta precisione restano in una sola chiamata GPU, ma il numero di linee cresce con quello delle celle, i dispositivi più vecchi possono rallentare sui raggi grandi.",
-    lidarViewWireframeColor: "Colore del reticolo",
-    lidarViewWireframeOpacity: "Opacità del reticolo",
     localLidarSection: "Avanzato — LiDAR locale (BYO)",
     localLidarHint: "Opzionale. Indica a Helios il tuo nDSM GeoTIFF personale (Modello Digitale di Superficie meno il terreno, altezza sul suolo in metri) ospitato su Home Assistant. Permette di avere ombre in regioni non ancora coperte dai provider LiDAR pubblici. All'interno dell'area definita, questa sorgente sostituisce qualsiasi provider nazionale.",
-    localLidarToolsHint: "Devi preparare un raster da zero? La via più semplice è il sito gemello [helios-lidar.org](https://helios-lidar.org): carica il tuo file LAZ / LAS grezzo o una coppia DSM + DTM e ti restituisce il COG a 2 bande che Helios consuma (banda 1 = nDSM, banda 2 = DTM) insieme al blocco YAML pronto da incollare nelle chiavi sotto. Gratis, nessuna installazione, nessun account. Se preferisci fare tutto in locale, il repository Helios include anche helper Python in `tools/lidar/` per la stessa conversione.",
+    localLidarToolsHint: "Devi preparare un raster da zero? Trascina il tuo file LAZ / LAS grezzo o una coppia di raster DSM + DTM sul sito gemello [helios-lidar.org](https://helios-lidar.org), ti restituisce il COG a 2 bande che Helios legge (banda 1 = nDSM, banda 2 = DTM) insieme al YAML pronto da incollare per le chiavi qui sotto. Gratis, nessuna installazione, nessun account. Preferisci eseguire tutto in locale? L'intera toolchain Python si trova nel [repository Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar).",
     localLidarEnabled: "Usa dati locali",
     localLidarUrl: "URL del GeoTIFF",
     localLidarMinLat: "Latitudine min",
@@ -1403,13 +1483,34 @@ const it = {
     resetSectionHint: "Strumenti di manutenzione per cancellare i dati memorizzati localmente dalla card.",
     resetCacheButton: "Reset cache dati",
     resetCacheWarning: "Attenzione: cancella i dati meteo Open-Meteo in cache e lo storico PV in memoria per TUTTE le card Helios aperte in questa pagina. La previsione rifinita perderà i suoi 5 giorni di calibrazione finché non saranno scaricati di nuovo (qualche minuto a seconda del tuo server HA). I dati su Home Assistant non vengono mai toccati.",
-    resetCacheDone: "Cache svuotata ✓"
+    resetCacheDone: "Cache svuotata ✓",
+    aboutSection: "Informazioni",
+    aboutVersionLabel: "Versione",
+    aboutSiteTitle: "Sito compagno, helios-lidar.org",
+    aboutSiteDescription: "Strumento gratuito per trasformare i dati LiDAR aperti grezzi di qualsiasi paese (LAZ / LAS o coppie DSM + DTM) nel GeoTIFF nDSM di cui Helios ha bisogno, insieme allo snippet YAML da incollare in questo editor. Niente QGIS, niente GDAL, niente installazione, niente account.",
+    aboutCodeLabel: "Codice sorgente",
+    aboutRepoCard: "Helios (la card)",
+    aboutRepoLidar: "Helios-Lidar (il sito compagno)",
+    aboutCoffeeMessage: "Helios è sviluppato da un solo sviluppatore con tanta energia e pochissimo sonno. Se ti aiuta nella tua routine quotidiana, una stella su GitHub o un caffè tengono in vita il progetto.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const nl = {
   cardName: "HELIOS",
   cardDescription: "☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime",
   lidarViewChipLabel: "LiDAR-weergave",
+  shadingDomeChipLabel: "Schaduwen",
   detail: {
     exitHint: "Tik ergens om te sluiten",
     todayLabel: "Vandaag",
@@ -1491,7 +1592,14 @@ const nl = {
     pvArrayCoordsPlaceholder: "optioneel",
     pvColor: "Productiekleur",
     batterySection: "Thuisbatterij",
-    batteryHint: "Optioneel. Elke entiteit verschijnt als een eigen chip aan weerszijden van de PV-chip, laadtoestand LINKS, ondertekend vermogen RECHTS, verbonden met PV via een statische stippellijn. Beide entiteiten zijn onafhankelijk optioneel. De bijbehorende chip verschijnt zodra de entiteit is ingesteld.",
+    batteryHint: "Optioneel. Declareer één rij per fysieke batterijbank (één invoer volstaat voor een enkele hybride omvormer; voeg er meer toe voor gesplitste huis + garage-opstellingen, of voor een hybride + standalone-paar). De chip op de kaart blijft enkelvoudig en aggregeert de banken als een capaciteitsgewogen SoC en een gesommeerd ondertekend vermogen. Elke entiteit binnen een bank is onafhankelijk optioneel, de chipzijde verschijnt zodra de entiteit is ingesteld.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Bank toevoegen",
+    batteryBankRemove: "Verwijderen",
+    batteryBankName: "Banknaam (optioneel)",
+    batteryBankNameHelp: 'Optioneel vriendelijk label dat in de rij-koptekst wordt weergegeven. Laat leeg om terug te vallen op „Bank 1", „Bank 2", enz. Handig wanneer je meerdere banken hebt en ze in één oogopslag wilt herkennen.',
+    batteryCapacityKwh: "Capaciteit (kWh, optioneel)",
+    batteryCapacityKwhHelp: "Wordt gebruikt om deze bank te wegen in de geaggregeerde SoC-chip wanneer banken verschillende groottes hebben (bv. een huisbank van 10 kWh + een garagebank van 5 kWh: de huisbank verplaatst de chip twee keer zoveel als die van de garage). Laat leeg als al je banken even groot zijn, de weging valt dan terug op een vlak ongewogen gemiddelde. Heeft geen invloed op de gesommeerde vermogensaflezing.",
     batterySocEntity: "Laadtoestand-entiteit",
     batterySocEntityHelp: 'Kies een batterijlaadtoestand-sensor (%, meestal met device_class "battery"). Verschijnt als chip links van de PV-chip met het live percentage.',
     batteryPowerEntity: "Vermogen-entiteit",
@@ -1500,6 +1608,8 @@ const nl = {
     batteryPowerInvertStandard: "Standaard",
     batteryPowerInvertInverted: "Omgekeerd",
     batteryPowerInvertHelp: "Standaard rapporteert je batterij-entiteit het laden als positief en het ontladen als negatief. Kies Omgekeerd als jouw entiteit het andersom doet (sommige GivEnergy- / GivTCP-installaties). Helios draait de waarde dan eenmalig om bij het inlezen, zodat de chip, de stroompijl en de dagelijkse laad- / ontlaadtotalen hun betekenis behouden.",
+    inverterCutoffSocPct: "Omvormer cutoff SoC (%)",
+    inverterCutoffSocPctHelp: "Percentage waarbij je hybride omvormer de PV-output blokkeert zodra de batterij zijn ingestelde plafond bereikt. Leeg laten om uit te schakelen. Wanneer ingesteld, slaat de schaduwkaart-trainer elk observatie-interval over waarin het batterij-SoC deze waarde bereikte, zodat de door de omvormer geblokkeerde productie de schaduwkaart niet vervuilt met spookschaduwen op die zonneposities. Vereist dat de batterij-SoC entiteit hierboven geconfigureerd is.",
     batteryColor: "Batterijkleur",
     weatherSection: "Weer",
     weatherHint: "Optioneel. Koppel lokale weerentiteiten zodat Helios metingen bij jou thuis gebruikt in plaats van het Open-Meteo-model dat geïnterpoleerd wordt naar je rastercel. Elke entiteit is onafhankelijk optioneel en wordt alleen gebruikt wanneer ze een verse waarde levert; ontbrekende of verouderde monsters vallen transparant terug op het model.",
@@ -1541,19 +1651,11 @@ const nl = {
     shadowOpacity: "Schaduwdekking",
     shadowOpacityHint: "Dekking van de op de grond geprojecteerde schaduwen.",
     lidarViewSection: "LiDAR-weergave",
-    lidarViewHint: "Klik rechtsboven in de kaart op de LiDAR-knop om over te schakelen naar een puntenwolk-weergave van je omgeving: elke geladen LiDAR-cel (grond, vegetatie en gebouwen) wordt over de basiskaart geschilderd. De knop blijft uitgeschakeld wanneer geen enkele provider het huis dekt. De weergave hergebruikt de data die al is opgehaald op de huidige precisie, er worden geen extra calls gedaan.",
+    lidarViewHint: "Klik rechtsboven in de kaart op de LiDAR-knop om over te schakelen naar de LiDAR-overlay: elke geladen cel wordt als wireframe getekend en in realtime geschaduwd op basis van zijn huidige zonblootstelling, verlichte oppervlakken gloeien warm en beschaduwde doven uit. Gebruik de schuif onderaan de kaart om de algehele dekking in of uit te draaien. De knop blijft uitgeschakeld wanneer geen enkele provider het huis dekt. De weergave hergebruikt de data die al is opgehaald op de huidige precisie, er worden geen extra calls gedaan.",
     lidarViewPointSize: "Puntgrootte (px)",
-    lidarViewPointColor: "Puntkleur",
-    lidarViewPointOpacity: "Puntdekking",
-    lidarViewWireframe: "Draadmodel",
-    lidarViewWireframeOn: "Aan",
-    lidarViewWireframeOff: "Uit",
-    lidarViewWireframeHint: "Verbindt elke geldige LiDAR-cel met haar rechter- en onderbuur via segmenten, wat een draadmodel over de puntwolk geeft. Zet de puntgrootte op 0 als je alleen de lijnen wilt. Zware rasters bij hoge precisie blijven in één GPU-call, maar het aantal lijnen groeit mee met het aantal cellen, oudere apparaten kunnen vertragen bij grote stralen.",
-    lidarViewWireframeColor: "Kleur van het draadmodel",
-    lidarViewWireframeOpacity: "Dekking van het draadmodel",
     localLidarSection: "Geavanceerd — Lokale LiDAR (BYO)",
     localLidarHint: "Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio's die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen het gedefinieerde gebied vervangt deze bron elke nationale leverancier.",
-    localLidarToolsHint: "Een eigen raster nodig? Het makkelijkst gaat dat via de begeleidende site [helios-lidar.org](https://helios-lidar.org): upload je ruwe LAZ / LAS-bestand of een DSM + DTM-paar, en je krijgt de 2-band COG terug die Helios leest (band 1 = nDSM, band 2 = DTM), samen met het kant-en-klare YAML-blok voor de onderstaande sleutels. Gratis, geen installatie, geen account. Wil je liever alles lokaal doen? Dan bevat de Helios-repository ook Python-helpers onder `tools/lidar/` voor dezelfde conversie.",
+    localLidarToolsHint: "Moet je een raster vanaf nul voorbereiden? Sleep je ruwe LAZ / LAS-bestand of een DSM + DTM-rasterpaar naar de begeleidende site [helios-lidar.org](https://helios-lidar.org), je krijgt de 2-band COG terug die Helios leest (band 1 = nDSM, band 2 = DTM) samen met het kant-en-klare YAML voor de sleutels hieronder. Gratis, geen installatie, geen account. Wil je liever alles lokaal draaien? De volledige Python-toolchain woont in de [Helios-Lidar repository](https://github.com/ReikanYsora/Helios-Lidar).",
     localLidarEnabled: "Lokale data gebruiken",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min. breedtegraad",
@@ -1564,13 +1666,34 @@ const nl = {
     resetSectionHint: "Onderhoudstools om de lokaal door de kaart bewaarde gegevens te wissen.",
     resetCacheButton: "Datacache resetten",
     resetCacheWarning: "Let op: dit wist de gecachete Open-Meteo weergegevens en de PV-geschiedenis in het geheugen van ELKE Helios-kaart die op deze pagina open staat. De bijgestelde verwachting verliest haar 5 dagen kalibratie totdat die opnieuw zijn opgehaald (enkele minuten afhankelijk van je HA-server). Gegevens in Home Assistant worden nooit aangeraakt.",
-    resetCacheDone: "Cache geleegd ✓"
+    resetCacheDone: "Cache geleegd ✓",
+    aboutSection: "Over",
+    aboutVersionLabel: "Versie",
+    aboutSiteTitle: "Begeleidende site, helios-lidar.org",
+    aboutSiteDescription: "Gratis tool om ruwe open LiDAR-data uit elk land (LAZ / LAS of DSM + DTM-paren) om te zetten naar het nDSM GeoTIFF dat Helios nodig heeft, plus het YAML-fragment om in deze editor te plakken. Geen QGIS, geen GDAL, geen installatie, geen account.",
+    aboutCodeLabel: "Broncode",
+    aboutRepoCard: "Helios (de kaart)",
+    aboutRepoLidar: "Helios-Lidar (de begeleidende site)",
+    aboutCoffeeMessage: "Helios wordt gebouwd door één ontwikkelaar met veel energie en heel weinig slaap. Als het je dagelijkse routine helpt, houdt een ster op GitHub of een koffie het project levend.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const pt = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a tua casa, em 3D e tempo real",
   lidarViewChipLabel: "Vista LiDAR",
+  shadingDomeChipLabel: "Sombras",
   detail: {
     exitHint: "Toca em qualquer lugar para sair",
     todayLabel: "Hoje",
@@ -1652,7 +1775,14 @@ const pt = {
     pvArrayCoordsPlaceholder: "opcional",
     pvColor: "Cor de produção",
     batterySection: "Bateria doméstica",
-    batteryHint: "Opcional. Cada entidade aparece como o seu próprio chip dos dois lados do chip PV, estado de carga à ESQUERDA, potência com sinal à DIREITA, ligada a PV por uma linha pontilhada estática. Ambas as entidades são independentemente opcionais. O chip correspondente aparece assim que a entidade é definida.",
+    batteryHint: "Opcional. Declara uma linha por cada banco físico de baterias (uma única entrada basta para um único inversor híbrido; adiciona mais para instalações divididas casa + garagem, ou para um par híbrido + autónomo). O chip do cartão mantém-se único, agregando os bancos como um SoC ponderado pela capacidade e uma potência com sinal somada. Cada entidade dentro de um banco é independentemente opcional, o lado do chip aparece assim que a entidade é definida.",
+    batteryBankTitle: "Banco {n}",
+    batteryBankAdd: "Adicionar banco",
+    batteryBankRemove: "Remover",
+    batteryBankName: "Nome do banco (opcional)",
+    batteryBankNameHelp: "Etiqueta amigável opcional mostrada no cabeçalho da linha. Deixa em branco para voltar a «Banco 1», «Banco 2», etc. Útil quando tens vários bancos e queres reconhecê-los num relance.",
+    batteryCapacityKwh: "Capacidade (kWh, opcional)",
+    batteryCapacityKwhHelp: "Usada para ponderar este banco no chip SoC agregado quando os bancos têm tamanhos diferentes (ex. um banco casa de 10 kWh + um banco garagem de 5 kWh: o banco da casa move o chip o dobro do que o da garagem). Deixa em branco se todos os teus bancos tiverem o mesmo tamanho, a ponderação reduz-se então a uma média simples não ponderada. Não afeta a leitura da potência somada.",
     batterySocEntity: "Entidade do estado de carga",
     batterySocEntityHelp: 'Escolhe um sensor de estado de carga da bateria (%, normalmente com device_class "battery"). Aparece como chip à esquerda do chip PV com a percentagem em tempo real.',
     batteryPowerEntity: "Entidade de potência",
@@ -1661,6 +1791,8 @@ const pt = {
     batteryPowerInvertStandard: "Padrão",
     batteryPowerInvertInverted: "Invertido",
     batteryPowerInvertHelp: "Por predefinição (Padrão) a tua entidade de bateria reporta a carga como positivo e a descarga como negativo. Escolhe Invertido se a tua entidade faz o oposto (alguns setups GivEnergy / GivTCP), o Helios inverte então o valor uma vez na leitura para que a pastilha, a seta do fluxo e os totais diários de carga / descarga mantenham o sentido.",
+    inverterCutoffSocPct: "SoC de corte do inversor (%)",
+    inverterCutoffSocPctHelp: "Percentagem à qual o seu inversor híbrido bloqueia a produção PV quando a bateria atinge o seu tecto configurado. Deixe vazio para desactivar. Quando definido, o treinador do mapa de sombreamento ignora todos os intervalos de observação onde o SoC da bateria atingiu este valor, para que a produção bloqueada pelo inversor não polua o mapa com sombras fantasma nas posições solares correspondentes. Requer que a entidade de SoC da bateria acima esteja configurada.",
     batteryColor: "Cor da bateria",
     weatherSection: "Meteorologia",
     weatherHint: "Opcional. Liga entidades meteo locais para que o Helios use medições feitas em tua casa em vez do modelo Open-Meteo interpolado à tua célula da grelha. Cada entidade é opcional de forma independente e só é usada quando reporta um valor fresco; amostras em falta ou desactualizadas voltam ao modelo de forma transparente.",
@@ -1702,19 +1834,11 @@ const pt = {
     shadowOpacity: "Opacidade das sombras",
     shadowOpacityHint: "Opacidade das sombras projetadas no chão.",
     lidarViewSection: "Vista LiDAR",
-    lidarViewHint: "Clica no botão LiDAR no canto superior direito da carta para alternar para uma vista em nuvem de pontos do teu ambiente: cada célula LiDAR carregada (solo, vegetação e edifícios) é pintada sobre o mapa de fundo. O botão fica desactivado quando nenhum provedor cobre a casa. A vista reutiliza os dados já obtidos com a precisão actual, nenhuma chamada adicional é feita.",
+    lidarViewHint: "Clica no botão LiDAR no canto superior direito da carta para alternar para a sobreposição LiDAR: cada célula carregada é desenhada como wireframe e sombreada em tempo real conforme a sua exposição solar actual, as superfícies iluminadas brilham quentes e as sombreadas esmorecem. Usa o cursor na base da carta para regular a opacidade global. O botão fica desactivado quando nenhum provedor cobre a casa. A vista reutiliza os dados já obtidos com a precisão actual, nenhuma chamada adicional é feita.",
     lidarViewPointSize: "Tamanho dos pontos (px)",
-    lidarViewPointColor: "Cor dos pontos",
-    lidarViewPointOpacity: "Opacidade dos pontos",
-    lidarViewWireframe: "Estrutura em arame",
-    lidarViewWireframeOn: "Ativo",
-    lidarViewWireframeOff: "Inativo",
-    lidarViewWireframeHint: "Liga cada célula LiDAR finita aos vizinhos à direita e abaixo com segmentos, criando uma malha sobre a nuvem de pontos. Coloca o tamanho dos pontos a 0 se só queres as linhas. Rasters densos em alta precisão continuam a desenhar-se numa única chamada GPU, mas o número de linhas cresce com o número de células, dispositivos antigos podem abrandar em raios grandes.",
-    lidarViewWireframeColor: "Cor da estrutura",
-    lidarViewWireframeOpacity: "Opacidade da estrutura",
     localLidarSection: "Avançado — LiDAR local (BYO)",
     localLidarHint: "Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da área definida, esta fonte substitui qualquer fornecedor nacional.",
-    localLidarToolsHint: "Precisas de preparar um raster do zero? A forma mais simples é o site complementar [helios-lidar.org](https://helios-lidar.org): envia o teu ficheiro LAZ / LAS bruto ou um par DSM + DTM e ele devolve o COG de 2 bandas que o Helios consome (banda 1 = nDSM, banda 2 = DTM) com o bloco YAML pronto para colar nas chaves abaixo. Grátis, sem instalação, sem conta. Se preferires fazer tudo localmente, o repositório Helios também inclui auxiliares Python em `tools/lidar/` para a mesma conversão.",
+    localLidarToolsHint: "Precisas de preparar um raster do zero? Larga o teu ficheiro LAZ / LAS bruto ou um par de rasters DSM + DTM no site complementar [helios-lidar.org](https://helios-lidar.org), ele devolve o COG de 2 bandas que o Helios lê (banda 1 = nDSM, banda 2 = DTM) com o YAML pronto a colar para as chaves abaixo. Grátis, sem instalação, sem conta. Preferes correr tudo localmente? A toolchain Python completa vive no [repositório Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar).",
     localLidarEnabled: "Usar dados locais",
     localLidarUrl: "URL do GeoTIFF",
     localLidarMinLat: "Latitude mín.",
@@ -1725,13 +1849,34 @@ const pt = {
     resetSectionHint: "Ferramentas de manutenção para limpar os dados armazenados localmente pelo cartão.",
     resetCacheButton: "Repor cache de dados",
     resetCacheWarning: "Atenção: limpa a meteorologia Open-Meteo em cache e o histórico PV em memória de TODOS os cartões Helios abertos nesta página. A previsão ajustada perderá os seus 5 dias de calibração até serem novamente obtidos (alguns minutos consoante o teu servidor HA). Os dados no Home Assistant nunca são tocados.",
-    resetCacheDone: "Cache limpa ✓"
+    resetCacheDone: "Cache limpa ✓",
+    aboutSection: "Sobre",
+    aboutVersionLabel: "Versão",
+    aboutSiteTitle: "Site complementar, helios-lidar.org",
+    aboutSiteDescription: "Ferramenta gratuita para transformar dados LiDAR abertos em bruto de qualquer país (LAZ / LAS ou pares DSM + DTM) no GeoTIFF nDSM de que o Helios precisa, juntamente com o trecho YAML para colar neste editor. Sem QGIS, sem GDAL, sem instalação, sem conta.",
+    aboutCodeLabel: "Código-fonte",
+    aboutRepoCard: "Helios (o cartão)",
+    aboutRepoLidar: "Helios-Lidar (o site complementar)",
+    aboutCoffeeMessage: "O Helios é feito por um único programador com muita energia e muito pouco sono. Se te ajuda no dia a dia, uma estrela no GitHub ou um café mantêm o projeto vivo.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
 const no = {
   cardName: "HELIOS",
   cardDescription: "☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid",
   lidarViewChipLabel: "LiDAR-visning",
+  shadingDomeChipLabel: "Skygger",
   detail: {
     exitHint: "Trykk hvor som helst for å gå ut",
     todayLabel: "I dag",
@@ -1813,7 +1958,14 @@ const no = {
     pvArrayCoordsPlaceholder: "valgfritt",
     pvColor: "Produksjonsfarge",
     batterySection: "Husbatteri",
-    batteryHint: "Valgfri. Hver entitet vises som sin egen chip på sidene av PV-chipen, ladenivå til VENSTRE, fortegnseffekt til HØYRE, koblet til PV med en statisk prikket strek. Begge entiteter er uavhengig valgfrie. Chipen på sin side vises så snart entiteten er satt.",
+    batteryHint: "Valgfri. Deklarer én rad per fysisk batteribank (én oppføring holder for én enkelt hybridvekselretter; legg til flere for delte hus + garasje-oppsett, eller for et hybrid + frittstående-par). Chipen på kortet forblir én og aggregerer bankene som en kapasitetsvektet SoC og en summert fortegnseffekt. Hver entitet inne i en bank er uavhengig valgfri, chip-siden vises så snart entiteten er satt.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Legg til bank",
+    batteryBankRemove: "Fjern",
+    batteryBankName: "Banknavn (valgfri)",
+    batteryBankNameHelp: "Valgfri vennlig etikett som vises i radens overskrift. La stå tomt for å falle tilbake til «Bank 1», «Bank 2», osv. Nyttig når du har flere banker og vil gjenkjenne dem på et blunk.",
+    batteryCapacityKwh: "Kapasitet (kWh, valgfri)",
+    batteryCapacityKwhHelp: "Brukes til å vekte denne banken i den aggregerte SoC-chipen når banker har ulik størrelse (f.eks. en husbank på 10 kWh + en garasjebank på 5 kWh: husbanken beveger chipen dobbelt så mye som garasjebanken). La stå tomt hvis alle bankene dine er like store, vektingen reduseres da til et flatt uvektet gjennomsnitt. Påvirker ikke avlesningen av summert effekt.",
     batterySocEntity: "Ladenivå-entitet",
     batterySocEntityHelp: 'Velg en sensor for batteriets ladenivå (%, vanligvis med device_class "battery"). Vises som chip til venstre for PV-chipen med live prosent.',
     batteryPowerEntity: "Effekt-entitet",
@@ -1822,6 +1974,8 @@ const no = {
     batteryPowerInvertStandard: "Standard",
     batteryPowerInvertInverted: "Invertert",
     batteryPowerInvertHelp: "Som standard rapporterer batteri-enheten lading som positivt og utlading som negativt. Velg Invertert hvis enheten din gjør motsatt (noen GivEnergy- / GivTCP-oppsett). Helios snur da verdien én gang ved innlesing, slik at chipen, strømpilen og daglige lade- / utladesummer beholder betydningen sin.",
+    inverterCutoffSocPct: "Vekselretter avbrudd SoC (%)",
+    inverterCutoffSocPctHelp: "Prosenten der din hybridvekselretter blokkerer PV-produksjonen når batteriet når sin innstilte grense. La være tom for å deaktivere. Når satt, hopper skyggekart-treneren over hvert observasjonsvindu der batteriets SoC nådde denne verdien, slik at den vekselretter-blokkerte produksjonen ikke forurenser skyggekartet med spøkelses-skygger på de tilsvarende solposisjonene. Krever at batteri-SoC-enheten over er konfigurert.",
     batteryColor: "Batterifarge",
     weatherSection: "Vær",
     weatherHint: "Valgfritt. Koble til lokale værentiteter slik at Helios bruker målinger tatt hjemme hos deg i stedet for Open-Meteo-modellen som interpoleres til rutecellen din. Hver entitet er uavhengig valgfri og brukes bare når den rapporterer en fersk verdi; manglende eller utdaterte prøver faller transparent tilbake til modellen.",
@@ -1863,19 +2017,11 @@ const no = {
     shadowOpacity: "Skyggeopasitet",
     shadowOpacityHint: "Opasitet for projiserte bakkeskygger.",
     lidarViewSection: "LiDAR-visning",
-    lidarViewHint: "Klikk på LiDAR-knappen øverst til høyre på kortet for å bytte til en punktskyvisning av omgivelsene dine: hver lastet LiDAR-celle (bakke, vegetasjon og bygninger) males over grunnkartet. Knappen forblir deaktivert når ingen leverandør dekker hjemmet. Visningen gjenbruker dataen som allerede er hentet med gjeldende presisjon, ingen ekstra kall gjøres.",
+    lidarViewHint: "Klikk på LiDAR-knappen øverst til høyre på kortet for å bytte til LiDAR-overlegget: hver lastet celle tegnes som trådramme og skyggelegges i sanntid etter sin aktuelle soleksponering, opplyste flater lyser varmt og skyggelagte tones ned. Bruk glidebryteren nederst på kortet for å justere den samlede opasiteten opp eller ned. Knappen forblir deaktivert når ingen leverandør dekker hjemmet. Visningen gjenbruker dataen som allerede er hentet med gjeldende presisjon, ingen ekstra kall gjøres.",
     lidarViewPointSize: "Punktstørrelse (px)",
-    lidarViewPointColor: "Punktfarge",
-    lidarViewPointOpacity: "Punktopasitet",
-    lidarViewWireframe: "Trådmodell",
-    lidarViewWireframeOn: "På",
-    lidarViewWireframeOff: "Av",
-    lidarViewWireframeHint: "Knytter hver gyldige LiDAR-celle til naboene til høyre og under med segmenter, og lager dermed et nett oppå punktskyen. Sett punktstørrelsen til 0 om du kun vil ha linjene. Tunge rastere ved høy presisjon kjøres fortsatt i ett GPU-kall, men antall linjer vokser med antall celler, eldre enheter kan bremse på store radier.",
-    lidarViewWireframeColor: "Trådmodell-farge",
-    lidarViewWireframeOpacity: "Trådmodell-opasitet",
     localLidarSection: "Avansert — Lokal LiDAR (BYO)",
     localLidarHint: "Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.",
-    localLidarToolsHint: "Trenger du å lage et eget raster? Den enkleste veien er følgesettstedet [helios-lidar.org](https://helios-lidar.org): last opp den rå LAZ / LAS-filen din eller et DSM + DTM-par, så får du tilbake 2-bånds COG-en Helios leser (bånd 1 = nDSM, bånd 2 = DTM) sammen med den ferdige YAML-blokken for nøklene under. Gratis, ingen installasjon, ingen konto. Vil du heller gjøre alt lokalt, inneholder Helios-repoet også Python-hjelpere under `tools/lidar/` for samme konvertering.",
+    localLidarToolsHint: "Trenger du å klargjøre en raster fra bunnen av? Slipp den rå LAZ / LAS-filen din eller et DSM + DTM-rasterpar inn på følgesiden [helios-lidar.org](https://helios-lidar.org), den returnerer 2-bånds COG-en Helios leser (bånd 1 = nDSM, bånd 2 = DTM) pluss den ferdige YAML-en for nøklene under. Gratis, ingen installasjon, ingen konto. Vil du heller kjøre alt lokalt? Hele Python-verktøykjeden bor i [Helios-Lidar-repoet](https://github.com/ReikanYsora/Helios-Lidar).",
     localLidarEnabled: "Bruk lokale data",
     localLidarUrl: "GeoTIFF-URL",
     localLidarMinLat: "Min breddegrad",
@@ -1886,10 +2032,579 @@ const no = {
     resetSectionHint: "Vedlikeholdsverktøy for å tømme data som kortet har bufret lokalt.",
     resetCacheButton: "Tilbakestill databuffer",
     resetCacheWarning: "Advarsel: dette tømmer den bufrede Open-Meteo-væren og PV-historikken i minnet for ALLE Helios-kort som er åpne på denne siden. Det justerte estimatet mister sin 5-dagers kalibrering inntil den hentes på nytt (noen minutter avhengig av HA-serveren din). Data i Home Assistant røres aldri.",
-    resetCacheDone: "Buffer tømt ✓"
+    resetCacheDone: "Buffer tømt ✓",
+    aboutSection: "Om",
+    aboutVersionLabel: "Versjon",
+    aboutSiteTitle: "Følgeside, helios-lidar.org",
+    aboutSiteDescription: "Gratis verktøy som gjør rå åpen LiDAR-data fra hvilket som helst land (LAZ / LAS eller DSM + DTM-par) om til nDSM GeoTIFF som Helios trenger, pluss YAML-snutten du limer inn i denne editoren. Ingen QGIS, ingen GDAL, ingen installasjon, ingen konto.",
+    aboutCodeLabel: "Kildekode",
+    aboutRepoCard: "Helios (kortet)",
+    aboutRepoLidar: "Helios-Lidar (følgesiden)",
+    aboutCoffeeMessage: "Helios bygges av én utvikler med mye energi og veldig lite søvn. Hvis det hjelper deg i hverdagen, holder en stjerne på GitHub eller en kaffe prosjektet i live.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
   }
 };
-const LOCALES = { en, fr, de, es, it, nl, pt, no };
+const pl = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Słońce, chmury, produkcja PV, bateria i cienie LiDAR na Twoim domu, w 3D w czasie rzeczywistym",
+  lidarViewChipLabel: "Widok LiDAR",
+  shadingDomeChipLabel: "Cienie",
+  detail: {
+    exitHint: "Kliknij gdziekolwiek, aby wyjść",
+    todayLabel: "Dziś",
+    todayProduced: "wyprodukowano",
+    todayForecast: "prognoza",
+    todayPeak: "rzeczywisty szczyt",
+    todayPeakForecast: "prognozowany szczyt",
+    todayNotStartedYet: "Produkcja wstrzymana",
+    tomorrowLabel: "Jutro",
+    tomorrowPeak: "szczyt przewidywany około",
+    batteryLabel: "Bateria",
+    batteryCharged: "naładowane",
+    batteryDischarged: "rozładowane",
+    actualShort: "Rzecz.",
+    forecastShort: "Prognoza",
+    deltaTooltip: "Rzeczywista produkcja vs prognoza w tym momencie",
+    forecastRefined: "doprecyzowana",
+    forecastCalibrationHint: "Prognoza skorygowana na podstawie średniej różnicy między modelem a rzeczywistą produkcją w ciągu ostatnich {n} dni."
+  },
+  editor: {
+    locationSection: "Lokalizacja",
+    homeLatitude: "Szerokość geograficzna domu",
+    homeLongitude: "Długość geograficzna domu",
+    locationHint: "Zastępuje adres domu używany jako środek mapy. Pozostaw oba pola puste, aby użyć domu skonfigurowanego w Home Assistant. Zastąpienie jest stosowane tylko gdy OBA pola zawierają prawidłowe współrzędne.",
+    mapSection: "Mapa",
+    mapStyle: "Styl mapy",
+    mapStyleHint: "Dwie mapy podkładowe: Ulice (stonowana, miejska, z pełnymi etykietami) lub Minimalna (ładuje styl Ulice, a następnie usuwa wszystkie nieistotne etykiety, ikony POI i tarcze dróg dla szybszego renderowania). Ciemny wariant wybranego stylu jest używany automatycznie, gdy motyw karty jest ustawiony na ciemny.",
+    mapStyleStreet: "Ulice",
+    cardTheme: "Motyw karty",
+    cardThemeHint: "Przełącza chrome karty (chipy, wykresy, przyciski, tooltipy, nakładkę scrub) oraz mapę podkładową 3D między jasnym wyglądem (domyślnie, na białej powierzchni) a ciemnym (na prawie czarnej), aby karta dobrze pasowała do jasnych lub ciemnych dashboardów Home Assistant.",
+    cardThemeLight: "Jasny",
+    cardThemeDark: "Ciemny",
+    showLabels: "Pokaż etykiety",
+    showLabelsHint: "Przełącza nazwy ulic, numery budynków, punkty zainteresowania i nazwy miejsc na mapie podkładowej.",
+    labelsOn: "Widoczne",
+    labelsOff: "Ukryte",
+    autoRotate: "Automatyczna rotacja kamery",
+    autoRotateHint: "Po kilku sekundach bezczynności kamera powoli orbituje wokół domu (około 1,5°/s, w kierunku przeciwnym do pozornego ruchu słońca). Przeciągnięcie jednym palcem natychmiast ją zatrzymuje, wznawia się po zwolnieniu.",
+    autoRotateOn: "Włączona",
+    autoRotateOff: "Wyłączona",
+    dateFormat: "Format daty (domyślnie: mm-dd)",
+    dateFormatHelp: "Tokeny: yyyy, yy, mm, dd. Przykłady:",
+    timeFormat: "Format czasu",
+    timeFormat12: "12 h",
+    timeFormat24: "24 h",
+    uiSection: "UI",
+    uiColorsHint: "Jeden kolor na metrykę, używany wszędzie, gdzie się pojawia. Słońce: łuk, tarcza słoneczna i górny obszar osi czasu. Chmury: tarcza na ziemi i dolny obszar osi czasu.",
+    sunColor: "Kolor słońca",
+    cloudColor: "Kolor chmur",
+    pvSection: "Produkcja słoneczna",
+    pvHint: "Opcjonalne. Po ustawieniu, przy domu pojawia się chip z bieżącą produkcją (obliczaną w ciągu ostatniej minuty) oraz dedykowany wykres nad osią czasu. Akceptuje czujnik mocy (W/kW) lub czujnik energii skumulowanej (Wh/kWh).",
+    pvEntity: "Encja produkcji",
+    pvEntityHelp: "Wybierz czujnik mocy lub energii słonecznej (W, kW, Wh, kWh).",
+    pvPeakPower: "Moc szczytowa (kWp)",
+    pvPeakPowerHelp: "Całkowita zainstalowana moc szczytowa Twojej instalacji w kilowatach-pikach. Steruje przerywaną linią prognozy na wykresie PV oraz nasyceniem przepływu lidera PV → dom. Pozostaw puste, gdy wpisujesz moc szczytową dla każdego stringu w wierszach poniżej (suma stanowi wtedy całość). Bez żadnego z nich prognoza nie jest rysowana; obserwowana produkcja i dzienny szczyt nadal się renderują.",
+    pvInverterMaxKw: "Maks. moc falownika (kW)",
+    pvInverterMaxKwHelp: "Opcjonalne ograniczenie prognozy. Ustaw na nominalną moc AC swojego falownika, gdy Twoje panele mogą produkować więcej niż falownik może dostarczyć (typowe europejskie połączenie: 6,4 kWp DC za falownikiem 5 kW). Nie wpływa na obserwację (falownik już ogranicza sprzętowo), ale ogranicza przewidywaną krzywą, dzienne sumy kWh i wartości tooltipa, aby odczyt nigdy nie przekraczał rzeczywistości.",
+    pvArraysSection: "Orientacja paneli",
+    pvArraysHelp: "Jeden wpis na grupę paneli o wspólnej orientacji. Pozostaw pojedynczy wpis z nachyleniem 0 dla instalacji płaskiej. Dodaj więcej wpisów, gdy panele są podzielone na wiele orientacji (np. jeden rząd skierowany na wschód, jeden na zachód). Karta prognozuje każdy wpis osobno i waży wynik jego udziałem w całkowitych kWp.",
+    pvArrayTitle: "Rząd {n}",
+    pvArrayName: "Nazwa",
+    pvArrayNameHelp: 'Opcjonalne. Etykieta dla tego rzędu wyświetlana w nagłówku edytora (np. „Dach południowy", „Garaż wschodni"). Pozostaw puste, aby wrócić do automatycznie numerowanego tytułu.',
+    pvArrayTilt: "Nachylenie (°)",
+    pvArrayAzimuth: "Azymut (°)",
+    pvArrayShare: "Udział (%)",
+    pvArrayPeakKwp: "Moc szczytowa (kWp)",
+    pvArrayPeakKwpHelp: 'Zainstalowana moc szczytowa TEGO rzędu w kilowatach-pikach. Suma we wszystkich rzędach = łączne kWp; zastępuje starsze globalne pole „Moc szczytowa" plus udział na rząd. Pozostaw puste, aby wrócić do ważenia opartego na udziałach (ścieżka legacy v1.6.2).',
+    pvArrayAdd: "+ Dodaj rząd",
+    pvArrayRemove: "Usuń",
+    pvArrayNormHint: "Udziały nie sumują się do 100 %, prognoza normalizuje je automatycznie.",
+    pvArrayTiltHelp: "Nachylenie tego rzędu od poziomu, 0 do 90: 0 dla płaskiej instalacji, 30 do 45 dla typowego pochyłego dachu, 90 dla w pełni pionowego ustawienia, takiego jak balkon. W połączeniu z azymutem steruje to transpozycją Liu-Jordana, która projektuje przewidywane natężenie promieniowania na płaszczyznę panelu.",
+    pvArrayAzimuthHelp: "Kierunek kompasowy, w którym jest skierowany ten rząd, zgodnie z ruchem wskazówek zegara od północy, 0 do 360: 0 = północ, 90 = wschód, 180 = południe, 270 = zachód.",
+    pvArrayShareHelp: "Względna waga tego rzędu w łącznej mocy kWp. Automatycznie normalizowana podczas obliczeń, więc 50/50, 60/60 i 1/1 dają tę samą prognozę. Pozostaw puste, gdy jest tylko jeden rząd (domyślnie otrzymuje 100 %).",
+    pvArrayLatitude: "Szerokość geograficzna paneli",
+    pvArrayLongitude: "Długość geograficzna paneli",
+    pvArrayCoordsHelp: "Opcjonalne. Ustaw tylko, gdy ten rząd NIE znajduje się w tym samym miejscu co dom (montaż na ziemi 300 m od domu, oddzielony garaż, itp.). Oba pola muszą być wypełnione, aby pozycja została zastosowana, w przeciwnym razie prognoza używa pozycji domu. Mała zielona kula pojawi się na mapie w tym miejscu.",
+    pvArrayHeight: "Wysokość paneli (m)",
+    pvArrayHeightHelp: "Opcjonalne, domyślnie 5. Wysokość tej grupy paneli nad ziemią w metrach; używana przez prognozę PV ze świadomością LiDAR do pozycjonowania źródła ray-marchingu podczas sprawdzania, czy panele są zasłonięte przez sąsiada lub drzewo. Podnieś dla dachu wyższego piętra (8-10 m), obniż dla instalacji naziemnej (0-1 m). Nie ma efektu, gdy żaden dostawca LiDAR nie obejmuje domu.",
+    pvArrayCoordsPlaceholder: "opcjonalnie",
+    pvColor: "Kolor produkcji",
+    batterySection: "Bateria domowa",
+    batteryHint: "Opcjonalne. Zadeklaruj jeden wiersz na każdy fizyczny bank baterii (jeden wpis wystarczy dla pojedynczego inwertera hybrydowego; dodaj więcej dla rozdzielonych instalacji dom + garaż lub dla pary hybryda + autonomiczny). Chip na karcie pozostaje pojedynczy i agreguje banki jako SoC ważony pojemnością oraz zsumowaną podpisaną moc. Każda encja wewnątrz banku jest niezależnie opcjonalna, strona chipa pojawia się, gdy tylko encja zostanie ustawiona.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Dodaj bank",
+    batteryBankRemove: "Usuń",
+    batteryBankName: "Nazwa banku (opcjonalne)",
+    batteryBankNameHelp: 'Opcjonalna przyjazna etykieta wyświetlana w nagłówku wiersza. Pozostaw puste, aby wrócić do „Bank 1", „Bank 2" itd. Przydatne, gdy masz kilka banków i chcesz je rozpoznać na pierwszy rzut oka.',
+    batteryCapacityKwh: "Pojemność (kWh, opcjonalne)",
+    batteryCapacityKwhHelp: "Używana do ważenia tego banku w zagregowanym chipie SoC, gdy banki mają różne rozmiary (np. bank domowy 10 kWh + bank garażowy 5 kWh: bank domowy przesuwa chip dwa razy bardziej niż bank garażowy). Pozostaw puste, jeśli wszystkie banki są tego samego rozmiaru, ważenie sprowadza się wtedy do prostej nieważonej średniej. Nie wpływa na odczyt zsumowanej mocy.",
+    batterySocEntity: "Encja stanu naładowania",
+    batterySocEntityHelp: 'Wybierz czujnik stanu naładowania baterii (%, zwykle z device_class „battery"). Renderuje się jako chip po lewej stronie chipa PV pokazujący bieżący procent.',
+    batteryPowerEntity: "Encja mocy",
+    batteryPowerEntityHelp: 'Wybierz czujnik mocy baterii (W lub kW). Konwencja znaku jest zgodna z samą encją (pozytywny jest interpretowany jako ładowanie) i jest pokazywana dosłownie na chipie (np. „+3,00 kW" ładowanie, „-1,20 kW" rozładowanie).',
+    batteryPowerInvert: "Znak mocy baterii",
+    batteryPowerInvertStandard: "Standardowy",
+    batteryPowerInvertInverted: "Odwrócony",
+    batteryPowerInvertHelp: "Domyślny (Standardowy): encja baterii już raportuje ładowanie jako pozytywne i rozładowanie jako negatywne. Wybierz Odwrócony, gdy Twoja encja robi odwrotnie (niektóre konfiguracje GivEnergy / GivTCP), Helios odwróci wartość raz przy odczycie, aby odczyt chipa, strzałka lidera i dzienne sumy naładowane / rozładowane zachowały swoje znaczenie.",
+    inverterCutoffSocPct: "SoC odcięcia falownika (%)",
+    inverterCutoffSocPctHelp: "Procent, przy którym Twój falownik hybrydowy blokuje produkcję PV, gdy bateria osiągnie ustawiony pułap. Pozostaw puste, aby wyłączyć. Po ustawieniu trener mapy zacienienia pomija każde okno obserwacji, w którym SoC baterii osiągnął tę wartość, aby produkcja zablokowana przez falownik nie zanieczyszczała mapy fantomowymi cieniami w odpowiadających pozycjach Słońca. Wymaga skonfigurowania encji SoC baterii powyżej.",
+    batteryColor: "Kolor baterii",
+    weatherSection: "Pogoda",
+    weatherHint: "Opcjonalne. Podłącz lokalne encje pogody, aby Helios używał pomiarów z Twojego domu zamiast modelu Open-Meteo interpolowanego do komórki siatki. Każda encja jest niezależnie opcjonalna i używana tylko wtedy, gdy niesie świeżą wartość; brakujące lub nieaktualne próbki przezroczyście wracają do modelu.",
+    solarRadiationEntity: "Encja promieniowania słonecznego",
+    solarRadiationEntityHelp: "Wybierz czujnik raportujący globalne natężenie promieniowania krótkofalowego w W/m² (typowo Ecowitt / Davis / osobista stacja pogodowa). Po ustawieniu jego aktualny stan i historia recordera zastępują Open-Meteo dla bieżącego + przeszłego natężenia wszędzie, gdzie się pojawia (numer chipa słońca, oś Y wykresu PV, kolorowanie łuku słońca). Godziny prognozy zawsze używają Open-Meteo, ponieważ czujnik zna tylko teraźniejszość.",
+    buildingsSection: "Budynek",
+    buildingsHint: 'Aby utrzymać kartę płynną w gęstych obszarach miejskich, tylko budynki w skonfigurowanym promieniu wokół domu są renderowane w 3D. Sam dom pozostaje przy pełnej nieprzezroczystości; pobliskie budynki są renderowane ze skonfigurowaną nieprzezroczystością, aby zapewniały kontekst miejski bez konkurowania z nakładkami danych. Promień klastra grupuje przyległe budynki gospodarcze (werandy, garaże, szopy) w zestaw „dom".',
+    displayRadius: "Promień wyświetlania",
+    displayRadiusHint: "Definiuje widoczny obszar wokół domu. Wszystko poza tym promieniem jest ukryte: mapa podkładowa, sąsiednie budynki, cienie. Steruje również zasięgiem pobierania LiDAR i klipem rzucanych cieni.",
+    timelineSection: "Oś czasu",
+    timelineEnabled: "Pokaż oś czasu",
+    timelineEnabledOn: "Pokaż",
+    timelineEnabledOff: "Ukryj",
+    timelineEnabledHint: "Ukrywa całą dolną oś czasu (wykres, etykiety dni, kursory scrub). Przydatne, gdy karta jest osadzona w szerszym panelu dashboard, gdzie inny widget już pokazuje dzienny trend.",
+    timelineWidth: "Szerokość osi czasu",
+    timelineWidthHint: "Zmniejsza oś czasu poziomo, utrzymując ją wycentrowaną na karcie. Przy 100 % przylega do krawędzi karty; poniżej tej wartości pasek wciąga się proporcjonalnie z obu stron.",
+    timelineConsumption: "Pokaż dzienne zużycie / prognozę",
+    timelineConsumptionOn: "Pokaż",
+    timelineConsumptionOff: "Ukryj",
+    timelineConsumptionHint: "Przełącza chip kWh na dzień renderowany obok każdej daty na osi czasu (obserwowany dla dni przeszłych, prognoza dla dziś i naprzód). Wyłącz, jeśli zależy Ci tylko na scenie na żywo i chcesz czystszego wykresu.",
+    buildingClusterRadius: "Promień klastra domu",
+    buildingOpacity: "Nieprzezroczystość otoczenia",
+    buildingColor: "Kolor budynków",
+    pixelRatio: "Pixel ratio",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (domyślnie) używa natywnego devicePixelRatio Twojego ekranu (ograniczonego do 2 na pulpicie, 1,25 na mobile) dla wyraźnego renderowania. 1x wymusza wartość 1,0 dla najtańszego możliwego obciążenia fragmentów na klatkę, przydatne na urządzeniach niskoklasowych lub w długich sesjach, gdy żywotność baterii / ciepło ma większe znaczenie niż wyraźność.",
+    mapStyleMinimal: "Minimalna",
+    shadowsSection: "Cienie",
+    shadowsEnabled: "Pokaż cienie",
+    shadowsEnabledOn: "Widoczne",
+    shadowsEnabledOff: "Ukryte",
+    shadowsEnabledHint: "Główny przełącznik rzucanych cieni naziemnych. Gdy ukryte, żadne cienie nie są w ogóle rzucane. Gdy widoczne, źródło wybiera się samo: dostawca LiDAR, gdy obejmuje Twoją lokalizację (budynki + roślinność), w przeciwnym razie ślady budynków OpenFreeMap (tylko budynki).",
+    lidarPrecision: "Precyzja LiDAR",
+    lidarPrecisionLow: "Niska",
+    lidarPrecisionMedium: "Średnia",
+    lidarPrecisionHigh: "Wysoka",
+    lidarPrecisionHint: "Jeśli Twój dom znajduje się wewnątrz dostawcy LiDAR zintegrowanego z Heliosem, otrzymujesz bardziej realistyczne cienie (budynki I roślinność). Może pojawić się pewne przesunięcie między renderowanymi budynkami a ich cieniami: badanie LiDAR jest robione w danym momencie i może nie odzwierciedlać aktualnego stanu terenu. Poza zasięgiem LiDAR cienie wracają do płaskich śladów budynków OpenFreeMap, a to ustawienie nie ma efektu. Wyższa precyzja pobiera więcej komórek ze źródła: widok LiDAR pokazuje więcej punktów i bardziej obciąża GPU. Rzeczywista gęstość zależy od tego, co dostawca publikuje dla Twojego obszaru.",
+    shadowOpacity: "Nieprzezroczystość cienia",
+    shadowOpacityHint: "Nieprzezroczystość rzucanych cieni naziemnych.",
+    lidarViewSection: "Widok LiDAR",
+    lidarViewHint: "Kliknij przycisk LiDAR w prawym górnym rogu karty, aby przełączyć się na nakładkę LiDAR: każda załadowana komórka jest rysowana jako siatka i cieniowana w czasie rzeczywistym według aktualnej ekspozycji słonecznej, oświetlone powierzchnie świecą ciepło, a zacienione gasną. Suwak u dołu karty służy do regulacji ogólnej nieprzezroczystości. Przycisk pozostaje wyłączony, gdy żaden dostawca nie obejmuje domu. Widok ponownie wykorzystuje dane już pobrane z bieżącą precyzją, nie są wykonywane żadne dodatkowe wywołania.",
+    lidarViewPointSize: "Rozmiar punktów (px)",
+    localLidarSection: "Zaawansowane — Lokalny LiDAR (BYO)",
+    localLidarHint: "Opcjonalne. Skieruj Heliosa na własny nDSM GeoTIFF (cyfrowy model powierzchni minus ziemia, wysokość nad ziemią w metrach) hostowany w Home Assistant. Pozwala na pokazanie cieni w dowolnym regionie jeszcze nie objętym przez publicznych dostawców LiDAR. Wewnątrz zdefiniowanego obszaru to źródło zastępuje każdego krajowego dostawcę.",
+    localLidarToolsHint: "Czy potrzebują Państwo przygotować raster od zera? Proszę przesłać surowy plik LAZ / LAS lub parę rastrów DSM + DTM na stronę towarzyszącą [helios-lidar.org](https://helios-lidar.org), zwróci ona 2-pasmowy COG, który Helios czyta (pasmo 1 = nDSM, pasmo 2 = DTM) wraz z gotowym do wklejenia YAML-em dla poniższych kluczy. Bezpłatnie, bez instalacji, bez konta. Czy wolą Państwo uruchamiać wszystko lokalnie? Pełny zestaw narzędzi w Pythonie znajduje się w [repozytorium Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar).",
+    localLidarEnabled: "Użyj danych lokalnych",
+    localLidarUrl: "URL GeoTIFF",
+    localLidarMinLat: "Min szerokość",
+    localLidarMaxLat: "Max szerokość",
+    localLidarMinLon: "Min długość",
+    localLidarMaxLon: "Max długość",
+    resetSection: "Reset",
+    resetSectionHint: "Narzędzia konserwacyjne do wymazania danych, które karta zapisała lokalnie.",
+    resetCacheButton: "Resetuj pamięć podręczną danych",
+    resetCacheWarning: "Ostrzeżenie: to wyczyści zapisaną pogodę Open-Meteo oraz historię PV w pamięci dla KAŻDEJ karty Helios otwartej na tej stronie. Doprecyzowana prognoza utraci swoje 5 dni kalibracji, dopóki nie zostaną ponownie pobrane (kilka minut w zależności od Twojego serwera HA). Twoje dane wewnątrz Home Assistant nigdy nie są dotykane.",
+    resetCacheDone: "Pamięć podręczna wyczyszczona ✓",
+    aboutSection: "O projekcie",
+    aboutVersionLabel: "Wersja",
+    aboutSiteTitle: "Strona towarzysząca, helios-lidar.org",
+    aboutSiteDescription: "Bezpłatne narzędzie do zamiany surowych otwartych danych LiDAR z dowolnego kraju (LAZ / LAS lub pary DSM + DTM) na GeoTIFF nDSM, którego potrzebuje Helios, wraz z fragmentem YAML do wklejenia w tym edytorze. Bez QGIS, bez GDAL, bez instalacji, bez konta.",
+    aboutCodeLabel: "Kod źródłowy",
+    aboutRepoCard: "Helios (karta)",
+    aboutRepoLidar: "Helios-Lidar (strona towarzysząca)",
+    aboutCoffeeMessage: "Helios tworzy jeden programista z dużą dawką energii i bardzo małą ilością snu. Jeśli pomaga Państwu w codziennym użytkowaniu, gwiazdka na GitHubie lub kawa utrzymują projekt przy życiu.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
+  }
+};
+const cs = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Slunce, mraky, FV produkce, baterie a LiDAR stíny na vašem domě, ve 3D v reálném čase",
+  lidarViewChipLabel: "Zobrazení LiDAR",
+  shadingDomeChipLabel: "Stíny",
+  detail: {
+    exitHint: "Klikněte kamkoli pro ukončení",
+    todayLabel: "Dnes",
+    todayProduced: "vyrobeno",
+    todayForecast: "předpověď",
+    todayPeak: "skutečné maximum",
+    todayPeakForecast: "předpokládané maximum",
+    todayNotStartedYet: "Produkce pozastavena",
+    tomorrowLabel: "Zítra",
+    tomorrowPeak: "maximum očekáváno kolem",
+    batteryLabel: "Baterie",
+    batteryCharged: "nabito",
+    batteryDischarged: "vybito",
+    actualShort: "Skut.",
+    forecastShort: "Předp.",
+    deltaTooltip: "Skutečná produkce vs předpověď v tomto okamžiku",
+    forecastRefined: "upřesněno",
+    forecastCalibrationHint: "Předpověď upravena podle průměrného rozdílu mezi modelem a pozorovanou produkcí za posledních {n} dní."
+  },
+  editor: {
+    locationSection: "Lokalita",
+    homeLatitude: "Zeměpisná šířka domova",
+    homeLongitude: "Zeměpisná délka domova",
+    locationHint: "Přepíše adresu domova použitou jako střed mapy. Ponechte obě pole prázdná pro použití domova nakonfigurovaného v Home Assistant. Přepsání se použije pouze tehdy, když OBĚ pole obsahují platné souřadnice.",
+    mapSection: "Mapa",
+    mapStyle: "Styl mapy",
+    mapStyleHint: "Dvě mapy: Ulice (střízlivá, městská, s plnými popisky) nebo Minimální (načte styl Ulice a poté odstraní všechny nepodstatné popisky, ikony POI a značky silnic pro rychlejší vykreslování). Tmavá varianta zvoleného stylu se používá automaticky, když je motiv karty nastaven na tmavý.",
+    mapStyleStreet: "Ulice",
+    cardTheme: "Motiv karty",
+    cardThemeHint: "Přepíná chrom karty (chipy, grafy, tlačítka, nápovědy, překrytí scrub) a podkladovou 3D mapu mezi světlým vzhledem (výchozí, na bílém povrchu) a tmavým (na téměř černém povrchu), aby karta dobře zapadla do světlých nebo tmavých dashboardů Home Assistant.",
+    cardThemeLight: "Světlý",
+    cardThemeDark: "Tmavý",
+    showLabels: "Zobrazit popisky",
+    showLabelsHint: "Přepíná názvy ulic, čísla budov, body zájmu a názvy míst na podkladové mapě.",
+    labelsOn: "Zobrazeno",
+    labelsOff: "Skryto",
+    autoRotate: "Automatická rotace kamery",
+    autoRotateHint: "Po několika sekundách nečinnosti kamera pomalu obíhá kolem domu (asi 1,5°/s, opačně ke zdánlivému pohybu slunce). Tažení jedním prstem ji okamžitě pozastaví a pokračuje, jakmile pustíte.",
+    autoRotateOn: "Zapnuto",
+    autoRotateOff: "Vypnuto",
+    dateFormat: "Formát data (výchozí: mm-dd)",
+    dateFormatHelp: "Tokeny: yyyy, yy, mm, dd. Příklady:",
+    timeFormat: "Formát času",
+    timeFormat12: "12 h",
+    timeFormat24: "24 h",
+    uiSection: "UI",
+    uiColorsHint: "Jedna barva na metriku, používaná všude, kde se objevuje. Slunce: oblouk, sluneční kotouč a horní oblast časové osy. Mraky: kotouč na zemi a dolní oblast časové osy.",
+    sunColor: "Barva slunce",
+    cloudColor: "Barva mraků",
+    pvSection: "Solární produkce",
+    pvHint: "Volitelné. Po nastavení se u domu objeví chip s okamžitou produkcí (vypočítanou za poslední minutu) a nad časovou osou se přidá dedikovaný graf. Přijímá buď senzor výkonu (W/kW) nebo kumulativní senzor energie (Wh/kWh).",
+    pvEntity: "Entita produkce",
+    pvEntityHelp: "Vyberte senzor solárního výkonu nebo energie (W, kW, Wh, kWh).",
+    pvPeakPower: "Špičkový výkon (kWp)",
+    pvPeakPowerHelp: "Celkový instalovaný špičkový výkon vašeho pole v kilowatt-pícech. Pohání tečkovanou linku předpovědi v grafu FV a sytost toku vedoucího FV → dům. Ponechte prázdné, když zadáváte špičkový výkon na řádek níže (součet je pak celkem). Bez žádného z nich se předpověď nevykresluje; pozorovaná produkce a denní maximum se stále vykreslují.",
+    pvInverterMaxKw: "Max výstup invertoru (kW)",
+    pvInverterMaxKwHelp: "Volitelné omezení předpovědi. Nastavte na jmenovitý AC výkon vašeho invertoru, když vaše panely mohou produkovat více, než invertor dokáže dodat (typické evropské párování: 6,4 kWp DC za invertorem 5 kW). Nezmění pozorování (invertor již omezuje hardwarově), ale ohraničí předpovídanou křivku, denní součty kWh a hodnoty nápovědy, aby odečet nikdy nepřekročil realitu.",
+    pvArraysSection: "Orientace panelů",
+    pvArraysHelp: "Jeden záznam pro skupinu panelů se stejnou orientací. Ponechte jediný záznam s naklonem 0 pro plochou instalaci. Přidejte další záznamy, když jsou panely rozděleny do více orientací (např. jedna řada směřuje na východ, jedna na západ). Karta předpovídá každý záznam zvlášť a váží výsledek jeho podílem na celkových kWp.",
+    pvArrayTitle: "Řádek {n}",
+    pvArrayName: "Název",
+    pvArrayNameHelp: 'Volitelné. Štítek pro tento řádek zobrazený v hlavičce editoru (např. „Jižní střecha", „Východní garáž"). Ponechte prázdné pro návrat k automaticky číslovanému názvu.',
+    pvArrayTilt: "Sklon (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Podíl (%)",
+    pvArrayPeakKwp: "Špičkový výkon (kWp)",
+    pvArrayPeakKwpHelp: 'Instalovaný špičkový výkon TOHOTO řádku v kilowatt-pícech. Součet napříč řádky = celkem kWp; nahrazuje starší globální pole „Špičkový výkon" plus podíl na řádek. Ponechte prázdné pro návrat k vážení založenému na podílech (legacy cesta v1.6.2).',
+    pvArrayAdd: "+ Přidat řádek",
+    pvArrayRemove: "Odebrat",
+    pvArrayNormHint: "Podíly nesčítají do 100 %, předpověď je normalizuje automaticky.",
+    pvArrayTiltHelp: "Sklon tohoto řádku od horizontu, 0 až 90: 0 pro plochou instalaci, 30 až 45 pro typickou skloněnou střechu, 90 pro plně vertikální nastavení jako balkon. V kombinaci s azimutem pohání Liu-Jordan transpozici, která projektuje předpovídané záření na rovinu panelu.",
+    pvArrayAzimuthHelp: "Kompasový směr, kterým je tento řádek otočen, ve směru hodinových ručiček od severu, 0 až 360: 0 = sever, 90 = východ, 180 = jih, 270 = západ.",
+    pvArrayShareHelp: "Relativní váha tohoto řádku v celkových kWp. Automaticky normalizovaná v době výpočtu, takže 50/50, 60/60 a 1/1 dávají stejnou předpověď. Ponechte prázdné, když je pouze jeden řádek (ve výchozím nastavení dostává 100 %).",
+    pvArrayLatitude: "Zeměpisná šířka panelů",
+    pvArrayLongitude: "Zeměpisná délka panelů",
+    pvArrayCoordsHelp: "Volitelné. Nastavte pouze tehdy, když tento řádek NENÍ na stejném místě jako dům (pozemní montáž 300 m daleko, oddělená garáž atd.). Obě pole musí být vyplněna, aby se pozice použila, jinak předpověď používá pozici domu. Na mapě se na tomto místě objeví malá zelená koule.",
+    pvArrayHeight: "Výška panelů (m)",
+    pvArrayHeightHelp: "Volitelné, výchozí 5. Výška této skupiny panelů nad zemí v metrech; používaná předpovědí FV se znalostí LiDAR pro umístění počátku ray-marchingu při kontrole, zda jsou panely zastíněny sousedem nebo stromem. Zvyšte pro střechu vyššího patra (8-10 m), snižte pro pozemní instalaci (0-1 m). Nemá vliv, pokud žádný poskytovatel LiDAR nepokrývá domov.",
+    pvArrayCoordsPlaceholder: "volitelné",
+    pvColor: "Barva produkce",
+    batterySection: "Domácí baterie",
+    batteryHint: "Volitelné. Deklarujte jeden řádek na každý fyzický bank baterií (jeden záznam postačí pro samostatný hybridní střídač; přidejte další pro rozdělené instalace dům + garáž nebo pro dvojici hybrid + samostatný). Chip na kartě zůstává jediný a agreguje banky jako SoC vážený kapacitou a sečtený podepsaný výkon. Každá entita uvnitř banku je nezávisle volitelná, strana chipu se objeví, jakmile je entita nastavena.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Přidat bank",
+    batteryBankRemove: "Odebrat",
+    batteryBankName: "Název banku (volitelné)",
+    batteryBankNameHelp: 'Volitelný přátelský štítek zobrazený v záhlaví řádku. Ponechte prázdné pro návrat k „Bank 1", „Bank 2" atd. Užitečné, když máte několik banků a chcete je rozeznat na první pohled.',
+    batteryCapacityKwh: "Kapacita (kWh, volitelné)",
+    batteryCapacityKwhHelp: "Slouží k vážení tohoto banku v agregovaném SoC chipu, když mají banky různé velikosti (např. domácí bank 10 kWh + garážový bank 5 kWh: domácí bank pohne chipem dvakrát více než garážový). Ponechte prázdné, pokud jsou všechny vaše banky stejně velké, vážení se pak zredukuje na plochý nevážený průměr. Neovlivňuje hodnotu sečteného výkonu.",
+    batterySocEntity: "Entita stavu nabití",
+    batterySocEntityHelp: 'Vyberte senzor stavu nabití baterie (%, obvykle s device_class „battery"). Vykreslí se jako chip vlevo od chipu FV zobrazující živé procento.',
+    batteryPowerEntity: "Entita výkonu",
+    batteryPowerEntityHelp: 'Vyberte senzor výkonu baterie (W nebo kW). Konvence znaménka sleduje samotnou entitu (kladné je interpretováno jako nabíjení) a je zobrazena doslovně na chipu (např. „+3,00 kW" nabíjení, „-1,20 kW" vybíjení).',
+    batteryPowerInvert: "Znaménko výkonu baterie",
+    batteryPowerInvertStandard: "Standardní",
+    batteryPowerInvertInverted: "Obrácené",
+    batteryPowerInvertHelp: "Výchozí (Standardní): entita baterie již hlásí nabíjení jako kladné a vybíjení jako záporné. Vyberte Obrácené, když vaše entita dělá opak (některé sestavy GivEnergy / GivTCP), Helios pak při příjmu obrátí hodnotu jednou, aby odečet chipu, šipka vedení a denní součty nabito / vybito zachovaly svůj význam.",
+    inverterCutoffSocPct: "SoC odpojení střídače (%)",
+    inverterCutoffSocPctHelp: "Procento, při kterém váš hybridní střídač blokuje výrobu PV, jakmile baterie dosáhne nastaveného stropu. Ponechte prázdné pro deaktivaci. Když je nastaveno, trénovač mapy stínování přeskočí každé pozorovací okno, ve kterém SoC baterie dosáhl této hodnoty, aby výroba blokovaná střídačem neznečišťovala mapu fantomovými stíny v odpovídajících pozicích Slunce. Vyžaduje, aby entita SoC baterie výše byla nakonfigurována.",
+    batteryColor: "Barva baterie",
+    weatherSection: "Počasí",
+    weatherHint: "Volitelné. Připojte místní entity počasí, aby Helios používal měření z vašeho domova místo modelu Open-Meteo interpolovaného na vaši buňku mřížky. Každá entita je nezávisle volitelná a používá se pouze tehdy, když nese čerstvou hodnotu; chybějící nebo neaktuální vzorky se průhledně vrací k modelu.",
+    solarRadiationEntity: "Entita slunečního záření",
+    solarRadiationEntityHelp: "Vyberte senzor hlásící globální krátkovlnné záření ve W/m² (typicky Ecowitt / Davis / osobní meteostanice). Po nastavení jeho aktuální stav a historie recordera nahrazují Open-Meteo pro živé + minulé záření všude, kde se objevuje (číslo chipu slunce, osa Y grafu FV, zbarvení slunečního oblouku). Hodiny předpovědi vždy používají Open-Meteo, protože senzor zná jen současnost.",
+    buildingsSection: "Budova",
+    buildingsHint: 'Aby byla karta plynulá v hustých městských oblastech, pouze budovy v nakonfigurovaném okruhu kolem domu jsou vykresleny ve 3D. Sám dům zůstává na plné neprůhlednosti; okolní budovy jsou vykresleny s nakonfigurovanou neprůhledností, takže poskytují městský kontext, aniž by soupeřily s datovými překryvy. Poloměr clusteru seskupuje připojené hospodářské budovy (verandy, garáže, kůlny) do skupiny „dům".',
+    displayRadius: "Poloměr zobrazení",
+    displayRadiusHint: "Definuje viditelnou oblast kolem domu. Vše za tímto poloměrem je skryto: podkladová mapa, sousední budovy, stíny. Také pohání rozsah načítání LiDAR a oříznutí promítaných stínů.",
+    timelineSection: "Časová osa",
+    timelineEnabled: "Zobrazit časovou osu",
+    timelineEnabledOn: "Zobrazit",
+    timelineEnabledOff: "Skrýt",
+    timelineEnabledHint: "Skryje celou spodní časovou osu (graf, štítky dnů, kurzory scrub). Užitečné, když je karta vložena do širšího panelu dashboardu, kde jiný widget již zobrazuje denní trend.",
+    timelineWidth: "Šířka časové osy",
+    timelineWidthHint: "Zmenšuje časovou osu horizontálně, přičemž ji udržuje vycentrovanou na kartě. Při 100 % přiléhá ke hranám karty; pod tím se pruh proporcionálně stahuje z obou stran.",
+    timelineConsumption: "Zobrazit denní spotřebu / předpověď",
+    timelineConsumptionOn: "Zobrazit",
+    timelineConsumptionOff: "Skrýt",
+    timelineConsumptionHint: "Přepíná chip kWh za den vykreslený vedle každého data na časové ose (pozorováno pro minulé dny, předpověď pro dnes a dále). Vypněte, pokud vám záleží pouze na živé scéně a chcete čistší graf.",
+    buildingClusterRadius: "Poloměr clusteru domu",
+    buildingOpacity: "Neprůhlednost okolí",
+    buildingColor: "Barva budov",
+    pixelRatio: "Pixel ratio",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (výchozí) používá nativní devicePixelRatio vaší obrazovky (omezený na 2 na desktopu, 1,25 na mobilu) pro ostré vykreslování. 1x vynucuje hodnotu 1,0 pro nejlevnější možnou zátěž fragmentů na snímek, užitečné na zařízeních nižší třídy nebo pro dlouhé relace, kde životnost baterie / teplo záleží více než ostrost.",
+    mapStyleMinimal: "Minimální",
+    shadowsSection: "Stínování",
+    shadowsEnabled: "Zobrazit stíny",
+    shadowsEnabledOn: "Zobrazeno",
+    shadowsEnabledOff: "Skryto",
+    shadowsEnabledHint: "Hlavní přepínač pro promítané pozemní stíny. Když jsou skryté, žádné stíny se vůbec nepromítají. Když jsou zobrazené, zdroj se vybírá sám: poskytovatel LiDAR, když pokrývá vaši lokalitu (budovy + vegetace), jinak otisky budov OpenFreeMap (pouze budovy).",
+    lidarPrecision: "Přesnost LiDAR",
+    lidarPrecisionLow: "Nízká",
+    lidarPrecisionMedium: "Střední",
+    lidarPrecisionHigh: "Vysoká",
+    lidarPrecisionHint: "Pokud váš domov leží uvnitř poskytovatele LiDAR integrovaného s Heliosem, získáte realističtější stíny (budovy A vegetace). Mezi vykreslenými budovami a jejich stíny se může objevit určitý posun: průzkum LiDAR je zachycen v daném datu a nemusí odrážet aktuální stav terénu. Mimo pokrytí LiDAR se stíny vrací k plochým otiskům budov OpenFreeMap a toto nastavení nemá vliv. Vyšší přesnost stahuje více buněk ze zdroje: zobrazení LiDAR ukazuje více bodů a více zatěžuje GPU. Skutečná hustota závisí na tom, co poskytovatel publikuje pro vaši oblast.",
+    shadowOpacity: "Neprůhlednost stínu",
+    shadowOpacityHint: "Neprůhlednost promítaných pozemních stínů.",
+    lidarViewSection: "Zobrazení LiDAR",
+    lidarViewHint: "Klikněte na tlačítko LiDAR v pravém horním rohu karty pro přepnutí na vrstvu LiDAR: každá načtená buňka je vykreslena jako drátěný model a stínována v reálném čase podle aktuální sluneční expozice, osvětlené plochy září teple a zastíněné slábnou. Posuvníkem ve spodní části karty regulujte celkovou neprůhlednost. Tlačítko zůstává deaktivované, když žádný poskytovatel nepokrývá domov. Zobrazení znovu používá data již načtená s aktuální přesností, žádné další volání se neprovádí.",
+    lidarViewPointSize: "Velikost bodů (px)",
+    localLidarSection: "Pokročilé — Lokální LiDAR (BYO)",
+    localLidarHint: "Volitelné. Nasměrujte Helios na svůj vlastní nDSM GeoTIFF (Digitální model povrchu mínus země, výška nad zemí v metrech) hostovaný v Home Assistant. Umožňuje rozsvítit stíny v libovolném regionu, který ještě není pokryt veřejnými poskytovateli LiDAR. Uvnitř definované oblasti tento zdroj nahrazuje jakéhokoli národního poskytovatele.",
+    localLidarToolsHint: "Potřebujete připravit raster od nuly? Vložte svůj surový soubor LAZ / LAS nebo pár rastrů DSM + DTM na doprovodný web [helios-lidar.org](https://helios-lidar.org), vrátí 2-pásmový COG, který Helios čte (pásmo 1 = nDSM, pásmo 2 = DTM) společně s YAML připraveným k vložení pro níže uvedené klíče. Zdarma, bez instalace, bez účtu. Dáváte přednost spuštění všeho lokálně? Kompletní sada nástrojů v Pythonu se nachází v [repozitáři Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar).",
+    localLidarEnabled: "Použít lokální data",
+    localLidarUrl: "URL GeoTIFF",
+    localLidarMinLat: "Min šířka",
+    localLidarMaxLat: "Max šířka",
+    localLidarMinLon: "Min délka",
+    localLidarMaxLon: "Max délka",
+    resetSection: "Reset",
+    resetSectionHint: "Údržbové nástroje pro vymazání dat, která karta lokálně mezipaměť.",
+    resetCacheButton: "Resetovat mezipaměť dat",
+    resetCacheWarning: "Upozornění: toto vymaže mezipaměť počasí Open-Meteo a historii FV v paměti pro KAŽDOU kartu Helios otevřenou na této stránce. Upřesněná předpověď ztratí svých 5 dní kalibrace, dokud nebudou znovu načteny (několik minut v závislosti na vašem serveru HA). Vaše data uvnitř Home Assistant nejsou nikdy dotčena.",
+    resetCacheDone: "Mezipaměť vyčištěna ✓",
+    aboutSection: "O projektu",
+    aboutVersionLabel: "Verze",
+    aboutSiteTitle: "Doprovodný web, helios-lidar.org",
+    aboutSiteDescription: "Bezplatný nástroj, který převede surová otevřená LiDAR data z libovolné země (LAZ / LAS nebo dvojice DSM + DTM) na GeoTIFF nDSM, který Helios potřebuje, plus úryvek YAML k vložení do tohoto editoru. Bez QGIS, bez GDAL, bez instalace, bez účtu.",
+    aboutCodeLabel: "Zdrojový kód",
+    aboutRepoCard: "Helios (karta)",
+    aboutRepoLidar: "Helios-Lidar (doprovodný web)",
+    aboutCoffeeMessage: "Helios vyvíjí jediný vývojář s velkou energií a velmi malým spánkem. Pokud Vám pomáhá v každodenním provozu, hvězda na GitHubu nebo káva udrží projekt naživu.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
+  }
+};
+const sv = {
+  cardName: "HELIOS",
+  cardDescription: "☀️ Sol, moln, PV-produktion, batteri och LiDAR-skuggor på ditt hem, i 3D i realtid",
+  lidarViewChipLabel: "LiDAR-vy",
+  shadingDomeChipLabel: "Skuggor",
+  detail: {
+    exitHint: "Klicka var som helst för att avsluta",
+    todayLabel: "Idag",
+    todayProduced: "producerat",
+    todayForecast: "prognos",
+    todayPeak: "verklig topp",
+    todayPeakForecast: "prognostiserad topp",
+    todayNotStartedYet: "Produktion pausad",
+    tomorrowLabel: "Imorgon",
+    tomorrowPeak: "topp förväntad kring",
+    batteryLabel: "Batteri",
+    batteryCharged: "laddat",
+    batteryDischarged: "urladdat",
+    actualShort: "Verkligt",
+    forecastShort: "Prognos",
+    deltaTooltip: "Verklig produktion vs prognos vid denna tidpunkt",
+    forecastRefined: "justerad",
+    forecastCalibrationHint: "Prognos justerad från det genomsnittliga gapet mellan modellen och observerad produktion under de senaste {n} dagarna."
+  },
+  editor: {
+    locationSection: "Plats",
+    homeLatitude: "Hemmets latitud",
+    homeLongitude: "Hemmets longitud",
+    locationHint: "Åsidosätter hemadressen som används som kortets centrum. Lämna båda fälten tomma för att använda Home Assistants konfigurerade hem. Åsidosättningen tillämpas endast när BÅDA fälten är inställda på giltiga koordinater.",
+    mapSection: "Karta",
+    mapStyle: "Kartstil",
+    mapStyleHint: "Två baskartor: Gator (nykter, urban, med fullständiga etiketter) eller Minimal (laddar Gator-stilen och tar sedan bort alla oviktiga etiketter, POI-ikoner och vägskyltar för snabbare rendering). Den mörka varianten av vald stil används automatiskt när korttemat är inställt på mörkt.",
+    mapStyleStreet: "Gator",
+    cardTheme: "Korttema",
+    cardThemeHint: "Växlar kortets kromfärg (chippar, diagram, knappar, verktygstips, scrub-överlagring) och 3D-baskartan mellan ett ljust utseende (standard, på vit yta) och ett mörkt utseende (på nästan svart yta) så att kortet smälter in i ljusa eller mörka Home Assistant-dashboards.",
+    cardThemeLight: "Ljust",
+    cardThemeDark: "Mörkt",
+    showLabels: "Visa etiketter",
+    showLabelsHint: "Växlar gatunamn, husnummer, intressepunkter och platsnamn på baskartan.",
+    labelsOn: "Visas",
+    labelsOff: "Dolda",
+    autoRotate: "Automatisk kamerarotation",
+    autoRotateHint: "Efter några sekunders inaktivitet roterar kameran långsamt runt hemmet (ungefär 1,5°/s, mot solens skenbara rörelse). Ett enfingersdrag pausar den omedelbart och den återupptas så snart du släpper.",
+    autoRotateOn: "På",
+    autoRotateOff: "Av",
+    dateFormat: "Datumformat (standard: mm-dd)",
+    dateFormatHelp: "Token: yyyy, yy, mm, dd. Exempel:",
+    timeFormat: "Tidsformat",
+    timeFormat12: "12 h",
+    timeFormat24: "24 h",
+    uiSection: "UI",
+    uiColorsHint: "En färg per mätvärde, återanvänd överallt där det förekommer. Sol: bågen, solskivan och det övre området av tidslinjen. Moln: skivan på marken och det nedre området av tidslinjen.",
+    sunColor: "Solfärg",
+    cloudColor: "Molnfärg",
+    pvSection: "Solproduktion",
+    pvHint: "Valfritt. När det är inställt visas ett chip nära hemmet med ögonblicklig produktion (beräknad över den senaste minuten) och ett dedikerat diagram läggs till ovanför tidslinjen. Accepterar antingen en effektsensor (W/kW) eller en kumulativ energisensor (Wh/kWh).",
+    pvEntity: "Produktionsentitet",
+    pvEntityHelp: "Välj en sol-effekt- eller energisensor (W, kW, Wh, kWh).",
+    pvPeakPower: "Topp-effekt (kWp)",
+    pvPeakPowerHelp: "Total installerad topp-effekt för din anläggning i kilowatt-peak. Driver den prickade prognoslinjen i PV-diagrammet och PV → hem-ledarens flödesmättnad. Lämna tomt när du anger en topp-kWp per sträng på varje rad nedan (totalen är då summan). Utan någondera ritas ingen prognos; observerad produktion och dagstoppen renderas fortfarande.",
+    pvInverterMaxKw: "Växelriktarens maxeffekt (kW)",
+    pvInverterMaxKwHelp: "Valfri begränsning av prognosen. Ställ in på din växelriktares märkeffekt AC när dina paneler kan producera mer än växelriktaren kan leverera (typisk europeisk kombination: 6,4 kWp DC bakom en 5 kW växelriktare). Lämnar observation oförändrad (växelriktaren begränsar redan i hårdvara) men begränsar den förutsagda kurvan, dagliga kWh-totaler och tooltip-värden så att avläsningen aldrig överstiger verkligheten.",
+    pvArraysSection: "Panelorientering",
+    pvArraysHelp: "En post per grupp av medroterade paneler. Lämna en enda post med lutning 0 för en plan installation. Lägg till fler poster när panelerna är uppdelade på flera orienteringar (t.ex. en rad som vetter åt öst, en mot väst). Kortet prognostiserar varje post separat och viktar resultatet med dess andel av den totala kWp.",
+    pvArrayTitle: "Rad {n}",
+    pvArrayName: "Namn",
+    pvArrayNameHelp: 'Valfritt. En etikett för denna rad som visas i redigerarens rubrik (t.ex. "Söderläge", "Östra garaget"). Lämna tomt för att återgå till den automatiskt numrerade titeln.',
+    pvArrayTilt: "Lutning (°)",
+    pvArrayAzimuth: "Azimut (°)",
+    pvArrayShare: "Andel (%)",
+    pvArrayPeakKwp: "Topp-effekt (kWp)",
+    pvArrayPeakKwpHelp: 'Installerad topp-effekt för DENNA rad i kilowatt-peak. Summa över rader = total kWp; ersätter det äldre globala "Topp-effekt"-fältet plus andelen per rad. Lämna tomt för att återgå till den andelsbaserade viktningen (legacy v1.6.2-vägen).',
+    pvArrayAdd: "+ Lägg till rad",
+    pvArrayRemove: "Ta bort",
+    pvArrayNormHint: "Andelarna summerar inte till 100 %, prognosen normaliserar dem automatiskt.",
+    pvArrayTiltHelp: "Denna rads lutning från horisontellt, 0 till 90: 0 för en plan installation, 30 till 45 för ett typiskt lutande tak, 90 för en helt vertikal uppställning som en balkong. Tillsammans med azimuten driver detta Liu-Jordan-transpositionen som projicerar den förutsagda strålningen på panelplanet.",
+    pvArrayAzimuthHelp: "Kompassbäring som denna rad vetter åt, medurs från norr, 0 till 360: 0 = norr, 90 = öster, 180 = söder, 270 = väster.",
+    pvArrayShareHelp: "Denna rads relativa vikt i den totala kWp. Auto-normaliserad vid beräkningstid, så 50/50, 60/60 och 1/1 ger alla samma prognos. Lämna tomt när det bara finns en rad (den får 100 % som standard).",
+    pvArrayLatitude: "Panellatitud",
+    pvArrayLongitude: "Panellongitud",
+    pvArrayCoordsHelp: "Valfritt. Ställ in endast när denna rad INTE är på samma plats som hemmet (markmontering 300 m bort, fristående garage, etc.). Båda fälten måste vara ifyllda för att positionen ska gälla, annars använder prognosen hemmets position. En liten grön sfär kommer att visas på kartan på den platsen.",
+    pvArrayHeight: "Panelhöjd (m)",
+    pvArrayHeightHelp: "Valfritt, standard 5. Höjden på denna panelgrupp över marken i meter; används av den LiDAR-medvetna PV-prognosen för att placera ray-marchingens ursprung när det kontrolleras om matrisen är skuggad av en granne eller ett träd. Höj för ett tak på övre våningen (8-10 m), sänk för en markmonterad anläggning (0-1 m). Har ingen effekt när ingen LiDAR-leverantör täcker hemmet.",
+    pvArrayCoordsPlaceholder: "valfritt",
+    pvColor: "Produktionsfärg",
+    batterySection: "Hembatteri",
+    batteryHint: "Valfritt. Deklarera en rad per fysisk batteribank (en post räcker för en enda hybridväxelriktare; lägg till fler för delade hus + garage-installationer, eller för ett hybrid + fristående-par). Chipet på kortet förblir ett och aggregerar bankerna som en kapacitetsviktad SoC och en summerad signerad effekt. Varje entitet inuti en bank är oberoende valfri, chipsidan visas så snart entiteten är inställd.",
+    batteryBankTitle: "Bank {n}",
+    batteryBankAdd: "Lägg till bank",
+    batteryBankRemove: "Ta bort",
+    batteryBankName: "Bankens namn (valfritt)",
+    batteryBankNameHelp: 'Valfri vänlig etikett som visas i radens rubrik. Lämna tomt för att falla tillbaka till "Bank 1", "Bank 2", osv. Praktiskt när du har flera banker och vill känna igen dem med en blick.',
+    batteryCapacityKwh: "Kapacitet (kWh, valfritt)",
+    batteryCapacityKwhHelp: "Används för att vikta denna bank i den aggregerade SoC-chipen när bankerna har olika storlekar (t.ex. en husbank på 10 kWh + en garagebank på 5 kWh: husbanken flyttar chipet dubbelt så mycket som garagebanken). Lämna tomt om alla dina banker har samma storlek, viktningen kollapsar då till ett platt oviktat medelvärde. Påverkar inte avläsningen av summerad effekt.",
+    batterySocEntity: "Laddningstillståndsentitet",
+    batterySocEntityHelp: 'Välj en batteriladdningssensor (%, vanligtvis med device_class "battery"). Renderar som ett chip till vänster om PV-chipet som visar det aktuella procenttalet.',
+    batteryPowerEntity: "Effektentitet",
+    batteryPowerEntityHelp: 'Välj en batterieffektsensor (W eller kW). Teckenkonventionen följer entiteten själv (positivt tolkas som laddning) och visas ordagrant på chipet (t.ex. "+3,00 kW" laddar, "-1,20 kW" laddar ur).',
+    batteryPowerInvert: "Batterieffektens tecken",
+    batteryPowerInvertStandard: "Standard",
+    batteryPowerInvertInverted: "Inverterat",
+    batteryPowerInvertHelp: "Standard: batterientiteten rapporterar redan laddning som positiv och urladdning som negativ. Välj Inverterat när din entitet gör tvärtom (vissa GivEnergy / GivTCP-uppsättningar), Helios vänder då värdet en gång vid intag så att chipets avläsning, ledarpilen och dagliga laddade / urladdade totaler behåller sin betydelse.",
+    inverterCutoffSocPct: "Växelriktarens avstängnings-SoC (%)",
+    inverterCutoffSocPctHelp: "Procenten där din hybridväxelriktare blockerar PV-produktionen när batteriet når sin inställda gräns. Lämna tomt för att inaktivera. När det är satt hoppar skuggkartans tränare över varje observationsfönster där batteriets SoC nådde detta värde, så att den växelriktar-blockerade produktionen inte förorenar skuggkartan med spökskuggor vid motsvarande solpositioner. Kräver att batteri-SoC-entiteten ovan är konfigurerad.",
+    batteryColor: "Batterifärg",
+    weatherSection: "Väder",
+    weatherHint: "Valfritt. Anslut lokala väderentiteter för att mata Helios med mätningar gjorda hemma hos dig istället för Open-Meteo-modellen interpolerad till din rutcell. Varje entitet är oberoende valfri och används endast när den bär ett färskt värde; saknade eller inaktuella prov faller tillbaka till modellen transparent.",
+    solarRadiationEntity: "Solstrålningsentitet",
+    solarRadiationEntityHelp: "Välj en sensor som rapporterar global kortvågsstrålning i W/m² (typisk Ecowitt / Davis / personlig väderstation). När den är inställd ersätter dess aktuella tillstånd och recorder-historik Open-Meteo för den levande + tidigare strålningen överallt där den visas (solchipets nummer, PV-diagrammets Y-axel, solbågsfärgning). Prognostimmar använder alltid Open-Meteo eftersom en sensor bara känner nuet.",
+    buildingsSection: "Byggnad",
+    buildingsHint: 'För att hålla kortet smidigt i täta urbana områden renderas endast byggnader inom den konfigurerade radien runt hemmet i 3D. Hemmet självt stannar vid full opacitet; närliggande byggnader renderas med den konfigurerade opaciteten så att de ger urban kontext utan att konkurrera med dataöverlagren. Klusterradien grupperar fastsittande uthus (verandor, garage, skjul) i "hemmet"-uppsättningen.',
+    displayRadius: "Visningsradie",
+    displayRadiusHint: "Definierar det synliga området runt hemmet. Allt bortom denna radie döljs: baskarta, närliggande byggnader, skuggor. Driver också LiDAR-hämtningens omfattning och den projicerade skuggans klippning.",
+    timelineSection: "Tidslinje",
+    timelineEnabled: "Visa tidslinje",
+    timelineEnabledOn: "Visa",
+    timelineEnabledOff: "Dölj",
+    timelineEnabledHint: "Döljer hela den nedre tidslinjen (diagram, dagsetiketter, scrub-cursorer). Användbart när kortet är inbäddat i en bredare dashboard-panel där en annan widget redan visar den dagliga trenden.",
+    timelineWidth: "Tidslinjebredd",
+    timelineWidthHint: "Krymper tidslinjen horisontellt samtidigt som den hålls centrerad på kortet. Vid 100 % hugger den kortets kanter; under det dras stapeln in proportionellt på båda sidor.",
+    timelineConsumption: "Visa daglig förbrukning / prognos",
+    timelineConsumptionOn: "Visa",
+    timelineConsumptionOff: "Dölj",
+    timelineConsumptionHint: "Växlar kWh-chipet per dag som renderas bredvid varje datum på tidslinjen (observerat för tidigare dagar, prognos för idag och framåt). Stäng av om du bara bryr dig om den levande scenen och vill ha ett renare diagram.",
+    buildingClusterRadius: "Hemmets klusterradie",
+    buildingOpacity: "Omgivningens opacitet",
+    buildingColor: "Byggnadsfärg",
+    pixelRatio: "Pixel ratio",
+    pixelRatioAuto: "Auto",
+    pixelRatio1x: "1x",
+    pixelRatioHint: "Auto (standard) använder din skärms ursprungliga devicePixelRatio (begränsad till 2 på desktop, 1,25 på mobil) för skarp rendering. 1x tvingar värdet till 1,0 för den billigaste möjliga fragment-arbetsbelastningen per bildruta, användbart på enheter i lägre prisklass eller för långa sessioner där batteritid / värme spelar större roll än skärpa.",
+    mapStyleMinimal: "Minimal",
+    shadowsSection: "Skuggning",
+    shadowsEnabled: "Visa skuggor",
+    shadowsEnabledOn: "Visas",
+    shadowsEnabledOff: "Dolda",
+    shadowsEnabledHint: "Huvudströmbrytare för markskuggor. När de döljs projiceras inga skuggor alls. När de visas väljer sig källan själv: en LiDAR-leverantör när en täcker din plats (byggnader + vegetation), OpenFreeMap-byggnadsfotavtryck annars (endast byggnader).",
+    lidarPrecision: "LiDAR-precision",
+    lidarPrecisionLow: "Låg",
+    lidarPrecisionMedium: "Medel",
+    lidarPrecisionHigh: "Hög",
+    lidarPrecisionHint: "Om ditt hem ligger inom en LiDAR-leverantör integrerad med Helios får du mer realistiska skuggor (byggnader OCH vegetation). Viss förskjutning kan visas mellan de renderade byggnaderna och deras skuggor: LiDAR-undersökningen är fångad vid ett givet datum och kanske inte återspeglar markens aktuella tillstånd. Utanför LiDAR-täckning faller skuggor tillbaka till de platta OpenFreeMap-byggnadsfotavtrycken och denna inställning har ingen effekt. Högre precision drar fler celler från källan: LiDAR-vyn visar fler punkter och väger mer på GPU:n. Den faktiska densiteten beror på vad leverantören publicerar för ditt område.",
+    shadowOpacity: "Skuggopacitet",
+    shadowOpacityHint: "Opacitet för de gjutna markskuggorna.",
+    lidarViewSection: "LiDAR-vy",
+    lidarViewHint: "Klicka på LiDAR-knappen i kortets övre högra hörn för att växla till LiDAR-överlägget: varje laddad cell ritas som trådmodell och skuggas i realtid efter sin aktuella solexponering, upplysta ytor glöder varmt och skuggade tonas ner. Använd skjutreglaget längst ner på kortet för att vrida upp eller ner den totala opaciteten. Knappen förblir avaktiverad när ingen leverantör täcker hemmet. Vyn återanvänder data som redan hämtats med aktuell precision, inga extra anrop görs.",
+    lidarViewPointSize: "Punktstorlek (px)",
+    localLidarSection: "Avancerat — Lokal LiDAR (BYO)",
+    localLidarHint: "Valfritt. Peka Helios mot din egen nDSM GeoTIFF (Digital ytmodell minus mark, höjd över mark i meter) hostad på Home Assistant. Låter dig tända skuggor i alla regioner som inte ännu täcks av de offentliga LiDAR-leverantörerna. Inom det definierade området ersätter denna källa alla nationella leverantörer.",
+    localLidarToolsHint: "Behöver du förbereda en raster från grunden? Släpp in din råa LAZ / LAS-fil eller ett DSM + DTM-rasterpar på följeslagarsajten [helios-lidar.org](https://helios-lidar.org), så returnerar den 2-bands COG:en som Helios läser (band 1 = nDSM, band 2 = DTM) plus den redo-att-klistra-in YAML för nycklarna nedan. Gratis, ingen installation, inget konto. Föredrar du att köra allt lokalt? Hela Python-verktygskedjan bor i [Helios-Lidar-repot](https://github.com/ReikanYsora/Helios-Lidar).",
+    localLidarEnabled: "Använd lokala data",
+    localLidarUrl: "GeoTIFF-URL",
+    localLidarMinLat: "Min latitud",
+    localLidarMaxLat: "Max latitud",
+    localLidarMinLon: "Min longitud",
+    localLidarMaxLon: "Max longitud",
+    resetSection: "Återställning",
+    resetSectionHint: "Underhållsverktyg för att radera data som kortet har cachat lokalt.",
+    resetCacheButton: "Återställ datacache",
+    resetCacheWarning: "Varning: detta rensar den cachade Open-Meteo-vädret och PV-historiken i minnet för VARJE Helios-kort som är öppet på denna sida. Den justerade prognosen kommer att förlora sina 5 dagar av kalibrering tills de hämtas igen (några minuter beroende på din HA-server). Dina data inuti Home Assistant rörs aldrig.",
+    resetCacheDone: "Cache rensad ✓",
+    aboutSection: "Om",
+    aboutVersionLabel: "Version",
+    aboutSiteTitle: "Följeslagarsajt, helios-lidar.org",
+    aboutSiteDescription: "Gratisverktyg som omvandlar rå öppen LiDAR-data från valfritt land (LAZ / LAS eller DSM + DTM-par) till det nDSM GeoTIFF som Helios behöver, plus YAML-snutten du klistrar in i den här editorn. Inget QGIS, ingen GDAL, ingen installation, inget konto.",
+    aboutCodeLabel: "Källkod",
+    aboutRepoCard: "Helios (kortet)",
+    aboutRepoLidar: "Helios-Lidar (följeslagarsajten)",
+    aboutCoffeeMessage: "Helios byggs av en enda utvecklare med mycket energi och väldigt lite sömn. Om det hjälper dig i vardagen håller en stjärna på GitHub eller en kaffe projektet vid liv.",
+    aboutCoffeeLink: "Buy me a coffee",
+    shadingSection: "Adaptive shading map",
+    shadingHint: "A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.",
+    shadingStatsCells: "cells with data",
+    shadingStatsConfident: "cells trusted by the forecast",
+    shadingStatsUnder: "strongest under-production:",
+    shadingStatsOver: "strongest over-production:",
+    shadingExport: "Export map",
+    shadingImport: "Import map",
+    shadingImportError: "That file is not a valid Helios shading map.",
+    shadingReset: "Reset map",
+    shadingResetConfirm: "Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills."
+  }
+};
+const LOCALES = { en, fr, de, es, it, nl, pt, no, pl, cs, sv };
 const FALLBACK = en;
 function pickTranslations(haLanguage) {
   if (!haLanguage) {
@@ -1944,9 +2659,18 @@ const heliosCardStyles = i$3`
 
     #map-container
     {
-        width: 100%;
-        height: 100%;
-        position: relative;
+        /*  Absolute + inset:0 so the container fills its ha-card
+            parent via the containing-block dimensions (which respect
+            min-height) rather than via percentage height resolution.
+            Percentage heights only cascade when the parent has a
+            concrete pixel height, the Masonry dashboard layout sets
+            only a min-height floor on the card, so a height:100% here
+            would collapse to 0 and the MapLibre canvas would never
+            render. Sections and panel views pass a pixel height down,
+            so the old percentage path worked there, the absolute path
+            works under both.                                          */
+        position: absolute;
+        inset: 0;
     }
 
     /*  Force-hide the MapLibre attribution rail. attributionControl
@@ -3004,11 +3728,11 @@ const heliosCardStyles = i$3`
 
     /*  Stroke-only outline on top of the filled area so peaks read
         cleanly even where the gradient fades towards the midline.
-        Stroke width 0.7 px (down from the v1.6.2 default 1.4 px)
-        so the curve reads as a hairline trace; on high-variation
-        days the previous 1.0 px ribbon stacked over itself on
-        every wobble and turned the dense regions into a smudged
-        band. At 0.7 px the curve stays a line at any zoom.        */
+        Stroke width 0.7 px so the curve reads as a hairline
+        trace; a wider stroke (the earlier 1.4 px default) stacked
+        over itself on every wobble on high-variation days and
+        turned the dense regions into a smudged band. At 0.7 px
+        the curve stays a line at any zoom.                       */
     .hc-chart-line
     {
         fill: none;
@@ -3622,6 +4346,36 @@ const heliosCardStyles = i$3`
         minus the LiDAR button itself), the home hitbox / glow, and
         the timeline. Easier to audit if any future overlay needs
         to be hidden in LiDAR View by looking at this single block. */
+    /*  Base transition + composite-layer hint kept on the unprefixed
+        selectors so the fade runs in BOTH directions across every
+        browser. Declaring the transition only inside .lidar-view-
+        active made entry smooth but the exit snap-back instantly
+        because the selector no longer matched and the transition
+        property left scope; declaring it here keeps it in scope at
+        all times. The will-change: opacity hint promotes each element
+        to its own composite layer so the GPU drives the alpha sweep
+        instead of asking the painter to redo layout per frame,
+        which used to drop frames on the chips that sit inside
+        transform-less wrappers (time-bar, solar-svg).               */
+    .overlay-top-left,
+    .home-glow-svg,
+    .home-hitbox,
+    .home-silhouette-svg,
+    .time-bar,
+    .solar-svg,
+    .solar-pct-label,
+    .cloud-svg,
+    .cloud-leader-svg,
+    .cloud-pct-label,
+    .pv-home-anchor-svg,
+    .pv-home-leader-svg,
+    .pv-pct-label,
+    .battery-leader-svg,
+    .battery-pct-label
+    {
+        transition: opacity 0.35s ease;
+        will-change: opacity;
+    }
     ha-card.lidar-view-active .overlay-top-left,
     ha-card.lidar-view-active .home-glow-svg,
     ha-card.lidar-view-active .home-hitbox,
@@ -3640,12 +4394,323 @@ const heliosCardStyles = i$3`
     {
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.25s ease;
     }
     ha-card.lidar-view-active .overlay-top-right
     {
         opacity: 1;
         pointer-events: auto;
+    }
+
+    /*  Shading-dome view: mirrors the LiDAR fade-out list so the
+        rest of the HUD steps aside when the dome takes over the
+        canvas, then the dome SVG itself overlays the map without
+        intercepting pointer events. Top-right chip cluster stays
+        live so the user can toggle the dome back off.            */
+    ha-card.shading-dome-active .overlay-top-left,
+    ha-card.shading-dome-active .home-glow-svg,
+    ha-card.shading-dome-active .home-hitbox,
+    ha-card.shading-dome-active .home-silhouette-svg,
+    ha-card.shading-dome-active .time-bar,
+    ha-card.shading-dome-active .solar-svg,
+    ha-card.shading-dome-active .solar-pct-label,
+    ha-card.shading-dome-active .cloud-svg,
+    ha-card.shading-dome-active .cloud-leader-svg,
+    ha-card.shading-dome-active .cloud-pct-label,
+    ha-card.shading-dome-active .pv-home-anchor-svg,
+    ha-card.shading-dome-active .pv-home-leader-svg,
+    ha-card.shading-dome-active .pv-pct-label,
+    ha-card.shading-dome-active .battery-leader-svg,
+    ha-card.shading-dome-active .battery-pct-label
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
+    /*  Top-right cluster (mode bar) stays visible while the
+        dome is active so the user can always switch modes via
+        the same widget that took them in.                       */
+    ha-card.shading-dome-active .overlay-top-right
+    {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    /*  Three-segment mode bar (Layer UI / LiDAR / Ombres). Sits
+        in the top-right rail in place of the old LiDAR chip pair.
+        Stacked VERTICALLY with iOS-friendly 40 px touch targets
+        so the trio is comfortable on a phone in landscape. Each
+        segment is icon-only with a title tooltip; the active
+        segment takes the same scrub-blue plate the clock chip
+        uses while scrubbing so the user has one consistent
+        visual language for "you are in a non-default mode".
+        Segments are glued together via shared borders and
+        matching corner radii.                                    */
+    .mode-bar
+    {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: stretch;
+        pointer-events: auto;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+        border-radius: 6px;
+    }
+    .mode-bar-seg
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  40px;
+        height: 40px;
+        box-sizing: border-box;
+        padding: 0;
+        background: #ffffff;
+        color:      #000000;
+        border:     1px solid #000000;
+        border-bottom: 0;
+        cursor: pointer;
+        position: relative;
+        z-index: 50;
+        opacity: 1;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .mode-bar-seg:first-child { border-radius: 6px 6px 0 0; }
+    .mode-bar-seg:last-child  { border-radius: 0 0 6px 6px; border-bottom: 1px solid #000000; }
+    .mode-bar-seg:hover       { background: #f2f2f2; }
+    .mode-bar-seg:active      { background: #e6e6e6; }
+    .mode-bar-seg ha-icon
+    {
+        --mdc-icon-size: 22px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+    .mode-bar-seg.is-disabled
+    {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+    .mode-bar-seg.is-disabled:hover,
+    .mode-bar-seg.is-disabled:active { background: #ffffff; }
+    .mode-bar-seg.is-on
+    {
+        background: rgba(31, 111, 235, 0.95);
+        color: #ffffff;
+        border-color: rgba(20, 78, 168, 0.95);
+    }
+    .mode-bar-seg.is-on:hover  { background: rgba(24, 92, 199, 0.95); }
+    .mode-bar-seg.is-on:active { background: rgba(20, 78, 168, 0.95); }
+    /*  Vertical seam between an active segment and the next one
+        down: paint a 1 px overlay on the top of the lower
+        segment so the seam reads as part of the active plate
+        instead of the inactive segment's border below it.       */
+    .mode-bar-seg.is-on + .mode-bar-seg::before
+    {
+        content: '';
+        position: absolute;
+        left: -1px;
+        right: -1px;
+        top: -1px;
+        height: 1px;
+        background: rgba(20, 78, 168, 0.95);
+        pointer-events: none;
+    }
+    /*  Dome SVG: full-card overlay, sits below the click chrome so
+        it never blocks pointer events. Fade alpha comes from inline
+        style driven by the dome fade RAF.                          */
+    .shading-dome-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 7;
+    }
+    /*  Cloud-bin picker: small segmented control hugging the top
+        edge under the dome chip cluster. Pills mirror the dome's
+        accent so it reads as part of the same widget.             */
+    /*  Continuous cloud-cover slider, bottom-left corner of the
+        card while the dome is on. Sun glyph on the LEFT, heavy-
+        cloud glyph on the RIGHT, the slider in between reads as
+        the cloud-cover knob driving the dome's view. The percent
+        value chip on the far RIGHT is the immediate readout of
+        the slider position; lets the user know they're at 35 %
+        rather than guessing from the handle's position.          */
+    .shading-dome-cloud-slider
+    {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        pointer-events: auto;
+    }
+    /*  Tick wrapper: the slider sits in a relative container so
+        the tick spans can be absolutely positioned over the
+        track without disturbing the slider's native thumb
+        hit-area. --thumb-r feeds the calc() positions on each
+        tick so they land on the actual thumb centre at every
+        snap point, not on the wrap's geometric percentage. The
+        native thumb's centre travels between (thumb-r) and
+        (track-width - thumb-r), so we use the same offset for
+        the tick positions.                                       */
+    .shading-dome-cloud-track-wrap
+    {
+        --thumb-r: 7px;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 14px;
+    }
+    .shading-dome-cloud-tick
+    {
+        position: absolute;
+        top: 50%;
+        width: 2px;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.55);
+        border-radius: 1px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+    }
+    .shading-dome-cloud-icon
+    {
+        --mdc-icon-size: 18px;
+        color: rgba(255, 255, 255, 0.85);
+        display: inline-flex;
+        align-items: center;
+    }
+    .shading-dome-cloud-icon--sun   { color: #fde68a; }
+    .shading-dome-cloud-icon--cloud { color: #cbd5e1; }
+    .shading-dome-cloud-range
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 160px;
+        height: 4px;
+        background: linear-gradient(to right, #fde68a 0%, #cbd5e1 100%);
+        border-radius: 999px;
+        outline: none;
+        cursor: pointer;
+        margin: 0;
+    }
+    .shading-dome-cloud-range::-webkit-slider-thumb
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .shading-dome-cloud-range::-moz-range-thumb
+    {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .shading-dome-cloud-value
+    {
+        min-width: 36px;
+        text-align: right;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.85);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*  LiDAR View opacity slider. Painted at the bottom of the card
+        while the LiDAR view is active. Same capsule pill as the dome
+        cloud picker for visual consistency between the two modes;
+        ungated (continuous, no ticks) because opacity is a free
+        analog tune, not a binned pick.                              */
+
+    .lidar-view-opacity-slider
+    {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.35s ease;
+    }
+    .lidar-view-opacity-slider.is-active
+    {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .lidar-view-opacity-icon
+    {
+        --mdc-icon-size: 16px;
+        color: rgba(255, 255, 255, 0.85);
+        display: inline-flex;
+        align-items: center;
+    }
+    .lidar-view-opacity-icon--low  { opacity: 0.7; }
+    .lidar-view-opacity-icon--high { opacity: 1.0; }
+    .lidar-view-opacity-range
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 160px;
+        height: 4px;
+        background: linear-gradient(to right, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.9) 100%);
+        border-radius: 999px;
+        outline: none;
+        cursor: pointer;
+        margin: 0;
+    }
+    .lidar-view-opacity-range::-webkit-slider-thumb
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .lidar-view-opacity-range::-moz-range-thumb
+    {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.4);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+        cursor: pointer;
+    }
+    .lidar-view-opacity-value
+    {
+        min-width: 36px;
+        text-align: right;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.85);
+        font-variant-numeric: tabular-nums;
     }
 
 
@@ -3780,8 +4845,8 @@ const heliosCardStyles = i$3`
         right: 8px;
         z-index: 60;
         display: flex;
-        flex-direction: row-reverse;
-        align-items: center;
+        flex-direction: column;
+        align-items: flex-end;
         pointer-events: none;
     }
 
@@ -4200,8 +5265,8 @@ const heliosCardStyles = i$3`
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
     /*  Sunrise / sunset markers used to live here as ha-icon
-        glyphs anchored to the arc's horizon crossings. Removed in
-        v1.6.3 ; the arc shape itself reads as "sunrise / sunset".  */
+        glyphs anchored to the arc's horizon crossings. Removed:
+        the arc shape itself reads as "sunrise / sunset".          */
 
 
     /*  Below-horizon segments, round dots at fixed spacing so the
@@ -4355,7 +5420,8 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .solar-pct-label,
     ha-card.theme-dark .map-btn:not(.map-btn-on),
     ha-card.theme-dark .lidar-view-chip:not(.is-on),
-    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on)
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on),
+    ha-card.theme-dark .mode-bar-seg:not(.is-on)
     {
         background: #191a1b;
         color:       #e6e6e6;
@@ -4395,9 +5461,26 @@ const heliosCardStyles = i$3`
     ha-card.theme-dark .cloud-pct-label ha-icon,
     ha-card.theme-dark .solar-pct-label ha-icon,
     ha-card.theme-dark .map-btn:not(.map-btn-on) ha-icon,
-    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon
+    ha-card.theme-dark .lidar-view-toggle-btn:not(.is-on) ha-icon,
+    ha-card.theme-dark .mode-bar-seg:not(.is-on) ha-icon
     {
         color: #e6e6e6;
+    }
+    ha-card.theme-dark .mode-bar-seg:not(.is-on):not(.is-disabled):hover
+    {
+        background: #292a2b;
+    }
+    ha-card.theme-dark .mode-bar-seg:not(.is-on):not(.is-disabled):active
+    {
+        background: #353637;
+    }
+    ha-card.theme-dark .mode-bar-seg
+    {
+        border-color: rgba(255, 255, 255, 0.20);
+    }
+    ha-card.theme-dark .mode-bar-seg:last-child
+    {
+        border-bottom-color: rgba(255, 255, 255, 0.20);
     }
 
     ha-card.theme-dark .tl-live-btn:hover  { background: #292a2b; }
@@ -4665,6 +5748,56 @@ function sampleDtmAt(raster, lon, lat) {
   if (!raster.terrain) return null;
   return bilinearSample(raster.terrain, raster, lon, lat);
 }
+function computeLidarCellExposureRows(raster, sunAltitudeDeg, sunAzimuthDeg, jStart, jEnd, out, stepM = 2, maxDistM = 200) {
+  if (sunAltitudeDeg <= 0) return;
+  if (jStart >= jEnd) return;
+  const altR = sunAltitudeDeg * D;
+  const azR = sunAzimuthDeg * D;
+  const dxM = Math.sin(azR);
+  const dyM = Math.cos(azR);
+  const tanAlt = Math.tan(altR);
+  const { rasterSize, minLat, maxLat, minLon, maxLon, heights, terrain } = raster;
+  const pxLon = (maxLon - minLon) / rasterSize;
+  const pxLat = (maxLat - minLat) / rasterSize;
+  const hasTerrain = !!terrain;
+  const j0 = Math.max(0, jStart);
+  const j1 = Math.min(rasterSize, jEnd);
+  for (let j = j0; j < j1; j++) {
+    const cLat = maxLat - (j + 0.5) * pxLat;
+    const mPerDegLon = M_PER_DEG_LAT$2 * Math.cos(cLat * D);
+    const dLatPerM = dyM / M_PER_DEG_LAT$2;
+    const dLonPerM = dxM / mPerDegLon;
+    for (let i2 = 0; i2 < rasterSize; i2++) {
+      const idx = j * rasterSize + i2;
+      const cellH = heights[idx];
+      if (!isFinite(cellH)) {
+        out[idx] = 0;
+        continue;
+      }
+      const cLon = minLon + (i2 + 0.5) * pxLon;
+      const cellDtm = hasTerrain ? terrain[idx] : 0;
+      let shadowed = false;
+      for (let d2 = stepM; d2 <= maxDistM; d2 += stepM) {
+        const lat = cLat + dLatPerM * d2;
+        const lon = cLon + dLonPerM * d2;
+        const sampleObstacle = sampleNdsmAt(raster, lon, lat);
+        if (sampleObstacle === null) continue;
+        let relGround = 0;
+        if (hasTerrain) {
+          const sampleDtm = sampleDtmAt(raster, lon, lat);
+          if (sampleDtm !== null) relGround = sampleDtm - cellDtm;
+        }
+        const obstacleZ = relGround + sampleObstacle;
+        const rayZ = cellH + d2 * tanAlt;
+        if (obstacleZ > rayZ) {
+          shadowed = true;
+          break;
+        }
+      }
+      out[idx] = shadowed ? 0 : 255;
+    }
+  }
+}
 function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg, sunAzimuthDeg, stepM = 2, maxDistM = 200) {
   if (!raster) return false;
   if (sunAltitudeDeg <= 0) return false;
@@ -4685,14 +5818,303 @@ function isPanelShaded(raster, panelLat, panelLon, panelHeightM, sunAltitudeDeg,
     let relGround = 0;
     if (panelDtm !== null) {
       const sampleDtm = sampleDtmAt(raster, lon, lat);
-      if (sampleDtm === null) continue;
-      relGround = sampleDtm - panelDtm;
+      if (sampleDtm !== null) {
+        relGround = sampleDtm - panelDtm;
+      }
     }
     const obstacleZ = relGround + obstacleAboveGround;
     const rayZ = panelHeightM + d2 * tanAlt;
     if (obstacleZ > rayZ) return true;
   }
   return false;
+}
+function parseBatteryBanks(config) {
+  if (!config) return [];
+  const raw2 = config["batteries"];
+  if (Array.isArray(raw2) && raw2.length > 0) {
+    const banks = [];
+    for (const e2 of raw2) {
+      if (!e2 || typeof e2 !== "object") continue;
+      const obj = e2;
+      const soc2 = String(obj["soc-entity"] ?? "").trim();
+      const power2 = String(obj["power-entity"] ?? "").trim();
+      if (!soc2 && !power2) continue;
+      const capRaw = obj["capacity-kwh"];
+      const cap = typeof capRaw === "number" ? capRaw : parseFloat(String(capRaw ?? ""));
+      banks.push({
+        name: String(obj["name"] ?? "").trim() || `Battery ${banks.length + 1}`,
+        socEntity: soc2,
+        powerEntity: power2,
+        powerInvert: obj["power-invert"] === true,
+        capacityKwh: isFinite(cap) && cap > 0 ? cap : 1
+      });
+    }
+    if (banks.length > 0) return banks;
+  }
+  const soc = String(config["battery-soc-entity"] ?? "").trim();
+  const power = String(config["battery-power-entity"] ?? "").trim();
+  if (!soc && !power) return [];
+  return [{
+    name: "Battery 1",
+    socEntity: soc,
+    powerEntity: power,
+    powerInvert: config["battery-power-invert"] === true,
+    capacityKwh: 1
+  }];
+}
+function interpAt$1(s2, ms) {
+  const t2 = s2.times;
+  const v2 = s2.values;
+  const n3 = t2.length;
+  if (n3 === 0) return null;
+  if (ms <= t2[0].getTime()) return v2[0];
+  if (ms >= t2[n3 - 1].getTime()) return v2[n3 - 1];
+  let lo = 0;
+  let hi = n3 - 1;
+  while (hi - lo > 1) {
+    const mid = lo + hi >> 1;
+    if (t2[mid].getTime() <= ms) lo = mid;
+    else hi = mid;
+  }
+  const t0 = t2[lo].getTime();
+  const t1 = t2[hi].getTime();
+  if (t1 === t0) return v2[lo];
+  const f2 = (ms - t0) / (t1 - t0);
+  return v2[lo] + (v2[hi] - v2[lo]) * f2;
+}
+function aggregateBankHistory(banks, series, mode) {
+  const tset = /* @__PURE__ */ new Set();
+  for (const s2 of series) {
+    for (const ts of s2.times) tset.add(ts.getTime());
+  }
+  if (tset.size === 0) return { times: [], values: [] };
+  const tsorted = Array.from(tset).sort((a2, b2) => a2 - b2);
+  const times = new Array(tsorted.length);
+  const values2 = new Array(tsorted.length);
+  let n3 = 0;
+  for (const ms of tsorted) {
+    if (mode === "soc") {
+      let num = 0;
+      let den = 0;
+      for (let i2 = 0; i2 < banks.length; i2++) {
+        const v2 = interpAt$1(series[i2], ms);
+        if (v2 === null) continue;
+        num += v2 * banks[i2].capacityKwh;
+        den += banks[i2].capacityKwh;
+      }
+      if (den === 0) continue;
+      times[n3] = new Date(ms);
+      values2[n3] = num / den;
+      n3++;
+    } else {
+      let sum2 = 0;
+      let saw = false;
+      for (let i2 = 0; i2 < banks.length; i2++) {
+        const v2 = interpAt$1(series[i2], ms);
+        if (v2 === null) continue;
+        sum2 += v2;
+        saw = true;
+      }
+      if (!saw) continue;
+      times[n3] = new Date(ms);
+      values2[n3] = sum2;
+      n3++;
+    }
+  }
+  times.length = n3;
+  values2.length = n3;
+  return { times, values: values2 };
+}
+function refreshBattery(host) {
+  if (!host.hass) return;
+  const banks = parseBatteryBanks(host.config);
+  if (banks.length === 0) {
+    if (host._batterySoc !== null) host._batterySoc = null;
+    if (host._batteryPower !== null) host._batteryPower = null;
+    if (host._batteryPowerUnit !== "") host._batteryPowerUnit = "";
+    if (host._batterySocHistory !== null) host._batterySocHistory = null;
+    if (host._batteryPowerHistory !== null) host._batteryPowerHistory = null;
+    host._batteryFetchKey = "";
+    return;
+  }
+  let socNum = 0;
+  let socDen = 0;
+  let powSumW = null;
+  for (const b2 of banks) {
+    if (b2.socEntity) {
+      const so = host.hass.states?.[b2.socEntity];
+      const v2 = so ? parseFloat(so.state) : NaN;
+      if (isFinite(v2)) {
+        const clamped = Math.max(0, Math.min(100, v2));
+        socNum += clamped * b2.capacityKwh;
+        socDen += b2.capacityKwh;
+      }
+    }
+    if (b2.powerEntity) {
+      const so = host.hass.states?.[b2.powerEntity];
+      const v2 = so ? parseFloat(so.state) : NaN;
+      if (isFinite(v2)) {
+        const unit = String(so.attributes?.unit_of_measurement ?? "");
+        const watts = pvNormalizeToWatts(v2, unit);
+        const signed = b2.powerInvert ? -watts : watts;
+        powSumW = (powSumW ?? 0) + signed;
+      }
+    }
+  }
+  const nextSoc = socDen > 0 ? socNum / socDen : null;
+  const nextUnit = powSumW !== null ? "W" : "";
+  if (nextSoc !== host._batterySoc) host._batterySoc = nextSoc;
+  if (powSumW !== host._batteryPower) host._batteryPower = powSumW;
+  if (nextUnit !== host._batteryPowerUnit) host._batteryPowerUnit = nextUnit;
+  if (!host._timeRange || host._batteryFetching) return;
+  const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
+  const sig = banks.map(
+    (b2) => `${b2.socEntity}|${b2.powerEntity}|inv=${b2.powerInvert ? 1 : 0}|cap=${b2.capacityKwh}`
+  ).join("&");
+  const fetchKey = `${sig}@${rangeKey}`;
+  if (fetchKey === host._batteryFetchKey) return;
+  host._batteryFetchKey = fetchKey;
+  fetchBatteryHistory(host, banks, host._timeRange.start, host._timeRange.end);
+}
+async function fetchBatteryHistory(host, banks, start, end) {
+  if (!host.hass?.callWS || banks.length === 0) return;
+  host._batteryFetching = true;
+  try {
+    const now = /* @__PURE__ */ new Date();
+    const fetchEnd = end > now ? now : end;
+    if (start >= fetchEnd) {
+      host._batterySocHistory = { times: [], values: [] };
+      host._batteryPowerHistory = { times: [], values: [] };
+      return;
+    }
+    const idsSet = /* @__PURE__ */ new Set();
+    for (const b2 of banks) {
+      if (b2.socEntity) idsSet.add(b2.socEntity);
+      if (b2.powerEntity) idsSet.add(b2.powerEntity);
+    }
+    const ids = Array.from(idsSet);
+    const result = await host.hass.callWS({
+      type: "history/history_during_period",
+      start_time: start.toISOString(),
+      end_time: fetchEnd.toISOString(),
+      entity_ids: ids,
+      minimal_response: true,
+      no_attributes: true
+    });
+    const parseSeries = (arr) => {
+      const times = [];
+      const values2 = [];
+      for (const item of arr ?? []) {
+        const stateStr = typeof item?.s === "string" ? item.s : typeof item?.state === "string" ? item.state : null;
+        if (stateStr === null || stateStr === "unavailable" || stateStr === "unknown" || stateStr === "") {
+          continue;
+        }
+        const v2 = parseFloat(stateStr);
+        if (!isFinite(v2)) continue;
+        let ts = null;
+        if (typeof item?.lu === "number") {
+          ts = new Date(item.lu * 1e3);
+        } else if (typeof item?.last_updated === "string") {
+          ts = new Date(item.last_updated);
+        } else if (typeof item?.last_changed === "string") {
+          ts = new Date(item.last_changed);
+        }
+        if (!ts || isNaN(ts.getTime())) continue;
+        times.push(ts);
+        values2.push(v2);
+      }
+      return { times, values: values2 };
+    };
+    const bankSocSeries = [];
+    const bankPowerSeries = [];
+    for (const b2 of banks) {
+      let socS = { times: [], values: [] };
+      if (b2.socEntity) {
+        socS = parseSeries(result?.[b2.socEntity] ?? []);
+        socS.values = socS.values.map((v2) => Math.max(0, Math.min(100, v2)));
+      }
+      let powS = { times: [], values: [] };
+      if (b2.powerEntity) {
+        powS = parseSeries(result?.[b2.powerEntity] ?? []);
+        if (b2.powerInvert) {
+          powS.values = powS.values.map((v2) => -v2);
+        }
+      }
+      bankSocSeries.push(socS);
+      bankPowerSeries.push(powS);
+    }
+    host._batterySocHistory = aggregateBankHistory(banks, bankSocSeries, "soc");
+    host._batteryPowerHistory = aggregateBankHistory(banks, bankPowerSeries, "power");
+  } catch (e2) {
+    console.warn("[HELIOS] battery history fetch failed:", e2);
+    host._batterySocHistory = { times: [], values: [] };
+    host._batteryPowerHistory = { times: [], values: [] };
+  } finally {
+    host._batteryFetching = false;
+  }
+}
+function batterySampleAtTime(hist, time) {
+  if (!hist || hist.times.length === 0) {
+    return null;
+  }
+  const tMs = time.getTime();
+  const firstMs = hist.times[0].getTime();
+  const lastMs = hist.times[hist.times.length - 1].getTime();
+  if (tMs < firstMs || tMs > lastMs + 6e4) {
+    return null;
+  }
+  let idx = hist.times.length - 1;
+  for (let i2 = 0; i2 < hist.times.length; i2++) {
+    if (hist.times[i2].getTime() > tMs) {
+      idx = i2 - 1;
+      break;
+    }
+  }
+  if (idx < 0) {
+    idx = 0;
+  }
+  return hist.values[idx];
+}
+function formatBatteryPower(hass, value, unit) {
+  const lu = (unit || "").trim().toLowerCase();
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  const abs = Math.abs(value);
+  if (lu === "w" && abs >= 1e3) {
+    return `${sign}${formatLocalisedNumber(hass, abs / 1e3, 2)} kW`;
+  }
+  if (lu === "w") {
+    return `${sign}${formatLocalisedNumber(hass, abs, 0, true)} W`;
+  }
+  if (lu === "kw") {
+    return `${sign}${formatLocalisedNumber(hass, abs, 2)} kW`;
+  }
+  return `${sign}${formatLocalisedNumber(hass, abs, 1)}${unit ? " " + unit : ""}`;
+}
+function computeBatteryToday(host) {
+  const today0 = /* @__PURE__ */ new Date();
+  today0.setHours(0, 0, 0, 0);
+  const startMs = today0.getTime();
+  const endMs = Date.now();
+  let chargedKwh = 0;
+  let dischargedKwh = 0;
+  const hist = host._batteryPowerHistory;
+  if (hist && hist.times.length >= 2) {
+    for (let i2 = 1; i2 < hist.times.length; i2++) {
+      const tMs = hist.times[i2].getTime();
+      if (tMs < startMs || tMs > endMs) continue;
+      const dtH = (tMs - hist.times[i2 - 1].getTime()) / 36e5;
+      if (dtH <= 0 || dtH > 6) continue;
+      const wAvg = (pvNormalizeToWatts(hist.values[i2 - 1], host._batteryPowerUnit) + pvNormalizeToWatts(hist.values[i2], host._batteryPowerUnit)) / 2;
+      const kwh = wAvg * dtH / 1e3;
+      if (kwh > 0) chargedKwh += kwh;
+      else dischargedKwh += -kwh;
+    }
+  }
+  return {
+    socNow: host._batterySoc,
+    chargedKwh,
+    dischargedKwh
+  };
 }
 const DEFAULT_PANEL_HEIGHT_M = 5;
 const PV_CALIB_WIPE_FLAG_KEY = "helios-pv-calib:wiped-v1";
@@ -4729,6 +6151,17 @@ function refreshPv(host) {
           buf.shift();
         }
       }
+      const hist = host._pvHistory;
+      if (hist) {
+        const lastIdx = hist.times.length - 1;
+        const lastTs = lastIdx >= 0 ? hist.times[lastIdx].getTime() : 0;
+        if (ts > lastTs) {
+          host._pvHistory = {
+            times: [...hist.times, new Date(ts)],
+            values: [...hist.values, next3]
+          };
+        }
+      }
     }
   } else {
     if (host._pvCurrent !== null) {
@@ -4741,7 +6174,7 @@ function refreshPv(host) {
   if (!host._timeRange || host._pvFetching) {
     return;
   }
-  const CALIBRATION_PAST_DAYS = 7;
+  const CALIBRATION_PAST_DAYS = 30;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const fetchStart = new Date(today0.getTime() - CALIBRATION_PAST_DAYS * 24 * 36e5);
@@ -4751,10 +6184,74 @@ function refreshPv(host) {
   if (fetchKey === host._pvFetchKey) {
     return;
   }
-  host._pvFetchKey = fetchKey;
-  fetchPvHistory(host, entity, fetchStart, fetchEnd);
+  const batteryEntities = batterySocEntitiesForInhibit(host.config);
+  host._pvFetchKey = fetchKey + (batteryEntities.length > 0 ? "|bsoc:" + batteryEntities.join(",") : "");
+  fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntities);
 }
-async function fetchPvHistory(host, entityId, start, end) {
+function batterySocEntitiesForInhibit(cfg) {
+  if (!cfg) return [];
+  const cutoff = cfg["inverter-cutoff-soc-pct"];
+  const cutoffN = typeof cutoff === "number" ? cutoff : typeof cutoff === "string" ? parseFloat(cutoff) : NaN;
+  if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return [];
+  const banks = parseBatteryBanks(cfg);
+  return banks.map((b2) => b2.socEntity).filter((e2) => e2.length > 0);
+}
+function inverterCutoffSocPct(cfg) {
+  if (!cfg) return null;
+  const cutoff = cfg["inverter-cutoff-soc-pct"];
+  const cutoffN = typeof cutoff === "number" ? cutoff : typeof cutoff === "string" ? parseFloat(cutoff) : NaN;
+  if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return null;
+  return cutoffN;
+}
+function parseHistoryEntries(arr) {
+  const times = [];
+  const values2 = [];
+  let lastTsMs = null;
+  for (const item of arr) {
+    const sRaw = item?.s ?? item?.state;
+    if (sRaw === null || sRaw === void 0 || sRaw === "unavailable" || sRaw === "unknown" || sRaw === "") continue;
+    const v2 = parseFloat(String(sRaw));
+    if (!isFinite(v2)) continue;
+    let ts = null;
+    const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+    if (typeof tsRaw === "number") {
+      ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1e3);
+    } else if (typeof tsRaw === "string") {
+      const asNum = Number(tsRaw);
+      if (Number.isFinite(asNum) && asNum > 1e9) {
+        ts = new Date(asNum > 1e12 ? asNum : asNum * 1e3);
+      } else {
+        ts = new Date(tsRaw);
+      }
+    }
+    if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) {
+      ts = new Date(lastTsMs);
+    }
+    if (!ts || isNaN(ts.getTime())) continue;
+    lastTsMs = ts.getTime();
+    times.push(ts);
+    values2.push(v2);
+  }
+  return { times, values: values2 };
+}
+function valueAtMs(series, ms) {
+  if (!series || series.times.length === 0) return null;
+  const t2 = series.times;
+  const v2 = series.values;
+  if (ms < t2[0].getTime() || ms > t2[t2.length - 1].getTime()) return null;
+  let lo = 0, hi = t2.length - 1;
+  while (lo < hi - 1) {
+    const mid = lo + hi >> 1;
+    if (t2[mid].getTime() <= ms) lo = mid;
+    else hi = mid;
+  }
+  const t0 = t2[lo].getTime();
+  const t1 = t2[hi].getTime();
+  if (t1 === t0) return v2[lo];
+  const f2 = (ms - t0) / (t1 - t0);
+  return v2[lo] + (v2[hi] - v2[lo]) * f2;
+}
+async function fetchPvHistory(host, entityId, start, end, batterySocEntityIds = []) {
   if (!host.hass?.callWS) {
     return;
   }
@@ -4764,50 +6261,28 @@ async function fetchPvHistory(host, entityId, start, end) {
     const fetchEnd = end > now ? now : end;
     if (start >= fetchEnd) {
       host._pvHistory = { times: [], values: [] };
+      host._batteryHistories = [];
       return;
     }
+    const entityIds = batterySocEntityIds.length > 0 ? [entityId, ...batterySocEntityIds] : [entityId];
     const result = await host.hass.callWS({
       type: "history/history_during_period",
       start_time: start.toISOString(),
       end_time: fetchEnd.toISOString(),
-      entity_ids: [entityId],
+      entity_ids: entityIds,
       minimal_response: true,
       no_attributes: true
     });
     const arr = (result && result[entityId]) ?? [];
-    const times = [];
-    const values2 = [];
-    let lastTsMs = null;
-    for (const item of arr) {
-      const sRaw = item?.s ?? item?.state;
-      if (sRaw === null || sRaw === void 0 || sRaw === "unavailable" || sRaw === "unknown" || sRaw === "") {
-        continue;
-      }
-      const v2 = parseFloat(String(sRaw));
-      if (!isFinite(v2)) {
-        continue;
-      }
-      let ts = null;
-      const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
-      if (typeof tsRaw === "number") {
-        ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1e3);
-      } else if (typeof tsRaw === "string") {
-        const asNum = Number(tsRaw);
-        if (Number.isFinite(asNum) && asNum > 1e9) {
-          ts = new Date(asNum > 1e12 ? asNum : asNum * 1e3);
-        } else {
-          ts = new Date(tsRaw);
-        }
-      }
-      if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null) {
-        ts = new Date(lastTsMs);
-      }
-      if (!ts || isNaN(ts.getTime())) {
-        continue;
-      }
-      lastTsMs = ts.getTime();
-      times.push(ts);
-      values2.push(v2);
+    const parsed = parseHistoryEntries(arr);
+    const times = parsed.times;
+    const values2 = parsed.values;
+    if (batterySocEntityIds.length > 0) {
+      host._batteryHistories = batterySocEntityIds.map(
+        (id) => parseHistoryEntries((result && result[id]) ?? [])
+      );
+    } else {
+      host._batteryHistories = [];
     }
     host._pvHistory = { times, values: values2 };
     host._pvHistoryDiagnostics = {
@@ -5152,210 +6627,6 @@ function formatPvValue(hass, value, unit) {
   }
   const formatted = Math.abs(value) >= 100 ? formatLocalisedNumber(hass, value, 0, true) : formatLocalisedNumber(hass, value, 1);
   return u2 ? `${formatted} ${u2}` : formatted;
-}
-function batteryPowerInvert(config) {
-  return config?.["battery-power-invert"] === true;
-}
-function refreshBattery(host) {
-  if (!host.hass) {
-    return;
-  }
-  const socEntity = String(host.config?.["battery-soc-entity"] ?? "").trim();
-  const powerEntity = String(host.config?.["battery-power-entity"] ?? "").trim();
-  let nextSoc = null;
-  if (socEntity) {
-    const so = host.hass.states?.[socEntity];
-    const v2 = so ? parseFloat(so.state) : NaN;
-    if (isFinite(v2)) {
-      nextSoc = Math.max(0, Math.min(100, v2));
-    }
-  }
-  if (nextSoc !== host._batterySoc) {
-    host._batterySoc = nextSoc;
-  }
-  let nextPower = null;
-  let nextUnit = "";
-  if (powerEntity) {
-    const so = host.hass.states?.[powerEntity];
-    const v2 = so ? parseFloat(so.state) : NaN;
-    if (isFinite(v2)) {
-      nextPower = batteryPowerInvert(host.config) ? -v2 : v2;
-      nextUnit = so.attributes?.unit_of_measurement ?? "";
-    }
-  }
-  if (nextPower !== host._batteryPower) {
-    host._batteryPower = nextPower;
-  }
-  if (nextUnit !== host._batteryPowerUnit) {
-    host._batteryPowerUnit = nextUnit;
-  }
-  if (!socEntity && !powerEntity) {
-    if (host._batterySocHistory !== null) {
-      host._batterySocHistory = null;
-    }
-    if (host._batteryPowerHistory !== null) {
-      host._batteryPowerHistory = null;
-    }
-    host._batteryFetchKey = "";
-    return;
-  }
-  if (!host._timeRange || host._batteryFetching) {
-    return;
-  }
-  const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
-  const fetchKey = `${socEntity}+${powerEntity}@${rangeKey}@inv=${batteryPowerInvert(host.config) ? 1 : 0}`;
-  if (fetchKey === host._batteryFetchKey) {
-    return;
-  }
-  host._batteryFetchKey = fetchKey;
-  fetchBatteryHistory(host, socEntity, powerEntity, host._timeRange.start, host._timeRange.end);
-}
-async function fetchBatteryHistory(host, socEntity, powerEntity, start, end) {
-  if (!host.hass?.callWS) {
-    return;
-  }
-  host._batteryFetching = true;
-  try {
-    const now = /* @__PURE__ */ new Date();
-    const fetchEnd = end > now ? now : end;
-    if (start >= fetchEnd) {
-      if (socEntity) {
-        host._batterySocHistory = { times: [], values: [] };
-      }
-      if (powerEntity) {
-        host._batteryPowerHistory = { times: [], values: [] };
-      }
-      return;
-    }
-    const ids = [];
-    if (socEntity) {
-      ids.push(socEntity);
-    }
-    if (powerEntity) {
-      ids.push(powerEntity);
-    }
-    const result = await host.hass.callWS({
-      type: "history/history_during_period",
-      start_time: start.toISOString(),
-      end_time: fetchEnd.toISOString(),
-      entity_ids: ids,
-      minimal_response: true,
-      no_attributes: true
-    });
-    const parseSeries = (arr) => {
-      const times = [];
-      const values2 = [];
-      for (const item of arr ?? []) {
-        const stateStr = typeof item?.s === "string" ? item.s : typeof item?.state === "string" ? item.state : null;
-        if (stateStr === null || stateStr === "unavailable" || stateStr === "unknown" || stateStr === "") {
-          continue;
-        }
-        const v2 = parseFloat(stateStr);
-        if (!isFinite(v2)) {
-          continue;
-        }
-        let ts = null;
-        if (typeof item?.lu === "number") {
-          ts = new Date(item.lu * 1e3);
-        } else if (typeof item?.last_updated === "string") {
-          ts = new Date(item.last_updated);
-        } else if (typeof item?.last_changed === "string") {
-          ts = new Date(item.last_changed);
-        }
-        if (!ts || isNaN(ts.getTime())) {
-          continue;
-        }
-        times.push(ts);
-        values2.push(v2);
-      }
-      return { times, values: values2 };
-    };
-    if (socEntity) {
-      const series = parseSeries(result?.[socEntity] ?? []);
-      series.values = series.values.map((v2) => Math.max(0, Math.min(100, v2)));
-      host._batterySocHistory = series;
-    } else {
-      host._batterySocHistory = null;
-    }
-    if (powerEntity) {
-      const series = parseSeries(result?.[powerEntity] ?? []);
-      if (batteryPowerInvert(host.config)) {
-        series.values = series.values.map((v2) => -v2);
-      }
-      host._batteryPowerHistory = series;
-    } else {
-      host._batteryPowerHistory = null;
-    }
-  } catch (e2) {
-    console.warn("[HELIOS] battery history fetch failed:", e2);
-    host._batterySocHistory = { times: [], values: [] };
-    host._batteryPowerHistory = { times: [], values: [] };
-  } finally {
-    host._batteryFetching = false;
-  }
-}
-function batterySampleAtTime(hist, time) {
-  if (!hist || hist.times.length === 0) {
-    return null;
-  }
-  const tMs = time.getTime();
-  const firstMs = hist.times[0].getTime();
-  const lastMs = hist.times[hist.times.length - 1].getTime();
-  if (tMs < firstMs || tMs > lastMs + 6e4) {
-    return null;
-  }
-  let idx = hist.times.length - 1;
-  for (let i2 = 0; i2 < hist.times.length; i2++) {
-    if (hist.times[i2].getTime() > tMs) {
-      idx = i2 - 1;
-      break;
-    }
-  }
-  if (idx < 0) {
-    idx = 0;
-  }
-  return hist.values[idx];
-}
-function formatBatteryPower(hass, value, unit) {
-  const lu = (unit || "").trim().toLowerCase();
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  const abs = Math.abs(value);
-  if (lu === "w" && abs >= 1e3) {
-    return `${sign}${formatLocalisedNumber(hass, abs / 1e3, 2)} kW`;
-  }
-  if (lu === "w") {
-    return `${sign}${formatLocalisedNumber(hass, abs, 0, true)} W`;
-  }
-  if (lu === "kw") {
-    return `${sign}${formatLocalisedNumber(hass, abs, 2)} kW`;
-  }
-  return `${sign}${formatLocalisedNumber(hass, abs, 1)}${unit ? " " + unit : ""}`;
-}
-function computeBatteryToday(host) {
-  const today0 = /* @__PURE__ */ new Date();
-  today0.setHours(0, 0, 0, 0);
-  const startMs = today0.getTime();
-  const endMs = Date.now();
-  let chargedKwh = 0;
-  let dischargedKwh = 0;
-  const hist = host._batteryPowerHistory;
-  if (hist && hist.times.length >= 2) {
-    for (let i2 = 1; i2 < hist.times.length; i2++) {
-      const tMs = hist.times[i2].getTime();
-      if (tMs < startMs || tMs > endMs) continue;
-      const dtH = (tMs - hist.times[i2 - 1].getTime()) / 36e5;
-      if (dtH <= 0 || dtH > 6) continue;
-      const wAvg = (pvNormalizeToWatts(hist.values[i2 - 1], host._batteryPowerUnit) + pvNormalizeToWatts(hist.values[i2], host._batteryPowerUnit)) / 2;
-      const kwh = wAvg * dtH / 1e3;
-      if (kwh > 0) chargedKwh += kwh;
-      else dischargedKwh += -kwh;
-    }
-  }
-  return {
-    socNow: host._batterySoc,
-    chargedKwh,
-    dischargedKwh
-  };
 }
 function refreshSolarRadiation(host) {
   const entity = String(host.config?.["solar-radiation-entity"] ?? "").trim();
@@ -8873,7 +10144,7 @@ Use an identity property function instead: \`{ "type": "identity", "property": $
           return this._globalStateRefs;
         }
       }
-      const ss = wt, os = Qi, as = os.light, ls = os.sky, us = os.paintProperty, cs = os.layoutProperty;
+      const ss = wt, os = Qi, as = os.light, ls = os.sky, us = os.paintProperty, cs2 = os.layoutProperty;
       function hs(t3, e3) {
         let n4 = false;
         if (null == e3 ? void 0 : e3.length) for (const r3 of e3) t3.fire(new vt(new Error(r3.message))), n4 = true;
@@ -9456,7 +10727,7 @@ Use an identity property function instead: \`{ "type": "identity", "property": $
         setLayoutProperty(t3, e3, n4 = {}) {
           var r3;
           if ("visibility" === t3) return this.visibility = e3, this._visibilityExpression.setValue(e3), void this.recalculateVisibility();
-          (null === (r3 = this._transitionablePaint) || void 0 === r3 ? void 0 : r3.hasProperty(t3)) ? this.fire(new vt(new Error(t3 + Js))) : null != e3 && this._validate(cs, `layers.${this.id}.layout.${t3}`, t3, e3, n4) || this._unevaluatedLayout.setValue(t3, e3);
+          (null === (r3 = this._transitionablePaint) || void 0 === r3 ? void 0 : r3.hasProperty(t3)) ? this.fire(new vt(new Error(t3 + Js))) : null != e3 && this._validate(cs2, `layers.${this.id}.layout.${t3}`, t3, e3, n4) || this._unevaluatedLayout.setValue(t3, e3);
         }
         getPaintProperty(t3) {
           var e3, n4;
@@ -10860,7 +12131,7 @@ Use an identity property function instead: \`{ "type": "identity", "property": $
       function hl({ queryGeometry: t3, size: e3, transform: n4, unwrappedTileID: r3, getElevation: i3 }, s3) {
         return Wa(t3, s3, e3 * (n4.projectTileCoordinates(s3.x, s3.y, r3, i3).signedDistanceFromCamera / n4.cameraToCenterDistance));
       }
-      function pl({ queryGeometry: t3, size: e3, transform: n4, unwrappedTileID: r3, getElevation: i3 }, s3) {
+      function pl2({ queryGeometry: t3, size: e3, transform: n4, unwrappedTileID: r3, getElevation: i3 }, s3) {
         const o3 = n4.projectTileCoordinates(s3.x, s3.y, r3, i3).signedDistanceFromCamera, a3 = e3 * (n4.cameraToCenterDistance / o3);
         return Wa(t3, yl(s3, n4, r3, i3), a3);
       }
@@ -10868,7 +12139,7 @@ Use an identity property function instead: \`{ "type": "identity", "property": $
         return Wa(t3, yl(s3, n4, r3, i3), e3);
       }
       function dl({ queryGeometry: t3, size: e3, transform: n4, unwrappedTileID: r3, getElevation: i3, pitchAlignment: s3 = "map", pitchScale: o3 = "map" }, a3) {
-        const l3 = "map" === s3 ? "map" === o3 ? cl : hl : "map" === o3 ? pl : fl, u3 = { queryGeometry: t3, size: e3, transform: n4, unwrappedTileID: r3, getElevation: i3 };
+        const l3 = "map" === s3 ? "map" === o3 ? cl : hl : "map" === o3 ? pl2 : fl, u3 = { queryGeometry: t3, size: e3, transform: n4, unwrappedTileID: r3, getElevation: i3 };
         for (const t4 of a3) for (const e4 of t4) if (l3(u3, e4)) return true;
         return false;
       }
@@ -28082,7 +29353,7 @@ ${n4.shaderPreludeCode.vertexSource}`, define: n4.shaderDefine }, defaultProject
           return false;
         }
       }
-      const cs = { "AttributionControl.ToggleAttribution": "Toggle attribution", "AttributionControl.MapFeedback": "Map feedback", "FullscreenControl.Enter": "Enter fullscreen", "FullscreenControl.Exit": "Exit fullscreen", "GeolocateControl.FindMyLocation": "Find my location", "GeolocateControl.LocationNotAvailable": "Location not available", "LogoControl.Title": "MapLibre logo", "Map.Title": "Map", "Marker.Title": "Map marker", "NavigationControl.ResetBearing": "Drag to rotate map, click to reset north", "NavigationControl.ZoomIn": "Zoom in", "NavigationControl.ZoomOut": "Zoom out", "Popup.Close": "Close popup", "ScaleControl.Feet": "ft", "ScaleControl.Meters": "m", "ScaleControl.Kilometers": "km", "ScaleControl.Miles": "mi", "ScaleControl.NauticalMiles": "nm", "GlobeControl.Enable": "Enable globe", "GlobeControl.Disable": "Disable globe", "TerrainControl.Enable": "Enable terrain", "TerrainControl.Disable": "Disable terrain", "CooperativeGesturesHandler.WindowsHelpText": "Use Ctrl + scroll to zoom the map", "CooperativeGesturesHandler.MacHelpText": "Use ⌘ + scroll to zoom the map", "CooperativeGesturesHandler.MobileHelpText": "Use two fingers to move the map" }, hs = i2, us = { hash: false, interactive: true, bearingSnap: 7, zoomSnap: 0, attributionControl: Jr, maplibreLogo: false, refreshExpiredTiles: true, canvasContextAttributes: { antialias: false, preserveDrawingBuffer: false, powerPreference: "high-performance", failIfMajorPerformanceCaveat: false, desynchronized: false, contextType: void 0 }, scrollZoom: true, minZoom: -2, maxZoom: 22, minPitch: 0, maxPitch: 60, boxZoom: true, dragRotate: true, dragPan: true, keyboard: true, doubleClickZoom: true, touchZoomRotate: true, touchPitch: true, cooperativeGestures: false, trackResize: true, center: [0, 0], elevation: 0, zoom: 0, bearing: 0, pitch: 0, roll: 0, renderWorldCopies: true, maxTileCacheSize: null, maxTileCacheZoomLevels: t2.c.MAX_TILE_CACHE_ZOOM_LEVELS, transformRequest: null, transformCameraUpdate: null, transformConstrain: null, fadeDuration: 300, crossSourceCollisions: true, clickTolerance: 3, localIdeographFontFamily: "sans-serif", pitchWithRotate: true, rollEnabled: false, reduceMotion: void 0, validateStyle: true, maxCanvasSize: [4096, 4096], cancelPendingTileRequestsWhileZooming: true, centerClampedToGround: true, experimentalZoomLevelsToOverscale: void 0, anisotropicFilterPitch: 20 };
+      const cs2 = { "AttributionControl.ToggleAttribution": "Toggle attribution", "AttributionControl.MapFeedback": "Map feedback", "FullscreenControl.Enter": "Enter fullscreen", "FullscreenControl.Exit": "Exit fullscreen", "GeolocateControl.FindMyLocation": "Find my location", "GeolocateControl.LocationNotAvailable": "Location not available", "LogoControl.Title": "MapLibre logo", "Map.Title": "Map", "Marker.Title": "Map marker", "NavigationControl.ResetBearing": "Drag to rotate map, click to reset north", "NavigationControl.ZoomIn": "Zoom in", "NavigationControl.ZoomOut": "Zoom out", "Popup.Close": "Close popup", "ScaleControl.Feet": "ft", "ScaleControl.Meters": "m", "ScaleControl.Kilometers": "km", "ScaleControl.Miles": "mi", "ScaleControl.NauticalMiles": "nm", "GlobeControl.Enable": "Enable globe", "GlobeControl.Disable": "Disable globe", "TerrainControl.Enable": "Enable terrain", "TerrainControl.Disable": "Disable terrain", "CooperativeGesturesHandler.WindowsHelpText": "Use Ctrl + scroll to zoom the map", "CooperativeGesturesHandler.MacHelpText": "Use ⌘ + scroll to zoom the map", "CooperativeGesturesHandler.MobileHelpText": "Use two fingers to move the map" }, hs = i2, us = { hash: false, interactive: true, bearingSnap: 7, zoomSnap: 0, attributionControl: Jr, maplibreLogo: false, refreshExpiredTiles: true, canvasContextAttributes: { antialias: false, preserveDrawingBuffer: false, powerPreference: "high-performance", failIfMajorPerformanceCaveat: false, desynchronized: false, contextType: void 0 }, scrollZoom: true, minZoom: -2, maxZoom: 22, minPitch: 0, maxPitch: 60, boxZoom: true, dragRotate: true, dragPan: true, keyboard: true, doubleClickZoom: true, touchZoomRotate: true, touchPitch: true, cooperativeGestures: false, trackResize: true, center: [0, 0], elevation: 0, zoom: 0, bearing: 0, pitch: 0, roll: 0, renderWorldCopies: true, maxTileCacheSize: null, maxTileCacheZoomLevels: t2.c.MAX_TILE_CACHE_ZOOM_LEVELS, transformRequest: null, transformCameraUpdate: null, transformConstrain: null, fadeDuration: 300, crossSourceCollisions: true, clickTolerance: 3, localIdeographFontFamily: "sans-serif", pitchWithRotate: true, rollEnabled: false, reduceMotion: void 0, validateStyle: true, maxCanvasSize: [4096, 4096], cancelPendingTileRequestsWhileZooming: true, centerClampedToGround: true, experimentalZoomLevelsToOverscale: void 0, anisotropicFilterPitch: 20 };
       let ds = class extends Qr {
         get _ownerWindow() {
           var e3, t3;
@@ -28107,7 +29378,7 @@ ${n4.shaderPreludeCode.vertexSource}`, define: n4.shaderDefine }, defaultProject
             if (e4.target === this._container) return this._container.scrollTop = 0, this._container.scrollLeft = 0, false;
           }, this._onWindowOnline = () => {
             this._update();
-          }, this._interactive = r3.interactive, this._maxTileCacheSize = r3.maxTileCacheSize, this._maxTileCacheZoomLevels = r3.maxTileCacheZoomLevels, this._canvasContextAttributes = Object.assign({}, r3.canvasContextAttributes), this._trackResize = true === r3.trackResize, this._bearingSnap = r3.bearingSnap, this._zoomSnap = r3.zoomSnap, this._centerClampedToGround = r3.centerClampedToGround, this._refreshExpiredTiles = true === r3.refreshExpiredTiles, this._fadeDuration = r3.fadeDuration, this._crossSourceCollisions = true === r3.crossSourceCollisions, this._collectResourceTiming = true === r3.collectResourceTiming, this._locale = Object.assign(Object.assign({}, cs), r3.locale), this._clickTolerance = r3.clickTolerance, this._overridePixelRatio = r3.pixelRatio, this._maxCanvasSize = r3.maxCanvasSize, this._zoomLevelsToOverscale = r3.experimentalZoomLevelsToOverscale, this.transformCameraUpdate = r3.transformCameraUpdate, this.transformConstrain = r3.transformConstrain, this.cancelPendingTileRequestsWhileZooming = true === r3.cancelPendingTileRequestsWhileZooming, this.setAnisotropicFilterPitch(r3.anisotropicFilterPitch), void 0 !== r3.reduceMotion && (n3.prefersReducedMotion = r3.reduceMotion), this._imageQueueHandle = u2.addThrottleControl(() => this.isMoving()), this._requestManager = new _2(r3.transformRequest), this._container = this._resolveContainer(r3.container), r3.maxBounds && this.setMaxBounds(r3.maxBounds), this._setupContainer(), this._setupPainter(), this.on("move", () => this._update(false)), this.on("moveend", () => this._update(false)), this.on("zoom", () => this._update(true)), this.on("terrain", () => {
+          }, this._interactive = r3.interactive, this._maxTileCacheSize = r3.maxTileCacheSize, this._maxTileCacheZoomLevels = r3.maxTileCacheZoomLevels, this._canvasContextAttributes = Object.assign({}, r3.canvasContextAttributes), this._trackResize = true === r3.trackResize, this._bearingSnap = r3.bearingSnap, this._zoomSnap = r3.zoomSnap, this._centerClampedToGround = r3.centerClampedToGround, this._refreshExpiredTiles = true === r3.refreshExpiredTiles, this._fadeDuration = r3.fadeDuration, this._crossSourceCollisions = true === r3.crossSourceCollisions, this._collectResourceTiming = true === r3.collectResourceTiming, this._locale = Object.assign(Object.assign({}, cs2), r3.locale), this._clickTolerance = r3.clickTolerance, this._overridePixelRatio = r3.pixelRatio, this._maxCanvasSize = r3.maxCanvasSize, this._zoomLevelsToOverscale = r3.experimentalZoomLevelsToOverscale, this.transformCameraUpdate = r3.transformCameraUpdate, this.transformConstrain = r3.transformConstrain, this.cancelPendingTileRequestsWhileZooming = true === r3.cancelPendingTileRequestsWhileZooming, this.setAnisotropicFilterPitch(r3.anisotropicFilterPitch), void 0 !== r3.reduceMotion && (n3.prefersReducedMotion = r3.reduceMotion), this._imageQueueHandle = u2.addThrottleControl(() => this.isMoving()), this._requestManager = new _2(r3.transformRequest), this._container = this._resolveContainer(r3.container), r3.maxBounds && this.setMaxBounds(r3.maxBounds), this._setupContainer(), this._setupPainter(), this.on("move", () => this._update(false)), this.on("moveend", () => this._update(false)), this.on("zoom", () => this._update(true)), this.on("terrain", () => {
             this.painter.terrainFacilitator.depthDirty = true, this._update(true);
           }), this.once("idle", () => this._idleTriggered = true), "undefined" != typeof window && (this._ownerWindow.addEventListener("online", this._onWindowOnline, false), this._setupResizeObserver()), this.handlers = new Yr(this, r3), this._hash = r3.hash ? new Ya("string" == typeof r3.hash && r3.hash || void 0).addTo(this) : void 0, (null === (i3 = this._hash) || void 0 === i3 ? void 0 : i3._onHashChange()) || (this.jumpTo({ center: r3.center, elevation: r3.elevation, zoom: r3.zoom, bearing: r3.bearing, pitch: r3.pitch, roll: r3.roll }), r3.bounds && (this.resize(), this.fitBounds(r3.bounds, t2.e({}, r3.fitBoundsOptions, { duration: 0 }))));
           const c3 = "string" == typeof r3.style || !("globe" === (null === (a3 = null === (o3 = r3.style) || void 0 === o3 ? void 0 : o3.projection) || void 0 === a3 ? void 0 : a3.type));
@@ -29426,7 +30697,7 @@ ${n4.shaderPreludeCode.vertexSource}`, define: n4.shaderDefine }, defaultProject
 })(maplibreGl);
 var maplibreGlExports = maplibreGl.exports;
 const maplibregl = /* @__PURE__ */ getDefaultExportFromCjs(maplibreGlExports);
-const PAST_DAYS = 7;
+const PAST_DAYS = 30;
 const FORECAST_DAYS = 3;
 const RATE_LIMIT_BACKOFF_MS = [
   5 * 6e4,
@@ -29479,7 +30750,7 @@ function pickModelsForLocation(lat, lon, precision) {
   return [GLOBAL, "gfs_seamless"];
 }
 const CACHE_KEY_PREFIX = "helios-weather-cache:";
-const CACHE_TTL_MS = 30 * 6e4;
+const CACHE_TTL_MS$1 = 30 * 6e4;
 function cacheKey(lat, lon, precision) {
   return `${CACHE_KEY_PREFIX}${precision}:${lat.toFixed(3)},${lon.toFixed(3)}`;
 }
@@ -29506,7 +30777,7 @@ function readCache(lat, lon, precision) {
     const raw2 = window.localStorage?.getItem(cacheKey(lat, lon, precision));
     if (!raw2) return null;
     const obj = JSON.parse(raw2);
-    if (Date.now() - obj.storedAt > CACHE_TTL_MS) return null;
+    if (Date.now() - obj.storedAt > CACHE_TTL_MS$1) return null;
     if (new Date(obj.storedAt).toDateString() !== (/* @__PURE__ */ new Date()).toDateString()) {
       return null;
     }
@@ -29562,11 +30833,9 @@ const HOURLY_VARS = [
   "cloud_cover_mid",
   "cloud_cover_high",
   "weather_code",
-  //Drive the PV thermal-derating model in pv-thermal.ts. Cell
-  //temperature climbs above STC under sun and is cooled by wind,
-  //so the engine pulls both alongside cloud + irradiance. Providers
-  //that don't return them leave the multiplier at 1, and the
-  //prediction falls back to the legacy "cool cell" assumption.
+  //Drive the PV thermal-derating model in pv-thermal.ts. Cell temperature climbs above STC under sun and is cooled by wind, so the engine pulls
+  //both alongside cloud + irradiance. Providers that don't return them leave the multiplier at 1, and the prediction falls back to the legacy "cool
+  //cell" assumption.
   "temperature_2m",
   "wind_speed_10m"
 ];
@@ -31219,6 +32488,9 @@ function processHeightRaster(heights, geo, opts = {}, terrain) {
   if (heights.length < N2) {
     return emptyResult();
   }
+  if (opts.medianSmooth) {
+    heights = median3x3(heights, rasterSize);
+  }
   const pxLon = (maxLon - minLon) / rasterSize;
   const pxLat = (maxLat - minLat) / rasterSize;
   const halfLon = pxLon / 2;
@@ -31322,12 +32594,9 @@ function processHeightRaster(heights, geo, opts = {}, terrain) {
       cellsPerClumpCap: maxCellsPerComponent,
       heightRangeM: keptCells > 0 ? [Number(hMin.toFixed(1)), Number(hMax.toFixed(1))] : null
     },
-    //Forward the raw raster + geo so the engine can keep it for
-    //the LiDAR View overlay. Same buffer reference, no copy: the
-    //pipeline never mutates `heights` after the validity pass
-    //above, and the engine treats the buffer as read-only. The
-    //terrain band, when provided, is forwarded with the same
-    //zero-copy contract.
+    //Forward the raw raster + geo so the engine can keep it for the LiDAR View overlay. Same buffer reference, no copy: the pipeline never
+    //mutates `heights` after the validity pass above, and the engine treats the buffer as read-only. The terrain band, when provided, is
+    //forwarded with the same zero-copy contract.
     raster: {
       heights,
       terrain,
@@ -31338,6 +32607,46 @@ function processHeightRaster(heights, geo, opts = {}, terrain) {
       maxLon
     }
   };
+}
+function median3x3(src, size) {
+  const out = new Float32Array(src.length);
+  const buf = new Array(9);
+  for (let j = 0; j < size; j++) {
+    for (let i2 = 0; i2 < size; i2++) {
+      const idx = j * size + i2;
+      const center = src[idx];
+      if (!isFinite(center)) {
+        out[idx] = center;
+        continue;
+      }
+      let n3 = 0;
+      for (let dj = -1; dj <= 1; dj++) {
+        const jj = j + dj;
+        if (jj < 0 || jj >= size) continue;
+        for (let di = -1; di <= 1; di++) {
+          const ii = i2 + di;
+          if (ii < 0 || ii >= size) continue;
+          const v2 = src[jj * size + ii];
+          if (isFinite(v2)) buf[n3++] = v2;
+        }
+      }
+      if (n3 === 0) {
+        out[idx] = NaN;
+        continue;
+      }
+      for (let k2 = 1; k2 < n3; k2++) {
+        const v2 = buf[k2];
+        let m2 = k2 - 1;
+        while (m2 >= 0 && buf[m2] > v2) {
+          buf[m2 + 1] = buf[m2];
+          m2--;
+        }
+        buf[m2 + 1] = v2;
+      }
+      out[idx] = buf[n3 - 1 >> 1];
+    }
+  }
+  return out;
 }
 function emptyResult() {
   return {
@@ -34523,6 +35832,40 @@ class GeoTIFF extends GeoTIFFBase {
 async function fromArrayBuffer(arrayBuffer, signal) {
   return GeoTIFF.fromSource(makeBufferSource(arrayBuffer), void 0, signal);
 }
+function extractMultipartTiff(buf, contentType) {
+  const bytes = new Uint8Array(buf);
+  let magic = -1;
+  for (let i2 = 0; i2 < bytes.length - 4; i2++) {
+    if (bytes[i2] === 73 && bytes[i2 + 1] === 73 && bytes[i2 + 2] === 42 && bytes[i2 + 3] === 0 || bytes[i2] === 77 && bytes[i2 + 1] === 77 && bytes[i2 + 2] === 0 && bytes[i2 + 3] === 42) {
+      magic = i2;
+      break;
+    }
+  }
+  if (magic < 0) return null;
+  const m2 = contentType.match(/boundary=("?)([^";]+)\1/);
+  let bodyEnd = bytes.length;
+  if (m2) {
+    const boundary = "--" + m2[2];
+    const boundaryBytes = new TextEncoder().encode(boundary);
+    for (let i2 = magic + 4; i2 <= bytes.length - boundaryBytes.length; i2++) {
+      let match = true;
+      for (let j = 0; j < boundaryBytes.length; j++) {
+        if (bytes[i2 + j] !== boundaryBytes[j]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        bodyEnd = i2;
+        break;
+      }
+    }
+  }
+  while (bodyEnd > magic && (bytes[bodyEnd - 1] === 13 || bytes[bodyEnd - 1] === 10)) {
+    bodyEnd--;
+  }
+  return buf.slice(magic, bodyEnd);
+}
 async function fetchFloat32GeoTiff(url, rasterSize, signal) {
   let resp;
   try {
@@ -34538,6 +35881,12 @@ async function fetchFloat32GeoTiff(url, rasterSize, signal) {
     return null;
   }
   if (buf.byteLength < 200) return null;
+  const contentType = resp.headers.get("content-type") ?? "";
+  if (contentType.includes("multipart/")) {
+    const tiffSlice = extractMultipartTiff(buf, contentType);
+    if (!tiffSlice) return null;
+    buf = tiffSlice;
+  }
   let tiff;
   try {
     tiff = await fromArrayBuffer(buf);
@@ -35336,13 +36685,15 @@ function resolveLidarSource(lat, lon, cfg) {
 }
 const VERT_SRC = `
 precision highp float;
-attribute vec3 a_pos;
+attribute vec3  a_pos;
+attribute float a_exposure;
 uniform mat4  u_matrix;
 uniform float u_mercPerMeter;
 uniform float u_fadeFullMeters;
 uniform float u_fadeOutMeters;
 uniform float u_pointSizePx;
 varying float v_alpha;
+varying float v_exposure;
 
 void main() {
     float dxM = a_pos.x / u_mercPerMeter;
@@ -35350,7 +36701,8 @@ void main() {
     float d2  = dxM * dxM + dyM * dyM;
     float fullR2 = u_fadeFullMeters * u_fadeFullMeters;
     float fadeR2 = u_fadeOutMeters * u_fadeOutMeters;
-    v_alpha = 1.0 - smoothstep(fullR2, fadeR2, d2);
+    v_alpha    = 1.0 - smoothstep(fullR2, fadeR2, d2);
+    v_exposure = a_exposure;
     gl_Position  = u_matrix * vec4(a_pos, 1.0);
     //Collapse the primitive once the alpha is essentially zero so
     //fully-faded points don't waste rasteriser time. The 0.001
@@ -35363,7 +36715,15 @@ const FRAG_SRC = `
 precision mediump float;
 uniform vec4  u_color;
 uniform float u_alphaFade;
+//Solar-exposure modulation. The vertex shader normalises a per-cell exposure byte to [0, 1]; this controls a brightness multiplier + a warm
+//tint applied to the base colour. 1 = sun-lit (full brightness, slight warm shift), 0 = in shadow (dimmed). The defaults are tuned so a
+//missing exposure buffer (attribute disabled, vertexAttrib1f(1.0)) produces visuals identical to the pre-exposure render: full lit, neutral
+//tint. When the engine starts feeding real exposure data the dimmed cells immediately read as shadow without changing the lit baseline.
+uniform float u_exposureLitBoost;
+uniform float u_exposureShadowFloor;
+uniform vec3  u_exposureWarmTint;
 varying float v_alpha;
+varying float v_exposure;
 
 void main() {
     //v_alpha is the home-distance fall-off, 1 inside the full radius
@@ -35372,7 +36732,10 @@ void main() {
     //invisible fragments (and for lines this clips the segment past
     //the boundary cleanly).
     if (v_alpha <= 0.0) discard;
-    gl_FragColor = vec4(u_color.rgb, u_color.a * u_alphaFade * v_alpha);
+    float lit  = mix(u_exposureShadowFloor, u_exposureLitBoost, v_exposure);
+    vec3  warm = mix(vec3(1.0), u_exposureWarmTint, v_exposure);
+    vec3  col  = u_color.rgb * lit * warm;
+    gl_FragColor = vec4(col, u_color.a * u_alphaFade * v_alpha);
 }
 `;
 class LidarViewLayer {
@@ -35380,18 +36743,20 @@ class LidarViewLayer {
     this.id = "helios-lidar-view";
     this.type = "custom";
     this.renderingMode = "2d";
+    this._triIdxCount = 0;
+    this._hasExposure = false;
     this._vertexCount = 0;
     this._lineIdxCount = 0;
     this._indexType = 0;
     this._aPos = -1;
+    this._aExposure = -1;
     this._shiftedMatrix = new Float32Array(16);
     this._fadeFullMeters = 100;
     this._fadeOutMeters = 100;
     this._pointSizePx = 1.5;
-    this._color = [1, 1, 1, 0.5];
     this._alphaFade = 0;
-    this._wireframeEnabled = false;
-    this._wireframeColor = [1, 1, 1, 0.5];
+    this._opacity = 0.6;
+    this._cellToVert = null;
     this._raster = null;
     this._homeMerc = maplibregl.MercatorCoordinate.fromLngLat([opts.homeLon, opts.homeLat], 0);
     this._mercPerMeter = this._homeMerc.meterInMercatorCoordinateUnits();
@@ -35413,8 +36778,13 @@ class LidarViewLayer {
     this._pointSizePx = px;
     this._map?.triggerRepaint();
   }
-  setColor(rgba) {
-    this._color = rgba;
+  //Single opacity knob, in [0..1]. Drives the points and the fill
+  //pass directly; the wireframe uses min(opacity + 0.15, 1) so the
+  //lines stay readable above the soft fill.
+  setOpacity(opacity) {
+    const clamped = Math.max(0, Math.min(1, opacity));
+    if (clamped === this._opacity) return;
+    this._opacity = clamped;
     this._map?.triggerRepaint();
   }
   //Fade multiplier in [0..1]. 0 = invisible (shortcut: no draw call).
@@ -35422,15 +36792,6 @@ class LidarViewLayer {
     const clamped = Math.max(0, Math.min(1, a2));
     if (clamped === this._alphaFade) return;
     this._alphaFade = clamped;
-    this._map?.triggerRepaint();
-  }
-  setWireframeEnabled(on) {
-    if (on === this._wireframeEnabled) return;
-    this._wireframeEnabled = on;
-    this._map?.triggerRepaint();
-  }
-  setWireframeColor(rgba) {
-    this._wireframeColor = rgba;
     this._map?.triggerRepaint();
   }
   //Rebuild the GPU buffer from a fresh height raster. Only finite
@@ -35510,6 +36871,29 @@ class LidarViewLayer {
     }
     this._lineIdxCount = li;
     const lineUsed = li > 0 ? lineIdx.subarray(0, li) : new Uint32Array(0);
+    const maxTris = Math.max(0, (rasterSize - 1) * (rasterSize - 1));
+    const triIdx = new Uint32Array(maxTris * 6);
+    let ti = 0;
+    for (let j = 0; j < rasterSize - 1; j++) {
+      for (let i2 = 0; i2 < rasterSize - 1; i2++) {
+        const v00 = cellToVert[j * rasterSize + i2];
+        const v10 = cellToVert[j * rasterSize + i2 + 1];
+        const v01 = cellToVert[(j + 1) * rasterSize + i2];
+        const v11 = cellToVert[(j + 1) * rasterSize + i2 + 1];
+        if (v00 < 0 || v10 < 0 || v01 < 0 || v11 < 0) continue;
+        triIdx[ti++] = v00;
+        triIdx[ti++] = v10;
+        triIdx[ti++] = v11;
+        triIdx[ti++] = v00;
+        triIdx[ti++] = v11;
+        triIdx[ti++] = v01;
+      }
+    }
+    this._triIdxCount = ti;
+    const triUsed = ti > 0 ? triIdx.subarray(0, ti) : new Uint32Array(0);
+    this._cellToVert = cellToVert;
+    this._hasExposure = false;
+    this._pendingExposure = void 0;
     if (this._gl && this._buffer) {
       const gl = this._gl;
       gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
@@ -35520,9 +36904,52 @@ class LidarViewLayer {
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, lineUsed, gl.STATIC_DRAW);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
       }
+      if (this._triIndexBuffer) {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._triIndexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, triUsed, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+      }
+      if (this._exposureBuffer) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._exposureBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, n3, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      }
     } else {
       this._pendingVerts = used;
       this._pendingLineIdx = lineUsed;
+      this._pendingTriIdx = triUsed;
+    }
+    this._map?.triggerRepaint();
+  }
+  //Accept a per-raster-cell exposure byte array (length = rasterSize²) coming from computeLidarCellExposureRows(). Maps it through the cached
+  //cellToVert into a per-vertex byte array, uploads to the GPU and flips _hasExposure so the next render reads from a_exposure instead of
+  //the constant fallback. Passing null clears the override.
+  setExposure(perCellExposure) {
+    if (!perCellExposure || !this._cellToVert || this._vertexCount === 0) {
+      this._hasExposure = false;
+      this._pendingExposure = void 0;
+      this._map?.triggerRepaint();
+      return;
+    }
+    const c2v = this._cellToVert;
+    const N2 = c2v.length;
+    if (perCellExposure.length !== N2) {
+      this._hasExposure = false;
+      this._map?.triggerRepaint();
+      return;
+    }
+    const vertExposure = new Uint8Array(this._vertexCount);
+    for (let i2 = 0; i2 < N2; i2++) {
+      const v2 = c2v[i2];
+      if (v2 >= 0) vertExposure[v2] = perCellExposure[i2] ?? 255;
+    }
+    if (this._gl && this._exposureBuffer) {
+      this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this._exposureBuffer);
+      this._gl.bufferData(this._gl.ARRAY_BUFFER, vertExposure, this._gl.STATIC_DRAW);
+      this._gl.bindBuffer(this._gl.ARRAY_BUFFER, null);
+      this._hasExposure = true;
+    } else {
+      this._pendingExposure = vertExposure;
     }
     this._map?.triggerRepaint();
   }
@@ -35546,6 +36973,7 @@ class LidarViewLayer {
       }
       this._program = program;
       this._aPos = gl.getAttribLocation(program, "a_pos");
+      this._aExposure = gl.getAttribLocation(program, "a_exposure");
       this._uMatrix = gl.getUniformLocation(program, "u_matrix") ?? void 0;
       this._uMercPerMeter = gl.getUniformLocation(program, "u_mercPerMeter") ?? void 0;
       this._uFadeFull = gl.getUniformLocation(program, "u_fadeFullMeters") ?? void 0;
@@ -35553,12 +36981,23 @@ class LidarViewLayer {
       this._uPointSize = gl.getUniformLocation(program, "u_pointSizePx") ?? void 0;
       this._uColor = gl.getUniformLocation(program, "u_color") ?? void 0;
       this._uAlphaFade = gl.getUniformLocation(program, "u_alphaFade") ?? void 0;
+      this._uExposureLit = gl.getUniformLocation(program, "u_exposureLitBoost") ?? void 0;
+      this._uExposureShadow = gl.getUniformLocation(program, "u_exposureShadowFloor") ?? void 0;
+      this._uExposureWarmTint = gl.getUniformLocation(program, "u_exposureWarmTint") ?? void 0;
       this._buffer = gl.createBuffer() ?? void 0;
       if (this._pendingVerts && this._buffer) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
         gl.bufferData(gl.ARRAY_BUFFER, this._pendingVerts, gl.STATIC_DRAW);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
         this._pendingVerts = void 0;
+      }
+      this._exposureBuffer = gl.createBuffer() ?? void 0;
+      if (this._pendingExposure && this._exposureBuffer) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._exposureBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, this._pendingExposure, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        this._hasExposure = this._pendingExposure.length === this._vertexCount;
+        this._pendingExposure = void 0;
       }
       const isWebGL2 = typeof WebGL2RenderingContext !== "undefined" && gl instanceof WebGL2RenderingContext;
       const has32Idx = isWebGL2 || !!gl.getExtension("OES_element_index_uint");
@@ -35570,6 +37009,13 @@ class LidarViewLayer {
           gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this._pendingLineIdx, gl.STATIC_DRAW);
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
           this._pendingLineIdx = void 0;
+        }
+        this._triIndexBuffer = gl.createBuffer() ?? void 0;
+        if (this._pendingTriIdx && this._triIndexBuffer) {
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._triIndexBuffer);
+          gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, this._pendingTriIdx, gl.STATIC_DRAW);
+          gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+          this._pendingTriIdx = void 0;
         }
       }
     } catch (err) {
@@ -35624,13 +37070,28 @@ class LidarViewLayer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
     gl.enableVertexAttribArray(this._aPos);
     gl.vertexAttribPointer(this._aPos, 3, gl.FLOAT, false, 0, 0);
+    if (this._aExposure >= 0) {
+      if (this._hasExposure && this._exposureBuffer) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._exposureBuffer);
+        gl.enableVertexAttribArray(this._aExposure);
+        gl.vertexAttribPointer(this._aExposure, 1, gl.UNSIGNED_BYTE, true, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this._buffer);
+      } else {
+        gl.disableVertexAttribArray(this._aExposure);
+        gl.vertexAttrib1f(this._aExposure, 1);
+      }
+    }
     if (this._uMatrix) gl.uniformMatrix4fv(this._uMatrix, false, this._shiftedMatrix);
     if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
     if (this._uFadeFull) gl.uniform1f(this._uFadeFull, this._fadeFullMeters);
     if (this._uFadeOut) gl.uniform1f(this._uFadeOut, this._fadeOutMeters);
+    if (this._uExposureLit) gl.uniform1f(this._uExposureLit, 1);
+    if (this._uExposureShadow) gl.uniform1f(this._uExposureShadow, 0.35);
+    if (this._uExposureWarmTint) gl.uniform3f(this._uExposureWarmTint, 1, 0.85, 0.6);
     const pixelRatio = this._map?.getPixelRatio?.() ?? (typeof window !== "undefined" && window.devicePixelRatio || 1);
     if (this._uPointSize) gl.uniform1f(this._uPointSize, this._pointSizePx * pixelRatio);
-    if (this._uColor) gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
+    const fillA = this._opacity;
+    const wireA = Math.min(1, this._opacity + 0.15);
     if (this._uAlphaFade) gl.uniform1f(this._uAlphaFade, this._alphaFade);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -35638,17 +37099,17 @@ class LidarViewLayer {
     gl.disable(gl.STENCIL_TEST);
     gl.disable(gl.CULL_FACE);
     if (this._uColor && this._pointSizePx > 0) {
-      gl.uniform4f(this._uColor, this._color[0], this._color[1], this._color[2], this._color[3]);
+      gl.uniform4f(this._uColor, 1, 1, 1, fillA);
       gl.drawArrays(gl.POINTS, 0, this._vertexCount);
     }
-    if (this._wireframeEnabled && this._indexBuffer && this._indexType !== 0 && this._lineIdxCount > 0 && this._uColor) {
-      gl.uniform4f(
-        this._uColor,
-        this._wireframeColor[0],
-        this._wireframeColor[1],
-        this._wireframeColor[2],
-        this._wireframeColor[3]
-      );
+    if (this._hasExposure && this._triIndexBuffer && this._indexType !== 0 && this._triIdxCount > 0 && this._uColor) {
+      gl.uniform4f(this._uColor, 1, 1, 1, fillA);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._triIndexBuffer);
+      gl.drawElements(gl.TRIANGLES, this._triIdxCount, this._indexType, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+    }
+    if (this._indexBuffer && this._indexType !== 0 && this._lineIdxCount > 0 && this._uColor) {
+      gl.uniform4f(this._uColor, 1, 1, 1, wireA);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._indexBuffer);
       gl.drawElements(gl.LINES, this._lineIdxCount, this._indexType, 0);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
@@ -35688,9 +37149,13 @@ class LidarViewLayer {
   onRemove(_map, gl) {
     if (this._buffer) gl.deleteBuffer(this._buffer);
     if (this._indexBuffer) gl.deleteBuffer(this._indexBuffer);
+    if (this._triIndexBuffer) gl.deleteBuffer(this._triIndexBuffer);
+    if (this._exposureBuffer) gl.deleteBuffer(this._exposureBuffer);
     if (this._program) gl.deleteProgram(this._program);
     this._buffer = void 0;
     this._indexBuffer = void 0;
+    this._triIndexBuffer = void 0;
+    this._exposureBuffer = void 0;
     this._program = void 0;
     this._indexType = 0;
     this._gl = void 0;
@@ -36053,7 +37518,10 @@ const _HeliosEngine = class _HeliosEngine {
     this._pvArrayMarkers = [];
     this._selectedTime = null;
     this._lastAtmosphereAlt = -999;
+    this._lastLidarExposureAlt = -999;
+    this._lastLidarExposureAz = -999;
     this._rateLimitStreak = 0;
+    this._paused = false;
     this._sensorIrradianceSamples = null;
     this._autoRotateLastFrame = 0;
     this._autoRotateLastUserAction = 0;
@@ -36069,6 +37537,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._lidarRaster = null;
     this._selectedTimeShadowTimer = null;
     this._lidarViewActive = false;
+    this._lidarViewOpacity = DEFAULT_LIDAR_VIEW_OPACITY;
     this._detailMode = false;
     this._postExitCooldownUntil = 0;
     this.homeLat = haCoords[1];
@@ -36089,6 +37558,78 @@ const _HeliosEngine = class _HeliosEngine {
     _liveEngines.add(this);
     this._fetchLat = this.homeLat;
     this._fetchLon = this.homeLon;
+    this._initMapInstance(container, haCoords);
+  }
+  //_weatherTimer holds either a setInterval id (regular refresh) or
+  //a setTimeout id (rate-limit back-off). The two ID spaces overlap
+  //in practice but not by spec, so we always clear both kinds.
+  _clearWeatherTimer() {
+    if (this._weatherTimer !== void 0) {
+      window.clearInterval(this._weatherTimer);
+      window.clearTimeout(this._weatherTimer);
+      this._weatherTimer = void 0;
+    }
+  }
+  setSolarRadiationSamples(samples) {
+    if (!samples || samples.length === 0) {
+      if (this._sensorIrradianceSamples === null) return;
+      this._sensorIrradianceSamples = null;
+      this._arcInputsCache = void 0;
+      this._renderForCurrentSelection();
+      return;
+    }
+    const cleaned = [];
+    for (const s2 of samples) {
+      const ms = s2.time.getTime();
+      if (!isFinite(ms)) continue;
+      if (!isFinite(s2.wm2) || s2.wm2 < 0) continue;
+      cleaned.push({ tMs: ms, wm2: s2.wm2 });
+    }
+    cleaned.sort((a2, b2) => a2.tMs - b2.tMs);
+    const next3 = cleaned.length > 0 ? cleaned : null;
+    if (this._sensorSamplesEqual(this._sensorIrradianceSamples, next3)) {
+      return;
+    }
+    this._sensorIrradianceSamples = next3;
+    this._arcInputsCache = void 0;
+    this._renderForCurrentSelection();
+  }
+  _sensorSamplesEqual(a2, b2) {
+    if (a2 === b2) return true;
+    if (a2 === null || b2 === null) return false;
+    if (a2.length !== b2.length) return false;
+    for (let i2 = 0; i2 < a2.length; i2++) {
+      if (a2[i2].tMs !== b2[i2].tMs) return false;
+      if (a2[i2].wm2 !== b2[i2].wm2) return false;
+    }
+    return true;
+  }
+  //Nearest-neighbour lookup over the pushed sensor history. Returns
+  //the W/m² reading whose timestamp is closest to `t` provided the
+  //gap is within the strict window; otherwise null so the caller
+  //falls back to the model. Linear scan is fine for ~hourly samples
+  //across a few-day window (a couple of hundred entries at most).
+  _sensorIrradianceAt(t2) {
+    const samples = this._sensorIrradianceSamples;
+    if (!samples || samples.length === 0) return null;
+    const tMs = t2.getTime();
+    let bestIdx = -1;
+    let bestDelta = Number.POSITIVE_INFINITY;
+    for (let i2 = 0; i2 < samples.length; i2++) {
+      const d2 = Math.abs(samples[i2].tMs - tMs);
+      if (d2 < bestDelta) {
+        bestDelta = d2;
+        bestIdx = i2;
+      } else if (d2 > bestDelta) {
+        break;
+      }
+    }
+    if (bestIdx < 0 || bestDelta > _HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS) {
+      return null;
+    }
+    return samples[bestIdx].wm2;
+  }
+  _initMapInstance(container, haCoords) {
     const pixelRatio = this._pixelRatio();
     const styleInfo = this._resolveMapStyle();
     this.map = new maplibregl.Map(
@@ -36099,12 +37640,9 @@ const _HeliosEngine = class _HeliosEngine {
         zoom: 18,
         pitch: 55,
         bearing: this.homeLat >= 0 ? 180 : 0,
-        //Zoom is locked to the resting pose. The 3D camera +
-        //LiDAR overlay are tuned for this single altitude, and
-        //letting the user wander off-zoom only opened the door
-        //to "why does my card look different from the docs"
-        //screenshots. detail-mode separately raises maxZoom
-        //for its dive animation and resets it on exit.
+        //Zoom is locked to the resting pose. The 3D camera + LiDAR overlay are tuned for this single altitude, and letting the user wander
+        //off-zoom only opened the door to "why does my card look different from the docs" screenshots. detail-mode separately raises maxZoom for
+        //its dive animation and resets it on exit.
         minZoom: 18,
         maxZoom: 18,
         dragPan: false,
@@ -36157,10 +37695,23 @@ const _HeliosEngine = class _HeliosEngine {
     this.map.on("style.load", this._mapStyleLoadHandler);
     this._mapLoadHandler = () => {
       this.map?.resize();
+      requestAnimationFrame(() => this.map?.resize());
+      window.setTimeout(() => this.map?.resize(), 400);
+      this._applyMapBounds();
+      window.setTimeout(() => {
+        if (!this.map) return;
+        if (this.map.areTilesLoaded()) return;
+        if (!this.map.isStyleLoaded()) return;
+        try {
+          const styleUrl = this._resolveMapStyle().url;
+          this.map.setStyle(styleUrl);
+        } catch (_2) {
+        }
+      }, 5e3);
       startAutoRotateLoop(this);
     };
     this.map.on("load", this._mapLoadHandler);
-    this.map.on("styleimagemissing", (e2) => {
+    this._mapStyleImageMissingHandler = (e2) => {
       if (!this.map || !e2?.id || this.map.hasImage(e2.id)) return;
       try {
         this.map.addImage(e2.id, {
@@ -36171,7 +37722,8 @@ const _HeliosEngine = class _HeliosEngine {
         });
       } catch (_2) {
       }
-    });
+    };
+    this.map.on("styleimagemissing", this._mapStyleImageMissingHandler);
     this._mapMoveHandler = () => this.onMapTransform?.();
     this.map.on("move", this._mapMoveHandler);
     const canvas = this.map.getCanvas();
@@ -36247,75 +37799,6 @@ const _HeliosEngine = class _HeliosEngine {
     this.map.on("error", this._mapErrorHandler);
     this._refreshWeather();
   }
-  //_weatherTimer holds either a setInterval id (regular refresh) or
-  //a setTimeout id (rate-limit back-off). The two ID spaces overlap
-  //in practice but not by spec, so we always clear both kinds.
-  _clearWeatherTimer() {
-    if (this._weatherTimer !== void 0) {
-      window.clearInterval(this._weatherTimer);
-      window.clearTimeout(this._weatherTimer);
-      this._weatherTimer = void 0;
-    }
-  }
-  setSolarRadiationSamples(samples) {
-    if (!samples || samples.length === 0) {
-      if (this._sensorIrradianceSamples === null) return;
-      this._sensorIrradianceSamples = null;
-      this._arcInputsCache = void 0;
-      this._renderForCurrentSelection();
-      return;
-    }
-    const cleaned = [];
-    for (const s2 of samples) {
-      const ms = s2.time.getTime();
-      if (!isFinite(ms)) continue;
-      if (!isFinite(s2.wm2) || s2.wm2 < 0) continue;
-      cleaned.push({ tMs: ms, wm2: s2.wm2 });
-    }
-    cleaned.sort((a2, b2) => a2.tMs - b2.tMs);
-    const next3 = cleaned.length > 0 ? cleaned : null;
-    if (this._sensorSamplesEqual(this._sensorIrradianceSamples, next3)) {
-      return;
-    }
-    this._sensorIrradianceSamples = next3;
-    this._arcInputsCache = void 0;
-    this._renderForCurrentSelection();
-  }
-  _sensorSamplesEqual(a2, b2) {
-    if (a2 === b2) return true;
-    if (a2 === null || b2 === null) return false;
-    if (a2.length !== b2.length) return false;
-    for (let i2 = 0; i2 < a2.length; i2++) {
-      if (a2[i2].tMs !== b2[i2].tMs) return false;
-      if (a2[i2].wm2 !== b2[i2].wm2) return false;
-    }
-    return true;
-  }
-  //Nearest-neighbour lookup over the pushed sensor history. Returns
-  //the W/m² reading whose timestamp is closest to `t` provided the
-  //gap is within the strict window; otherwise null so the caller
-  //falls back to the model. Linear scan is fine for ~hourly samples
-  //across a few-day window (a couple of hundred entries at most).
-  _sensorIrradianceAt(t2) {
-    const samples = this._sensorIrradianceSamples;
-    if (!samples || samples.length === 0) return null;
-    const tMs = t2.getTime();
-    let bestIdx = -1;
-    let bestDelta = Number.POSITIVE_INFINITY;
-    for (let i2 = 0; i2 < samples.length; i2++) {
-      const d2 = Math.abs(samples[i2].tMs - tMs);
-      if (d2 < bestDelta) {
-        bestDelta = d2;
-        bestIdx = i2;
-      } else if (d2 > bestDelta) {
-        break;
-      }
-    }
-    if (bestIdx < 0 || bestDelta > _HeliosEngine.SENSOR_IRRADIANCE_WINDOW_MS) {
-      return null;
-    }
-    return samples[bestIdx].wm2;
-  }
   //Resolves the active OpenFreeMap style URL from `map-style` +
   //`card-theme`. OpenFreeMap publishes a fixed set of MapLibre
   //styles at https://tiles.openfreemap.org/styles/<name>:
@@ -36329,19 +37812,14 @@ const _HeliosEngine = class _HeliosEngine {
   //             card viewport, Fiord's #45516E reads as "evening"
   //             without losing the basemap content underneath.
   //
-  //We resolve to a single URL because OpenFreeMap has no separate
-  //light / dark pair per style, the dark style is its own thing
-  //and replaces both Liberty and Positron when the card chrome is
-  //dark. The user-side mapping is therefore:
+  //We resolve to a single URL because OpenFreeMap has no separate light / dark pair per style, the dark style is its own thing and replaces both
+  //Liberty and Positron when the card chrome is dark. The user-side mapping is therefore:
   //
-  //  map-style: streets  + card-theme: light → liberty
-  //  map-style: streets  + card-theme: dark  → fiord
-  //  map-style: minimal  + card-theme: light → positron
-  //  map-style: minimal  + card-theme: dark  → fiord
+  // map-style: streets  + card-theme: light → liberty map-style: streets  + card-theme: dark  → fiord map-style: minimal  + card-theme: light →
+  // positron map-style: minimal  + card-theme: dark  → fiord
   //
-  //All styles use the same vector tile source backing the buildings
-  //fetch in engine/buildings.ts, so a style change keeps the home
-  //and surroundings GeoJSON cache intact.
+  //All styles use the same vector tile source backing the buildings fetch in engine/buildings.ts, so a style change keeps the home and surroundings
+  //GeoJSON cache intact.
   _resolveMapStyle() {
     const raw2 = String(this.cfg["map-style"] ?? "streets").toLowerCase();
     const isDark = String(this.cfg["card-theme"] ?? "light").toLowerCase() === "dark";
@@ -36365,9 +37843,8 @@ const _HeliosEngine = class _HeliosEngine {
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio : 1;
     return IS_MOBILE ? Math.min(Math.max(dpr, 1), 1.25) : Math.min(Math.max(dpr, 1.5), 2);
   }
-  //Reads the user-configured shadow precision, normalises any
-  //off-spec value to the default and returns one of the canonical
-  //LidarPrecisionLevel members.
+  //Reads the user-configured shadow precision, normalises any off-spec value to the default and returns one of the canonical LidarPrecisionLevel
+  //members.
   _lidarPrecisionLevel() {
     const v2 = String(this.cfg["lidar-precision"] ?? DEFAULT_LIDAR_PRECISION).toLowerCase();
     if (v2 === "low" || v2 === "medium" || v2 === "high") {
@@ -36406,8 +37883,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return best;
   }
-  //Resolve the weather variables at a given time as seen from the
-  //home location.
+  //Resolve the weather variables at a given time as seen from the home location.
   //
   //Single source: _homeHourlyData, populated by fetchHomePointData.
   //If null (initial state, fetch failed, or fetch in flight) we
@@ -36554,7 +38030,10 @@ const _HeliosEngine = class _HeliosEngine {
     window.clearInterval(this._skyTimer);
     this._lastAtmosphereAlt = -999;
     this._refreshShadowsAndAtmosphere();
-    this._skyTimer = window.setInterval(() => this._refreshShadowsAndAtmosphere(), 6e4);
+    this._skyTimer = window.setInterval(() => {
+      if (this._paused) return;
+      this._refreshShadowsAndAtmosphere();
+    }, 6e4);
     if (this._homeHourlyData) {
       this._renderForCurrentSelection();
     }
@@ -36645,11 +38124,10 @@ const _HeliosEngine = class _HeliosEngine {
       this.map.removeSource("helios-cloud-rings");
     }
   }
-  //Update the disc + ring geometry to reflect the given cloud cover
-  //percentage. Called from _renderForCurrentSelection so it ticks
-  //both with live time progression and with manual scrubbing.
+  //Update the disc + ring geometry to reflect the given cloud cover percentage. Called from _renderForCurrentSelection so it ticks both with live
+  //time progression and with manual scrubbing.
   //
-  //  cloudPct ∈ [0, 100]   , coverage at the home location now
+  // cloudPct ∈ [0, 100]   , coverage at the home location now
   //
   //The ring (100 % reference) has fixed radius CLOUD_DISC_RADIUS_M.
   //The disc scales linearly: radius = CLOUD_DISC_RADIUS_M * pct/100.
@@ -36760,10 +38238,8 @@ const _HeliosEngine = class _HeliosEngine {
   //for concave footprints (L, U) where a convex hull would cut
   //a too-large hole and expose terrain at the inner corners.
   //
-  //Vertex elevation is queried per-vertex against the live
-  //terrain mesh, matching what MapLibre's fill-extrusion shader
-  //does internally so the silhouette tracks the rendered
-  //extrusion exactly.
+  //Vertex elevation is queried per-vertex against the live terrain mesh, matching what MapLibre's fill-extrusion shader does internally so the
+  //silhouette tracks the rendered extrusion exactly.
   //
   //Returns an empty array until the buildings GeoJSON has landed.
   projectHomeFootprints() {
@@ -36805,7 +38281,99 @@ const _HeliosEngine = class _HeliosEngine {
   setLidarViewActive(on) {
     if (on === this._lidarViewActive) return;
     this._lidarViewActive = on;
-    if (on) this._ensureLidarFetched();
+    if (on) {
+      this._ensureLidarFetched();
+      this._lastLidarExposureAlt = -999;
+      this._lastLidarExposureAz = -999;
+      this._scheduleLidarExposureRecompute();
+    } else {
+      if (this._exposureIdleHandle !== void 0) {
+        this._cancelIdleCb(this._exposureIdleHandle);
+        this._exposureIdleHandle = void 0;
+      }
+      if (this._exposureChunkRaf !== void 0) {
+        cancelAnimationFrame(this._exposureChunkRaf);
+        this._exposureChunkRaf = void 0;
+      }
+      this._lidarViewLayer?.setExposure(null);
+    }
+  }
+  //Cross-browser requestIdleCallback / cancelIdleCallback. Safari only shipped them in 2024, fall back to setTimeout(0) where the API is
+  //missing so the compute still runs (it just doesn't get the deadline-friendly scheduling perk).
+  _requestIdleCb(cb) {
+    const w2 = window;
+    if (typeof w2.requestIdleCallback === "function") {
+      return w2.requestIdleCallback(cb, { timeout: 2e3 });
+    }
+    return window.setTimeout(cb, 0);
+  }
+  _cancelIdleCb(handle) {
+    const w2 = window;
+    if (typeof w2.cancelIdleCallback === "function") {
+      w2.cancelIdleCallback(handle);
+      return;
+    }
+    window.clearTimeout(handle);
+  }
+  _scheduleLidarExposureRecompute() {
+    if (!this._lidarViewActive) return;
+    if (!this._lidarRaster || !this._lidarViewLayer) return;
+    if (this._exposureIdleHandle !== void 0) return;
+    if (this._exposureChunkRaf !== void 0) return;
+    this._exposureIdleHandle = this._requestIdleCb(() => {
+      this._exposureIdleHandle = void 0;
+      if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer) return;
+      const sun = getSunPosition(this._selectedTime ?? /* @__PURE__ */ new Date(), this.homeLat, this.homeLon);
+      if (!sun) return;
+      const altDelta = Math.abs(sun.altitude - this._lastLidarExposureAlt);
+      const azDelta = Math.abs(sun.azimuth - this._lastLidarExposureAz);
+      if (altDelta < 0.5 && azDelta < 0.5) return;
+      const r2 = this._lidarRaster;
+      const rasterRef = {
+        heights: r2.heights,
+        terrain: r2.terrain,
+        rasterSize: r2.rasterSize,
+        minLat: r2.minLat,
+        maxLat: r2.maxLat,
+        minLon: r2.minLon,
+        maxLon: r2.maxLon
+      };
+      const out = new Uint8Array(rasterRef.rasterSize * rasterRef.rasterSize);
+      const capturedRaster = r2;
+      const CHUNK_ROWS = 8;
+      let j = 0;
+      const tick2 = () => {
+        if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer) {
+          this._exposureChunkRaf = void 0;
+          return;
+        }
+        if (this._lidarRaster !== capturedRaster) {
+          this._exposureChunkRaf = void 0;
+          this._scheduleLidarExposureRecompute();
+          return;
+        }
+        const currentSun = getSunPosition(this._selectedTime ?? /* @__PURE__ */ new Date(), this.homeLat, this.homeLon);
+        if (currentSun && (Math.abs(currentSun.altitude - sun.altitude) >= 0.5 || Math.abs(currentSun.azimuth - sun.azimuth) >= 0.5)) {
+          this._exposureChunkRaf = void 0;
+          this._lastLidarExposureAlt = -999;
+          this._lastLidarExposureAz = -999;
+          this._scheduleLidarExposureRecompute();
+          return;
+        }
+        const jEnd = Math.min(rasterRef.rasterSize, j + CHUNK_ROWS);
+        computeLidarCellExposureRows(rasterRef, sun.altitude, sun.azimuth, j, jEnd, out);
+        j = jEnd;
+        if (j < rasterRef.rasterSize) {
+          this._exposureChunkRaf = requestAnimationFrame(tick2);
+          return;
+        }
+        this._exposureChunkRaf = void 0;
+        this._lidarViewLayer.setExposure(out);
+        this._lastLidarExposureAlt = sun.altitude;
+        this._lastLidarExposureAz = sun.azimuth;
+      };
+      this._exposureChunkRaf = requestAnimationFrame(tick2);
+    });
   }
   //Wire (or rewire after a style reload) the WebGL custom layer that
   //paints the LiDAR View dot cloud on the map's own GL context. The
@@ -36836,6 +38404,7 @@ const _HeliosEngine = class _HeliosEngine {
       }
       this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
       this._pushLidarViewConfig();
+      this._pushLidarViewFadeRange();
       const layer = this._lidarViewLayer;
       const raster = this._lidarRaster;
       window.requestAnimationFrame(() => {
@@ -36853,17 +38422,34 @@ const _HeliosEngine = class _HeliosEngine {
       console.warn("[HELIOS] LiDAR view layer init failed:", err);
     }
   }
-  //Read all LiDAR View visual knobs off the current config and push
-  //them to the layer. Called on init and whenever updateConfig sees a
-  //relevant key change.
+  //Push the current LiDAR View tuning to the layer. Called on init,
+  //on updateConfig when point-size changes, and on setLidarViewOpacity
+  //when the slider moves. The slider value is halved before being
+  //handed to the layer (slider 100 % → layer 50 % alpha): the live
+  //irradiance fill at full alpha carpets the basemap and swallows
+  //the building topology underneath, so a 0.5 scale ceiling keeps
+  //the layer readable even when the user dials the slider all the
+  //way up.
   _pushLidarViewConfig() {
+    if (!this._lidarViewLayer) return;
+    this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
+    this._lidarViewLayer.setOpacity(this._lidarViewOpacity * 0.5);
+  }
+  //Fade range is fixed (LIDAR_VIEW_FULL_OPACITY_RADIUS_M / LIDAR_VIEW_DISPLAY_RADIUS_M, both compile-time constants), no reason to
+  //push it on every slider tick. Called once from _initLidarViewLayer and that's it.
+  _pushLidarViewFadeRange() {
     if (!this._lidarViewLayer) return;
     const [fullR, fadeR] = this._lidarViewFadeRange();
     this._lidarViewLayer.setFadeRange(fullR, fadeR);
-    this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
-    this._lidarViewLayer.setColor(this._lidarViewColorRgba());
-    this._lidarViewLayer.setWireframeEnabled(this._lidarViewWireframeEnabled());
-    this._lidarViewLayer.setWireframeColor(this._lidarViewWireframeRgba());
+  }
+  setLidarViewOpacity(opacity) {
+    const clamped = Math.max(0, Math.min(1, opacity));
+    if (clamped === this._lidarViewOpacity) return;
+    this._lidarViewOpacity = clamped;
+    this._lidarViewLayer?.setOpacity(clamped * 0.5);
+  }
+  getLidarViewOpacity() {
+    return this._lidarViewOpacity;
   }
   //Fade alpha multiplier in [0..1]. Driven by the card's enter/exit
   //animation; the engine just forwards. When the View is off the
@@ -36871,13 +38457,9 @@ const _HeliosEngine = class _HeliosEngine {
   setLidarViewFadeAlpha(alpha) {
     this._lidarViewLayer?.setAlphaFade(alpha);
   }
-  //Distance-based opacity fall-off bounds for the View. Both
-  //thresholds are fixed: full opacity inside
-  //LIDAR_VIEW_FULL_OPACITY_RADIUS_M, smooth fade out at
-  //LIDAR_VIEW_DISPLAY_RADIUS_M. Decoupled from building-radius on
-  //purpose, so the LiDAR overlay is always painted at a tight,
-  //consistent disc no matter how far the underlying raster
-  //actually extends.
+  //Distance-based opacity fall-off bounds for the View. Both thresholds are fixed: full opacity inside LIDAR_VIEW_FULL_OPACITY_RADIUS_M, smooth
+  //fade out at LIDAR_VIEW_DISPLAY_RADIUS_M. Decoupled from building-radius on purpose, so the LiDAR overlay is always painted at a tight,
+  //consistent disc no matter how far the underlying raster actually extends.
   _lidarViewFadeRange() {
     return [LIDAR_VIEW_FULL_OPACITY_RADIUS_M, LIDAR_VIEW_DISPLAY_RADIUS_M];
   }
@@ -36886,47 +38468,6 @@ const _HeliosEngine = class _HeliosEngine {
     const n3 = typeof raw2 === "number" ? raw2 : parseFloat(String(raw2 ?? ""));
     if (!isFinite(n3) || n3 <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
     return Math.min(6, n3);
-  }
-  _lidarViewColorRgba() {
-    const rawColor = this.cfg["lidar-view-point-color"];
-    const hex = typeof rawColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim()) ? rawColor.trim() : defaultLidarViewPointColor(this.cfg["card-theme"]);
-    const rawOpa = this.cfg["lidar-view-point-opacity"];
-    const opa = typeof rawOpa === "number" ? rawOpa : parseFloat(String(rawOpa ?? ""));
-    const alpha = isFinite(opa) ? Math.max(0, Math.min(1, opa)) : DEFAULT_LIDAR_VIEW_POINT_OPACITY;
-    const rgb = this._hexToRgb01(hex);
-    return [rgb[0], rgb[1], rgb[2], alpha];
-  }
-  _lidarViewWireframeEnabled() {
-    const raw2 = this.cfg["lidar-view-wireframe"];
-    if (typeof raw2 === "boolean") return raw2;
-    if (typeof raw2 === "string") {
-      const s2 = raw2.trim().toLowerCase();
-      if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
-      if (s2 === "false" || s2 === "0" || s2 === "off" || s2 === "no") return false;
-    }
-    return DEFAULT_LIDAR_VIEW_WIREFRAME;
-  }
-  _lidarViewWireframeRgba() {
-    const rawColor = this.cfg["lidar-view-wireframe-color"];
-    const hex = typeof rawColor === "string" && /^#[0-9a-fA-F]{3,8}$/.test(rawColor.trim()) ? rawColor.trim() : defaultLidarViewWireframeColor(this.cfg["card-theme"]);
-    const rawOpa = this.cfg["lidar-view-wireframe-opacity"];
-    const opa = typeof rawOpa === "number" ? rawOpa : parseFloat(String(rawOpa ?? ""));
-    const alpha = isFinite(opa) ? Math.max(0, Math.min(1, opa)) : DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY;
-    const rgb = this._hexToRgb01(hex);
-    return [rgb[0], rgb[1], rgb[2], alpha];
-  }
-  _hexToRgb01(hex) {
-    let h2 = hex.replace("#", "");
-    if (h2.length === 3) h2 = h2.split("").map((c2) => c2 + c2).join("");
-    if (h2.length === 8) h2 = h2.slice(0, 6);
-    const r2 = parseInt(h2.slice(0, 2), 16) / 255;
-    const g2 = parseInt(h2.slice(2, 4), 16) / 255;
-    const b2 = parseInt(h2.slice(4, 6), 16) / 255;
-    return [
-      isFinite(r2) ? r2 : 1,
-      isFinite(g2) ? g2 : 1,
-      isFinite(b2) ? b2 : 1
-    ];
   }
   //LiDAR View support, exposed to the card.
   //
@@ -36977,6 +38518,31 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return Math.min(500, Math.max(20, v2));
   }
+  //Clamp MapLibre's camera bounds to a tight bbox around the home,
+  //sized at 2x the display radius (small margin for the pitched
+  //viewport corners). With pan + zoom disabled the camera never
+  //moves anyway, but the bounds tell MapLibre the area outside
+  //the disc is unreachable, which dampens speculative tile fetches
+  //at the horizon of the pitched view during rotation. Re-called
+  //after a config edit (building-radius change) re-runs the engine
+  //init path so the bounds always match the live display radius.
+  _applyMapBounds() {
+    if (!this.map) return;
+    const radiusM = this._buildingRadiusMeters();
+    const halfBbox = radiusM * 2;
+    const D2 = Math.PI / 180;
+    const mPerDegLat = 111320;
+    const mPerDegLon = 111320 * Math.cos(this.homeLat * D2);
+    const dLat = halfBbox / mPerDegLat;
+    const dLon = halfBbox / mPerDegLon;
+    try {
+      this.map.setMaxBounds([
+        [this.homeLon - dLon, this.homeLat - dLat],
+        [this.homeLon + dLon, this.homeLat + dLat]
+      ]);
+    } catch (_2) {
+    }
+  }
   //Resolves the configured surroundings opacity (0..1). Falls back
   //to DEFAULT_BUILDING_OPACITY for missing or invalid input.
   _buildingOpacity() {
@@ -36998,8 +38564,7 @@ const _HeliosEngine = class _HeliosEngine {
     }
     return Math.min(100, v2);
   }
-  //Resolves the configured building base colour. Falls back to the
-  //neutral grey if missing or malformed.
+  //Resolves the configured building base colour. Falls back to the neutral grey if missing or malformed.
   _buildingColor() {
     const v2 = String(this.cfg["building-color"] ?? "").trim();
     return /^#[0-9a-fA-F]{6}$/.test(v2) ? v2 : DEFAULT_BUILDING_COLOR_HEX;
@@ -37213,9 +38778,7 @@ const _HeliosEngine = class _HeliosEngine {
       console.warn("[HELIOS] Buildings fetch failed:", err);
     });
   }
-  //Wire up the LiDAR shadow pipeline for the current home + precision
-  //setting. Idempotent: safe to call after any config / position
-  //change.
+  //Wire up the LiDAR shadow pipeline for the current home + precision setting. Idempotent: safe to call after any config / position change.
   //
   //  - Resolves the country provider that covers the home (France
   //    HD only for now, see engine/lidar.ts).
@@ -37297,10 +38860,8 @@ const _HeliosEngine = class _HeliosEngine {
     homeSrc?.setData(this._buildingsData?.home ?? empty);
     surrSrc?.setData(this._buildingsData?.surroundings ?? empty);
   }
-  //Repaint hillshade direction, satellite raster, night-shade overlay,
-  //fog and building tints to match the current sun altitude. Phases
-  //blend continuously rather than at hard thresholds so dawn/dusk,
-  //golden hour, mid-day and night feel like a smooth progression.
+  //Repaint hillshade direction, satellite raster, night-shade overlay, fog and building tints to match the current sun altitude. Phases blend
+  //continuously rather than at hard thresholds so dawn/dusk, golden hour, mid-day and night feel like a smooth progression.
   //
   //Altitude bands (degrees above horizon):
   //  alt < -6   : deep night          (cold blue/black, low contrast)
@@ -37325,6 +38886,7 @@ const _HeliosEngine = class _HeliosEngine {
       return;
     }
     this._lastAtmosphereAlt = altitude;
+    this._scheduleLidarExposureRecompute();
     if (this.map.getLayer("helios-night-shade")) {
       try {
         const ns = nightShadeForAltitude(altitude);
@@ -37357,7 +38919,7 @@ const _HeliosEngine = class _HeliosEngine {
       const shadowsOn = this._shadowsEnabled();
       const radius = this._buildingRadiusMeters();
       const lidarRef = this._lidarShadowFeatures;
-      const sig = `${shadowsOn ? "1" : "0"}|${altitude.toFixed(2)}|${azimuth.toFixed(2)}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|L${lidarRef ? lidarRef.features.length : -1}|B${this._buildingsData ? this._buildingsData.home.features.length + this._buildingsData.surroundings.features.length : -1}`;
+      const sig = `${shadowsOn ? "1" : "0"}|${altitude.toFixed(1)}|${azimuth.toFixed(1)}|${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|L${lidarRef ? lidarRef.features.length : -1}|B${this._buildingsData ? this._buildingsData.home.features.length + this._buildingsData.surroundings.features.length : -1}`;
       if (sig !== this._lastShadowSig) {
         this._lastShadowSig = sig;
         let input = { type: "FeatureCollection", features: [] };
@@ -37380,8 +38942,7 @@ const _HeliosEngine = class _HeliosEngine {
             sunAzimuthDeg: azimuth,
             sunAltitudeDeg: altitude,
             homeLat: this.homeLat,
-            //Clip shadows to the building visibility disc so
-            //they never extend past the rendered surroundings.
+            //Clip shadows to the building visibility disc so they never extend past the rendered surroundings.
             clipCenterLat: this.homeLat,
             clipCenterLon: this.homeLon,
             clipRadiusMeters: radius
@@ -37478,9 +39039,7 @@ const _HeliosEngine = class _HeliosEngine {
         center: [this.homeLon, this.homeLat],
         zoom: 18,
         pitch: 55,
-        //Same hemisphere-aware bearing as the initial setup
-        //above, recentering must restore the resting pose,
-        //not flip the orientation.
+        //Same hemisphere-aware bearing as the initial setup above, recentering must restore the resting pose, not flip the orientation.
         bearing: this.homeLat >= 0 ? 180 : 0,
         duration: dur
       }
@@ -37568,6 +39127,22 @@ const _HeliosEngine = class _HeliosEngine {
       }
     }
   }
+  //Card-side gate based on the IntersectionObserver: when the
+  //card is off-screen (scrolled out of view, hidden in a
+  //collapsed conditional, sitting in a non-focused tab) the
+  //card calls setPaused(true) and we stop the periodic shadow
+  //refresh + skip the dome re-projection. Resume on visibility.
+  //One immediate refresh on un-pause so the sun position the
+  //user sees matches now, not "where the sun was when the card
+  //scrolled out 10 minutes ago".
+  setPaused(paused) {
+    if (this._paused === paused) return;
+    this._paused = paused;
+    if (!paused) this._refreshShadowsAndAtmosphere();
+  }
+  isPaused() {
+    return this._paused;
+  }
   //True while the post-exit cooldown is active. The card consults
   //this to gate timeline scrubs; the engine consults it internally
   //for the canvas drag-rotate. Both surfaces read the same clock so
@@ -37578,8 +39153,7 @@ const _HeliosEngine = class _HeliosEngine {
   isDetailMode() {
     return this._detailMode;
   }
-  //Compute the screen-space layout of the on-map readout chips and
-  //the leader lines that tie them to the home / on-ground ring.
+  //Compute the screen-space layout of the on-map readout chips and the leader lines that tie them to the home / on-ground ring.
   //
   //  cloudLabel, where the cloud-cover chip should be drawn (in
   //               CSS pixels, relative to the map canvas). Sits to
@@ -37613,8 +39187,7 @@ const _HeliosEngine = class _HeliosEngine {
   //               the PV / battery chip leader lines and as the
   //               centre of the cloud fill disc.
   //
-  //Returns null when the map isn't ready yet, the card treats
-  //null as "don't render the overlay this frame".
+  //Returns null when the map isn't ready yet, the card treats null as "don't render the overlay this frame".
   projectHomeLabelLayout() {
     if (!this.map) {
       return null;
@@ -37733,11 +39306,9 @@ const _HeliosEngine = class _HeliosEngine {
       depth: cw
     };
   }
-  //Build the screen-space layout of the solar arc, the sun's
-  //current position on the arc, and the incidence ray.
+  //Build the screen-space layout of the solar arc, the sun's current position on the arc, and the incidence ray.
   //
-  //Returns null until the map is ready. The card uses null as
-  //"don't render the overlay this frame".
+  //Returns null until the map is ready. The card uses null as "don't render the overlay this frame".
   //
   //Each arc point also carries the irradiance (W/m²) at that
   //instant, computed with the current cloud cover applied
@@ -37927,6 +39498,113 @@ const _HeliosEngine = class _HeliosEngine {
       altitudeM: up
     };
   }
+  //Project an arbitrary (azimuth, altitude) angular position above
+  //the home onto the same sphere the sun arc uses, then forward
+  //to screen pixels. Used by the shading-dome overlay to paint
+  //every populated cell of the learned residual grid on the
+  //celestial hemisphere the same way the sun is.
+  _projectSpherePoint(azimuthDeg, altitudeDeg) {
+    const D2 = Math.PI / 180;
+    const a2 = altitudeDeg * D2;
+    const z2 = azimuthDeg * D2;
+    const east = SUN_ARC_RADIUS_M * Math.cos(a2) * Math.sin(z2);
+    const north = SUN_ARC_RADIUS_M * Math.cos(a2) * Math.cos(z2);
+    const up = SUN_ARC_RADIUS_M * Math.sin(a2);
+    const mPerDegLat = 111320;
+    const mPerDegLon = 111320 * Math.cos(this.homeLat * D2);
+    const lon = this.homeLon + east / mPerDegLon;
+    const lat = this.homeLat + north / mPerDegLat;
+    return this._projectScenePoint(lon, lat, up);
+  }
+  //Layout the shading-dome overlay: every populated cell of the learned residual grid projected onto the celestial hemisphere above the home, plus
+  //today's solar arc carrying the per-sample residual ratio so the user can see "the sun walks through this red cell at 17h, that's the tree".
+  //
+  //`cellPolys`  — one entry per cell, four corner pixels of the
+  //               annular sector (az ± 5 deg × alt ± 2.5 deg)
+  //               projected onto the sphere; cells with any
+  //               corner behind the camera are dropped.
+  //`todayArc`   — sun-position samples for today, each with the
+  //               shading-map ratio looked up at its (az, alt,
+  //               liveCloud) coordinates and the kernel-smoothed
+  //               confidence.
+  //`homeScreen` — ground anchor reused by the SVG for centred
+  //               labels.
+  //
+  //`now` lets the caller pin the dome to a different day if it
+  //ever needs to (timeline scrubbing, debug). Defaults to wall
+  //clock so the bright arc is always today.
+  projectShadingDome(opts) {
+    if (!this.map) return null;
+    const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
+    if (!homeScreen) return null;
+    const HALF_AZ = 5;
+    const HALF_ALT = 2.5;
+    const AZ_BIN_COUNT = 36;
+    const ALT_BIN_COUNT = 18;
+    const populated = /* @__PURE__ */ new Map();
+    for (const c2 of opts.decodedCells) {
+      if (c2.cloudBin !== opts.cloudBinForArc) continue;
+      const azBin = Math.floor(c2.azimuthDeg / 10);
+      const altBin = Math.floor(c2.altitudeDeg / 5);
+      populated.set(`${azBin}|${altBin}`, { ratio: c2.ratio, aged: c2.aged });
+    }
+    const cellPolys = [];
+    for (let azBin = 0; azBin < AZ_BIN_COUNT; azBin++) {
+      const azCentre = azBin * 10 + 5;
+      for (let altBin = 0; altBin < ALT_BIN_COUNT; altBin++) {
+        const altCentre = altBin * 5 + 2.5;
+        const az0 = azCentre - HALF_AZ;
+        const az1 = azCentre + HALF_AZ;
+        const al0 = Math.max(0.5, altCentre - HALF_ALT);
+        const al1 = Math.min(89, altCentre + HALF_ALT);
+        const p1 = this._projectSpherePoint(az0, al0);
+        const p2 = this._projectSpherePoint(az1, al0);
+        const p3 = this._projectSpherePoint(az1, al1);
+        const p4 = this._projectSpherePoint(az0, al1);
+        if (!p1 || !p2 || !p3 || !p4) continue;
+        const path = `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} L ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z`;
+        const hit = populated.get(`${azBin}|${altBin}`);
+        cellPolys.push({
+          path,
+          ratio: hit ? hit.ratio : 1,
+          aged: hit ? hit.aged : 0,
+          cloudBin: opts.cloudBinForArc,
+          //Forwarded so the card-side renderer can drive the enter/exit wipe off altitude rather than a screen-space clip-path. Altitude
+          //is camera-independent so the zenith (highest cells) stays the last drawn / first erased regardless of how the user has
+          //rotated the map underneath the dome.
+          altitudeDeg: altCentre
+        });
+      }
+    }
+    const todayArc = [];
+    const dayStart = new Date(opts.now);
+    dayStart.setHours(0, 0, 0, 0);
+    const N2 = SUN_ARC_SAMPLES;
+    const stepMs = 24 * 60 * 60 * 1e3 / N2;
+    for (let i2 = 0; i2 < N2; i2++) {
+      const t2 = new Date(dayStart.getTime() + i2 * stepMs);
+      const sun = getSunPosition(t2, this.homeLat, this.homeLon);
+      const belowHorizon = sun.altitude <= 0;
+      const proj = belowHorizon ? null : this._projectSpherePoint(sun.azimuth, sun.altitude);
+      if (!proj) continue;
+      const lookup = opts.cellLookup(sun.azimuth, sun.altitude, opts.liveCloudPct);
+      todayArc.push({
+        x: proj.x,
+        y: proj.y,
+        ratio: lookup ? lookup.ratio : 1,
+        confidence: lookup ? lookup.confidence : 0,
+        altitudeDeg: sun.altitude,
+        belowHorizon
+      });
+    }
+    let sunScreen = null;
+    const sunNow = getSunPosition(opts.now, this.homeLat, this.homeLon);
+    if (sunNow.altitude > 0) {
+      const p2 = this._projectSpherePoint(sunNow.azimuth, sunNow.altitude);
+      if (p2) sunScreen = { x: p2.x, y: p2.y, altitudeDeg: sunNow.altitude };
+    }
+    return { homeScreen, cellPolys, todayArc, sun: sunScreen };
+  }
   setSelectedTime(time) {
     this._selectedTime = time;
     if (time === null) {
@@ -37971,7 +39649,7 @@ const _HeliosEngine = class _HeliosEngine {
   //last fetch failed.
   //
   //The optional `terrain` field carries the DTM band when the
-  //source COG ships one (v1.6.3+ helios-lidar.org output); it
+  //source COG ships one (helios-lidar.org 2-band output); it
   //lets the shading ray-march lift its comparison into absolute
   //Z so sloped ground between the panel and a far obstacle is
   //taken into account. Absent on every public provider and on
@@ -37993,8 +39671,7 @@ const _HeliosEngine = class _HeliosEngine {
       windSpeed: home.windSpeed
     };
   }
-  //card is expected to call this whenever onWeatherUpdate fires
-  //and re-render the chart.
+  //card is expected to call this whenever onWeatherUpdate fires and re-render the chart.
   getTimelineSeries() {
     const home = this._homeHourlyData;
     if (!home || !home.times.length) {
@@ -38073,9 +39750,7 @@ const _HeliosEngine = class _HeliosEngine {
         rateLimitStreak: this._rateLimitStreak
       },
       timeline: {
-        //Range + selectedTime kept as ISO strings rather than
-        //Date instances so the snapshot round-trips through
-        //JSON.stringify cleanly.
+        //Range + selectedTime kept as ISO strings rather than Date instances so the snapshot round-trips through JSON.stringify cleanly.
         rangeStart: this._getTimeRange()?.start?.toISOString() ?? null,
         rangeEnd: this._getTimeRange()?.end?.toISOString() ?? null,
         selectedTime: this._selectedTime?.toISOString() ?? null
@@ -38208,6 +39883,15 @@ const _HeliosEngine = class _HeliosEngine {
       cancelAnimationFrame(this._detailDiveRaf);
       this._detailDiveRaf = void 0;
     }
+    if (this._exposureIdleHandle !== void 0) {
+      this._cancelIdleCb(this._exposureIdleHandle);
+      this._exposureIdleHandle = void 0;
+    }
+    if (this._exposureChunkRaf !== void 0) {
+      cancelAnimationFrame(this._exposureChunkRaf);
+      this._exposureChunkRaf = void 0;
+    }
+    this._lidarViewActive = false;
     const canvas = this._mapCanvas;
     if (this._dragRotateHandlers) {
       const h2 = this._dragRotateHandlers;
@@ -38237,6 +39921,7 @@ const _HeliosEngine = class _HeliosEngine {
         if (this._mapLoadHandler) this.map.off("load", this._mapLoadHandler);
         if (this._mapMoveHandler) this.map.off("move", this._mapMoveHandler);
         if (this._mapErrorHandler) this.map.off("error", this._mapErrorHandler);
+        if (this._mapStyleImageMissingHandler) this.map.off("styleimagemissing", this._mapStyleImageMissingHandler);
       } catch (_2) {
       }
     }
@@ -38251,7 +39936,15 @@ const _HeliosEngine = class _HeliosEngine {
         "helios-buildings-home",
         "helios-buildings-home-outline",
         "helios-buildings-home-outline-glow",
-        "helios-building-shadows"
+        "helios-building-shadows",
+        //LiDAR-View custom layer: MapLibre invokes the layer's
+        //onRemove() when we removeLayer it, which is what frees
+        //the 4 GPU buffers + the WebGLProgram. On the iOS
+        //Safari code path where `map.remove()` doesn't fan out
+        //to custom layers, this explicit removeLayer is the
+        //only thing preventing the buffers + program from
+        //leaking through every engine respawn.
+        "helios-lidar-view"
       ]) {
         try {
           if (this.map.getLayer(lid)) this.map.removeLayer(lid);
@@ -38288,6 +39981,7 @@ const _HeliosEngine = class _HeliosEngine {
     this._mapLoadHandler = void 0;
     this._mapMoveHandler = void 0;
     this._mapErrorHandler = void 0;
+    this._mapStyleImageMissingHandler = void 0;
     this._webglLostHandler = void 0;
     this._webglRestoredHandler = void 0;
     this.onContextLost = void 0;
@@ -38353,6 +40047,485 @@ function flowDuration(rate, saturation, minDuration = 0.4) {
   const eased = 1 - Math.pow(1 - f2, 3);
   return 30 - (30 - minDuration) * eased;
 }
+const AZIMUTH_BIN_DEG = 10;
+const ALTITUDE_BIN_DEG = 5;
+const AZIMUTH_BIN_COUNT = 36;
+const ALTITUDE_BIN_COUNT = 18;
+const CLOUD_BIN_EDGES = [0, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100];
+const CLOUD_BIN_COUNT = CLOUD_BIN_EDGES.length - 1;
+const HALFLIFE_DAYS = 60;
+const DAY_MS = 864e5;
+const MIN_EFFECTIVE_SAMPLES = 2;
+const RATIO_MIN$1 = 0.3;
+const RATIO_MAX$1 = 1.7;
+const STORAGE_KEY = "helios-shading-map:v2";
+function binFor(azimuthDeg, altitudeDeg, cloudPct) {
+  if (!isFinite(azimuthDeg) || !isFinite(altitudeDeg) || !isFinite(cloudPct)) return null;
+  if (altitudeDeg <= 0) return null;
+  const az = Math.floor((azimuthDeg % 360 + 360) % 360 / AZIMUTH_BIN_DEG) | 0;
+  const alt = Math.max(0, Math.min(ALTITUDE_BIN_COUNT - 1, Math.floor(altitudeDeg / ALTITUDE_BIN_DEG)));
+  let cloud = CLOUD_BIN_COUNT - 1;
+  const c2 = Math.max(0, Math.min(100, cloudPct));
+  for (let i2 = 0; i2 < CLOUD_BIN_COUNT; i2++) {
+    if (c2 < CLOUD_BIN_EDGES[i2 + 1] || i2 === CLOUD_BIN_COUNT - 1) {
+      cloud = i2;
+      break;
+    }
+  }
+  return { az, alt, cloud };
+}
+function cellKey(c2) {
+  return `${c2.az}|${c2.alt}|${c2.cloud}`;
+}
+function emptyMap() {
+  return { version: 2, lastTrainedMs: 0, cells: {} };
+}
+function applyObservation(map, sunAzimuthDeg, sunAltitudeDeg, cloudPct, actualW, predictedW, timestampMs) {
+  if (!isFinite(actualW) || !isFinite(predictedW) || !isFinite(timestampMs)) return false;
+  if (predictedW < 80 || actualW < 0) return false;
+  const ratio = actualW / predictedW;
+  if (!isFinite(ratio) || ratio <= 0) return false;
+  const clamped = Math.max(RATIO_MIN$1, Math.min(RATIO_MAX$1, ratio));
+  const bin = binFor(sunAzimuthDeg, sunAltitudeDeg, cloudPct);
+  if (!bin) return false;
+  const key = cellKey(bin);
+  const cell = map.cells[key];
+  if (!cell) {
+    map.cells[key] = { ema: clamped, w: 1, t: timestampMs };
+    return true;
+  }
+  const dDays = Math.max(0, (timestampMs - cell.t) / DAY_MS);
+  const retained = cell.w * Math.pow(0.5, dDays / HALFLIFE_DAYS);
+  const newW = retained + 1;
+  cell.ema = (cell.ema * retained + clamped) / newW;
+  cell.w = newW;
+  cell.t = timestampMs;
+  return true;
+}
+function lookupRatio(map, sunAzimuthDeg, sunAltitudeDeg, cloudPct, nowMs) {
+  const target = binFor(sunAzimuthDeg, sunAltitudeDeg, cloudPct);
+  if (!target) return null;
+  const SIGMA2 = 2;
+  let num = 0;
+  let den = 0;
+  for (let dAz = -1; dAz <= 1; dAz++) {
+    for (let dAlt = -1; dAlt <= 1; dAlt++) {
+      for (let dC = -1; dC <= 1; dC++) {
+        const az = ((target.az + dAz) % AZIMUTH_BIN_COUNT + AZIMUTH_BIN_COUNT) % AZIMUTH_BIN_COUNT;
+        const alt = target.alt + dAlt;
+        if (alt < 0 || alt >= ALTITUDE_BIN_COUNT) continue;
+        const cloud = target.cloud + dC;
+        if (cloud < 0 || cloud >= CLOUD_BIN_COUNT) continue;
+        const cell = map.cells[cellKey({ az, alt, cloud })];
+        if (!cell) continue;
+        const dDays = Math.max(0, (nowMs - cell.t) / DAY_MS);
+        const aged = cell.w * Math.pow(0.5, dDays / HALFLIFE_DAYS);
+        if (aged <= 0) continue;
+        const dist2 = dAz * dAz + dAlt * dAlt + dC * dC;
+        const kernel = Math.exp(-dist2 / SIGMA2);
+        const weight = aged * kernel;
+        num += weight * cell.ema;
+        den += weight;
+      }
+    }
+  }
+  if (den <= 0) return null;
+  const ratio = num / den;
+  const confidence = Math.min(1, den / MIN_EFFECTIVE_SAMPLES);
+  if (confidence < 0.33) return null;
+  return { ratio, confidence };
+}
+function blendedRatio(lookup, fallback) {
+  if (!lookup) return fallback;
+  return lookup.ratio * lookup.confidence + fallback * (1 - lookup.confidence);
+}
+function safeStorage() {
+  try {
+    if (typeof window === "undefined") return null;
+    const ls = window.localStorage;
+    if (!ls) return null;
+    return ls;
+  } catch (_2) {
+    return null;
+  }
+}
+function loadMap(storage = safeStorage()) {
+  if (!storage) return emptyMap();
+  try {
+    const raw2 = storage.getItem(STORAGE_KEY);
+    if (!raw2) return emptyMap();
+    const parsed = JSON.parse(raw2);
+    if (!parsed || parsed.version !== 2 || typeof parsed.cells !== "object") return emptyMap();
+    return {
+      version: 2,
+      lastTrainedMs: typeof parsed.lastTrainedMs === "number" ? parsed.lastTrainedMs : 0,
+      cells: parsed.cells || {}
+    };
+  } catch (_2) {
+    return emptyMap();
+  }
+}
+function saveMap(map, storage = safeStorage()) {
+  if (!storage) return;
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify(map));
+  } catch (_2) {
+  }
+}
+function resetMap(storage = safeStorage()) {
+  const fresh = emptyMap();
+  if (storage) {
+    try {
+      storage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+    } catch (_2) {
+    }
+  }
+  return fresh;
+}
+function mergeMaps(a2, b2, nowMs = Date.now()) {
+  const out = {
+    version: 2,
+    lastTrainedMs: Math.max(a2.lastTrainedMs || 0, b2.lastTrainedMs || 0),
+    cells: {}
+  };
+  const keys = /* @__PURE__ */ new Set();
+  for (const k2 of Object.keys(a2.cells)) keys.add(k2);
+  for (const k2 of Object.keys(b2.cells)) keys.add(k2);
+  for (const k2 of keys) {
+    const ca = a2.cells[k2];
+    const cb = b2.cells[k2];
+    if (ca && !cb) {
+      out.cells[k2] = { ...ca };
+      continue;
+    }
+    if (cb && !ca) {
+      out.cells[k2] = { ...cb };
+      continue;
+    }
+    const dDaysA = Math.max(0, (nowMs - ca.t) / DAY_MS);
+    const dDaysB = Math.max(0, (nowMs - cb.t) / DAY_MS);
+    const wA = ca.w * Math.pow(0.5, dDaysA / HALFLIFE_DAYS);
+    const wB = cb.w * Math.pow(0.5, dDaysB / HALFLIFE_DAYS);
+    const wSum = wA + wB;
+    if (wSum <= 0) {
+      out.cells[k2] = ca.t >= cb.t ? { ...ca } : { ...cb };
+      continue;
+    }
+    out.cells[k2] = {
+      ema: (ca.ema * wA + cb.ema * wB) / wSum,
+      w: wSum,
+      t: Math.max(ca.t, cb.t)
+    };
+  }
+  return out;
+}
+function exportMapJson(map) {
+  return JSON.stringify(map, null, 2);
+}
+function importMapJson(raw2) {
+  try {
+    const parsed = JSON.parse(raw2);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (parsed.version !== 2) return null;
+    if (!parsed.cells || typeof parsed.cells !== "object") return null;
+    const cells = {};
+    for (const key of Object.keys(parsed.cells)) {
+      const c2 = parsed.cells[key];
+      if (!c2 || typeof c2.ema !== "number" || typeof c2.w !== "number" || typeof c2.t !== "number") continue;
+      if (!isFinite(c2.ema) || !isFinite(c2.w) || !isFinite(c2.t)) continue;
+      cells[key] = { ema: c2.ema, w: c2.w, t: c2.t };
+    }
+    return {
+      version: 2,
+      lastTrainedMs: typeof parsed.lastTrainedMs === "number" ? parsed.lastTrainedMs : 0,
+      cells
+    };
+  } catch (_2) {
+    return null;
+  }
+}
+function decodeCellKey(key, cell) {
+  const parts = key.split("|");
+  if (parts.length !== 3) return null;
+  const az = parseInt(parts[0], 10);
+  const alt = parseInt(parts[1], 10);
+  const cloud = parseInt(parts[2], 10);
+  if (!isFinite(az) || !isFinite(alt) || !isFinite(cloud)) return null;
+  return {
+    azimuthDeg: az * AZIMUTH_BIN_DEG + AZIMUTH_BIN_DEG / 2,
+    altitudeDeg: alt * ALTITUDE_BIN_DEG + ALTITUDE_BIN_DEG / 2,
+    cloudBin: cloud,
+    cell
+  };
+}
+const CLOUD_BIN_LABELS = [
+  "0-12.5%",
+  "12.5-25%",
+  "25-37.5%",
+  "37.5-50%",
+  "50-62.5%",
+  "62.5-75%",
+  "75-87.5%",
+  "87.5-100%"
+];
+const CLOUD_BIN_COUNT_EXPORT = CLOUD_BIN_COUNT;
+function describeMap(map, nowMs) {
+  let confidentCells = 0;
+  let strongestUnder = null;
+  let strongestOver = null;
+  const keys = Object.keys(map.cells);
+  for (const key of keys) {
+    const cell = map.cells[key];
+    const dDays = Math.max(0, (nowMs - cell.t) / DAY_MS);
+    const aged = cell.w * Math.pow(0.5, dDays / HALFLIFE_DAYS);
+    if (aged >= MIN_EFFECTIVE_SAMPLES) confidentCells++;
+    if (aged < 1) continue;
+    if (cell.ema < 0.9 && (!strongestUnder || cell.ema < strongestUnder.ratio)) {
+      strongestUnder = { key, ratio: cell.ema, w: aged };
+    }
+    if (cell.ema > 1.1 && (!strongestOver || cell.ema > strongestOver.ratio)) {
+      strongestOver = { key, ratio: cell.ema, w: aged };
+    }
+  }
+  return { cells: keys.length, confidentCells, strongestUnder, strongestOver };
+}
+const DOME_FADE_IN_MS = 1e3;
+const DOME_FADE_OUT_MS = 1e3;
+function toggleShadingDome(host) {
+  if (!host._engine) return;
+  if (!host._shadingDomeMode) {
+    host._shadingDomeFadeOutStartMs = null;
+    host._shadingDomeFadeInStartMs = performance.now();
+    host._shadingDomeMode = true;
+    refreshShadingDomeScene(host);
+    refreshOverlays(host);
+    startShadingDomeFadeLoop(host);
+  } else {
+    host._shadingDomeFadeInStartMs = null;
+    host._shadingDomeFadeOutStartMs = performance.now();
+    startShadingDomeFadeLoop(host);
+  }
+}
+function startShadingDomeFadeLoop(host) {
+  if (host._shadingDomeFadeRaf !== void 0) return;
+  const tick2 = () => {
+    const now = performance.now();
+    const inStart = host._shadingDomeFadeInStartMs;
+    const outStart = host._shadingDomeFadeOutStartMs;
+    if (outStart !== null && now - outStart >= DOME_FADE_OUT_MS) {
+      host._shadingDomeFadeOutStartMs = null;
+      host._shadingDomeMode = false;
+      host._shadingDomeScene = null;
+      refreshOverlays(host);
+    }
+    if (inStart !== null && now - inStart >= DOME_FADE_IN_MS) {
+      host._shadingDomeFadeInStartMs = null;
+    }
+    host.requestUpdate();
+    if (host._shadingDomeFadeInStartMs !== null || host._shadingDomeFadeOutStartMs !== null) {
+      host._shadingDomeFadeRaf = requestAnimationFrame(tick2);
+    } else {
+      host._shadingDomeFadeRaf = void 0;
+    }
+  };
+  host._shadingDomeFadeRaf = requestAnimationFrame(tick2);
+}
+function refreshShadingDomeScene(host) {
+  if (!host._shadingDomeMode || !host._engine) {
+    host._shadingDomeScene = null;
+    return;
+  }
+  const map = loadMap();
+  const nowMs = Date.now();
+  const decodedCells = [];
+  for (const key of Object.keys(map.cells)) {
+    const cell = map.cells[key];
+    const d2 = decodeCellKey(key, cell);
+    if (!d2) continue;
+    const dDays = Math.max(0, (nowMs - cell.t) / 864e5);
+    const aged = cell.w * Math.pow(0.5, dDays / 60);
+    if (aged <= 0.05) continue;
+    decodedCells.push({
+      azimuthDeg: d2.azimuthDeg,
+      altitudeDeg: d2.altitudeDeg,
+      cloudBin: d2.cloudBin,
+      ratio: cell.ema,
+      aged
+    });
+  }
+  const now = /* @__PURE__ */ new Date();
+  const cloudPct = Math.max(0, Math.min(100, host._shadingDomeCloudPct));
+  const cloudBin = Math.min(7, Math.floor(cloudPct / 12.5));
+  const lookupCache = /* @__PURE__ */ new Map();
+  const cellLookup = (az, alt, cloud) => {
+    const bin = binFor(az, alt, cloud);
+    if (!bin) return null;
+    const key = cellKey(bin);
+    const cached = lookupCache.get(key);
+    if (cached !== void 0) return cached;
+    const result = lookupRatio(map, az, alt, cloud, nowMs);
+    lookupCache.set(key, result);
+    return result;
+  };
+  const scene = host._engine.projectShadingDome({
+    cellLookup,
+    decodedCells,
+    cloudBinForArc: cloudBin,
+    liveCloudPct: cloudPct,
+    now
+  });
+  host._shadingDomeScene = scene;
+}
+function shadingDomeFadeAlpha(host) {
+  const now = performance.now();
+  if (host._shadingDomeFadeInStartMs !== null) {
+    return Math.max(0, Math.min(1, (now - host._shadingDomeFadeInStartMs) / DOME_FADE_IN_MS));
+  }
+  if (host._shadingDomeFadeOutStartMs !== null) {
+    return 1 - Math.max(0, Math.min(1, (now - host._shadingDomeFadeOutStartMs) / DOME_FADE_OUT_MS));
+  }
+  return host._shadingDomeMode ? 1 : 0;
+}
+function easeOutQuad(t2) {
+  return 1 - (1 - t2) * (1 - t2);
+}
+const DOME_WIPE_SOFT_DEG = 8;
+const DOME_WIPE_MAX_DEG = 100;
+function shadingDomeWipeThreshold(host) {
+  const now = performance.now();
+  if (host._shadingDomeFadeInStartMs !== null) {
+    const t2 = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeInStartMs) / DOME_FADE_IN_MS)));
+    return t2 * DOME_WIPE_MAX_DEG;
+  }
+  if (host._shadingDomeFadeOutStartMs !== null) {
+    const t2 = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeOutStartMs) / DOME_FADE_OUT_MS)));
+    return (1 - t2) * DOME_WIPE_MAX_DEG;
+  }
+  return host._shadingDomeMode ? DOME_WIPE_MAX_DEG : 0;
+}
+function wipeAlphaForAltitude(cellAltitudeDeg, threshold) {
+  const delta = threshold - cellAltitudeDeg;
+  if (delta <= 0) return 0;
+  if (delta >= DOME_WIPE_SOFT_DEG) return 1;
+  return delta / DOME_WIPE_SOFT_DEG;
+}
+function shouldRenderShadingDome(host) {
+  return host._shadingDomeMode || host._shadingDomeFadeInStartMs !== null || host._shadingDomeFadeOutStartMs !== null;
+}
+function ratioToFill$1(ratio) {
+  const r2 = Math.max(0.3, Math.min(1.7, ratio));
+  if (r2 < 1) {
+    const t22 = (1 - r2) / 0.7;
+    const red2 = 235;
+    const green2 = Math.round(235 * (1 - t22 * 0.85));
+    const blue2 = Math.round(235 * (1 - t22 * 0.85));
+    return `rgb(${red2}, ${green2}, ${blue2})`;
+  }
+  const t2 = (r2 - 1) / 0.7;
+  const red = Math.round(235 * (1 - t2 * 0.85));
+  const green = 235;
+  const blue = Math.round(235 * (1 - t2 * 0.85));
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+function renderShadingDomeOverlay(host) {
+  if (!shouldRenderShadingDome(host)) return A;
+  const scene = host._shadingDomeScene;
+  if (!scene) return A;
+  const wipe = shadingDomeWipeThreshold(host);
+  const wireframeNodes = [];
+  const coloredNodes = [];
+  for (const c2 of scene.cellPolys) {
+    const wipeAlpha = wipeAlphaForAltitude(c2.altitudeDeg, wipe);
+    if (wipeAlpha <= 0) continue;
+    wireframeNodes.push(w`
+            <path d="${c2.path}"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.09)"
+                  stroke-opacity="${wipeAlpha}"
+                  stroke-width="0.35" />
+        `);
+    if (c2.aged > 0) {
+      const opacity = Math.max(0.18, Math.min(0.55, c2.aged / 8)) * wipeAlpha;
+      coloredNodes.push(w`
+                <path d="${c2.path}"
+                      fill="${ratioToFill$1(c2.ratio)}"
+                      fill-opacity="${opacity}"
+                      stroke="rgba(255,255,255,0.22)"
+                      stroke-opacity="${wipeAlpha}"
+                      stroke-width="0.45" />
+            `);
+    }
+  }
+  const ribbonNodes = [];
+  const arc = scene.todayArc;
+  for (let i2 = 1; i2 < arc.length; i2++) {
+    const a2 = arc[i2 - 1];
+    const b2 = arc[i2];
+    if (a2.belowHorizon || b2.belowHorizon) continue;
+    const colour = b2.confidence > 0 ? ratioToFill$1(b2.ratio) : "#f8e89c";
+    const segAlt = Math.max(a2.altitudeDeg, b2.altitudeDeg);
+    const wipeAlpha = wipeAlphaForAltitude(segAlt, wipe);
+    if (wipeAlpha <= 0) continue;
+    const opacity = (0.55 + 0.4 * Math.max(0, Math.min(1, b2.confidence))) * wipeAlpha;
+    ribbonNodes.push(w`
+            <line x1="${a2.x.toFixed(1)}" y1="${a2.y.toFixed(1)}"
+                  x2="${b2.x.toFixed(1)}" y2="${b2.y.toFixed(1)}"
+                  stroke="${colour}" stroke-opacity="${opacity}"
+                  stroke-width="3.5" stroke-linecap="round" />
+        `);
+  }
+  const sunWipeAlpha = scene.sun ? wipeAlphaForAltitude(scene.sun.altitudeDeg, wipe) : 0;
+  const sunMarker = scene.sun && sunWipeAlpha > 0 ? w`
+        <g opacity="${sunWipeAlpha.toFixed(2)}">
+            <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
+                    r="7" fill="#fde68a" stroke="rgba(255,255,255,0.9)" stroke-width="1.5" />
+            <circle cx="${scene.sun.x.toFixed(1)}" cy="${scene.sun.y.toFixed(1)}"
+                    r="12" fill="none" stroke="rgba(253, 230, 138, 0.45)" stroke-width="1.5" />
+        </g>
+    ` : A;
+  return b`
+        <svg class="shading-dome-svg">
+            <g class="shading-dome-cells-wire">${wireframeNodes}</g>
+            <g class="shading-dome-cells-color">${coloredNodes}</g>
+            <g class="shading-dome-ribbon">${ribbonNodes}</g>
+            <g class="shading-dome-sun">${sunMarker}</g>
+        </svg>
+    `;
+}
+function renderShadingDomeCloudPicker(host, onChange) {
+  if (shadingDomeFadeAlpha(host) <= 0) return A;
+  const pct = Math.round(Math.max(0, Math.min(100, host._shadingDomeCloudPct)));
+  return b`
+        <div class="shading-dome-cloud-slider" aria-label="Cloud cover">
+            <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--sun"   icon="mdi:weather-sunny"></ha-icon>
+            <div class="shading-dome-cloud-track-wrap">
+                <input type="range" min="0" max="100" step="12.5"
+                       class="shading-dome-cloud-range"
+                       .value="${String(pct)}"
+                       aria-label="Cloud cover percentage"
+                       @input="${(e2) => onChange(Number(e2.target.value))}" />
+                <!--  Visual ticks for every snap point on the
+                      8-bin scale (12.5 % intervals). The slider
+                      snaps to these via step=12.5 so each tick
+                      tells the user "you can land here".
+                      Position uses calc() with the thumb radius
+                      (--thumb-r, 7 px) so each tick lands on the
+                      actual thumb centre at that value, not on
+                      the geometric percentage of the wrap (which
+                      would be off by ~half-a-thumb-width).      -->
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.125)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.250)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.375)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.500)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.625)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.750)"></span>
+                <span class="shading-dome-cloud-tick" style="left:calc(var(--thumb-r) + (100% - 2 * var(--thumb-r)) * 0.875)"></span>
+            </div>
+            <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--cloud" icon="mdi:weather-cloudy"></ha-icon>
+            <span class="shading-dome-cloud-value">${pct}%</span>
+        </div>
+    `;
+}
 const VISUAL_CONFIG_KEYS = [
   "show-labels",
   "sun-color",
@@ -38365,8 +40538,11 @@ const VISUAL_CONFIG_KEYS = [
   //the cloud disc, buildings and labels on the resulting
   //`style.load`.
   "map-style",
+  //Legacy flat keys kept on the watch list so editing a pre-multi-bank YAML still triggers a refresh; the multi-bank `batteries:`
+  //array entry below is what catches the post-migration shape (and any user editing via the new editor UI).
   "battery-soc-entity",
   "battery-power-entity",
+  "batteries",
   "battery-color",
   //solar-radiation-entity, when set, feeds the engine sensor
   //samples that override Open-Meteo for the live + past
@@ -38432,12 +40608,24 @@ function initVisibilityObserver(host) {
   if (host._visibilityObserver || typeof IntersectionObserver === "undefined") {
     return;
   }
+  let intersecting = true;
+  const applyState = () => {
+    const tabHidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+    const paused = !intersecting || tabHidden;
+    setAnimationsPaused(host, paused);
+    host._engine?.setPaused(paused);
+  };
   host._visibilityObserver = new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      setAnimationsPaused(host, !entry.isIntersecting);
+      intersecting = entry.isIntersecting;
     }
+    applyState();
   }, { threshold: 0 });
   host._visibilityObserver.observe(host);
+  if (typeof document !== "undefined") {
+    host._onVisibilityChange = applyState;
+    document.addEventListener("visibilitychange", host._onVisibilityChange);
+  }
 }
 function initEngine(host) {
   host._initInflight = true;
@@ -38476,6 +40664,7 @@ function initEngineNow(host) {
         return;
       }
       host._engine = new HeliosEngine(container, host.config, [lon, lat], elevation);
+      host._lastEngineSpawnAt = performance.now();
       wireEngineCallbacks(host);
       host._initInflight = false;
     };
@@ -38502,10 +40691,22 @@ function wireEngineCallbacks(host) {
     host._chartSeries = host._engine?.getTimelineSeries() ?? null;
     refreshOverlays(host);
   };
+  let overlayRaf = null;
   host._engine.onMapTransform = () => {
-    refreshOverlays(host);
+    if (host._engine?.isPaused()) return;
+    if (overlayRaf !== null) return;
+    overlayRaf = requestAnimationFrame(() => {
+      overlayRaf = null;
+      refreshOverlays(host);
+      refreshShadingDomeScene(host);
+    });
   };
   host._engine.onContextLost = () => {
+    const sinceSpawn = performance.now() - host._lastEngineSpawnAt;
+    if (sinceSpawn < 2e3) {
+      console.warn("[HELIOS] context-lost arrived too soon after spawn, skipping respawn to avoid cascade");
+      return;
+    }
     host._lastHomeKey = "";
     if (!host._initInflight) initEngine(host);
   };
@@ -38526,14 +40727,14 @@ function computeForecastCalibration(host) {
   const hist = host._pvHistory;
   const coords = getHomeCoords(host.config, host.hass);
   if (k2 === null || k2 <= 0 || !series || !hist || !coords) return null;
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const ratios = [];
   const raster = host._engine?.getLidarRaster() ?? null;
   for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++) {
-    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
-    const dayEndMs = dayStartMs + 24 * HOUR_MS;
+    const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS2;
+    const dayEndMs = dayStartMs + 24 * HOUR_MS2;
     const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
     if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
     const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
@@ -38572,12 +40773,14 @@ function actualKwhForDay(hist, pvUnit, startMs, endMs) {
   const unit = (pvUnit || "").toLowerCase();
   const isCumulativeEnergy = unit === "wh" || unit === "kwh" || unit === "mwh";
   const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   if (isCumulativeEnergy) {
     let kwh2 = 0;
     for (let i2 = 1; i2 < hist.times.length; i2++) {
       const tMs = hist.times[i2].getTime();
+      const tPrevMs = hist.times[i2 - 1].getTime();
       if (tMs < startMs || tMs >= endMs) continue;
+      if (tPrevMs < startMs) continue;
       const dv = hist.values[i2] - hist.values[i2 - 1];
       if (!isFinite(dv) || dv < 0) continue;
       kwh2 += dv * energyFactor;
@@ -38589,7 +40792,7 @@ function actualKwhForDay(hist, pvUnit, startMs, endMs) {
     const tCurrMs = hist.times[i2].getTime();
     if (tCurrMs < startMs || tCurrMs >= endMs) continue;
     const tPrevMs = hist.times[i2 - 1].getTime();
-    const dtH = (tCurrMs - tPrevMs) / HOUR_MS;
+    const dtH = (tCurrMs - tPrevMs) / HOUR_MS2;
     if (dtH <= 0 || dtH > 6) continue;
     const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
     const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
@@ -38689,6 +40892,230 @@ function timelineConsumptionEnabled(config) {
     if (s2 === "true" || s2 === "1" || s2 === "on" || s2 === "yes") return true;
   }
   return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
+}
+const HA_USER_DATA_KEY = "helios-shading-map";
+const PUSH_DEBOUNCE_MS = 3e4;
+const TRAINING_WINDOW_DAYS = 30;
+const HOUR_MS = 36e5;
+const BUCKET_MS = 30 * 6e4;
+const BUCKETS_PER_HOUR = 2;
+function trainShadingMap(host) {
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const hist = host._pvHistory;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 === null || k2 <= 0 || !series || !hist || !coords) return 0;
+  if (hist.times.length < 2 || series.times.length < 2) return 0;
+  void syncShadingMapFromHomeAssistant(host.hass);
+  const map = loadMap();
+  const now = Date.now();
+  const windowStart = now - TRAINING_WINDOW_DAYS * 24 * HOUR_MS;
+  const watermark = Math.max(windowStart, (map.lastTrainedMs || 0) - BUCKET_MS);
+  const raster = host._engine?.getLidarRaster() ?? null;
+  const pvUnit = host._pvUnit;
+  const sensorIsEnergy = isCumulativeEnergyUnit(pvUnit);
+  const cutoffPct = inverterCutoffSocPct(host.config);
+  const socSeries = cutoffPct !== null ? host._batteryHistories : [];
+  if (cutoffPct !== null && socSeries.length === 0 && parseBatteryBanks(host.config).length > 0) {
+    console.warn("[HELIOS] inverter-cutoff-soc-pct is set but no battery bank exposes a soc-entity, the trainer cutoff guard is inactive. Add a soc-entity to at least one bank in the `batteries:` array.");
+  }
+  let updated = 0;
+  let highestProcessedMs = map.lastTrainedMs || 0;
+  for (let i2 = 0; i2 < series.times.length - 1; i2++) {
+    const t0Ms = series.times[i2].getTime();
+    const t1Ms = series.times[i2 + 1].getTime();
+    if (t1Ms - t0Ms !== HOUR_MS) continue;
+    const cloud0 = series.cloud[i2] ?? 0;
+    const cloud1 = series.cloud[i2 + 1] ?? 0;
+    const temp0 = series.temperature?.[i2] ?? NaN;
+    const temp1 = series.temperature?.[i2 + 1] ?? NaN;
+    const wind0 = series.windSpeed?.[i2] ?? NaN;
+    const wind1 = series.windSpeed?.[i2 + 1] ?? NaN;
+    for (let b2 = 0; b2 < BUCKETS_PER_HOUR; b2++) {
+      const bucketStartMs = t0Ms + b2 * BUCKET_MS;
+      const bucketEndMs = bucketStartMs + BUCKET_MS;
+      if (bucketEndMs <= watermark) continue;
+      if (bucketEndMs > now) continue;
+      if (bucketStartMs < windowStart) continue;
+      const frac = (b2 + 0.5) / BUCKETS_PER_HOUR;
+      const cloud = cloud0 + (cloud1 - cloud0) * frac;
+      const airT = lerpFinite(temp0, temp1, frac);
+      const windMs = lerpFinite(wind0, wind1, frac);
+      const tMid = new Date(bucketStartMs + BUCKET_MS / 2);
+      const pct = computePvPowerWeighted(host.config, tMid, coords.lat, coords.lon, cloud, {
+        airTempC: airT,
+        windMs,
+        raster
+      });
+      const predictedW = pct * k2;
+      if (!isFinite(predictedW) || predictedW <= 0) continue;
+      const actualW = actualWattsForBucket(hist, pvUnit, sensorIsEnergy, bucketStartMs, bucketEndMs);
+      if (actualW === null) continue;
+      const sun = getSunPosition(tMid, coords.lat, coords.lon);
+      if (!sun || sun.altitude <= 0) continue;
+      if (cutoffPct !== null && socSeries.length > 0) {
+        let minSoc = null;
+        let anyBank = false;
+        for (const s2 of socSeries) {
+          const v2 = valueAtMs(s2, tMid.getTime());
+          if (v2 === null) continue;
+          anyBank = true;
+          if (minSoc === null || v2 < minSoc) minSoc = v2;
+        }
+        if (anyBank && minSoc !== null && minSoc >= cutoffPct) {
+          if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
+          continue;
+        }
+      }
+      if (applyObservation(map, sun.azimuth, sun.altitude, cloud, actualW, predictedW, tMid.getTime())) {
+        updated++;
+      }
+      if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
+    }
+  }
+  if (updated > 0) {
+    map.lastTrainedMs = highestProcessedMs;
+    saveMap(map);
+    invalidateShadingMapCache();
+    schedulePushToHomeAssistant(host.hass);
+  }
+  return updated;
+}
+let _cachedMap = null;
+let _cachedLoadedAt = 0;
+const CACHE_TTL_MS = 5e3;
+function currentShadingMap() {
+  const now = Date.now();
+  if (_cachedMap && now - _cachedLoadedAt < CACHE_TTL_MS) return _cachedMap;
+  _cachedMap = loadMap();
+  _cachedLoadedAt = now;
+  return _cachedMap;
+}
+function invalidateShadingMapCache() {
+  _cachedMap = null;
+  _cachedLoadedAt = 0;
+}
+function isCumulativeEnergyUnit(unit) {
+  const u2 = (unit || "").toLowerCase();
+  return u2 === "wh" || u2 === "kwh" || u2 === "mwh";
+}
+function lerpFinite(a2, b2, frac) {
+  if (!isFinite(a2) && !isFinite(b2)) return NaN;
+  if (!isFinite(a2)) return b2;
+  if (!isFinite(b2)) return a2;
+  return a2 + (b2 - a2) * frac;
+}
+function actualWattsForBucket(hist, pvUnit, asEnergy, startMs, endMs) {
+  if (hist.times.length < 2) return null;
+  if (asEnergy) return actualWattsFromEnergyBucket(hist, pvUnit, startMs, endMs);
+  return actualWattsFromPowerBucket(hist, pvUnit, startMs, endMs);
+}
+function actualWattsFromEnergyBucket(hist, pvUnit, startMs, endMs) {
+  const unit = pvUnit.toLowerCase();
+  const energyFactor = unit === "wh" ? 1 / 1e3 : unit === "mwh" ? 1e3 : 1;
+  let kwh = 0;
+  let saw = false;
+  for (let i2 = 1; i2 < hist.times.length; i2++) {
+    const tMs = hist.times[i2].getTime();
+    if (tMs < startMs || tMs >= endMs) continue;
+    const dv = hist.values[i2] - hist.values[i2 - 1];
+    if (!isFinite(dv) || dv < 0) continue;
+    kwh += dv * energyFactor;
+    saw = true;
+  }
+  if (!saw) return null;
+  const windowHours = (endMs - startMs) / 36e5;
+  if (windowHours <= 0) return null;
+  return kwh / windowHours * 1e3;
+}
+function actualWattsFromPowerBucket(hist, pvUnit, startMs, endMs) {
+  let area = 0;
+  let span = 0;
+  let saw = false;
+  for (let i2 = 1; i2 < hist.times.length; i2++) {
+    const tCurr = hist.times[i2].getTime();
+    const tPrev = hist.times[i2 - 1].getTime();
+    const segStart = Math.max(tPrev, startMs);
+    const segEnd = Math.min(tCurr, endMs);
+    if (segEnd <= segStart) continue;
+    const dt = tCurr - tPrev;
+    if (dt <= 0 || dt > 30 * 6e4) continue;
+    const wPrev = pvNormalizeToWatts(hist.values[i2 - 1], pvUnit);
+    const wCurr = pvNormalizeToWatts(hist.values[i2], pvUnit);
+    if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+    const f0 = (segStart - tPrev) / dt;
+    const f1 = (segEnd - tPrev) / dt;
+    const wA = wPrev + (wCurr - wPrev) * f0;
+    const wB = wPrev + (wCurr - wPrev) * f1;
+    area += (wA + wB) / 2 * (segEnd - segStart);
+    span += segEnd - segStart;
+    saw = true;
+  }
+  if (!saw || span <= 0) return null;
+  return area / span;
+}
+let _pulledFromHomeAssistant = false;
+let _pushTimer = null;
+async function syncShadingMapFromHomeAssistant(hass) {
+  if (_pulledFromHomeAssistant) return false;
+  _pulledFromHomeAssistant = true;
+  if (!hass || typeof hass.callWS !== "function") return false;
+  let remoteRaw = null;
+  try {
+    const reply = await hass.callWS({
+      type: "frontend/get_user_data",
+      key: HA_USER_DATA_KEY
+    });
+    const value = reply && typeof reply === "object" ? reply.value : null;
+    if (typeof value === "string") remoteRaw = value;
+    else if (value && typeof value === "object") remoteRaw = JSON.stringify(value);
+  } catch (_2) {
+    return false;
+  }
+  if (!remoteRaw) return false;
+  const remote = importMapJson(remoteRaw);
+  if (!remote) return false;
+  const local = loadMap();
+  const merged = mergeMaps(local, remote);
+  saveMap(merged);
+  invalidateShadingMapCache();
+  return true;
+}
+function schedulePushToHomeAssistant(hass, _map) {
+  if (!hass || typeof hass.callWS !== "function") return;
+  if (_pushTimer !== null) clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(() => {
+    _pushTimer = null;
+    const latest = loadMap();
+    const payload = exportMapJson(latest);
+    try {
+      hass.callWS({
+        type: "frontend/set_user_data",
+        key: HA_USER_DATA_KEY,
+        value: payload
+      });
+    } catch (_2) {
+    }
+  }, PUSH_DEBOUNCE_MS);
+}
+function exportCurrentShadingMap() {
+  return exportMapJson(loadMap());
+}
+function importShadingMapJson(raw2) {
+  const parsed = importMapJson(raw2);
+  if (!parsed) return false;
+  saveMap(parsed);
+  invalidateShadingMapCache();
+  return true;
+}
+function resetShadingMap() {
+  resetMap();
+  invalidateShadingMapCache();
+}
+function effectiveForecastRatio(map, time, lat, lon, cloud, calR, nowMs) {
+  const sun = getSunPosition(time, lat, lon);
+  if (!sun || sun.altitude <= 0) return calR;
+  return blendedRatio(lookupRatio(map, sun.azimuth, sun.altitude, cloud, nowMs), calR);
 }
 function findSunCrossing(lat, lon, dayStartMs, dayEndMs, direction) {
   const STEP_MS = 60 * 60 * 1e3;
@@ -38847,6 +41274,9 @@ function pvValueAtTime(host, targetMs) {
   const k2 = pvCalibK(host.config);
   const cal = computeForecastCalibration(host);
   const calR = cal ? cal.ratio : 1;
+  trainShadingMap(host);
+  const shading = currentShadingMap();
+  const nowMs = Date.now();
   const capW = pvInverterMaxW(host.config);
   if (k2 !== null && series && coords && series.times.length >= 2) {
     const raster = host._engine?.getLidarRaster() ?? null;
@@ -38855,16 +41285,20 @@ function pvValueAtTime(host, targetMs) {
       if (targetMs > t1) continue;
       const t0 = series.times[i2 - 1].getTime();
       if (targetMs < t0) break;
-      const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2 - 1], coords.lat, coords.lon, series.cloud[i2 - 1] ?? 0, {
+      const cloud0 = series.cloud[i2 - 1] ?? 0;
+      const cloud1 = series.cloud[i2] ?? 0;
+      const eff0 = effectiveForecastRatio(shading, series.times[i2 - 1], coords.lat, coords.lon, cloud0, calR, nowMs);
+      const eff1 = effectiveForecastRatio(shading, series.times[i2], coords.lat, coords.lon, cloud1, calR, nowMs);
+      const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2 - 1], coords.lat, coords.lon, cloud0, {
         airTempC: series.temperature[i2 - 1],
         windMs: series.windSpeed[i2 - 1],
         raster
-      }) * k2 * calR);
-      const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, series.cloud[i2] ?? 0, {
+      }) * k2 * eff0);
+      const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud1, {
         airTempC: series.temperature[i2],
         windMs: series.windSpeed[i2],
         raster
-      }) * k2 * calR);
+      }) * k2 * eff1);
       const dt = t1 - t0;
       if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
       const w2 = w0 + (w1 - w0) * (targetMs - t0) / dt;
@@ -39184,6 +41618,8 @@ function renderPvChart(host) {
   const series = host._chartSeries;
   const cal = computeForecastCalibration(host);
   const calR = cal ? cal.ratio : 1;
+  trainShadingMap(host);
+  const shading = currentShadingMap();
   const capW = pvInverterMaxW(host.config);
   const predictedSamples = [];
   if (k2 !== null && series && typeof lat === "number" && typeof lon === "number") {
@@ -39194,13 +41630,15 @@ function renderPvChart(host) {
       if (tMs < nowMs) continue;
       if (tMs < startMs) continue;
       if (tMs > endMsAbs) continue;
-      const pct = computePvPowerWeighted(host.config, series.times[i2], lat, lon, series.cloud[i2] ?? 0, {
+      const cloud = series.cloud[i2] ?? 0;
+      const pct = computePvPowerWeighted(host.config, series.times[i2], lat, lon, cloud, {
         airTempC: series.temperature[i2],
         windMs: series.windSpeed[i2],
         raster
       });
       if (pct <= 0) continue;
-      const wattsClipped = Math.min(capW, pct * k2 * calR);
+      const eff = effectiveForecastRatio(shading, series.times[i2], lat, lon, cloud, calR, nowMs);
+      const wattsClipped = Math.min(capW, pct * k2 * eff);
       predictedSamples.push({ t: series.times[i2], v: wattsClipped * nativeFromW });
     }
   }
@@ -39430,6 +41868,8 @@ function computeDailyKwhTotals(host) {
   const coords = getHomeCoords(host.config, host.hass);
   const cal = computeForecastCalibration(host);
   const calR = cal ? cal.ratio : 1;
+  trainShadingMap(host);
+  const shading = currentShadingMap();
   const capW = pvInverterMaxW(host.config);
   if (k2 !== null && k2 > 0 && series && coords) {
     const nowMs = Date.now();
@@ -39445,7 +41885,8 @@ function computeDailyKwhTotals(host) {
         raster
       });
       if (pct <= 0) continue;
-      const watts = Math.min(capW, pct * k2 * calR);
+      const eff = effectiveForecastRatio(shading, series.times[i2], coords.lat, coords.lon, cloud, calR, nowMs);
+      const watts = Math.min(capW, pct * k2 * eff);
       const kwh = watts / 1e3;
       const dk = dayKey(tMs);
       out.set(dk, (out.get(dk) ?? 0) + kwh);
@@ -39453,13 +41894,50 @@ function computeDailyKwhTotals(host) {
   }
   return out;
 }
+function computeRefinedDailyKwh(host, dayStartMs, dayEndMs) {
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 === null || k2 <= 0 || !series || !coords) return null;
+  const raster = host._engine?.getLidarRaster() ?? null;
+  const shMap = currentShadingMap();
+  const cal = computeForecastCalibration(host);
+  const calR = cal?.ratio ?? 1;
+  const nowMs = Date.now();
+  let kwh = 0;
+  let any = false;
+  for (let i2 = 0; i2 < series.times.length; i2++) {
+    const tMs = series.times[i2].getTime();
+    if (tMs < dayStartMs || tMs >= dayEndMs) continue;
+    const cloud = series.cloud[i2] ?? 0;
+    const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud, {
+      airTempC: series.temperature[i2],
+      windMs: series.windSpeed[i2],
+      raster
+    });
+    if (pct < 0) continue;
+    const ratio = effectiveForecastRatio(shMap, series.times[i2], coords.lat, coords.lon, cloud, calR, nowMs);
+    kwh += pct * k2 * ratio / 1e3;
+    any = true;
+  }
+  return any ? kwh : null;
+}
+const COUNT_UP_MS = 700;
+function dashCountUpPhase(host) {
+  const start = host._dashOpenedAtMs;
+  if (start === null) return 1;
+  const t2 = Math.max(0, Math.min(1, (performance.now() - start) / COUNT_UP_MS));
+  const inv = 1 - t2;
+  return 1 - inv * inv * inv;
+}
 function renderDashboard(host) {
   const t2 = pickTranslations(host.hass?.language);
   const sunColor = cfgHex(host.config?.["sun-color"], DEFAULT_SUN_COLOR_HEX);
   const cloudColor = cfgHex(host.config?.["cloud-color"], DEFAULT_CLOUD_COLOR_HEX);
   const pvColor = cfgHex(host.config?.["pv-color"], DEFAULT_PV_COLOR_HEX);
   const batteryColor = cfgHex(host.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
-  const hasBattery = String(host.config?.["battery-soc-entity"] ?? "").trim() !== "" || String(host.config?.["battery-power-entity"] ?? "").trim() !== "";
+  const banks = parseBatteryBanks(host.config);
+  const hasBattery = banks.some((b2) => b2.socEntity !== "" || b2.powerEntity !== "");
   return b`
         <div class="detail-panel">
             <button
@@ -39482,16 +41960,16 @@ function renderDashboard(host) {
     `;
 }
 function computeTodayHourly(host) {
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const startMs = today0.getTime();
-  const endMs = startMs + 24 * HOUR_MS;
+  const endMs = startMs + 24 * HOUR_MS2;
   const nowMs = Date.now();
   const bins = [];
   for (let h2 = 0; h2 < 24; h2++) {
     bins.push({
-      hourTs: startMs + h2 * HOUR_MS,
+      hourTs: startMs + h2 * HOUR_MS2,
       observedW: null,
       forecastW: null
     });
@@ -39534,7 +42012,7 @@ function computeTodayHourly(host) {
       if (tMs < startMs || tMs >= endMs) continue;
       const w2 = isCumulativeEnergy ? values2[i2] * 1e3 : pvNormalizeToWatts(values2[i2], host._pvUnit);
       if (!isFinite(w2)) continue;
-      const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+      const hourTs = Math.floor(tMs / HOUR_MS2) * HOUR_MS2;
       sums.set(hourTs, (sums.get(hourTs) ?? 0) + w2);
       counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
     }
@@ -39562,8 +42040,8 @@ function computeTodayHourly(host) {
       });
       if (pct < 0) continue;
       const watts = pct * k2;
-      const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-      const idx = (hourTs - startMs) / HOUR_MS;
+      const hourTs = Math.floor(tMs / HOUR_MS2) * HOUR_MS2;
+      const idx = (hourTs - startMs) / HOUR_MS2;
       if (idx >= 0 && idx < 24) {
         bins[idx].forecastW = watts;
       }
@@ -39592,7 +42070,7 @@ function computeTodayHourly(host) {
       peakPredictedHourTs = b2.hourTs;
     }
     if (b2.observedW !== null) producedKwh += b2.observedW / 1e3;
-    if (b2.hourTs + HOUR_MS <= nowMs) {
+    if (b2.hourTs + HOUR_MS2 <= nowMs) {
       if (b2.observedW !== null) forecastKwh += b2.observedW / 1e3;
     } else if (b2.hourTs > nowMs) {
       if (b2.forecastW !== null) forecastKwh += b2.forecastW / 1e3;
@@ -39627,11 +42105,11 @@ function interpolateKwhAt(pts, t2) {
   return a2.kwh + (t2 - a2.tMs) / (b2.tMs - a2.tMs) * (b2.kwh - a2.kwh);
 }
 function computeTodayCumulative(host) {
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const startMs = today0.getTime();
-  const endMs = startMs + 24 * HOUR_MS;
+  const endMs = startMs + 24 * HOUR_MS2;
   const nowMs = Date.now();
   const actualSamples = [];
   actualSamples.push({ tMs: startMs, kwh: 0 });
@@ -39658,7 +42136,7 @@ function computeTodayCumulative(host) {
         const w2 = pvNormalizeToWatts(hist.values[i2], host._pvUnit);
         if (!isFinite(w2)) continue;
         if (prevT !== null && prevW !== null) {
-          const dh = (tMs - prevT) / HOUR_MS;
+          const dh = (tMs - prevT) / HOUR_MS2;
           if (dh > 0 && dh <= 6) {
             actualKwh += (prevW + w2) / 2 / 1e3 * dh;
           }
@@ -39685,7 +42163,7 @@ function computeTodayCumulative(host) {
     for (let i2 = 0; i2 < series.times.length; i2++) {
       const tMs = series.times[i2].getTime();
       if (tMs < startMs || tMs >= endMs) continue;
-      const binEnd = Math.floor(tMs / HOUR_MS) * HOUR_MS + HOUR_MS;
+      const binEnd = Math.floor(tMs / HOUR_MS2) * HOUR_MS2 + HOUR_MS2;
       const cloud = series.cloud[i2] ?? 0;
       const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud, {
         airTempC: series.temperature[i2],
@@ -39705,8 +42183,8 @@ function computeTodayCumulative(host) {
 function renderDashTodaySection(host, t2, pvColor, sunColor) {
   const data = computeTodayHourly(host);
   const cum = computeTodayCumulative(host);
-  const HOUR_MS = 36e5;
-  const formatPeakTime = (hourTs) => hourTs !== null ? new Date(hourTs + HOUR_MS / 2).toLocaleTimeString([], {
+  const HOUR_MS2 = 36e5;
+  const formatPeakTime = (hourTs) => hourTs !== null ? new Date(hourTs + HOUR_MS2 / 2).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23"
@@ -39730,9 +42208,19 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
   todayDate.setHours(0, 0, 0, 0);
   const todayDateLabel = formatDate(todayDate, host.config?.["date-format"]);
   const calibration = computeForecastCalibration(host);
-  const refinedForecastKwh = calibration !== null ? forecastKwh * calibration.ratio : null;
-  const refinedDeltaPct = calibration !== null ? (calibration.ratio - 1) * 100 : null;
+  const todayStartMs = (() => {
+    const d2 = /* @__PURE__ */ new Date();
+    d2.setHours(0, 0, 0, 0);
+    return d2.getTime();
+  })();
+  const todayEndMs = todayStartMs + 864e5;
+  const refinedForecastKwh = calibration !== null ? computeRefinedDailyKwh(host, todayStartMs, todayEndMs) : null;
+  const refinedDeltaPct = calibration !== null && refinedForecastKwh !== null && forecastKwh > 0.05 ? (refinedForecastKwh - forecastKwh) / forecastKwh * 100 : null;
   const calibrationHint = calibration !== null ? t2.detail.forecastCalibrationHint.replace("{n}", String(calibration.daysUsed)) : "";
+  const phase = dashCountUpPhase(host);
+  const producedKwhDisplay = producedKwh * phase;
+  const forecastKwhDisplay = forecastKwh * phase;
+  const refinedForecastDisplay = refinedForecastKwh !== null ? refinedForecastKwh * phase : null;
   return b`
         <section class="dash-section dash-card dash-today">
             <header class="dash-card-header">
@@ -39746,7 +42234,7 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                         ${historyLoading ? b`
                             <span class="dash-stat-skeleton" aria-hidden="true"></span>
                         ` : b`
-                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, producedKwh, 1)}</span>
+                            <span class="dash-stat-value">${formatLocalisedNumber(host.hass, producedKwhDisplay, 1)}</span>
                             <span class="dash-stat-unit">kWh ${t2.detail.todayProduced}</span>
                             ${deltaPct !== null ? b`
                                 <span class="dash-stat-delta ${deltaPct >= 0 ? "dash-stat-delta-up" : "dash-stat-delta-down"}"
@@ -39761,15 +42249,15 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
                     ${forecastKwh > 0.05 ? b`
                         <div class="dash-today-stat dash-today-stat-predicted ${refinedForecastKwh !== null ? "dash-today-stat-with-refined" : ""}" style="color:${predictedColor}">
                             <span class="dash-stat-main">
-                                <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwh, 1)}</span>
+                                <span class="dash-stat-value">${formatLocalisedNumber(host.hass, forecastKwhDisplay, 1)}</span>
                                 <span class="dash-stat-unit">kWh ${t2.detail.todayForecast}</span>
                             </span>
-                            ${refinedForecastKwh !== null && refinedDeltaPct !== null ? b`
+                            ${refinedForecastDisplay !== null && refinedDeltaPct !== null ? b`
                                 <span class="dash-stat-refined"
                                       data-tooltip="${calibrationHint}"
                                       aria-label="${calibrationHint}"
                                 >
-                                    → ${formatLocalisedNumber(host.hass, refinedForecastKwh, 1)} kWh ${t2.detail.forecastRefined}
+                                    → ${formatLocalisedNumber(host.hass, refinedForecastDisplay, 1)} kWh ${t2.detail.forecastRefined}
                                     <span class="dash-stat-refined-pct ${refinedDeltaPct >= 0 ? "dash-stat-refined-up" : "dash-stat-refined-down"}">
                                         (${refinedDeltaPct >= 0 ? "+" : ""}${formatLocalisedNumber(host.hass, refinedDeltaPct, 0, true)} %)
                                     </span>
@@ -39809,11 +42297,11 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
 function renderDashTodayChart(host, pvColor, sunColor, cum) {
   if (cum.maxKwh < 0.05) return A;
   const t2 = pickTranslations(host.hass?.language);
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const startMs = today0.getTime();
-  const endMs = startMs + 24 * HOUR_MS;
+  const endMs = startMs + 24 * HOUR_MS2;
   const nowMs = Date.now();
   const W = 240, H2 = 60;
   const PAD_L = 22, PAD_R = 4, PAD_T = 12, PAD_B = 10;
@@ -39956,7 +42444,7 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                           x2="${W - PAD_R}" y2="${yFor(v2).toFixed(2)}"/>
                 `)}
                 ${hourTicks.map((h2) => {
-    const tMs = startMs + h2 * HOUR_MS;
+    const tMs = startMs + h2 * HOUR_MS2;
     const x2 = xFor(tMs);
     return w`
                         <line class="dash-today-chart-grid"
@@ -40013,9 +42501,9 @@ function renderDashTodayChart(host, pvColor, sunColor, cum) {
                 `)}
             </div>
             <!--  Twilight ha-icon glyphs (sunrise / sunset) used to
-                  sit here; they were replaced in v1.6.3 by the
-                  night-zone diagonal hatch rendered inside the SVG
-                  above. Same visual vocabulary as the timeline's
+                  sit here; they were replaced by the night-zone
+                  diagonal hatch rendered inside the SVG above.
+                  Same visual vocabulary as the timeline's
                   .hc-night-zone overlay, and the hatch communicates
                   "this slice is night" without competing with the
                   PV curve for the user's attention.                   -->
@@ -40048,11 +42536,11 @@ function formatPvWatts(hass, w2) {
   return Math.round(w2) + " W";
 }
 function computeTomorrow(host) {
-  const HOUR_MS = 36e5;
+  const HOUR_MS2 = 36e5;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
-  const tomorrowMs = today0.getTime() + 24 * HOUR_MS;
-  const endMs = tomorrowMs + 24 * HOUR_MS;
+  const tomorrowMs = today0.getTime() + 24 * HOUR_MS2;
+  const endMs = tomorrowMs + 24 * HOUR_MS2;
   const series = host._chartSeries;
   const coords = getHomeCoords(host.config, host.hass);
   const k2 = pvCalibK(host.config);
@@ -40077,7 +42565,7 @@ function computeTomorrow(host) {
         totalKwh += watts / 1e3;
         if (watts > peakW) {
           peakW = watts;
-          peakHourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+          peakHourTs = Math.floor(tMs / HOUR_MS2) * HOUR_MS2;
         }
         cloudSum += cloud * pct;
         cloudWeight += pct;
@@ -40089,8 +42577,8 @@ function computeTomorrow(host) {
 }
 function renderDashTomorrowSection(host, t2, sunColor, _cloudColor, pvColor) {
   const data = computeTomorrow(host);
-  const HOUR_MS = 36e5;
-  const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
+  const HOUR_MS2 = 36e5;
+  const peakTimeLabel = data.peakHourTs !== null ? new Date(data.peakHourTs + HOUR_MS2 / 2).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23"
@@ -40101,8 +42589,15 @@ function renderDashTomorrowSection(host, t2, sunColor, _cloudColor, pvColor) {
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowDateLabel = formatDate(tomorrowDate, host.config?.["date-format"]);
   const calibration = computeForecastCalibration(host);
-  const refinedTotalKwh = calibration !== null ? data.totalKwh * calibration.ratio : null;
-  const refinedDeltaPct = calibration !== null ? (calibration.ratio - 1) * 100 : null;
+  const tomorrowStartMs = (() => {
+    const d2 = /* @__PURE__ */ new Date();
+    d2.setHours(0, 0, 0, 0);
+    d2.setDate(d2.getDate() + 1);
+    return d2.getTime();
+  })();
+  const tomorrowEndMs = tomorrowStartMs + 864e5;
+  const refinedTotalKwh = calibration !== null ? computeRefinedDailyKwh(host, tomorrowStartMs, tomorrowEndMs) : null;
+  const refinedDeltaPct = calibration !== null && refinedTotalKwh !== null && data.totalKwh > 0.05 ? (refinedTotalKwh - data.totalKwh) / data.totalKwh * 100 : null;
   const calibrationHint = calibration !== null ? t2.detail.forecastCalibrationHint.replace("{n}", String(calibration.daysUsed)) : "";
   return b`
         <section class="dash-section dash-card dash-tomorrow">
@@ -40222,7 +42717,9 @@ function handleHomeClick(host, e2) {
   }
   host._homeHover = false;
   host._detailMode = true;
+  host._dashOpenedAtMs = performance.now();
   host._engine?.setDetailMode(true);
+  startDashCountUpLoop(host);
 }
 function handleExitDetail(host, e2) {
   e2.stopPropagation();
@@ -40230,21 +42727,42 @@ function handleExitDetail(host, e2) {
     return;
   }
   host._detailMode = false;
+  host._dashOpenedAtMs = null;
+  if (host._dashCountUpRaf !== void 0) {
+    cancelAnimationFrame(host._dashCountUpRaf);
+    host._dashCountUpRaf = void 0;
+  }
   host._engine?.setDetailMode(false);
+}
+function startDashCountUpLoop(host) {
+  if (host._dashCountUpRaf !== void 0) return;
+  const tick2 = () => {
+    if (!host._detailMode || host._dashOpenedAtMs === null) {
+      host._dashCountUpRaf = void 0;
+      return;
+    }
+    host.requestUpdate?.();
+    if (dashCountUpPhase(host) >= 1) {
+      host._dashCountUpRaf = void 0;
+      return;
+    }
+    host._dashCountUpRaf = requestAnimationFrame(tick2);
+  };
+  host._dashCountUpRaf = requestAnimationFrame(tick2);
 }
 function handleDashChartPointerMove(host, e2) {
   const svgEl = e2.currentTarget;
   if (!svgEl) return;
   const rect = svgEl.getBoundingClientRect();
   if (rect.width <= 0) return;
-  const W = 240, PAD_X = 4;
+  const W = 240, PAD_L = 22, PAD_R = 4;
   const fracPx = Math.max(0, Math.min(1, (e2.clientX - rect.left) / rect.width));
   const xLogical = fracPx * W;
   const today0 = /* @__PURE__ */ new Date();
   today0.setHours(0, 0, 0, 0);
   const startMs = today0.getTime();
   const endMs = startMs + 24 * 36e5;
-  const tFrac = (xLogical - PAD_X) / (W - 2 * PAD_X);
+  const tFrac = (xLogical - PAD_L) / (W - PAD_L - PAD_R);
   host._dashChartHoverTs = startMs + Math.max(0, Math.min(1, tFrac)) * (endMs - startMs);
 }
 function handleDashChartPointerLeave(host) {
@@ -40294,6 +42812,23 @@ function startLidarFadeLoop(host) {
     }
   };
   host._lidarFadeRaf = requestAnimationFrame(tick2);
+}
+function renderLidarViewOpacityPicker(host, onChange) {
+  const pct = Math.round(Math.max(0, Math.min(1, host._lidarViewOpacity)) * 100);
+  const activeCls = host._lidarViewMode ? " is-active" : "";
+  return b`
+        <div class="lidar-view-opacity-slider${activeCls}" aria-label="LiDAR view opacity" ?aria-hidden="${!host._lidarViewMode}">
+            <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--low"  icon="mdi:circle-outline"></ha-icon>
+            <input type="range" min="0" max="100" step="1"
+                   class="lidar-view-opacity-range"
+                   .value="${String(pct)}"
+                   aria-label="LiDAR view opacity percentage"
+                   tabindex="${host._lidarViewMode ? 0 : -1}"
+                   @input="${(e2) => onChange(Number(e2.target.value) / 100)}" />
+            <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--high" icon="mdi:circle"></ha-icon>
+            <span class="lidar-view-opacity-value">${pct}%</span>
+        </div>
+    `;
 }
 const colorPickerStyles = i$3`
     :host { position: relative; display: inline-block; }
@@ -40823,7 +43358,341 @@ const editorStyles = i$3`
         outline: 2px solid #ef4444;
         outline-offset: 2px;
     }
+
+    /*  About section pinned at the very bottom of the editor.
+        Compact rows for the version + links + appreciation line,
+        styled as a "credits panel" rather than another config
+        section so the user reads it as a soft footer.              */
+    .about-row
+    {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0 14px;
+    }
+    .about-label
+    {
+        font-weight: 500;
+        color: var(--secondary-text-color, #71717a);
+        font-size: 13px;
+    }
+    .about-value
+    {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        font-size: 13px;
+        color: var(--primary-text-color, #18181b);
+    }
+    .about-block
+    {
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .about-link
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        color: var(--primary-color, #3b82f6);
+        font-size: 14px;
+        font-weight: 500;
+        padding: 6px 0;
+    }
+    .about-link:hover { text-decoration: underline; }
+    .about-link ha-icon
+    {
+        --mdc-icon-size: 18px;
+        color: inherit;
+    }
+    .about-paragraph
+    {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--secondary-text-color, #52525b);
+    }
+    .about-coffee
+    {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    }
+    /*  BMC button styled to match the reset-btn shape (transparent fill,
+        1px border, compact padding, right-aligned via margin-left: auto)
+        but in BMC yellow so the brand colour still reads even though the
+        fill is gone. Same hover bloom pattern as reset-btn for visual
+        consistency across the editor's outline buttons.                */
+    .about-coffee-link
+    {
+        margin-top: 8px;
+        background: transparent;
+        border: 1px solid #ffcc00;
+        color: #ffcc00;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        align-self: flex-end;
+        margin-left: auto;
+        width: fit-content;
+    }
+    .about-coffee-link:hover
+    {
+        background: rgba(255, 204, 0, 0.08);
+        text-decoration: none;
+    }
+    .about-coffee-link:focus-visible
+    {
+        outline: 2px solid #ffcc00;
+        outline-offset: 2px;
+    }
+    /*  Shading-map debug section: stat strip + 4-up polar grid +
+        action row. Grid wraps from a 4-up row to a 2x2 / 1-up
+        stack via the auto-fit template, so the section reads
+        cleanly in both the side panel and a narrow mobile view.  */
+    .shading-stats
+    {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        font-size: 12px;
+        color: var(--secondary-text-color, #5f6368);
+        margin: 6px 0 10px;
+    }
+    .shading-grid
+    {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .shading-disc
+    {
+        background: rgba(0, 0, 0, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        padding: 6px 4px 4px;
+        text-align: center;
+    }
+    .shading-disc-title
+    {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--secondary-text-color, #5f6368);
+        margin-bottom: 2px;
+    }
+    .shading-disc-svg
+    {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+    .shading-actions
+    {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .shading-actions button
+    {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: inherit;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+    }
+    .shading-actions button:hover
+    {
+        background: rgba(255, 255, 255, 0.06);
+    }
+    .shading-actions .shading-reset
+    {
+        border-color: #ef4444;
+        color: #ef4444;
+    }
+    .shading-actions .shading-reset:hover
+    {
+        background: rgba(239, 68, 68, 0.08);
+    }
 `;
+const DISC_R = 110;
+const DISC_CENTRE = 120;
+const DISC_VIEWBOX = 240;
+const AZIMUTH_STEP = 10;
+const ALTITUDE_STEP = 5;
+function ratioToFill(ratio) {
+  const r2 = Math.max(0.3, Math.min(1.7, ratio));
+  if (r2 < 1) {
+    const t22 = (1 - r2) / 0.7;
+    const red2 = 220;
+    const green2 = Math.round(220 * (1 - t22));
+    const blue2 = Math.round(220 * (1 - t22));
+    return `rgb(${red2}, ${green2}, ${blue2})`;
+  }
+  const t2 = (r2 - 1) / 0.7;
+  const red = Math.round(220 * (1 - t2));
+  const green = 220;
+  const blue = Math.round(220 * (1 - t2));
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+function renderCloudDisc(cloudBin, cells, nowMs) {
+  const sectors = [];
+  for (const decoded of cells) {
+    if (!decoded) continue;
+    if (decoded.cloudBin !== cloudBin) continue;
+    const azCentre = decoded.azimuthDeg;
+    const altCentre = decoded.altitudeDeg;
+    const azStart = azCentre - AZIMUTH_STEP / 2;
+    const azEnd = azCentre + AZIMUTH_STEP / 2;
+    const altLow = altCentre - ALTITUDE_STEP / 2;
+    const altHigh = altCentre + ALTITUDE_STEP / 2;
+    const rOuter = DISC_R * (1 - altLow / 90);
+    const rInner = DISC_R * (1 - altHigh / 90);
+    if (rOuter <= 0 || rInner < 0 || rOuter <= rInner) continue;
+    const path = annularSectorPath(azStart, azEnd, rInner, rOuter);
+    const dDays = Math.max(0, (nowMs - decoded.cell.t) / 864e5);
+    const aged = decoded.cell.w * Math.pow(0.5, dDays / 60);
+    const opacity = Math.max(0.15, Math.min(1, aged / 5));
+    const fill = ratioToFill(decoded.cell.ema);
+    sectors.push(w`
+            <path d="${path}"
+                  fill="${fill}"
+                  fill-opacity="${opacity}"
+                  stroke="rgba(0,0,0,0.12)"
+                  stroke-width="0.4">
+                <title>az ${Math.round(azCentre)}° / alt ${Math.round(altCentre)}° / cloud ${CLOUD_BIN_LABELS[cloudBin]}, ratio ${decoded.cell.ema.toFixed(2)}, w ${aged.toFixed(1)}</title>
+            </path>
+        `);
+  }
+  return b`
+        <div class="shading-disc">
+            <div class="shading-disc-title">${CLOUD_BIN_LABELS[cloudBin]}</div>
+            <svg viewBox="0 0 ${DISC_VIEWBOX} ${DISC_VIEWBOX}" class="shading-disc-svg">
+                <circle cx="${DISC_CENTRE}" cy="${DISC_CENTRE}" r="${DISC_R}" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.15)" stroke-width="0.7" />
+                ${[15, 30, 45, 60, 75].map((alt) => w`
+                    <circle cx="${DISC_CENTRE}" cy="${DISC_CENTRE}" r="${DISC_R * (1 - alt / 90)}"
+                            fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.4" />
+                `)}
+                ${sectors.length ? sectors : w`
+                    <text x="${DISC_CENTRE}" y="${DISC_CENTRE + 4}" text-anchor="middle"
+                          fill="rgba(255,255,255,0.4)" font-size="10">no data yet</text>
+                `}
+                <text x="${DISC_CENTRE}" y="10"  text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="9">N</text>
+                <text x="${DISC_CENTRE}" y="${DISC_VIEWBOX - 2}" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="9">S</text>
+                <text x="6" y="${DISC_CENTRE + 3}" text-anchor="start" fill="rgba(255,255,255,0.55)" font-size="9">W</text>
+                <text x="${DISC_VIEWBOX - 6}" y="${DISC_CENTRE + 3}" text-anchor="end" fill="rgba(255,255,255,0.55)" font-size="9">E</text>
+            </svg>
+        </div>
+    `;
+}
+function annularSectorPath(azStart, azEnd, rInner, rOuter) {
+  const sweep = (azEnd - azStart + 360) % 360;
+  const largeArc = sweep > 180 ? 1 : 0;
+  const p1 = polarToCart(azStart, rOuter);
+  const p2 = polarToCart(azEnd, rOuter);
+  const p3 = polarToCart(azEnd, rInner);
+  const p4 = polarToCart(azStart, rInner);
+  if (rInner <= 0) {
+    return [
+      `M ${DISC_CENTRE} ${DISC_CENTRE}`,
+      `L ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`,
+      `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`,
+      `Z`
+    ].join(" ");
+  }
+  return [
+    `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`,
+    `L ${p3.x.toFixed(2)} ${p3.y.toFixed(2)}`,
+    `A ${rInner} ${rInner} 0 ${largeArc} 0 ${p4.x.toFixed(2)} ${p4.y.toFixed(2)}`,
+    `Z`
+  ].join(" ");
+}
+function polarToCart(azimuthDeg, radius) {
+  const rad = (azimuthDeg - 90) * Math.PI / 180;
+  return {
+    x: DISC_CENTRE + radius * Math.cos(rad),
+    y: DISC_CENTRE + radius * Math.sin(rad)
+  };
+}
+function renderShadingMapSection(opts) {
+  const t2 = pickTranslations(opts.hass?.language);
+  const map = loadMap();
+  const nowMs = Date.now();
+  const stats = describeMap(map, nowMs);
+  const decoded = Object.keys(map.cells).map((k2) => decodeCellKey(k2, map.cells[k2])).filter((d2) => d2 !== null);
+  const handleExport = () => {
+    const json = exportCurrentShadingMap();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a2 = document.createElement("a");
+    a2.href = url;
+    a2.download = `helios-shading-map-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a2);
+    a2.click();
+    document.body.removeChild(a2);
+    URL.revokeObjectURL(url);
+  };
+  const handleImport = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = String(reader.result || "");
+        const ok = importShadingMapJson(text);
+        if (!ok) {
+          window.alert(t2.editor.shadingImportError);
+          return;
+        }
+        opts.onAfterChange();
+      };
+      reader.readAsText(file);
+    });
+    input.click();
+  };
+  const handleReset = () => {
+    if (!window.confirm(t2.editor.shadingResetConfirm)) return;
+    resetShadingMap();
+    opts.onAfterChange();
+  };
+  return b`
+        <div class="hint">${t2.editor.shadingHint}</div>
+        <div class="shading-stats">
+            <div><strong>${stats.cells}</strong> ${t2.editor.shadingStatsCells}</div>
+            <div><strong>${stats.confidentCells}</strong> ${t2.editor.shadingStatsConfident}</div>
+            ${stats.strongestUnder ? b`
+                <div>${t2.editor.shadingStatsUnder} <strong>${(stats.strongestUnder.ratio * 100).toFixed(0)}%</strong></div>
+            ` : A}
+            ${stats.strongestOver ? b`
+                <div>${t2.editor.shadingStatsOver} <strong>${(stats.strongestOver.ratio * 100).toFixed(0)}%</strong></div>
+            ` : A}
+        </div>
+        <div class="shading-grid">
+            ${Array.from({ length: CLOUD_BIN_COUNT_EXPORT }, (_2, b2) => renderCloudDisc(b2, decoded, nowMs))}
+        </div>
+        <div class="shading-actions">
+            <button type="button" @click="${handleExport}">${t2.editor.shadingExport}</button>
+            <button type="button" @click="${handleImport}">${t2.editor.shadingImport}</button>
+            <button type="button" class="shading-reset" @click="${handleReset}">${t2.editor.shadingReset}</button>
+        </div>
+    `;
+}
 var __defProp$1 = Object.defineProperty;
 var __getOwnPropDesc$1 = Object.getOwnPropertyDescriptor;
 var __decorateClass$1 = (decorators, target, key, kind) => {
@@ -40834,6 +43703,13 @@ var __decorateClass$1 = (decorators, target, key, kind) => {
   if (kind && result) __defProp$1(target, key, result);
   return result;
 };
+const LIDAR_VIEW_LEGACY_KEYS = [
+  "lidar-view-point-color",
+  "lidar-view-point-opacity",
+  "lidar-view-wireframe",
+  "lidar-view-wireframe-color",
+  "lidar-view-wireframe-opacity"
+];
 let HeliosColorPicker = class extends i {
   constructor() {
     super(...arguments);
@@ -41029,6 +43905,7 @@ let HeliosCardEditor = class extends i {
     this._pickerReady = false;
     this._openSection = "location";
     this._openArrayIndices = /* @__PURE__ */ new Set([0]);
+    this._openBatteryIndices = /* @__PURE__ */ new Set([0]);
     this._sliderDebounce = /* @__PURE__ */ new Map();
     this._pvEntityFilter = (entity) => {
       if (!entity || !entity.attributes) return false;
@@ -41061,6 +43938,10 @@ let HeliosCardEditor = class extends i {
     super.disconnectedCallback();
     for (const t2 of this._sliderDebounce.values()) window.clearTimeout(t2);
     this._sliderDebounce.clear();
+    if (this._resetFeedbackTimer !== void 0) {
+      window.clearTimeout(this._resetFeedbackTimer);
+      this._resetFeedbackTimer = void 0;
+    }
   }
   setConfig(config) {
     this._cfg = { ...config };
@@ -41069,13 +43950,9 @@ let HeliosCardEditor = class extends i {
     super.connectedCallback();
     this._ensureEntityPicker();
   }
-  //ha-entity-picker is part of HA's lazy-loaded card-editor bundle.
-  //In a fresh tab, or in HA versions that don't pre-load it for
-  //custom cards, the tag is unknown until something on the page
-  //pulls it in. We force the load by creating a transient
-  //"entities" card and asking for its config element, the side
-  //effect registers ha-entity-picker. While the load is pending we
-  //fall back to a plain text input so the field is never broken.
+  //ha-entity-picker is part of HA's lazy-loaded card-editor bundle. In a fresh tab, or in HA versions that don't pre-load it for custom cards, the
+  //tag is unknown until something on the page pulls it in. We force the load by creating a transient "entities" card and asking for its config
+  //element, the side effect registers ha-entity-picker. While the load is pending we fall back to a plain text input so the field is never broken.
   async _ensureEntityPicker() {
     if (this._pickerReady) return;
     if (typeof customElements !== "undefined" && customElements.get("ha-entity-picker")) {
@@ -41114,6 +43991,9 @@ let HeliosCardEditor = class extends i {
   }
   _update(key, value) {
     const next3 = { ...this._cfg, [key]: value };
+    for (const k2 of LIDAR_VIEW_LEGACY_KEYS) {
+      if (k2 in next3) delete next3[k2];
+    }
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next3 } }));
     this._cfg = next3;
   }
@@ -41134,10 +44014,8 @@ let HeliosCardEditor = class extends i {
     if (!isFinite(v2)) return;
     this._update(key, v2);
   }
-  //Slider commit. Updates local state synchronously so the slider
-  //thumb tracks the drag, but defers the cross-component
-  //`config-changed` event by SLIDER_COMMIT_DELAY_MS so the engine
-  //doesn't see a flood of intermediate values.
+  //Slider commit. Updates local state synchronously so the slider thumb tracks the drag, but defers the cross-component `config-changed` event by
+  //SLIDER_COMMIT_DELAY_MS so the engine doesn't see a flood of intermediate values.
   _numSlider(key, e2) {
     const v2 = parseFloat(e2.target.value);
     if (!isFinite(v2)) return;
@@ -41179,8 +44057,8 @@ let HeliosCardEditor = class extends i {
       return s2 === "" ? null : s2;
     };
     const raw2 = this._cfg?.["pv-arrays"];
-    if (Array.isArray(raw2) && raw2.length > 0) {
-      const out = raw2.map((entry) => {
+    if (Array.isArray(raw2)) {
+      return raw2.map((entry) => {
         const e2 = entry && typeof entry === "object" ? entry : {};
         return {
           name: toStr(e2["name"]),
@@ -41193,14 +44071,13 @@ let HeliosCardEditor = class extends i {
           height: toNum2(e2["height"])
         };
       });
-      return out.length > 0 ? out : [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
     }
     const legacyTilt = toNum2(this._cfg?.["pv-tilt"]);
     const legacyAz = toNum2(this._cfg?.["pv-azimuth"]);
     if (legacyTilt !== null || legacyAz !== null) {
       return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, peakKwp: null, latitude: null, longitude: null, height: null }];
     }
-    return [{ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null }];
+    return [];
   }
   //Persists a list of array entries to the config under `pv-arrays`
   //and clears the legacy `pv-tilt` / `pv-azimuth` keys in the same
@@ -41209,21 +44086,25 @@ let HeliosCardEditor = class extends i {
   //(e.g. tilt set but azimuth blank) still produces a sparse but
   //valid YAML entry; the card-side reader applies sensible defaults.
   _writePvArrays(list) {
-    const arrays = list.map((e2) => {
-      const o2 = {};
-      if (e2.name !== null) o2["name"] = e2.name;
-      if (e2.tilt !== null) o2["tilt"] = e2.tilt;
-      if (e2.azimuth !== null) o2["azimuth"] = e2.azimuth;
-      if (e2.share !== null) o2["share"] = e2.share;
-      if (e2.peakKwp !== null) o2["peak-kwp"] = e2.peakKwp;
-      if (e2.latitude !== null) o2["latitude"] = e2.latitude;
-      if (e2.longitude !== null) o2["longitude"] = e2.longitude;
-      if (e2.height !== null) o2["height"] = e2.height;
-      return o2;
-    });
-    const next3 = { ...this._cfg, "pv-arrays": arrays };
-    if ("pv-tilt" in next3) delete next3["pv-tilt"];
-    if ("pv-azimuth" in next3) delete next3["pv-azimuth"];
+    const next3 = { ...this._cfg };
+    delete next3["pv-tilt"];
+    delete next3["pv-azimuth"];
+    if (list.length === 0) {
+      delete next3["pv-arrays"];
+    } else {
+      next3["pv-arrays"] = list.map((e2) => {
+        const o2 = {};
+        if (e2.name !== null) o2["name"] = e2.name;
+        if (e2.tilt !== null) o2["tilt"] = e2.tilt;
+        if (e2.azimuth !== null) o2["azimuth"] = e2.azimuth;
+        if (e2.share !== null) o2["share"] = e2.share;
+        if (e2.peakKwp !== null) o2["peak-kwp"] = e2.peakKwp;
+        if (e2.latitude !== null) o2["latitude"] = e2.latitude;
+        if (e2.longitude !== null) o2["longitude"] = e2.longitude;
+        if (e2.height !== null) o2["height"] = e2.height;
+        return o2;
+      });
+    }
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next3 } }));
     this._cfg = next3;
   }
@@ -41243,10 +44124,8 @@ let HeliosCardEditor = class extends i {
     }
     this._writePvArrays(list);
   }
-  //Updates the user-typed name for row `i`. Empty input clears the
-  //field to null, the summary then falls back to the auto-numbered
-  //"Row N" title. Stops the event so the parent <details>` toggle
-  //doesn't fire when the user types inside the input.
+  //Updates the user-typed name for row `i`. Empty input clears the field to null, the summary then falls back to the auto-numbered "Row N" title.
+  //Stops the event so the parent <details>` toggle doesn't fire when the user types inside the input.
   _arrayName(i2, e2) {
     const list = this._readPvArrays();
     if (i2 < 0 || i2 >= list.length) return;
@@ -41270,7 +44149,7 @@ let HeliosCardEditor = class extends i {
   //reads as "100%" without needing to write 100 into the YAML.
   _arrayRemove(i2) {
     const list = this._readPvArrays();
-    if (i2 < 0 || i2 >= list.length || list.length <= 1) return;
+    if (i2 < 0 || i2 >= list.length) return;
     list.splice(i2, 1);
     const next3 = /* @__PURE__ */ new Set();
     for (const idx of this._openArrayIndices) {
@@ -41295,10 +44174,8 @@ let HeliosCardEditor = class extends i {
   //the editor falls back to "everything closed", a valid state
   //since the section content is the only mandatory surface.
   //
-  //Also scrolls the just-opened section into view so the user is
-  //never left looking at the bottom of the previous section after
-  //a click. Done on the next rAF tick so the layout reflects the
-  //newly-expanded body before we measure.
+  //Also scrolls the just-opened section into view so the user is never left looking at the bottom of the previous section after a click. Done on
+  //the next rAF tick so the layout reflects the newly-expanded body before we measure.
   _onSectionToggle(sectionId, e2) {
     const el = e2.currentTarget;
     if (el.open) {
@@ -41310,16 +44187,133 @@ let HeliosCardEditor = class extends i {
       this._openSection = null;
     }
   }
-  //Syncs the local open-set with the <details> element's runtime
-  //state on every native `toggle` event. Without this round-trip,
-  //Lit re-renders would snap the `open` attribute back to whatever
-  //_openArrayIndices says, fighting the user's click.
+  //Syncs the local open-set with the <details> element's runtime state on every native `toggle` event. Without this round-trip, Lit re-renders
+  //would snap the `open` attribute back to whatever _openArrayIndices says, fighting the user's click.
   _onArrayToggle(i2, e2) {
     const el = e2.currentTarget;
     const next3 = new Set(this._openArrayIndices);
     if (el.open) next3.add(i2);
     else next3.delete(i2);
     this._openArrayIndices = next3;
+  }
+  //Battery-bank editor state machinery. Mirrors the PV-arrays helpers above (read/write to the `batteries:` array with legacy flat-key
+  //fallback, per-field updaters, add/remove). Kept separate so a bank edit never touches a PV row by index collision.
+  _readBatteries() {
+    const toNum2 = (v2) => {
+      if (v2 === void 0 || v2 === null || v2 === "") return null;
+      const n3 = typeof v2 === "number" ? v2 : parseFloat(String(v2));
+      return isFinite(n3) ? n3 : null;
+    };
+    const toStr = (v2) => {
+      if (v2 === void 0 || v2 === null) return null;
+      const s2 = String(v2).trim();
+      return s2 === "" ? null : s2;
+    };
+    const raw2 = this._cfg?.["batteries"];
+    if (Array.isArray(raw2)) {
+      return raw2.map((entry) => {
+        const e2 = entry && typeof entry === "object" ? entry : {};
+        return {
+          name: toStr(e2["name"]),
+          socEntity: String(e2["soc-entity"] ?? "").trim(),
+          powerEntity: String(e2["power-entity"] ?? "").trim(),
+          powerInvert: e2["power-invert"] === true,
+          capacityKwh: toNum2(e2["capacity-kwh"])
+        };
+      });
+    }
+    const soc = String(this._cfg?.["battery-soc-entity"] ?? "").trim();
+    const power = String(this._cfg?.["battery-power-entity"] ?? "").trim();
+    if (soc === "" && power === "") return [];
+    return [{
+      name: null,
+      socEntity: soc,
+      powerEntity: power,
+      powerInvert: this._cfg?.["battery-power-invert"] === true,
+      capacityKwh: null
+    }];
+  }
+  //Persists a list of bank entries under `batteries:` and clears the legacy flat keys in the same event so configs converge to the new
+  //shape on first edit. Empty entity strings are dropped from the YAML so a half-filled new row produces a sparse but valid bank.
+  _writeBatteries(list) {
+    const next3 = { ...this._cfg };
+    delete next3["battery-soc-entity"];
+    delete next3["battery-power-entity"];
+    delete next3["battery-power-invert"];
+    if (list.length === 0) {
+      delete next3["batteries"];
+    } else {
+      next3["batteries"] = list.map((e2) => {
+        const o2 = {};
+        if (e2.name !== null) o2["name"] = e2.name;
+        if (e2.socEntity !== "") o2["soc-entity"] = e2.socEntity;
+        if (e2.powerEntity !== "") o2["power-entity"] = e2.powerEntity;
+        if (e2.powerInvert) o2["power-invert"] = true;
+        if (e2.capacityKwh !== null) o2["capacity-kwh"] = e2.capacityKwh;
+        return o2;
+      });
+    }
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: next3 } }));
+    this._cfg = next3;
+  }
+  _bankEntity(i2, key, value) {
+    const list = this._readBatteries();
+    if (i2 < 0 || i2 >= list.length) return;
+    list[i2] = { ...list[i2], [key]: (value ?? "").trim() };
+    this._writeBatteries(list);
+  }
+  _bankName(i2, e2) {
+    const list = this._readBatteries();
+    if (i2 < 0 || i2 >= list.length) return;
+    const raw2 = e2.target.value.trim();
+    list[i2] = { ...list[i2], name: raw2 === "" ? null : raw2 };
+    this._writeBatteries(list);
+  }
+  _bankCapacity(i2, e2) {
+    const list = this._readBatteries();
+    if (i2 < 0 || i2 >= list.length) return;
+    const raw2 = e2.target.value.trim();
+    if (raw2 === "") {
+      list[i2] = { ...list[i2], capacityKwh: null };
+    } else {
+      const v2 = parseFloat(raw2);
+      if (!isFinite(v2) || v2 <= 0) return;
+      list[i2] = { ...list[i2], capacityKwh: v2 };
+    }
+    this._writeBatteries(list);
+  }
+  _bankInvert(i2, invert) {
+    const list = this._readBatteries();
+    if (i2 < 0 || i2 >= list.length) return;
+    list[i2] = { ...list[i2], powerInvert: invert };
+    this._writeBatteries(list);
+  }
+  _bankAdd() {
+    const list = this._readBatteries();
+    if (list.length >= HeliosCardEditor.BATTERIES_MAX) return;
+    list.push({ name: null, socEntity: "", powerEntity: "", powerInvert: false, capacityKwh: null });
+    this._openBatteryIndices = /* @__PURE__ */ new Set([...this._openBatteryIndices, list.length - 1]);
+    this._writeBatteries(list);
+  }
+  _bankRemove(i2) {
+    const list = this._readBatteries();
+    if (i2 < 0 || i2 >= list.length) return;
+    list.splice(i2, 1);
+    const next3 = /* @__PURE__ */ new Set();
+    for (const idx of this._openBatteryIndices) {
+      if (idx === i2) continue;
+      if (idx > i2) next3.add(idx - 1);
+      else next3.add(idx);
+    }
+    this._openBatteryIndices = next3;
+    this._writeBatteries(list);
+  }
+  _onBankToggle(i2, e2) {
+    const el = e2.currentTarget;
+    const next3 = new Set(this._openBatteryIndices);
+    if (el.open) next3.add(i2);
+    else next3.delete(i2);
+    this._openBatteryIndices = next3;
   }
   //Format a numeric slider value for display alongside the input.
   //Integers stay integer; fractional values get 2 decimals.
@@ -41720,7 +44714,6 @@ let HeliosCardEditor = class extends i {
                                                 type="button"
                                                 class="pv-array-remove"
                                                 aria-label="${t2.editor.pvArrayRemove}: ${title}"
-                                                ?disabled="${arrays.length <= 1}"
                                                 @click="${(e2) => {
           e2.preventDefault();
           e2.stopPropagation();
@@ -41836,77 +44829,153 @@ let HeliosCardEditor = class extends i {
 
                 </details>
 
+                <details class="advanced-section" ?open="${this._openSection === "shading"}" @toggle="${(e2) => this._onSectionToggle("shading", e2)}">
+                    <summary class="section-title section-title-collapse">${t2.editor.shadingSection}</summary>
+                    ${renderShadingMapSection({ hass: this.hass, onAfterChange: () => this.requestUpdate() })}
+                </details>
+
                 <details class="advanced-section" ?open="${this._openSection === "battery"}" @toggle="${(e2) => this._onSectionToggle("battery", e2)}">
                     <summary class="section-title section-title-collapse">${t2.editor.batterySection}</summary>
-                <div class="hint">${t2.editor.batteryHint}</div>
-                <div class="field field-block">
-                    <span class="label">${t2.editor.batterySocEntity}</span>
-                    ${this._pickerReady ? b`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass="${this.hass}"
-                            .value="${String(c2["battery-soc-entity"] ?? "")}"
-                            .includeDomains="${["sensor", "input_number"]}"
-                            .entityFilter="${this._batterySocEntityFilter}"
-                            @value-changed="${(e2) => this._update("battery-soc-entity", e2.detail.value ?? "")}"
-                        ></ha-entity-picker>
-                    ` : b`
+                    <div class="hint">${t2.editor.batteryHint}</div>
+                    ${(() => {
+      const banks = this._readBatteries();
+      return b`
+                            ${banks.map((bank, i2) => {
+        const fallback = t2.editor.batteryBankTitle.replace("{n}", String(i2 + 1));
+        const title = bank.name ?? fallback;
+        const isOpen = this._openBatteryIndices.has(i2);
+        return b`
+                                    <details class="pv-array-card" ?open="${isOpen}" @toggle="${(e2) => this._onBankToggle(i2, e2)}">
+                                        <summary class="pv-array-summary">
+                                            <span class="pv-array-chevron" aria-hidden="true"></span>
+                                            <span class="pv-array-title">${title}</span>
+                                            <button
+                                                type="button"
+                                                class="pv-array-remove"
+                                                aria-label="${t2.editor.batteryBankRemove}: ${title}"
+                                                @click="${(e2) => {
+          e2.preventDefault();
+          e2.stopPropagation();
+          this._bankRemove(i2);
+        }}"
+                                            >${t2.editor.batteryBankRemove}</button>
+                                        </summary>
+                                        <div class="pv-array-body">
+                                            <label class="field">
+                                                <span class="label">${t2.editor.batteryBankName}</span>
+                                                <input
+                                                    type="text"
+                                                    maxlength="40"
+                                                    placeholder="${fallback}"
+                                                    .value="${bank.name ?? ""}"
+                                                    @change="${(e2) => this._bankName(i2, e2)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t2.editor.batteryBankNameHelp}</div>
+                                            <div class="field field-block">
+                                                <span class="label">${t2.editor.batterySocEntity}</span>
+                                                ${this._pickerReady ? b`
+                                                    <ha-entity-picker
+                                                        allow-custom-entity
+                                                        .hass="${this.hass}"
+                                                        .value="${bank.socEntity}"
+                                                        .includeDomains="${["sensor", "input_number"]}"
+                                                        .entityFilter="${this._batterySocEntityFilter}"
+                                                        @value-changed="${(e2) => this._bankEntity(i2, "socEntity", e2.detail.value ?? "")}"
+                                                    ></ha-entity-picker>
+                                                ` : b`
+                                                    <input
+                                                        type="text"
+                                                        .value="${bank.socEntity}"
+                                                        placeholder="sensor.battery_soc"
+                                                        @change="${(e2) => this._bankEntity(i2, "socEntity", e2.target.value)}"
+                                                    />
+                                                `}
+                                            </div>
+                                            <div class="field-help">${t2.editor.batterySocEntityHelp}</div>
+                                            <div class="field field-block">
+                                                <span class="label">${t2.editor.batteryPowerEntity}</span>
+                                                ${this._pickerReady ? b`
+                                                    <ha-entity-picker
+                                                        allow-custom-entity
+                                                        .hass="${this.hass}"
+                                                        .value="${bank.powerEntity}"
+                                                        .includeDomains="${["sensor", "input_number"]}"
+                                                        .entityFilter="${this._batteryPowerEntityFilter}"
+                                                        @value-changed="${(e2) => this._bankEntity(i2, "powerEntity", e2.detail.value ?? "")}"
+                                                    ></ha-entity-picker>
+                                                ` : b`
+                                                    <input
+                                                        type="text"
+                                                        .value="${bank.powerEntity}"
+                                                        placeholder="sensor.battery_power"
+                                                        @change="${(e2) => this._bankEntity(i2, "powerEntity", e2.target.value)}"
+                                                    />
+                                                `}
+                                            </div>
+                                            <div class="field-help">${t2.editor.batteryPowerEntityHelp}</div>
+                                            <div class="field">
+                                                <span class="label">${t2.editor.batteryPowerInvert}</span>
+                                                <div class="segmented-toggle">
+                                                    <button
+                                                        type="button"
+                                                        class="seg-option ${!bank.powerInvert ? "active" : ""}"
+                                                        @click="${() => this._bankInvert(i2, false)}"
+                                                    >${t2.editor.batteryPowerInvertStandard}</button>
+                                                    <button
+                                                        type="button"
+                                                        class="seg-option ${bank.powerInvert ? "active" : ""}"
+                                                        @click="${() => this._bankInvert(i2, true)}"
+                                                    >${t2.editor.batteryPowerInvertInverted}</button>
+                                                </div>
+                                            </div>
+                                            <div class="field-help">${t2.editor.batteryPowerInvertHelp}</div>
+                                            <label class="field">
+                                                <span class="label">${t2.editor.batteryCapacityKwh}</span>
+                                                <input
+                                                    type="number"
+                                                    min="0.1"
+                                                    step="0.1"
+                                                    placeholder="10"
+                                                    .value="${bank.capacityKwh !== null ? String(bank.capacityKwh) : ""}"
+                                                    @change="${(e2) => this._bankCapacity(i2, e2)}"
+                                                />
+                                            </label>
+                                            <div class="field-help">${t2.editor.batteryCapacityKwhHelp}</div>
+                                        </div>
+                                    </details>
+                                `;
+      })}
+                            ${banks.length < HeliosCardEditor.BATTERIES_MAX ? b`
+                                <button
+                                    type="button"
+                                    class="pv-array-add"
+                                    @click="${() => this._bankAdd()}"
+                                >+ ${t2.editor.batteryBankAdd}</button>
+                            ` : A}
+                        `;
+    })()}
+                    <div class="field" style="margin-top: 14px;">
+                        <span class="label">${t2.editor.inverterCutoffSocPct}</span>
                         <input
-                            type="text"
-                            .value="${String(c2["battery-soc-entity"] ?? "")}"
-                            placeholder="sensor.battery_soc"
-                            @change="${(e2) => this._str("battery-soc-entity", e2)}"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            .value="${c2["inverter-cutoff-soc-pct"] != null ? String(c2["inverter-cutoff-soc-pct"]) : ""}"
+                            placeholder="95"
+                            @change="${(e2) => this._numField("inverter-cutoff-soc-pct", e2)}"
                         />
-                    `}
-                </div>
-                <div class="field-help">${t2.editor.batterySocEntityHelp}</div>
-                <div class="field field-block">
-                    <span class="label">${t2.editor.batteryPowerEntity}</span>
-                    ${this._pickerReady ? b`
-                        <ha-entity-picker
-                            allow-custom-entity
-                            .hass="${this.hass}"
-                            .value="${String(c2["battery-power-entity"] ?? "")}"
-                            .includeDomains="${["sensor", "input_number"]}"
-                            .entityFilter="${this._batteryPowerEntityFilter}"
-                            @value-changed="${(e2) => this._update("battery-power-entity", e2.detail.value ?? "")}"
-                        ></ha-entity-picker>
-                    ` : b`
-                        <input
-                            type="text"
-                            .value="${String(c2["battery-power-entity"] ?? "")}"
-                            placeholder="sensor.battery_power"
-                            @change="${(e2) => this._str("battery-power-entity", e2)}"
-                        />
-                    `}
-                </div>
-                <div class="field-help">${t2.editor.batteryPowerEntityHelp}</div>
-                <div class="field">
-                    <span class="label">${t2.editor.batteryPowerInvert}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${c2["battery-power-invert"] !== true ? "active" : ""}"
-                            @click="${() => this._update("battery-power-invert", false)}"
-                        >${t2.editor.batteryPowerInvertStandard}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${c2["battery-power-invert"] === true ? "active" : ""}"
-                            @click="${() => this._update("battery-power-invert", true)}"
-                        >${t2.editor.batteryPowerInvertInverted}</button>
                     </div>
-                </div>
-                <div class="field-help">${t2.editor.batteryPowerInvertHelp}</div>
-                <label class="field">
-                    <span class="label">${t2.editor.batteryColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c2["battery-color"], DEFAULT_BATTERY_COLOR_HEX)}"
-                        .ariaLabel="${t2.editor.batteryColor}"
-                        @value-changed="${(e2) => this._color("battery-color", e2)}"
-                    ></helios-color-picker>
-                </label>
-                <div class="hint">${t2.editor.batteryHint}</div>
-
+                    <div class="field-help">${t2.editor.inverterCutoffSocPctHelp}</div>
+                    <label class="field">
+                        <span class="label">${t2.editor.batteryColor}</span>
+                        <helios-color-picker
+                            .value="${cfgHex(c2["battery-color"], DEFAULT_BATTERY_COLOR_HEX)}"
+                            .ariaLabel="${t2.editor.batteryColor}"
+                            @value-changed="${(e2) => this._color("battery-color", e2)}"
+                        ></helios-color-picker>
+                    </label>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === "weather"}" @toggle="${(e2) => this._onSectionToggle("weather", e2)}">
@@ -41940,58 +45009,6 @@ let HeliosCardEditor = class extends i {
                                 @input="${(e2) => this._numSlider("lidar-view-point-size", e2)}"
                             />
                             <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-point-size"] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX), 0.5)}</span>
-                        </div>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t2.editor.lidarViewPointColor}</span>
-                        <helios-color-picker
-                            .value="${String(c2["lidar-view-point-color"] ?? defaultLidarViewPointColor(c2["card-theme"]))}"
-                            @value-changed="${(e2) => this._update("lidar-view-point-color", e2.detail.value)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t2.editor.lidarViewPointOpacity}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="0" max="1" step="0.05"
-                                .value="${String(c2["lidar-view-point-opacity"] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY)}"
-                                @input="${(e2) => this._numSlider("lidar-view-point-opacity", e2)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-point-opacity"] ?? DEFAULT_LIDAR_VIEW_POINT_OPACITY), 0.05)}</span>
-                        </div>
-                    </label>
-                    <div class="field">
-                        <span class="label">${t2.editor.lidarViewWireframe}</span>
-                        <div class="segmented-toggle">
-                            <button
-                                type="button"
-                                class="seg-option ${(c2["lidar-view-wireframe"] ?? DEFAULT_LIDAR_VIEW_WIREFRAME) === true ? "active" : ""}"
-                                @click="${() => this._update("lidar-view-wireframe", true)}"
-                            >${t2.editor.lidarViewWireframeOn}</button>
-                            <button
-                                type="button"
-                                class="seg-option ${(c2["lidar-view-wireframe"] ?? DEFAULT_LIDAR_VIEW_WIREFRAME) !== true ? "active" : ""}"
-                                @click="${() => this._update("lidar-view-wireframe", false)}"
-                            >${t2.editor.lidarViewWireframeOff}</button>
-                        </div>
-                    </div>
-                    <div class="hint">${t2.editor.lidarViewWireframeHint}</div>
-                    <label class="field">
-                        <span class="label">${t2.editor.lidarViewWireframeColor}</span>
-                        <helios-color-picker
-                            .value="${String(c2["lidar-view-wireframe-color"] ?? defaultLidarViewWireframeColor(c2["card-theme"]))}"
-                            @value-changed="${(e2) => this._update("lidar-view-wireframe-color", e2.detail.value)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t2.editor.lidarViewWireframeOpacity}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="0" max="1" step="0.05"
-                                .value="${String(c2["lidar-view-wireframe-opacity"] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY)}"
-                                @input="${(e2) => this._numSlider("lidar-view-wireframe-opacity", e2)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c2["lidar-view-wireframe-opacity"] ?? DEFAULT_LIDAR_VIEW_WIREFRAME_OPACITY), 0.05)}</span>
                         </div>
                     </label>
                 </details>
@@ -42085,6 +45102,39 @@ let HeliosCardEditor = class extends i {
                     >${this._resetFeedback ?? t2.editor.resetCacheButton}</button>
                 </details>
 
+                <details class="advanced-section about-section" ?open="${this._openSection === "about"}" @toggle="${(e2) => this._onSectionToggle("about", e2)}">
+                    <summary class="section-title section-title-collapse">${t2.editor.aboutSection}</summary>
+                    <div class="about-row">
+                        <span class="about-label">${t2.editor.aboutVersionLabel}</span>
+                        <span class="about-value">${"1.7.0"}</span>
+                    </div>
+                    <div class="about-block">
+                        <a class="about-link" href="https://helios-lidar.org" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:satellite-variant"></ha-icon>
+                            <span>${t2.editor.aboutSiteTitle}</span>
+                        </a>
+                        <p class="about-paragraph">${t2.editor.aboutSiteDescription}</p>
+                    </div>
+                    <div class="about-block">
+                        <div class="about-label">${t2.editor.aboutCodeLabel}</div>
+                        <a class="about-link" href="https://github.com/ReikanYsora/Helios" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>${t2.editor.aboutRepoCard}</span>
+                        </a>
+                        <a class="about-link" href="https://github.com/ReikanYsora/Helios-Lidar" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>${t2.editor.aboutRepoLidar}</span>
+                        </a>
+                    </div>
+                    <div class="about-block about-coffee">
+                        <p class="about-paragraph">${t2.editor.aboutCoffeeMessage}</p>
+                        <a class="about-link about-coffee-link" href="https://www.buymeacoffee.com/reikanysora" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:coffee"></ha-icon>
+                            <span>${t2.editor.aboutCoffeeLink}</span>
+                        </a>
+                    </div>
+                </details>
+
             </div>
         `;
   }
@@ -42105,6 +45155,7 @@ let HeliosCardEditor = class extends i {
 };
 HeliosCardEditor.SLIDER_COMMIT_DELAY_MS = 250;
 HeliosCardEditor.PV_ARRAYS_MAX = 6;
+HeliosCardEditor.BATTERIES_MAX = 6;
 HeliosCardEditor.styles = editorStyles;
 __decorateClass$1([
   n2({ attribute: false })
@@ -42121,6 +45172,9 @@ __decorateClass$1([
 __decorateClass$1([
   r()
 ], HeliosCardEditor.prototype, "_openArrayIndices", 2);
+__decorateClass$1([
+  r()
+], HeliosCardEditor.prototype, "_openBatteryIndices", 2);
 __decorateClass$1([
   r()
 ], HeliosCardEditor.prototype, "_resetFeedback", 2);
@@ -42157,7 +45211,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.6.4"}`,
+      `%c☀ HELIOS%c v${"1.7.0"}`,
       labelStyle,
       versionStyle
     );
@@ -42181,7 +45235,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.6.4",
+        version: "1.7.0",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -42189,7 +45243,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.6.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -42253,6 +45307,7 @@ let HeliosCard = class extends i {
     this._pvFetchKey = "";
     this._pvFetching = false;
     this._pvHistoryDiagnostics = null;
+    this._batteryHistories = [];
     this._pvCalibWiped = false;
     this._pvSampleBuffer = [];
     this._batterySoc = null;
@@ -42278,12 +45333,20 @@ let HeliosCard = class extends i {
     this._isLiveMode = true;
     this._shadowBusy = false;
     this._detailMode = false;
+    this._dashOpenedAtMs = null;
     this._lidarViewMode = false;
     this._lidarFadeInStartMs = null;
     this._lidarFadeOutStartMs = null;
+    this._lidarViewOpacity = DEFAULT_LIDAR_VIEW_OPACITY;
+    this._shadingDomeMode = false;
+    this._shadingDomeFadeInStartMs = null;
+    this._shadingDomeFadeOutStartMs = null;
+    this._shadingDomeCloudPct = 0;
+    this._shadingDomeScene = null;
     this._lastHomeKey = "";
     this._lastConfigSig = "";
     this._initInflight = false;
+    this._lastEngineSpawnAt = 0;
     this._trackElement = null;
     this._trackPointerId = null;
     this._boundPointerMove = (e2) => onTimelinePointerMove(this, e2);
@@ -42350,11 +45413,8 @@ let HeliosCard = class extends i {
     this._lastHomeKey = "";
     this.requestUpdate();
   }
-  //Wipe all card-side cached production / forecast data and
-  //trigger a fresh fetch from HA and Open-Meteo. Used by the
-  //editor's "reset data cache" button so users can recover from
-  //a stuck calibration or a stale weather payload without
-  //touching localStorage manually.
+  //Wipe all card-side cached production / forecast data and trigger a fresh fetch from HA and Open-Meteo. Used by the editor's "reset data cache"
+  //button so users can recover from a stuck calibration or a stale weather payload without touching localStorage manually.
   resetDataCache() {
     this._pvHistory = null;
     this._pvSampleBuffer = [];
@@ -42363,9 +45423,12 @@ let HeliosCard = class extends i {
     this._engine?.resetDataCache();
     this.requestUpdate();
   }
-  //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
+  //Sizing for masonry view. 1 unit = 50 px so 15 ≈ 750 px, giving
+  //the basemap area room to breathe (~480 px once the timeline
+  //takes its ~150 px below). 12 ≈ 600 px was a 16:9 letterbox
+  //that read as cramped on the default Lovelace column width.
   getCardSize() {
-    return 12;
+    return 15;
   }
   //Sizing for sections view (current). 1 row ≈ 56 px and 1 col ≈ 30 px
   //(at section width 360 px). Default 9 columns x 11 rows ≈ 540 x 624 px.
@@ -42399,6 +45462,10 @@ let HeliosCard = class extends i {
   connectedCallback() {
     super.connectedCallback();
     _liveCards.add(this);
+    if (this._pendingCleanupTimer !== void 0) {
+      window.clearTimeout(this._pendingCleanupTimer);
+      this._pendingCleanupTimer = void 0;
+    }
     tick(this);
     this._timer = window.setInterval(() => tick(this), 3e4);
     initVisibilityObserver(this);
@@ -42409,6 +45476,10 @@ let HeliosCard = class extends i {
     window.clearInterval(this._timer);
     this._visibilityObserver?.disconnect();
     this._visibilityObserver = void 0;
+    if (this._onVisibilityChange) {
+      document.removeEventListener("visibilitychange", this._onVisibilityChange);
+      this._onVisibilityChange = void 0;
+    }
     if (this._initDebounceTimer !== void 0) {
       window.clearTimeout(this._initDebounceTimer);
       this._initDebounceTimer = void 0;
@@ -42418,8 +45489,14 @@ let HeliosCard = class extends i {
       cancelAnimationFrame(this._lidarFadeRaf);
       this._lidarFadeRaf = void 0;
     }
-    this._engine?.cleanup();
-    this._engine = void 0;
+    if (this._pendingCleanupTimer !== void 0) {
+      window.clearTimeout(this._pendingCleanupTimer);
+    }
+    this._pendingCleanupTimer = window.setTimeout(() => {
+      this._pendingCleanupTimer = void 0;
+      this._engine?.cleanup();
+      this._engine = void 0;
+    }, 1500);
   }
   //Engine init policy: re-init only when one of the *identity inputs*
   //changes (API key, home coordinates, map style). We resize the
@@ -42443,6 +45520,11 @@ let HeliosCard = class extends i {
     if (!this._engine || identityChanged) {
       if (this._initInflight) {
         return;
+      }
+      if (identityChanged) {
+        this._lidarViewMode = false;
+        this._shadingDomeMode = false;
+        this._detailMode = false;
       }
       this._lastHomeKey = homeKey;
       this._lastConfigSig = computeConfigSig(this.config);
@@ -42516,16 +45598,17 @@ let HeliosCard = class extends i {
     const pvPeakRefW = pvCalibKVal !== null && pvCalibKVal > 0 ? pvCalibKVal * 100 : 5e3;
     const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
     const pvIdle = !(pvWattsNow > 0);
-    const batterySocEntity = String(this.config?.["battery-soc-entity"] ?? "").trim();
-    const batteryPowerEntity = String(this.config?.["battery-power-entity"] ?? "").trim();
+    const batteryBanks = this._getBatteryBanks();
+    const hasAnyBankSoc = batteryBanks.some((b2) => b2.socEntity !== "");
+    const hasAnyBankPower = batteryBanks.some((b2) => b2.powerEntity !== "");
     const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
     const batteryScrubbing = !this._isLiveMode && this._selectedTime !== null;
     const batteryScrubFuture = batteryScrubbing && this._selectedTime.getTime() > Date.now() + 6e4;
     const activeBatterySoc = batteryScrubbing ? batterySampleAtTime(this._batterySocHistory, this._selectedTime) : this._batterySoc;
     const activeBatteryPower = batteryScrubbing ? batterySampleAtTime(this._batteryPowerHistory, this._selectedTime) : this._batteryPower;
     const activeBatteryUnit = this._batteryPowerUnit;
-    const showSocChip = hasApiKey && layout !== null && !batteryScrubFuture && batterySocEntity !== "" && activeBatterySoc !== null;
-    const showPowerChip = hasApiKey && layout !== null && !batteryScrubFuture && batteryPowerEntity !== "" && activeBatteryPower !== null;
+    const showSocChip = hasApiKey && layout !== null && !batteryScrubFuture && hasAnyBankSoc && activeBatterySoc !== null;
+    const showPowerChip = hasApiKey && layout !== null && !batteryScrubFuture && hasAnyBankPower && activeBatteryPower !== null;
     const batterySocText = showSocChip ? `${Math.round(activeBatterySoc)} %` : "";
     const batteryPowerText = showPowerChip ? formatBatteryPower(this.hass, activeBatteryPower, activeBatteryUnit) : "";
     const batteryCharging = showPowerChip && activeBatteryPower > 0;
@@ -42603,7 +45686,8 @@ let HeliosCard = class extends i {
     const cardClasses = [
       cardThemeClass,
       this._detailMode ? "detail-active" : "",
-      this._lidarViewMode ? "lidar-view-active" : ""
+      this._lidarViewMode ? "lidar-view-active" : "",
+      this._shadingDomeMode ? "shading-dome-active" : ""
     ].filter(Boolean).join(" ");
     return b`
             <ha-card class="${cardClasses}">
@@ -42690,62 +45774,73 @@ let HeliosCard = class extends i {
                     </div>
                 ` : A}
 
-                <!--  Top-right column. Hosts the LiDAR View toggle:
-                      always present when coords are known so its slot
-                      stays stable across homes; disabled when no LiDAR
-                      provider covers the active home. The back-to-live
-                      button lives top-left next to the clock since both
-                      relate to "where am I in time". The shadow-busy
-                      indicator now rides the centre spinner-sun (which
-                      also shows during the initial weather fetch) so
-                      the user has a single, prominent loading signal
-                      instead of two competing spinners on opposite
-                      sides of the card. Sits at the same 8 px edge
-                      margin as the clock and the timeline.  -->
-                <!--  Top-right cluster, mirror of the top-left
-                      clock + scrub-return pair. The "LiDAR" chip is
-                      passive (purely a status label) and the toggle
-                      button sits to its LEFT, fused to the chip's
-                      left edge with a shared border. Three button
-                      states:
-                        - no provider covers the home, disabled,
-                          eye-off-outline icon, no click handler
-                        - public online provider, active, earth
-                          icon, click toggles LiDAR view
-                        - local-nDSM (YAML config), active, harddisk
-                          icon, click toggles LiDAR view
-                      Active state mirrors the scrub-blue theme used
-                      on the opposite rail when LiDAR view is on, so
-                      the cluster doubles as the "you're in LiDAR
-                      view" signal the way the clock chip doubles as
-                      the "you're scrubbing" signal.                 -->
+                <!--  Top-right mode bar: three glued segments picking
+                      which canvas state the card is in. The default
+                      Layer UI is the regular HUD (sun arc, clouds,
+                      leader lines, chips), LiDAR View paints the
+                      cell cloud over a quiet basemap, Ombres paints
+                      the celestial dome of learned residuals above
+                      the home. The three modes are mutually
+                      exclusive; the bar shows which one is active
+                      and lets the user switch in a single click.
+                      Each segment is icon-only with a title
+                      tooltip; the active segment takes the same
+                      scrub-blue plate the clock chip uses while
+                      scrubbing, for visual consistency with the
+                      other mode-indicating chips.                   -->
                 ${hasApiKey ? (() => {
       const isLocal = lidarSourceId === "local-ndsm";
       const hasProvider = lidarSourceId !== null;
-      const stateClass = !hasProvider ? "is-uncovered" : isLocal ? "is-local" : "is-online";
-      const stateIcon = !hasProvider ? "mdi:cloud-off-outline" : isLocal ? "mdi:harddisk" : "mdi:earth";
-      const stateLabel = !hasProvider ? "No LiDAR coverage at this location" : isLocal ? "Toggle LiDAR view, local nDSM" : "Toggle LiDAR view, online provider";
-      const onToggle = hasProvider ? () => toggleLidarView(this) : void 0;
+      const lidarIcon = !hasProvider ? "mdi:cloud-off-outline" : isLocal ? "mdi:harddisk" : "mdi:earth";
+      const lidarTitle = !hasProvider ? "No LiDAR coverage at this location" : isLocal ? "LiDAR view, local nDSM" : "LiDAR view, online provider";
+      const isLayer = !this._lidarViewMode && !this._shadingDomeMode;
+      const onLayer = () => {
+        if (this._lidarViewMode) toggleLidarView(this);
+        if (this._shadingDomeMode) toggleShadingDome(this);
+      };
+      const onLidar = hasProvider ? () => {
+        if (this._shadingDomeMode) toggleShadingDome(this);
+        if (!this._lidarViewMode) toggleLidarView(this);
+      } : void 0;
+      const onDome = () => {
+        if (this._lidarViewMode) toggleLidarView(this);
+        if (!this._shadingDomeMode) toggleShadingDome(this);
+      };
       return b`
                         <div class="overlay-top-right">
-                            <button
-                                type="button"
-                                class="lidar-view-toggle-btn ${stateClass} ${this._lidarViewMode ? "is-on" : ""}"
-                                ?disabled="${!hasProvider}"
-                                aria-label="${stateLabel}"
-                                aria-pressed="${this._lidarViewMode ? "true" : "false"}"
-                                @click="${onToggle}"
-                            >
-                                <ha-icon icon="${stateIcon}"></ha-icon>
-                            </button>
-                            <button
-                                type="button"
-                                class="lidar-view-chip ${stateClass} ${this._lidarViewMode ? "is-on" : ""}"
-                                ?disabled="${!hasProvider}"
-                                aria-label="${stateLabel}"
-                                aria-pressed="${this._lidarViewMode ? "true" : "false"}"
-                                @click="${onToggle}"
-                            >${pickTranslations(this.hass?.language).lidarViewChipLabel}</button>
+                            <div class="mode-bar" role="radiogroup" aria-label="View mode">
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg ${isLayer ? "is-on" : ""}"
+                                    role="radio"
+                                    aria-checked="${isLayer ? "true" : "false"}"
+                                    title="Default layer UI"
+                                    @click="${onLayer}"
+                                >
+                                    <ha-icon icon="mdi:solar-power-variant"></ha-icon>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg ${this._lidarViewMode ? "is-on" : ""} ${!hasProvider ? "is-disabled" : ""}"
+                                    role="radio"
+                                    aria-checked="${this._lidarViewMode ? "true" : "false"}"
+                                    ?disabled="${!hasProvider}"
+                                    title="${lidarTitle}"
+                                    @click="${onLidar}"
+                                >
+                                    <ha-icon icon="${lidarIcon}"></ha-icon>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg ${this._shadingDomeMode ? "is-on" : ""}"
+                                    role="radio"
+                                    aria-checked="${this._shadingDomeMode ? "true" : "false"}"
+                                    title="Adaptive shading dome"
+                                    @click="${onDome}"
+                                >
+                                    <ha-icon icon="mdi:radar"></ha-icon>
+                                </button>
+                            </div>
                         </div>
                     `;
     })() : A}
@@ -42776,13 +45871,13 @@ let HeliosCard = class extends i {
                 ` : A}
 
                 ${hasApiKey && this._cloudScene ? (() => {
-      const cs = this._cloudScene;
-      const lowPts = cs.discLow.length >= 3 ? cs.discLow.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
-      const midPts = cs.discMid.length >= 3 ? cs.discMid.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
-      const highPts = cs.discHigh.length >= 3 ? cs.discHigh.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
-      const ringPts = cs.ring.length >= 3 ? cs.ring.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
-      const cloudLight = lerpHexToward(cs.cloudHex, "#ffffff", 0.55);
-      const cloudDark = lerpHexToward(cs.cloudHex, "#000000", 0.4);
+      const cs2 = this._cloudScene;
+      const lowPts = cs2.discLow.length >= 3 ? cs2.discLow.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
+      const midPts = cs2.discMid.length >= 3 ? cs2.discMid.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
+      const highPts = cs2.discHigh.length >= 3 ? cs2.discHigh.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
+      const ringPts = cs2.ring.length >= 3 ? cs2.ring.map((p2) => `${p2.x},${p2.y}`).join(" ") : "";
+      const cloudLight = lerpHexToward(cs2.cloudHex, "#ffffff", 0.55);
+      const cloudDark = lerpHexToward(cs2.cloudHex, "#000000", 0.4);
       const silhouettes = this._homeSilhouettes;
       const maskId = "helios-cloud-home-mask";
       return b`
@@ -42828,7 +45923,7 @@ let HeliosCard = class extends i {
                                     <polygon
                                         class="cloud-disc cloud-disc-mid"
                                         points="${midPts}"
-                                        fill="${cs.cloudHex}"
+                                        fill="${cs2.cloudHex}"
                                         fill-opacity="0.5"
                                     />
                                 ` : A}
@@ -43222,11 +46317,11 @@ let HeliosCard = class extends i {
 
                 <!--  Sunrise / sunset markers were drawn here as
                       sun-coloured ha-icon glyphs anchored at the
-                      arc's horizon crossings. Removed in v1.6.3 :
-                      the arc shape itself already communicates
-                      "the sun rises here, sets there", the icons
-                      added visual noise and competed with the
-                      LiDAR shadow blobs sitting on the same
+                      arc's horizon crossings. Removed: the arc
+                      shape itself already communicates "the sun
+                      rises here, sets there", the icons added
+                      visual noise and competed with the LiDAR
+                      shadow blobs sitting on the same
                       horizon line.                                  -->
 
 
@@ -43294,8 +46389,34 @@ let HeliosCard = class extends i {
                       internal scroll / tap would close the panel.  -->
                 ${this._detailMode ? renderDashboard(this) : A}
 
+                <!--  Adaptive shading-dome overlay. SVG is full-card,
+                      absolutely positioned, pointer-events disabled
+                      so it never intercepts clicks meant for the
+                      map. Fades in via inline opacity driven by the
+                      fade RAF loop. The cloud-bin picker rides
+                      flush against the top-right chip cluster so
+                      the slice selector is right next to the chip
+                      that opened the view.                          -->
+                ${renderShadingDomeOverlay(this)}
+                ${this._shadingDomeMode ? renderShadingDomeCloudPicker(this, (pct) => {
+      this._shadingDomeCloudPct = pct;
+      refreshShadingDomeScene(this);
+      this.requestUpdate();
+    }) : A}
+                ${renderLidarViewOpacityPicker(this, (opacity) => {
+      this._lidarViewOpacity = opacity;
+      this._engine?.setLidarViewOpacity(opacity);
+    })}
+
             </ha-card>
         `;
+  }
+  _getBatteryBanks() {
+    if (this.config !== this._cachedBatteryBanksCfg || !this._cachedBatteryBanks) {
+      this._cachedBatteryBanks = parseBatteryBanks(this.config);
+      this._cachedBatteryBanksCfg = this.config;
+    }
+    return this._cachedBatteryBanks;
   }
 };
 HeliosCard.OUTLINE_FAR = 1.5;
@@ -43392,6 +46513,9 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_lidarViewMode", 2);
+__decorateClass([
+  r()
+], HeliosCard.prototype, "_shadingDomeMode", 2);
 HeliosCard = __decorateClass([
   t("helios-card")
 ], HeliosCard);
