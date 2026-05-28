@@ -29,7 +29,8 @@ import
     refreshBattery,
     batterySampleAtTime,
     formatBatteryPower,
-    parseBatteryBanks
+    parseBatteryBanks,
+    type BatteryBank
 } from './card/battery';
 import { refreshSolarRadiation } from './card/radiation';
 import { computeForecastCalibration } from './card/calibration';
@@ -449,12 +450,15 @@ export class HeliosCard extends LitElement
     _lidarFadeOutStartMs: number | null = null;
     _lidarFadeRaf?:       number;
     //Overall LiDAR View opacity, driven by the bottom slider painted
-    //while the view is active. Runtime state on purpose: no config
-    //key. Defaults to DEFAULT_LIDAR_VIEW_OPACITY each card lifetime
-    //so the user always lands on a sensible-looking opacity, then
-    //tweaks live. Pushed to the engine in the slider's @input
-    //handler, which forwards to the WebGL layer.
-    @state() _lidarViewOpacity = DEFAULT_LIDAR_VIEW_OPACITY;
+    //while the view is active. Plain field (NOT @state) on purpose:
+    //the slider drag fires ~50 input events / s and a @state coupling
+    //would cascade the full 1000+ line render() on each one (parse-
+    //BatteryBanks, projection math, leader paths, etc.) for zero
+    //visual benefit because the slider's own .value already tracks
+    //the drag and the engine push goes straight to the WebGL layer.
+    //Defaults to DEFAULT_LIDAR_VIEW_OPACITY each card lifetime so
+    //the user always lands on a sensible-looking opacity.
+    _lidarViewOpacity = DEFAULT_LIDAR_VIEW_OPACITY;
 
     //Shading-dome overlay state. Mutually exclusive with the LiDAR
     //view (the click handlers below close one before opening the
@@ -583,10 +587,13 @@ export class HeliosCard extends LitElement
     }
 
 
-    //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
+    //Sizing for masonry view. 1 unit = 50 px so 15 ≈ 750 px, giving
+    //the basemap area room to breathe (~480 px once the timeline
+    //takes its ~150 px below). 12 ≈ 600 px was a 16:9 letterbox
+    //that read as cramped on the default Lovelace column width.
     public getCardSize(): number
     {
-        return 12;
+        return 15;
     }
 
     //Sizing for sections view (current). 1 row ≈ 56 px and 1 col ≈ 30 px
@@ -977,7 +984,7 @@ export class HeliosCard extends LitElement
         //SoC chip, power for the Power chip), so a multi-bank install with one bank reporting still gets the aggregated chip painted.
         //Falls back transparently to legacy single-bank configs because parseBatteryBanks wraps the flat keys into a one-row list when
         //the `batteries:` array is absent.
-        const batteryBanks       = parseBatteryBanks(this.config);
+        const batteryBanks       = this._getBatteryBanks();
         const hasAnyBankSoc      = batteryBanks.some(b => b.socEntity   !== '');
         const hasAnyBankPower    = batteryBanks.some(b => b.powerEntity !== '');
         const batteryColor       = cfgHex(this.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
@@ -2039,24 +2046,6 @@ export class HeliosCard extends LitElement
                     this._engine?.setLidarViewOpacity(opacity);
                 })}
 
-                <!--  Depth-of-field veil. A single absolutely-positioned
-                      div pinned to the card's box with a 0.6 px backdrop
-                      blur and a radial mask centred on the home's
-                      current screen position (clamped to the card centre
-                      when no layout is available). The mask is fully
-                      transparent in a ~30 % inner disc so the home + its
-                      immediate surroundings stay crisp, then ramps to
-                      fully opaque (full blur) at the edges. Effect is
-                      barely perceptible by design, just enough to give a
-                      gentle vignette of softness on the periphery that
-                      mimics depth of field at distance. Pointer events
-                      off so nothing under it ever sees its surface.    -->
-                <div
-                    class="dof-blur-mask"
-                    style="--dof-x:${(layout?.home.x ?? 0).toFixed(1)}px; --dof-y:${(layout?.home.y ?? 0).toFixed(1)}px"
-                    aria-hidden="true"
-                ></div>
-
             </ha-card>
         `;
     }
@@ -2064,6 +2053,21 @@ export class HeliosCard extends LitElement
 
     //Per-card unique id used to namespace SVG <defs> ids so multiple Helios cards on the same dashboard don't clash on gradient / filter references.
     _instanceId = `h${Math.floor(Math.random() * 1e9).toString(36)}`;
+
+    //Memoised parseBatteryBanks result, keyed on the config object identity. parseBatteryBanks walks the YAML, allocates a fresh array
+    //and N objects, and re-trims every entity string on each call, expensive when the Lit render fires at 60-120 Hz during scrub.
+    //Hass swaps the config reference whenever the user edits it, so identity equality is the right invalidation signal.
+    private _cachedBatteryBanks?: BatteryBank[];
+    private _cachedBatteryBanksCfg?: HeliosConfig;
+    private _getBatteryBanks(): BatteryBank[]
+    {
+        if (this.config !== this._cachedBatteryBanksCfg || !this._cachedBatteryBanks)
+        {
+            this._cachedBatteryBanks    = parseBatteryBanks(this.config);
+            this._cachedBatteryBanksCfg = this.config;
+        }
+        return this._cachedBatteryBanks;
+    }
 
     //Hover handlers on the home hitbox. Toggle the sun-coloured glow halo around the home silhouette so the focal building reads as interactive
     //before the user clicks. Cleared on exit so the glow doesn't get stuck on if the cursor leaves while the detail overlay is fading in.

@@ -26,8 +26,9 @@ import
     computePvPowerWeighted
 } from './pv';
 import { computeBatteryToday, parseBatteryBanks, type BatteryHost } from './battery';
-import { type ChartHost } from './charts';
+import { effectiveForecastRatio, type ChartHost } from './charts';
 import { computeForecastCalibration } from './calibration';
+import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
 
@@ -53,6 +54,42 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //Lit-side requestUpdate handle used during the count-up window; the dashboard handlers below set it via the host so a single rAF
     //loop drives re-renders for the 700 ms window then self-clears.
     _dashCountUpRaf?:      number;
+}
+
+
+//Day-integrated kWh forecast with the per-step `effectiveForecastRatio` blended in. The same recipe the timeline day-strip chips use:
+//for each forecast sample, compute the raw model output (pct × k), then multiply by the (shading-map per-(sun×cloud) auto-learned
+//ratio when confident, scalar 5-day calibration as fallback). Used by the dashboard's "→ X kWh affiné" headline so the dashboard's
+//refined figure matches the timeline chips and the in-card refined value at every scrub instant.
+export function computeRefinedDailyKwh(host: DashboardHost, dayStartMs: number, dayEndMs: number): number | null
+{
+    const k      = pvCalibK(host.config);
+    const series = host._chartSeries;
+    const coords = getHomeCoords(host.config, host.hass);
+    if (k === null || k <= 0 || !series || !coords) return null;
+    const raster = host._engine?.getLidarRaster() ?? null;
+    const shMap  = currentShadingMap();
+    const cal    = computeForecastCalibration(host);
+    const calR   = cal?.ratio ?? 1;
+    const nowMs  = Date.now();
+    let kwh = 0;
+    let any = false;
+    for (let i = 0; i < series.times.length; i++)
+    {
+        const tMs = series.times[i].getTime();
+        if (tMs < dayStartMs || tMs >= dayEndMs) continue;
+        const cloud = series.cloud[i] ?? 0;
+        const pct = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
+            airTempC: series.temperature[i],
+            windMs:   series.windSpeed[i],
+            raster,
+        });
+        if (pct < 0) continue;
+        const ratio = effectiveForecastRatio(shMap, series.times[i], coords.lat, coords.lon, cloud, calR, nowMs);
+        kwh += (pct * k * ratio) / 1000;
+        any = true;
+    }
+    return any ? kwh : null;
 }
 
 
@@ -221,6 +258,10 @@ export function computeTodayHourly(host: DashboardHost): {
     //Pass 2: forecast. Only when peak power is configured. Fill
     //in every hour bin (so we can show the full curve), but the
     //caller will combine observed + forecast for the area split.
+    //RAW model output here (no calibration / shading map blend),
+    //the refined headline computes its own pass via
+    //computeRefinedDailyKwh so the "PRÉVU" figure stays raw and the
+    //arrow figure carries the per-(sun×cloud) auto-learning.
     const k      = pvCalibK(host.config);
     const series = host._chartSeries;
     const coords = getHomeCoords(host.config, host.hass);
@@ -545,17 +586,26 @@ export function renderDashTodaySection(
     todayDate.setHours(0, 0, 0, 0);
     const todayDateLabel = formatDate(todayDate, host.config?.['date-format']);
 
-    //Forecast calibration: derive a multiplier from the past 5
-    //completed days' (actual / predicted) ratios, then surface
-    //both the raw and the refined kWh side by side under the
-    //PRÉVU stat. Hidden when fewer than 2 past days carried
-    //enough production to compute a stable ratio.
+    //Forecast calibration: surface the refined kWh as a SECOND
+    //per-step integration that blends the per-(sun × cloud) shading-
+    //map auto-learning with the scalar 5-day actual / predicted
+    //ratio. Same recipe as the timeline day-strip chips, so the
+    //dashboard headline and the in-card refined values match at
+    //every scrub instant. Hidden when fewer than 2 past days
+    //carried enough production to compute a stable ratio
+    //(computeForecastCalibration returns null in that case).
     const calibration = computeForecastCalibration(host);
+    const todayStartMs = (() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+    })();
+    const todayEndMs   = todayStartMs + 86_400_000;
     const refinedForecastKwh = calibration !== null
-        ? forecastKwh * calibration.ratio
+        ? computeRefinedDailyKwh(host, todayStartMs, todayEndMs)
         : null;
-    const refinedDeltaPct = calibration !== null
-        ? (calibration.ratio - 1) * 100
+    const refinedDeltaPct = calibration !== null && refinedForecastKwh !== null && forecastKwh > 0.05
+        ? ((refinedForecastKwh - forecastKwh) / forecastKwh) * 100
         : null;
     const calibrationHint = calibration !== null
         ? t.detail.forecastCalibrationHint.replace('{n}', String(calibration.daysUsed))
@@ -1041,16 +1091,27 @@ export function renderDashTomorrowSection(
     tomorrowDate.setDate(tomorrowDate.getDate() + 1);
     const tomorrowDateLabel = formatDate(tomorrowDate, host.config?.['date-format']);
 
-    //Same calibration multiplier we apply on the today card,
-    //surfaced under the tomorrow stat too so the user sees a
-    //refined estimate in both places. Hidden when calibration
-    //isn't available (no kWp, no history, < 2 valid past days).
+    //Same per-(sun × cloud) blended ratio we apply on the today
+    //card, surfaced under the tomorrow stat too so the user sees a
+    //refined estimate in both places. Walks the chart series across
+    //tomorrow's 24 h window, multiplies each model output by the
+    //shading-map auto-learned ratio (when confident) and falls back
+    //to the scalar 5-day calibration otherwise. Hidden when
+    //calibration isn't available (no kWp, no history, < 2 valid
+    //past days).
     const calibration = computeForecastCalibration(host);
+    const tomorrowStartMs = (() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + 1);
+        return d.getTime();
+    })();
+    const tomorrowEndMs   = tomorrowStartMs + 86_400_000;
     const refinedTotalKwh = calibration !== null
-        ? data.totalKwh * calibration.ratio
+        ? computeRefinedDailyKwh(host, tomorrowStartMs, tomorrowEndMs)
         : null;
-    const refinedDeltaPct = calibration !== null
-        ? (calibration.ratio - 1) * 100
+    const refinedDeltaPct = calibration !== null && refinedTotalKwh !== null && data.totalKwh > 0.05
+        ? ((refinedTotalKwh - data.totalKwh) / data.totalKwh) * 100
         : null;
     const calibrationHint = calibration !== null
         ? t.detail.forecastCalibrationHint.replace('{n}', String(calibration.daysUsed))

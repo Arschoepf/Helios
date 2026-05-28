@@ -2650,7 +2650,7 @@ const heliosCardStyles = i$3`
             its surroundings. Layouts that DO pass an explicit height
             (masonry via getCardSize, sections view via getGridOptions)
             override this freely.                                       */
-        min-height: 480px;
+        min-height: 600px;
         /*  New stacking context so absolute children with z-index
             stay scoped to the card instead of escaping above HA's
             dashboard chrome on scroll. */
@@ -4636,33 +4636,6 @@ const heliosCardStyles = i$3`
         cloud picker for visual consistency between the two modes;
         ungated (continuous, no ticks) because opacity is a free
         analog tune, not a binned pick.                              */
-    /*  Permanent depth-of-field veil. Sits at z-index 1, between the
-        MapLibre canvas (auto / 0) and every chip / overlay (z-index
-        11+), so backdrop-filter only sweeps the BASEMAP behind it,
-        never the UI. Chips, timeline, sliders and the mode bar all
-        composite ABOVE the veil and stay crisp regardless of where
-        the user is looking.
-
-        The blur is 0.6 px (subliminal on its own) shaped by a radial
-        mask centred on the home's current screen position: fully
-        transparent inside ~32 % of the radius (no blur at the focal
-        point), smooth ramp to fully opaque (full blur) at ~96 %. The
-        home stays crisp, the edges read as out-of-focus, which gives
-        the basemap a gentle DoF without any per-frame JS work, the
-        mask anchor follows the home through CSS variables updated
-        by the card render. Pointer events off so the veil never
-        intercepts clicks meant for the map underneath.               */
-    .dof-blur-mask
-    {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        z-index: 1;
-        backdrop-filter: blur(0.6px);
-        -webkit-backdrop-filter: blur(0.6px);
-        mask-image: radial-gradient(circle at var(--dof-x, 50%) var(--dof-y, 50%), transparent 32%, black 96%);
-        -webkit-mask-image: radial-gradient(circle at var(--dof-x, 50%) var(--dof-y, 50%), transparent 32%, black 96%);
-    }
 
     .lidar-view-opacity-slider
     {
@@ -38367,7 +38340,7 @@ const _HeliosEngine = class _HeliosEngine {
       };
       const out = new Uint8Array(rasterRef.rasterSize * rasterRef.rasterSize);
       const capturedRaster = r2;
-      const CHUNK_ROWS = 32;
+      const CHUNK_ROWS = 8;
       let j = 0;
       const tick2 = () => {
         if (!this._lidarViewActive || !this._lidarRaster || !this._lidarViewLayer) {
@@ -38431,6 +38404,7 @@ const _HeliosEngine = class _HeliosEngine {
       }
       this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
       this._pushLidarViewConfig();
+      this._pushLidarViewFadeRange();
       const layer = this._lidarViewLayer;
       const raster = this._lidarRaster;
       window.requestAnimationFrame(() => {
@@ -38458,16 +38432,21 @@ const _HeliosEngine = class _HeliosEngine {
   //way up.
   _pushLidarViewConfig() {
     if (!this._lidarViewLayer) return;
-    const [fullR, fadeR] = this._lidarViewFadeRange();
-    this._lidarViewLayer.setFadeRange(fullR, fadeR);
     this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
     this._lidarViewLayer.setOpacity(this._lidarViewOpacity * 0.5);
+  }
+  //Fade range is fixed (LIDAR_VIEW_FULL_OPACITY_RADIUS_M / LIDAR_VIEW_DISPLAY_RADIUS_M, both compile-time constants), no reason to
+  //push it on every slider tick. Called once from _initLidarViewLayer and that's it.
+  _pushLidarViewFadeRange() {
+    if (!this._lidarViewLayer) return;
+    const [fullR, fadeR] = this._lidarViewFadeRange();
+    this._lidarViewLayer.setFadeRange(fullR, fadeR);
   }
   setLidarViewOpacity(opacity) {
     const clamped = Math.max(0, Math.min(1, opacity));
     if (clamped === this._lidarViewOpacity) return;
     this._lidarViewOpacity = clamped;
-    this._pushLidarViewConfig();
+    this._lidarViewLayer?.setOpacity(clamped * 0.5);
   }
   getLidarViewOpacity() {
     return this._lidarViewOpacity;
@@ -41915,6 +41894,34 @@ function computeDailyKwhTotals(host) {
   }
   return out;
 }
+function computeRefinedDailyKwh(host, dayStartMs, dayEndMs) {
+  const k2 = pvCalibK(host.config);
+  const series = host._chartSeries;
+  const coords = getHomeCoords(host.config, host.hass);
+  if (k2 === null || k2 <= 0 || !series || !coords) return null;
+  const raster = host._engine?.getLidarRaster() ?? null;
+  const shMap = currentShadingMap();
+  const cal = computeForecastCalibration(host);
+  const calR = cal?.ratio ?? 1;
+  const nowMs = Date.now();
+  let kwh = 0;
+  let any = false;
+  for (let i2 = 0; i2 < series.times.length; i2++) {
+    const tMs = series.times[i2].getTime();
+    if (tMs < dayStartMs || tMs >= dayEndMs) continue;
+    const cloud = series.cloud[i2] ?? 0;
+    const pct = computePvPowerWeighted(host.config, series.times[i2], coords.lat, coords.lon, cloud, {
+      airTempC: series.temperature[i2],
+      windMs: series.windSpeed[i2],
+      raster
+    });
+    if (pct < 0) continue;
+    const ratio = effectiveForecastRatio(shMap, series.times[i2], coords.lat, coords.lon, cloud, calR, nowMs);
+    kwh += pct * k2 * ratio / 1e3;
+    any = true;
+  }
+  return any ? kwh : null;
+}
 const COUNT_UP_MS = 700;
 function dashCountUpPhase(host) {
   const start = host._dashOpenedAtMs;
@@ -42201,8 +42208,14 @@ function renderDashTodaySection(host, t2, pvColor, sunColor) {
   todayDate.setHours(0, 0, 0, 0);
   const todayDateLabel = formatDate(todayDate, host.config?.["date-format"]);
   const calibration = computeForecastCalibration(host);
-  const refinedForecastKwh = calibration !== null ? forecastKwh * calibration.ratio : null;
-  const refinedDeltaPct = calibration !== null ? (calibration.ratio - 1) * 100 : null;
+  const todayStartMs = (() => {
+    const d2 = /* @__PURE__ */ new Date();
+    d2.setHours(0, 0, 0, 0);
+    return d2.getTime();
+  })();
+  const todayEndMs = todayStartMs + 864e5;
+  const refinedForecastKwh = calibration !== null ? computeRefinedDailyKwh(host, todayStartMs, todayEndMs) : null;
+  const refinedDeltaPct = calibration !== null && refinedForecastKwh !== null && forecastKwh > 0.05 ? (refinedForecastKwh - forecastKwh) / forecastKwh * 100 : null;
   const calibrationHint = calibration !== null ? t2.detail.forecastCalibrationHint.replace("{n}", String(calibration.daysUsed)) : "";
   const phase = dashCountUpPhase(host);
   const producedKwhDisplay = producedKwh * phase;
@@ -42576,8 +42589,15 @@ function renderDashTomorrowSection(host, t2, sunColor, _cloudColor, pvColor) {
   tomorrowDate.setDate(tomorrowDate.getDate() + 1);
   const tomorrowDateLabel = formatDate(tomorrowDate, host.config?.["date-format"]);
   const calibration = computeForecastCalibration(host);
-  const refinedTotalKwh = calibration !== null ? data.totalKwh * calibration.ratio : null;
-  const refinedDeltaPct = calibration !== null ? (calibration.ratio - 1) * 100 : null;
+  const tomorrowStartMs = (() => {
+    const d2 = /* @__PURE__ */ new Date();
+    d2.setHours(0, 0, 0, 0);
+    d2.setDate(d2.getDate() + 1);
+    return d2.getTime();
+  })();
+  const tomorrowEndMs = tomorrowStartMs + 864e5;
+  const refinedTotalKwh = calibration !== null ? computeRefinedDailyKwh(host, tomorrowStartMs, tomorrowEndMs) : null;
+  const refinedDeltaPct = calibration !== null && refinedTotalKwh !== null && data.totalKwh > 0.05 ? (refinedTotalKwh - data.totalKwh) / data.totalKwh * 100 : null;
   const calibrationHint = calibration !== null ? t2.detail.forecastCalibrationHint.replace("{n}", String(calibration.daysUsed)) : "";
   return b`
         <section class="dash-section dash-card dash-tomorrow">
@@ -43348,8 +43368,7 @@ const editorStyles = i$3`
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        padding: 8px 0 14px;
     }
     .about-label
     {
@@ -43400,20 +43419,38 @@ const editorStyles = i$3`
         padding-top: 14px;
         border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
+    /*  BMC button styled to match the reset-btn shape (transparent fill,
+        1px border, compact padding, right-aligned via margin-left: auto)
+        but in BMC yellow so the brand colour still reads even though the
+        fill is gone. Same hover bloom pattern as reset-btn for visual
+        consistency across the editor's outline buttons.                */
     .about-coffee-link
     {
-        margin-top: 4px;
-        background: #ffdd00;
-        color: #000000;
-        padding: 8px 14px;
-        border-radius: 8px;
-        align-self: flex-start;
+        margin-top: 8px;
+        background: transparent;
+        border: 1px solid #ffcc00;
+        color: #ffcc00;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
         font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        align-self: flex-end;
+        margin-left: auto;
+        width: fit-content;
     }
     .about-coffee-link:hover
     {
-        background: #ffea4a;
+        background: rgba(255, 204, 0, 0.08);
         text-decoration: none;
+    }
+    .about-coffee-link:focus-visible
+    {
+        outline: 2px solid #ffcc00;
+        outline-offset: 2px;
     }
     /*  Shading-map debug section: stat strip + 4-up polar grid +
         action row. Grid wraps from a 4-up row to a 2x2 / 1-up
@@ -45069,7 +45106,7 @@ let HeliosCardEditor = class extends i {
                     <summary class="section-title section-title-collapse">${t2.editor.aboutSection}</summary>
                     <div class="about-row">
                         <span class="about-label">${t2.editor.aboutVersionLabel}</span>
-                        <span class="about-value">${"1.7.0-beta.4"}</span>
+                        <span class="about-value">${"1.7.0-beta.5"}</span>
                     </div>
                     <div class="about-block">
                         <a class="about-link" href="https://helios-lidar.org" target="_blank" rel="noopener noreferrer">
@@ -45174,7 +45211,7 @@ if (!window.customCards.some((c2) => c2.type === "helios-card")) {
     const labelStyle = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px 0 0 4px;font-weight:bold;";
     const versionStyle = "background:#1f2937;color:#f59e0b;padding:2px 8px;border-radius:0 4px 4px 0;font-weight:bold;";
     console.info(
-      `%c☀ HELIOS%c v${"1.7.0-beta.4"}`,
+      `%c☀ HELIOS%c v${"1.7.0-beta.5"}`,
       labelStyle,
       versionStyle
     );
@@ -45198,7 +45235,7 @@ window.addEventListener("helios-data-cache-reset", () => {
         snapshot: c2.getStatsSnapshot()
       }));
       const out = {
-        version: "1.7.0-beta.4",
+        version: "1.7.0-beta.5",
         cards: cards.length,
         lifecycle: w2.__heliosStats ?? null,
         details: cards
@@ -45206,7 +45243,7 @@ window.addEventListener("helios-data-cache-reset", () => {
       const label = "background:#f59e0b;color:#1f2937;padding:2px 8px;border-radius:4px;font-weight:bold;";
       const heading = "color:#f59e0b;font-weight:bold;";
       console.groupCollapsed(
-        `%c☀ HELIOS stats%c v${"1.7.0-beta.4"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
+        `%c☀ HELIOS stats%c v${"1.7.0-beta.5"}, ${cards.length} card${cards.length === 1 ? "" : "s"} alive`,
         label,
         "color:#6b7280;font-weight:normal;"
       );
@@ -45386,9 +45423,12 @@ let HeliosCard = class extends i {
     this._engine?.resetDataCache();
     this.requestUpdate();
   }
-  //Sizing for masonry view. 1 unit = 50 px so 12 ≈ 600 px.
+  //Sizing for masonry view. 1 unit = 50 px so 15 ≈ 750 px, giving
+  //the basemap area room to breathe (~480 px once the timeline
+  //takes its ~150 px below). 12 ≈ 600 px was a 16:9 letterbox
+  //that read as cramped on the default Lovelace column width.
   getCardSize() {
-    return 12;
+    return 15;
   }
   //Sizing for sections view (current). 1 row ≈ 56 px and 1 col ≈ 30 px
   //(at section width 360 px). Default 9 columns x 11 rows ≈ 540 x 624 px.
@@ -45558,7 +45598,7 @@ let HeliosCard = class extends i {
     const pvPeakRefW = pvCalibKVal !== null && pvCalibKVal > 0 ? pvCalibKVal * 100 : 5e3;
     const pvFlowDuration = flowDuration(pvWattsNow, pvPeakRefW, 0.5);
     const pvIdle = !(pvWattsNow > 0);
-    const batteryBanks = parseBatteryBanks(this.config);
+    const batteryBanks = this._getBatteryBanks();
     const hasAnyBankSoc = batteryBanks.some((b2) => b2.socEntity !== "");
     const hasAnyBankPower = batteryBanks.some((b2) => b2.powerEntity !== "");
     const batteryColor = cfgHex(this.config?.["battery-color"], DEFAULT_BATTERY_COLOR_HEX);
@@ -46368,26 +46408,15 @@ let HeliosCard = class extends i {
       this._engine?.setLidarViewOpacity(opacity);
     })}
 
-                <!--  Depth-of-field veil. A single absolutely-positioned
-                      div pinned to the card's box with a 0.6 px backdrop
-                      blur and a radial mask centred on the home's
-                      current screen position (clamped to the card centre
-                      when no layout is available). The mask is fully
-                      transparent in a ~30 % inner disc so the home + its
-                      immediate surroundings stay crisp, then ramps to
-                      fully opaque (full blur) at the edges. Effect is
-                      barely perceptible by design, just enough to give a
-                      gentle vignette of softness on the periphery that
-                      mimics depth of field at distance. Pointer events
-                      off so nothing under it ever sees its surface.    -->
-                <div
-                    class="dof-blur-mask"
-                    style="--dof-x:${(layout?.home.x ?? 0).toFixed(1)}px; --dof-y:${(layout?.home.y ?? 0).toFixed(1)}px"
-                    aria-hidden="true"
-                ></div>
-
             </ha-card>
         `;
+  }
+  _getBatteryBanks() {
+    if (this.config !== this._cachedBatteryBanksCfg || !this._cachedBatteryBanks) {
+      this._cachedBatteryBanks = parseBatteryBanks(this.config);
+      this._cachedBatteryBanksCfg = this.config;
+    }
+    return this._cachedBatteryBanks;
   }
 };
 HeliosCard.OUTLINE_FAR = 1.5;
@@ -46484,9 +46513,6 @@ __decorateClass([
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_lidarViewMode", 2);
-__decorateClass([
-  r()
-], HeliosCard.prototype, "_lidarViewOpacity", 2);
 __decorateClass([
   r()
 ], HeliosCard.prototype, "_shadingDomeMode", 2);

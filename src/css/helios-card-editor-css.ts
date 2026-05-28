@@ -553,8 +553,7 @@ export const editorStyles = css`
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        padding: 8px 0 14px;
     }
     .about-label
     {
@@ -605,20 +604,38 @@ export const editorStyles = css`
         padding-top: 14px;
         border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
+    /*  BMC button styled to match the reset-btn shape (transparent fill,
+        1px border, compact padding, right-aligned via margin-left: auto)
+        but in BMC yellow so the brand colour still reads even though the
+        fill is gone. Same hover bloom pattern as reset-btn for visual
+        consistency across the editor's outline buttons.                */
     .about-coffee-link
     {
-        margin-top: 4px;
-        background: #ffdd00;
-        color: #000000;
-        padding: 8px 14px;
-        border-radius: 8px;
-        align-self: flex-start;
+        margin-top: 8px;
+        background: transparent;
+        border: 1px solid #ffcc00;
+        color: #ffcc00;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
         font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        align-self: flex-end;
+        margin-left: auto;
+        width: fit-content;
     }
     .about-coffee-link:hover
     {
-        background: #ffea4a;
+        background: rgba(255, 204, 0, 0.08);
         text-decoration: none;
+    }
+    .about-coffee-link:focus-visible
+    {
+        outline: 2px solid #ffcc00;
+        outline-offset: 2px;
     }
     /*  Shading-map debug section: stat strip + 4-up polar grid +
         action row. Grid wraps from a 4-up row to a 2x2 / 1-up

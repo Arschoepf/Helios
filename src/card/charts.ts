@@ -38,7 +38,7 @@ import { lookupRatio, blendedRatio, type ShadingMap } from '../engine/shadingMap
 //apply identical corrections; that's how a tree's late-afternoon
 //shadow ends up showing in both the dashboard headline and the
 //refined curve simultaneously.
-function effectiveForecastRatio(
+export function effectiveForecastRatio(
     map:    ShadingMap,
     time:   Date,
     lat:    number,

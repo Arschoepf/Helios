@@ -1793,9 +1793,11 @@ export class HeliosEngine
             //this._lidarRaster moves on while rasterRef stays pointing at the old data, so the tick can bail before posting an
             //exposure sized to the dead raster (which would otherwise paint nonsense for one frame).
             const capturedRaster = r;
-            //32-row chunks land each rAF tick around 6-20 ms even at high precision (rasterSize ~512), so the browser still hits 60 fps
-            //during the sweep. Lower chunk sizes would shave per-frame budget further at the cost of more total wall time (rAF overhead).
-            const CHUNK_ROWS = 32;
+            //8-row chunks fit comfortably under 16 ms even at high precision (rasterSize ~512: 8 × 512 × ~100 raymarch steps × ~12
+            //ops per step ≈ 5 M ops per chunk, 4-8 ms on a hot core), so the browser keeps hitting 60 fps during the sweep. 32-row
+            //chunks were overruning the frame budget at high precision and produced the visible 3-4 fps stutter on activation. rAF
+            //overhead per tick is negligible (~0.1 ms), so the 4x extra ticks cost nothing relative to the gain.
+            const CHUNK_ROWS = 8;
             let j = 0;
             const tick = (): void =>
             {
@@ -1877,6 +1879,7 @@ export class HeliosEngine
             }
             this._lidarViewLayer.setHome(this.homeLat, this.homeLon);
             this._pushLidarViewConfig();
+            this._pushLidarViewFadeRange();
 
             const layer  = this._lidarViewLayer;
             const raster = this._lidarRaster;
@@ -1918,10 +1921,17 @@ export class HeliosEngine
     private _pushLidarViewConfig(): void
     {
         if (!this._lidarViewLayer) return;
-        const [fullR, fadeR] = this._lidarViewFadeRange();
-        this._lidarViewLayer.setFadeRange(fullR, fadeR);
         this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
         this._lidarViewLayer.setOpacity(this._lidarViewOpacity * 0.5);
+    }
+
+    //Fade range is fixed (LIDAR_VIEW_FULL_OPACITY_RADIUS_M / LIDAR_VIEW_DISPLAY_RADIUS_M, both compile-time constants), no reason to
+    //push it on every slider tick. Called once from _initLidarViewLayer and that's it.
+    private _pushLidarViewFadeRange(): void
+    {
+        if (!this._lidarViewLayer) return;
+        const [fullR, fadeR] = this._lidarViewFadeRange();
+        this._lidarViewLayer.setFadeRange(fullR, fadeR);
     }
 
     public setLidarViewOpacity(opacity: number): void
@@ -1929,7 +1939,8 @@ export class HeliosEngine
         const clamped = Math.max(0, Math.min(1, opacity));
         if (clamped === this._lidarViewOpacity) return;
         this._lidarViewOpacity = clamped;
-        this._pushLidarViewConfig();
+        //Direct push to skip even the _pushLidarViewConfig overhead, no other tunable changes during a slider drag.
+        this._lidarViewLayer?.setOpacity(clamped * 0.5);
     }
 
     public getLidarViewOpacity(): number

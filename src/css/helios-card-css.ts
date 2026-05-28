@@ -45,7 +45,7 @@ export const heliosCardStyles = css`
             its surroundings. Layouts that DO pass an explicit height
             (masonry via getCardSize, sections view via getGridOptions)
             override this freely.                                       */
-        min-height: 480px;
+        min-height: 600px;
         /*  New stacking context so absolute children with z-index
             stay scoped to the card instead of escaping above HA's
             dashboard chrome on scroll. */
@@ -2031,33 +2031,6 @@ export const heliosCardStyles = css`
         cloud picker for visual consistency between the two modes;
         ungated (continuous, no ticks) because opacity is a free
         analog tune, not a binned pick.                              */
-    /*  Permanent depth-of-field veil. Sits at z-index 1, between the
-        MapLibre canvas (auto / 0) and every chip / overlay (z-index
-        11+), so backdrop-filter only sweeps the BASEMAP behind it,
-        never the UI. Chips, timeline, sliders and the mode bar all
-        composite ABOVE the veil and stay crisp regardless of where
-        the user is looking.
-
-        The blur is 0.6 px (subliminal on its own) shaped by a radial
-        mask centred on the home's current screen position: fully
-        transparent inside ~32 % of the radius (no blur at the focal
-        point), smooth ramp to fully opaque (full blur) at ~96 %. The
-        home stays crisp, the edges read as out-of-focus, which gives
-        the basemap a gentle DoF without any per-frame JS work, the
-        mask anchor follows the home through CSS variables updated
-        by the card render. Pointer events off so the veil never
-        intercepts clicks meant for the map underneath.               */
-    .dof-blur-mask
-    {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        z-index: 1;
-        backdrop-filter: blur(0.6px);
-        -webkit-backdrop-filter: blur(0.6px);
-        mask-image: radial-gradient(circle at var(--dof-x, 50%) var(--dof-y, 50%), transparent 32%, black 96%);
-        -webkit-mask-image: radial-gradient(circle at var(--dof-x, 50%) var(--dof-y, 50%), transparent 32%, black 96%);
-    }
 
     .lidar-view-opacity-slider
     {
