@@ -156,7 +156,7 @@ export const cs: Translations = {
         lidarViewPointSize:    'Velikost bodů (px)',
         localLidarSection:     'Pokročilé — Lokální LiDAR (BYO)',
         localLidarHint:        'Volitelné. Nasměrujte Helios na svůj vlastní nDSM GeoTIFF (Digitální model povrchu mínus země, výška nad zemí v metrech) hostovaný v Home Assistant. Umožňuje rozsvítit stíny v libovolném regionu, který ještě není pokryt veřejnými poskytovateli LiDAR. Uvnitř definované oblasti tento zdroj nahrazuje jakéhokoli národního poskytovatele.',
-        localLidarToolsHint:   'Potřebujete připravit raster od nuly? Snadná cesta je společník [helios-lidar.org](https://helios-lidar.org): vložte svůj surový soubor LAZ / LAS nebo pár rastrů DSM + DTM a vrátí 2-pásmový COG, který Helios čte (pásmo 1 = nDSM, pásmo 2 = DTM) plus připravený k vložení YAML pro níže uvedené klíče. Zdarma, bez instalace, bez účtu. Pokud raději spustíte vše lokálně, repozitář Helios také dodává Python pomocníky pod `tools/lidar/` pro stejnou konverzi.',
+        localLidarToolsHint:   'Potřebujete připravit raster od nuly? Vložte svůj surový soubor LAZ / LAS nebo pár rastrů DSM + DTM na doprovodný web [helios-lidar.org](https://helios-lidar.org), vrátí 2-pásmový COG, který Helios čte (pásmo 1 = nDSM, pásmo 2 = DTM) společně s YAML připraveným k vložení pro níže uvedené klíče. Zdarma, bez instalace, bez účtu. Dáváte přednost spuštění všeho lokálně? Kompletní sada nástrojů v Pythonu se nachází v [repozitáři Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar).',
         localLidarEnabled:     'Použít lokální data',
         localLidarUrl:         'URL GeoTIFF',
         localLidarMinLat:      'Min šířka',

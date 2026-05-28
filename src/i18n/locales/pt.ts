@@ -154,7 +154,7 @@ export const pt: Translations = {
         lidarViewPointSize:    'Tamanho dos pontos (px)',
         localLidarSection:     'Avançado — LiDAR local (BYO)',
         localLidarHint:        'Opcional. Aponta o Helios para o teu próprio nDSM GeoTIFF (Modelo Digital de Superfície menos o solo, altura acima do solo em metros) alojado no Home Assistant. Permite ter sombras em regiões ainda não cobertas pelos fornecedores LiDAR públicos. Dentro da área definida, esta fonte substitui qualquer fornecedor nacional.',
-        localLidarToolsHint:   'Precisas de preparar um raster do zero? A forma mais simples é o site complementar [helios-lidar.org](https://helios-lidar.org): envia o teu ficheiro LAZ / LAS bruto ou um par DSM + DTM e ele devolve o COG de 2 bandas que o Helios consome (banda 1 = nDSM, banda 2 = DTM) com o bloco YAML pronto para colar nas chaves abaixo. Grátis, sem instalação, sem conta. Se preferires fazer tudo localmente, o repositório Helios também inclui auxiliares Python em `tools/lidar/` para a mesma conversão.',
+        localLidarToolsHint:   'Precisas de preparar um raster do zero? Larga o teu ficheiro LAZ / LAS bruto ou um par de rasters DSM + DTM no site complementar [helios-lidar.org](https://helios-lidar.org), ele devolve o COG de 2 bandas que o Helios lê (banda 1 = nDSM, banda 2 = DTM) com o YAML pronto a colar para as chaves abaixo. Grátis, sem instalação, sem conta. Preferes correr tudo localmente? A toolchain Python completa vive no [repositório Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar).',
         localLidarEnabled:     'Usar dados locais',
         localLidarUrl:         'URL do GeoTIFF',
         localLidarMinLat:      'Latitude mín.',

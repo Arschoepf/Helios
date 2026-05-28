@@ -154,7 +154,7 @@ export const nl: Translations = {
         lidarViewPointSize:    'Puntgrootte (px)',
         localLidarSection:     'Geavanceerd — Lokale LiDAR (BYO)',
         localLidarHint:        'Optioneel. Verwijs Helios naar je eigen nDSM-GeoTIFF (Digitaal Oppervlaktemodel min de grond, hoogte boven het maaiveld in meters) gehost in Home Assistant. Hiermee krijg je schaduwen in regio\'s die nog niet door de publieke LiDAR-leveranciers worden gedekt. Binnen het gedefinieerde gebied vervangt deze bron elke nationale leverancier.',
-        localLidarToolsHint:   'Een eigen raster nodig? Het makkelijkst gaat dat via de begeleidende site [helios-lidar.org](https://helios-lidar.org): upload je ruwe LAZ / LAS-bestand of een DSM + DTM-paar, en je krijgt de 2-band COG terug die Helios leest (band 1 = nDSM, band 2 = DTM), samen met het kant-en-klare YAML-blok voor de onderstaande sleutels. Gratis, geen installatie, geen account. Wil je liever alles lokaal doen? Dan bevat de Helios-repository ook Python-helpers onder `tools/lidar/` voor dezelfde conversie.',
+        localLidarToolsHint:   'Moet je een raster vanaf nul voorbereiden? Sleep je ruwe LAZ / LAS-bestand of een DSM + DTM-rasterpaar naar de begeleidende site [helios-lidar.org](https://helios-lidar.org), je krijgt de 2-band COG terug die Helios leest (band 1 = nDSM, band 2 = DTM) samen met het kant-en-klare YAML voor de sleutels hieronder. Gratis, geen installatie, geen account. Wil je liever alles lokaal draaien? De volledige Python-toolchain woont in de [Helios-Lidar repository](https://github.com/ReikanYsora/Helios-Lidar).',
         localLidarEnabled:     'Lokale data gebruiken',
         localLidarUrl:         'GeoTIFF-URL',
         localLidarMinLat:      'Min. breedtegraad',
