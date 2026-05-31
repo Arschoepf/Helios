@@ -98,6 +98,13 @@ export function startLidarFadeLoop(host: LidarViewHost): void
             host._lidarViewMode = false;
             host._engine?.setLidarViewFadeAlpha(0);
             host._engine?.setLidarViewActive(false);
+            //onMapTransform gated refreshOverlays() out while LiDAR
+            //was active, so any camera rotation the user performed
+            //inside LiDAR mode left the home silhouette + chip
+            //positions frozen at the bearing they had at toggle-on.
+            //Push a fresh projection pass now so the glow / leaders
+            //land at the right screen coords when the HUD comes back.
+            refreshOverlays(host);
         }
         //Enter fade complete, drop the marker so subsequent ticks stop ramping. The layer alpha sits at 1 until the user toggles back off.
         if (inStart !== null && now - inStart >= LIDAR_FADE_IN_MS)

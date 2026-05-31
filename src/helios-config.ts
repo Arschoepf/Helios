@@ -161,6 +161,12 @@ export interface HeliosConfig
     //the legacy behaviour where every bucket trains.
     'inverter-cutoff-soc-pct'?: unknown;
     'battery-color'?:         unknown;
+    //Optional. HA entity ids for the grid import / grid export
+    //meters the user already exposes through a sensor (or the HA
+    //Energy dashboard). The card reads the live values, the
+    //visual placement of the readouts is being reworked.
+    'grid-import-entity'?:    unknown;
+    'grid-export-entity'?:    unknown;
     'date-format'?:           unknown;
     //'12h' | '24h'. Default: '24h'. Picks between locale-
     //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
@@ -172,16 +178,10 @@ export interface HeliosConfig
     //a quieter, label-light basemap that draws less attention. The
     //label visibility toggle and the helios-buildings extrusion are
     //independent of this choice (both are wired to custom sources).
-    //When `card-theme: dark` is set, the Fiord dark style is used for
-    //both choices so the basemap matches the chrome.
+    //When the active HA theme is dark (probed via hass.themes.darkMode),
+    //the Fiord dark style is auto-selected so the basemap matches the
+    //frontend chrome without a per-card override.
     'map-style'?:             unknown;
-    //Picks the card chrome theme. 'light' (default) paints chips,
-    //charts, buttons, tooltips and the scrub overlay on a white
-    //surface; 'dark' switches to a near-black surface with light-
-    //grey text so the card sits cleanly inside dark HA dashboards.
-    //The 3D map basemap and the configured colour palette (sun,
-    //cloud, PV, battery) are unaffected.
-    'card-theme'?:            unknown;
     //Opts the idle-camera orbit in or out. Default: true (orbit
     //enabled). When false, the camera stays at the user's bearing
     //forever; pinch-rotate still works normally. Useful on low-power
@@ -317,24 +317,43 @@ export interface HeliosConfig
 //Defaults were chosen for maximum perceptual contrast against each
 //other and against typical satellite imagery:
 //  - Sun: a warm amber (#EF9F27), clearly warm, high luminance,
-//    doesn't compete with the green/blue of vegetation or water in
-//    the basemap.
-//  - Cloud: a cool desaturated blue (#5A8DC4), clearly cool, mid
-//    luminance, doesn't compete with the typical road/river blues
-//    rendered by MapTiler streets.
-//These two hues sit roughly opposite on the colour wheel so the eye
-//can distinguish them even at low alpha.
-export const DEFAULT_SUN_COLOR_HEX:   string = '#EF9F27';
-export const DEFAULT_CLOUD_COLOR_HEX: string = '#5A8DC4';
-//Vivid green that holds its own against the chart's white background and reads as "solar production" without competing with the orange sun or the
-//blue cloud colours.
-export const DEFAULT_PV_COLOR_HEX:    string = '#27B36B';
-//Bright red, distinct from sun (orange), cloud (blue), PV
-//(green), and easy to associate visually with battery
-//discharge / "energy on draw" semantics. Picked for chip-on-map
-//legibility against busy satellite basemaps in both light and
-//dark themes.
-export const DEFAULT_BATTERY_COLOR_HEX: string = '#FF5252';
+//Defaults aligned with Home Assistant's Energy dashboard palette
+//(--energy-solar-color / --energy-battery-out-color / --secondary-
+//text-color). A Helios card dropped into an HA dashboard now reads
+//as a first-party Energy tile by default, and any theme that
+//overrides the HA energy tokens (Catppuccin, Nord, etc.) flows
+//through automatically because the CSS rules consume the same
+//variables. The legacy per-config colour overrides
+//(sun-color / cloud-color / pv-color / battery-color in YAML) are
+//no longer read, those keys stay in the config type for backward
+//compatibility but the renderer ignores them.
+//Sun identity (arc + ray + disc) takes the HA amber tone so it
+//reads as distinct from the PV production orange. Helios is named
+//for the sun, the live sun on screen must not be confused with
+//the "PV production" identity. amber = #ffc107.
+export const DEFAULT_SUN_COLOR_HEX:   string = '#ffc107';  //--amber-color
+export const DEFAULT_CLOUD_COLOR_HEX: string = '#727272';  //--secondary-text-color (neutral)
+//PV chip + leader inherit the HA Energy palette's solar orange so
+//Helios's PV identity is identical to the HA energy distribution
+//card's solar node.
+export const DEFAULT_PV_COLOR_HEX:    string = '#ff9800';  //--energy-solar-color
+//SoC identity uses the HA Energy discharge teal (battery-out): the
+//SoC chip displays the "stock" of energy in the bank, same color
+//as battery-out in HA's energy graph. Live power direction adds
+//the in/out variants below via dual-tone leaders / chips.
+export const DEFAULT_BATTERY_COLOR_HEX: string = '#4db6ac';  //--energy-battery-out-color
+//Battery charging (positive power) uses the HA Energy pink. The
+//card splits the battery power leader colour by sign: charging =
+//pink, discharging = teal, the dual indicator the user requested
+//in the backlog.
+export const DEFAULT_BATTERY_IN_COLOR_HEX:  string = '#f06292';  //--energy-battery-in-color
+export const DEFAULT_BATTERY_OUT_COLOR_HEX: string = '#4db6ac';  //--energy-battery-out-color
+//Grid import (consumption from the grid) blue, grid return (export
+//to the grid) purple. Exactly the HA Energy palette so the Helios
+//map chips read as the same identity HA users see in the Energy
+//dashboard.
+export const DEFAULT_GRID_IMPORT_COLOR_HEX: string = '#488fc2';  //--energy-grid-consumption-color
+export const DEFAULT_GRID_EXPORT_COLOR_HEX: string = '#8353d1';  //--energy-grid-return-color
 
 
 //Default values for the building config, exposed so the visual editor can render the matching placeholder / slider defaults.

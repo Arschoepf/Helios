@@ -45,14 +45,55 @@ const RATIO_MAX = 1.5;
 const MIN_DAY_PREDICTED_KWH = 2;
 
 
+//Memoization cache. The calibration ratio is a pure function of
+//(config, series, history, pv unit, hass.config) identities, so a
+//WeakMap keyed on the host with the input identities checked on
+//read absorbs every repeat call inside a single render pass.
+//Without this cache the function fired 5+ times per render (main
+//chip + chart segments + dashboard headlines), each call iterating
+//5 days × ~24 hourly samples calling computePvPowerWeighted with
+//its full Math.sin/cos/asin/acos stack. On a dashboard rendering
+//at 60+ Hz under auto-rotate that dominated total CPU.
+interface CalibCacheEntry
+{
+    config:   unknown;
+    series:   unknown;
+    hist:     unknown;
+    pvUnit:   string;
+    hassCfg:  unknown;
+    raster:   unknown;
+    result:   ForecastCalibration | null;
+}
+const _calibCache = new WeakMap<ChartHost, CalibCacheEntry>();
+
+
 //Returns the calibration ratio plus the count of days that fed into it, or null when fewer than 2 past days have enough data to be averaged.
 export function computeForecastCalibration(host: ChartHost): ForecastCalibration | null
 {
+    const series  = host._chartSeries;
+    const hist    = host._pvHistory;
+    const hassCfg = host.hass?.config;
+    const raster  = host._engine?.getLidarRaster() ?? null;
+
+    const cached = _calibCache.get(host);
+    if (cached
+        && cached.config  === host.config
+        && cached.series  === series
+        && cached.hist    === hist
+        && cached.pvUnit  === host._pvUnit
+        && cached.hassCfg === hassCfg
+        && cached.raster  === raster)
+    {
+        return cached.result;
+    }
+
     const k      = pvCalibK(host.config);
-    const series = host._chartSeries;
-    const hist   = host._pvHistory;
     const coords = getHomeCoords(host.config, host.hass);
-    if (k === null || k <= 0 || !series || !hist || !coords) return null;
+    if (k === null || k <= 0 || !series || !hist || !coords)
+    {
+        _calibCache.set(host, { config: host.config, series, hist, pvUnit: host._pvUnit, hassCfg, raster, result: null });
+        return null;
+    }
 
     //Walk back day by day starting at yesterday. For each day, compute the model's "would-have-predicted" kWh from the hourly weather samples and the
     //user's actual produced kWh from the PV history. Keep going up to WINDOW_DAYS or until we run out of weather samples.
@@ -61,12 +102,10 @@ export function computeForecastCalibration(host: ChartHost): ForecastCalibration
     today0.setHours(0, 0, 0, 0);
 
     const ratios: number[] = [];
-    //Same LiDAR raster + per-array shading used in the live
-    //prediction; pulling it once outside the day loop so each
-    //past-day integration sees identical shading geometry as
-    //the upcoming days. Null on installs without LiDAR coverage,
-    //in which case predictedKwhForDay skips the raycast.
-    const raster = host._engine?.getLidarRaster() ?? null;
+    //Raster fetched above for the cache key; reused here so each
+    //past-day integration sees identical shading geometry as the
+    //upcoming days. Null on installs without LiDAR coverage, in
+    //which case predictedKwhForDay skips the raycast.
 
     for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++)
     {
@@ -84,13 +123,23 @@ export function computeForecastCalibration(host: ChartHost): ForecastCalibration
         ratios.push(Math.max(RATIO_MIN, Math.min(RATIO_MAX, r)));
     }
 
-    if (ratios.length < 2) return null;
-
-    const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length;
-    return {
-        ratio:    Math.max(RATIO_MIN, Math.min(RATIO_MAX, mean)),
-        daysUsed: ratios.length
-    };
+    let result: ForecastCalibration | null;
+    if (ratios.length < 2)
+    {
+        result = null;
+    }
+    else
+    {
+        let sum = 0;
+        for (const r of ratios) sum += r;
+        const mean = sum / ratios.length;
+        result = {
+            ratio:    Math.max(RATIO_MIN, Math.min(RATIO_MAX, mean)),
+            daysUsed: ratios.length
+        };
+    }
+    _calibCache.set(host, { config: host.config, series, hist, pvUnit: host._pvUnit, hassCfg, raster, result });
+    return result;
 }
 
 

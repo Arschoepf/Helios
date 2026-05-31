@@ -49,9 +49,49 @@ export interface BatteryBank
 //absent and at least one of the flat keys is set, the flat keys are wrapped in a single-bank list so the rest of the engine speaks one
 //shape regardless of how the config is authored. Returns an empty array when no battery is configured (the chip / trainer paths then
 //early-out without touching hass.states).
+//
+//WeakMap cache: the parsed bank list is a pure function of the
+//config object identity. It was previously walked on every render
+//(chip + chart + dashboard + trainer + multiple call sites in pv.ts
+//), each call iterating the batteries array and string-trimming
+//every entry.
+const _parseBatteryBanksCache = new WeakMap<HeliosConfig, BatteryBank[]>();
+
 export function parseBatteryBanks(config: HeliosConfig | undefined): BatteryBank[]
 {
     if (!config) return [];
+    const cached = _parseBatteryBanksCache.get(config);
+    if (cached !== undefined) return cached;
+    const result = _parseBatteryBanksImpl(config);
+    _parseBatteryBanksCache.set(config, result);
+    return result;
+}
+
+
+//Variant of parseBatteryBanks that falls back to the HA Energy
+//dashboard's battery source when the user-configured banks come
+//back empty. Lets the card light up the Battery + SoC chips
+//automatically as long as the user wired `stat_energy_from` and /
+//or `stat_soc` in the dashboard energy preferences.
+//
+//Returns the explicit user banks untouched when present; otherwise
+//synthesises a single-bank list backed by the dashboard defaults.
+export function effectiveBatteryBanks(
+    config:    HeliosConfig | undefined,
+    _defaults: { batteryPowerEntity: string | null; batterySocEntity: string | null },
+): BatteryBank[]
+{
+    //HA Energy auto-detect fallback was retired in 1.8.0 alongside
+    //the grid one. The user-configured banks (either via the new
+    //`batteries:` array or the legacy flat `battery-soc-entity` /
+    //`battery-power-entity` keys) are the only source. Without
+    //explicit config, the SoC + power chips collapse cleanly.
+    return parseBatteryBanks(config);
+}
+
+
+function _parseBatteryBanksImpl(config: HeliosConfig): BatteryBank[]
+{
     const raw = config['batteries'];
     if (Array.isArray(raw) && raw.length > 0)
     {
@@ -96,6 +136,7 @@ export interface BatteryHost
     readonly config:     HeliosConfig | undefined;
     readonly hass:       any;
     readonly _timeRange: { start: Date; end: Date } | null;
+    readonly _energyDefaults: { batteryPowerEntity: string | null; batterySocEntity: string | null };
 
     _batterySoc:          number | null;
     _batteryPower:        number | null;
@@ -215,7 +256,7 @@ export function refreshBattery(host: BatteryHost): void
 {
     if (!host.hass) return;
 
-    const banks = parseBatteryBanks(host.config);
+    const banks = effectiveBatteryBanks(host.config, host._energyDefaults);
 
     //No banks configured at all: clear everything and bail. This
     //keeps a stale graph from lingering when the user wipes the

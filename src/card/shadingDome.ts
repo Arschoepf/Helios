@@ -31,14 +31,26 @@ import type { HeliosEngine } from '../helios-engine';
 
 //1 s for both directions: enter wipes the dome into view top-down, exit wipes it out bottom-up. Long enough that the reveal reads as a deliberate
 //polish flourish rather than a click latency, short enough that the user isn't left waiting before they can interact with the cloud-cover slider.
-const DOME_FADE_IN_MS  = 1000;
-const DOME_FADE_OUT_MS = 1000;
+//Match the LiDAR exit timings so the animation cadence reads as
+//one consistent family across modes. 1000 ms felt sluggish at the
+//exit and was making the chip + timeline transitions look like
+//they never played at all.
+const DOME_FADE_IN_MS  = 600;
+const DOME_FADE_OUT_MS = 280;
 
 
 export interface ShadingDomeHost extends OverlaysHost
 {
     readonly _engine?: HeliosEngine;
     _shadingDomeMode:           boolean;
+    //Independent CSS-mask flag for the shading-dome-active body class.
+    //Decouples the HUD hide rule from the dome's own render gating so
+    //a toggle-off can lift the chip + timeline transitions IMMEDIATELY
+    //(at click time) while the dome SVG keeps fading out via the rAF
+    //loop. Without this decoupling, the chip transitions chased the
+    //class flip happening at end-of-fade and Lit's batched paint
+    //collapsed the lift to an instant, which read as "no animation".
+    _shadingDomeChipMask:       boolean;
     _shadingDomeFadeInStartMs:  number | null;
     _shadingDomeFadeOutStartMs: number | null;
     _shadingDomeFadeRaf?:       number;
@@ -75,15 +87,36 @@ export function toggleShadingDome(host: ShadingDomeHost): void
     {
         host._shadingDomeFadeOutStartMs = null;
         host._shadingDomeFadeInStartMs  = performance.now();
-        host._shadingDomeMode = true;
+        host._shadingDomeMode           = true;
+        //Defer the chip-mask flip by one animation frame so the
+        //browser commits the dome SVG's "opacity 0" first frame
+        //BEFORE the shading-dome-active class hits ha-card. Without
+        //this gap, the chip opacity transition was being collapsed
+        //into the same paint as the class flip and the chips
+        //disappeared instantly instead of fading. Symmetric to the
+        //exit path where the class flip leads the dome retirement.
         refreshShadingDomeScene(host);
         refreshOverlays(host);
+        requestAnimationFrame(() =>
+        {
+            host._shadingDomeChipMask = true;
+            host.requestUpdate();
+        });
         startShadingDomeFadeLoop(host);
     }
     else
     {
+        //Toggle off: lift the chip mask IMMEDIATELY so the
+        //shading-dome-active class drops off ha-card on the same
+        //paint as the click. The chip + timeline transitions fire
+        //right away from a clean reflow point, while the dome SVG
+        //keeps rendering via _shadingDomeMode = true + the fade-out
+        //marker. The rAF tick at end-of-fade flips _shadingDomeMode
+        //off to retire the dome render gate.
         host._shadingDomeFadeInStartMs  = null;
         host._shadingDomeFadeOutStartMs = performance.now();
+        host._shadingDomeChipMask       = false;
+        refreshOverlays(host);
         startShadingDomeFadeLoop(host);
     }
 }
@@ -103,8 +136,9 @@ export function startShadingDomeFadeLoop(host: ShadingDomeHost): void
         if (outStart !== null && now - outStart >= DOME_FADE_OUT_MS)
         {
             host._shadingDomeFadeOutStartMs = null;
-            host._shadingDomeMode = false;
-            host._shadingDomeScene = null;
+            host._shadingDomeMode           = false;
+            host._shadingDomeChipMask       = false;
+            host._shadingDomeScene          = null;
             refreshOverlays(host);
         }
         if (inStart !== null && now - inStart >= DOME_FADE_IN_MS)
@@ -135,6 +169,28 @@ export function startShadingDomeFadeLoop(host: ShadingDomeHost): void
 //currently-loaded shading map. Called on every camera move while
 //the dome is active, plus once at toggle-on. Idempotent; sets the
 //host scene to null when the engine isn't ready.
+//Module-level cache for the decoded cells. The shading map only
+//changes on a saveMap() call (training pass) , the dome scene
+//refresh, by contrast, fires on every map move while the dome is
+//active. Walking 5000+ Object.keys + Math.pow per cell on each
+//rotation frame was a major freeze trigger; we now keep the
+//decoded list cached and key it on the map object identity (the
+//loadMap cache layer returns the same reference between writes).
+let _cachedDecodedMapRef: unknown = null;
+let _cachedDecodedCells: Array<{
+    azimuthDeg:  number;
+    altitudeDeg: number;
+    cloudBin:    number;
+    ratio:       number;
+    aged:        number;
+}> = [];
+let _cachedDecodedStampMs = 0;
+//Refresh the decay weight every 5 min of wall clock. Inside that
+//window the aged values are reused from the cache; outside, the
+//entries are re-decoded so the opacity stays in sync with the
+//exponential ageing kernel.
+const _DECODE_REFRESH_MS = 5 * 60_000;
+
 export function refreshShadingDomeScene(host: ShadingDomeHost): void
 {
     if (!host._shadingDomeMode || !host._engine)
@@ -144,23 +200,31 @@ export function refreshShadingDomeScene(host: ShadingDomeHost): void
     }
     const map = loadMap();
     const nowMs = Date.now();
-    //Decode every populated cell once + age its weight so the view layer paints opacity directly without re-deriving it per-frame.
-    const decodedCells: Array<{ azimuthDeg: number; altitudeDeg: number; cloudBin: number; ratio: number; aged: number }> = [];
-    for (const key of Object.keys(map.cells))
+    let decodedCells = _cachedDecodedCells;
+    if (_cachedDecodedMapRef !== map
+        || nowMs - _cachedDecodedStampMs > _DECODE_REFRESH_MS)
     {
-        const cell = map.cells[key];
-        const d = decodeCellKey(key, cell);
-        if (!d) continue;
-        const dDays = Math.max(0, (nowMs - cell.t) / 86_400_000);
-        const aged  = cell.w * Math.pow(0.5, dDays / 60);
-        if (aged <= 0.05) continue;
-        decodedCells.push({
-            azimuthDeg:  d.azimuthDeg,
-            altitudeDeg: d.altitudeDeg,
-            cloudBin:    d.cloudBin,
-            ratio:       cell.ema,
-            aged,
-        });
+        //Decode every populated cell once + age its weight so the view layer paints opacity directly without re-deriving it per-frame.
+        decodedCells = [];
+        for (const key of Object.keys(map.cells))
+        {
+            const cell = map.cells[key];
+            const d = decodeCellKey(key, cell);
+            if (!d) continue;
+            const dDays = Math.max(0, (nowMs - cell.t) / 86_400_000);
+            const aged  = cell.w * Math.pow(0.5, dDays / 60);
+            if (aged <= 0.05) continue;
+            decodedCells.push({
+                azimuthDeg:  d.azimuthDeg,
+                altitudeDeg: d.altitudeDeg,
+                cloudBin:    d.cloudBin,
+                ratio:       cell.ema,
+                aged,
+            });
+        }
+        _cachedDecodedMapRef = map;
+        _cachedDecodedCells  = decodedCells;
+        _cachedDecodedStampMs = nowMs;
     }
 
     const now = new Date();
@@ -342,12 +406,15 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
     {
         const wipeAlpha = wipeAlphaForAltitude(c.altitudeDeg, wipe);
         if (wipeAlpha <= 0) continue;
+        //Wireframe + outlines use currentColor so the theme override
+        //below can swap white -> black via .shading-dome-cells-* in
+        //light mode without touching the per-cell opacity envelope.
         wireframeNodes.push(svg`
             <path d="${c.path}"
                   fill="none"
-                  stroke="rgba(255,255,255,0.09)"
-                  stroke-opacity="${wipeAlpha}"
-                  stroke-width="0.35" />
+                  stroke="currentColor"
+                  stroke-opacity="${0.22 * wipeAlpha}"
+                  stroke-width="0.6" />
         `);
         if (c.aged > 0)
         {
@@ -356,9 +423,9 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
                 <path d="${c.path}"
                       fill="${ratioToFill(c.ratio)}"
                       fill-opacity="${opacity}"
-                      stroke="rgba(255,255,255,0.22)"
-                      stroke-opacity="${wipeAlpha}"
-                      stroke-width="0.45" />
+                      stroke="currentColor"
+                      stroke-opacity="${0.45 * wipeAlpha}"
+                      stroke-width="0.85" />
             `);
         }
     }
@@ -399,8 +466,17 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
         </g>
     ` : nothing;
 
+    //Overall SVG opacity = shadingDomeFadeAlpha so the dome ENTRY
+    //ramps from invisible to opaque alongside the chip fade-out. The
+    //altitude wipe still rolls the cells in horizon-to-zenith inside
+    //that ramp; without this opacity multiplier the low-altitude
+    //cells appeared opaque immediately and covered the chips before
+    //their CSS transition could play, which the user reported as
+    //"the entry animation doesn't play". On exit, the same fade-out
+    //ramps the dome back to invisible while the chips fade in.
+    const fadeAlpha = shadingDomeFadeAlpha(host);
     return html`
-        <svg class="shading-dome-svg">
+        <svg class="shading-dome-svg" style="opacity:${fadeAlpha.toFixed(3)}">
             <g class="shading-dome-cells-wire">${wireframeNodes}</g>
             <g class="shading-dome-cells-color">${coloredNodes}</g>
             <g class="shading-dome-ribbon">${ribbonNodes}</g>

@@ -263,28 +263,66 @@ function safeStorage(): MapStorage | null
     catch (_) { return null; }
 }
 
+//In-memory cache of the parsed map. The dome refresh path calls
+//loadMap() on every map move while the shading dome is active,
+//and the underlying payload can grow past 50 KB after weeks of
+//training. Each call is `localStorage.getItem` + `JSON.parse`
+//running synchronously on the main thread, blocking 10-50 ms per
+//hit on Safari and Firefox: the classic source of mini-freezes
+//under manual rotation. We cache the parsed object and invalidate
+//it whenever the caller writes back via saveMap / resetMap.
+let _cachedMap: ShadingMap | null = null;
+
+function _invalidateLoadMapCache(): void
+{
+    _cachedMap = null;
+}
+
+
 export function loadMap(storage: MapStorage | null = safeStorage()): ShadingMap
 {
-    if (!storage) return emptyMap();
+    if (_cachedMap) return _cachedMap;
+    if (!storage)
+    {
+        _cachedMap = emptyMap();
+        return _cachedMap;
+    }
     try
     {
         const raw = storage.getItem(STORAGE_KEY);
-        if (!raw) return emptyMap();
+        if (!raw)
+        {
+            _cachedMap = emptyMap();
+            return _cachedMap;
+        }
         const parsed = JSON.parse(raw) as ShadingMap;
-        if (!parsed || parsed.version !== 2 || typeof parsed.cells !== 'object') return emptyMap();
+        if (!parsed || parsed.version !== 2 || typeof parsed.cells !== 'object')
+        {
+            _cachedMap = emptyMap();
+            return _cachedMap;
+        }
         //Trust the cell shape; future schema bumps invalidate via the
         //version field. Empty `cells` is fine, that's a fresh install.
-        return {
+        _cachedMap = {
             version: 2,
             lastTrainedMs: typeof parsed.lastTrainedMs === 'number' ? parsed.lastTrainedMs : 0,
             cells: parsed.cells || {},
         };
+        return _cachedMap;
     }
-    catch (_) { return emptyMap(); }
+    catch (_)
+    {
+        _cachedMap = emptyMap();
+        return _cachedMap;
+    }
 }
 
 export function saveMap(map: ShadingMap, storage: MapStorage | null = safeStorage()): void
 {
+    //Keep the in-memory cache aligned with what just got persisted
+    //so the next loadMap() call hits the cache instead of round-
+    //tripping through JSON.parse.
+    _cachedMap = map;
     if (!storage) return;
     try { storage.setItem(STORAGE_KEY, JSON.stringify(map)); }
     catch (_) { /* quota or disabled, give up silently */ }
@@ -293,6 +331,7 @@ export function saveMap(map: ShadingMap, storage: MapStorage | null = safeStorag
 export function resetMap(storage: MapStorage | null = safeStorage()): ShadingMap
 {
     const fresh = emptyMap();
+    _invalidateLoadMapCache();
     if (storage)
     {
         try { storage.setItem(STORAGE_KEY, JSON.stringify(fresh)); }

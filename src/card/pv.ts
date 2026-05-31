@@ -8,6 +8,7 @@
 //re-render exactly as the inline version did.
 
 import type { HeliosConfig } from '../helios-config';
+import { resolveEffectiveEntity } from './energy-prefs';
 import { computePvPower, getSunPosition, type PanelOrientation } from '../engine/sun';
 import { isPanelShaded, type NdsmRaster } from '../engine/pv-shading';
 import { formatLocalisedNumber } from './format';
@@ -53,6 +54,7 @@ export interface PvHost
     readonly config:     HeliosConfig | undefined;
     readonly hass:       any;
     readonly _timeRange: { start: Date; end: Date } | null;
+    readonly _energyDefaults: import('./energy-prefs').EnergyDefaults;
 
     _pvCurrent:             number | null;
     _pvUnit:                string;
@@ -80,7 +82,7 @@ const PV_CALIB_WIPE_FLAG_KEY = 'helios-pv-calib:wiped-v1';
 //when the (entity, range) tuple matches the last successful fetch.
 export function refreshPv(host: PvHost): void
 {
-    const entity = String(host.config?.['pv-power-entity'] ?? '').trim();
+    const entity = resolveEffectiveEntity(host.config, host._energyDefaults, 'pv-power-entity');
 
     if (!entity || !host.hass)
     {
@@ -421,7 +423,7 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
     }
 
     //Classification, same logic as currentPvRate. Repeated inline so each helper is self-contained.
-    const entity   = String(host.config?.['pv-power-entity'] ?? '').trim();
+    const entity   = resolveEffectiveEntity(host.config, host._energyDefaults, 'pv-power-entity');
     const stateObj = host.hass?.states?.[entity];
     const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
     const dc       = String(stateObj?.attributes?.device_class ?? '').toLowerCase();
@@ -513,7 +515,7 @@ export function currentPvRate(host: PvHost): PvRate | null
         return null;
     }
 
-    const entity   = String(host.config?.['pv-power-entity'] ?? '').trim();
+    const entity   = resolveEffectiveEntity(host.config, host._energyDefaults, 'pv-power-entity');
     const stateObj = host.hass?.states?.[entity];
     const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
     const dc       = String(stateObj?.attributes?.device_class ?? '').toLowerCase();
@@ -696,8 +698,20 @@ export function pvNormalizeToWatts(value: number, unit: string): number
 //Returns null when neither source is set or both are invalid;
 //callers then skip the prediction line and the peak-of-day
 //highlights for future days.
+//WeakMap cache: pvCalibK is a pure function of the config object's
+//identity. It used to be called 5+ times per render (chip + chart +
+//dashboard + calibration), each call walking pvArrays(config) which
+//parses every array entry. WeakMap-by-config absorbs every repeat
+//call until setConfig hands a fresh config object.
+const _pvCalibKCache = new WeakMap<HeliosConfig, number | null>();
+
 export function pvCalibK(config: HeliosConfig | undefined): number | null
 {
+    if (!config) return null;
+    if (_pvCalibKCache.has(config))
+    {
+        return _pvCalibKCache.get(config) ?? null;
+    }
     const arraysTotal = pvArrays(config).totalKwp;
     let kwp: number;
     if (arraysTotal > 0)
@@ -706,12 +720,18 @@ export function pvCalibK(config: HeliosConfig | undefined): number | null
     }
     else
     {
-        const raw = config?.['pv-peak-kwp'];
+        const raw = config['pv-peak-kwp'];
         const v   = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-        if (!isFinite(v) || v <= 0) return null;
+        if (!isFinite(v) || v <= 0)
+        {
+            _pvCalibKCache.set(config, null);
+            return null;
+        }
         kwp = v;
     }
-    return kwp * 10;
+    const result = kwp * 10;
+    _pvCalibKCache.set(config, result);
+    return result;
 }
 
 
@@ -724,12 +744,18 @@ export function pvCalibK(config: HeliosConfig | undefined): number | null
 //this; live PV observation is unaffected (the inverter has
 //already clipped the output in hardware before the entity
 //reported its value).
+const _pvInverterMaxWCache = new WeakMap<HeliosConfig, number>();
+
 export function pvInverterMaxW(config: HeliosConfig | undefined): number
 {
-    const raw = config?.['pv-inverter-max-kw'];
+    if (!config) return Infinity;
+    const cached = _pvInverterMaxWCache.get(config);
+    if (cached !== undefined) return cached;
+    const raw = config['pv-inverter-max-kw'];
     const kw  = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-    if (!isFinite(kw) || kw <= 0) return Infinity;
-    return kw * 1000;
+    const result = (!isFinite(kw) || kw <= 0) ? Infinity : kw * 1000;
+    _pvInverterMaxWCache.set(config, result);
+    return result;
 }
 
 

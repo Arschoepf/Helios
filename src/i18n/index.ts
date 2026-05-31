@@ -99,10 +99,6 @@ export interface Translations
         mapStyle:                 string;
         mapStyleHint:             string;
         mapStyleStreet:           string;
-        cardTheme:                string;
-        cardThemeHint:            string;
-        cardThemeLight:           string;
-        cardThemeDark:            string;
         showLabels:               string;
         showLabelsHint:           string;
         labelsOn:                 string;
@@ -216,6 +212,19 @@ export interface Translations
         inverterCutoffSocPct:       string;
         inverterCutoffSocPctHelp:   string;
         batteryColor:             string;
+        //Grid section: import / export power readouts. Both sides
+        //accept multiple entities; the chip displays whichever entity
+        //last changed (typical for peak / off-peak indexes that never
+        //increment at the same time).
+        gridSection:              string;
+        gridHint:                 string;
+        gridImportTitle:          string;
+        gridImportHint:           string;
+        gridExportTitle:          string;
+        gridExportHint:           string;
+        gridSourceTitle:          string;
+        gridSourceAdd:            string;
+        gridSourceRemove:         string;
         //Weather section. Hosts the optional solar-radiation entity
         //override: when wired to a physical W/m² sensor at the home
         //(typical Ecowitt / Davis / personal weather station), the

@@ -13,6 +13,7 @@ import
 } from '../helios-config';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
+import type { ChartSeries } from './charts';
 
 
 //Structural surface the host card exposes to this module. Extends
@@ -27,6 +28,7 @@ export interface TimelineHost extends OverlaysHost
     _selectedTime:      Date | null;
     _isLiveMode:        boolean;
     _now:               Date;
+    _chartSeries:       ChartSeries | null;
 
     //Hover cursor position on the timeline charts. The scrub handler
     //below writes it in lock-step with _selectedTime so the hover
@@ -52,9 +54,42 @@ export interface TimelineHost extends OverlaysHost
 //    time progresses.
 //PV and battery live readings update on Home Assistant state
 //changes, not on this tick, so they stay real-time regardless.
+//
+//Skip the _now / refreshOverlays update when neither the minute
+//nor the day have changed since the previous tick: the clock and
+//the live cursor display HH:MM at most, so a 30 s tick that lands
+//inside the same minute would cascade into a full Lit re-render
+//(template + arc + chart + dome) for no visible delta. On a busy
+//dashboard with several Helios cards, those wasted renders add up.
 export function tick(host: TimelineHost): void
 {
-    host._now = new Date();
+    const next = new Date();
+    const prev = host._now;
+    if (prev
+        && next.getMinutes() === prev.getMinutes()
+        && next.getHours()   === prev.getHours()
+        && next.getDate()    === prev.getDate()
+        && next.getMonth()   === prev.getMonth()
+        && next.getFullYear()=== prev.getFullYear())
+    {
+        return;
+    }
+    //Day rollover: the engine's getTimelineRange() is computed off
+    //"today midnight - N past days", so when the clock crosses
+    //midnight the window must shift by 24 h. Without this refetch
+    //the timeline kept showing the previous day's 5-day window
+    //(stuck on 4 visible days) until the next weather push hit.
+    const dayRolledOver = !prev
+        || next.getDate()     !== prev.getDate()
+        || next.getMonth()    !== prev.getMonth()
+        || next.getFullYear() !== prev.getFullYear();
+    host._now = next;
+    if (dayRolledOver && host._engine)
+    {
+        const range = host._engine.getTimelineRange();
+        if (range) host._timeRange = range;
+        host._chartSeries = host._engine.getTimelineSeries() ?? host._chartSeries;
+    }
     //The sun moves with time, so refresh its screen-space
     //position too. The other parts of refreshOverlays
     //(percentage label) are camera-driven and won't change

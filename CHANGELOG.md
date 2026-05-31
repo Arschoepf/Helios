@@ -5,6 +5,153 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.8.0
+
+> Accelerated release to address performance regressions reported after
+> v1.7.0. Some roadmap items (notably the new LiDAR providers) are
+> deferred. Apologies for the delay on those, they remain priority for
+> the next cycle. Stabilising the rendering took precedence over
+> extending coverage for this one.
+
+### Home Assistant harmonisation
+
+The card now reads the active HA theme directly via
+`hass.themes.darkMode` instead of exposing its own toggle. Every chip,
+leader, chart and editor control consumes HA design tokens
+(`--primary-color`, `--card-background-color`, `--divider-color`,
+`--ha-card-border-*`, `--energy-solar-color`,
+`--energy-grid-consumption-color`, `--energy-battery-in-color`, etc.).
+The card also picks up the HA frontend default border / radius / box-
+shadow, so Helios sits visually alongside the other Energy dashboard
+cards. Users familiar with the HA Energy dashboard recognise the same
+colour vocabulary and chip language, and an HA theme switch now flips
+the card automatically.
+
+The legacy `card-theme: light | dark` YAML option is gone. When the
+editor opens, retired keys are silently scrubbed from the config.
+
+### Performance and stability
+
+- WebGL "too many active contexts" fix in dashboard edit mode. The
+  mount / unmount loop HA triggers during the edit-mode UI animation
+  is neutralised (`preview: false`, 1 s first-spawn debounce,
+  `isConnected` gates on every deferred spawn path). Engines no
+  longer pile up and the browser's WebGL pool stays healthy.
+- `LidarViewLayer.setData()` memoised on the raster signature.
+  Re-toggling LiDAR view without moving the map short-circuits the
+  Mercator double loop and the GPU buffer uploads. ~100-300 ms gain.
+- Shading dome animations revised: entry and exit play symmetrically
+  with the chip + timeline transitions.
+- Home glow refreshed after exiting LiDAR (the projections were
+  frozen at the bearing of toggle-on).
+- Proportional grid IN / OUT bead animation, tied to the live power
+  (cap 10 kW import, 1 kW export, idle below 5 W).
+- Dependencies bumped to their latest stable versions (Vite 8,
+  TypeScript 6, pbf 5, @mapbox/vector-tile 3, terser 5.48). Bundle
+  drops from ~2986 KB to ~2208 KB (-26 %, gzipped -13 %).
+
+### Grid Import / Export
+
+- Multi-tariff support. `grid-import-entity` and `grid-export-entity`
+  accept either a string or an array of entities. Typical case: French
+  Linky EASF01 (peak hours) + EASF02 (off-peak hours). The visual
+  editor exposes an editable list with up to 8 sources per side.
+- "Last-changed wins" logic. When several entities are wired, the
+  chip displays the watts of whichever entity moved most recently
+  (the active tariff).
+- Recorder backfill at boot. A 1 h history pull from the HA recorder
+  seeds the rolling buffer for each grid entity on first refresh, so
+  the slope is meaningful right away even when the live integration
+  is silent for minutes (slow-polling Linky TIC, etc.).
+- Rolling window 60 min, up to 800 samples per entity.
+- No more 0 W seeding. If no derivation has landed yet, the chip
+  stays on the last computed value instead of falling back to 0.
+- Import / export leaders + beads driven by the live power.
+
+### Home hub and leaders
+
+- Solid drop-leader between the home pill and the projected ground
+  at the 3D building, painted in HA primary colour. The home cluster
+  is lifted a notch to leave the leader visible.
+- Permanent home glow (opacity 0.25 at rest) bumping to 0.85 with a
+  thicker drop-shadow on hover.
+- Larger home hitbox (120 px, z-index 55) so click / hover lands on
+  the home even when chips or leaders sit under the pointer.
+- Sun ray bead. The sun → PV chip ray now carries a circular bead
+  instead of an arrow, speed tied to the live irradiance.
+- Battery + grid leaders use a quadratic fillet on the L-shape to
+  match the cloud-layer leaders.
+
+### Cloud cover
+
+- The fourth mode-bar button is gone. The central cloud chip itself
+  toggles 3 per-layer sub-chips (low / mid / high) with a cascade
+  fade-in animation.
+- Three L-leaders connect the toggle to the sub-chips, converging on
+  a central junction with a vertical trunk.
+- Auto-OFF when switching to LiDAR or Shading mode so the sub-chips
+  don't leak into the active layer.
+
+### Timeline and clock chip
+
+- Top-left date / time chip pulled up to z-index 1000, no longer
+  crossed by the solar arc nor by the dome overlays.
+- Mobile day-strip: tighter gap / padding / font clamps. The kWh
+  annotation hides below 90 px cell width.
+- Night hatches and day separators alpha bumped to stay legible in
+  dark mode.
+- Hover tooltip uses a 12 px border-radius matching the chip language.
+- Theme-aware prediction colour: darker on light theme, lighter on
+  dark theme.
+- Timeline slides in / out from below (translateY 140 %) when
+  returning to the default view.
+
+### LiDAR mesh
+
+- Loading feedback. Until the exposure compute lands, only the points
+  and the wireframe paint in pure white. Colour-filled triangles
+  appear once the exposure is ready.
+- Spinner on the LiDAR mode-bar button during compute, with the other
+  two mode buttons disabled to prevent state races.
+- Shader shadow floor bumped (0.25 → 0.55) so the mesh stays legible
+  at night when every cell is in shadow.
+
+### Solar arc and irradiance chip
+
+- Depth-split rendering. The half of the arc closer to the camera
+  paints over the chips (z 11), the half further out paints behind
+  (z 5). The sun disc follows the same rule.
+- The W/m² label sits at z 13 above the front arc so it never gets
+  crossed.
+
+### PV string markers removed
+
+The icon + leader + sphere that marked each PV string position is
+removed. Backing code, CSS and engine projections are gone too
+(~5 KB bundle savings).
+
+### HA Energy auto-detect removed
+
+The fallback that pulled entities from the HA Energy dashboard is
+removed for PV, battery and grid. Resolution is now entirely driven
+by the explicit YAML keys. Diagnosing a chip at 0 W is much simpler:
+if the chip is silent, the configured entity is the one responsible,
+no opaque fallback shadowing the source.
+
+### Diagnostics and hygiene
+
+- Every runtime `console.info` / `console.log` debug call is gone.
+  The console stays silent in steady state, only genuine warnings
+  (context lost, fetch failed) remain.
+- Engine cleanup drops `_lidarViewLayer` + `_lidarRaster` explicitly
+  after `map.remove()` so dead GL handles don't get pinned across
+  editor respawns.
+
+### i18n
+
+- 9 new grid keys translated across every supported locale (EN, FR,
+  DE, ES, IT, NL, PT, NO, PL, CS, SV).
+
 ## v1.7.0
 
 Headline release on top of v1.6.4. Thirty-five alpha iterations + three

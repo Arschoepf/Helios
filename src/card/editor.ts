@@ -4,14 +4,9 @@ import { colorPickerStyles, editorStyles } from '../css/helios-card-editor-css';
 import
 {
     type HeliosConfig,
-    DEFAULT_SUN_COLOR_HEX,
-    DEFAULT_CLOUD_COLOR_HEX,
-    DEFAULT_PV_COLOR_HEX,
-    DEFAULT_BATTERY_COLOR_HEX,
     DEFAULT_BUILDING_RADIUS_M,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
-    DEFAULT_BUILDING_COLOR_HEX,
     DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
@@ -20,7 +15,6 @@ import
     DEFAULT_TIMELINE_CONSUMPTION_ENABLED
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
-import { cfgHex } from './format';
 import { renderShadingMapSection } from './shadingMapView';
 
 
@@ -282,7 +276,46 @@ export class HeliosCardEditor extends LitElement
 
     public setConfig(config: HeliosConfig): void
     {
-        this._cfg = { ...config };
+        //Strip every legacy / removed config key the moment the user
+        //opens the editor. Keeps YAML clean as the schema evolves and
+        //prevents stale config from carrying ghost behaviour into a
+        //fresh card frame.
+        const sanitised = HeliosCardEditor._sanitiseConfig({ ...config });
+        const changed   = !HeliosCardEditor._configEq(config, sanitised);
+        this._cfg = sanitised;
+        //If we trimmed anything, push the cleaned config back up to
+        //HA so the YAML reflects the schema immediately, not only on
+        //the user's next manual edit.
+        if (changed)
+        {
+            this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: sanitised } }));
+        }
+    }
+
+    //Schema-aware strip of legacy / removed keys. The list grows with
+    //the version; new entries land here when a key is retired so the
+    //next editor open silently scrubs the user's YAML.
+    private static _RETIRED_KEYS: string[] = [
+        'card-theme',
+        'card-theme-light',
+        'card-theme-dark',
+    ];
+    private static _sanitiseConfig(config: HeliosConfig): HeliosConfig
+    {
+        const out = { ...config } as Record<string, unknown>;
+        for (const k of HeliosCardEditor._RETIRED_KEYS)
+        {
+            if (k in out) delete out[k];
+        }
+        return out as HeliosConfig;
+    }
+    private static _configEq(a: HeliosConfig, b: HeliosConfig): boolean
+    {
+        const aKeys = Object.keys(a).sort();
+        const bKeys = Object.keys(b).sort();
+        if (aKeys.length !== bKeys.length) return false;
+        for (let i = 0; i < aKeys.length; i++) if (aKeys[i] !== bKeys[i]) return false;
+        return true;
     }
 
     public connectedCallback(): void
@@ -400,11 +433,6 @@ export class HeliosCardEditor extends LitElement
                 { detail: { config: this._cfg } }));
         }, HeliosCardEditor.SLIDER_COMMIT_DELAY_MS);
         this._sliderDebounce.set(k, t);
-    }
-
-    private _color(key: keyof HeliosConfig, e: CustomEvent): void
-    {
-        this._update(key, e.detail.value);
     }
 
     //Reads the configured PV layout into the shape the editor's
@@ -882,6 +910,139 @@ export class HeliosCardEditor extends LitElement
         return u === 'W/m²' || u === 'W/m2';
     };
 
+    //Multi-entity grid editor: each slot (import / export) accepts a
+    //list of entities, same UX as the PV-array / battery-bank lists
+    //above but trimmed to a single field per entry. The slot's value
+    //in the config is normalised on read: a leftover legacy string
+    //is converted to a one-element array, and a fully empty array is
+    //serialised as an absent key so the YAML stays clean.
+    private static GRID_SOURCES_MAX = 8;
+
+    private _readGridSources(slot: 'import' | 'export'): string[]
+    {
+        const key = slot === 'import' ? 'grid-import-entity' : 'grid-export-entity';
+        const raw = (this._cfg as Record<string, unknown> | undefined)?.[key];
+        if (Array.isArray(raw))
+        {
+            return (raw as unknown[])
+                .filter((s): s is string => typeof s === 'string')
+                .map(s => s.trim());
+        }
+        if (typeof raw === 'string' && raw.trim() !== '') return [raw.trim()];
+        return [];
+    }
+
+    private _writeGridSources(slot: 'import' | 'export', list: string[]): void
+    {
+        if (!this._cfg) return;
+        const key = slot === 'import' ? 'grid-import-entity' : 'grid-export-entity';
+        const next = { ...this._cfg } as Record<string, unknown>;
+        //Preserve empty placeholder rows so the editor can render a
+        //fresh entity-picker waiting for input after the user clicks
+        //"Add a source". Filtering empties out at write-time was the
+        //bug that made the Add button look broken: every fresh row
+        //was stripped before render.
+        //
+        //Collapse to a single string only when the list has exactly
+        //one non-empty entry AND no empty placeholders are pending
+        //(otherwise the picker UI would lose the row the user is
+        //about to fill in). Drop the key entirely only when the list
+        //is fully empty.
+        if (list.length === 0)
+        {
+            delete next[key];
+        }
+        else if (list.length === 1 && list[0].trim() !== '')
+        {
+            next[key] = list[0];
+        }
+        else
+        {
+            next[key] = list.slice();
+        }
+        this._cfg = next as HeliosConfig;
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+    }
+
+    private _gridSourceAdd(slot: 'import' | 'export'): void
+    {
+        const list = this._readGridSources(slot);
+        if (list.length >= HeliosCardEditor.GRID_SOURCES_MAX) return;
+        list.push('');
+        this._writeGridSources(slot, list);
+    }
+
+    private _gridSourceRemove(slot: 'import' | 'export', i: number): void
+    {
+        const list = this._readGridSources(slot);
+        list.splice(i, 1);
+        this._writeGridSources(slot, list);
+    }
+
+    private _gridSourceSet(slot: 'import' | 'export', i: number, value: string): void
+    {
+        const list = this._readGridSources(slot);
+        list[i] = value;
+        this._writeGridSources(slot, list);
+    }
+
+    private _renderGridSlot(slot: 'import' | 'export'): TemplateResult
+    {
+        const t = pickTranslations(this.hass?.language);
+        const list  = this._readGridSources(slot);
+        const title = slot === 'import' ? t.editor.gridImportTitle : t.editor.gridExportTitle;
+        const hint  = slot === 'import' ? t.editor.gridImportHint  : t.editor.gridExportHint;
+        return html`
+            <div class="grid-slot-block">
+                <div class="grid-slot-title">${title}</div>
+                <div class="hint">${hint}</div>
+                ${list.length === 0 ? html`
+                    <button
+                        type="button"
+                        class="pv-array-add"
+                        @click="${() => this._gridSourceAdd(slot)}"
+                    >+ ${t.editor.gridSourceAdd}</button>
+                ` : html`
+                    ${list.map((entity, i) => html`
+                        <div class="grid-source-row">
+                            <div class="grid-source-picker">
+                                ${this._pickerReady ? html`
+                                    <ha-entity-picker
+                                        allow-custom-entity
+                                        .hass="${this.hass}"
+                                        .value="${entity}"
+                                        .includeDomains="${['sensor', 'input_number']}"
+                                        @value-changed="${(e: CustomEvent) => this._gridSourceSet(slot, i, e.detail.value ?? '')}"
+                                    ></ha-entity-picker>
+                                ` : html`
+                                    <input
+                                        type="text"
+                                        .value="${entity}"
+                                        placeholder="sensor.${slot === 'import' ? 'grid_import' : 'grid_export'}"
+                                        @change="${(e: Event) => this._gridSourceSet(slot, i, (e.target as HTMLInputElement).value)}"
+                                    />
+                                `}
+                            </div>
+                            <button
+                                type="button"
+                                class="pv-array-remove"
+                                aria-label="${t.editor.gridSourceRemove}"
+                                @click="${() => this._gridSourceRemove(slot, i)}"
+                            >${t.editor.gridSourceRemove}</button>
+                        </div>
+                    `)}
+                    ${list.length < HeliosCardEditor.GRID_SOURCES_MAX ? html`
+                        <button
+                            type="button"
+                            class="pv-array-add"
+                            @click="${() => this._gridSourceAdd(slot)}"
+                        >+ ${t.editor.gridSourceAdd}</button>
+                    ` : nothing}
+                `}
+            </div>
+        `;
+    }
+
     protected render(): TemplateResult
     {
         const c = this._cfg;
@@ -947,22 +1108,6 @@ export class HeliosCardEditor extends LitElement
                 </label>
                 <div class="hint">${t.editor.mapStyleHint}</div>
                 <div class="field">
-                    <span class="label">${t.editor.cardTheme}</span>
-                    <div class="segmented-toggle">
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['card-theme'] ?? 'light')) === 'light' ? 'active' : ''}"
-                            @click="${() => this._update('card-theme', 'light')}"
-                        >${t.editor.cardThemeLight}</button>
-                        <button
-                            type="button"
-                            class="seg-option ${(String(c['card-theme'] ?? 'light')) === 'dark' ? 'active' : ''}"
-                            @click="${() => this._update('card-theme', 'dark')}"
-                        >${t.editor.cardThemeDark}</button>
-                    </div>
-                </div>
-                <div class="hint">${t.editor.cardThemeHint}</div>
-                <div class="field">
                     <span class="label">${t.editor.showLabels}</span>
                     <div class="segmented-toggle">
                         <button
@@ -983,23 +1128,6 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" ?open="${this._openSection === 'ui'}" @toggle="${(e: Event) => this._onSectionToggle('ui', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.uiSection}</summary>
-                    <label class="field">
-                        <span class="label">${t.editor.sunColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c['sun-color'], DEFAULT_SUN_COLOR_HEX)}"
-                            .ariaLabel="${t.editor.sunColor}"
-                            @value-changed="${(e: CustomEvent) => this._color('sun-color', e)}"
-                        ></helios-color-picker>
-                    </label>
-                    <label class="field">
-                        <span class="label">${t.editor.cloudColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c['cloud-color'], DEFAULT_CLOUD_COLOR_HEX)}"
-                            .ariaLabel="${t.editor.cloudColor}"
-                            @value-changed="${(e: CustomEvent) => this._color('cloud-color', e)}"
-                        ></helios-color-picker>
-                    </label>
-                    <div class="hint">${t.editor.uiColorsHint}</div>
                     <label class="field">
                         <span class="label">${t.editor.dateFormat}</span>
                         <input
@@ -1145,14 +1273,6 @@ export class HeliosCardEditor extends LitElement
                         <span class="slider-value">${this._fmtNum(Number(c['building-opacity'] ?? DEFAULT_BUILDING_OPACITY), 0.05)}</span>
                     </div>
                 </label>
-                <label class="field">
-                    <span class="label">${t.editor.buildingColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c['building-color'], DEFAULT_BUILDING_COLOR_HEX)}"
-                        .ariaLabel="${t.editor.buildingColor}"
-                        @value-changed="${(e: CustomEvent) => this._color('building-color', e)}"
-                    ></helios-color-picker>
-                </label>
                 <div class="hint">${t.editor.buildingsHint}</div>
 
                 </details>
@@ -1253,14 +1373,6 @@ export class HeliosCardEditor extends LitElement
                     />
                 </label>
                 <div class="field-help">${t.editor.pvInverterMaxKwHelp}</div>
-                <label class="field">
-                    <span class="label">${t.editor.pvColor}</span>
-                    <helios-color-picker
-                        .value="${cfgHex(c['pv-color'], DEFAULT_PV_COLOR_HEX)}"
-                        .ariaLabel="${t.editor.pvColor}"
-                        @value-changed="${(e: CustomEvent) => this._color('pv-color', e)}"
-                    ></helios-color-picker>
-                </label>
                 ${(() => {
                     const arrays   = this._readPvArrays();
                     const sharesSum = this._arraySharesSum(arrays);
@@ -1542,14 +1654,6 @@ export class HeliosCardEditor extends LitElement
                         />
                     </div>
                     <div class="field-help">${t.editor.inverterCutoffSocPctHelp}</div>
-                    <label class="field">
-                        <span class="label">${t.editor.batteryColor}</span>
-                        <helios-color-picker
-                            .value="${cfgHex(c['battery-color'], DEFAULT_BATTERY_COLOR_HEX)}"
-                            .ariaLabel="${t.editor.batteryColor}"
-                            @value-changed="${(e: CustomEvent) => this._color('battery-color', e)}"
-                        ></helios-color-picker>
-                    </label>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'weather'}" @toggle="${(e: Event) => this._onSectionToggle('weather', e)}">
@@ -1569,6 +1673,13 @@ export class HeliosCardEditor extends LitElement
                         ` : nothing}
                     </div>
                     <div class="field-help">${t.editor.solarRadiationEntityHelp}</div>
+                </details>
+
+                <details class="advanced-section" ?open="${this._openSection === 'grid'}" @toggle="${(e: Event) => this._onSectionToggle('grid', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.gridSection}</summary>
+                    <div class="hint">${t.editor.gridHint}</div>
+                    ${this._renderGridSlot('import')}
+                    ${this._renderGridSlot('export')}
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'lidarView'}" @toggle="${(e: Event) => this._onSectionToggle('lidarView', e)}">

@@ -406,14 +406,23 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const pv   = pvValueAtTime(host, hoverMs);
     const hasPv = isFinite(pv.value);
 
-    const sunColor    = cfgHex(host.config?.['sun-color'],   DEFAULT_SUN_COLOR_HEX);
-    const cloudColor  = cfgHex(host.config?.['cloud-color'], DEFAULT_CLOUD_COLOR_HEX);
-    const pvBaseColor = cfgHex(host.config?.['pv-color'],    DEFAULT_PV_COLOR_HEX);
-    //Predicted PV reads lighter than observed, mirroring the
-    //dotted-vs-solid convention the dashboard uses for the
-    //refined-forecast headline + chart. Same lerp factor (0.55
-    //toward white) so the tint matches across the card.
-    const pvColor = pv.isPredicted ? lerpHexToward(pvBaseColor, '#ffffff', 0.55) : pvBaseColor;
+    //Colour configs no longer consulted, HA Energy palette via the
+    //defaults. Charts.ts keeps the locals so its blend/lerp logic
+    //downstream stays unchanged.
+    const sunColor    = DEFAULT_SUN_COLOR_HEX;
+    const cloudColor  = DEFAULT_CLOUD_COLOR_HEX;
+    const pvBaseColor = DEFAULT_PV_COLOR_HEX;
+    //Predicted PV reads "off-shade" from observed. Theme-aware so
+    //it stays readable on both backgrounds: light theme blends
+    //toward BLACK (darker, contrasts with white card), dark theme
+    //blends toward WHITE (lighter, contrasts with dark card). Mirrors
+    //the predictedColor logic in dashboard.ts.
+    const isDarkTheme = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
+    const pvColor = pv.isPredicted
+        ? (isDarkTheme
+            ? lerpHexToward(pvBaseColor, '#ffffff', 0.55)
+            : lerpHexToward(pvBaseColor, '#000000', 0.35))
+        : pvBaseColor;
 
     const timeLabel = new Date(hoverMs).toLocaleTimeString([], {
         hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -784,6 +793,15 @@ export function renderPvChart(host: ChartHost): TemplateResult
     }
 
     const pvColor = cfgHex(host.config?.['pv-color'], DEFAULT_PV_COLOR_HEX);
+    //Theme-aware "predicted" PV shade for the dashed forecast curve
+    //overlay: light theme blends pvColor toward BLACK so it stays
+    //readable on a white card; dark theme blends toward WHITE so it
+    //still reads as a softer line on the dark plate. Mirrors the
+    //dashboard's predictedColor logic.
+    const isDarkTheme       = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
+    const predictedPvColor  = isDarkTheme
+        ? lerpHexToward(pvColor, '#ffffff', 0.55)
+        : lerpHexToward(pvColor, '#000000', 0.35);
 
     //Day-boundary X positions, same computation as the main chart so the dotted separators line up across the two.
     const endMsAbs = range.end.getTime();
@@ -1056,7 +1074,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
                 <path
                     class="hc-chart-line hc-chart-predicted"
                     d="${predictedLine}"
-                    stroke="${pvColor}"
+                    stroke="${predictedPvColor}"
                 ></path>
             ` : nothing}
             ${showHover ? svg`

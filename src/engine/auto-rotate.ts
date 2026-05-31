@@ -18,7 +18,15 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { HeliosConfig } from '../helios-config';
 
 
-const AUTO_ROTATE_DEG_PER_SEC   = 1.5;
+//Speed picked so the rotation reads as a continuous slow drift
+//rather than a sequence of pixel-snap "steps". The previous 1.5
+//deg/s produced an infra-pixel delta per frame at the typical
+//Helios zoom: the on-screen displacement only reached ~1 px once
+//every 15 frames, which the eye reads as discrete jumps. 4 deg/s
+//gives a sub-pixel delta around 0.18 px/frame at the same zoom,
+//continuous enough for the eye while still slow enough that a
+//full revolution takes 90 seconds.
+const AUTO_ROTATE_DEG_PER_SEC   = 4.0;
 const AUTO_ROTATE_INACTIVITY_MS = 5_000;
 
 
@@ -35,6 +43,12 @@ export interface AutoRotateHost
     _autoRotateRaf?:           number;
     _autoRotateLastFrame:      number;
     _autoRotateLastUserAction: number;
+    //Accumulated bearing held by the loop. Lets us integrate the
+    //sub-degree per-frame delta in our own float without round-
+    //tripping through MapLibre's getBearing(), which clamps and
+    //returns a normalised value that may silently quantise the
+    //increment near zero and produce the "step-by-step" jitter.
+    _autoRotateBearing?:       number;
 }
 
 
@@ -50,6 +64,11 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
     }
     host._autoRotateLastFrame      = performance.now();
     host._autoRotateLastUserAction = 0;
+    //Seed the locally tracked bearing from the map's current value
+    //so the loop's first step picks up from wherever the camera
+    //already is. Subsequent frames integrate against this slot
+    //without round-tripping through getBearing().
+    host._autoRotateBearing = host.map.getBearing();
 
     const tick = (t: number) =>
     {
@@ -76,9 +95,24 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
         {
             //Negative delta: bearing decreases, camera rotates counter-clockwise around the up axis as seen from above, map content drifts clockwise
             //on screen, opposite of the sun's apparent motion.
-            const next = host.map.getBearing()
-                - AUTO_ROTATE_DEG_PER_SEC * dt;
-            host.map.setBearing(next);
+            //
+            //Re-sync the locally tracked bearing with whatever the
+            //map currently says when the user just stopped touching
+            //the camera (sinceUser flips above the threshold): a
+            //manual drag mid-loop would otherwise see us snap back
+            //to the locally stored value at the next tick.
+            if (host._autoRotateBearing === undefined
+                || sinceUser - AUTO_ROTATE_INACTIVITY_MS < 16)
+            {
+                host._autoRotateBearing = host.map.getBearing();
+            }
+            host._autoRotateBearing -= AUTO_ROTATE_DEG_PER_SEC * dt;
+            host.map.setBearing(host._autoRotateBearing);
+        }
+        else
+        {
+            //While paused, keep the locally tracked bearing in sync with the live map so a resume picks up smoothly from the user-edited camera.
+            host._autoRotateBearing = host.map.getBearing();
         }
 
         host._autoRotateRaf = requestAnimationFrame(tick);

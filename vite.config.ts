@@ -42,9 +42,12 @@ export default defineConfig({
             //resource URL in Lovelace. No external imports, and no
             //code-splitting either: geotiff dynamically imports its
             //per-format decoders (pako, zstd, lerc, jpeg, lzw, ...),
-            //which would normally land in separate chunks. inlineDynamicImports
-            //hoists every dynamic import into the main bundle so HACS
-            //sees a single helios.js artefact.
+            //which would normally land in separate chunks.
+            //inlineDynamicImports hoists every dynamic import into
+            //the main bundle so HACS sees a single helios.js
+            //artefact. The Vite 8 deprecation warning is acceptable
+            //here, the alternative (`output.codeSplitting: false`)
+            //emits multiple chunks which HACS can't serve.
             external: [],
             output:
             {

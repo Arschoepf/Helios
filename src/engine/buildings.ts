@@ -29,7 +29,7 @@
 //parsing pipeline only needs those two attributes plus the polygon geometry.
 
 import { VectorTile } from '@mapbox/vector-tile';
-import Pbf from 'pbf';
+import { PbfReader } from 'pbf';
 
 export interface BuildingsResult
 {
@@ -300,7 +300,7 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
         let tile: VectorTile;
         try
         {
-            tile = new VectorTile(new Pbf(new Uint8Array(buf)));
+            tile = new VectorTile(new PbfReader(new Uint8Array(buf)));
         }
         catch (_)
         {
