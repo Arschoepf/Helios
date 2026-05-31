@@ -264,16 +264,6 @@ export function refreshShadingDomeScene(host: ShadingDomeHost): void
 }
 
 
-//Dome visibility gating used to gate the chip on confident cell
-//count; the new mode-bar always exposes the segment so this is
-//unused. Kept exported (returns true) in case a future surface
-//wants to opt in to the same gating again.
-export function shouldShowDomeChip(): boolean
-{
-    return true;
-}
-
-
 //Compute the current fade alpha [0, 1] applied to the cloud-cover slider that lives below the dome. The dome SVG itself uses the clip-path
 //helper just below for a top-to-bottom reveal; the slider keeps a plain opacity fade because animating a clip on a horizontal control would feel
 //odd. Both use the same DOME_FADE_*_MS time base so they finish together.
@@ -498,10 +488,17 @@ export function renderShadingDomeCloudPicker(
     onChange: (pct: number) => void,
 ): TemplateResult | typeof nothing
 {
-    if (shadingDomeFadeAlpha(host) <= 0) return nothing;
     const pct = Math.round(Math.max(0, Math.min(100, host._shadingDomeCloudPct)));
+    //Always rendered so the slide-out CSS transition can run when the
+    //mode is dropped. .is-active lifts the pill into view + enables
+    //pointer events; without the class CSS parks it below the card
+    //with opacity 0. The exit fade marker drops the class straight
+    //away on toggle-off so the pill slides DOWN in parallel with the
+    //dome's own fade-out instead of waiting for it to complete.
+    const sliderActive = host._shadingDomeMode && host._shadingDomeFadeOutStartMs === null;
+    const activeCls    = sliderActive ? ' is-active' : '';
     return html`
-        <div class="shading-dome-cloud-slider" aria-label="Cloud cover">
+        <div class="shading-dome-cloud-slider${activeCls}" aria-label="Cloud cover" ?aria-hidden="${!sliderActive}">
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--sun"   icon="mdi:weather-sunny"></ha-icon>
             <div class="shading-dome-cloud-track-wrap">
                 <input type="range" min="0" max="100" step="12.5"

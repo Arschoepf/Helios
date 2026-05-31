@@ -1519,6 +1519,13 @@ export class HeliosCardEditor extends LitElement
 
                 </details>
 
+                <details class="advanced-section" ?open="${this._openSection === 'grid'}" @toggle="${(e: Event) => this._onSectionToggle('grid', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.gridSection}</summary>
+                    <div class="hint">${t.editor.gridHint}</div>
+                    ${this._renderGridSlot('import')}
+                    ${this._renderGridSlot('export')}
+                </details>
+
                 <details class="advanced-section" ?open="${this._openSection === 'shading'}" @toggle="${(e: Event) => this._onSectionToggle('shading', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.shadingSection}</summary>
                     ${renderShadingMapSection({ hass: this.hass, onAfterChange: () => this.requestUpdate() })}
@@ -1673,13 +1680,6 @@ export class HeliosCardEditor extends LitElement
                         ` : nothing}
                     </div>
                     <div class="field-help">${t.editor.solarRadiationEntityHelp}</div>
-                </details>
-
-                <details class="advanced-section" ?open="${this._openSection === 'grid'}" @toggle="${(e: Event) => this._onSectionToggle('grid', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.gridSection}</summary>
-                    <div class="hint">${t.editor.gridHint}</div>
-                    ${this._renderGridSlot('import')}
-                    ${this._renderGridSlot('export')}
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'lidarView'}" @toggle="${(e: Event) => this._onSectionToggle('lidarView', e)}">

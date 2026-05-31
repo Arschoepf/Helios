@@ -1390,12 +1390,20 @@ export class HeliosCard extends LitElement
         const gridScrubTimeMs = batteryScrubbing && !batteryScrubFuture
             ? this._selectedTime!.getTime()
             : null;
-        const gridImportDisplayWatts = gridScrubTimeMs !== null
+        //Scrub path runs through gridWattsAtTime which sums slopes
+        //across every wired entity, the sum can dip below zero
+        //around the moment a tariff switches or when a meter
+        //quantises in the "wrong" direction by one Wh. A negative
+        //IMPORT at scrub time is an EXPORT moment that the export
+        //chip already reports; clamping to 0 keeps the slot honest.
+        const rawImport = gridScrubTimeMs !== null
             ? gridWattsAtTime(this._gridImportSamples, this._gridImportUnits, gridScrubTimeMs)
             : this._gridImportValue;
-        const gridExportDisplayWatts = gridScrubTimeMs !== null
+        const rawExport = gridScrubTimeMs !== null
             ? gridWattsAtTime(this._gridExportSamples, this._gridExportUnits, gridScrubTimeMs)
             : this._gridExportValue;
+        const gridImportDisplayWatts = rawImport === null ? null : Math.max(0, rawImport);
+        const gridExportDisplayWatts = rawExport === null ? null : Math.max(0, rawExport);
         const gridImportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridImportUnit;
         const gridExportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridExportUnit;
 
@@ -1443,7 +1451,6 @@ export class HeliosCard extends LitElement
         const batteryLeaderColor = batteryCharging
             ? 'var(--energy-battery-in-color, #f06292)'
             : 'var(--energy-battery-out-color, #4db6ac)';
-        void batteryCharging;
         const batteryWattsForFlow = showPowerChip
             ? Math.abs(pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
             : 0;
@@ -1461,35 +1468,21 @@ export class HeliosCard extends LitElement
         //when a layout is available; gated by the same flag as the
         //chip rendering so we don't dereference a null layout below.
         //
-        //  PV_LEG_OFFSET_PX (12) is the horizontal distance from
-        //  the PV chip's centre to each L-leg's vertical drop.
-        //  The SoC L hangs to the LEFT of centre by this amount,
-        //  the Power L to the RIGHT, bringing both legs slightly
-        //  inboard of the chip's quarter-width so the bends sit
-        //  closer to the chip's middle. Constant rather than
-        //  measured because the chips are min-width-clamped to
-        //  76 px in the common case, see helios-card-css.ts.
         //  PV_HALF_HEIGHT_PX (11) places the top of the vertical
         //  leg flush against PV's bottom edge so the line emerges
         //  from the chip rather than from inside it.
         //  CHIP_NUDGE_PX (32) is the horizontal distance from each
         //  battery chip's centre to the inside of its left/right
-        //  edge, so the chip background covers the very tip of
-        //  the leader and the visible dash sequence terminates
-        //  cleanly at the chip border.
+        //  edge, so the chip background covers the very tip of the
+        //  leader and the visible dash sequence terminates cleanly
+        //  at the chip border.
         //  FILLET_R (6) rounds the corner of the L with a quadratic
-        //  Bézier. The visible line and the arrow's <animateMotion>
+        //  Bezier. The visible line and the arrow's <animateMotion>
         //  path share the same fillet, so the arrow's tangent
         //  rotates smoothly through the bend instead of snapping
-        //  90° at the corner. SMIL parametrises the path at
+        //  90 deg at the corner. SMIL parametrises the path at
         //  constant linear velocity, so the time spent on the
         //  fillet shrinks proportionally with `flowDuration`.
-        //L-leg starting points. The PV chip is 76 px wide (min-width
-        //set on .pv-pct-label); pinning the legs at 25 % and 75 % of
-        //that width drops each foot 19 px off the chip's centre, well
-        //inside the chip body so the L's vertical leg visibly emerges
-        //from a clear PV anchor instead of crowding the chip's centre.
-        const PV_LEG_OFFSET_PX     = 19;
         const PV_HALF_HEIGHT_PX    = 11;
         //Half-width of the PV chip, used by the solar-ray target snap.
         //Sized to the NARROWEST realistic PV chip text ("0 W" -> ~55 px
@@ -1554,15 +1547,22 @@ export class HeliosCard extends LitElement
         const gridImportLeaderPath = buildLPathToHome(layout?.gridImportLabel.x   ?? 0, layout?.gridImportLabel.y   ?? 0, 22);
         const gridExportLeaderPath = buildLPathToHome(layout?.gridExportLabel.x   ?? 0, layout?.gridExportLabel.y   ?? 0, 22);
 
-        //Grid bead animation duration, proportional to live power.
-        //Below ~5 W the chip is idle (rounding noise around HA's
-        //recorder, no real flow) and the bead is dropped entirely.
-        //Above the cap (10 kW import, 1 kW export) the duration
-        //saturates at MIN_DUR so the bead doesn't disappear in a
-        //blur. The cap is opinionated, the card has no way to know
-        //the user's actual contract / inverter ceiling so we
-        //hardcode round residential thresholds.
-        const GRID_BEAD_IMPORT_CAP_W = 10000;
+        //Grid bead cadence, frequency (= 1 / dur) is proportional to
+        //live power so the perceived bead speed tracks the chip
+        //value linearly. The previous mapping was linear in
+        //DURATION which made a 1 kW reading look almost as fast as
+        //a 4 kW reading (8 s -> 6 s vs 8 s -> 2 s), nothing like
+        //"twice the power = twice the speed". The new formula:
+        //  dur = MIN_DUR * CAP / watts
+        //gives MIN_DUR at the cap, 2 x MIN_DUR at half the cap,
+        //4 x MIN_DUR at a quarter, clamped to MAX_DUR_S so very
+        //small readings still produce a visible bead.
+        //Below ~5 W the chip is idle (recorder rounding noise) and
+        //the bead is dropped entirely. Caps are opinionated round
+        //residential thresholds: 5 kW import covers most French
+        //single-phase contracts, 1 kW export covers a typical
+        //surplus on a home installation.
+        const GRID_BEAD_IMPORT_CAP_W = 5000;
         const GRID_BEAD_EXPORT_CAP_W = 1000;
         const GRID_BEAD_MIN_DUR_S = 1.2;
         const GRID_BEAD_MAX_DUR_S = 8.0;
@@ -1573,16 +1573,15 @@ export class HeliosCard extends LitElement
         const exportWattsAbs = this._gridExportValue !== null
             ? Math.abs(pvNormalizeToWatts(this._gridExportValue, this._gridExportUnit))
             : 0;
+        const proportionalBeadDur = (watts: number, capW: number): number =>
+        {
+            const w = Math.max(watts, 1);
+            return Math.min(GRID_BEAD_MAX_DUR_S, Math.max(GRID_BEAD_MIN_DUR_S, GRID_BEAD_MIN_DUR_S * capW / w));
+        };
         const gridImportBeadDur = importWattsAbs < GRID_BEAD_IDLE_W ? null
-            : GRID_BEAD_MAX_DUR_S - (GRID_BEAD_MAX_DUR_S - GRID_BEAD_MIN_DUR_S)
-              * Math.min(1, importWattsAbs / GRID_BEAD_IMPORT_CAP_W);
+            : proportionalBeadDur(importWattsAbs, GRID_BEAD_IMPORT_CAP_W);
         const gridExportBeadDur = exportWattsAbs < GRID_BEAD_IDLE_W ? null
-            : GRID_BEAD_MAX_DUR_S - (GRID_BEAD_MAX_DUR_S - GRID_BEAD_MIN_DUR_S)
-              * Math.min(1, exportWattsAbs / GRID_BEAD_EXPORT_CAP_W);
-        //Silence: PV_LEG_OFFSET_PX is no longer consumed by the
-        //simplified leader build, kept declared above for any future
-        //surface that wants a vertical-leg anchor again.
-        void PV_LEG_OFFSET_PX;
+            : proportionalBeadDur(exportWattsAbs, GRID_BEAD_EXPORT_CAP_W);
 
         //Solar-arc overlay, sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
@@ -2292,31 +2291,51 @@ export class HeliosCard extends LitElement
                     </svg>
                 ` : nothing}
 
+                <!--  Ray + bead live in their own SVG below the chip
+                      family (z 7 < pv-pct-label z 8) so the PV chip's
+                      background always occludes the ray endpoint at
+                      the chip border. The sun disc itself stays in
+                      the depth-split SVG below so it still passes in
+                      front of / behind the home cluster depending on
+                      camera bearing, but the ray no longer rides
+                      OVER the production chip when the sun's near
+                      half of the sky brings the disc above the chip
+                      stack. -->
+                ${showSun && showRay ? html`
+                    <svg class="solar-svg solar-ray-svg"
+                         style="--solar-daylight:${sunScene!.daylight}">
+                        <line
+                            class="solar-ray"
+                            style="--sun-flow-duration:${sunFlowDuration}s"
+                            x1="${sunScene!.sun.x}"  y1="${sunScene!.sun.y}"
+                            x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
+                            stroke="${sunColor}"
+                        ></line>
+                        <!--  Bead uses an absolute-coordinate path
+                              with cx / cy left at the default 0
+                              origin, same vocabulary as the PV
+                              leader bead. Single-attribute updates
+                              keep the SMIL animation continuous
+                              during camera rotation. -->
+                        <circle
+                            class="solar-ray-bead"
+                            r="5"
+                            fill="${sunColor}"
+                        >
+                            <animateMotion
+                                dur="${sunFlowDuration}s"
+                                repeatCount="indefinite"
+                                path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
+                            ></animateMotion>
+                        </circle>
+                    </svg>
+                ` : nothing}
+
                 ${showSun ? html`
                     <svg
                         class="solar-svg solar-svg-sun ${sunScene!.sun.nearness >= 0.50 ? 'solar-svg-sun-near' : 'solar-svg-sun-far'}"
                         style="--solar-daylight:${sunScene!.daylight}"
                     >
-                        ${showRay ? svg`
-                            <line
-                                class="solar-ray"
-                                style="--sun-flow-duration:${sunFlowDuration}s"
-                                x1="${sunScene!.sun.x}"  y1="${sunScene!.sun.y}"
-                                x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
-                                stroke="${sunColor}"
-                            ></line>
-                            <circle
-                                class="solar-ray-bead"
-                                cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}" r="5"
-                                fill="${sunColor}"
-                            >
-                                <animateMotion
-                                    dur="${sunFlowDuration}s"
-                                    repeatCount="indefinite"
-                                    path="M 0,0 L ${sunRayTargetX - sunScene!.sun.x},${sunRayTargetY - sunScene!.sun.y}"
-                                ></animateMotion>
-                            </circle>
-                        ` : nothing}
                         ${(() => {
                             //Sun disc, four concentric layers, painted
                             //in render order (back to front):
@@ -2444,7 +2463,10 @@ export class HeliosCard extends LitElement
                     ].filter(Boolean).join(' ');
                     return html`
                         <svg class="${glowClasses}"
-                             style="--helios-sun-color:${sunColor};--pv-leader-color:${pvColor};--pv-flow-duration:${pvFlowDuration}s">
+                             style="--helios-sun-color:${sunColor};--pv-leader-color:${pvColor};--pv-flow-duration:${pvFlowDuration}s"
+                             @click="${(e: Event) => handleHomeClick(this, e)}"
+                             @mouseenter="${this._onHomeEnter}"
+                             @mouseleave="${this._onHomeLeave}">
                             ${silhouettePts.map(sil => sil === null ? nothing : svg`
                                 <polygon class="home-glow-shape" points="${sil.base}" />
                                 <polygon class="home-glow-shape" points="${sil.top}" />

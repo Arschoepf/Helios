@@ -63,7 +63,6 @@ const HOME_FALLBACK_M   = 30;   //If no polygon contains the home point, pick
                                 //the nearest one within this radius. Covers the common case where HA's home latitude lands in a garden a few metres
                                 //off the actual building.
 
-//----------------------------------------------------------------- coords
 
 function lonLatToTile(lon: number, lat: number, z: number): { x: number; y: number }
 {
@@ -97,7 +96,6 @@ function metersToDegLon(m: number, atLat: number): number
     return m / (111_320 * Math.cos(atLat * Math.PI / 180));
 }
 
-//----------------------------------------------------------------- geometry
 
 //Ray-casting point-in-polygon for a single ring (lon,lat pairs).
 //Returns true if (lon, lat) is strictly inside or on the boundary.
@@ -162,7 +160,6 @@ function representativePoint(geom: GeoJSON.Geometry): [number, number] | null
     return [sx / ring.length, sy / ring.length];
 }
 
-//----------------------------------------------------------------- ofm tile template
 
 //OpenFreeMap publishes its planet vector tiles under a versioned
 //snapshot path that rotates every few weeks. The TileJSON at
@@ -202,7 +199,6 @@ async function getOpenFreeMapTileTemplate(signal?: AbortSignal): Promise<string 
     return _ofmTileTemplateInflight;
 }
 
-//----------------------------------------------------------------- main
 
 export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Promise<BuildingsResult>
 {

@@ -62,19 +62,18 @@ conditions at the user's home. The full picture sits on a single
 * **Incidence ray**, dashed line from the sun to the PV chip,
   animated to flow at a speed proportional to live irradiance.
   Snaps to the side of the PV chip facing the sun.
-* **Cloud cover disc**, a translucent disc on the ground, centred
-  on the home, scaled by the live cloud-cover percentage and
-  outlined in the configured cloud colour. A fixed black ring
-  marks the 100 % reference.
 * **Solar irradiance chip**, pinned above the sun disc, shows the
   live W/m² figure. Reads from the configured
   `solar-radiation-entity` for live + past timestamps when one is
   set; falls back to the model otherwise. Future timestamps
   always come from the model.
-* **Cloud cover chip**, pinned just outside the cloud disc at a
-  hemisphere-aware geographic anchor (NE of home in NH, SW in SH).
-  Shows the live cloud %. Hovering the disc reveals a low/mid/high
-  breakdown tooltip.
+* **Cloud cover chip + dome**, a top-of-card chip shows the live
+  cloud-cover percentage. Tapping the chip toggles a hemispheric
+  cloud-dome overlay anchored at the home and fans three sub-
+  chips below the toggle for the low / mid / high layer
+  breakdown. The dome is sliced into three horizontal bands whose
+  opacity tracks each layer's share of the sky, so the user reads
+  the modelled coverage spatially rather than as a flat number.
 * **Home halo**, a soft sun-coloured glow under the focal home
   outline so the building reads at a glance even on a busy basemap.
 * **PV production chip** *(optional)*, when a `pv-power-entity`
@@ -148,7 +147,7 @@ Helios/
 │   │   ├── shadingDome.ts               Hemispheric dome overlay rendering of the shading map
 │   │   ├── charts.ts                    Timeline charts (irradiance, PV) + day labels
 │   │   ├── dashboard.ts                 Detail-mode panel + counter-up animation
-│   │   ├── overlays.ts                  Screen-space projections (sun arc, cloud disc)
+│   │   ├── overlays.ts                  Screen-space projections (sun arc, home silhouettes)
 │   │   ├── timeline.ts                  Clock tick + scrub pointer handlers
 │   │   ├── lidar-view.ts                LiDAR-View toggle + fade rAF loop + opacity picker
 │   │   ├── init.ts                      Engine bootstrap + visibility observer + home coords
@@ -339,7 +338,7 @@ diagnostic snapshot.
   annotation; null when fewer than 2 past days carry enough data.
 * **`card/overlays.ts`**, screen-space projections refreshed on
   every map transform and clock tick: sun arc samples, sun
-  position, cloud disc bands, home silhouettes, label anchors.
+  position, home silhouettes, label anchors.
   Plus `setAnimationsPaused` (IntersectionObserver hook),
   `buildArcSegments` (pairs arc samples into stroke-ready
   segments), and `flowDuration` (rate-to-duration easing used by
@@ -609,8 +608,8 @@ vector tile(s) covering a bbox around the home (1–4 tiles at z=14).
 The tile URL template is resolved once at startup from the public
 TileJSON at `https://tiles.openfreemap.org/planet`; OpenFreeMap
 rotates the underlying snapshot path every few weeks, so caching
-the template per page lifetime keeps us pointed at whatever
-snapshot is current. Each tile's `building` source-layer is
+the template per page lifetime keeps the engine pointed at
+whatever snapshot is current. Each tile's `building` source-layer is
 decoded (OpenMapTiles schema, so `render_height` and
 `render_min_height` are present); MultiPolygon
 features are split into independent Polygon features. Then each

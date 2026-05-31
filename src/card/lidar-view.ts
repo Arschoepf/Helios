@@ -154,17 +154,21 @@ export function renderLidarViewOpacityPicker(
 ): TemplateResult | typeof nothing
 {
     const pct        = Math.round(Math.max(0, Math.min(1, host._lidarViewOpacity)) * 100);
-    //Always render the pill so its opacity transition runs in both directions (fade-in on mode enter, fade-out on mode exit). When the
-    //mode is off, the .is-active class drops, CSS animates opacity back to 0 and pointer-events go inert.
-    const activeCls  = host._lidarViewMode ? ' is-active' : '';
+    //Always render the pill so its slide + opacity transitions run in
+    //both directions. .is-active goes ON only when the mode is active
+    //AND no exit fade is in flight, so the pill slides DOWN at the same
+    //instant the dot cloud starts retreating, instead of waiting for
+    //the cloud's own fade-out to complete.
+    const sliderActive = host._lidarViewMode && host._lidarFadeOutStartMs === null;
+    const activeCls    = sliderActive ? ' is-active' : '';
     return html`
-        <div class="lidar-view-opacity-slider${activeCls}" aria-label="LiDAR view opacity" ?aria-hidden="${!host._lidarViewMode}">
+        <div class="lidar-view-opacity-slider${activeCls}" aria-label="LiDAR view opacity" ?aria-hidden="${!sliderActive}">
             <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--low"  icon="mdi:circle-outline"></ha-icon>
             <input type="range" min="0" max="100" step="1"
                    class="lidar-view-opacity-range"
                    .value="${String(pct)}"
                    aria-label="LiDAR view opacity percentage"
-                   tabindex="${host._lidarViewMode ? 0 : -1}"
+                   tabindex="${sliderActive ? 0 : -1}"
                    @input="${(e: Event) => onChange(Number((e.target as HTMLInputElement).value) / 100)}" />
             <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--high" icon="mdi:circle"></ha-icon>
             <span class="lidar-view-opacity-value">${pct}%</span>

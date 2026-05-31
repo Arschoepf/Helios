@@ -571,7 +571,7 @@ export class HeliosEngine
     //on every map transform without having to round-trip back
     //through _renderForCurrentSelection.
     private _currentCloudPct: number = 0;
-    //Per-layer breakdown captured at the same instant — used by
+    //Per-layer breakdown captured at the same instant, used by
     //projectCloudScene() to size the three concentric bands
     //(low → mid → high, from centre to edge) proportionally to
     //each layer's contribution to the total.
@@ -1697,7 +1697,7 @@ export class HeliosEngine
         //Layer breakdown: each band's outer radius is the cumulative
         //share of low + mid (+ high) over the layer total. When all
         //three layers are zero the disc collapses to the home anchor
-        //regardless of the effective percentage — that can only
+        //regardless of the effective percentage, that can only
         //happen with a degenerate weather sample, but the guard
         //below keeps the polygons non-degenerate.
         const total = cLow + cMid + cHi;
@@ -3793,15 +3793,15 @@ export class HeliosEngine
     //Layout the shading-dome overlay: every populated cell of the learned residual grid projected onto the celestial hemisphere above the home, plus
     //today's solar arc carrying the per-sample residual ratio so the user can see "the sun walks through this red cell at 17h, that's the tree".
     //
-    //`cellPolys`  — one entry per cell, four corner pixels of the
+    //`cellPolys` , one entry per cell, four corner pixels of the
     //               annular sector (az ± 5 deg × alt ± 2.5 deg)
     //               projected onto the sphere; cells with any
     //               corner behind the camera are dropped.
-    //`todayArc`   — sun-position samples for today, each with the
+    //`todayArc`  , sun-position samples for today, each with the
     //               shading-map ratio looked up at its (az, alt,
     //               liveCloud) coordinates and the kernel-smoothed
     //               confidence.
-    //`homeScreen` — ground anchor reused by the SVG for centred
+    //`homeScreen`, ground anchor reused by the SVG for centred
     //               labels.
     //
     //`now` lets the caller pin the dome to a different day if it

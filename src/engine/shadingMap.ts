@@ -50,11 +50,9 @@ const MIN_EFFECTIVE_SAMPLES = 2;
 const RATIO_MIN = 0.3;
 const RATIO_MAX = 1.7;
 
-//v2: schema bump when the cloud-cover dimension went from 4 to
-//8 bins. Old keys like `az|alt|3` meant 75-100 % under v1 but
-//mean 37.5-50 % under v2, so loading v1 data into the v2 schema
-//would corrupt the cells silently. Cleanest: ignore v1 entirely
-//and let the model relearn from scratch.
+//Storage key carries a schema version so a future cloud-cover
+//bin change can land without silently corrupting cells already on
+//disk; older keys are ignored and the model relearns from scratch.
 const STORAGE_KEY = 'helios-shading-map:v2';
 
 

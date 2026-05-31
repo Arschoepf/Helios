@@ -1,5 +1,6 @@
 //Grid import / export readout, the live numeric value read from
-//hass.states.
+//hass.states and the past-scrub derivation from the rolling buffer
+//backed by HA recorder history.
 //
 //grid-import-entity and grid-export-entity can be wired as a single
 //entity (string) OR as an array of entities. The array form is the
@@ -10,6 +11,14 @@
 //(the active tariff), so the chip displays the value of the entity
 //that changed MOST RECENTLY. No averaging, no summing: the last-
 //updated entity wins.
+//
+//Both live and past-scrub derivations share one bracketed-slope
+//helper. The bracket is chosen so that the time span across the two
+//samples is at least MIN_SLOPE_SPAN_MS, expanding outward when the
+//immediate bracket is too narrow. This keeps a 1 Wh meter quantum
+//from projecting into a hundred-watt spike when two consecutive
+//samples landed 5 s apart, while still using the natural sample
+//cadence on sparse meters (Linky 30 min, Shelly 60 s).
 
 import type { HeliosConfig } from '../helios-config';
 import { pvNormalizeToWatts } from './pv';
@@ -17,77 +26,41 @@ import { pvNormalizeToWatts } from './pv';
 
 type Sample = { t: number; v: number; lastChangeT?: number | null };
 
-//Set of entity IDs that already had their HA recorder history pulled
-//once this session. Live state cumulative-kWh meters (especially TIC
-//Linky indexes for HP / HC tariffs) sometimes go minutes or hours
-//without pushing a fresh state event, but the recorder always has
-//older transitions on disk. Seeding the rolling buffer with that
-//history means the chip can derive a meaningful slope from the very
-//first refresh, instead of waiting for the live state to move (or
-//worse, displaying 0 W when the integration is silent).
+
 const _historyFetched   = new Set<string>();
 const _historyInflight  = new Set<string>();
-//1 hour history backfill, long enough to give the derivation a
-//moving signal even on the slowest 30 min Linky polling, short
-//enough to keep the WS payload tiny.
-const GRID_HISTORY_WINDOW_MS = 60 * 60_000;
+//72 hour history backfill so the past-scrub bracket actually
+//covers the timeline's visible past range (2 days + margin), the
+//earlier 6 h window had the user dragging the scrub deep into
+//yesterday and hitting the buffer's edge, where pickBracket fell
+//back to the first two samples and returned a constant slope for
+//every position past that edge (the user's "scrub value never
+//changes, no matter where I drop the cursor" symptom).
+const GRID_HISTORY_WINDOW_MS = 72 * 60 * 60_000;
+//In-memory retention window aligned with the backfill so live
+//accumulation never trims off bracket-relevant history.
+const GRID_SAMPLE_WINDOW_MS = 72 * 60 * 60_000;
+const GRID_SAMPLE_MAX       = 16384;
+//Minimum time span a slope must cover before it is trusted. Below
+//this the 1 Wh meter quantum dominates the numerator and the
+//derivation becomes meaningless (1 Wh / 5 s -> 720 W spike with no
+//physical meaning). 60 s keeps that error under ~60 W on a 1 Wh
+//meter and is short enough that the chip stays responsive.
+const MIN_SLOPE_SPAN_MS = 60_000;
+//Live derivation horizon. When picking the bracket for the LIVE
+//chip we target now() and look for samples within this many ms
+//behind now. Older brackets are not interesting for "what is
+//flowing right now" and bias the chip toward a stale average. 10
+//min covers Linky histo mode (10 min push cadence) without
+//showing an outright stale half-hour-old value.
+const LIVE_SLOPE_LOOKBACK_MS = 10 * 60_000;
+//Edge tolerance for SCRUB targets that sit just outside the
+//buffer. When the user drags the scrub past the buffer's first
+//sample by less than this, we use the first bracket as a "best
+//effort" answer; beyond that we return null so the chip hides
+//cleanly instead of showing a misleading constant slope.
+const SCRUB_EDGE_TOLERANCE_MS = 10 * 60_000;
 
-
-function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string, Sample[]>): void
-{
-    if (!host.hass?.callWS) return;
-    if (_historyFetched.has(entity)) return;
-    if (_historyInflight.has(entity)) return;
-    _historyInflight.add(entity);
-    const end   = new Date();
-    const start = new Date(end.getTime() - GRID_HISTORY_WINDOW_MS);
-    (async (): Promise<void> =>
-    {
-        try
-        {
-            const result: any = await host.hass.callWS({
-                type:             'history/history_during_period',
-                start_time:       start.toISOString(),
-                end_time:         end.toISOString(),
-                entity_ids:       [entity],
-                minimal_response: true,
-                no_attributes:    true
-            });
-            const arr: any[] = (result && result[entity]) ?? [];
-            const buf = bufMap.get(entity) ?? [];
-            let lastV: number | null = null;
-            let lastChangeT: number | null = null;
-            for (const item of arr)
-            {
-                const sRaw = item?.s ?? item?.state;
-                if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') continue;
-                const v = parseFloat(String(sRaw));
-                if (!isFinite(v)) continue;
-                const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
-                let t: number | null = null;
-                if (typeof tsRaw === 'number')      t = tsRaw > 1e12 ? tsRaw : tsRaw * 1000;
-                else if (typeof tsRaw === 'string') { const n = Number(tsRaw); t = Number.isFinite(n) && n > 1e9 ? (n > 1e12 ? n : n * 1000) : new Date(tsRaw).getTime(); }
-                if (t === null || !isFinite(t)) continue;
-                const realTransition = lastV !== null && lastV !== v;
-                if (realTransition || lastChangeT === null) lastChangeT = t;
-                buf.push({ t, v, lastChangeT });
-                lastV = v;
-            }
-            if (buf.length > 0)
-            {
-                buf.sort((a, b) => a.t - b.t);
-                bufMap.set(entity, buf);
-                host.requestUpdate();
-            }
-            _historyFetched.add(entity);
-        }
-        catch { /* silent: live derivation still works once HA pushes state */ }
-        finally
-        {
-            _historyInflight.delete(entity);
-        }
-    })();
-}
 
 export interface GridHost
 {
@@ -119,16 +92,70 @@ export interface GridHost
 }
 
 
-//Rolling window for the dE/dt derivative when a cumulative energy
-//sensor is wired. 10 min stays responsive while covering even slow-
-//updating Linky / Shelly integrations.
-//60 min rolling window. Long enough to keep the recorder backfill
-//meaningful when HA's live state goes silent for several minutes
-//between TIC pushes; short enough to keep the slope reactive to
-//real consumption changes once HA resumes pushing.
-const GRID_SAMPLE_WINDOW_MS = 60 * 60_000;
-const GRID_SAMPLE_PERIOD_MS = 5_000;
-const GRID_SAMPLE_MAX       = 800;
+function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string, Sample[]>): void
+{
+    if (!host.hass?.callWS) return;
+    if (_historyFetched.has(entity)) return;
+    if (_historyInflight.has(entity)) return;
+    _historyInflight.add(entity);
+    const end   = new Date();
+    const start = new Date(end.getTime() - GRID_HISTORY_WINDOW_MS);
+    (async (): Promise<void> =>
+    {
+        try
+        {
+            const result: any = await host.hass.callWS({
+                type:             'history/history_during_period',
+                start_time:       start.toISOString(),
+                end_time:         end.toISOString(),
+                entity_ids:       [entity],
+                minimal_response: true,
+                no_attributes:    true
+            });
+            const arr: any[] = (result && result[entity]) ?? [];
+            const merged: Sample[] = [];
+            let lastV: number | null = null;
+            let lastChangeT: number | null = null;
+            for (const item of arr)
+            {
+                const sRaw = item?.s ?? item?.state;
+                if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') continue;
+                const v = parseNumericState(sRaw);
+                if (v === null) continue;
+                const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
+                const t = parseTimestamp(tsRaw);
+                if (t === null) continue;
+                const realTransition = lastV !== null && lastV !== v;
+                if (realTransition || lastChangeT === null) lastChangeT = t;
+                merged.push({ t, v, lastChangeT });
+                lastV = v;
+            }
+            //Merge with any live samples that may have already landed
+            //while the WS call was in flight, dedupe by timestamp.
+            const live = bufMap.get(entity) ?? [];
+            for (const s of live) merged.push(s);
+            merged.sort((a, b) => a.t - b.t);
+            const deduped: Sample[] = [];
+            for (const s of merged)
+            {
+                const last = deduped[deduped.length - 1];
+                if (last && last.t === s.t) continue;
+                deduped.push(s);
+            }
+            if (deduped.length > 0)
+            {
+                bufMap.set(entity, deduped);
+                host.requestUpdate();
+            }
+            _historyFetched.add(entity);
+        }
+        catch { /* silent: live derivation still works once HA pushes state */ }
+        finally
+        {
+            _historyInflight.delete(entity);
+        }
+    })();
+}
 
 
 export function refreshGrid(host: GridHost): void
@@ -182,12 +209,6 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
     for (const key of Array.from(bufMap.keys()))     if (!entities.includes(key)) bufMap.delete(key);
     for (const key of Array.from(derivedMap.keys())) if (!entities.includes(key)) derivedMap.delete(key);
 
-    //Per-entity processing. Each entity's reading is sampled into its
-    //own rolling buffer; the slope (or the raw value if the sensor
-    //reports power natively) is recorded in derivedMap with the
-    //timestamp at which the underlying state changed for the last
-    //time. Whichever entity has the most recent change wins the
-    //chip.
     let unitForOutput = '';
     let sawAny        = false;
     const nowMs       = Date.now();
@@ -196,35 +217,51 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
 
     for (const entity of entities)
     {
-        //Pull the last hour of recorder history once per session so
-        //the rolling buffer carries a usable slope even when the
-        //live state is silent.
+        //Pull the recorder history once per session so the rolling
+        //buffer carries a usable slope even when the live state is
+        //silent at boot.
         ensureHistoryFetched(host, entity, bufMap);
 
         const stateObj = host.hass.states?.[entity];
         if (!stateObj) continue;
-        const raw  = String(stateObj.state ?? '').trim();
+        const raw  = stateObj.state;
         const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
-        if (raw === '' || raw === 'unknown' || raw === 'unavailable') continue;
-        const num = parseFloat(raw);
-        if (!isFinite(num)) continue;
+        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable') continue;
+        const num = parseNumericState(raw);
+        if (num === null) continue;
         unitForOutput = unitForOutput || unit;
         sawAny = true;
 
         const u = unit.toLowerCase();
         unitsMap.set(entity, u);
+
+        //Sample timestamp comes from the entity's last_updated so the
+        //slope reflects when HA observed the value, not when we ran
+        //refreshGrid. Falling back to nowMs only when last_updated is
+        //missing (very old HA, or a state we forged on the fly).
+        const stateTs = parseTimestamp(stateObj.last_updated)
+                     ?? parseTimestamp(stateObj.last_changed)
+                     ?? nowMs;
+
         if (u === 'wh' || u === 'kwh' || u === 'mwh')
         {
-            const out = deriveWattsFromCumulative(bufMap, entity, num, u, nowMs);
+            recordCumulativeSample(bufMap, entity, num, stateTs, nowMs);
+            const out = bracketedSlopeWatts(bufMap.get(entity), u, nowMs, LIVE_SLOPE_LOOKBACK_MS);
             if (out !== null)
             {
-                //out.changedAt is the timestamp of the SAMPLE PUSH that
-                //triggered this derivation; it's the right tie-breaker
-                //for "which entity moved last". A frozen entity never
-                //updates its derivedMap entry, so a tariff that just
-                //handed control to the OTHER one stops dragging the
-                //chip back to its stale value.
+                //out.changedAt is the timestamp of the newest sample
+                //in the bracket. A tariff that just stopped moving
+                //sees its bracket sample age out; once everything in
+                //the buffer pre-dates the lookback window, this entity
+                //stops bidding for the chip and the other tariff wins.
                 derivedMap.set(entity, { watts: out.watts, t: out.changedAt });
+            }
+            else
+            {
+                //Bracket couldn't produce a slope (buffer too short
+                //or all samples flat). Forget any stale derivation
+                //for this entity so its sibling drives the chip.
+                derivedMap.delete(entity);
             }
         }
         else if (u === 'w' || u === 'kw' || u === 'mw')
@@ -232,18 +269,16 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
             //Power sensor: the value IS the watts. Tag with the
             //sensor's last_updated so cross-entity ranking still
             //works against cumulative-kWh siblings.
-            const lastUpdated = String(stateObj.last_updated ?? stateObj.last_changed ?? '').trim();
-            const changedAt   = lastUpdated ? new Date(lastUpdated).getTime() : nowMs;
             derivedMap.set(entity, {
                 watts: pvNormalizeToWatts(num, unit),
-                t:     isFinite(changedAt) ? changedAt : nowMs
+                t:     stateTs
             });
         }
         else
         {
-            //Unknown unit: forward the raw value, tagged with now so
-            //it ranks competitively against other entities.
-            derivedMap.set(entity, { watts: num, t: nowMs });
+            //Unknown unit: forward the raw value, tagged with the
+            //entity's last_updated so it ranks competitively.
+            derivedMap.set(entity, { watts: num, t: stateTs });
         }
     }
 
@@ -257,7 +292,9 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
     }
 
     //Pick the entity with the most recent change. If no entity has
-    //a derivation yet (buffers still warming up), seed at 0.
+    //a derivation yet (buffers still warming up), zero the chip out
+    //rather than carrying a stale value forward, the previous
+    //"keep last value" rule made a frozen sensor look live.
     let bestT     = -1;
     let bestWatts: number | null = null;
     for (const [, entry] of derivedMap)
@@ -270,17 +307,14 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
     }
     if (bestWatts === null)
     {
-        //No live derivation landed yet. Keep whatever the chip was
-        //showing (last derived value from earlier in the session,
-        //or from the seeded history below). We never zero the chip
-        //out just because the integration went silent.
+        //No live derivation landed yet. Show 0 W so the chip stays
+        //visible (it has an entity wired) but reads as "nothing
+        //currently flowing", instead of carrying whatever stale
+        //number the previous tick had.
+        applyValue(host, slot, 0, unitIsEnergy(unitForOutput) ? 'W' : (unitForOutput || 'W'));
         return;
     }
 
-    //Output unit: cumulative-kWh sensors derive into W, others keep
-    //their native unit. We normalise everything to W on the chip
-    //since the multi-entity case can't mix kWh-display with W-display
-    //cleanly.
     const outUnit = unitIsEnergy(unitForOutput) ? 'W' : (unitForOutput || 'W');
     applyValue(host, slot, bestWatts, outUnit);
 }
@@ -293,20 +327,236 @@ function unitIsEnergy(unit: string): boolean
 }
 
 
+//Parse a state value that came in as either a string or a number.
+//Accepts both '.' and ',' decimal separators since some integrations
+//(rare, but exist) forward the locale-formatted form. Returns null
+//for anything that isn't a finite number.
+function parseNumericState(raw: unknown): number | null
+{
+    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (trimmed === '') return null;
+    //Locale-tolerant: replace a single comma with a dot when the
+    //string has no dot already. Avoids breaking thousand-separated
+    //inputs like "12,345.6" which would otherwise parse as 12.
+    const normalised = trimmed.includes('.') ? trimmed : trimmed.replace(',', '.');
+    const n = parseFloat(normalised);
+    return Number.isFinite(n) ? n : null;
+}
+
+
+function parseTimestamp(raw: unknown): number | null
+{
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === 'number')
+    {
+        if (!Number.isFinite(raw)) return null;
+        return raw > 1e12 ? raw : raw * 1000;
+    }
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (trimmed === '') return null;
+    const asNum = Number(trimmed);
+    if (Number.isFinite(asNum) && asNum > 1e9)
+    {
+        return asNum > 1e12 ? asNum : asNum * 1000;
+    }
+    const parsed = new Date(trimmed).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+
+//Push a fresh cumulative-energy reading into the per-entity buffer
+//and prune the rolling window. Duplicate timestamps are skipped so
+//the buffer doesn't fill with copies of the same observation when
+//several refreshGrid ticks land between two HA updates.
+function recordCumulativeSample(
+    bufMap:  Map<string, Sample[]>,
+    entity:  string,
+    num:     number,
+    stateTs: number,
+    nowMs:   number
+): void
+{
+    let buf = bufMap.get(entity);
+    if (!buf)
+    {
+        buf = [];
+        bufMap.set(entity, buf);
+    }
+    const last = buf.length > 0 ? buf[buf.length - 1] : null;
+    if (!last || stateTs > last.t)
+    {
+        const isRealTransition = last !== null && last.v !== num;
+        buf.push({
+            t: stateTs,
+            v: num,
+            lastChangeT: isRealTransition ? stateTs : (last?.lastChangeT ?? null)
+        });
+    }
+    //Hard cap on buffer size + drop samples older than the retention
+    //window, measured against the current wall clock (so stale buffers
+    //prune themselves out of memory even if no new sample lands for
+    //a while).
+    while (buf.length > GRID_SAMPLE_MAX) buf.shift();
+    while (buf.length > 1 && nowMs - buf[0].t > GRID_SAMPLE_WINDOW_MS) buf.shift();
+}
+
+
+//Find the pair of samples (oldest, newest) that brackets `targetMs`
+//in the buffer such that newest.t - oldest.t >= MIN_SLOPE_SPAN_MS.
+//When the immediate before/after bracket is too narrow (typical
+//5 s push throttle on Wh meters with 1 Wh quantum), we extend the
+//bracket outward, preferring the closer side, until either the
+//span exceeds MIN_SLOPE_SPAN_MS or the buffer is exhausted.
+//
+//Returns null when no two distinct samples can be found at all.
+//
+//`maxLookbackMs` constrains the LIVE path: the bracket's newest
+//sample must sit within `maxLookbackMs` of targetMs so a chip that
+//was last updated 10 min ago doesn't drag a stale "average" into
+//the live display. SCRUB pases null to disable that constraint.
+function pickBracket(
+    buf:           Sample[],
+    targetMs:      number,
+    maxLookbackMs: number | null
+): { oldest: Sample; newest: Sample } | null
+{
+    if (buf.length < 2) return null;
+    //beforeIdx = index of the latest sample with t <= targetMs.
+    //afterIdx  = index of the earliest sample with t > targetMs.
+    let beforeIdx = -1;
+    for (let i = 0; i < buf.length; i++)
+    {
+        if (buf[i].t <= targetMs) beforeIdx = i;
+        else break;
+    }
+    let afterIdx = beforeIdx + 1;
+
+    if (beforeIdx < 0)
+    {
+        //Target predates the buffer.
+        if (maxLookbackMs === null)
+        {
+            //SCRUB path: if the target is meaningfully before the
+            //buffer's first sample, refuse to extrapolate. Returning
+            //the same first-two-samples bracket for every target in
+            //this range would show one constant slope across hours
+            //of scrub (the symptom that motivated this audit).
+            //Within the edge tolerance the first bracket is still
+            //used so a small gap between buffer start and the user's
+            //scrub instant doesn't hide the chip needlessly.
+            if (buf[0].t - targetMs > SCRUB_EDGE_TOLERANCE_MS) return null;
+        }
+        beforeIdx = 0;
+        afterIdx  = 1;
+    }
+    else if (afterIdx >= buf.length)
+    {
+        //Target postdates the buffer (live path: target = now,
+        //newest buffer sample t < now). Use the last two samples.
+        beforeIdx = buf.length - 2;
+        afterIdx  = buf.length - 1;
+    }
+
+    let oldest = buf[beforeIdx];
+    let newest = buf[afterIdx];
+
+    //Extend outward until the bracket spans MIN_SLOPE_SPAN_MS or we
+    //can't extend any further on either side.
+    while (newest.t - oldest.t < MIN_SLOPE_SPAN_MS)
+    {
+        const canShrinkOlder  = beforeIdx > 0;
+        const canExtendNewer  = afterIdx < buf.length - 1;
+        if (!canShrinkOlder && !canExtendNewer) break;
+        if (!canShrinkOlder)
+        {
+            afterIdx++;
+            newest = buf[afterIdx];
+        }
+        else if (!canExtendNewer)
+        {
+            beforeIdx--;
+            oldest = buf[beforeIdx];
+        }
+        else
+        {
+            //Prefer the side whose neighbour sits closer in time so
+            //the bracket grows symmetrically around the target.
+            const beforeGap = oldest.t - buf[beforeIdx - 1].t;
+            const afterGap  = buf[afterIdx + 1].t - newest.t;
+            if (afterGap <= beforeGap)
+            {
+                afterIdx++;
+                newest = buf[afterIdx];
+            }
+            else
+            {
+                beforeIdx--;
+                oldest = buf[beforeIdx];
+            }
+        }
+    }
+
+    if (maxLookbackMs !== null && targetMs - newest.t > maxLookbackMs)
+    {
+        return null;
+    }
+    if (newest.t === oldest.t) return null;
+    return { oldest, newest };
+}
+
+
+function slopeWatts(oldest: Sample, newest: Sample, u: string): number | null
+{
+    const dt = (newest.t - oldest.t) / 1000;
+    if (dt <= 0) return null;
+    let dE_wh = newest.v - oldest.v;
+    if (u === 'kwh') dE_wh *= 1000;
+    else if (u === 'mwh') dE_wh *= 1_000_000;
+    //Power = energy / time. dE_wh is in Wh, dt is in seconds; the
+    //3600 factor turns Wh per second into watts.
+    return dE_wh * 3600 / dt;
+}
+
+
+//Internal helper used by the LIVE refresh. Returns the slope in
+//watts plus the timestamp of the newest sample in the bracket so
+//the multi-entity picker can rank by "moved most recently".
+function bracketedSlopeWatts(
+    buf:           Sample[] | undefined,
+    u:             string,
+    targetMs:      number,
+    maxLookbackMs: number | null
+): { watts: number; changedAt: number } | null
+{
+    if (!buf) return null;
+    const bracket = pickBracket(buf, targetMs, maxLookbackMs);
+    if (!bracket) return null;
+    const w = slopeWatts(bracket.oldest, bracket.newest, u);
+    if (w === null) return null;
+    //changedAt = the timestamp of the latest REAL value transition
+    //seen in this entity's buffer, not the last poll. The multi-
+    //tariff picker ranks by "moved most recently", and HA pushes
+    //last_updated even when the state value doesn't change, so the
+    //poll time would tie HP and HC even when only HP is currently
+    //incrementing. Falling back to newest.t when lastChangeT is
+    //null preserves the legacy ordering on the very first sample
+    //of a buffer.
+    const changedAt = bracket.newest.lastChangeT ?? bracket.newest.t;
+    return { watts: w, changedAt };
+}
+
+
 //Derive the grid watts AT (or as close as possible to) a target
-//timestamp, using the rolling buffer of (t, v) samples. Used by the
-//past-scrub render so the chip reflects the consumption / export
-//that was happening at the scrub instant rather than the live now.
+//timestamp, used by the past-scrub render. Sums the bracketed slope
+//of every entity in the slot, so multi-tariff installs (HP + HC)
+//combine into the actual power that was flowing at the scrub
+//instant, the inactive tariff contributing 0 W because its bracket
+//is flat across the target.
 //
-//Strategy: per entity, find the two samples that bracket the target,
-//compute the slope across that bracket. Sum (last-changed wins logic
-//is dropped for scrub: we want a single snapshot for the time, not
-//"whichever entity moved last across now"). The unit map carries
-//the energy unit for each entity so the conversion to watts is
-//correct regardless of whether the source was Wh / kWh / MWh.
-//
-//Returns null when no buffer covers the target or when every
-//bracket is flat (no transition around the target).
+//Returns null when no buffer can produce a bracket at all.
 export function gridWattsAtTime(
     samples:  Map<string, Sample[]>,
     units:    Map<string, string>,
@@ -330,122 +580,44 @@ export function gridWattsAtTime(
                 const d = Math.abs(buf[i].t - targetMs);
                 if (d < bestDt) { best = buf[i]; bestDt = d; }
             }
-            //Already in watts equivalent; downstream pvNormalizeToWatts
-            //handles kW / MW too.
+            //pvNormalizeToWatts is the same conversion used live so
+            //kW / MW power-native sensors stay consistent across the
+            //two paths.
             const watts = u === 'kw' ? best.v * 1000 : u === 'mw' ? best.v * 1_000_000 : best.v;
             total += watts;
             anyHit = true;
             continue;
         }
-        //Cumulative-energy sensor: find the two samples bracketing
-        //targetMs (or the closest 2 around it) and compute the slope.
-        let beforeIdx = -1;
-        let afterIdx  = -1;
-        for (let i = 0; i < buf.length; i++)
-        {
-            if (buf[i].t <= targetMs) beforeIdx = i;
-            if (buf[i].t >= targetMs) { afterIdx = i; break; }
-        }
-        let a = beforeIdx >= 0 ? buf[beforeIdx] : null;
-        let b = afterIdx  >= 0 ? buf[afterIdx]  : null;
-        if (!a || !b || a === b)
-        {
-            //Target sits outside the buffer; expand to the closest
-            //2 samples on the same side.
-            if (buf[0].t > targetMs)             { a = buf[0];                  b = buf[1];                  }
-            else if (buf[buf.length - 1].t < targetMs) { a = buf[buf.length - 2]; b = buf[buf.length - 1]; }
-            else if (beforeIdx >= 0)             { a = buf[Math.max(0, beforeIdx - 1)]; b = buf[beforeIdx]; }
-            else                                 continue;
-        }
-        if (!a || !b || a === b || a.v === b.v) continue;
-        const dt = (b.t - a.t) / 1000;
-        if (dt <= 0) continue;
-        let dE_wh = b.v - a.v;
-        if (u === 'kwh') dE_wh *= 1000;
-        else if (u === 'mwh') dE_wh *= 1_000_000;
-        total += dE_wh * 3600 / dt;
+        //Cumulative-energy sensor.
+        const bracket = pickBracket(buf, targetMs, null);
+        if (!bracket) continue;
+        const w = slopeWatts(bracket.oldest, bracket.newest, u);
+        if (w === null) continue;
+        total += w;
         anyHit = true;
     }
     return anyHit ? total : null;
 }
 
 
-//Push the latest cumulative reading into the per-entity buffer and
-//return:
-//   { watts, changedAt }   when the slope can be computed and the
-//                          cumulative value moved across the window.
-//                          changedAt is the timestamp of the newest
-//                          sample (i.e. when the entity last bumped).
-//   null                   when the buffer hasn't accumulated enough
-//                          samples or the value is flat.
-function deriveWattsFromCumulative(
-    bufMap: Map<string, Sample[]>,
-    entity: string,
-    num:    number,
-    u:      string,
-    nowMs:  number
-): { watts: number; changedAt: number } | null
-{
-    let buf = bufMap.get(entity);
-    if (!buf)
-    {
-        buf = [];
-        bufMap.set(entity, buf);
-    }
-    const last = buf.length > 0 ? buf[buf.length - 1] : null;
-    //Track whether THIS push represents a real value transition (the
-    //incoming reading differs from the most recent stored one). The
-    //changedAt returned below is the timestamp of the LATEST real
-    //transition we ever saw in this buffer, used by the multi-entity
-    //picker to rank entities by "which one moved most recently".
-    //Without this distinction, every entity returned the latest
-    //push timestamp (which is just ~nowMs) and the ranking became
-    //"whichever entity got processed last in the for loop", not
-    //"whichever entity actually moved".
-    let isRealTransition = false;
-    if (!last || nowMs - last.t >= GRID_SAMPLE_PERIOD_MS)
-    {
-        isRealTransition = last !== null && last.v !== num;
-        buf.push({ t: nowMs, v: num, lastChangeT: isRealTransition ? nowMs : (last?.lastChangeT ?? null) });
-    }
-    while (buf.length > GRID_SAMPLE_MAX) buf.shift();
-    while (buf.length > 1 && nowMs - buf[0].t > GRID_SAMPLE_WINDOW_MS) buf.shift();
-    if (buf.length < 2) return null;
-
-    const oldest = buf[0];
-    const newest = buf[buf.length - 1];
-    if (newest.v === oldest.v) return null;
-    const dt = (newest.t - oldest.t) / 1000;
-    if (dt <= 0) return null;
-    let dE_wh = newest.v - oldest.v;
-    if (u === 'kwh') dE_wh *= 1000;
-    else if (u === 'mwh') dE_wh *= 1_000_000;
-    //Power = energy / time. dE_wh is in Wh (after the unit ladder
-    //above), dt is in seconds, so the conversion factor 3600 turns
-    //Wh per second into watts. Vetted: 1 kW for 3.6 s = 1 Wh,
-    //1 * 3600 / 3.6 = 1000 W. ✓
-    const watts = dE_wh * 3600 / dt;
-    //changedAt: walk the buffer back to find the most recent sample
-    //whose v differs from its predecessor, that is the timestamp of
-    //the last real value transition. Fall back to newest.t if the
-    //buffer doesn't carry the lastChangeT bookkeeping (legacy samples
-    //captured before this commit).
-    const changedAt = newest.lastChangeT ?? newest.t;
-    return { watts, changedAt };
-}
-
-
 function applyValue(host: GridHost, slot: 'import' | 'export', value: number | null, unit: string): void
 {
+    //Negative on a directional grid slot has no physical meaning:
+    //a negative IMPORT is a moment of EXPORT (already reported by
+    //the export slot), and a negative EXPORT is a moment of import.
+    //Clamping to 0 keeps the chip readable and prevents the bead
+    //animation (driven by the absolute watts) from running on a
+    //direction the slot was never wired to represent.
+    const clamped = (value === null) ? null : Math.max(0, value);
     if (slot === 'import')
     {
-        if (host._gridImportValue !== value) host._gridImportValue = value;
-        if (host._gridImportUnit  !== unit)  host._gridImportUnit  = unit;
+        if (host._gridImportValue !== clamped) host._gridImportValue = clamped;
+        if (host._gridImportUnit  !== unit)    host._gridImportUnit  = unit;
     }
     else
     {
-        if (host._gridExportValue !== value) host._gridExportValue = value;
-        if (host._gridExportUnit  !== unit)  host._gridExportUnit  = unit;
+        if (host._gridExportValue !== clamped) host._gridExportValue = clamped;
+        if (host._gridExportUnit  !== unit)    host._gridExportUnit  = unit;
     }
 }
 

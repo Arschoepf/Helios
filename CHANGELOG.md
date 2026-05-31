@@ -5,6 +5,115 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.8.1
+
+> Point-fix release on top of v1.8.0. v1.8.0 is withdrawn from the
+> release timeline, its grid IN / OUT chips were unusable past the
+> first six hours of scrub, the day-strip labels were misaligned,
+> the sun bead flickered through camera rotations, and the cloud
+> dome retirement was not reflected in the docs. v1.8.1 is the
+> first build of the cycle that reads as the intended product.
+
+### Grid IN / OUT, full audit + rewrite
+
+- Sample timestamps now come from the entity's `last_updated`
+  instead of the wall clock at refresh time, so the slope reflects
+  when HA actually observed the value.
+- Slope is taken across a bracketed pair of samples whose time
+  span is at least 60 s. When the immediate before/after bracket
+  sits too close together (5 s pushes on a 1 Wh meter), the
+  bracket extends outward until the span clears the noise floor.
+  Kills the 1 Wh-quantum-into-720 W-spike pattern.
+- Multi-tariff installs (HP / HC) rank by the LAST REAL VALUE
+  TRANSITION, not the latest poll, so the entity that actually
+  incremented most recently always wins the chip. Live lookback
+  10 min covers Linky histo mode (10 min push cadence).
+- Recorder backfill window 72 h to match the timeline's visible
+  past range. `pickBracket()` returns null when a scrub target
+  sits more than 10 min before the buffer's first sample, the
+  chip hides cleanly instead of showing a stale constant slope.
+- Negative readings clamp to 0 in both live and scrub: a negative
+  IMPORT is an EXPORT moment the export chip already reports.
+- Bead cadence is now LINEAR in frequency (`dur = MIN * CAP /
+  watts`, clamped to `[MIN, MAX]`), so twice the power gives
+  twice the speed. Caps tuned to round residential thresholds:
+  5 kW import, 1 kW export.
+
+### Day-strip vertical centring + smartphone fit
+
+The date / kWh pair on the bottom strip now shares one baseline
+geometry across all four label states (bold today, regular past,
+italic forecast, regular non-today). Both spans land on the same
+font-size + 18 px line-height, on the HA frontend font stack
+(`--mdc-typography-body1-font-family`, `--ha-font-family`,
+`--paper-font-common-base_-_font-family`, Roboto fallback). The
+strip itself is `box-sizing: border-box` so the inner content
+area is exactly 18 px and the line box fills it without leftover
+space. Font clamped to 6-9 px so the pair fits the narrower
+per-day cells a portrait smartphone produces. Cramped-cell
+kWh-hide threshold dropped to 48 px so the last day's forecast
+stays visible when the timeline ends mid-day.
+
+### Sun -> PV ray, no more flicker or chip overrun
+
+- The bead was riding on a circle whose `cx` / `cy` plus a
+  relative path mutated two attributes per rotation frame; the
+  SMIL interpolation jittered between the old and new base.
+  Switched to an absolute-path bead with `cx` / `cy` at the
+  origin, single-attribute updates keep the animation continuous
+  through camera drags.
+- The ray + bead lived in the same SVG as the sun disc, whose
+  depth split brought the SVG above the PV chip on the sun's
+  near half of the sky. Moved the ray + bead to a dedicated SVG
+  fixed at z 7, the chip background now always occludes the ray
+  endpoint at the chip border. The sun disc keeps its depth
+  split so it still passes in front of / behind the home cluster
+  depending on bearing.
+
+### Home click zone follows the building shape
+
+The silhouette polygons now receive pointer events themselves,
+so a click on any visible part of the focal building opens the
+dashboard, regardless of how the 120 px circular hitbox lines
+up against the projected centroid. The circular hitbox stays as
+a fallback for tiny / distant buildings.
+
+### Dome + LiDAR sliders harmonised
+
+Both pills now share the same min-height, 16 px icons and anchor
+rail, and both slide UP from below the card on mode entry and
+slide DOWN out of view on mode exit (mirroring the timeline's
+own enter / exit). Slider retreat fires immediately on
+toggle-off, in parallel with the mode's own fade-out instead of
+after it.
+
+### Editor + docs freshness
+
+- Grid section in the visual editor moved between PV and
+  Shading, so the energy-producing sources stay grouped.
+- README + ARCHITECTURE: the on-ground cloud-cover disc bullet
+  is gone (the chip + dome toggle at the top of the card
+  replaced it). The Depth-of-field veil bullet is gone (the
+  effect is no longer in the rendering pipeline). Grid IN / OUT
+  chips added to the "at a glance" feature list, with
+  `grid-import-entity` / `grid-export-entity` rows in the config
+  table. `cloud-color` description updated to reflect the dome
+  bands.
+- Project-wide audit pass: em-dashes replaced with commas in
+  every source comment, every i18n locale label and the README
+  + CHANGELOG. Decorative section dividers removed from
+  `engine/buildings.ts`. Dead `shouldShowDomeChip()` helper
+  removed from `card/shadingDome.ts`. Unused `PV_LEG_OFFSET_PX`
+  constant + its `void` silencer removed from `helios-card.ts`,
+  along with a sibling `void batteryCharging;` that was
+  silencing a variable the very next line consumes.
+
+### Other
+
+- Cloud-cover curve in the timeline chart bumped from
+  `fill-opacity: 0.25` to `0.45` so it stays readable through
+  the irradiance fill painted on top.
+
 ## v1.8.0
 
 > Accelerated release to address performance regressions reported after
@@ -695,7 +804,7 @@ polish.
   people. First US-state native provider in Helios.
 * **Worldwide LiDAR provider registry**. New
   [`LIDAR_PROVIDERS.html`](./LIDAR_PROVIDERS.html) lists every
-  public elevation / LiDAR source we have inspected (integrated,
+  public elevation / LiDAR source inspected (integrated,
   verified compatible but pending, partially compatible,
   incompatible) with status, endpoint, curl-verified example fetch
   URL ready to paste in a browser, and an inline SVG world map
@@ -833,13 +942,13 @@ polish.
 ### Credits
 
 * **[@jourdant](https://github.com/jourdant)** (Jourdan Templeton)
-  — BYO local nDSM LiDAR provider ([PR #5](https://github.com/ReikanYsora/Helios/pull/5))
+ , BYO local nDSM LiDAR provider ([PR #5](https://github.com/ReikanYsora/Helios/pull/5))
   and matching Python preparation toolchain
   ([PR #11](https://github.com/ReikanYsora/Helios/pull/11)), idea
   credited to [@stephenwq](https://github.com/stephenwq).
   Unlocks shadows for any region with raw LiDAR data available
   offline, initial use case NSW Australia.
-* **[@i6media](https://github.com/i6media)** (Frank Boon) — optional
+* **[@i6media](https://github.com/i6media)** (Frank Boon), optional
   `home-latitude` / `home-longitude` overrides
   ([PR #9](https://github.com/ReikanYsora/Helios/pull/9)) and the
   multi-orientation PV layout

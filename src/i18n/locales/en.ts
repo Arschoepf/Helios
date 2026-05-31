@@ -167,7 +167,7 @@ export const en: Translations = {
         lidarViewSection:      'LiDAR View',
         lidarViewHint:         'Click the LiDAR button in the top-right of the card to switch into the LiDAR overlay: every loaded cell is drawn as a wireframe and shaded in real time by its current solar exposure, so lit surfaces glow warm and shaded ones dim out. Use the slider at the bottom of the card to dial the overall opacity in or out. The button stays disabled when no provider covers the home. The view reuses the data already fetched at the current precision, no extra calls are made.',
         lidarViewPointSize:    'Point size (px)',
-        localLidarSection:     'Advanced — Local LiDAR (BYO)',
+        localLidarSection:     'Advanced, Local LiDAR (BYO)',
         localLidarHint:        'Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.',
         localLidarToolsHint:   'Need to prepare a raster from scratch? Drop your raw LAZ / LAS file or a DSM + DTM raster pair into the companion site [helios-lidar.org](https://helios-lidar.org), it returns the 2-band COG Helios reads (band 1 = nDSM, band 2 = DTM) plus the ready-to-paste YAML for the keys below. Free, no install, no account. Prefer to run everything locally? The full Python toolchain lives in the [Helios-Lidar repository](https://github.com/ReikanYsora/Helios-Lidar).',
         localLidarEnabled:     'Use local data',

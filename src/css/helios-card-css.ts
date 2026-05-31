@@ -131,7 +131,13 @@ export const heliosCardStyles = css`
         inset: 0;
         width: 100%;
         height: 100%;
+        /*  The SVG itself stays click-transparent so empty pixels
+            don't capture clicks meant for chips behind it; only the
+            painted polygons (the home-glow-shape rule below) receive
+            pointer events. cursor: pointer makes the silhouette
+            read as interactive on hover. */
         pointer-events: none;
+        cursor: pointer;
         /*  Sits ABOVE the basemap + buildings but BELOW the time bar
             (z 10) so the outline never paints over the timeline when
             the home and the bar overlap, the bar always wins on the
@@ -203,7 +209,12 @@ export const heliosCardStyles = css`
         stroke: var(--energy-grid-consumption-color, #488fc2);
         stroke-width: 1;
         stroke-linejoin: round;
-        pointer-events: none;
+        /*  Painted polygons capture clicks so the silhouette's actual
+            shape becomes the hit zone, the 120 px circular hitbox
+            below only catches the centre and was missing the corners
+            of larger / zoomed-in buildings (the user reported clicks
+            on visible parts of the home not registering). */
+        pointer-events: visiblePainted;
     }
 
 
@@ -1487,6 +1498,12 @@ export const heliosCardStyles = css`
     {
         position: relative;
         height: 22px;
+        /*  border-box so the 22 px height includes the 2 px border,
+            inner content area is exactly 18 px. The cell's
+            line-height matches that 18 px so the text line box fills
+            the cell with no leftover space, no ambiguity about
+            where the row sits vertically. */
+        box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         /*  Theme-aware ink border matching the chart cards above so
             the timeline + day-strip stack reads as one outlined
@@ -1510,79 +1527,63 @@ export const heliosCardStyles = css`
         top: 0;
         bottom: 0;
         display: inline-flex;
-        align-items: center;
+        flex-direction: row;
+        align-items: baseline;
         justify-content: center;
-        /*  Tightened so the date + kWh pair fits inside the narrower
-            per-day slots that a 5-day window on a smartphone
-            produces. Combined with the reduced cell padding and the
-            wider kWh-hide threshold below, the labels stop
-            overflowing the day strip on portrait phones. */
         gap: 2px;
         padding: 0 2px;
         box-sizing: border-box;
         color: var(--primary-text-color, #212121);
-        line-height: 1.2;
+        /*  Inherit the HA frontend font stack rather than letting
+            the cell fall back to the OS default. Different OS fonts
+            ship italic and bold variants with different vertical
+            metrics, so on a host that did not propagate the Roboto
+            stack down to this depth, the date (bold) and the
+            forecast kWh (italic) ended up sitting on different
+            baselines and the cell read as misaligned. */
+        font-family: var(--mdc-typography-body1-font-family,
+                         var(--ha-font-family,
+                             var(--paper-font-common-base_-_font-family,
+                                 Roboto, "Helvetica Neue", Arial, sans-serif)));
+        /*  Single font-size for BOTH the date and the kWh so they
+            share one baseline geometry, the previous 13 / 12 px
+            split injected a 0.5 px ascender-asymmetry that read
+            as "labels not centred". The visual hierarchy now comes
+            from weight + opacity + italic only, no size delta. */
+        font-size: clamp(6px, 6.5cqw, 9px);
+        line-height: 18px;
         letter-spacing: 0.2px;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: clip;
         z-index: 2;
-        /*  Each cell is its own size container; the date + kWh
-            children scale + collapse using cqw / @container queries
-            so the text adapts to whatever horizontal real-estate
-            the visible time range gives the day (a 4-day window on
-            a narrow phone leaves ~25 % of the timeline per cell;
-            a 1-day window leaves the whole strip). Falls back to
-            the static font-size + display rules below on engines
-            without container-query support.                        */
+        font-weight: 600;
         container-type: inline-size;
         container-name: tb-day-strip-cell;
     }
 
-    /*  Both the date and the kWh scale down with the cell width
-        via cqw (1 % of container inline size). The date sits at
-        a slightly bigger clamp than the kWh so the primary label
-        gets the visual weight; the kWh stays demoted as a
-        contextual annotation. Font weight is intentionally NOT
-        set here so it inherits from the cell (which gets is-today
-        bumped to 800) and from the per-element overrides further
-        down (.tb-day-strip-kwh keeps its lighter 500 weight +
-        opacity recipe).                                            */
-    /*  line-height: 1 on both spans so their em-boxes match exactly
-        regardless of font-size. The .tb-day-strip-cell parent uses
-        align-items: center, which centres the em-boxes; without
-        line-height: 1, the larger label sat slightly above the
-        smaller one because their inherited line-height inflated the
-        boxes asymmetrically. */
-    .tb-day-strip-date
-    {
-        font-size: clamp(9px, 10cqw, 13px);
-        line-height: 1;
-    }
-    .tb-day-strip-kwh
-    {
-        font-size: clamp(8px, 9cqw, 12px);
-        line-height: 1;
-    }
-
-    .tb-day-strip-cell
-    {
-        font-weight: 600;
-    }
     .tb-day-strip-cell.is-today
     {
         font-weight: 800;
     }
 
-    /*  Cramped-cell fallback: drop the kWh annotation when the cell
-        no longer has the horizontal room to render "30/05 8,4 kWh"
-        without overflow. The threshold went from 55 px to 90 px
-        because the previous floor was too aggressive: a 5-day window
-        on a portrait smartphone (~70 px per cell) still produced an
-        overflowing label, the eye saw "30/05 8,4 kWh" trying to
-        sit in 65 px and clipping. Above 90 px the kWh comes back. */
-    @container tb-day-strip-cell (max-width: 90px)
+    /*  Spans inherit everything; no per-span font-size or line-
+        height override, that's what kept the baselines drifting
+        between weights / styles. Hierarchy lives in weight +
+        opacity + italic only (see the .tb-day-strip-kwh rule
+        further down for the lighter weight + 0.75 opacity recipe). */
+    .tb-day-strip-date
+    {
+        font-weight: inherit;
+    }
+
+    /*  Cramped-cell fallback: drop the kWh annotation only on
+        extremely narrow cells where neither the date nor the kWh
+        could fit. Above this floor the kWh is always shown so the
+        last forecast day stays readable even when the timeline
+        ends mid-day and that cell is much narrower than the others. */
+    @container tb-day-strip-cell (max-width: 48px)
     {
         .tb-day-strip-kwh { display: none; }
     }
@@ -2107,27 +2108,42 @@ export const heliosCardStyles = css`
     /*  Cloud-bin picker: small segmented control hugging the top
         edge under the dome chip cluster. Pills mirror the dome's
         accent so it reads as part of the same widget.             */
-    /*  Continuous cloud-cover slider, bottom-left corner of the
-        card while the dome is on. Sun glyph on the LEFT, heavy-
-        cloud glyph on the RIGHT, the slider in between reads as
-        the cloud-cover knob driving the dome's view. The percent
-        value chip on the far RIGHT is the immediate readout of
-        the slider position; lets the user know they're at 35 %
-        rather than guessing from the handle's position.          */
+    /*  Continuous cloud-cover slider, bottom-centre of the card
+        while the dome is on. Sun glyph on the LEFT, heavy-cloud
+        glyph on the RIGHT, the slider in between reads as the
+        cloud-cover knob driving the dome's view. Percent value
+        chip on the far RIGHT is the immediate readout. Shares the
+        same pill, same z, same bottom anchor as the LiDAR opacity
+        slider so the two modes feel mounted to the same rail. */
     .shading-dome-cloud-slider
     {
         position: absolute;
         bottom: 14px;
         left: 50%;
-        transform: translateX(-50%);
+        /*  translateY(60px) parks the pill below the card so the
+            slide-in animation can lift it back into view when the
+            mode becomes active. The .is-active class below resets
+            translateY to 0; the transition on transform + opacity
+            runs in both directions. */
+        transform: translate(-50%, 60px);
+        opacity: 0;
+        pointer-events: none;
+        transition: transform 0.35s ease, opacity 0.35s ease;
         z-index: 50;
         display: inline-flex;
         align-items: center;
         gap: 8px;
         padding: 6px 12px;
+        min-height: 28px;
+        box-sizing: border-box;
         background: rgba(0, 0, 0, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
+    }
+    .shading-dome-cloud-slider.is-active
+    {
+        transform: translate(-50%, 0);
+        opacity: 1;
         pointer-events: auto;
     }
     /*  Tick wrapper: the slider sits in a relative container so
@@ -2163,7 +2179,7 @@ export const heliosCardStyles = css`
     }
     .shading-dome-cloud-icon
     {
-        --mdc-icon-size: 18px;
+        --mdc-icon-size: 16px;
         color: rgba(255, 255, 255, 0.85);
         display: inline-flex;
         align-items: center;
@@ -2229,21 +2245,26 @@ export const heliosCardStyles = css`
         position: absolute;
         bottom: 14px;
         left: 50%;
-        transform: translateX(-50%);
+        /*  Same parked-below-the-card resting state as the dome
+            slider so the two modes share one slide-in animation. */
+        transform: translate(-50%, 60px);
+        opacity: 0;
+        pointer-events: none;
+        transition: transform 0.35s ease, opacity 0.35s ease;
         z-index: 50;
         display: inline-flex;
         align-items: center;
         gap: 8px;
         padding: 6px 12px;
+        min-height: 28px;
+        box-sizing: border-box;
         background: rgba(0, 0, 0, 0.55);
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.35s ease;
     }
     .lidar-view-opacity-slider.is-active
     {
+        transform: translate(-50%, 0);
         opacity: 1;
         pointer-events: auto;
     }
@@ -3152,6 +3173,13 @@ export const heliosCardStyles = css`
           the W/m^2 chip (z 12).                                  */
     .solar-svg-sun-far    { z-index: 5;  }
     .solar-svg-sun-near   { z-index: 12; }
+    /*  Sun -> PV ray + bead live on their own SVG below the chip
+        family (pv-pct-label sits at z 8) so the chip's background
+        always occludes the ray endpoint at the chip border. The
+        sun disc itself stays in the depth-split SVGs above so the
+        disc still passes in front of / behind the home cluster
+        depending on camera bearing. */
+    .solar-ray-svg        { z-index: 7;  }
 
     /*  Cloud-cover dome overlay: a celestial hemisphere centred
         on the home, sliced into three horizontal bands (low / mid

@@ -159,7 +159,7 @@ export const cs: Translations = {
         lidarViewSection:      'Zobrazení LiDAR',
         lidarViewHint:         'Klikněte na tlačítko LiDAR v pravém horním rohu karty pro přepnutí na vrstvu LiDAR: každá načtená buňka je vykreslena jako drátěný model a stínována v reálném čase podle aktuální sluneční expozice, osvětlené plochy září teple a zastíněné slábnou. Posuvníkem ve spodní části karty regulujte celkovou neprůhlednost. Tlačítko zůstává deaktivované, když žádný poskytovatel nepokrývá domov. Zobrazení znovu používá data již načtená s aktuální přesností, žádné další volání se neprovádí.',
         lidarViewPointSize:    'Velikost bodů (px)',
-        localLidarSection:     'Pokročilé — Lokální LiDAR (BYO)',
+        localLidarSection:     'Pokročilé, Lokální LiDAR (BYO)',
         localLidarHint:        'Volitelné. Nasměrujte Helios na svůj vlastní nDSM GeoTIFF (Digitální model povrchu mínus země, výška nad zemí v metrech) hostovaný v Home Assistant. Umožňuje rozsvítit stíny v libovolném regionu, který ještě není pokryt veřejnými poskytovateli LiDAR. Uvnitř definované oblasti tento zdroj nahrazuje jakéhokoli národního poskytovatele.',
         localLidarToolsHint:   'Potřebujete připravit raster od nuly? Vložte svůj surový soubor LAZ / LAS nebo pár rastrů DSM + DTM na doprovodný web [helios-lidar.org](https://helios-lidar.org), vrátí 2-pásmový COG, který Helios čte (pásmo 1 = nDSM, pásmo 2 = DTM) společně s YAML připraveným k vložení pro níže uvedené klíče. Zdarma, bez instalace, bez účtu. Dáváte přednost spuštění všeho lokálně? Kompletní sada nástrojů v Pythonu se nachází v [repozitáři Helios-Lidar](https://github.com/ReikanYsora/Helios-Lidar).',
         localLidarEnabled:     'Použít lokální data',

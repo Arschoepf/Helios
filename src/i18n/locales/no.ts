@@ -166,7 +166,7 @@ export const no: Translations = {
         lidarViewSection:      'LiDAR-visning',
         lidarViewHint:         'Klikk på LiDAR-knappen øverst til høyre på kortet for å bytte til LiDAR-overlegget: hver lastet celle tegnes som trådramme og skyggelegges i sanntid etter sin aktuelle soleksponering, opplyste flater lyser varmt og skyggelagte tones ned. Bruk glidebryteren nederst på kortet for å justere den samlede opasiteten opp eller ned. Knappen forblir deaktivert når ingen leverandør dekker hjemmet. Visningen gjenbruker dataen som allerede er hentet med gjeldende presisjon, ingen ekstra kall gjøres.',
         lidarViewPointSize:    'Punktstørrelse (px)',
-        localLidarSection:     'Avansert — Lokal LiDAR (BYO)',
+        localLidarSection:     'Avansert, Lokal LiDAR (BYO)',
         localLidarHint:        'Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.',
         localLidarToolsHint:   'Trenger du å klargjøre en raster fra bunnen av? Slipp den rå LAZ / LAS-filen din eller et DSM + DTM-rasterpar inn på følgesiden [helios-lidar.org](https://helios-lidar.org), den returnerer 2-bånds COG-en Helios leser (bånd 1 = nDSM, bånd 2 = DTM) pluss den ferdige YAML-en for nøklene under. Gratis, ingen installasjon, ingen konto. Vil du heller kjøre alt lokalt? Hele Python-verktøykjeden bor i [Helios-Lidar-repoet](https://github.com/ReikanYsora/Helios-Lidar).',
         localLidarEnabled:     'Bruk lokale data',

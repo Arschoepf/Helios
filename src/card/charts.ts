@@ -698,13 +698,15 @@ export function renderChart(host: ChartHost): TemplateResult
             viewBox="0 0 ${W} ${H}"
             preserveAspectRatio="none"
         >
-            <!-- Cloud first as the background layer; the irradiance
-                 fill paints on top with the same alpha so the two
-                 curves coexist rather than competing. -->
+            <!-- Cloud first as the background layer. Painted at a
+                 higher alpha than the irradiance fill that sits on
+                 top so the cloud curve stays readable through the
+                 sun overlay; the irradiance fill keeps its lighter
+                 0.25 alpha to avoid washing the cloud area out. -->
             <path
                 d="${cloudArea}"
                 fill="${cloudColor}"
-                fill-opacity="0.25"
+                fill-opacity="0.45"
             ></path>
             <path
                 d="${irrArea}"
