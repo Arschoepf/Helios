@@ -67,6 +67,8 @@ export interface LabelLayout
     pvLabel:           { x: number; y: number };
     batterySocLabel:   { x: number; y: number };
     batteryPowerLabel: { x: number; y: number };
+    gridImportLabel:   { x: number; y: number };
+    gridExportLabel:   { x: number; y: number };
     ringEdge:          { x: number; y: number };
     home:              { x: number; y: number };
     //Perspective-projected ground disc around the home. Drawn as
@@ -109,6 +111,114 @@ export interface OverlaysHost
 }
 
 
+//Sub-pixel epsilon for screen-space equality. Below this the eye
+//cannot tell the difference and Lit shouldn't re-render. Larger
+//values would let Lit skip true motion frames; smaller ones would
+//re-render on floating-point projection noise that produces no
+//visible delta.
+const EQ_EPS_PX = 0.25;
+
+function nearlyEq(a: number, b: number): boolean
+{
+    return Math.abs(a - b) <= EQ_EPS_PX;
+}
+
+function pointEq(
+    a: { x: number; y: number } | null | undefined,
+    b: { x: number; y: number } | null | undefined,
+): boolean
+{
+    if (a === b) return true;
+    if (!a || !b) return false;
+    return nearlyEq(a.x, b.x) && nearlyEq(a.y, b.y);
+}
+
+function pointArrayEq(
+    a: Array<{ x: number; y: number }>,
+    b: Array<{ x: number; y: number }>,
+): boolean
+{
+    if (a === b) return true;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++)
+    {
+        if (!nearlyEq(a[i].x, b[i].x) || !nearlyEq(a[i].y, b[i].y)) return false;
+    }
+    return true;
+}
+
+function labelLayoutEq(a: LabelLayout | null, b: LabelLayout | null): boolean
+{
+    if (a === b) return true;
+    if (!a || !b) return false;
+    return pointEq(a.cloudLabel,        b.cloudLabel)
+        && pointEq(a.pvLabel,           b.pvLabel)
+        && pointEq(a.batterySocLabel,   b.batterySocLabel)
+        && pointEq(a.batteryPowerLabel, b.batteryPowerLabel)
+        && pointEq(a.gridImportLabel,   b.gridImportLabel)
+        && pointEq(a.gridExportLabel,   b.gridExportLabel)
+        && pointEq(a.ringEdge,          b.ringEdge)
+        && pointEq(a.home,              b.home)
+        //homeAnchorPoints is a long SVG points string; direct
+        //equality against the previous string captures every
+        //vertex delta the ground disc would render and is cheap
+        //(both ends are interned via the engine's call cycle).
+        && a.homeAnchorPoints === b.homeAnchorPoints;
+}
+
+function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
+{
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (!nearlyEq(a.daylight, b.daylight)) return false;
+    if (!pointEq(a.home, b.home)) return false;
+    if (!nearlyEq(a.sun.x, b.sun.x) || !nearlyEq(a.sun.y, b.sun.y)
+        || !nearlyEq(a.sun.altitude, b.sun.altitude)) return false;
+    if (a.arc.length !== b.arc.length) return false;
+    for (let i = 0; i < a.arc.length; i++)
+    {
+        const sa = a.arc[i], sb = b.arc[i];
+        if (sa.belowHorizon !== sb.belowHorizon) return false;
+        if (!nearlyEq(sa.x, sb.x) || !nearlyEq(sa.y, sb.y)) return false;
+    }
+    //Sunrise / sunset markers must match presence and screen pos.
+    if ((a.sunrise === null) !== (b.sunrise === null)) return false;
+    if (a.sunrise && b.sunrise
+        && (!nearlyEq(a.sunrise.x, b.sunrise.x) || !nearlyEq(a.sunrise.y, b.sunrise.y))) return false;
+    if ((a.sunset === null) !== (b.sunset === null)) return false;
+    if (a.sunset && b.sunset
+        && (!nearlyEq(a.sunset.x, b.sunset.x) || !nearlyEq(a.sunset.y, b.sunset.y))) return false;
+    return true;
+}
+
+function cloudSceneEq(a: CloudScene | null, b: CloudScene | null): boolean
+{
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (a.cloudHex   !== b.cloudHex)   return false;
+    if (a.cloudPct   !== b.cloudPct)   return false;
+    if (a.cloudLow   !== b.cloudLow)   return false;
+    if (a.cloudMid   !== b.cloudMid)   return false;
+    if (a.cloudHigh  !== b.cloudHigh)  return false;
+    return pointArrayEq(a.discLow,  b.discLow)
+        && pointArrayEq(a.discMid,  b.discMid)
+        && pointArrayEq(a.discHigh, b.discHigh)
+        && pointArrayEq(a.ring,     b.ring);
+}
+
+function homeSilhouettesEq(a: HomeSilhouette[], b: HomeSilhouette[]): boolean
+{
+    if (a === b) return true;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++)
+    {
+        if (!pointArrayEq(a[i].base, b[i].base)) return false;
+        if (!pointArrayEq(a[i].top,  b[i].top))  return false;
+    }
+    return true;
+}
+
+
 //Pull the fresh screen-space layouts from the engine and stash
 //them on the host. Cheap: each engine projection is a handful of
 //matrix multiplies, no allocations of consequence. Called on every
@@ -116,14 +226,30 @@ export interface OverlaysHost
 //update (the engine's projection matrix is only ready after the
 //style has loaded), plus on every clock tick when in live mode
 //(the sun position depends on the time).
+//
+//Each assignment is gated by a shallow equality check against the
+//previous value. Lit uses identity-based dirty checking on @state
+//properties, so a fresh-identity assignment with identical numeric
+//content still triggers a full template re-render. During manual
+//map rotation MapLibre fires move events at the pointer rate (up
+//to 120 Hz on M4 trackpads), and the heavy template includes
+//three SMIL <animateMotion> elements whose `path` attribute is
+//rebuilt from these scene fields. Safari/WebKit re-arms the SMIL
+//clock on every path mutation; without these guards the clock
+//state grew monotonically over ~10-15 s of continuous drag and
+//the frame budget collapsed past the 120 Hz ceiling.
 export function refreshOverlays(host: OverlaysHost): void
 {
-    host._labelLayout = host._engine?.projectHomeLabelLayout() ?? null;
+    const nextLabel = host._engine?.projectHomeLabelLayout() ?? null;
+    if (!labelLayoutEq(host._labelLayout, nextLabel)) host._labelLayout = nextLabel;
 
     const t = host._selectedTime ?? host._now;
-    host._sunScene        = host._engine ? host._engine.projectSunScene(t)   : null;
-    host._cloudScene      = host._engine ? host._engine.projectCloudScene()  : null;
-    host._homeSilhouettes = host._engine ? host._engine.projectHomeFootprints() : [];
+    const nextSun   = host._engine ? host._engine.projectSunScene(t)        : null;
+    const nextCloud = host._engine ? host._engine.projectCloudScene()       : null;
+    const nextHomes = host._engine ? host._engine.projectHomeFootprints()   : [];
+    if (!sunSceneEq       (host._sunScene,        nextSun))   host._sunScene        = nextSun;
+    if (!cloudSceneEq     (host._cloudScene,      nextCloud)) host._cloudScene      = nextCloud;
+    if (!homeSilhouettesEq(host._homeSilhouettes, nextHomes)) host._homeSilhouettes = nextHomes;
 
     //LiDAR View overlay lives entirely inside the engine's WebGL
     //custom layer now: no per-transform projection on the JS side,
@@ -150,11 +276,14 @@ export function setAnimationsPaused(host: OverlaysHost, paused: boolean): void
     host.classList.toggle('helios-paused', paused);
     const root = host.shadowRoot;
     if (!root) return;
+    //NodeList directly iterable: skip Array.from. The querySelectorAll
+    //result is live in spec but immutable for our use here; the loop
+    //touches every svg in order regardless.
     const svgs = root.querySelectorAll('svg');
-    for (const svg of Array.from(svgs))
+    for (let i = 0; i < svgs.length; i++)
     {
-        const s = svg as SVGSVGElement & {
-            pauseAnimations?:  () => void;
+        const s = svgs[i] as SVGSVGElement & {
+            pauseAnimations?:   () => void;
             unpauseAnimations?: () => void;
         };
         try
@@ -208,7 +337,13 @@ export function flowDuration(
     {
         return 30;
     }
+    //Inline cubic instead of Math.pow(.., 3): the call fires from every
+    //bead duration recompute (sun ray, PV leader, grid beads) on each
+    //render frame; replacing the generic exponent with a 3-multiply
+    //chain shaves a measurable slice off the hot path under
+    //auto-rotate.
     const f = Math.min(1, rate / saturation);
-    const eased = 1 - Math.pow(1 - f, 3);
+    const oneMinusF = 1 - f;
+    const eased = 1 - oneMinusF * oneMinusF * oneMinusF;
     return 30 - (30 - minDuration) * eased;
 }

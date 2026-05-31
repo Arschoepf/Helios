@@ -12,6 +12,8 @@
 
 import { fromArrayBuffer } from 'geotiff';
 
+import { lidarFetchUrl } from './proxy';
+
 
 //Extract the image/tiff binary part out of a WCS 2.0 multipart/related response. Returns null when no TIFF magic is found in the buffer.
 //
@@ -82,7 +84,7 @@ export async function fetchFloat32GeoTiff(
     let resp: Response;
     try
     {
-        resp = await fetch(url, { signal });
+        resp = await fetch(lidarFetchUrl(url), { signal });
     }
     catch (_)
     {
@@ -215,7 +217,7 @@ export async function fetchFloat32GeoTiffWithNoData(
     let resp: Response;
     try
     {
-        resp = await fetch(url, { signal });
+        resp = await fetch(lidarFetchUrl(url), { signal });
     }
     catch (_)
     {

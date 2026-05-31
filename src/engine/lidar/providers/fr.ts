@@ -19,6 +19,7 @@ import type {
     LidarShadowResult
 } from '../../lidar';
 import { processHeightRaster, homeBbox, emptyResult, RASTER_DEFAULTS } from '../pipeline';
+import { lidarFetchUrl } from '../proxy';
 
 const WMS_URL    = 'https://data.geopf.fr/wms-r';
 const LAYER_MNH  = 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G';
@@ -73,7 +74,7 @@ export const franceLidarHd: LidarSource =
         let resp: Response;
         try
         {
-            resp = await fetch(`${WMS_URL}?${params.toString()}`, { signal: opts.signal });
+            resp = await fetch(lidarFetchUrl(`${WMS_URL}?${params.toString()}`), { signal: opts.signal });
         }
         catch (_)
         {

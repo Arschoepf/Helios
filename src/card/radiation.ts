@@ -83,6 +83,20 @@ export function refreshSolarRadiation(host: RadiationHost): void
 //the latest live sample is always in there) and once a history
 //fetch lands. Cheap, just an array concat + a setter that runs an
 //O(n log n) sort once.
+//
+//Dirty-flag gate: the inputs are stable between hass pushes and
+//history fetches, so we hash the (history identity, state identity,
+//entity) tuple and skip the whole rebuild when nothing changed.
+//Without this guard the function used to rebuild ~700 sample
+//objects per render under rotation (auto-rotate fires move events
+//which mutate overlay @state which retriggers updated() which
+//calls refreshSolarRadiation), creating a massive GC churn.
+const _pushedRadiationKey = new WeakMap<RadiationHost, {
+    histRef: unknown;
+    stateRef: unknown;
+    entity: string;
+}>();
+
 export function pushSolarRadiationToEngine(host: RadiationHost): void
 {
     if (!host._engine) return;
@@ -90,10 +104,20 @@ export function pushSolarRadiationToEngine(host: RadiationHost): void
     if (!entity || !host.hass)
     {
         host._engine.setSolarRadiationSamples(null);
+        _pushedRadiationKey.delete(host);
+        return;
+    }
+    const hist     = host._solarRadiationHistory;
+    const stateRef = host.hass.states?.[entity];
+    const cached = _pushedRadiationKey.get(host);
+    if (cached
+        && cached.histRef  === hist
+        && cached.stateRef === stateRef
+        && cached.entity   === entity)
+    {
         return;
     }
     const samples: { time: Date; wm2: number }[] = [];
-    const hist = host._solarRadiationHistory;
     if (hist)
     {
         for (let i = 0; i < hist.times.length; i++)
@@ -101,19 +125,19 @@ export function pushSolarRadiationToEngine(host: RadiationHost): void
             samples.push({ time: hist.times[i], wm2: hist.values[i] });
         }
     }
-    const stateObj = host.hass.states?.[entity];
-    if (stateObj)
+    if (stateRef)
     {
-        const v = parseFloat(stateObj.state);
+        const v = parseFloat(stateRef.state);
         if (isFinite(v) && v >= 0)
         {
-            const ts = stateObj.last_updated
-                ? new Date(stateObj.last_updated)
+            const ts = stateRef.last_updated
+                ? new Date(stateRef.last_updated)
                 : new Date();
             samples.push({ time: ts, wm2: v });
         }
     }
     host._engine.setSolarRadiationSamples(samples.length > 0 ? samples : null);
+    _pushedRadiationKey.set(host, { histRef: hist, stateRef, entity });
 }
 
 

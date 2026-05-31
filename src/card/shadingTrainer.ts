@@ -17,7 +17,6 @@ import {
     type ShadingMap,
 } from '../engine/shadingMap';
 import { computePvPowerWeighted, inverterCutoffSocPct, pvCalibK, pvNormalizeToWatts, valueAtMs, type PvHistory } from './pv';
-import { parseBatteryBanks } from './battery';
 import { getHomeCoords } from './init';
 import type { ChartHost } from './charts';
 
@@ -86,14 +85,15 @@ export function trainShadingMap(host: ChartHost): number
     //bank correctly trains the bucket while one full bank does not block it.
     const cutoffPct  = inverterCutoffSocPct(host.config);
     const socSeries  = (cutoffPct !== null) ? host._batteryHistories : [];
-    //Silent-guard trap: when the user has set the cutoff threshold AND configured at least one bank, but no bank exposes a SoC
-    //entity (power-only banks are a legitimate config), the guard would silently disable itself and let phantom shadows train into
-    //buckets where the inverter actually clipped. Warn once per trainer pass so the user sees the misconfiguration in the console
-    //instead of wondering why the shading map looks off after a few sunny days.
-    if (cutoffPct !== null && socSeries.length === 0 && parseBatteryBanks(host.config).length > 0)
-    {
-        console.warn('[HELIOS] inverter-cutoff-soc-pct is set but no battery bank exposes a soc-entity, the trainer cutoff guard is inactive. Add a soc-entity to at least one bank in the `batteries:` array.');
-    }
+    //Silent fallback: when the user set the cutoff threshold AND at
+    //least one bank is configured, but no bank exposes a SoC entity
+    //(power-only banks are a legitimate config, e.g. an inverter that
+    //only reports W), the cutoff guard simply stays inactive for
+    //this pass. The legacy warn flooded the console at every trainer
+    //tick which the user found noisy; the trainer just skips the
+    //guard and trains every bucket. The shading map self-corrects
+    //within a few sunny days as long as the user's SoC plateau is
+    //rare relative to the wider dataset.
 
     let updated = 0;
     let skippedInhibit = 0;

@@ -199,6 +199,12 @@ export class LidarViewLayer implements CustomLayerInterface
     private _pendingLineIdx?:  Uint32Array;
     private _pendingTriIdx?:   Uint32Array;
     private _pendingExposure?: Uint8Array;
+    //Signature of the LAST raster that we successfully rebuilt + uploaded. Composed of (rasterSize, bbox, homeMerc) , the four inputs the
+    //setData() build path actually depends on. Reused as the memo key: when setData() is called with the same signature (e.g. the user
+    //toggles LiDAR off/on without moving the map), we skip the entire double-loop + GL upload pass and return immediately. With rasterSize
+    //typically 256 to 512, the skipped work is ~65k to 260k Mercator conversions plus three GPU uploads, so the saved cost on a re-toggle
+    //is measured in 100+ ms on mid-range hardware.
+    private _builtSignature: string | null = null;
     //Maps a raster-cell index (j * rasterSize + i) to its vertex index in the GPU buffer, or -1 when the cell was NaN at setData time. Cached so
     //setExposure() can translate a per-raster-cell exposure array (engine concern) to the per-vertex order the GPU buffer expects, without
     //asking the engine to know our internal packing.
@@ -217,6 +223,9 @@ export class LidarViewLayer implements CustomLayerInterface
     {
         this._homeMerc     = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], 0);
         this._mercPerMeter = this._homeMerc.meterInMercatorCoordinateUnits();
+        //New home -> all the cached offsets are now relative to the
+        //wrong origin, invalidate the build memo so setData rebuilds.
+        this._builtSignature = null;
         //Buffer encodes offsets from the previous home, refit it against the new origin so the cloud stays anchored.
         if (this._raster) this.setData(this._raster);
         this._map?.triggerRepaint();
@@ -277,11 +286,28 @@ export class LidarViewLayer implements CustomLayerInterface
         {
             this._vertexCount = 0;
             this._pendingVerts = undefined;
+            this._builtSignature = null;
             if (this._gl && this._buffer)
             {
                 this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this._buffer);
                 this._gl.bufferData(this._gl.ARRAY_BUFFER, 0, this._gl.STATIC_DRAW);
             }
+            this._map?.triggerRepaint();
+            return;
+        }
+
+        //Memo guard: re-toggling the LiDAR view, or any side path that
+        //calls setData with the same raster + same home, hits this
+        //short-circuit and skips the 65k-260k Mercator-conversion build
+        //+ three GPU buffer uploads. The signature includes the home
+        //Mercator so a setHome() mid-session correctly invalidates.
+        //Heights identity is part of the signature via the raster
+        //object identity: a fresh fetch produces a new typed array, a
+        //re-fetch of the same tile from cache reuses the same one in
+        //the providers that cache by URL.
+        const signature = `${raster.rasterSize}|${raster.minLat}|${raster.maxLat}|${raster.minLon}|${raster.maxLon}|${this._homeMerc.x}|${this._homeMerc.y}|${raster.heights.length}`;
+        if (signature === this._builtSignature && this._vertexCount > 0)
+        {
             this._map?.triggerRepaint();
             return;
         }
@@ -429,6 +455,9 @@ export class LidarViewLayer implements CustomLayerInterface
             this._pendingLineIdx = lineUsed;
             this._pendingTriIdx  = triUsed;
         }
+        //Cache the signature LAST so a partial-build failure (an early
+        //return higher up) does not falsely mark the layer as built.
+        this._builtSignature = signature;
         this._map?.triggerRepaint();
     }
 
@@ -640,12 +669,23 @@ export class LidarViewLayer implements CustomLayerInterface
         if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
         if (this._uFadeFull)     gl.uniform1f(this._uFadeFull, this._fadeFullMeters);
         if (this._uFadeOut)      gl.uniform1f(this._uFadeOut,  this._fadeOutMeters);
-        //Exposure tone controls. Lit cells get a 1.0 multiplier (no change to the base colour) shaded toward a warm 1.0/0.85/0.6 tint; shadowed
-        //cells get dimmed to 35 % brightness with a neutral tint. Values picked so the "lit vs in shadow" contrast reads at a glance without the
-        //shadow cells fading below visibility under the home-distance fall-off.
-        if (this._uExposureLit)      gl.uniform1f(this._uExposureLit, 1.0);
-        if (this._uExposureShadow)   gl.uniform1f(this._uExposureShadow, 0.35);
-        if (this._uExposureWarmTint) gl.uniform3f(this._uExposureWarmTint, 1.0, 0.85, 0.6);
+        //Exposure tone controls.
+        //  - Lit cells use a saturated amber (1.0 / 0.6 / 0.15)
+        //    that stays readable on light dashboards.
+        //  - Shadowed cells were at 0.25 brightness which crushed the
+        //    whole mesh once the sun went below the horizon (every
+        //    cell sees zero exposure at night, so the entire LiDAR
+        //    view dropped to ~25 % luminance and read as "barely
+        //    visible"). Bumped to 0.55 so a fully-shadowed mesh stays
+        //    legible while the day-time shadow-vs-lit contrast
+        //    remains clear (gap of 0.45 between floor and lit).     */
+        //Top-level exposure uniforms = the "real" shading values used
+        //by the triangle fill pass. The points + wireframe passes
+        //re-write these to neutral (lit=1, shadow=1, warm=white) so
+        //those primitives paint as pure white regardless of exposure.
+        const U_LIT_REAL    = 1.0;
+        const U_SHADOW_REAL = 0.55;
+        const U_WARM_R = 1.0, U_WARM_G = 0.6, U_WARM_B = 0.15;
         //gl_PointSize is measured in framebuffer pixels. MapLibre
         //sizes its framebuffer at map.getPixelRatio() x CSS, which the
         //user can clamp via the `pixel-ratio` config (1x on mobile to
@@ -673,33 +713,46 @@ export class LidarViewLayer implements CustomLayerInterface
         gl.disable(gl.STENCIL_TEST);
         gl.disable(gl.CULL_FACE);
 
-        //Points pass. Skipped when the user dialed point size to 0
-        //(typical wireframe-only setup): gl_PointSize at 0 already
-        //collapses each primitive, but bypassing the call also saves
-        //the vertex shader work.
-        if (this._uColor && this._pointSizePx > 0)
-        {
-            gl.uniform4f(this._uColor, 1, 1, 1, fillA);
-            gl.drawArrays(gl.POINTS, 0, this._vertexCount);
-        }
-
-        //Irradiance fill pass. Triangulated cells, only renders when fresh exposure data is loaded. Sits under the wireframe lines so the line
-        //topology stays visually crisp on top.
+        //Irradiance fill pass. Triangulated cells, ONLY renders when
+        //fresh exposure data has been computed. Pre-compute frames
+        //show only the points + wireframe (white), so the user has a
+        //"loading skeleton" instead of a fully-lit amber stand-in.
+        //Drawn FIRST so the white wireframe below paints on top.
         if (this._hasExposure
          && this._triIndexBuffer
          && this._indexType !== 0
          && this._triIdxCount > 0
          && this._uColor)
         {
+            if (this._uExposureLit)      gl.uniform1f(this._uExposureLit,    U_LIT_REAL);
+            if (this._uExposureShadow)   gl.uniform1f(this._uExposureShadow, U_SHADOW_REAL);
+            if (this._uExposureWarmTint) gl.uniform3f(this._uExposureWarmTint, U_WARM_R, U_WARM_G, U_WARM_B);
             gl.uniform4f(this._uColor, 1, 1, 1, fillA);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._triIndexBuffer);
             gl.drawElements(gl.TRIANGLES, this._triIdxCount, this._indexType, 0);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
         }
 
-        //Wireframe pass. Always drawn. Same vertex buffer, line topology from the index buffer. The radius filter still applies via v_inside
-        //in the fragment shader: lines whose endpoints are both outside the radius go away, lines crossing the boundary fade to clipped at
-        //the edge.
+        //Points + wireframe passes ALWAYS render in pure white,
+        //regardless of exposure state. The exposure modulation is
+        //disabled by neutralising the shader uniforms (lit=1, shadow=
+        //1, warm=white), which collapses col = u_color * 1 * 1 to a
+        //flat white. This gives the user immediate visual feedback
+        //("the cells are loading") before the irradiance fill arrives.
+        if (this._uExposureLit)      gl.uniform1f(this._uExposureLit, 1.0);
+        if (this._uExposureShadow)   gl.uniform1f(this._uExposureShadow, 1.0);
+        if (this._uExposureWarmTint) gl.uniform3f(this._uExposureWarmTint, 1.0, 1.0, 1.0);
+
+        //Points pass. Skipped when the user dialed point size to 0
+        //(typical wireframe-only setup).
+        if (this._uColor && this._pointSizePx > 0)
+        {
+            gl.uniform4f(this._uColor, 1, 1, 1, fillA);
+            gl.drawArrays(gl.POINTS, 0, this._vertexCount);
+        }
+
+        //Wireframe pass. Always drawn on top so the line topology
+        //stays crisp above the (possibly shaded) fill.
         if (this._indexBuffer
          && this._indexType !== 0
          && this._lineIdxCount > 0

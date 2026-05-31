@@ -7,11 +7,11 @@
 #  test against a stale card version.
 #
 #  Trigger: release.published. GitHub fires this event for both
-#  full releases and prereleases, so any alpha / beta we ship lands
-#  on the site within minutes. Per the project plan, this stays as
-#  the trigger during the 1.7.0 prerelease cycle; once 1.7.0 stable
-#  ships we'll narrow the filter to non-prerelease only by adding a
-#  conditional on github.event.release.prerelease.
+#  full releases AND prereleases, so we filter prereleases out at
+#  the job level. Stable releases reach the public site, alpha /
+#  beta / rc tags do not. The manual workflow_dispatch entry is
+#  guarded the same way by string-matching the supplied tag so an
+#  alpha can't be republished by accident from the Actions UI.
 #
 #  Secrets required on the repo:
 #    HELIOS_LIDAR_HOST      VPS hostname or IPv4 (37.59.122.223)
@@ -39,6 +39,16 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    #  Skip prereleases. For release events we trust GitHub's
+    #  prerelease flag. For manual workflow_dispatch we reject tags
+    #  that look like a prerelease (-alpha. / -beta. / -rc.) so the
+    #  Actions UI can't push an alpha by mistake either.
+    if: >-
+      (github.event_name == 'release' && github.event.release.prerelease == false)
+      || (github.event_name == 'workflow_dispatch'
+          && !contains(inputs.release_tag, '-alpha.')
+          && !contains(inputs.release_tag, '-beta.')
+          && !contains(inputs.release_tag, '-rc.'))
     steps:
       - name: Resolve release tag
         id: tag

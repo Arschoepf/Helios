@@ -18,11 +18,12 @@ import
     DEFAULT_PV_COLOR_HEX,
     DEFAULT_BATTERY_COLOR_HEX
 } from '../helios-config';
-import { cfgHex, formatDate, formatLocalisedNumber, lerpHexToward } from './format';
+import { formatDate, formatLocalisedNumber, lerpHexToward } from './format';
 import
 {
     pvCalibK,
     pvNormalizeToWatts,
+    pvInverterMaxW,
     computePvPowerWeighted
 } from './pv';
 import { computeBatteryToday, parseBatteryBanks, type BatteryHost } from './battery';
@@ -72,6 +73,7 @@ export function computeRefinedDailyKwh(host: DashboardHost, dayStartMs: number, 
     const cal    = computeForecastCalibration(host);
     const calR   = cal?.ratio ?? 1;
     const nowMs  = Date.now();
+    const capW   = pvInverterMaxW(host.config);
     let kwh = 0;
     let any = false;
     for (let i = 0; i < series.times.length; i++)
@@ -86,7 +88,7 @@ export function computeRefinedDailyKwh(host: DashboardHost, dayStartMs: number, 
         });
         if (pct < 0) continue;
         const ratio = effectiveForecastRatio(shMap, series.times[i], coords.lat, coords.lon, cloud, calR, nowMs);
-        kwh += (pct * k * ratio) / 1000;
+        kwh += Math.min(capW, pct * k * ratio) / 1000;
         any = true;
     }
     return any ? kwh : null;
@@ -119,10 +121,14 @@ export function dashCountUpPhase(host: DashboardHost): number
 export function renderDashboard(host: DashboardHost): TemplateResult
 {
     const t            = pickTranslations(host.hass?.language);
-    const sunColor     = cfgHex(host.config?.['sun-color'],     DEFAULT_SUN_COLOR_HEX);
-    const cloudColor   = cfgHex(host.config?.['cloud-color'],   DEFAULT_CLOUD_COLOR_HEX);
-    const pvColor      = cfgHex(host.config?.['pv-color'],      DEFAULT_PV_COLOR_HEX);
-    const batteryColor = cfgHex(host.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
+    //Colour configs are no longer consulted; the dashboard inherits
+    //the HA Energy palette via the CSS tokens consumed by every chip
+    /// leader / chart style. Locals stay so downstream callers that
+    //expect a string colour for inline SVG attributes still build.
+    const sunColor     = DEFAULT_SUN_COLOR_HEX;
+    const cloudColor   = DEFAULT_CLOUD_COLOR_HEX;
+    const pvColor      = DEFAULT_PV_COLOR_HEX;
+    const batteryColor = DEFAULT_BATTERY_COLOR_HEX;
 
     //Multi-bank aware presence check: any configured bank exposing SoC or power makes the battery card eligible. parseBatteryBanks
     //transparently wraps the legacy flat keys into a one-row list, so single-bank configs still trigger here.
@@ -268,6 +274,7 @@ export function computeTodayHourly(host: DashboardHost): {
     if (k !== null && k > 0 && series && coords)
     {
         const raster = host._engine?.getLidarRaster() ?? null;
+        const capW   = pvInverterMaxW(host.config);
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
@@ -279,7 +286,7 @@ export function computeTodayHourly(host: DashboardHost): {
                 raster,
             });
             if (pct < 0) continue;
-            const watts = pct * k;
+            const watts = Math.min(capW, pct * k);
             const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
             const idx = (hourTs - startMs) / HOUR_MS;
             if (idx >= 0 && idx < 24)
@@ -476,6 +483,7 @@ export function computeTodayCumulative(host: DashboardHost): {
     if (k !== null && k > 0 && series && coords)
     {
         const raster = host._engine?.getLidarRaster() ?? null;
+        const capW   = pvInverterMaxW(host.config);
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
@@ -488,7 +496,7 @@ export function computeTodayCumulative(host: DashboardHost): {
                 raster,
             });
             if (pct < 0) continue;
-            predictedKwh += (pct * k) / 1000;
+            predictedKwh += Math.min(capW, pct * k) / 1000;
             predictedSamples.push({ tMs: binEnd, kwh: predictedKwh });
         }
     }
@@ -580,7 +588,15 @@ export function renderDashTodaySection(
      && data.peakHourTs !== null
      && data.peakHourTs > Date.now();
 
-    const predictedColor = lerpHexToward(pvColor, '#ffffff', 0.55);
+    //Theme-aware "predicted" PV shade. Light theme = blend toward
+    //BLACK (the otherwise washed-out amber on a white card was the
+    //reported "illisible" symptom). Dark theme = blend toward WHITE
+    //so the predicted curve and value still read as "lighter than
+    //observed" on the dark plate.
+    const isDarkTheme    = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
+    const predictedColor = isDarkTheme
+        ? lerpHexToward(pvColor, '#ffffff', 0.55)
+        : lerpHexToward(pvColor, '#000000', 0.35);
 
     const todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0);
@@ -740,7 +756,15 @@ export function renderDashTodayChart(
 
     const actualPath    = buildPath(cum.actualSamples);
     const predictedPath = buildPath(cum.predictedSamples);
-    const predictedColor = lerpHexToward(pvColor, '#ffffff', 0.55);
+    //Theme-aware "predicted" PV shade. Light theme = blend toward
+    //BLACK (the otherwise washed-out amber on a white card was the
+    //reported "illisible" symptom). Dark theme = blend toward WHITE
+    //so the predicted curve and value still read as "lighter than
+    //observed" on the dark plate.
+    const isDarkTheme    = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
+    const predictedColor = isDarkTheme
+        ? lerpHexToward(pvColor, '#ffffff', 0.55)
+        : lerpHexToward(pvColor, '#000000', 0.35);
 
     //Hour gridlines + labels at 6 h intervals. 4 ticks (0/6/12/18)
     //read as the natural "morning / noon / afternoon / evening"
@@ -1034,6 +1058,7 @@ export function computeTomorrow(host: DashboardHost): {
     if (series && coords)
     {
         const raster = host._engine?.getLidarRaster() ?? null;
+        const capW   = pvInverterMaxW(host.config);
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
@@ -1046,7 +1071,7 @@ export function computeTomorrow(host: DashboardHost): {
             });
             if (pct > 0 && k !== null)
             {
-                const watts = pct * k;
+                const watts = Math.min(capW, pct * k);
                 totalKwh += watts / 1000;
                 if (watts > peakW)
                 {
@@ -1084,7 +1109,15 @@ export function renderDashTomorrowSection(
 
     //Tomorrow is a pure forecast so its big stat uses the same lighter PV shade as the today section's "prévu" value, so the user reads both at a
     //glance as "predicted production" without having to re-parse the label.
-    const predictedColor = lerpHexToward(pvColor, '#ffffff', 0.55);
+    //Theme-aware "predicted" PV shade. Light theme = blend toward
+    //BLACK (the otherwise washed-out amber on a white card was the
+    //reported "illisible" symptom). Dark theme = blend toward WHITE
+    //so the predicted curve and value still read as "lighter than
+    //observed" on the dark plate.
+    const isDarkTheme    = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
+    const predictedColor = isDarkTheme
+        ? lerpHexToward(pvColor, '#ffffff', 0.55)
+        : lerpHexToward(pvColor, '#000000', 0.35);
 
     const tomorrowDate = new Date();
     tomorrowDate.setHours(0, 0, 0, 0);

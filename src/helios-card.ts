@@ -6,12 +6,11 @@ import
     type HeliosConfig,
     DEFAULT_SUN_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
-    DEFAULT_BATTERY_COLOR_HEX,
     DEFAULT_LIDAR_VIEW_OPACITY
 } from './helios-config';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-css';
-import { cfgHex, formatDate, darkenHex, lerpHexToward } from './card/format';
+import { formatDate, darkenHex } from './card/format';
 import
 {
     refreshPv,
@@ -29,7 +28,7 @@ import
     refreshBattery,
     batterySampleAtTime,
     formatBatteryPower,
-    parseBatteryBanks,
+    effectiveBatteryBanks,
     type BatteryBank
 } from './card/battery';
 import { refreshSolarRadiation } from './card/radiation';
@@ -55,6 +54,7 @@ import
 {
     buildArcSegments,
     flowDuration,
+    type ArcSegment,
     type SunScene,
     type CloudScene,
     type LabelLayout,
@@ -71,17 +71,29 @@ import
     timelineWidthPct
 } from './card/timeline';
 import { toggleLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
+import { refreshGrid, formatGridValue, gridWattsAtTime } from './card/grid';
+import {
+    subscribeEnergyPrefs,
+    unsubscribeEnergyPrefs,
+    EMPTY_ENERGY_DEFAULTS,
+    type EnergyDefaults,
+} from './card/energy-prefs';
 import {
     renderShadingDomeOverlay,
     renderShadingDomeCloudPicker,
     toggleShadingDome,
     refreshShadingDomeScene,
 } from './card/shadingDome';
+import {
+    cloudCoverIcon,
+    cloudLayerIcon,
+} from './card/cloudDome';
 import
 {
     computeConfigSig,
     getHomeCoords,
     initEngine,
+    cancelPendingRespawn,
     initVisibilityObserver
 } from './card/init';
 //Side-effect import: registers <helios-color-picker> and <helios-card-editor> as custom elements.
@@ -114,7 +126,16 @@ if (!window.customCards.some(c => c.type === 'helios-card'))
         type:        'helios-card',
         name:        _bootI18n.cardName,
         description: _bootI18n.cardDescription,
-        preview:     true
+        //preview:false: tells HA NOT to mount a live helios-card
+        //instance in the "Add card" picker thumbnail. Each live
+        //preview was spawning a full MapLibre engine + WebGL context
+        //of its own; combined with HA's hui-card-edit-mode re-parent
+        //cycle, the picker was the entry-point for the infinite
+        //load/unload loop reported in the editor mode of the
+        //dashboard. Trading the thumbnail for a static name + icon
+        //(HA falls back to that automatically) stops the cascade
+        //at the source.
+        preview:     false
     });
 }
 
@@ -154,6 +175,8 @@ if (!window.customCards.some(c => c.type === 'helios-card'))
 //`heliosStats()` function below can close over it without forcing the
 //class to be fully constructed first.
 const _liveCards = new Set<HeliosCard>();
+
+
 
 //Window-level reset bus: the editor's "reset data cache" button
 //fires this event so every live card on the page (potentially
@@ -295,6 +318,13 @@ export class HeliosCard extends LitElement
     private static readonly SUN_R_FAR    = 10.0;
     private static readonly SUN_R_NEAR   = 20.0;
     private static readonly SUN_RIM_WIDTH = 1.5;
+    //Outer radius of the central "home pill" icon, the circular
+    //node painted at layout.home. The pill itself is 28 px wide
+    //with a 2 px border (=> outermost radius 16 px); a 18 px
+    //leader nudge leaves the hairline just OUTSIDE the pill so the
+    //leader visibly docks against the disc edge instead of slicing
+    //through it.
+    private static readonly HOME_PILL_RADIUS_PX = 18;
     //Faint tint inside the rim so the "empty sun" at sunrise/sunset still reads as a disc, not a coloured spot.
     private static readonly SUN_FILL_OPACITY_BG = 0.20;
 
@@ -348,6 +378,34 @@ export class HeliosCard extends LitElement
     @state() _batterySoc:        number | null = null;
     @state() _batteryPower:      number | null = null;
     @state() _batteryPowerUnit:  string        = '';
+    //Grid import / export live values, populated by refreshGrid()
+    //from the configured grid-import-entity / grid-export-entity.
+    //Unit is captured alongside the value so the chip formats the
+    //correct W / kWh / m³ suffix without re-reading hass.states.
+    @state() _gridImportValue:   number | null = null;
+    @state() _gridImportUnit:    string        = '';
+    @state() _gridExportValue:   number | null = null;
+    @state() _gridExportUnit:    string        = '';
+    //Rolling buffers used by refreshGrid when the wired entity is a
+    //cumulative energy sensor (Wh / kWh): we derive a live W value
+    //from the slope over the last ~5 min instead of surfacing the
+    //meter's running total to the chip.
+    //Per-entity rolling buffers keyed by entity_id. Multi-entity
+    //grid wires (heures pleines / creuses, peak / off-peak) keep one
+    //buffer per source.
+    _gridImportSamples: Map<string, Array<{ t: number; v: number }>> = new Map();
+    _gridExportSamples: Map<string, Array<{ t: number; v: number }>> = new Map();
+    //Last derived watts per entity, tagged with the wall-clock at
+    //which the underlying state changed. The chip displays the watts
+    //of whichever entity moved most recently, so HP / HC indexes
+    //don't fight each other when only one is currently incrementing.
+    _gridImportLastDerived: Map<string, { watts: number; t: number }> = new Map();
+    _gridExportLastDerived: Map<string, { watts: number; t: number }> = new Map();
+    //Unit per grid entity (kwh / wh / mwh / w / kw) so the
+    //past-scrub derivation can convert raw buffer values to watts
+    //independently of the slot's overall normalised unit.
+    _gridImportUnits: Map<string, string> = new Map();
+    _gridExportUnits: Map<string, string> = new Map();
     //Historical series for the active timeline range. Both battery entities are fetched in a single `history/history_during_period` WebSocket call
     //when both are set.
     @state() _batterySocHistory: {
@@ -391,6 +449,17 @@ export class HeliosCard extends LitElement
     //even for concave footprints. Re-projected on every map
     //transform so rotation tracks.
     @state() _homeSilhouettes: HomeSilhouette[] = [];
+
+    //Energy dashboard preferences snapshot. Subscribed at
+    //connectedCallback and updated on every HA event
+    //`energy_preferences_updated`. Every chip refresh helper reads
+    //the fallback entity from here when the user-configured slot
+    //in the card YAML / editor is empty.
+    @state() _energyDefaults: EnergyDefaults = EMPTY_ENERGY_DEFAULTS;
+    _energyPrefsUnsub?: () => void;
+    //Projected screen-space positions of each configured PV array
+    //marker. Refreshed on every map transform via projectPvArray
+    //Markers(); the SVG overlay renders one lollipop per entry.
     //Hover state on the home hitbox. Drives a sun-coloured glow halo around the home silhouette so the user reads the focal building as interactive
     //before clicking.
     @state() _homeHover = false;
@@ -419,6 +488,11 @@ export class HeliosCard extends LitElement
     //True while the engine is fetching the LiDAR shadow payload from the upstream provider and rasterising it for the image source. Drives the
     //spinner chip pinned top-right of the map so the user knows the shadow layer they're about to see is still computing.
     @state() _shadowBusy    = false;
+    //True while the per-cell irradiance exposure sweep is in flight
+    //(idle handle scheduled or chunked rAF mid-pass). Drives the
+    //mode-bar LiDAR icon swap (icon -> spinner) and the mode-switch
+    //lock so the user cannot change modes mid-compute.
+    @state() _lidarExposureBusy = false;
     //True while the home is "focused": the existing overlay HUD is
     //hidden, the camera is eased to a closer / more pitched pose,
     //and a detail dashboard panel takes over. Toggled by clicking
@@ -465,6 +539,11 @@ export class HeliosCard extends LitElement
     //other). _shadingDomeCloudBin persists the user's bin pick
     //inside the card lifetime so a toggle off/on keeps the slice.
     @state() _shadingDomeMode = false;
+    //Mirrors _shadingDomeMode at toggle-on time but flips OFF the
+    //instant the user clicks to exit dome mode. Decouples the CSS
+    //chip / timeline hide rule from the dome SVG render gating so
+    //the HUD transitions fire from the same paint as the click.
+    @state() _shadingDomeChipMask = false;
     _shadingDomeFadeInStartMs:  number | null = null;
     _shadingDomeFadeOutStartMs: number | null = null;
     _shadingDomeFadeRaf?:       number;
@@ -476,23 +555,69 @@ export class HeliosCard extends LitElement
     _shadingDomeCloudPct = 0;
     _shadingDomeScene: import('./card/shadingDome').ShadingDomeScene | null = null;
 
+    //Cloud-cover dome overlay state. Mutually exclusive with the
+    //LiDAR view and the shading dome (click handlers below close
+    //any other active mode before opening this one).
+    @state() _cloudDomeMode = false;
+    _cloudDomeFadeInStartMs:  number | null = null;
+    _cloudDomeFadeOutStartMs: number | null = null;
+    _cloudDomeFadeRaf?:       number;
+    _cloudDomeScene: unknown = null;
+
     private _timer?:           number;
     _lastHomeKey       = '';
     _lastConfigSig     = '';
     _initInflight      = false;
-    //Deferred engine cleanup. Some HA dashboard layouts (Masonry in
-    //particular) detach and re-attach the card element repeatedly
-    //during their reflow pass. Tearing down the engine on every
-    //disconnect and re-creating it on every reconnect would burn
-    //through the browser's WebGL context pool (~16 max) in seconds,
-    //which then cascades into context-lost events on the survivors.
-    //Instead, we delay the cleanup; if the card re-mounts within the
-    //window, we cancel the cleanup and reuse the live engine, the
-    //engine's own ResizeObserver picks up any container size delta.
-    private _pendingCleanupTimer?: number;
     //Timestamp of the last engine spawn. onContextLost uses this to bail out when context losses arrive faster than ~2 s apart, which only happens
     //when the browser is thrashing the WebGL pool, respawning at that cadence just feeds the fire.
     _lastEngineSpawnAt = 0;
+
+    //Cached theme polarity. The fallback path (getComputedStyle +
+    //regex parse) forces a style flush, prohibitive to run on every
+    //render. The result only changes when hass.themes flips polarity
+    //or when the page styles are reloaded, so we cache it on the
+    //themesObj identity and recompute lazily.
+    private _cachedIsDarkThemesRef: unknown = undefined;
+    private _cachedIsDark = false;
+
+    //Refresh-chain gate. updated() re-runs the PV/Battery/Grid/
+    //Radiation refreshers only when hass, config or the timeline
+    //range change identity. Lit re-renders for every overlay @state
+    //mutation otherwise would re-run the chain on every map move
+    //during auto-rotate, which churned hundreds of allocations per
+    //frame for zero new data.
+    private _lastRefreshHassRef:           unknown = undefined;
+    private _lastRefreshConfigRef:         unknown = undefined;
+    private _lastRefreshTimeRangeRef:      unknown = undefined;
+    private _lastRefreshEnergyDefaultsRef: unknown = undefined;
+
+    //Clock-label memoisation. The date+time strings in the top-left
+    //change at most once per minute, but render() ran formatDate +
+    //toLocaleTimeString on every cycle (every overlay @state move
+    //during auto-rotate). Cached on epoch-minute + format flags.
+    private _cachedClockLabelKey:  string = '';
+    private _cachedClockDateLabel: string = '';
+    private _cachedClockTimeLabel: string = '';
+
+    //Arc-segment scratch buffers. The sun arc is split by altitude
+    //(below-horizon goes BEHIND the chip cluster, above-horizon goes
+    //in FRONT) on every render. Naive filter() pair allocated two
+    //fresh arrays per cycle; the buffers below are reused in place,
+    //length reset to zero on each render before being repopulated.
+    private _arcBackBuf:      ArcSegment[] = [];
+    private _arcFrontBuf:     ArcSegment[] = [];
+    private _arcFrontNearBuf: ArcSegment[] = [];
+
+    //Cached SVG point strings for the home silhouettes. The home
+    //silhouette is a stable feature of the (lon, lat, building shape)
+    //triple but the cards used to re-serialize every vertex to a
+    //"x,y" string on every render via Array.map + join. The cache
+    //below mirrors host._homeSilhouettes by reference, so when
+    //refreshOverlays substitutes a fresh array the cache rebuilds;
+    //otherwise the same pre-built strings are returned untouched.
+    private _silhouetteCacheKey: unknown = null;
+    private _silhouettePtsCache: Array<{ base: string; top: string; walls: string[] } | null> = [];
+
 
 
     //HA card lifecycle
@@ -634,17 +759,28 @@ export class HeliosCard extends LitElement
         };
     }
 
+    //Wall-clock timestamp captured on the last connect. The engine
+    //spawn defers a short delay after the connect so a HA dashboard
+    //edit-mode transition (which destroys + recreates the helios-card
+    //rapidly while the editor UI animates) doesn't allocate a fresh
+    //WebGL context for every transient mount. Without the defer,
+    //entering the dashboard edit mode looped through 50+ context
+    //allocations in under a second and hit the browser's per-page
+    //WebGL cap, producing the "too many active WebGL contexts" flood.
+    private _connectedAt = 0;
+    //Handle for the deferred requestUpdate() the connect-settle
+    //branch in updated() arms. MUST be cleared in disconnectedCallback
+    //so a card that gets unmounted before the timer fires can't post
+    //a stale requestUpdate that would re-spawn an engine for a
+    //detached card; that was the secondary leak path on top of the
+    //HA dashboard edit-mode wrapping cycle.
+    private _connectSettleTimer: number | undefined;
+
     public connectedCallback(): void
     {
         super.connectedCallback();
         _liveCards.add(this);
-        //Cancel any pending cleanup from a recent disconnect, the engine is still alive and we want to keep it that way. Without this, Masonry's
-        //mount/unmount churn would still tear down + re-create the engine on every reflow.
-        if (this._pendingCleanupTimer !== undefined)
-        {
-            window.clearTimeout(this._pendingCleanupTimer);
-            this._pendingCleanupTimer = undefined;
-        }
+        this._connectedAt = performance.now();
         tick(this);
         //30 s tick: the clock displays HH:MM only (seconds dropped),
         //the sun moves ~0.13° per refresh (visually smooth at that
@@ -655,6 +791,11 @@ export class HeliosCard extends LitElement
         //ups by 30× compared to the previous 1 Hz cadence.
         this._timer = window.setInterval(() => tick(this), 30_000);
         initVisibilityObserver(this);
+        if (typeof document !== 'undefined')
+        {
+            document.addEventListener('visibilitychange', this._onPageVisibilityForTheme);
+        }
+        subscribeEnergyPrefs(this);
     }
 
     public disconnectedCallback(): void
@@ -669,34 +810,54 @@ export class HeliosCard extends LitElement
             document.removeEventListener('visibilitychange', this._onVisibilityChange);
             this._onVisibilityChange = undefined;
         }
-        //If the card dies before the debounce fires, drop the pending init so a short-lived instance never spawns an engine it won't use.
-        if (this._initDebounceTimer !== undefined)
+        if (typeof document !== 'undefined')
         {
-            window.clearTimeout(this._initDebounceTimer);
-            this._initDebounceTimer = undefined;
-            this._initInflight      = false;
+            document.removeEventListener('visibilitychange', this._onPageVisibilityForTheme);
         }
+        unsubscribeEnergyPrefs(this);
         if (this._lidarFadeRaf !== undefined)
         {
             cancelAnimationFrame(this._lidarFadeRaf);
             this._lidarFadeRaf = undefined;
         }
-        //Defer the engine teardown; if the card re-mounts within the
-        //window (Masonry reflow), connectedCallback cancels the timer
-        //and the engine survives untouched. When the card is really
-        //gone (view switch, card removed), the cleanup runs after the
-        //grace period, the brief extra GPU work is invisible since
-        //nothing is on screen anymore.
-        if (this._pendingCleanupTimer !== undefined)
+        //Same treatment for the dome fade and the dashboard count-up
+        //loops: both self-resubmit via requestAnimationFrame and close
+        //over `this`, so a detached card would otherwise keep ticking
+        //and calling requestUpdate() against the disconnected element.
+        if (this._shadingDomeFadeRaf !== undefined)
         {
-            window.clearTimeout(this._pendingCleanupTimer);
+            cancelAnimationFrame(this._shadingDomeFadeRaf);
+            this._shadingDomeFadeRaf = undefined;
         }
-        this._pendingCleanupTimer = window.setTimeout(() =>
+        if (this._cloudDomeFadeRaf !== undefined)
         {
-            this._pendingCleanupTimer = undefined;
-            this._engine?.cleanup();
+            cancelAnimationFrame(this._cloudDomeFadeRaf);
+            this._cloudDomeFadeRaf = undefined;
+        }
+        if (this._lidarOpacityRaf)
+        {
+            cancelAnimationFrame(this._lidarOpacityRaf);
+            this._lidarOpacityRaf = 0;
+            this._pendingLidarOpacity = null;
+        }
+        if (this._dashCountUpRaf !== undefined)
+        {
+            cancelAnimationFrame(this._dashCountUpRaf);
+            this._dashCountUpRaf = undefined;
+        }
+        cancelPendingRespawn(this);
+        if (this._connectSettleTimer !== undefined)
+        {
+            window.clearTimeout(this._connectSettleTimer);
+            this._connectSettleTimer = undefined;
+        }
+        if (this._engine)
+        {
+            this._engine.cleanup();
             this._engine = undefined;
-        }, 1500);
+        }
+        this._lastHomeKey   = '';
+        this._initInflight  = false;
     }
 
     //IntersectionObserver, pause every CSS animation and every SVG
@@ -722,6 +883,17 @@ export class HeliosCard extends LitElement
     //dashboard editor.
     protected updated(_changedProperties: PropertyValues): void
     {
+        //Lazy Energy WS subscribe: HA can attach hass AFTER
+        //connectedCallback, in which case our connect-time
+        //subscribeEnergyPrefs call bailed out without callWS. The
+        //subscribe helper itself is idempotent (it checks
+        //_energyPrefsUnsub), so re-calling here as soon as hass is
+        //ready is safe.
+        if (this.hass && !this._energyPrefsUnsub)
+        {
+            subscribeEnergyPrefs(this);
+        }
+
         if (!this.hass?.config || !this.config)
         {
             return;
@@ -746,8 +918,43 @@ export class HeliosCard extends LitElement
 
         if (!this._engine || identityChanged)
         {
+            //Disconnected guard: HA's hui-card-edit-mode wrapping
+            //fires disconnectedCallback + reconnect in the same Lit
+            //tick on every dashboard edit mode entry. Without this
+            //gate, an updated() pass that lands on a detached element
+            //would still spawn a fresh engine for a card the DOM
+            //already discarded, and the cycle could repeat once HA
+            //re-attaches.
+            if (!this.isConnected) return;
             if (this._initInflight)
             {
+                return;
+            }
+            //Mount-debounce: when HA enters dashboard edit mode the
+            //card is destroyed + recreated several times in the
+            //first few hundred ms while the editor UI animates in.
+            //Allocating a fresh WebGL context per mount cycle floods
+            //the browser's per-page WebGL cap. Defer the very first
+            //engine spawn so a card that mounts and unmounts in <
+            //CONNECT_SETTLE_MS never allocates a context at all.
+            const sinceConnect = performance.now() - this._connectedAt;
+            const CONNECT_SETTLE_MS = 1000;
+            if (sinceConnect < CONNECT_SETTLE_MS)
+            {
+                //Reuse a single deferred wake-up so rapid Lit updates
+                //don't enqueue several timers. Cancelled in
+                //disconnectedCallback so a card that gets unmounted
+                //mid-defer never re-spawns.
+                if (this._connectSettleTimer !== undefined)
+                {
+                    window.clearTimeout(this._connectSettleTimer);
+                }
+                this._connectSettleTimer = window.setTimeout(() =>
+                {
+                    this._connectSettleTimer = undefined;
+                    if (!this.isConnected) return;
+                    this.requestUpdate();
+                }, CONNECT_SETTLE_MS - sinceConnect + 16);
                 return;
             }
             //Reset mode flags on identity change. Mode state lives on
@@ -766,6 +973,7 @@ export class HeliosCard extends LitElement
             {
                 this._lidarViewMode   = false;
                 this._shadingDomeMode = false;
+                this._cloudDomeMode   = false;
                 this._detailMode      = false;
             }
             this._lastHomeKey   = homeKey;
@@ -786,15 +994,30 @@ export class HeliosCard extends LitElement
             this._engine.updateConfig(this.config);
         }
 
+        //Refresh chain gate: the per-entity refresh helpers read
+        //hass.states + config and are pure functions of those two
+        //inputs plus the live time range. Lit calls updated() on
+        //every @state mutation (so every overlay reprojection during
+        //auto-rotate fires updated() again), which used to re-run
+        //the whole chain at 60+ Hz for zero new data. Skip it when
+        //neither hass nor config moved since the previous pass.
+        if (this.hass === this._lastRefreshHassRef
+            && this.config === this._lastRefreshConfigRef
+            && this._timeRange === this._lastRefreshTimeRangeRef
+            && this._energyDefaults === this._lastRefreshEnergyDefaultsRef)
+        {
+            return;
+        }
+        this._lastRefreshHassRef           = this.hass;
+        this._lastRefreshConfigRef         = this.config;
+        this._lastRefreshTimeRangeRef      = this._timeRange;
+        this._lastRefreshEnergyDefaultsRef = this._energyDefaults;
+
         refreshPv(this);
         refreshBattery(this);
+        refreshGrid(this);
         refreshSolarRadiation(this);
     }
-
-
-    //Engine setup
-
-    _initDebounceTimer?: number;
 
 
     //Timeline pointer interaction
@@ -805,6 +1028,151 @@ export class HeliosCard extends LitElement
 
     _boundPointerMove = (e: PointerEvent): void => onTimelinePointerMove(this, e);
     _boundPointerUp   = (e: PointerEvent): void => onTimelinePointerUp(this, e);
+
+
+    //Page-visibility listener that invalidates the cached theme
+    //probe whenever the tab returns to the foreground. Mobile HA
+    //users have reported the card staying on its previous polarity
+    //after a theme flip done while the app was backgrounded: HA
+    //occasionally pushes a hass with stale themes for one frame
+    //after resume, so we drop our own cache and force a re-render
+    //to pick up the fresh value as soon as it arrives.
+    private _onPageVisibilityForTheme = (): void =>
+    {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible')
+        {
+            this._cachedIsDarkThemesRef = undefined;
+            this.requestUpdate();
+        }
+    };
+
+
+    //Resolve the active theme polarity. Authoritative source is
+    //hass.themes.darkMode (boolean) which HA flips at runtime for
+    //every theme swap. The getComputedStyle fallback is for ancient
+    //HA builds that predate hass.themes.darkMode AND for custom
+    //themes that scope --primary-background-color below :host.
+    //
+    //Only the fallback gets cached: the primary path is a cheap
+    //typeof + property read so caching it adds risk for no gain.
+    //setCardThemeIsDark is invoked on every call so the engine
+    //stays in sync even when the engine spawns mid-session.
+    private _resolveIsDark(themesObj: { darkMode?: boolean } | undefined): boolean
+    {
+        let isDark: boolean;
+        if (themesObj && typeof themesObj.darkMode === 'boolean')
+        {
+            isDark = themesObj.darkMode;
+        }
+        else if (this._cachedIsDarkThemesRef === themesObj)
+        {
+            isDark = this._cachedIsDark;
+        }
+        else
+        {
+            isDark = this._probeIsDarkFromCss();
+            this._cachedIsDarkThemesRef = themesObj;
+            this._cachedIsDark = isDark;
+        }
+        this._engine?.setCardThemeIsDark(isDark);
+        return isDark;
+    }
+
+
+    //Fallback luminance probe. Reads --primary-background-color off
+    //the helios-card element and decides dark vs light from the
+    //relative luminance. Costly (forces a style recompute), so the
+    //caller above only reaches this when hass.themes.darkMode is
+    //undefined.
+    private _probeIsDarkFromCss(): boolean
+    {
+        try
+        {
+            const bg = getComputedStyle(this).getPropertyValue('--primary-background-color').trim();
+            if (!bg) return false;
+            const hexMatch = bg.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+            let r = 0, g = 0, b = 0;
+            if (hexMatch)
+            {
+                const hex = hexMatch[1].length === 3
+                    ? hexMatch[1].split('').map(c => c + c).join('')
+                    : hexMatch[1];
+                r = parseInt(hex.slice(0, 2), 16);
+                g = parseInt(hex.slice(2, 4), 16);
+                b = parseInt(hex.slice(4, 6), 16);
+            }
+            else
+            {
+                const rgbMatch = bg.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+                if (rgbMatch) { r = +rgbMatch[1]; g = +rgbMatch[2]; b = +rgbMatch[3]; }
+            }
+            const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            return lum < 0.5;
+        }
+        catch (_) {}
+        return false;
+    }
+
+
+    //Nudge a leader endpoint to the border of the central home
+    //circle (the `helios-home-pill` icon painted at layout.home).
+    //All chip leaders (PV, battery, grid) dock against this single
+    //pill so the home reads as the focal energy node, mirroring HA's
+    //own Energy distribution card.
+    private _nudgeToHomeCircle(
+        chipX: number, chipY: number,
+        homeX: number, homeY: number,
+    ): { x: number; y: number }
+    {
+        const dx = chipX - homeX;
+        const dy = chipY - homeY;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        return {
+            x: homeX + (dx / len) * HeliosCard.HOME_PILL_RADIUS_PX,
+            y: homeY + (dy / len) * HeliosCard.HOME_PILL_RADIUS_PX,
+        };
+    }
+
+
+    //Build (or return cached) the SVG point strings for the home
+    //silhouette layer. _homeSilhouettes is replaced (new array
+    //identity) only when the engine detects the projected vertices
+    //moved enough to redraw; between those updates we reuse the
+    //pre-serialized strings.
+    private _getSilhouettePoints(): Array<{ base: string; top: string; walls: string[] } | null>
+    {
+        const sils = this._homeSilhouettes;
+        if (this._silhouetteCacheKey === sils) return this._silhouettePtsCache;
+
+        const out: Array<{ base: string; top: string; walls: string[] } | null> = [];
+        for (const sil of sils)
+        {
+            const N = Math.min(sil.base.length, sil.top.length);
+            if (N < 3) { out.push(null); continue; }
+            let basePts = '';
+            let topPts  = '';
+            for (let i = 0; i < N; i++)
+            {
+                if (i > 0) { basePts += ' '; topPts += ' '; }
+                basePts += sil.base[i].x + ',' + sil.base[i].y;
+                topPts  += sil.top [i].x + ',' + sil.top [i].y;
+            }
+            const walls: string[] = new Array(N);
+            for (let i = 0; i < N; i++)
+            {
+                const j = (i + 1) % N;
+                walls[i] =
+                    sil.base[i].x + ',' + sil.base[i].y + ' ' +
+                    sil.base[j].x + ',' + sil.base[j].y + ' ' +
+                    sil.top [j].x + ',' + sil.top [j].y + ' ' +
+                    sil.top [i].x + ',' + sil.top [i].y;
+            }
+            out.push({ base: basePts, top: topPts, walls });
+        }
+        this._silhouetteCacheKey = sils;
+        this._silhouettePtsCache = out;
+        return out;
+    }
 
 
     //Render
@@ -828,16 +1196,36 @@ export class HeliosCard extends LitElement
         const displayDate = !this._isLiveMode && this._selectedTime
             ? this._selectedTime
             : this._now;
-        const displayDateLabel = formatDate(displayDate, this.config?.['date-format']);
         //time-format: '12h' or '24h' (default). hourCycle is more
         //authoritative than hour12, which some locales silently
         //ignore (fr-FR falls back to 24h regardless of hour12).
         const is12h = String(this.config?.['time-format'] ?? '24h').toLowerCase() === '12h';
-        const displayTimeLabel = displayDate.toLocaleTimeString([], {
-            hour:      '2-digit',
-            minute:    '2-digit',
-            hourCycle: is12h ? 'h12' : 'h23'
-        } as Intl.DateTimeFormatOptions);
+        //Memoise the date+time labels keyed on (epoch-minute, format
+        //flags) so a rotation that only mutates camera state does
+        //not re-run Intl.DateTimeFormat (2-5 ms per call on Safari)
+        //or our formatDate helper. Both labels only change once per
+        //minute in live mode and once per scrub-step in scrub mode.
+        const dateFmt = String(this.config?.['date-format'] ?? '');
+        const labelKey = `${Math.floor(displayDate.getTime() / 60_000)}|${is12h ? '12' : '24'}|${dateFmt}`;
+        let displayDateLabel: string;
+        let displayTimeLabel: string;
+        if (this._cachedClockLabelKey === labelKey)
+        {
+            displayDateLabel = this._cachedClockDateLabel;
+            displayTimeLabel = this._cachedClockTimeLabel;
+        }
+        else
+        {
+            displayDateLabel = formatDate(displayDate, this.config?.['date-format']);
+            displayTimeLabel = displayDate.toLocaleTimeString([], {
+                hour:      '2-digit',
+                minute:    '2-digit',
+                hourCycle: is12h ? 'h12' : 'h23'
+            } as Intl.DateTimeFormatOptions);
+            this._cachedClockLabelKey   = labelKey;
+            this._cachedClockDateLabel  = displayDateLabel;
+            this._cachedClockTimeLabel  = displayTimeLabel;
+        }
 
         //The on-ground disc self-encodes the low/mid/high breakdown
         //via three concentric bands (proportional radial widths,
@@ -852,13 +1240,16 @@ export class HeliosCard extends LitElement
         //The label is suppressed until both the layout (map ready)
         //and a cloud-cover value (data ready) are available.
         const layout         = this._labelLayout;
-        const showLabel      = hasApiKey && layout !== null && this._cloudCover >= 0;
 
         //Photovoltaic production chip, pinned above the home, tinted in the configured production colour and tied to the home with an animated leader
         //line whose dashes flow from the house up to the chip. Only renders when the user has set the optional `pv-power-entity` config and the live
         //state read produced a finite numeric value.
         const pvEntityId   = String(this.config?.['pv-power-entity'] ?? '').trim();
-        const pvColor      = cfgHex(this.config?.['pv-color'], DEFAULT_PV_COLOR_HEX);
+        //Colour configs (pv-color / battery-color / sun-color / cloud-color / building-color) are no longer
+        //consulted, the card inherits the active HA theme's Energy palette via CSS tokens. Defaults below
+        //are the matching hex for any inline SVG attribute that still expects a string colour, the YAML
+        //keys stay in the config type for backward compat but the renderer ignores them.
+        const pvColor      = DEFAULT_PV_COLOR_HEX;
         //When the user scrubs the timeline into the past, the chip
         //should reflect what the PV system actually produced at
         //that instant, same behaviour as the cloud / irradiance
@@ -987,10 +1378,26 @@ export class HeliosCard extends LitElement
         const batteryBanks       = this._getBatteryBanks();
         const hasAnyBankSoc      = batteryBanks.some(b => b.socEntity   !== '');
         const hasAnyBankPower    = batteryBanks.some(b => b.powerEntity !== '');
-        const batteryColor       = cfgHex(this.config?.['battery-color'], DEFAULT_BATTERY_COLOR_HEX);
         const batteryScrubbing   = !this._isLiveMode && this._selectedTime !== null;
         const batteryScrubFuture = batteryScrubbing
             && this._selectedTime!.getTime() > Date.now() + 60_000;
+
+        //Grid IN / OUT past-scrub: derive the watts from the rolling
+        //buffer around the scrub instant so the chip reflects what
+        //was actually flowing at that moment, not the live now. Skip
+        //in future scrub (no data) and in live mode (live values
+        //already in _gridImportValue / _gridExportValue).
+        const gridScrubTimeMs = batteryScrubbing && !batteryScrubFuture
+            ? this._selectedTime!.getTime()
+            : null;
+        const gridImportDisplayWatts = gridScrubTimeMs !== null
+            ? gridWattsAtTime(this._gridImportSamples, this._gridImportUnits, gridScrubTimeMs)
+            : this._gridImportValue;
+        const gridExportDisplayWatts = gridScrubTimeMs !== null
+            ? gridWattsAtTime(this._gridExportSamples, this._gridExportUnits, gridScrubTimeMs)
+            : this._gridExportValue;
+        const gridImportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridImportUnit;
+        const gridExportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridExportUnit;
 
         //Active SoC / power values for this render, historical samples in scrub mode, live state otherwise.
         const activeBatterySoc: number | null = batteryScrubbing
@@ -1028,7 +1435,15 @@ export class HeliosCard extends LitElement
         //moving OUT). The dashes flow at a speed proportional to
         //|P|, saturating at the same ~5 kW threshold as the PV
         //leader so all energy-flow streams read on the same scale.
-        const batteryCharging  = showPowerChip && (activeBatteryPower! > 0);
+        //Battery direction sign: positive = charging (energy IN),
+        //negative = discharging (OUT). Drives the dual-tone leader
+        //color (pink for charging, teal for discharging, the HA
+        //Energy palette identity).
+        const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
+        const batteryLeaderColor = batteryCharging
+            ? 'var(--energy-battery-in-color, #f06292)'
+            : 'var(--energy-battery-out-color, #4db6ac)';
+        void batteryCharging;
         const batteryWattsForFlow = showPowerChip
             ? Math.abs(pvNormalizeToWatts(activeBatteryPower!, activeBatteryUnit))
             : 0;
@@ -1076,50 +1491,98 @@ export class HeliosCard extends LitElement
         //from a clear PV anchor instead of crowding the chip's centre.
         const PV_LEG_OFFSET_PX     = 19;
         const PV_HALF_HEIGHT_PX    = 11;
-        //Half-width of the PV chip, min-width:76 in .pv-pct-label,
-        //so 38 px from centre to either side. Used for the solar-ray
-        //target snap (left/right side of the chip) when the sun sits
-        //roughly horizontal to the chip.
-        const PV_HALF_WIDTH_PX     = 38;
-        const BAT_CHIP_NUDGE_PX    = 32;
-        const FILLET_R             = 6;
-        //PV chip sits BELOW the SoC / Power shelf, so each L-leader runs from PV's TOP edge upward to the shelf, then horizontally to the SoC / Power
-        //chip.
-        const lPvEdgeY      = layout ? layout.pvLabel.y - PV_HALF_HEIGHT_PX           : 0;
-        const lShelfY       = layout ? layout.batterySocLabel.y                       : 0;
-        const lSocLegX      = layout ? layout.pvLabel.x - PV_LEG_OFFSET_PX            : 0;
-        const lPowerLegX    = layout ? layout.pvLabel.x + PV_LEG_OFFSET_PX            : 0;
-        const lSocEndX      = layout ? layout.batterySocLabel.x   + BAT_CHIP_NUDGE_PX : 0;
-        const lPowerEndX    = layout ? layout.batteryPowerLabel.x - BAT_CHIP_NUDGE_PX : 0;
-        //Forward L: PV edge → vertical leg → fillet → horizontal leg
-        //→ end. Direction-agnostic, the vertical leg can travel up
-        //or down because the fillet approach point follows the sign
-        //of (shelfY - pvEdgeY).
-        const buildLPath = (verticalX: number, pvEdgeY: number, shelfY: number, endX: number): string =>
+        //Half-width of the PV chip, used by the solar-ray target snap.
+        //Sized to the NARROWEST realistic PV chip text ("0 W" -> ~55 px
+        //wide, half ~27). Picking the small half-width guarantees the
+        //solar-ray snap point lands at-or-just-before the chip border
+        //even on short text, so the ray no longer overshoots and
+        //draws on top of the chip body. Wider chip strings still get
+        //the snap inside their pill but that's covered by the chip's
+        //own background.
+        const PV_HALF_WIDTH_PX  = 28;
+        //Chip cluster around the home: Battery (SoC + Power) on the
+        //RIGHT, Grid (Import + Export) on the LEFT. Each chip uses
+        //a straight hairline leader to the home centre rather than
+        //the old L-shape, since the horizontal stack no longer needs
+        //the bent geometry and the
+        //straight line matches the HA Energy distribution card's
+        //hairline vocabulary.
+        //Build a rounded L: horizontal segment from the chip side
+        //towards the home's vertical axis, fillet, vertical segment
+        //down (or up) to the home pill border. chipX/chipY is the
+        //chip centre; the leader starts at the chip edge nudged by
+        //chipNudgePx along the home direction, and ends at the home
+        //pill border.
+        const buildLPathToHome = (chipX: number, chipY: number, chipNudgePx: number): string =>
         {
-            const dirH  = endX  > verticalX ? 1 : -1;
-            const dirV  = shelfY > pvEdgeY  ? 1 : -1;
-            //Clamp the radius so the fillet never overshoots a short leg, the rounded corner has to fit inside both legs.
-            const r     = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
-            const preY  = shelfY - dirV * r;
-            const postX = verticalX + dirH * r;
-            return `M ${verticalX},${pvEdgeY} L ${verticalX},${preY} Q ${verticalX},${shelfY} ${postX},${shelfY} L ${endX},${shelfY}`;
+            if (!layout) return '';
+            const homeX = layout.home.x;
+            const homeY = layout.home.y;
+            //Chip-side start: nudge horizontally toward home.
+            const dirH = homeX > chipX ? 1 : -1;
+            const dirV = homeY > chipY ? 1 : -1;
+            const sx = chipX + dirH * chipNudgePx;
+            const sy = chipY;
+            //Land the vertical leg at 25 % of the home pill width
+            //(7 px = 28 / 4) on the chip's side of centre, so the
+            //two leaders meeting on the same row do NOT collide on
+            //the pill's central axis. Vertical leg then docks
+            //against the pill border at the matching circle
+            //intersection.
+            const HOME_PILL_VISIBLE_RADIUS = 16;
+            const HOME_PILL_QUARTER_X      = 7;
+            const ex = homeX - dirH * HOME_PILL_QUARTER_X;
+            //The vertical leg crosses the pill outline at
+            //y = home.y ± sqrt(R² - offsetX²).
+            const yIntersect = Math.sqrt(
+                Math.max(0,
+                    HOME_PILL_VISIBLE_RADIUS * HOME_PILL_VISIBLE_RADIUS
+                    - HOME_PILL_QUARTER_X    * HOME_PILL_QUARTER_X)
+            );
+            const ey = homeY - dirV * yIntersect;
+            //Fillet radius, clamped so the curve fits inside both
+            //legs of the L.
+            const FILLET_R = 12;
+            const r = Math.min(FILLET_R, Math.abs(ex - sx) / 2, Math.abs(ey - sy) / 2);
+            const preX  = ex - dirH * r;
+            const postY = sy + dirV * r;
+            return `M ${sx.toFixed(1)},${sy.toFixed(1)} L ${preX.toFixed(1)},${sy.toFixed(1)} Q ${ex.toFixed(1)},${sy.toFixed(1)} ${ex.toFixed(1)},${postY.toFixed(1)} L ${ex.toFixed(1)},${ey.toFixed(1)}`;
         };
-        //Reversed L: end of horizontal leg → fillet → vertical leg → PV edge. Used for the discharging arrow only.
-        const buildLPathReverse = (verticalX: number, pvEdgeY: number, shelfY: number, endX: number): string =>
-        {
-            const dirH  = endX  > verticalX ? 1 : -1;
-            const dirV  = shelfY > pvEdgeY  ? 1 : -1;
-            const r     = Math.min(FILLET_R, Math.abs(shelfY - pvEdgeY) / 2, Math.abs(endX - verticalX) / 2);
-            const preY  = shelfY - dirV * r;
-            const postX = verticalX + dirH * r;
-            return `M ${endX},${shelfY} L ${postX},${shelfY} Q ${verticalX},${shelfY} ${verticalX},${preY} L ${verticalX},${pvEdgeY}`;
-        };
-        const socLeaderPath   = buildLPath(lSocLegX,   lPvEdgeY, lShelfY, lSocEndX);
-        const powerLeaderPath = buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
-        const powerArrowPath  = batteryCharging
-            ? buildLPath(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX)
-            : buildLPathReverse(lPowerLegX, lPvEdgeY, lShelfY, lPowerEndX);
+        const socLeaderPath        = buildLPathToHome(layout?.batterySocLabel.x   ?? 0, layout?.batterySocLabel.y   ?? 0, 22);
+        const powerLeaderPath      = buildLPathToHome(layout?.batteryPowerLabel.x ?? 0, layout?.batteryPowerLabel.y ?? 0, 22);
+        const powerArrowPath       = powerLeaderPath;
+        const gridImportLeaderPath = buildLPathToHome(layout?.gridImportLabel.x   ?? 0, layout?.gridImportLabel.y   ?? 0, 22);
+        const gridExportLeaderPath = buildLPathToHome(layout?.gridExportLabel.x   ?? 0, layout?.gridExportLabel.y   ?? 0, 22);
+
+        //Grid bead animation duration, proportional to live power.
+        //Below ~5 W the chip is idle (rounding noise around HA's
+        //recorder, no real flow) and the bead is dropped entirely.
+        //Above the cap (10 kW import, 1 kW export) the duration
+        //saturates at MIN_DUR so the bead doesn't disappear in a
+        //blur. The cap is opinionated, the card has no way to know
+        //the user's actual contract / inverter ceiling so we
+        //hardcode round residential thresholds.
+        const GRID_BEAD_IMPORT_CAP_W = 10000;
+        const GRID_BEAD_EXPORT_CAP_W = 1000;
+        const GRID_BEAD_MIN_DUR_S = 1.2;
+        const GRID_BEAD_MAX_DUR_S = 8.0;
+        const GRID_BEAD_IDLE_W    = 5;
+        const importWattsAbs = this._gridImportValue !== null
+            ? Math.abs(pvNormalizeToWatts(this._gridImportValue, this._gridImportUnit))
+            : 0;
+        const exportWattsAbs = this._gridExportValue !== null
+            ? Math.abs(pvNormalizeToWatts(this._gridExportValue, this._gridExportUnit))
+            : 0;
+        const gridImportBeadDur = importWattsAbs < GRID_BEAD_IDLE_W ? null
+            : GRID_BEAD_MAX_DUR_S - (GRID_BEAD_MAX_DUR_S - GRID_BEAD_MIN_DUR_S)
+              * Math.min(1, importWattsAbs / GRID_BEAD_IMPORT_CAP_W);
+        const gridExportBeadDur = exportWattsAbs < GRID_BEAD_IDLE_W ? null
+            : GRID_BEAD_MAX_DUR_S - (GRID_BEAD_MAX_DUR_S - GRID_BEAD_MIN_DUR_S)
+              * Math.min(1, exportWattsAbs / GRID_BEAD_EXPORT_CAP_W);
+        //Silence: PV_LEG_OFFSET_PX is no longer consumed by the
+        //simplified leader build, kept declared above for any future
+        //surface that wants a vertical-leg anchor again.
+        void PV_LEG_OFFSET_PX;
 
         //Solar-arc overlay, sun trajectory across the sky, sun's
         //current position, and incidence ray to the home. All
@@ -1134,17 +1597,33 @@ export class HeliosCard extends LitElement
         //is painted in MapLibre paint properties from the engine
         //(see _updateCloudCoverDisc) so we don't need the cloud
         //hex in this render block.
-        const sunColor      = cfgHex(this.config?.['sun-color'],   DEFAULT_SUN_COLOR_HEX);
+        const sunColor      = DEFAULT_SUN_COLOR_HEX;
         const sunRimColor   = darkenHex(sunColor, 0.20);
         const arcSegments   = showSun ? buildArcSegments(sunScene!.arc, sunColor) : [];
         //Z-order split: below-horizon (dotted) segments render BEHIND
-        //the home chip cluster so the home reads cleanly through the
-        //night portion of the loop, while above-horizon segments, the
-        //sun ray, the sun disc and the W/m² readout render AFTER all
-        //chips so the live sun stays visually dominant, no chip ever
-        //occludes the body of the day.
-        const arcSegmentsBack  = arcSegments.filter(s =>  s.belowHorizon);
-        const arcSegmentsFront = arcSegments.filter(s => !s.belowHorizon);
+        //the home chip cluster, above-horizon segments render in front
+        //so the live sun always dominates. Single-pass split into two
+        //scratch buffers reused across renders so the filter() pair
+        //does not allocate two fresh arrays on every cycle.
+        const arcSegmentsBack     = this._arcBackBuf;
+        const arcSegmentsFrontFar  = this._arcFrontBuf;
+        const arcSegmentsFrontNear = this._arcFrontNearBuf;
+        arcSegmentsBack.length      = 0;
+        arcSegmentsFrontFar.length  = 0;
+        arcSegmentsFrontNear.length = 0;
+        //Above-horizon segments get a 2nd split by camera nearness so
+        //the part of the arc closest to the eye renders ABOVE the home
+        //chips (overlapping the leaders + pill), while the part that
+        //arches away from the eye renders BEHIND the chips. The
+        //threshold is the per-segment nearness midpoint: anything
+        //within the closer half is painted on the near SVG.
+        for (let i = 0; i < arcSegments.length; i++)
+        {
+            const s = arcSegments[i];
+            if (s.belowHorizon)            arcSegmentsBack.push(s);
+            else if (s.nearness >= 0.50)   arcSegmentsFrontNear.push(s);
+            else                           arcSegmentsFrontFar.push(s);
+        }
 
         //The incidence ray only renders when the sun is actually above the horizon, drawing a ray from below the ground towards the home would be
         //visually nonsensical.
@@ -1184,43 +1663,62 @@ export class HeliosCard extends LitElement
         //ray through the chip's top, which looked broken.
         let sunRayTargetX = sunScene?.home.x ?? 0;
         let sunRayTargetY = sunScene?.home.y ?? 0;
-        //Only snap the ray to the PV chip when the chip is actually rendered. Without this check, the ray pointed at a phantom pvLabel position
-        //whenever the user had no pv-power-entity configured, drawing toward an invisible anchor instead of landing on the home marker.
+        //Anchor the sun ray to the NEAREST point of the PV chip's
+        //pill outline rather than snapping to one of the four
+        //cardinal centres. The pill is centred at pvLabel.x / y,
+        //has a straight rectangular middle of width
+        //(PV_HALF_WIDTH_PX - PV_HALF_HEIGHT_PX) * 2 and two
+        //semicircular end-caps of radius PV_HALF_HEIGHT_PX. The
+        //resulting attachment point glides smoothly along the
+        //outline as the sun arcs across the sky instead of
+        //jumping between four discrete spots; matches the
+        //"leader docks at the closest border point" behaviour the
+        //HA Energy distribution card uses.
         if (layout && sunScene && pvEntityId)
         {
-            const dx       = sunScene.sun.x - layout.pvLabel.x;
-            const dy       = sunScene.sun.y - layout.pvLabel.y;
-            const compass  = Math.atan2(dx, -dy);   // 0 = up, +π/2 = right
-            const Q        = Math.PI / 4;           // 45°
-            const absC     = Math.abs(compass);
-            if (absC <= Q)
+            const cx = layout.pvLabel.x;
+            const cy = layout.pvLabel.y;
+            const halfW = PV_HALF_WIDTH_PX;
+            const halfH = PV_HALF_HEIGHT_PX;
+            const ex = sunScene.sun.x - cx;
+            const ey = sunScene.sun.y - cy;
+            //Width of the rectangular middle of the pill (between
+            //the two end-cap semicircles).
+            const straightHalfW = Math.max(0, halfW - halfH);
+
+            if (Math.abs(ex) <= straightHalfW)
             {
-                //Sun is above → attach to top-centre.
-                sunRayTargetX = layout.pvLabel.x;
-                sunRayTargetY = layout.pvLabel.y - PV_HALF_HEIGHT_PX;
-            }
-            else if (absC >= 3 * Q)
-            {
-                //Sun is below → attach to bottom-centre.
-                sunRayTargetX = layout.pvLabel.x;
-                sunRayTargetY = layout.pvLabel.y + PV_HALF_HEIGHT_PX;
-            }
-            else if (compass > 0)
-            {
-                //Sun is to the right → attach to right-centre.
-                sunRayTargetX = layout.pvLabel.x + PV_HALF_WIDTH_PX;
-                sunRayTargetY = layout.pvLabel.y;
+                //Sun above or below the straight middle. The nearest
+                //point sits on the top or bottom edge directly under
+                //the sun (clamped horizontally to the straight zone
+                //in case the sun is far off-axis).
+                sunRayTargetX = sunScene.sun.x;
+                sunRayTargetY = cy + (ey >= 0 ? 1 : -1) * halfH;
             }
             else
             {
-                //Sun is to the left → attach to left-centre.
-                sunRayTargetX = layout.pvLabel.x - PV_HALF_WIDTH_PX;
-                sunRayTargetY = layout.pvLabel.y;
+                //Sun off to one of the rounded ends. The nearest
+                //point sits on the matching end-cap arc, along the
+                //line from the end-cap centre to the sun.
+                const cornerX = cx + (ex >= 0 ? 1 : -1) * straightHalfW;
+                const cornerY = cy;
+                const dx = sunScene.sun.x - cornerX;
+                const dy = sunScene.sun.y - cornerY;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                sunRayTargetX = cornerX + halfH * dx / dist;
+                sunRayTargetY = cornerY + halfH * dy / dist;
             }
         }
 
-        const cardTheme = String(this.config?.['card-theme'] ?? 'light').toLowerCase();
-        const cardThemeClass = cardTheme === 'dark' ? 'theme-dark' : 'theme-light';
+        //Detect the active HA theme. Authoritative source is
+        //hass.themes.darkMode (boolean) which HA flips at runtime
+        //for every theme swap (user profile toggle, time-of-day
+        //auto-theme, external integration). A CSS-luminance probe
+        //via getComputedStyle stays around as a last-resort fallback
+        //for older HA builds that predate hass.themes.darkMode.
+        const themesObj = (this.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes;
+        const isDark = this._resolveIsDark(themesObj);
+        const cardThemeClass = isDark ? 'theme-dark' : 'theme-light';
 
         //LiDAR View gating: the button stays visible (so its location
         //is predictable across homes) but goes disabled when no LiDAR
@@ -1231,7 +1729,8 @@ export class HeliosCard extends LitElement
             cardThemeClass,
             this._detailMode      ? 'detail-active'        : '',
             this._lidarViewMode   ? 'lidar-view-active'    : '',
-            this._shadingDomeMode ? 'shading-dome-active'  : '',
+            this._shadingDomeChipMask ? 'shading-dome-active'  : '',
+            this._cloudDomeMode   ? 'cloud-dome-active'    : '',
         ].filter(Boolean).join(' ');
 
         return html`
@@ -1293,7 +1792,7 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 ${hasApiKey ? html`
-                    <div class="spinner-center ${(this._fetching || this._shadowBusy) ? 'spinning' : ''}">
+                    <div class="spinner-center ${this._fetching ? 'spinning' : ''}">
                         <svg class="spinner-sun" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                             <!--  Rotating ray bundle, 12 spokes around the disc.
                                   Painted in the configured sun colour via the
@@ -1336,56 +1835,80 @@ export class HeliosCard extends LitElement
                 ${hasApiKey ? (() => {
                     const isLocal     = lidarSourceId === 'local-ndsm';
                     const hasProvider = lidarSourceId !== null;
+                    //LiDAR readiness: an online provider needs its
+                    //first fetch to land before the view is meaningful;
+                    //the local nDSM resolves synchronously so it never
+                    //goes through the loading state. While the engine
+                    //is fetching shadows, the button shows the spinner
+                    //and is disabled; once data is ready, the icon
+                    //flips to satellite (online) or harddisk (local).
+                    //Loading state covers BOTH the raster fetch (shadow
+                    //busy) and the per-cell irradiance compute (exposure
+                    //busy). Either keeps the spinner up.
+                    const lidarLoading = hasProvider
+                                       && ((!isLocal && this._shadowBusy)
+                                           || (this._lidarViewMode && this._lidarExposureBusy));
+                    const lidarReady   = hasProvider && (isLocal || !this._shadowBusy);
                     const lidarIcon   = !hasProvider ? 'mdi:cloud-off-outline'
-                                       : isLocal     ? 'mdi:harddisk'
-                                                     : 'mdi:earth';
+                                       : lidarLoading ? 'mdi:loading'
+                                       : isLocal      ? 'mdi:harddisk'
+                                                      : 'mdi:satellite-variant';
                     const lidarTitle  = !hasProvider ? 'No LiDAR coverage at this location'
-                                       : isLocal     ? 'LiDAR view, local nDSM'
-                                                     : 'LiDAR view, online provider';
-                    const isLayer = !this._lidarViewMode && !this._shadingDomeMode;
-                    const onLayer = () => {
-                        if (this._lidarViewMode)   toggleLidarView(this);
-                        if (this._shadingDomeMode) toggleShadingDome(this);
-                    };
-                    const onLidar = hasProvider ? (() => {
-                        if (this._shadingDomeMode) toggleShadingDome(this);
-                        if (!this._lidarViewMode)  toggleLidarView(this);
-                    }) : undefined;
-                    const onDome = () => {
-                        if (this._lidarViewMode)   toggleLidarView(this);
-                        if (!this._shadingDomeMode) toggleShadingDome(this);
-                    };
+                                       : lidarLoading ? 'LiDAR view, loading shadows...'
+                                       : isLocal      ? 'LiDAR view, local nDSM'
+                                                      : 'LiDAR view, online provider';
+                    const isLayer = !this._lidarViewMode && !this._shadingDomeMode && !this._cloudDomeMode;
+                    //Lock mode-switching while the exposure sweep is in
+                    //flight: the user cannot exit / re-enter / swap
+                    //modes until the LiDAR view has finished computing.
+                    //Same guard applied to all 3 mode-bar buttons so a
+                    //race between "user clicks home" and "sweep midway"
+                    //can't leave the layer in a half-built state.
+                    const modeLocked = this._lidarViewMode && this._lidarExposureBusy;
+                    //Mode-bar click handlers bound once as class fields
+                    //(see _onModeLayer etc.) so Lit does not see a fresh
+                    //closure identity on every render and re-attach the
+                    //@click handler four times per cycle.
+                    const onLidar    = (lidarReady && !modeLocked) ? this._onModeLidar        : undefined;
+                    const onLayer    = !modeLocked                  ? this._onModeLayer        : undefined;
+                    const onShading  = !modeLocked                  ? this._onModeShadingDome  : undefined;
+                    //Live cloud-cover icon for the cloud-dome button:
+                    //sun, partly-cloudy, cloudy or pouring depending on
+                    //the current home reading. The user reads the sky
+                    //state at a glance without opening the dome.
                     return html`
                         <div class="overlay-top-right">
                             <div class="mode-bar" role="radiogroup" aria-label="View mode">
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${isLayer ? 'is-on' : ''}"
+                                    class="mode-bar-seg ${isLayer ? 'is-on' : ''} ${modeLocked ? 'is-disabled' : ''}"
                                     role="radio"
                                     aria-checked="${isLayer ? 'true' : 'false'}"
-                                    title="Default layer UI"
+                                    ?disabled="${modeLocked}"
+                                    aria-label="Default layer UI"
                                     @click="${onLayer}"
                                 >
-                                    <ha-icon icon="mdi:solar-power-variant"></ha-icon>
+                                    <ha-icon icon="mdi:home"></ha-icon>
                                 </button>
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${this._lidarViewMode ? 'is-on' : ''} ${!hasProvider ? 'is-disabled' : ''}"
+                                    class="mode-bar-seg ${this._lidarViewMode ? 'is-on' : ''} ${(!lidarReady || modeLocked) ? 'is-disabled' : ''} ${lidarLoading ? 'is-loading' : ''}"
                                     role="radio"
                                     aria-checked="${this._lidarViewMode ? 'true' : 'false'}"
-                                    ?disabled="${!hasProvider}"
-                                    title="${lidarTitle}"
+                                    ?disabled="${!lidarReady || modeLocked}"
+                                    aria-label="${lidarTitle}"
                                     @click="${onLidar}"
                                 >
                                     <ha-icon icon="${lidarIcon}"></ha-icon>
                                 </button>
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${this._shadingDomeMode ? 'is-on' : ''}"
+                                    class="mode-bar-seg ${this._shadingDomeMode ? 'is-on' : ''} ${modeLocked ? 'is-disabled' : ''}"
                                     role="radio"
                                     aria-checked="${this._shadingDomeMode ? 'true' : 'false'}"
-                                    title="Adaptive shading dome"
-                                    @click="${onDome}"
+                                    ?disabled="${modeLocked}"
+                                    aria-label="Adaptive shading dome"
+                                    @click="${onShading}"
                                 >
                                     <ha-icon icon="mdi:radar"></ha-icon>
                                 </button>
@@ -1418,129 +1941,6 @@ export class HeliosCard extends LitElement
                         ` : nothing}
                     </div>
                 ` : nothing}
-
-                ${hasApiKey && this._cloudScene ? (() => {
-                    //SVG-projected cloud disc + 100 % ring. The
-                    //screen-space points come from the engine via
-                    //projectCloudScene() (anchor-at-home), so the
-                    //rendered shape stays a true circle whatever the
-                    //terrain mesh does underneath.
-                    //
-                    //The disc is split into three concentric bands
-                    //sized by each layer's share of (low+mid+high)
-                    //and shaded with three derivatives of the
-                    //configured cloud colour: light (low, innermost),
-                    //normal (mid), dark (high, outermost). We stack
-                    //outer → inner so each smaller polygon visually
-                    //"covers" the centre of the larger one to create
-                    //the band appearance — no SVG mask / clip needed.
-                    const cs        = this._cloudScene!;
-                    const lowPts    = cs.discLow.length  >= 3 ? cs.discLow .map(p => `${p.x},${p.y}`).join(' ') : '';
-                    const midPts    = cs.discMid.length  >= 3 ? cs.discMid .map(p => `${p.x},${p.y}`).join(' ') : '';
-                    const highPts   = cs.discHigh.length >= 3 ? cs.discHigh.map(p => `${p.x},${p.y}`).join(' ') : '';
-                    const ringPts   = cs.ring.length     >= 3 ? cs.ring    .map(p => `${p.x},${p.y}`).join(' ') : '';
-                    //Light (low) and dark (high) shades: lerp the
-                    //cloud hex toward white / black. Mid uses the
-                    //configured cloud colour as-is.
-                    const cloudLight = lerpHexToward(cs.cloudHex, '#ffffff', 0.55);
-                    const cloudDark  = lerpHexToward(cs.cloudHex, '#000000', 0.40);
-                    //SVG mask: white background = cloud visible
-                    //everywhere, black home silhouettes punch a hole
-                    //so the actual MapLibre extrusion (walls, roof,
-                    //outline glow) shows through. Re-projected each
-                    //transform via projectHomeFootprints so the cut-
-                    //out tracks rotation. Empty array until the
-                    //buildings GeoJSON has landed; the mask then
-                    //degrades to "all visible" and the disc covers
-                    //the home as before.
-                    const silhouettes = this._homeSilhouettes;
-                    const maskId = 'helios-cloud-home-mask';
-                    return html`
-                        <svg class="cloud-svg">
-                            <defs>
-                                <mask id="${maskId}" maskUnits="userSpaceOnUse">
-                                    <rect x="0" y="0" width="100%" height="100%" fill="white" />
-                                    ${silhouettes.map(sil => {
-                                        const N = Math.min(sil.base.length, sil.top.length);
-                                        if (N < 3) return nothing;
-                                        const basePts = sil.base.map(p => `${p.x},${p.y}`).join(' ');
-                                        const topPts  = sil.top .map(p => `${p.x},${p.y}`).join(' ');
-                                        const walls   = [];
-                                        for (let i = 0; i < N; i++)
-                                        {
-                                            const j = (i + 1) % N;
-                                            walls.push(
-                                                `${sil.base[i].x},${sil.base[i].y} ` +
-                                                `${sil.base[j].x},${sil.base[j].y} ` +
-                                                `${sil.top [j].x},${sil.top [j].y} ` +
-                                                `${sil.top [i].x},${sil.top [i].y}`
-                                            );
-                                        }
-                                        //Tiny 1 px stroke pads the mask outward by half a pixel so SVG sub-pixel anti-aliasing on the silhouette edge
-                                        //can never leave a visible cloud sliver. Just breathing room, no visible halo.
-                                        return svg`
-                                            <polygon points="${basePts}" fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
-                                            <polygon points="${topPts}"  fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
-                                            ${walls.map(w => svg`
-                                                <polygon points="${w}" fill="black" stroke="black" stroke-width="1" stroke-linejoin="round" />
-                                            `)}
-                                        `;
-                                    })}
-                                </mask>
-                            </defs>
-                            ${ringPts ? svg`
-                                <polygon class="cloud-ring" points="${ringPts}" />
-                            ` : nothing}
-                            <g mask="url(#${maskId})">
-                                ${highPts ? svg`
-                                    <polygon
-                                        class="cloud-disc cloud-disc-high"
-                                        points="${highPts}"
-                                        fill="${cloudDark}"
-                                        fill-opacity="0.5"
-                                    />
-                                ` : nothing}
-                                ${midPts ? svg`
-                                    <polygon
-                                        class="cloud-disc cloud-disc-mid"
-                                        points="${midPts}"
-                                        fill="${cs.cloudHex}"
-                                        fill-opacity="0.5"
-                                    />
-                                ` : nothing}
-                                ${lowPts ? svg`
-                                    <polygon
-                                        class="cloud-disc cloud-disc-low"
-                                        points="${lowPts}"
-                                        fill="${cloudLight}"
-                                        fill-opacity="0.5"
-                                    />
-                                ` : nothing}
-                                <!--  Thin separator outlines on the band
-                                      boundaries. The reference ring at
-                                      100 % already paints the outermost
-                                      edge, so we only need the two inner
-                                      separators (mid ↔ high and low ↔
-                                      mid). Stroke-only, no fill, drawn
-                                      on top so the boundary reads
-                                      cleanly without flattening the
-                                      band colours behind them.  -->
-                                ${highPts ? svg`
-                                    <polygon
-                                        class="cloud-band-sep"
-                                        points="${highPts}"
-                                    />
-                                ` : nothing}
-                                ${midPts ? svg`
-                                    <polygon
-                                        class="cloud-band-sep"
-                                        points="${midPts}"
-                                    />
-                                ` : nothing}
-                            </g>
-                        </svg>
-                    `;
-                })() : nothing}
 
                 <!--  Solar arc, BACK pass. Renders only the dotted
                       below-horizon segments (the sun's path through
@@ -1578,38 +1978,51 @@ export class HeliosCard extends LitElement
                     </svg>
                 ` : nothing}
 
-                ${showLabel ? (() =>
-                {
-                    //Endpoint = fill-disc edge in the chip-to-home
-                    //direction. The fill disc shares the ring's
-                    //centre (= home) and scales linearly with cloud
-                    //cover %; at 0 % the radius is zero and the line
-                    //terminates at home, at 100 % it reaches the
-                    //full ring edge. Pinning the endpoint to the
-                    //live fill, rather than to a static ring or
-                    //the home centre, keeps the leader "hugging"
-                    //the disc as it grows and shrinks.
-                    const pct  = Math.max(0, Math.min(100, this._cloudCover));
-                    const tFill = pct / 100;
-                    const endX  = layout!.home.x + (layout!.ringEdge.x - layout!.home.x) * tFill;
-                    const endY  = layout!.home.y + (layout!.ringEdge.y - layout!.home.y) * tFill;
-                    return html`
-                        <svg class="cloud-leader-svg">
-                            <line
-                                x1="${layout!.cloudLabel.x + 10}"
-                                y1="${layout!.cloudLabel.y}"
-                                x2="${endX}"
-                                y2="${endY}"
-                            ></line>
-                        </svg>`;
-                })() : nothing}
-                ${showLabel ? html`
-                    <div
-                        class="cloud-pct-label"
-                        style="left:${layout!.cloudLabel.x}px; top:${layout!.cloudLabel.y}px"
-                    >
-                        <ha-icon icon="mdi:weather-cloudy"></ha-icon>
+                ${hasApiKey && this._cloudCover >= 0 ? html`
+                    <button class="cloud-pct-label${this._cloudDomeMode ? ' is-on' : ''}"
+                            type="button"
+                            @click="${this._onCloudChipToggle}"
+                            aria-pressed="${this._cloudDomeMode ? 'true' : 'false'}"
+                            aria-label="Per-layer cloud cover">
+                        <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
                         <span>${cloudPctRound}%</span>
+                    </button>
+                ` : nothing}
+                ${hasApiKey && this._cloudScene ? html`
+                    <svg class="cloud-layer-leaders${this._cloudDomeMode ? ' is-on' : ''}"
+                         viewBox="0 0 180 22" preserveAspectRatio="xMidYMid meet">
+                        <!--  Four-segment leader system:
+                              - Trunk: a single vertical from the toggle
+                                bottom (x=90 y=0) down to a central
+                                junction point (x=90 y=11), the halfway
+                                line between the toggle and the layer
+                                chips.
+                              - From the junction, three branches reach
+                                each chip: an L (with Q fillet) toward
+                                the low chip on the left, a straight
+                                vertical to the mid chip, and a mirrored
+                                L toward the high chip on the right.
+                              Chip-center x positions: low at 27, mid at
+                              90, high at 153 (fixed-width chips, see
+                              .cloud-layer-chip min-width).             -->
+                        <path d="M 90,0 L 90,11"                          class="cloud-layer-leader cloud-layer-leader--trunk" fill="none" stroke="currentColor"/>
+                        <path d="M 90,11 L 35,11 Q 27,11 27,19 L 27,22"   class="cloud-layer-leader cloud-layer-leader--low"   fill="none" stroke="currentColor"/>
+                        <path d="M 90,11 L 90,22"                          class="cloud-layer-leader cloud-layer-leader--mid"   fill="none" stroke="currentColor"/>
+                        <path d="M 90,11 L 145,11 Q 153,11 153,19 L 153,22" class="cloud-layer-leader cloud-layer-leader--high" fill="none" stroke="currentColor"/>
+                    </svg>
+                    <div class="cloud-layer-chips${this._cloudDomeMode ? ' is-on' : ''}">
+                        <div class="cloud-layer-chip cloud-layer-chip--low">
+                            <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
+                            <span>${Math.round(this._cloudScene.cloudLow)}%</span>
+                        </div>
+                        <div class="cloud-layer-chip cloud-layer-chip--mid">
+                            <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
+                            <span>${Math.round(this._cloudScene.cloudMid)}%</span>
+                        </div>
+                        <div class="cloud-layer-chip cloud-layer-chip--high">
+                            <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
+                            <span>${Math.round(this._cloudScene.cloudHigh)}%</span>
+                        </div>
                     </div>
                 ` : nothing}
 
@@ -1622,87 +2035,36 @@ export class HeliosCard extends LitElement
                       because PV and the home share the same X anchor
                       so a straight segment is the right vocabulary.
                       Hidden when no PV entity is configured.  -->
-                <!--  Ground ring around the home. Drawn in its own SVG
-                      layer with an SVG mask built from the home's
-                      screen-space silhouette polygons (the same ones
-                      that drive the home-glow halo). The mask paints
-                      WHITE everywhere and BLACK over the extruded
-                      building's projected outline, so the ring is
-                      hidden wherever the 3D building stands in front
-                      of it. The eye reads the ring as a ground
-                      footprint the building physically stands inside,
-                      improving the perspective without having to
-                      route the ring through MapLibre's layer stack.
-                      Leader line + bead live in the next sibling SVG
-                      so they stay above the home as before.          -->
-                ${showPvLabel ? (() => {
-                    const maskId = `helios-home-anchor-mask-${this._instanceId}`;
-                    return html`
-                        <svg class="pv-home-anchor-svg">
-                            <defs>
-                                <mask id="${maskId}" maskUnits="userSpaceOnUse" x="0" y="0" width="10000" height="10000">
-                                    <!--  White background , ring visible. -->
-                                    <rect x="0" y="0" width="10000" height="10000" fill="white" />
-                                    <!--  Black home silhouette , ring hidden
-                                          where the projected building
-                                          stands. Same base + top + wall
-                                          polygons the .home-glow-svg
-                                          renders, no extra projection
-                                          pass needed.                       -->
-                                    ${this._homeSilhouettes.map(sil => {
-                                        const N = Math.min(sil.base.length, sil.top.length);
-                                        if (N < 3) return nothing;
-                                        const basePts = sil.base.map(p => `${p.x},${p.y}`).join(' ');
-                                        const topPts  = sil.top .map(p => `${p.x},${p.y}`).join(' ');
-                                        const walls: string[] = [];
-                                        for (let i = 0; i < N; i++)
-                                        {
-                                            const j = (i + 1) % N;
-                                            walls.push(
-                                                `${sil.base[i].x},${sil.base[i].y} ` +
-                                                `${sil.base[j].x},${sil.base[j].y} ` +
-                                                `${sil.top [j].x},${sil.top [j].y} ` +
-                                                `${sil.top [i].x},${sil.top [i].y}`
-                                            );
-                                        }
-                                        return svg`
-                                            <polygon points="${basePts}" fill="black" />
-                                            <polygon points="${topPts}"  fill="black" />
-                                            ${walls.map(w => svg`
-                                                <polygon points="${w}" fill="black" />
-                                            `)}
-                                        `;
-                                    })}
-                                </mask>
-                            </defs>
-                            <g mask="url(#${maskId})">
-                                <g
-                                    class="pv-home-leader-anchor ${pvIdle ? '' : 'is-pulsing'}"
-                                    transform="translate(${layout!.home.x},${layout!.home.y})"
-                                    style="--pv-flow-duration:${pvFlowDuration}s"
-                                >
-                                    <polygon
-                                        class="pv-home-leader-anchor-disc"
-                                        points="${layout!.homeAnchorPoints}"
-                                        fill="none"
-                                        stroke="${pvColor}"
-                                        stroke-width="1.6"
-                                    ></polygon>
-                                </g>
-                            </g>
-                        </svg>
-                    `;
-                })() : nothing}
+                <!--  No ground ring around the home: the previous
+                      projected disc fought with the cloud-cover
+                      overlay and the HA-Energy-blue home silhouette
+                      below already carries the footprint identity.
+                      Slot kept so the home stack stays vertically
+                      anchored for the leaders below. -->
+                ${nothing}
 
-                ${showPvLabel ? html`
+                ${showPvLabel ? (() => {
+                    //Leader endpoint = edge of the home circle on the
+                    //chip-to-home axis. The home node icon (a small
+                    //circular disc painted right where layout.home
+                    //sits) is the shared docking point for every
+                    //chip leader, so the line stops at the disc's
+                    //border via a fixed radius nudge.
+                    const pvX1 = layout!.pvLabel.x;
+                    const pvY1 = layout!.pvLabel.y + PV_HALF_HEIGHT_PX;
+                    const pvHomeEnd = this._nudgeToHomeCircle(
+                        pvX1, pvY1,
+                        layout!.home.x, layout!.home.y,
+                    );
+                    return html`
                     <svg class="pv-home-leader-svg">
                         <line
                             class="pv-home-leader-line"
                             style="--pv-leader-color:${pvColor}"
-                            x1="${layout!.pvLabel.x}"
-                            y1="${layout!.pvLabel.y + PV_HALF_HEIGHT_PX}"
-                            x2="${layout!.home.x}"
-                            y2="${layout!.home.y}"
+                            x1="${pvX1}"
+                            y1="${pvY1}"
+                            x2="${pvHomeEnd.x}"
+                            y2="${pvHomeEnd.y}"
                         ></line>
                         ${!pvIdle ? svg`
                             <!--  Moving bead, a small filled disc rides
@@ -1720,19 +2082,19 @@ export class HeliosCard extends LitElement
                                 <animateMotion
                                     dur="${pvFlowDuration}s"
                                     repeatCount="indefinite"
-                                    path="M ${layout!.pvLabel.x},${layout!.pvLabel.y + PV_HALF_HEIGHT_PX} L ${layout!.home.x},${layout!.home.y}"
+                                    path="M ${pvX1},${pvY1} L ${pvHomeEnd.x},${pvHomeEnd.y}"
                                 ></animateMotion>
                             </circle>
                         ` : nothing}
-                    </svg>
-                ` : nothing}
+                    </svg>`;
+                })() : nothing}
 
                 ${showPvLabel ? html`
                     <div
                         class="pv-pct-label ${isPvPredicted ? 'is-predicted' : ''}"
                         style="left:${layout!.pvLabel.x}px; top:${layout!.pvLabel.y}px; --pv-leader-color:${pvColor}"
                     >
-                        <ha-icon icon="mdi:solar-power-variant"></ha-icon>
+                        <ha-icon icon="mdi:solar-power"></ha-icon>
                         <span>${pvDisplayValue}</span>
                     </div>
                 ` : nothing}
@@ -1747,7 +2109,7 @@ export class HeliosCard extends LitElement
                         ${showSocChip ? svg`
                             <path
                                 class="battery-leader-line"
-                                style="--battery-leader-color:${batteryColor}"
+                                style="--battery-leader-color:${batteryLeaderColor}"
                                 d="${socLeaderPath}"
                             ></path>
                         ` : nothing}
@@ -1764,14 +2126,14 @@ export class HeliosCard extends LitElement
                         ${showPowerChip ? svg`
                             <path
                                 class="battery-leader-line"
-                                style="--battery-leader-color:${batteryColor}"
+                                style="--battery-leader-color:${batteryLeaderColor}"
                                 d="${powerLeaderPath}"
                             ></path>
                             ${!batteryIdle ? svg`
                                 <circle
                                     class="battery-leader-bead"
                                     r="4"
-                                    fill="${batteryColor}"
+                                    style="fill:${batteryLeaderColor}"
                                 >
                                     <animateMotion
                                         dur="${batteryFlowDuration}s"
@@ -1785,7 +2147,7 @@ export class HeliosCard extends LitElement
                     ${showSocChip ? html`
                         <div
                             class="battery-pct-label"
-                            style="left:${layout!.batterySocLabel.x}px; top:${layout!.batterySocLabel.y}px; --battery-leader-color:${batteryColor}"
+                            style="left:${layout!.batterySocLabel.x}px; top:${layout!.batterySocLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
                         >
                             <ha-icon icon="mdi:battery"></ha-icon>
                             <span>${batterySocText}</span>
@@ -1794,7 +2156,7 @@ export class HeliosCard extends LitElement
                     ${showPowerChip ? html`
                         <div
                             class="battery-pct-label"
-                            style="left:${layout!.batteryPowerLabel.x}px; top:${layout!.batteryPowerLabel.y}px; --battery-leader-color:${batteryColor}"
+                            style="left:${layout!.batteryPowerLabel.x}px; top:${layout!.batteryPowerLabel.y}px; --battery-leader-color:${batteryLeaderColor}"
                         >
                             <ha-icon icon="mdi:lightning-bolt"></ha-icon>
                             <span>${batteryPowerText}</span>
@@ -1802,18 +2164,78 @@ export class HeliosCard extends LitElement
                     ` : nothing}
                 ` : nothing}
 
-                <!--  Solar arc, FRONT pass. Renders the above-horizon
-                      portion of the sun's loop, the incidence ray to
-                      the PV chip, and the sun disc itself, placed AFTER
-                      every home-anchored chip so the live sun always
-                      reads on top. The card is named Helios, the sun
-                      must dominate the stack visually.  -->
-                ${showSun && arcSegmentsFront.length > 0 ? html`
+                <!--  Grid Import / Export column on the LEFT side of
+                      the home. Import = HA energy consumption blue,
+                      Export = HA energy return purple. Same straight
+                      hairline leader vocabulary as the battery
+                      column on the right. Renders only when the
+                      matching entity is configured AND has a finite
+                      reading.                                       -->
+                ${hasApiKey && layout !== null && gridImportDisplayWatts !== null && !batteryScrubFuture ? html`
+                    <svg class="grid-leader-svg">
+                        <path class="grid-import-leader-line" d="${gridImportLeaderPath}" />
+                        <!--  Moving bead, same vocabulary as the PV
+                              leader: a small disc rides the leader
+                              from the home pill out to the grid chip
+                              at a fixed cadence. Direction = OUT from
+                              home for IMPORT? No, semantically the
+                              import flows FROM the grid INTO the home,
+                              so the bead travels chip → home. -->
+                        ${gridImportBeadDur !== null ? svg`
+                            <circle class="grid-import-leader-bead" r="3.5">
+                                <animateMotion dur="${gridImportBeadDur.toFixed(2)}s" repeatCount="indefinite"
+                                               path="${gridImportLeaderPath}" />
+                            </circle>
+                        ` : nothing}
+                    </svg>
+                    <div
+                        class="grid-import-label"
+                        style="left:${layout!.gridImportLabel.x}px; top:${layout!.gridImportLabel.y}px"
+                    >
+                        <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
+                        <span>${formatGridValue(gridImportDisplayWatts, gridImportDisplayUnit)}</span>
+                    </div>
+                ` : nothing}
+                ${hasApiKey && layout !== null && gridExportDisplayWatts !== null && !batteryScrubFuture ? html`
+                    <svg class="grid-leader-svg">
+                        <path class="grid-export-leader-line" d="${gridExportLeaderPath}" />
+                        <!--  Export bead: travels FROM the home OUT to
+                              the grid chip, matching the semantic
+                              direction (energy leaving the home).
+                              keyPoints 1->0 reverses the animateMotion
+                              traversal so the bead starts at the home
+                              end of the path and ends at the chip.  -->
+                        ${gridExportBeadDur !== null ? svg`
+                            <circle class="grid-export-leader-bead" r="3.5">
+                                <animateMotion dur="${gridExportBeadDur.toFixed(2)}s" repeatCount="indefinite"
+                                               keyPoints="1;0" keyTimes="0;1"
+                                               path="${gridExportLeaderPath}" />
+                            </circle>
+                        ` : nothing}
+                    </svg>
+                    <div
+                        class="grid-export-label"
+                        style="left:${layout!.gridExportLabel.x}px; top:${layout!.gridExportLabel.y}px"
+                    >
+                        <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
+                        <span>${formatGridValue(gridExportDisplayWatts, gridExportDisplayUnit)}</span>
+                    </div>
+                ` : nothing}
+
+                <!--  Solar arc, FAR-FRONT pass. Above-horizon
+                      segments whose nearness is below the 0.5 mid-
+                      point: the arc has already arched away from the
+                      eye but is still in front of the sky dome's
+                      back wall. These render BEHIND the home-anchored
+                      chips so a chip cluster doesn't get crossed by
+                      an arc segment that visually sits "in the back
+                      half" of the sky. -->
+                ${showSun && arcSegmentsFrontFar.length > 0 ? html`
                     <svg
-                        class="solar-svg solar-svg-front"
+                        class="solar-svg solar-svg-front-far"
                         style="--solar-daylight:${sunScene!.daylight}"
                     >
-                        ${arcSegmentsFront.map(s => svg`
+                        ${arcSegmentsFrontFar.map(s => svg`
                             <line
                                 class="solar-arc-outline"
                                 x1="${s.x1}" y1="${s.y1}"
@@ -1822,7 +2244,7 @@ export class HeliosCard extends LitElement
                                     + (HeliosCard.OUTLINE_NEAR - HeliosCard.OUTLINE_FAR) * s.nearness}"
                             ></line>
                         `)}
-                        ${arcSegmentsFront.map(s => svg`
+                        ${arcSegmentsFrontFar.map(s => svg`
                             <line
                                 class="solar-arc-segment"
                                 x1="${s.x1}" y1="${s.y1}"
@@ -1832,6 +2254,49 @@ export class HeliosCard extends LitElement
                                     + (HeliosCard.SEGMENT_NEAR - HeliosCard.SEGMENT_FAR) * s.nearness}"
                             ></line>
                         `)}
+                    </svg>
+                ` : nothing}
+
+                <!--  Solar arc, NEAR-FRONT pass. Above-horizon
+                      segments whose nearness is at or above 0.5: the
+                      part of the arc that is closer to the camera
+                      than the home. These render IN FRONT of the
+                      home-anchored chips + leaders so the live arc
+                      always reads on top of the HUD on its near side.
+                      The card is named Helios, the sun must dominate
+                      visually wherever it is. -->
+                ${showSun && arcSegmentsFrontNear.length > 0 ? html`
+                    <svg
+                        class="solar-svg solar-svg-front-near"
+                        style="--solar-daylight:${sunScene!.daylight}"
+                    >
+                        ${arcSegmentsFrontNear.map(s => svg`
+                            <line
+                                class="solar-arc-outline"
+                                x1="${s.x1}" y1="${s.y1}"
+                                x2="${s.x2}" y2="${s.y2}"
+                                stroke-width="${HeliosCard.OUTLINE_FAR
+                                    + (HeliosCard.OUTLINE_NEAR - HeliosCard.OUTLINE_FAR) * s.nearness}"
+                            ></line>
+                        `)}
+                        ${arcSegmentsFrontNear.map(s => svg`
+                            <line
+                                class="solar-arc-segment"
+                                x1="${s.x1}" y1="${s.y1}"
+                                x2="${s.x2}" y2="${s.y2}"
+                                stroke="${s.color}"
+                                stroke-width="${HeliosCard.SEGMENT_FAR
+                                    + (HeliosCard.SEGMENT_NEAR - HeliosCard.SEGMENT_FAR) * s.nearness}"
+                            ></line>
+                        `)}
+                    </svg>
+                ` : nothing}
+
+                ${showSun ? html`
+                    <svg
+                        class="solar-svg solar-svg-sun ${sunScene!.sun.nearness >= 0.50 ? 'solar-svg-sun-near' : 'solar-svg-sun-far'}"
+                        style="--solar-daylight:${sunScene!.daylight}"
+                    >
                         ${showRay ? svg`
                             <line
                                 class="solar-ray"
@@ -1840,20 +2305,17 @@ export class HeliosCard extends LitElement
                                 x2="${sunRayTargetX}"    y2="${sunRayTargetY}"
                                 stroke="${sunColor}"
                             ></line>
-                            ${this._isLiveMode ? svg`
-                                <polygon
-                                    class="solar-ray-arrow"
-                                    points="-6,-4 0,0 -6,4"
-                                    fill="${sunColor}"
-                                >
-                                    <animateMotion
-                                        dur="${sunFlowDuration}s"
-                                        repeatCount="indefinite"
-                                        rotate="auto"
-                                        path="M ${sunScene!.sun.x},${sunScene!.sun.y} L ${sunRayTargetX},${sunRayTargetY}"
-                                    ></animateMotion>
-                                </polygon>
-                            ` : nothing}
+                            <circle
+                                class="solar-ray-bead"
+                                cx="${sunScene!.sun.x}" cy="${sunScene!.sun.y}" r="5"
+                                fill="${sunColor}"
+                            >
+                                <animateMotion
+                                    dur="${sunFlowDuration}s"
+                                    repeatCount="indefinite"
+                                    path="M 0,0 L ${sunRayTargetX - sunScene!.sun.x},${sunRayTargetY - sunScene!.sun.y}"
+                                ></animateMotion>
+                            </circle>
                         ` : nothing}
                         ${(() => {
                             //Sun disc, four concentric layers, painted
@@ -1969,34 +2431,27 @@ export class HeliosCard extends LitElement
                       flipped via a class so the appearance / fade is
                       a pure CSS transition, no per-frame work.  -->
                 ${hasApiKey && this._homeSilhouettes.length > 0 && !this._detailMode ? (() => {
-                    const sunColor = cfgHex(this.config?.['sun-color'], DEFAULT_SUN_COLOR_HEX);
+                    const sunColor = DEFAULT_SUN_COLOR_HEX;
+                    const silhouettePts = this._getSilhouettePoints();
+                    //Pulse on bead arrival retired in alpha.18: the
+                    //flash carved a hot spot on the home silhouette
+                    //that competed with the steady HA-Energy-blue
+                    //identity, hard to read against the cloud-cover
+                    //wash. Glow is now a static hover-only halo.
+                    const glowClasses = [
+                        'home-glow-svg',
+                        this._homeHover ? 'is-hovered' : '',
+                    ].filter(Boolean).join(' ');
                     return html`
-                        <svg class="home-glow-svg ${this._homeHover ? 'is-hovered' : ''}"
-                             style="--helios-sun-color:${sunColor}">
-                            ${this._homeSilhouettes.map(sil => {
-                                const N = Math.min(sil.base.length, sil.top.length);
-                                if (N < 3) return nothing;
-                                const basePts = sil.base.map(p => `${p.x},${p.y}`).join(' ');
-                                const topPts  = sil.top .map(p => `${p.x},${p.y}`).join(' ');
-                                const walls   = [];
-                                for (let i = 0; i < N; i++)
-                                {
-                                    const j = (i + 1) % N;
-                                    walls.push(
-                                        `${sil.base[i].x},${sil.base[i].y} ` +
-                                        `${sil.base[j].x},${sil.base[j].y} ` +
-                                        `${sil.top [j].x},${sil.top [j].y} ` +
-                                        `${sil.top [i].x},${sil.top [i].y}`
-                                    );
-                                }
-                                return svg`
-                                    <polygon class="home-glow-shape" points="${basePts}" />
-                                    <polygon class="home-glow-shape" points="${topPts}"  />
-                                    ${walls.map(w => svg`
-                                        <polygon class="home-glow-shape" points="${w}" />
-                                    `)}
-                                `;
-                            })}
+                        <svg class="${glowClasses}"
+                             style="--helios-sun-color:${sunColor};--pv-leader-color:${pvColor};--pv-flow-duration:${pvFlowDuration}s">
+                            ${silhouettePts.map(sil => sil === null ? nothing : svg`
+                                <polygon class="home-glow-shape" points="${sil.base}" />
+                                <polygon class="home-glow-shape" points="${sil.top}" />
+                                ${sil.walls.map(w => svg`
+                                    <polygon class="home-glow-shape" points="${w}" />
+                                `)}
+                            `)}
                         </svg>
                     `;
                 })() : nothing}
@@ -2016,6 +2471,33 @@ export class HeliosCard extends LitElement
                         @mouseleave="${this._onHomeLeave}"
                     ></div>
                 ` : nothing}
+
+                <!--  Home pill: a small circular node painted exactly
+                      at the projected home centre. Every chip leader
+                      docks against its border so the cluster reads as
+                      a single energy hub, the same vocabulary HA's
+                      Energy distribution card uses for its central
+                      home node.                                       -->
+                ${hasApiKey && layout !== null && !this._detailMode ? html`
+                    <!--  Solid drop-leader from the home pill DOWN to
+                          the projected ground at the home (lat, lon).
+                          Same vocabulary as the other home-anchored
+                          leaders (stroke-width 2, round caps), painted
+                          in the HA primary colour so it reads as the
+                          family signature of the home cluster.        -->
+                    <svg class="home-drop-leader-svg">
+                        <line class="home-drop-leader-line"
+                              x1="${layout!.home.x}" y1="${layout!.home.y + 14}"
+                              x2="${layout!.home.x}" y2="${layout!.home.y + 60}" />
+                    </svg>
+                    <div
+                        class="home-pill"
+                        style="left:${layout!.home.x}px; top:${layout!.home.y}px"
+                    >
+                        <ha-icon icon="mdi:home"></ha-icon>
+                    </div>
+                ` : nothing}
+
 
                 <!--  Detail dashboard overlay, takes over the card
                       while _detailMode is on. The CSS class
@@ -2041,10 +2523,7 @@ export class HeliosCard extends LitElement
                     refreshShadingDomeScene(this);
                     this.requestUpdate();
                 }) : nothing}
-                ${renderLidarViewOpacityPicker(this, (opacity) => {
-                    this._lidarViewOpacity = opacity;
-                    this._engine?.setLidarViewOpacity(opacity);
-                })}
+                ${renderLidarViewOpacityPicker(this, this._onLidarOpacityChange)}
 
             </ha-card>
         `;
@@ -2059,12 +2538,16 @@ export class HeliosCard extends LitElement
     //Hass swaps the config reference whenever the user edits it, so identity equality is the right invalidation signal.
     private _cachedBatteryBanks?: BatteryBank[];
     private _cachedBatteryBanksCfg?: HeliosConfig;
+    private _cachedBatteryBanksDefaults?: EnergyDefaults;
     private _getBatteryBanks(): BatteryBank[]
     {
-        if (this.config !== this._cachedBatteryBanksCfg || !this._cachedBatteryBanks)
+        if (this.config !== this._cachedBatteryBanksCfg
+            || this._energyDefaults !== this._cachedBatteryBanksDefaults
+            || !this._cachedBatteryBanks)
         {
-            this._cachedBatteryBanks    = parseBatteryBanks(this.config);
-            this._cachedBatteryBanksCfg = this.config;
+            this._cachedBatteryBanks         = effectiveBatteryBanks(this.config, this._energyDefaults);
+            this._cachedBatteryBanksCfg      = this.config;
+            this._cachedBatteryBanksDefaults = this._energyDefaults;
         }
         return this._cachedBatteryBanks;
     }
@@ -2078,6 +2561,67 @@ export class HeliosCard extends LitElement
     private _onHomeLeave = (): void =>
     {
         this._homeHover = false;
+    };
+
+    //LiDAR opacity slider, rAF-coalesced. The native <input
+    //type="range"> fires @input on every pointer step (up to ~50
+    //Hz on hi-rate devices). Each call hit setLidarViewOpacity
+    //which triggers a full MapLibre repaint, basemap tiles plus
+    //building extrusions plus night-shade plus the LiDAR custom
+    //layer. Coalescing to one rAF reduces the repaint storm to one
+    //per frame at most, no perceived slider lag.
+    private _pendingLidarOpacity: number | null = null;
+    private _lidarOpacityRaf:     number       = 0;
+    private _onLidarOpacityChange = (opacity: number): void =>
+    {
+        this._pendingLidarOpacity = opacity;
+        if (this._lidarOpacityRaf) return;
+        this._lidarOpacityRaf = requestAnimationFrame(() =>
+        {
+            this._lidarOpacityRaf = 0;
+            const v = this._pendingLidarOpacity;
+            if (v === null) return;
+            this._lidarViewOpacity = v;
+            this._engine?.setLidarViewOpacity(v);
+        });
+    };
+
+
+    //Bound mode-bar handlers. Class fields rather than inline arrow
+    //expressions inside render() so Lit sees a stable identity and
+    //does not re-attach the four @click handlers on every render
+    //cycle (template re-attach cost + closure allocation).
+    private _onModeLayer = (): void =>
+    {
+        if (this._lidarViewMode)   toggleLidarView(this);
+        if (this._shadingDomeMode) toggleShadingDome(this);
+        //Cloud detail toggle is a simple ON/OFF, not a full-screen
+        //mode: leaving it on while the user switches back to the
+        //default layer keeps the 3 layer chips visible.
+    };
+    //Cloud cover detail toggle. ON reveals 3 chips (low / mid /
+    //high) under the central cloud chip; OFF leaves only the
+    //aggregate cloud chip. The aggregate chip itself doubles as the
+    //toggle button (see render block + _onCloudChipToggle below).
+    private _onCloudChipToggle = (): void =>
+    {
+        this._cloudDomeMode = !this._cloudDomeMode;
+    };
+    private _onModeLidar = (): void =>
+    {
+        if (this._shadingDomeMode) toggleShadingDome(this);
+        //LiDAR and Shading replace the whole HUD; force the per-layer
+        //cloud expansion back to OFF so the 3 layer chips don't leak
+        //through. The aggregate cloud chip itself is already hidden
+        //by the .cloud-dome-active CSS family.
+        this._cloudDomeMode = false;
+        if (!this._lidarViewMode)  toggleLidarView(this);
+    };
+    private _onModeShadingDome = (): void =>
+    {
+        if (this._lidarViewMode)   toggleLidarView(this);
+        this._cloudDomeMode = false;
+        if (!this._shadingDomeMode) toggleShadingDome(this);
     };
 
     static styles = heliosCardStyles;
