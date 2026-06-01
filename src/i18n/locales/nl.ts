@@ -125,7 +125,7 @@ export const nl: Translations = {
         gridSourceAdd:      'Bron toevoegen',
         gridSourceRemove:   'Verwijderen',
         gridCombinedTitle:  'Gecombineerde entiteit',
-        gridCombinedHint:   'Eén sensor met teken waarvan de waarde de richting aangeeft (Fronius P_Grid, Shelly EM, P1 netto vermogen…). Indien ingesteld voedt deze beide chips en worden de aparte import-/exportentiteiten hieronder verborgen. Accepteert een vermogenssensor (W / kW) of een netto-energiesensor met teken (kWh die kan dalen bij teruglevering).',
+        gridCombinedHint:   'Eén sensor met teken waarvan de waarde de richting aangeeft. Indien ingesteld voedt deze beide chips en worden de aparte import-/exportentiteiten hieronder verborgen. Accepteert een vermogenssensor (W / kW) of een netto-energiesensor met teken (kWh die kan dalen bij teruglevering).',
         gridInvertLabel:    'Tekenconventie',
         gridInvertStandard: '+ = afname',
         gridInvertInverted: '+ = teruglevering',

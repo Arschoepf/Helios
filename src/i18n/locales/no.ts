@@ -134,7 +134,7 @@ export const no: Translations = {
         gridSourceAdd:      'Legg til en kilde',
         gridSourceRemove:   'Fjern',
         gridCombinedTitle:  'Kombinert enhet',
-        gridCombinedHint:   'En enkelt sensor med fortegn der verdien angir retningen (Fronius P_Grid, Shelly EM, P1 netto effekt…). Når den er satt, mater den begge brikkene, og de separate import-/eksportenhetene nedenfor skjules. Godtar en effektsensor (W / kW) eller en netto energisensor med fortegn (kWh som kan synke ved eksport).',
+        gridCombinedHint:   'En enkelt sensor med fortegn der verdien angir retningen. Når den er satt, mater den begge brikkene, og de separate import-/eksportenhetene nedenfor skjules. Godtar en effektsensor (W / kW) eller en netto energisensor med fortegn (kWh som kan synke ved eksport).',
         gridInvertLabel:    'Fortegnskonvensjon',
         gridInvertStandard: '+ = import',
         gridInvertInverted: '+ = eksport',

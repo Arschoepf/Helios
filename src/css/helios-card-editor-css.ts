@@ -380,10 +380,18 @@ export const editorStyles = css`
     .camera-block
     {
         margin-top: 12px;
+        margin-bottom: 16px;
         padding: 10px 12px 8px;
         border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
         border-radius: 6px;
         background: var(--secondary-background-color, rgba(0, 0, 0, 0.02));
+    }
+    /*  Breathing room under the entity picker row in every grid slot
+        (combined, import, export) so the invert toggle / "add source"
+        button does not crowd the dropdown. */
+    .grid-source-row
+    {
+        margin-bottom: 12px;
     }
     .camera-reset-row
     {

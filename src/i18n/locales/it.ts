@@ -125,7 +125,7 @@ export const it: Translations = {
         gridSourceAdd:      'Aggiungi una sorgente',
         gridSourceRemove:   'Rimuovi',
         gridCombinedTitle:  'Entità combinata',
-        gridCombinedHint:   'Un singolo sensore con segno il cui valore indica la direzione (Fronius P_Grid, Shelly EM, potenza netta P1…). Quando è impostato alimenta entrambi i chip e le entità separate di importazione / esportazione sotto vengono nascoste. Accetta un sensore di potenza (W / kW) o un sensore di energia netta con segno (kWh che può diminuire durante l’immissione).',
+        gridCombinedHint:   'Un singolo sensore con segno il cui valore indica la direzione. Quando è impostato alimenta entrambi i chip e le entità separate di importazione / esportazione sotto vengono nascoste. Accetta un sensore di potenza (W / kW) o un sensore di energia netta con segno (kWh che può diminuire durante l’immissione).',
         gridInvertLabel:    'Convenzione del segno',
         gridInvertStandard: '+ = prelievo',
         gridInvertInverted: '+ = immissione',

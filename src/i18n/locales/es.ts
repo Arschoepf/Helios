@@ -125,7 +125,7 @@ export const es: Translations = {
         gridSourceAdd:      'Añadir una fuente',
         gridSourceRemove:   'Quitar',
         gridCombinedTitle:  'Entidad combinada',
-        gridCombinedHint:   'Un único sensor con signo cuyo valor indica el sentido (Fronius P_Grid, Shelly EM, potencia neta P1…). Cuando se define, alimenta ambas etiquetas y las entidades de importación / exportación separadas de abajo se ocultan. Admite un sensor de potencia (W / kW) o un sensor de energía neta con signo (kWh que puede bajar al exportar).',
+        gridCombinedHint:   'Un único sensor con signo cuyo valor indica el sentido. Cuando se define, alimenta ambas etiquetas y las entidades de importación / exportación separadas de abajo se ocultan. Admite un sensor de potencia (W / kW) o un sensor de energía neta con signo (kWh que puede bajar al exportar).',
         gridInvertLabel:    'Convención de signo',
         gridInvertStandard: '+ = importación',
         gridInvertInverted: '+ = exportación',

@@ -125,7 +125,7 @@ export const pt: Translations = {
         gridSourceAdd:      'Adicionar uma fonte',
         gridSourceRemove:   'Remover',
         gridCombinedTitle:  'Entidade combinada',
-        gridCombinedHint:   'Um único sensor com sinal cujo valor indica o sentido (Fronius P_Grid, Shelly EM, potência líquida P1…). Quando definido, alimenta ambos os chips e as entidades separadas de importação / exportação abaixo ficam ocultas. Aceita um sensor de potência (W / kW) ou um sensor de energia líquida com sinal (kWh que pode descer ao exportar).',
+        gridCombinedHint:   'Um único sensor com sinal cujo valor indica o sentido. Quando definido, alimenta ambos os chips e as entidades separadas de importação / exportação abaixo ficam ocultas. Aceita um sensor de potência (W / kW) ou um sensor de energia líquida com sinal (kWh que pode descer ao exportar).',
         gridInvertLabel:    'Convenção de sinal',
         gridInvertStandard: '+ = importação',
         gridInvertInverted: '+ = exportação',

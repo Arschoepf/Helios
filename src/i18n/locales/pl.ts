@@ -127,7 +127,7 @@ export const pl: Translations = {
         gridSourceAdd:      'Dodaj źródło',
         gridSourceRemove:   'Usuń',
         gridCombinedTitle:  'Encja łączona',
-        gridCombinedHint:   'Pojedynczy czujnik ze znakiem, którego wartość określa kierunek (Fronius P_Grid, Shelly EM, moc netto P1…). Po ustawieniu zasila oba znaczniki, a osobne encje importu / eksportu poniżej są ukrywane. Przyjmuje czujnik mocy (W / kW) lub czujnik energii netto ze znakiem (kWh, który może maleć podczas oddawania).',
+        gridCombinedHint:   'Pojedynczy czujnik ze znakiem, którego wartość określa kierunek. Po ustawieniu zasila oba znaczniki, a osobne encje importu / eksportu poniżej są ukrywane. Przyjmuje czujnik mocy (W / kW) lub czujnik energii netto ze znakiem (kWh, który może maleć podczas oddawania).',
         gridInvertLabel:    'Konwencja znaku',
         gridInvertStandard: '+ = pobór',
         gridInvertInverted: '+ = oddawanie',

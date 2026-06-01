@@ -125,7 +125,7 @@ export const de: Translations = {
         gridSourceAdd:      'Quelle hinzufügen',
         gridSourceRemove:   'Entfernen',
         gridCombinedTitle:  'Kombinierte Entität',
-        gridCombinedHint:   'Ein einzelner vorzeichenbehafteter Sensor, dessen Wert die Richtung trägt (Fronius P_Grid, Shelly EM, P1-Netto-Leistung…). Sobald gesetzt, speist er beide Chips, und die getrennten Import-/Export-Entitäten unten werden ausgeblendet. Akzeptiert einen Leistungssensor (W / kW) oder einen vorzeichenbehafteten Netto-Energiesensor (kWh, der bei Einspeisung fallen kann).',
+        gridCombinedHint:   'Ein einzelner vorzeichenbehafteter Sensor, dessen Wert die Richtung trägt. Sobald gesetzt, speist er beide Chips, und die getrennten Import-/Export-Entitäten unten werden ausgeblendet. Akzeptiert einen Leistungssensor (W / kW) oder einen vorzeichenbehafteten Netto-Energiesensor (kWh, der bei Einspeisung fallen kann).',
         gridInvertLabel:    'Vorzeichenkonvention',
         gridInvertStandard: '+ = Bezug',
         gridInvertInverted: '+ = Einspeisung',

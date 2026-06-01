@@ -132,7 +132,7 @@ export const fr: Translations = {
         gridSourceAdd:      'Ajouter une source',
         gridSourceRemove:   'Retirer',
         gridCombinedTitle:  'Entité combinée',
-        gridCombinedHint:   'Un seul capteur signé dont la valeur porte le sens du flux (Fronius P_Grid, Shelly EM, puissance nette Linky/P1…). Une fois renseigné, il alimente les deux pastilles et les entités import / export séparées ci-dessous sont masquées. Accepte un capteur de puissance (W / kW) ou un capteur d’énergie nette signé (kWh pouvant diminuer lors d’une injection).',
+        gridCombinedHint:   'Un seul capteur signé dont la valeur porte le sens du flux. Une fois renseigné, il alimente les deux pastilles et les entités import / export séparées ci-dessous sont masquées. Accepte un capteur de puissance (W / kW) ou un capteur d’énergie nette signé (kWh pouvant diminuer lors d’une injection).',
         gridInvertLabel:    'Convention de signe',
         gridInvertStandard: '+ = soutirage',
         gridInvertInverted: '+ = injection',

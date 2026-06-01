@@ -127,7 +127,7 @@ export const sv: Translations = {
         gridSourceAdd:      'Lägg till en källa',
         gridSourceRemove:   'Ta bort',
         gridCombinedTitle:  'Kombinerad entitet',
-        gridCombinedHint:   'En enda sensor med tecken vars värde anger riktningen (Fronius P_Grid, Shelly EM, P1 netto-effekt…). När den är angiven matar den båda chipsen och de separata import-/exportentiteterna nedan döljs. Godtar en effektsensor (W / kW) eller en netto-energisensor med tecken (kWh som kan minska vid export).',
+        gridCombinedHint:   'En enda sensor med tecken vars värde anger riktningen. När den är angiven matar den båda chipsen och de separata import-/exportentiteterna nedan döljs. Godtar en effektsensor (W / kW) eller en netto-energisensor med tecken (kWh som kan minska vid export).',
         gridInvertLabel:    'Teckenkonvention',
         gridInvertStandard: '+ = import',
         gridInvertInverted: '+ = export',

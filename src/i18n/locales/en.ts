@@ -135,7 +135,7 @@ export const en: Translations = {
         gridSourceAdd:      'Add a source',
         gridSourceRemove:   'Remove',
         gridCombinedTitle:  'Combined entity',
-        gridCombinedHint:   'A single signed sensor whose value carries the direction (Fronius P_Grid, Shelly EM, P1 net power…). When set it drives both chips and the separate import / export entities below are hidden. Accepts a power sensor (W / kW) or a signed net-energy sensor (kWh that can fall while exporting).',
+        gridCombinedHint:   'A single signed sensor whose value carries the direction. When set it drives both chips and the separate import / export entities below are hidden. Accepts a power sensor (W / kW) or a signed net-energy sensor (kWh that can fall while exporting).',
         gridInvertLabel:    'Sign convention',
         gridInvertStandard: '+ = import',
         gridInvertInverted: '+ = export',

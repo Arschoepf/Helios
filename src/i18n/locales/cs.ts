@@ -127,7 +127,7 @@ export const cs: Translations = {
         gridSourceAdd:      'Přidat zdroj',
         gridSourceRemove:   'Odstranit',
         gridCombinedTitle:  'Kombinovaná entita',
-        gridCombinedHint:   'Jediný senzor se znaménkem, jehož hodnota udává směr (Fronius P_Grid, Shelly EM, čistý výkon P1…). Když je nastaven, napájí oba čipy a samostatné entity importu / exportu níže se skryjí. Přijímá senzor výkonu (W / kW) nebo znaménkový senzor čisté energie (kWh, která může při dodávce klesat).',
+        gridCombinedHint:   'Jediný senzor se znaménkem, jehož hodnota udává směr. Když je nastaven, napájí oba čipy a samostatné entity importu / exportu níže se skryjí. Přijímá senzor výkonu (W / kW) nebo znaménkový senzor čisté energie (kWh, která může při dodávce klesat).',
         gridInvertLabel:    'Konvence znaménka',
         gridInvertStandard: '+ = odběr',
         gridInvertInverted: '+ = dodávka',

@@ -7,6 +7,18 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.1
+
+- Editor polish: 16 px bottom margin on the Camera block so it
+  no longer kisses the pixel-ratio segmented toggle below, and a
+  12 px bottom margin on every `grid-source-row` so the combined
+  entity picker (and the import / export pickers next to it) get
+  air before the invert toggle / "add source" row underneath.
+- Combined grid entity hint: dropped the inline brand list
+  (Fronius P_Grid, Shelly EM, P1 net power, ...) from all 11
+  locales; the YAML config doc carries the example list, the
+  in-editor hint stays focused on what the field expects.
+
 ### alpha.0
 
 ### Camera pose control
