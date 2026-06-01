@@ -5,7 +5,38 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
-## Unreleased
+## v1.8.2
+
+### alpha.0
+
+### Camera pose control
+
+New UI section in the editor for pinning the resting camera pose
+and / or locking it. Three new config keys:
+
+- `camera-pitch-deg` (15..85), vertical tilt baked into every
+  engine init. The slider in the editor previews live as you drag.
+- `camera-bearing-deg` (0..359), horizontal rotation, same live
+  preview. Wraps to `[0, 360)` so a stale 720 deg in the YAML
+  reads as 0 instead of putting the map in an unreachable pose.
+- `camera-locked` (boolean), when on, manual drag-rotate +
+  drag-pitch are inert on the canvas, pinch-rotate is disabled
+  too, and the idle auto-orbit is suspended so the configured pose
+  is the only pose the user ever sees. Lock + auto-rotate are
+  mutually exclusive at runtime, the auto-orbit code reads the
+  lock flag every tick.
+
+Editor: "Camera" block inside the UI section with a pitch slider,
+a bearing slider, a lock toggle, and a "Reset" button anchored
+bottom-right that clears all three keys, releases the lock and
+drives the engine back to the hemisphere-aware default pose
+(north up in SH, south up in NH, pitch 55).
+
+Live preview rides the engine directly via setCameraBearing /
+setCameraPitch / setCameraLocked instead of going through a
+config commit, so a slider drag never respawns the WebGL context.
+The values are written to YAML in parallel (debounced) so the
+next natural respawn boots from the chosen pose.
 
 ### Combined signed grid entity
 

@@ -435,6 +435,127 @@ export class HeliosCardEditor extends LitElement
         this._sliderDebounce.set(k, t);
     }
 
+    //Pull the live HeliosEngine off the global the engine constructor
+    //exposes. Used by the camera section to drive its sliders in real
+    //time: setCameraBearing / setCameraPitch / setCameraLocked land
+    //immediately on the visible map instead of waiting for the
+    //debounced config-changed event to bake the new value into the
+    //engine's resting pose. undefined while no engine has booted yet
+    //(fresh editor open on a card that just mounted).
+    private _engine(): { setCameraBearing: (d: number) => void;
+                         setCameraPitch:   (d: number) => void;
+                         setCameraLocked:  (l: boolean) => void;
+                         getCameraBearing: () => number;
+                         getCameraPitch:   () => number;
+                         getDefaultBearing: () => number;
+                         getDefaultPitch:  () => number; } | undefined
+    {
+        return (window as unknown as {
+            __heliosEngine?: {
+                setCameraBearing: (d: number) => void;
+                setCameraPitch:   (d: number) => void;
+                setCameraLocked:  (l: boolean) => void;
+                getCameraBearing: () => number;
+                getCameraPitch:   () => number;
+                getDefaultBearing: () => number;
+                getDefaultPitch:  () => number;
+            }
+        }).__heliosEngine;
+    }
+
+    //Resolve the pose value shown in the slider thumb. Reads the
+    //config first (the persisted user choice), then the live map
+    //pose when no config is set (so the slider boots on the camera's
+    //current angle rather than zero), then the engine's default as
+    //a last resort when the engine has not booted yet.
+    private _readCameraBearing(): number
+    {
+        const cfg = this._cfg as Record<string, unknown> | undefined;
+        const raw = Number(cfg?.['camera-bearing-deg']);
+        if (Number.isFinite(raw)) return ((raw % 360) + 360) % 360;
+        const e = this._engine();
+        return e ? Math.round(((e.getCameraBearing() % 360) + 360) % 360) : 0;
+    }
+    private _readCameraPitch(): number
+    {
+        const cfg = this._cfg as Record<string, unknown> | undefined;
+        const raw = Number(cfg?.['camera-pitch-deg']);
+        if (Number.isFinite(raw)) return Math.max(15, Math.min(85, raw));
+        const e = this._engine();
+        return e ? Math.max(15, Math.min(85, Math.round(e.getCameraPitch()))) : 55;
+    }
+    private _readCameraLocked(): boolean
+    {
+        return (this._cfg as Record<string, unknown> | undefined)?.['camera-locked'] === true;
+    }
+
+    //Write helpers, push live to the engine THEN commit the value
+    //to the YAML config so the next engine respawn (page reload,
+    //theme flip, ...) picks up the same pose. Live update is not
+    //debounced, the config commit is (via _update via the existing
+    //SLIDER_COMMIT_DELAY_MS path, see _cameraSlider below).
+    private _writeCameraBearing(deg: number): void
+    {
+        const e = this._engine();
+        if (e) e.setCameraBearing(deg);
+        this._cameraCommit('camera-bearing-deg', ((deg % 360) + 360) % 360);
+    }
+    private _writeCameraPitch(deg: number): void
+    {
+        const clamped = Math.max(15, Math.min(85, deg));
+        const e       = this._engine();
+        if (e) e.setCameraPitch(clamped);
+        this._cameraCommit('camera-pitch-deg', clamped);
+    }
+    private _writeCameraLocked(locked: boolean): void
+    {
+        const e = this._engine();
+        if (e) e.setCameraLocked(locked);
+        //Default (false) is the absent state, so only persist the
+        //flag when the user is actively locking.
+        const next = { ...this._cfg } as Record<string, unknown>;
+        if (locked) next['camera-locked'] = true;
+        else        delete next['camera-locked'];
+        this._cfg = next as HeliosConfig;
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+    }
+    //Reset every camera knob to its boot default: clear all three
+    //config keys (so the YAML stays tidy), drive the engine back to
+    //the hemisphere-aware pose, and release the lock. The sliders
+    //re-render from the live engine values on the next Lit cycle.
+    private _resetCamera(): void
+    {
+        const e    = this._engine();
+        const next = { ...this._cfg } as Record<string, unknown>;
+        delete next['camera-bearing-deg'];
+        delete next['camera-pitch-deg'];
+        delete next['camera-locked'];
+        this._cfg = next as HeliosConfig;
+        if (e)
+        {
+            e.setCameraLocked(false);
+            e.setCameraBearing(e.getDefaultBearing());
+            e.setCameraPitch(e.getDefaultPitch());
+        }
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+    }
+    //Slider input dispatcher: synchronous live preview + debounced
+    //config commit, mirroring _numSlider but routed through the
+    //write helpers above so the engine setters fire on every tick.
+    private _cameraCommit(key: 'camera-bearing-deg' | 'camera-pitch-deg', value: number): void
+    {
+        this._cfg = { ...this._cfg, [key]: value } as HeliosConfig;
+        const existing = this._sliderDebounce.get(key);
+        if (existing !== undefined) window.clearTimeout(existing);
+        const t = window.setTimeout(() =>
+        {
+            this._sliderDebounce.delete(key);
+            this.dispatchEvent(new CustomEvent('config-changed',
+                { detail: { config: this._cfg } }));
+        }, HeliosCardEditor.SLIDER_COMMIT_DELAY_MS);
+        this._sliderDebounce.set(key, t);
+    }
+
     //Reads the configured PV layout into the shape the editor's
     //repeatable section consumes. Always returns at least one entry
     //so the section always has a card to render:
@@ -1291,6 +1412,57 @@ export class HeliosCardEditor extends LitElement
                         </div>
                     </div>
                     <div class="hint">${t.editor.autoRotateHint}</div>
+
+                    <div class="camera-block">
+                        <div class="grid-slot-title">${t.editor.cameraTitle}</div>
+                        <div class="hint">${t.editor.cameraHint}</div>
+                        <label class="field">
+                            <span class="label">${t.editor.cameraPitch}</span>
+                            <div class="slider-row">
+                                <input
+                                    type="range" min="15" max="85" step="1"
+                                    .value="${String(this._readCameraPitch())}"
+                                    @input="${(e: Event) => this._writeCameraPitch(parseFloat((e.target as HTMLInputElement).value))}"
+                                />
+                                <span class="slider-value">${this._readCameraPitch()}°</span>
+                            </div>
+                        </label>
+                        <label class="field">
+                            <span class="label">${t.editor.cameraBearing}</span>
+                            <div class="slider-row">
+                                <input
+                                    type="range" min="0" max="359" step="1"
+                                    .value="${String(this._readCameraBearing())}"
+                                    @input="${(e: Event) => this._writeCameraBearing(parseFloat((e.target as HTMLInputElement).value))}"
+                                />
+                                <span class="slider-value">${this._readCameraBearing()}°</span>
+                            </div>
+                        </label>
+                        <div class="field">
+                            <span class="label">${t.editor.cameraLocked}</span>
+                            <div class="segmented-toggle">
+                                <button
+                                    type="button"
+                                    class="seg-option ${this._readCameraLocked() ? 'active' : ''}"
+                                    @click="${() => this._writeCameraLocked(true)}"
+                                >${t.editor.cameraLockedOn}</button>
+                                <button
+                                    type="button"
+                                    class="seg-option ${!this._readCameraLocked() ? 'active' : ''}"
+                                    @click="${() => this._writeCameraLocked(false)}"
+                                >${t.editor.cameraLockedOff}</button>
+                            </div>
+                        </div>
+                        <div class="field-help">${t.editor.cameraLockedHelp}</div>
+                        <div class="camera-reset-row">
+                            <button
+                                type="button"
+                                class="camera-reset-btn"
+                                @click="${() => this._resetCamera()}"
+                            >${t.editor.cameraReset}</button>
+                        </div>
+                    </div>
+
                     <div class="field">
                         <span class="label">${t.editor.pixelRatio}</span>
                         <div class="segmented-toggle">

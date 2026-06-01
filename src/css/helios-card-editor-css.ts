@@ -371,6 +371,43 @@ export const editorStyles = css`
         border-radius: 3px;
     }
 
+    /*  Camera section, lives inside the UI accordion. Bordered to
+        read as one composite control (pitch slider, bearing slider,
+        lock toggle, reset action) rather than four loose fields. The
+        reset row is anchored bottom-right via flex so the action
+        sits where users expect a destructive escape hatch on a
+        chunk of inputs. */
+    .camera-block
+    {
+        margin-top: 12px;
+        padding: 10px 12px 8px;
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border-radius: 6px;
+        background: var(--secondary-background-color, rgba(0, 0, 0, 0.02));
+    }
+    .camera-reset-row
+    {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 6px;
+    }
+    .camera-reset-btn
+    {
+        appearance: none;
+        background: transparent;
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.18));
+        color: var(--secondary-text-color, #727272);
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .camera-reset-btn:hover
+    {
+        border-color: var(--primary-color, #03a9f4);
+        color: var(--primary-color, #03a9f4);
+    }
+
     /*  One bordered card per PV array entry. Now a <details> so
         the user can collapse individual arrays once they're set up
         and keep the editor short. The card frame stays whether

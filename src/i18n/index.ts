@@ -107,6 +107,15 @@ export interface Translations
         autoRotateHint:           string;
         autoRotateOn:             string;
         autoRotateOff:            string;
+        cameraTitle:              string;
+        cameraHint:               string;
+        cameraPitch:              string;
+        cameraBearing:            string;
+        cameraLocked:             string;
+        cameraLockedOn:           string;
+        cameraLockedOff:          string;
+        cameraLockedHelp:         string;
+        cameraReset:              string;
         dateFormat:               string;
         dateFormatHelp:           string;
         timeFormat:               string;

@@ -505,6 +505,81 @@ export class HeliosEngine
         return this.map !== undefined;
     }
 
+    //Resting-pose helpers. Read the user-configured `camera-bearing-deg`
+    /// `camera-pitch-deg` if set, otherwise fall back to the hemisphere-
+    //aware default bearing (north up in SH, south up in NH) and the
+    //55 deg pitch tuned for the 3D scene. The returned values are
+    //clamped to the same bounds the manual drag handlers enforce so a
+    //stale YAML value can never put the camera in an unrenderable pose.
+    private _initialBearing(): number
+    {
+        const raw = Number((this.cfg as Record<string, unknown>)['camera-bearing-deg']);
+        if (Number.isFinite(raw))
+        {
+            //Wrap into [0, 360) so 720 deg, -45 deg etc all become valid.
+            const wrapped = ((raw % 360) + 360) % 360;
+            return wrapped;
+        }
+        return this.homeLat >= 0 ? 180 : 0;
+    }
+    private _initialPitch(): number
+    {
+        const raw = Number((this.cfg as Record<string, unknown>)['camera-pitch-deg']);
+        if (Number.isFinite(raw))
+        {
+            return Math.max(15, Math.min(85, raw));
+        }
+        return 55;
+    }
+    //True when manual drag-rotate / drag-pitch + the idle auto-orbit
+    //should all be suppressed because the user opted into a locked
+    //camera pose. Consumed by the canvas pointer handlers and the
+    //auto-rotate rAF loop.
+    public isCameraLocked(): boolean
+    {
+        return (this.cfg as Record<string, unknown>)['camera-locked'] === true;
+    }
+    //Live setter so the editor's slider can preview a new bearing
+    //without waiting for the next config commit. Wraps to [0, 360).
+    public setCameraBearing(deg: number): void
+    {
+        if (!this.map || !Number.isFinite(deg)) return;
+        const wrapped = ((deg % 360) + 360) % 360;
+        this.map.setBearing(wrapped);
+    }
+    //Live setter for the editor's pitch slider, clamped to the same
+    //bounds the drag-pitch handler enforces.
+    public setCameraPitch(deg: number): void
+    {
+        if (!this.map || !Number.isFinite(deg)) return;
+        const clamped = Math.max(15, Math.min(85, deg));
+        this.map.setPitch(clamped);
+    }
+    //Toggle the lock at runtime so the editor's switch can apply
+    //immediately without a respawn. Flips the pinch-rotate handler;
+    //the pointer drag-rotate gate re-evaluates isCameraLocked() on
+    //every pointerdown so its branch picks up the new state too.
+    //The cfg is mutated in-place so the rAF auto-rotate loop reads
+    //the new value on its very next tick.
+    public setCameraLocked(locked: boolean): void
+    {
+        if (!this.map) return;
+        (this.cfg as Record<string, unknown>)['camera-locked'] = locked;
+        if (locked) this.map.touchZoomRotate.disable();
+        else        this.map.touchZoomRotate.enable({ around: 'center' });
+    }
+    //Out-of-config defaults that the editor's reset button restores.
+    //Always the hemisphere-aware boot pose, never the user's
+    //customised values; reading from _initialBearing / _initialPitch
+    //here would simply echo back whatever the user just changed.
+    public getDefaultBearing(): number { return this.homeLat >= 0 ? 180 : 0; }
+    public getDefaultPitch():   number { return 55; }
+    //Live camera pose readers so the editor can pre-fill its sliders
+    //with whatever the user is currently looking at, not just the
+    //value committed to the YAML config.
+    public getCameraBearing(): number { return this.map ? this.map.getBearing() : this.getDefaultBearing(); }
+    public getCameraPitch():   number { return this.map ? this.map.getPitch()   : this.getDefaultPitch(); }
+
     //Auto-rotation state. The map slowly orbits the home in the
     //opposite direction to the sun's apparent motion (decreasing
     //bearing, ~1.5°/s) when the user has been idle for a few
@@ -759,8 +834,8 @@ export class HeliosEngine
             style:           styleInfo.url,
             center:          haCoords,
             zoom:            18,
-            pitch:           55,
-            bearing:         this.homeLat >= 0 ? 180 : 0,
+            pitch:           this._initialPitch(),
+            bearing:         this._initialBearing(),
             //Zoom is locked to the resting pose. The 3D camera + LiDAR overlay are tuned for this single altitude, and letting the user wander
             //off-zoom only opened the door to "why does my card look different from the docs" screenshots. detail-mode separately raises maxZoom for
             //its dive animation and resets it on exit.
@@ -826,10 +901,22 @@ export class HeliosEngine
         try { (window as unknown as { __heliosMap?: MapLibreMap }).__heliosMap = this.map; }
         catch (_) {}
 
+        //Sibling global for the editor's UI: the camera slider /
+        //lock toggle needs setCameraBearing / setCameraPitch /
+        //setCameraLocked, which live on this engine instance, not on
+        //the bare map. Same cheap "anyone with dev-tools already has
+        //the page" argument as __heliosMap above.
+        try { (window as unknown as { __heliosEngine?: HeliosEngine }).__heliosEngine = this; }
+        catch (_) {}
+
         //Lock the pinch-rotate pivot to the canvas centre. By default, TwoFingersTouchZoomRotateHandler rotates around the centroid of the two
         //fingers, visually, the home orbits around the pinch point during the gesture, very obvious on small cards. `around: 'center'` forces the
         //pivot to be the screen centre, which is exactly where the home projects, so the home stays pinned no matter where the fingers land.
-        this.map.touchZoomRotate.enable({ around: 'center' });
+        //
+        //When camera-locked is true the pinch-rotate is disabled too so
+        //the configured pose is the only pose the user ever sees.
+        if (this.isCameraLocked()) this.map.touchZoomRotate.disable();
+        else                       this.map.touchZoomRotate.enable({ around: 'center' });
 
         //Hard pin the map centre on every user-driven transform: the
         //home must never leave the dead-centre of the card during a
@@ -995,6 +1082,12 @@ export class HeliosEngine
             //Swallow gestures during the post-exit cooldown so the click that dismissed the dashboard panel can't bleed into a fresh drag-rotate on
             //the canvas behind.
             if (this.isUserGestureSuppressed()) return;
+            //camera-locked: the user opted into a fixed pose so manual
+            //drag-rotate / drag-pitch are inert. The toggle is exposed
+            //in the editor UI section and is re-evaluated on every
+            //pointerdown so flipping it in live preview disengages
+            //immediately without an engine respawn.
+            if (this.isCameraLocked()) return;
             dragRotating = true;
             activeId     = e.pointerId;
             lastPointerX = e.clientX;
@@ -3021,9 +3114,11 @@ export class HeliosEngine
         {
             center:   [this.homeLon, this.homeLat],
             zoom:     18,
-            pitch:    55,
-            //Same hemisphere-aware bearing as the initial setup above, recentering must restore the resting pose, not flip the orientation.
-            bearing:  this.homeLat >= 0 ? 180 : 0,
+            //Restores the configured resting pose (camera-pitch-deg /
+            //camera-bearing-deg) when set, otherwise falls back to the
+            //hemisphere-aware defaults the initial map() init uses.
+            pitch:    this._initialPitch(),
+            bearing:  this._initialBearing(),
             duration: dur
         });
     }

@@ -214,6 +214,24 @@ export interface HeliosConfig
     //forever; pinch-rotate still works normally. Useful on low-power
     //devices or for users who find the constant motion distracting.
     'auto-rotate-enabled'?:    unknown;
+    //Optional camera pose pinned at every engine init. Numeric values
+    //in degrees; when set they override the auto-default (pitch 55,
+    //bearing south in NH / north in SH) so the camera always boots
+    //from the same angle the user dialled in.
+    //  camera-pitch-deg   : 15..85 (tilt; clamp matches the manual
+    //                       drag-pitch bounds).
+    //  camera-bearing-deg : 0..359 (compass rotation; 0 = north up,
+    //                       90 = east up, 180 = south up, ...).
+    //Either can be set independently of the other. Either still
+    //allows the user to drag-rotate / drag-pitch at runtime; the
+    //pose only locks when camera-locked is true.
+    'camera-pitch-deg'?:       unknown;
+    'camera-bearing-deg'?:     unknown;
+    //Optional boolean. When true, manual drag-rotate AND drag-pitch
+    //are disabled on the canvas, and the idle auto-orbit is also
+    //suppressed, so the camera stays at the configured (or default)
+    //bearing + pitch forever. Default false.
+    'camera-locked'?:          unknown;
     //Timeline visibility toggle. Default: true. When false the whole
     //time-bar (chart card, day labels, scrub cursors) is hidden so
     //the card focuses on the live scene only.

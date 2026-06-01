@@ -59,6 +59,14 @@ export const VISUAL_CONFIG_KEYS = [
     'lidar-local-ndsm-max-lat',
     'lidar-local-ndsm-min-lon',
     'lidar-local-ndsm-max-lon'
+    //camera-pitch-deg, camera-bearing-deg, camera-locked are NOT in
+    //this list: a slider drag would respawn the engine every frame,
+    //which would teardown + rebuild the WebGL context for every
+    //pixel of input motion. The editor instead pushes the live
+    //preview through engine.setCameraBearing / setCameraPitch /
+    //setCameraLocked and lets the new values bake into the config so
+    //the next natural respawn (page reload, dashboard edit, theme
+    //flip) reads them out of _initialBearing / _initialPitch.
 ] as const;
 
 
