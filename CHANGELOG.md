@@ -7,6 +7,35 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.3
+
+### Battery, radiation, semaphore: extending the alpha.2 recorder fix
+
+Follow-up to alpha.2 after the reporter (LBDG_) tested it on his
+Victron setup and confirmed the PV path works (-26 % adaptive
+calibration applied, recorder no longer globally frozen). Two
+symptoms remained: battery data taking several minutes to
+populate, and a brief lag on each card mount. A second user on
+the same Reddit thread also reported every apex-charts on his
+dashboard flatlining while Helios was loading, the signature of
+a recorder still saturated by Helios on cards that share the
+connection.
+
+- Battery and radiation fetches now follow the same statistics-
+  first pattern as PV (#159). 5-minute buckets, ~576 rows per
+  entity for a 2-day window vs ~150-200k raw on a 1 Hz BMS.
+  Raw history fallback for entities without long-term statistics
+  tracking. Module-level cache mirroring the PV pattern, no
+  more refetch on every card mount.
+- Global concurrency semaphore on the WebSocket fetch path
+  (#160). Caps Helios's in-flight history / statistics fetches
+  at 2, so the recorder retains headroom for other history-bound
+  cards on the same dashboard.
+- The 30-day shading-map trainer fetch defers behind the
+  user-facing PV history and calibration fetches via
+  `requestIdleCallback` (1 s timeout fallback). The chip and
+  chart paint first, the trainer catches up in the background.
+
 ### alpha.2
 
 ### Recorder unblock on high-frequency PV sensors
