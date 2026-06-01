@@ -7,6 +7,35 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.2
+
+### Recorder unblock on high-frequency PV sensors
+
+- Reported on Reddit (#155) by a user running a Victron Cerbo GX
+  MPPT logging more than one sample per second: the Helios card
+  never finished loading and the HA recorder went unresponsive
+  for unrelated entities while the card was open. Root cause was
+  a single 30-day raw history fetch that ballooned to millions
+  of state rows on high-frequency installs.
+- The PV calibration and the 30-day shading-map trainer now
+  consume `recorder/statistics_during_period` instead of raw
+  history. ~120 hourly rows for the 5-day calibration, ~8.6k
+  5-min rows for the 30-day trainer, vs potentially millions on
+  the legacy path. Both consumers fall back to the raw window
+  when the source entity is not long-term-statistics tracked
+  (no `state_class`).
+- Raw history fetches on the PV / grid / battery / radiation
+  paths are now bound to the chart's visible window (~2 days)
+  and pass `significant_changes_only: true` so HA drops
+  bucket-internal duplicates server-side. Roughly 30 to 70 %
+  fewer rows on noisy sensors.
+- Module-level cache for the three PV slots survives the user
+  navigating away from the Helios card and back (the previous
+  per-LitElement cache reset on every mount). 15-minute TTL.
+- WebSocket calls now have a 30-second timeout. On a stalled
+  recorder the card degrades to live chip values rather than
+  hanging on a loading state forever.
+
 ### alpha.1
 
 - Editor polish: 16 px bottom margin on the Camera block so it
