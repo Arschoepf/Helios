@@ -417,9 +417,11 @@ function parseRawBatteryHistory(arr: any[]): BatteryHistory
 }
 
 
-//Parse a statistics payload (`recorder/statistics_during_period`) into a `BatteryHistory`. SoC and power sensors are both `state_class:
-//measurement` on every BMS / inverter integration I've checked (Victron, Solis, Tesla, Pylontech, BYD, SonnenBatterie), so the relevant
-//column is `mean`. Anchor at the bucket midpoint so the trapezoidal lookups in the chart and the chip-scrub path stay correct.
+//Parse a statistics payload (`recorder/statistics_during_period`) into a `BatteryHistory`. SoC and power sensors most often expose
+//`state_class: measurement` (Victron, Solis, Tesla, Pylontech, BYD, SonnenBatterie BMS) and the relevant column is `mean`. Some setups
+//wire a cumulative-energy kWh counter as the battery power source instead (`state_class: total_increasing`), in which case `mean` is
+//`null` and `state` carries the cumulative reading at the bucket end. We prefer `mean` when present and fall back to `state` so the
+//slot lands populated either way. See #161.
 function parseBatteryStats(arr: any[]): BatteryHistory
 {
     const times:  Date[]   = [];
@@ -429,11 +431,20 @@ function parseBatteryStats(arr: any[]): BatteryHistory
         const startMs = parseStatBoundary(item?.start);
         const endMs   = parseStatBoundary(item?.end);
         if (startMs === null) continue;
-        const valueRaw = item?.mean;
+        let valueRaw: unknown = item?.mean;
+        let anchorAtEnd = false;
+        if (valueRaw === null || valueRaw === undefined)
+        {
+            valueRaw = item?.state;
+            //Cumulative readings anchor at the bucket end so consecutive deltas attribute correctly to the bucket that produced them.
+            anchorAtEnd = true;
+        }
         if (valueRaw === null || valueRaw === undefined) continue;
         const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
         if (!isFinite(v)) continue;
-        const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
+        const anchorMs = anchorAtEnd
+            ? (endMs ?? startMs)
+            : (endMs !== null ? (startMs + endMs) / 2 : startMs);
         times.push(new Date(anchorMs));
         values.push(v);
     }
@@ -508,7 +519,9 @@ export async function fetchBatteryHistory(
             end_time:       fetchEnd.toISOString(),
             statistic_ids:  ids,
             period:         '5minute',
-            types:          ['mean'],
+            //Both fields, because a setup that wires a cumulative kWh meter as the battery power source has `mean: null` per bucket
+            //(measurement assumption breaks). Asking for `state` too lets the parser cover both wirings in one round-trip. See #161.
+            types:          ['mean', 'state'],
         });
         const statsUsable = ids.some(id => Array.isArray(statsResult?.[id]) && statsResult[id].length > 0);
         if (statsUsable)

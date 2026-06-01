@@ -660,31 +660,43 @@ function parseStatBoundary(raw: unknown): number | null
 }
 
 
+//Locate the slot that brackets a scrub timestamp. Prefers the raw `_pvHistory` (finer resolution, narrow window) when it covers the
+//instant; falls back to the trainer-grade `_pvTrainerStats` (5-min over 30 days) for scrub points that land before the raw window. Both
+//slots carry the same `{ times, values }` shape, in the same unit, so the caller treats them identically. Returns null when neither slot
+//brackets the instant (scrub past either slot's edges, or no data fetched yet). See #161.
+function pickPvHistoryAt(host: PvHost, tMs: number): PvHistory | null
+{
+    const bracketed = (h: PvHistory | null): PvHistory | null =>
+    {
+        if (!h || h.times.length === 0) return null;
+        const firstMs = h.times[0].getTime();
+        const lastMs  = h.times[h.times.length - 1].getTime();
+        //Allow a 60 s grace at the tail so a "live" scrub to "now" still resolves on a series whose last sample is a few seconds old.
+        if (tMs < firstMs || tMs > lastMs + 60_000) return null;
+        return h;
+    };
+    return bracketed(host._pvHistory) ?? bracketed(host._pvTrainerStats);
+}
+
+
 //Compute the production rate at an arbitrary historical time
 //(used when the user scrubs the timeline into the past). For
 //a cumulative entity we differentiate the two history samples
 //bracketing the requested instant; for a power entity we just
 //return the value of the closest historical sample. Returns
-//null when the requested time falls outside the fetched
+//null when the requested time falls outside every fetched
 //history window, the chip is then hidden by the caller, which
 //is the right behaviour for the future half of the timeline
 //(no production data exists there yet).
 export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 {
-    const hist = host._pvHistory;
-    if (!hist || hist.times.length === 0)
-    {
-        return null;
-    }
-
     const tMs = time.getTime();
-    const firstMs = hist.times[0].getTime();
-    const lastMs  = hist.times[hist.times.length - 1].getTime();
-    if (tMs < firstMs || tMs > lastMs + 60_000)
-    {
-        //Outside the history window. Allow a 60 s grace at the tail so a "live" scrub to "now" still resolves.
-        return null;
-    }
+
+    //Pick the slot that brackets the scrub timestamp. The raw `_pvHistory` window is bounded to the chart's visible past (~2 days), so any
+    //scrub older than that would return null without this fallback. `_pvTrainerStats` carries the same data at 5-min resolution over 30
+    //days, which is enough for chip-level accuracy when the cursor lands past the raw window. See #161.
+    const hist = pickPvHistoryAt(host, tMs);
+    if (!hist) return null;
 
     //Classification, same logic as currentPvRate. Repeated inline so each helper is self-contained.
     const entity   = resolveEffectiveEntity(host.config, host._energyDefaults, 'pv-power-entity');

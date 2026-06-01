@@ -7,6 +7,31 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.5
+
+### Chip scrub coverage on cumulative-energy entities and outside-raw scrubs
+
+Field follow-up on alpha.3 / alpha.4. The recorder freeze fix from
+alpha.2 (#155) carried two latent regressions for users scrubbing
+the timeline cursor:
+
+- The PV chip resolver (`pvRateAtTime`) read `_pvHistory` only.
+  Since the raw history slot is bounded to the chart's visible
+  past (~2 days) the chip turned blank as soon as the cursor
+  landed outside that window. The 5-min trainer-grade statistics
+  slot covering the past 30 days is now consulted as a fallback,
+  so scrub-time chip values resolve anywhere within the
+  recorder's long-term-statistics retention (#161).
+- The battery and radiation statistics fetches requested only
+  the `mean` column. For entities with `state_class:
+  total_increasing` (a cumulative kWh counter wired as battery
+  power, an irradiance source surfaced as a Wh meter, etc.)
+  `mean` is null per bucket and the parser dropped every row,
+  even though HA returned non-empty arrays. Both fetches now
+  request `['mean', 'state']` and the parser prefers the
+  populated one. Slots land populated regardless of the source
+  entity's class.
+
 ### alpha.4
 
 ### LiDAR polish + grid chip icons
