@@ -12,7 +12,76 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
-import { callWSWithTimeout } from './ws-timeout';
+import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
+
+
+//-----------------------------------------------------------------
+//Module-level cache for the solar-radiation history fetch.
+//Mirrors the PV and battery patterns so a navigation away and back
+//does not re-trigger the WS round-trip. See #159.
+
+const RADIATION_CACHE_TTL_MS = 15 * 60_000;
+
+interface RadiationHistoryCacheEntry
+{
+    history: RadiationHistory;
+    ts:      number;
+}
+
+const _radiationHistoryCache: Map<string, RadiationHistoryCacheEntry> = new Map();
+
+function radiationHistoryCacheGet(key: string): RadiationHistoryCacheEntry | null
+{
+    const e = _radiationHistoryCache.get(key);
+    if (!e) return null;
+    if (Date.now() - e.ts > RADIATION_CACHE_TTL_MS)
+    {
+        _radiationHistoryCache.delete(key);
+        return null;
+    }
+    return e;
+}
+
+
+//Coerce a `start` / `end` statistics field into a millisecond epoch. Same accept set as the PV / battery parsers, duplicated here so the
+//module stays self-contained.
+function parseStatBoundary(raw: unknown): number | null
+{
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (typeof raw === 'string')
+    {
+        const asNum = Number(raw);
+        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        const d = new Date(raw);
+        const t = d.getTime();
+        return isFinite(t) ? t : null;
+    }
+    return null;
+}
+
+
+//Parse a statistics payload into a RadiationHistory. Irradiance sensors are `state_class: measurement`, so the `mean` column is the
+//relevant value and the bucket midpoint anchors the sample.
+function parseRadiationStats(arr: any[]): RadiationHistory
+{
+    const times:  Date[]   = [];
+    const values: number[] = [];
+    for (const item of arr ?? [])
+    {
+        const startMs = parseStatBoundary(item?.start);
+        const endMs   = parseStatBoundary(item?.end);
+        if (startMs === null) continue;
+        const valueRaw = item?.mean;
+        if (valueRaw === null || valueRaw === undefined) continue;
+        const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
+        if (!isFinite(v) || v < 0) continue;
+        const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
+        times.push(new Date(anchorMs));
+        values.push(v);
+    }
+    return { times, values };
+}
 
 
 //Fetched historical irradiance series, parallel times[] / values[]
@@ -75,7 +144,17 @@ export function refreshSolarRadiation(host: RadiationHost): void
         return;
     }
     host._solarRadiationFetchKey = fetchKey;
-    fetchSolarRadiationHistory(host, entity, host._timeRange.start, host._timeRange.end);
+
+    //Cache hit short-circuits the WS round-trip on the navigation case. Cache invalidates on TTL (15 min) or on any (entity / range)
+    //change since that flips the fetch key. See #159.
+    const cached = radiationHistoryCacheGet(fetchKey);
+    if (cached)
+    {
+        host._solarRadiationHistory = cached.history;
+        pushSolarRadiationToEngine(host);
+        return;
+    }
+    fetchSolarRadiationHistory(host, entity, host._timeRange.start, host._timeRange.end, fetchKey);
 }
 
 
@@ -148,10 +227,11 @@ export function pushSolarRadiationToEngine(host: RadiationHost): void
 //solar irradiance in the same unit the engine consumes, no
 //normalisation step.
 export async function fetchSolarRadiationHistory(
-    host: RadiationHost,
+    host:     RadiationHost,
     entityId: string,
-    start: Date,
-    end: Date
+    start:    Date,
+    end:      Date,
+    cacheKey: string = '',
 ): Promise<void>
 {
     if (!host.hass?.callWS)
@@ -170,82 +250,55 @@ export async function fetchSolarRadiationHistory(
             return;
         }
 
-        const result: any = await callWSWithTimeout<any>(host.hass, {
-            type:                     'history/history_during_period',
-            start_time:               start.toISOString(),
-            end_time:                 fetchEnd.toISOString(),
-            entity_ids:               [entityId],
-            minimal_response:         true,
-            no_attributes:            true,
-            //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency solar-radiation sensors. See #157.
-            significant_changes_only: true,
+        //Try statistics first. Personal weather station and IoT irradiance sensors that follow HA conventions expose
+        //`state_class: measurement` and land in LTS automatically, so the stats path scales to high-frequency feeds at near-zero cost.
+        //Falls back to raw history when the entity is not tracked, which preserves coverage on non-LTS custom sensors at the cost
+        //of recorder bandwidth on the slim 2-day window.
+        let history: RadiationHistory = { times: [], values: [] };
+        const statsResult: any = await callWSWithTimeout<any>(host.hass, {
+            type:           'recorder/statistics_during_period',
+            start_time:     start.toISOString(),
+            end_time:       fetchEnd.toISOString(),
+            statistic_ids:  [entityId],
+            period:         '5minute',
+            types:          ['mean'],
         });
-
-        const arr: any[] = (result && result[entityId]) ?? [];
-        const times:  Date[]   = [];
-        const values: number[] = [];
-        let lastTsMs: number | null = null;
-
-        for (const item of arr)
+        const statsArr: any[] = (statsResult && statsResult[entityId]) ?? [];
+        if (statsArr.length > 0)
         {
-            const sRaw = item?.s ?? item?.state;
-            if (sRaw === null
-                || sRaw === undefined
-                || sRaw === 'unavailable'
-                || sRaw === 'unknown'
-                || sRaw === '')
-            {
-                continue;
-            }
-            const v = parseFloat(String(sRaw));
-            if (!isFinite(v) || v < 0)
-            {
-                continue;
-            }
-
-            let ts: Date | null = null;
-            const tsRaw =
-                item?.lu             ??
-                item?.lc             ??
-                item?.last_updated   ??
-                item?.last_changed   ??
-                null;
-            if (typeof tsRaw === 'number')
-            {
-                ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
-            }
-            else if (typeof tsRaw === 'string')
-            {
-                const asNum = Number(tsRaw);
-                if (Number.isFinite(asNum) && asNum > 1e9)
-                {
-                    ts = new Date(asNum > 1e12 ? asNum : asNum * 1000);
-                }
-                else
-                {
-                    ts = new Date(tsRaw);
-                }
-            }
-            if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
-            {
-                ts = new Date(lastTsMs);
-            }
-            if (!ts || isNaN(ts.getTime()))
-            {
-                continue;
-            }
-
-            lastTsMs = ts.getTime();
-            times.push(ts);
-            values.push(v);
+            history = parseRadiationStats(statsArr);
+        }
+        else
+        {
+            const rawResult: any = await callWSWithTimeout<any>(host.hass, {
+                type:                     'history/history_during_period',
+                start_time:               start.toISOString(),
+                end_time:                 fetchEnd.toISOString(),
+                entity_ids:               [entityId],
+                minimal_response:         true,
+                no_attributes:            true,
+                significant_changes_only: true,
+            });
+            history = parseRawRadiationHistory((rawResult && rawResult[entityId]) ?? []);
         }
 
-        host._solarRadiationHistory = { times, values };
+        host._solarRadiationHistory = history;
         pushSolarRadiationToEngine(host);
+        if (cacheKey)
+        {
+            _radiationHistoryCache.set(cacheKey, { history, ts: Date.now() });
+        }
     }
     catch (e)
     {
-        console.warn('[HELIOS] Solar radiation history fetch failed:', e);
+        if (e instanceof WsTimeoutError)
+        {
+            console.warn(`[HELIOS] solar radiation fetch timed out (${e.timeoutMs} ms), engine falls back to Open-Meteo for the past window.`);
+        }
+        else
+        {
+            console.warn('[HELIOS] Solar radiation history fetch failed:', e);
+        }
         host._solarRadiationHistory = { times: [], values: [] };
         pushSolarRadiationToEngine(host);
     }
@@ -253,4 +306,71 @@ export async function fetchSolarRadiationHistory(
     {
         host._solarRadiationFetching = false;
     }
+}
+
+
+//Raw-history parser, kept around for the statistics fallback path. Same defensive parsing as the legacy implementation: tolerates the
+//compact `s`/`lu` shape and the verbose `state`/`last_updated` shape, drops `unavailable` / `unknown` / empty samples, falls back to the
+//previous timestamp on a missing `lu` (HA's compaction can omit it on consecutive identical samples).
+function parseRawRadiationHistory(arr: any[]): RadiationHistory
+{
+    const times:  Date[]   = [];
+    const values: number[] = [];
+    let lastTsMs: number | null = null;
+
+    for (const item of arr)
+    {
+        const sRaw = item?.s ?? item?.state;
+        if (sRaw === null
+            || sRaw === undefined
+            || sRaw === 'unavailable'
+            || sRaw === 'unknown'
+            || sRaw === '')
+        {
+            continue;
+        }
+        const v = parseFloat(String(sRaw));
+        if (!isFinite(v) || v < 0)
+        {
+            continue;
+        }
+
+        let ts: Date | null = null;
+        const tsRaw =
+            item?.lu             ??
+            item?.lc             ??
+            item?.last_updated   ??
+            item?.last_changed   ??
+            null;
+        if (typeof tsRaw === 'number')
+        {
+            ts = new Date(tsRaw > 1e12 ? tsRaw : tsRaw * 1000);
+        }
+        else if (typeof tsRaw === 'string')
+        {
+            const asNum = Number(tsRaw);
+            if (Number.isFinite(asNum) && asNum > 1e9)
+            {
+                ts = new Date(asNum > 1e12 ? asNum : asNum * 1000);
+            }
+            else
+            {
+                ts = new Date(tsRaw);
+            }
+        }
+        if ((!ts || isNaN(ts.getTime())) && lastTsMs !== null)
+        {
+            ts = new Date(lastTsMs);
+        }
+        if (!ts || isNaN(ts.getTime()))
+        {
+            continue;
+        }
+
+        lastTsMs = ts.getTime();
+        times.push(ts);
+        values.push(v);
+    }
+
+    return { times, values };
 }

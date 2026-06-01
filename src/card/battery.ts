@@ -7,7 +7,38 @@
 import type { HeliosConfig } from '../helios-config';
 import { formatLocalisedNumber } from './format';
 import { pvNormalizeToWatts } from './pv';
-import { callWSWithTimeout } from './ws-timeout';
+import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
+
+
+//-----------------------------------------------------------------
+//Module-level cache for the battery history fetch. Survives Lit
+//element unmount + remount (the user navigating away from the
+//Helios card and back) the same way the PV cache does in pv.ts.
+//15-minute TTL covers the most common nav-around-the-dashboard
+//pattern without serving stale data forever. See #159.
+
+const BATTERY_CACHE_TTL_MS = 15 * 60_000;
+
+interface BatteryHistoryCacheEntry
+{
+    soc:   BatteryHistory;
+    power: BatteryHistory;
+    ts:    number;
+}
+
+const _batteryHistoryCache: Map<string, BatteryHistoryCacheEntry> = new Map();
+
+function batteryHistoryCacheGet(key: string): BatteryHistoryCacheEntry | null
+{
+    const e = _batteryHistoryCache.get(key);
+    if (!e) return null;
+    if (Date.now() - e.ts > BATTERY_CACHE_TTL_MS)
+    {
+        _batteryHistoryCache.delete(key);
+        return null;
+    }
+    return e;
+}
 
 
 //Fetched historical series for one battery entity (SoC or power),
@@ -329,21 +360,117 @@ export function refreshBattery(host: BatteryHost): void
     const fetchKey = `${sig}@${rangeKey}`;
     if (fetchKey === host._batteryFetchKey) return;
     host._batteryFetchKey = fetchKey;
-    fetchBatteryHistory(host, banks, host._timeRange.start, host._timeRange.end);
+
+    //Cache hit short-circuits the WS round-trip: the user navigates away from the Helios card and back, the module-level cache still has
+    //the previous aggregation parsed and ready, no recorder hit. Cache invalidates on TTL (15 min) or on any (bank signature / range)
+    //change since that flips the fetch key. See #159.
+    const cached = batteryHistoryCacheGet(fetchKey);
+    if (cached)
+    {
+        host._batterySocHistory   = cached.soc;
+        host._batteryPowerHistory = cached.power;
+        return;
+    }
+    fetchBatteryHistory(host, banks, host._timeRange.start, host._timeRange.end, fetchKey);
 }
 
 
-//Single-call history fetch for the battery overlay. Both entities
-//(when configured) are bundled into one `entity_ids` array so we
-//pay one WS roundtrip instead of two. Either side of the result
-//may end up empty (entity not yet existing, no state changes in
-//range, etc.) and that's fine, the chip will show only the side
-//that did return data.
+//Parse a raw-history payload (`history/history_during_period`, minimal response shape) into a `BatteryHistory`. Accepts both `lu` (numeric epoch
+//seconds) and `last_updated` / `last_changed` (ISO strings) so the function survives HA payload variations across releases.
+function parseRawBatteryHistory(arr: any[]): BatteryHistory
+{
+    const times:  Date[]   = [];
+    const values: number[] = [];
+    for (const item of arr ?? [])
+    {
+        const stateStr =
+            typeof item?.s     === 'string' ? item.s :
+            typeof item?.state === 'string' ? item.state :
+            null;
+        if (stateStr === null
+            || stateStr === 'unavailable'
+            || stateStr === 'unknown'
+            || stateStr === '')
+        {
+            continue;
+        }
+        const v = parseFloat(stateStr);
+        if (!isFinite(v)) continue;
+        let ts: Date | null = null;
+        if (typeof item?.lu === 'number')
+        {
+            ts = new Date(item.lu * 1000);
+        }
+        else if (typeof item?.last_updated === 'string')
+        {
+            ts = new Date(item.last_updated);
+        }
+        else if (typeof item?.last_changed === 'string')
+        {
+            ts = new Date(item.last_changed);
+        }
+        if (!ts || isNaN(ts.getTime())) continue;
+        times.push(ts);
+        values.push(v);
+    }
+    return { times, values };
+}
+
+
+//Parse a statistics payload (`recorder/statistics_during_period`) into a `BatteryHistory`. SoC and power sensors are both `state_class:
+//measurement` on every BMS / inverter integration I've checked (Victron, Solis, Tesla, Pylontech, BYD, SonnenBatterie), so the relevant
+//column is `mean`. Anchor at the bucket midpoint so the trapezoidal lookups in the chart and the chip-scrub path stay correct.
+function parseBatteryStats(arr: any[]): BatteryHistory
+{
+    const times:  Date[]   = [];
+    const values: number[] = [];
+    for (const item of arr ?? [])
+    {
+        const startMs = parseStatBoundary(item?.start);
+        const endMs   = parseStatBoundary(item?.end);
+        if (startMs === null) continue;
+        const valueRaw = item?.mean;
+        if (valueRaw === null || valueRaw === undefined) continue;
+        const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
+        if (!isFinite(v)) continue;
+        const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
+        times.push(new Date(anchorMs));
+        values.push(v);
+    }
+    return { times, values };
+}
+
+
+//Coerce a `start` / `end` statistics field into a millisecond epoch. Same accept set as the PV stats parser, kept here as a private copy so
+//`battery.ts` stays import-light (a single circular guard through `pv.ts` would otherwise be needed).
+function parseStatBoundary(raw: unknown): number | null
+{
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (typeof raw === 'string')
+    {
+        const asNum = Number(raw);
+        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        const d = new Date(raw);
+        const t = d.getTime();
+        return isFinite(t) ? t : null;
+    }
+    return null;
+}
+
+
+//Single-call history fetch for the battery overlay. Tries `recorder/statistics_during_period` first because it's the only path that scales
+//on a Victron BMS reporting at >1 Hz (5-min buckets, ~576 rows for a 2-day window per entity vs ~150-200k raw). When the entity has no
+//long-term-statistics tracking (no `state_class`) the stats array comes back empty and we fall back to a raw `history/history_during_period`
+//fetch with `significant_changes_only` so the legacy code path still works for users with custom or non-`measurement` entities.
+//
+//Both entities (when configured) are bundled into one WS roundtrip so multi-bank installs pay one round-trip per call, not 2N.
 export async function fetchBatteryHistory(
-    host:  BatteryHost,
-    banks: BatteryBank[],
-    start: Date,
-    end:   Date
+    host:     BatteryHost,
+    banks:    BatteryBank[],
+    start:    Date,
+    end:      Date,
+    cacheKey: string = '',
 ): Promise<void>
 {
     if (!host.hass?.callWS || banks.length === 0) return;
@@ -371,55 +498,44 @@ export async function fetchBatteryHistory(
         }
         const ids = Array.from(idsSet);
 
-        const result: any = await callWSWithTimeout<any>(host.hass, {
-            type:                     'history/history_during_period',
-            start_time:               start.toISOString(),
-            end_time:                 fetchEnd.toISOString(),
-            entity_ids:               ids,
-            minimal_response:         true,
-            no_attributes:            true,
-            //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency battery SoC / power sensors. See #157.
-            significant_changes_only: true,
-        });
+        //Per-entity parsed series, populated from whichever fetch path returns usable data. Both paths produce the same `BatteryHistory`
+        //shape so the per-bank aggregation downstream is source-agnostic.
+        const perEntity: Record<string, BatteryHistory> = {};
 
-        const parseSeries = (arr: any[]): BatteryHistory =>
+        const statsResult: any = await callWSWithTimeout<any>(host.hass, {
+            type:           'recorder/statistics_during_period',
+            start_time:     start.toISOString(),
+            end_time:       fetchEnd.toISOString(),
+            statistic_ids:  ids,
+            period:         '5minute',
+            types:          ['mean'],
+        });
+        const statsUsable = ids.some(id => Array.isArray(statsResult?.[id]) && statsResult[id].length > 0);
+        if (statsUsable)
         {
-            const times:  Date[]   = [];
-            const values: number[] = [];
-            for (const item of arr ?? [])
+            for (const id of ids)
             {
-                const stateStr =
-                    typeof item?.s     === 'string' ? item.s :
-                    typeof item?.state === 'string' ? item.state :
-                    null;
-                if (stateStr === null
-                    || stateStr === 'unavailable'
-                    || stateStr === 'unknown'
-                    || stateStr === '')
-                {
-                    continue;
-                }
-                const v = parseFloat(stateStr);
-                if (!isFinite(v)) continue;
-                let ts: Date | null = null;
-                if (typeof item?.lu === 'number')
-                {
-                    ts = new Date(item.lu * 1000);
-                }
-                else if (typeof item?.last_updated === 'string')
-                {
-                    ts = new Date(item.last_updated);
-                }
-                else if (typeof item?.last_changed === 'string')
-                {
-                    ts = new Date(item.last_changed);
-                }
-                if (!ts || isNaN(ts.getTime())) continue;
-                times.push(ts);
-                values.push(v);
+                perEntity[id] = parseBatteryStats(statsResult?.[id] ?? []);
             }
-            return { times, values };
-        };
+        }
+        else
+        {
+            //Either no entity is LTS-tracked (no `state_class`) or the recorder hasn't seen the window yet. Fall back to raw history with
+            //`significant_changes_only` so high-frequency installs still benefit from server-side dedup.
+            const rawResult: any = await callWSWithTimeout<any>(host.hass, {
+                type:                     'history/history_during_period',
+                start_time:               start.toISOString(),
+                end_time:                 fetchEnd.toISOString(),
+                entity_ids:               ids,
+                minimal_response:         true,
+                no_attributes:            true,
+                significant_changes_only: true,
+            });
+            for (const id of ids)
+            {
+                perEntity[id] = parseRawBatteryHistory(rawResult?.[id] ?? []);
+            }
+        }
 
         //Per-bank parsed series, kept around for the aggregation. Bank index parallel to `banks`; either side may be empty when the bank
         //didn't define that entity or HA returned no samples in range.
@@ -430,19 +546,19 @@ export async function fetchBatteryHistory(
             let socS: BatteryHistory = { times: [], values: [] };
             if (b.socEntity)
             {
-                socS = parseSeries(result?.[b.socEntity] ?? []);
+                socS = perEntity[b.socEntity] ?? { times: [], values: [] };
                 //Clamp SoC samples to [0, 100] in the history too, same out-of-range tolerance as the live read.
-                socS.values = socS.values.map(v => Math.max(0, Math.min(100, v)));
+                socS = { times: socS.times, values: socS.values.map(v => Math.max(0, Math.min(100, v))) };
             }
             let powS: BatteryHistory = { times: [], values: [] };
             if (b.powerEntity)
             {
-                powS = parseSeries(result?.[b.powerEntity] ?? []);
+                powS = perEntity[b.powerEntity] ?? { times: [], values: [] };
                 //Apply this bank's own invert preference once at parse time, identical to the live ingest path, so every chart / sum
                 //that consumes _batteryPowerHistory sees "positive = charging" regardless of how each bank's entity is wired.
                 if (b.powerInvert)
                 {
-                    powS.values = powS.values.map(v => -v);
+                    powS = { times: powS.times, values: powS.values.map(v => -v) };
                 }
             }
             bankSocSeries.push(socS);
@@ -453,12 +569,28 @@ export async function fetchBatteryHistory(
         //timestamps, sorted; per-timestamp we interpolate each bank's series at that instant, then capacity-weight SoC and sum signed
         //power across banks. This produces a continuous aggregated stream even when the BMS entities tick at different cadences (a
         //common case in mixed-vendor setups).
-        host._batterySocHistory   = aggregateBankHistory(banks, bankSocSeries,   'soc');
-        host._batteryPowerHistory = aggregateBankHistory(banks, bankPowerSeries, 'power');
+        const socAgg   = aggregateBankHistory(banks, bankSocSeries,   'soc');
+        const powerAgg = aggregateBankHistory(banks, bankPowerSeries, 'power');
+        host._batterySocHistory   = socAgg;
+        host._batteryPowerHistory = powerAgg;
+
+        //Persist the aggregated outcome for the next mount. Cross-mount cache hits short-circuit the WS round-trip entirely on the
+        //navigation case that drives the user-visible "lag on each return" symptom from #155.
+        if (cacheKey)
+        {
+            _batteryHistoryCache.set(cacheKey, { soc: socAgg, power: powerAgg, ts: Date.now() });
+        }
     }
     catch (e)
     {
-        console.warn('[HELIOS] battery history fetch failed:', e);
+        if (e instanceof WsTimeoutError)
+        {
+            console.warn(`[HELIOS] battery history fetch timed out (${e.timeoutMs} ms), rendering without past-day curve.`);
+        }
+        else
+        {
+            console.warn('[HELIOS] battery history fetch failed:', e);
+        }
         host._batterySocHistory   = { times: [], values: [] };
         host._batteryPowerHistory = { times: [], values: [] };
     }
