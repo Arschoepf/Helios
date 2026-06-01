@@ -816,11 +816,29 @@ export class HeliosCard extends LitElement
     //detached card; that was the secondary leak path on top of the
     //HA dashboard edit-mode wrapping cycle.
     private _connectSettleTimer: number | undefined;
+    //Handle for the deferred engine cleanup scheduled by `disconnectedCallback`. Home Assistant detaches and re-attaches the same
+    //custom-element instance on every `config-changed` event dispatched by the editor (slider commits, picker writes, toggle flips),
+    //not just on the documented edit-mode entry. Cleaning up the engine on the first detach and re-creating it on the immediate
+    //re-attach costs one full WebGL context allocation per user input, which the diagnostic `enginesCreated` counter confirms.
+    //
+    //Soft cleanup pattern: defer the engine destruction by a short grace. If `connectedCallback` fires within the grace window we
+    //cancel the cleanup, the engine stays alive, and `updated()` short-circuits the respawn branch because `_engine` is still
+    //defined and `_lastHomeKey` still matches. If the grace expires without a re-attach the engine is cleaned up as before.
+    private _deferredEngineCleanupTimer: number | undefined;
+    private static readonly ENGINE_CLEANUP_GRACE_MS = 1000;
 
     public connectedCallback(): void
     {
         super.connectedCallback();
         _liveCards.add(this);
+        //Soft-cleanup recovery: if `disconnectedCallback` armed a deferred engine cleanup and we landed back here within the grace
+        //window, cancel the cleanup. The engine, its MapLibre stack and its WebGL context are still alive on the element and the
+        //subsequent `updated()` pass will short-circuit the respawn branch.
+        if (this._deferredEngineCleanupTimer !== undefined)
+        {
+            window.clearTimeout(this._deferredEngineCleanupTimer);
+            this._deferredEngineCleanupTimer = undefined;
+        }
         this._connectedAt = performance.now();
         tick(this);
         //30 s tick: the clock displays HH:MM only (seconds dropped),
@@ -892,12 +910,28 @@ export class HeliosCard extends LitElement
             window.clearTimeout(this._connectSettleTimer);
             this._connectSettleTimer = undefined;
         }
-        if (this._engine)
+        //Soft cleanup: HA detaches + re-attaches this same element instance on every `config-changed` commit (slider, picker,
+        //toggle), not only on the documented edit-mode entry. Tearing the engine down on the first detach and rebuilding it on the
+        //immediate re-attach burns one WebGL context allocation per user input. Defer the destruction so a re-attach within
+        //`ENGINE_CLEANUP_GRACE_MS` can cancel it cleanly (see `connectedCallback`). After the grace window expires without a
+        //re-attach we cleanup as before. `_engine` and `_lastHomeKey` are intentionally NOT reset here so the deferred-attach path
+        //can short-circuit `updated()`'s respawn branch; the cleanup callback below clears both when it finally fires.
+        if (this._engine !== undefined && this._deferredEngineCleanupTimer === undefined)
         {
-            this._engine.cleanup();
-            this._engine = undefined;
+            this._deferredEngineCleanupTimer = window.setTimeout(() =>
+            {
+                this._deferredEngineCleanupTimer = undefined;
+                //Re-check connectedness because a third disconnect/reconnect cycle could have landed in the interim. If we are
+                //attached again, leave the engine alone, `connectedCallback` already cancelled the previous timer in that case.
+                if (this.isConnected) return;
+                if (this._engine !== undefined)
+                {
+                    this._engine.cleanup();
+                    this._engine = undefined;
+                }
+                this._lastHomeKey = '';
+            }, HeliosCard.ENGINE_CLEANUP_GRACE_MS);
         }
-        this._lastHomeKey   = '';
         this._initInflight  = false;
     }
 

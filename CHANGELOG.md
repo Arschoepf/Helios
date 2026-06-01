@@ -7,6 +7,32 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.8
+
+### Soft cleanup on disconnect, stops the per-commit WebGL respawn
+
+Diagnosed via the in-card `window.heliosStats()` counters
+(#162). Home Assistant detaches and re-attaches the same
+helios-card custom-element instance on every `config-changed`
+event emitted by the editor, slider commits and toggle flips
+included, not only on the documented edit-mode entry. Each
+detach was tearing the engine down and the immediate re-attach
+was creating a fresh one, burning one full WebGL context
+allocation per user input. With two cards on the dashboard the
+counter incremented by 2 on every slider release.
+
+`disconnectedCallback` now defers the engine cleanup by a
+1 second grace instead of firing it immediately.
+`connectedCallback` cancels the deferred cleanup if the same
+element re-attaches within the grace, the engine, its MapLibre
+stack and its WebGL context remain alive, and `updated()`
+short-circuits the respawn branch because `_engine` is still
+defined and `_lastHomeKey` still matches. If the grace expires
+without a re-attach (real navigation away) the cleanup fires
+exactly as before. Net result: zero WebGL context recreation on
+slider drags, picker writes, toggle flips and the other editor
+events that previously triggered a respawn cycle.
+
 ### alpha.7
 
 ### Resilience pass + hygiene cleanup
