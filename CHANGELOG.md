@@ -7,6 +7,25 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.4
+
+### LiDAR polish + grid chip icons
+
+- LiDAR mode-bar (#152): when the shadow fetch finishes loading,
+  the satellite (or harddisk) glyph that replaces the spinner no
+  longer inherits a frame of rotation animation. The
+  `is-spinning` class now lives on the `ha-icon` itself so the
+  animation drops in the exact frame the icon attribute swaps.
+- LiDAR opacity slider (#153): the percent readout next to the
+  slider thumb now tracks the drag. `_lidarViewOpacity` is
+  intentionally not a Lit `@state` (the slider fires up to
+  50 input events / s and a state coupling would re-render the
+  entire card on every tick), so the readout span gets an
+  imperative DOM write inside the input handler.
+- Grid import / export chip icons (#154): from a home-centric
+  reading, the previous icons pointed in the wrong direction.
+  Swapped so the chip glyph matches its label.
+
 ### alpha.3
 
 ### Battery, radiation, semaphore: extending the alpha.2 recorder fix
