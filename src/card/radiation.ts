@@ -12,6 +12,7 @@
 
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
+import { callWSWithTimeout } from './ws-timeout';
 
 
 //Fetched historical irradiance series, parallel times[] / values[]
@@ -169,7 +170,7 @@ export async function fetchSolarRadiationHistory(
             return;
         }
 
-        const result: any = await host.hass.callWS({
+        const result: any = await callWSWithTimeout<any>(host.hass, {
             type:                     'history/history_during_period',
             start_time:               start.toISOString(),
             end_time:                 fetchEnd.toISOString(),

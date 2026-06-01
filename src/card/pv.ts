@@ -13,6 +13,7 @@ import { computePvPower, getSunPosition, type PanelOrientation } from '../engine
 import { isPanelShaded, type NdsmRaster } from '../engine/pv-shading';
 import { formatLocalisedNumber } from './format';
 import { parseBatteryBanks } from './battery';
+import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 
 //Default panel height above ground in metres when the user didn't
 //set a per-array `height`. 5 m matches the eaves of a single-storey
@@ -89,6 +90,65 @@ export interface PvHost
 //Per-instance flag key used by wipeLegacyPvCalibStorage to mark the one-time cleanup as done. Stored alongside the calibration entries it sweeps so a
 //stale read from another browser still triggers a fresh cleanup on first load.
 const PV_CALIB_WIPE_FLAG_KEY = 'helios-pv-calib:wiped-v1';
+
+
+//-----------------------------------------------------------------
+//Module-level cache for the three PV-side WS fetches. Survives Lit
+//element unmount + remount (the user navigating away from the card
+//and back), which is the lifecycle event that the per-instance
+//`_pv*FetchKey` gate cannot catch. Without this, every navigation
+//restarted the heavy fetch from zero, see #155 / #158.
+//
+//Each entry carries the parsed series + the fetched-at timestamp.
+//TTL keeps stale data from drifting forever, the next refresh
+//cycle after expiry falls back to a fresh fetch. Keyed by the same
+//fetch key the refresh path computes, so an entity / range / SoC
+//bank change naturally invalidates without an explicit clear.
+
+const PV_CACHE_TTL_MS = 15 * 60_000;
+
+interface PvHistoryCacheEntry
+{
+    history:          PvHistory;
+    batteryHistories: PvHistory[];
+    diagnostics:      { rawEntries: number; samples: number; windowH: number };
+    ts:               number;
+}
+
+interface PvStatsCacheEntry
+{
+    stats: PvHistory;
+    ts:    number;
+}
+
+const _pvHistoryCache:        Map<string, PvHistoryCacheEntry> = new Map();
+const _pvCalibStatsCache:     Map<string, PvStatsCacheEntry>   = new Map();
+const _pvTrainerStatsCache:   Map<string, PvStatsCacheEntry>   = new Map();
+
+
+function pvHistoryCacheGet(key: string): PvHistoryCacheEntry | null
+{
+    const e = _pvHistoryCache.get(key);
+    if (!e) return null;
+    if (Date.now() - e.ts > PV_CACHE_TTL_MS)
+    {
+        _pvHistoryCache.delete(key);
+        return null;
+    }
+    return e;
+}
+
+function pvStatsCacheGet(cache: Map<string, PvStatsCacheEntry>, key: string): PvStatsCacheEntry | null
+{
+    const e = cache.get(key);
+    if (!e) return null;
+    if (Date.now() - e.ts > PV_CACHE_TTL_MS)
+    {
+        cache.delete(key);
+        return null;
+    }
+    return e;
+}
 
 
 //Live + history refresh, called from the card on every lifecycle
@@ -215,7 +275,20 @@ export function refreshPv(host: PvHost): void
         if (fullFetchKey !== host._pvFetchKey)
         {
             host._pvFetchKey = fullFetchKey;
-            fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntities);
+            //Cache hit short-circuits the WS round-trip: the user navigates away from the card and back, the module-level cache still
+            //has the previous fetch parsed and ready, no recorder hit. Cache invalidates on TTL (15 min) or on any (entity / range /
+            //SoC bank) change since that flips the key.
+            const cached = pvHistoryCacheGet(fullFetchKey);
+            if (cached)
+            {
+                host._pvHistory             = cached.history;
+                host._batteryHistories      = cached.batteryHistories;
+                host._pvHistoryDiagnostics  = cached.diagnostics;
+            }
+            else
+            {
+                fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntities, fullFetchKey);
+            }
         }
     }
 
@@ -227,7 +300,15 @@ export function refreshPv(host: PvHost): void
         if (calibKey !== host._pvCalibStatsFetchKey)
         {
             host._pvCalibStatsFetchKey = calibKey;
-            fetchPvStatistics(host, entity, calibStart, fetchEnd, 'hour', 'calib');
+            const cachedCalib = pvStatsCacheGet(_pvCalibStatsCache, calibKey);
+            if (cachedCalib)
+            {
+                host._pvCalibStats = cachedCalib.stats;
+            }
+            else
+            {
+                fetchPvStatistics(host, entity, calibStart, fetchEnd, 'hour', 'calib', calibKey);
+            }
         }
     }
 
@@ -239,7 +320,15 @@ export function refreshPv(host: PvHost): void
         if (trainerKey !== host._pvTrainerStatsFetchKey)
         {
             host._pvTrainerStatsFetchKey = trainerKey;
-            fetchPvStatistics(host, entity, trainerStart, fetchEnd, '5minute', 'trainer');
+            const cachedTrainer = pvStatsCacheGet(_pvTrainerStatsCache, trainerKey);
+            if (cachedTrainer)
+            {
+                host._pvTrainerStats = cachedTrainer.stats;
+            }
+            else
+            {
+                fetchPvStatistics(host, entity, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey);
+            }
         }
     }
 }
@@ -353,6 +442,7 @@ export async function fetchPvHistory(
     start: Date,
     end: Date,
     batterySocEntityIds: string[] = [],
+    cacheKey: string = '',
 ): Promise<void>
 {
     if (!host.hass?.callWS)
@@ -376,7 +466,7 @@ export async function fetchPvHistory(
         const entityIds = batterySocEntityIds.length > 0
             ? [entityId, ...batterySocEntityIds]
             : [entityId];
-        const result: any = await host.hass.callWS({
+        const result: any = await callWSWithTimeout<any>(host.hass, {
             type:                     'history/history_during_period',
             start_time:               start.toISOString(),
             end_time:                 fetchEnd.toISOString(),
@@ -395,30 +485,40 @@ export async function fetchPvHistory(
 
         //Per-bank parse for battery SoC when requested. Failure for any one bank is silent: the trainer just sees an empty series for
         //that bank and the min-SoC computation skips it, no need to fail the whole PV fetch over an optional companion entity.
-        if (batterySocEntityIds.length > 0)
-        {
-            host._batteryHistories = batterySocEntityIds.map(id =>
-                parseHistoryEntries((result && result[id]) ?? [])
-            );
-        }
-        else
-        {
-            host._batteryHistories = [];
-        }
+        const batteryHistories: PvHistory[] = batterySocEntityIds.length > 0
+            ? batterySocEntityIds.map(id => parseHistoryEntries((result && result[id]) ?? []))
+            : [];
+        host._batteryHistories = batteryHistories;
 
-        host._pvHistory = { times, values };
+        const history: PvHistory = { times, values };
+        host._pvHistory = history;
         //Snapshot the fetch outcome so `window.heliosStats()` can
         //surface it without us logging on every fetch.
-        host._pvHistoryDiagnostics =
+        const diagnostics =
         {
             rawEntries: arr.length,
             samples:    times.length,
             windowH:    Number(((fetchEnd.getTime() - start.getTime()) / 3_600_000).toFixed(1))
         };
+        host._pvHistoryDiagnostics = diagnostics;
+
+        //Persist for the next mount. The TTL covers stale-read protection; the cache lives at module scope so nav-away / nav-back
+        //picks it up without a fresh recorder hit.
+        if (cacheKey)
+        {
+            _pvHistoryCache.set(cacheKey, { history, batteryHistories, diagnostics, ts: Date.now() });
+        }
     }
     catch (e)
     {
-        console.warn('[HELIOS] PV history fetch failed:', e);
+        if (e instanceof WsTimeoutError)
+        {
+            console.warn(`[HELIOS] PV history fetch timed out (${e.timeoutMs} ms), rendering without past-day series.`);
+        }
+        else
+        {
+            console.warn('[HELIOS] PV history fetch failed:', e);
+        }
         host._pvHistory = { times: [], values: [] };
     }
     finally
@@ -450,12 +550,14 @@ export async function fetchPvStatistics(
     end: Date,
     period: '5minute' | 'hour' | 'day' | 'week' | 'month',
     role: 'calib' | 'trainer',
+    cacheKey: string = '',
 ): Promise<void>
 {
     if (!host.hass?.callWS) return;
 
     const fetchingFlag    = role === 'calib' ? '_pvCalibStatsFetching'    : '_pvTrainerStatsFetching';
     const targetSlot      = role === 'calib' ? '_pvCalibStats'            : '_pvTrainerStats';
+    const cache           = role === 'calib' ? _pvCalibStatsCache         : _pvTrainerStatsCache;
 
     host[fetchingFlag] = true;
     try
@@ -472,7 +574,7 @@ export async function fetchPvStatistics(
         const unit = (host._pvUnit || '').toLowerCase();
         const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
 
-        const result: any = await host.hass.callWS({
+        const result: any = await callWSWithTimeout<any>(host.hass, {
             type:           'recorder/statistics_during_period',
             start_time:     start.toISOString(),
             end_time:       fetchEnd.toISOString(),
@@ -507,12 +609,24 @@ export async function fetchPvStatistics(
             values.push(v);
         }
 
-        host[targetSlot] = { times, values };
+        const stats: PvHistory = { times, values };
+        host[targetSlot] = stats;
+        if (cacheKey)
+        {
+            cache.set(cacheKey, { stats, ts: Date.now() });
+        }
     }
     catch (e)
     {
-        //LTS endpoint missing or entity not tracked. Surface an empty series so the consumer can degrade to `_pvHistory`.
-        console.warn(`[HELIOS] PV statistics fetch failed (${role}):`, e);
+        if (e instanceof WsTimeoutError)
+        {
+            console.warn(`[HELIOS] PV ${role} statistics fetch timed out (${e.timeoutMs} ms), consumer degrades to raw _pvHistory.`);
+        }
+        else
+        {
+            //LTS endpoint missing or entity not tracked. Surface an empty series so the consumer can degrade to `_pvHistory`.
+            console.warn(`[HELIOS] PV statistics fetch failed (${role}):`, e);
+        }
         host[targetSlot] = { times: [], values: [] };
     }
     finally

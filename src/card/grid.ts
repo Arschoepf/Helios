@@ -31,6 +31,7 @@
 
 import type { HeliosConfig } from '../helios-config';
 import { pvNormalizeToWatts } from './pv';
+import { callWSWithTimeout } from './ws-timeout';
 
 
 type Sample = { t: number; v: number; lastChangeT?: number | null };
@@ -119,7 +120,7 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
     {
         try
         {
-            const result: any = await host.hass.callWS({
+            const result: any = await callWSWithTimeout<any>(host.hass, {
                 type:                     'history/history_during_period',
                 start_time:               start.toISOString(),
                 end_time:                 end.toISOString(),

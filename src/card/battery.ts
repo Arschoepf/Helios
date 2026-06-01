@@ -7,6 +7,7 @@
 import type { HeliosConfig } from '../helios-config';
 import { formatLocalisedNumber } from './format';
 import { pvNormalizeToWatts } from './pv';
+import { callWSWithTimeout } from './ws-timeout';
 
 
 //Fetched historical series for one battery entity (SoC or power),
@@ -370,7 +371,7 @@ export async function fetchBatteryHistory(
         }
         const ids = Array.from(idsSet);
 
-        const result: any = await host.hass.callWS({
+        const result: any = await callWSWithTimeout<any>(host.hass, {
             type:                     'history/history_during_period',
             start_time:               start.toISOString(),
             end_time:                 fetchEnd.toISOString(),
